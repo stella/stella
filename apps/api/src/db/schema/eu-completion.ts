@@ -13,6 +13,9 @@ export const EU_COMPLETION_STATUSES = [
   "failed-backoff",
   "failed",
   "dry-run",
+  "too-large",
+  "publisher-gone",
+  "superseded-by-crawl",
 ] as const;
 export const EU_COMPLETION_MODES = ["dry-run", "apply"] as const;
 export const EU_COMPLETION_TARGETS = ["formex", "full"] as const;
@@ -21,10 +24,16 @@ const RETRY_STATUSES = [
   "failed-backoff",
   "failed",
   "publisher-refused",
+  "superseded-by-crawl",
 ] as const satisfies readonly (typeof EU_COMPLETION_STATUSES)[number][];
 const ATTEMPT_STATES = ["idle", "picked-up", "repair"] as const;
 export const EU_COMPLETION_PAYLOAD_MAX_BYTES = 16 * 1024 * 1024;
 export const EU_COMPLETION_REQUESTS_PER_HOUR = 3600;
+export type EuCompletionReviewedCounts = {
+  reviewed: number;
+  accepted: number;
+  requiresReview: number;
+};
 export type EuCompletionProvenance = {
   requestHashes: string[];
   requestedSurfaces: string[];
@@ -41,6 +50,7 @@ export const euCompletionReceipts = p.pgTable.withRLS(
     status: p.text({ enum: EU_COMPLETION_STATUSES }).notNull(),
     target: p.text({ enum: EU_COMPLETION_TARGETS }),
     claimedSourceHash: p.text("claimed_source_hash"),
+    completionSourceHash: p.text("completion_source_hash"),
     claimedObservationOrder: p.bigint("claimed_observation_order", {
       mode: "bigint",
     }),
@@ -73,6 +83,9 @@ export const euCompletionReceipts = p.pgTable.withRLS(
   },
   (t) => [
     p.primaryKey({ columns: [t.id], name: "eu_completion_receipts_pkey" }),
+    p
+      .unique("eu_completion_receipts_approval_proof_key")
+      .on(t.id, t.sourceId, t.parserVersion, t.mode, t.status, t.completedAt),
     p
       .foreignKey({
         columns: [t.sourceId],
@@ -198,6 +211,12 @@ export const euCompletionApprovals = p.pgTable.withRLS(
     supervisedAt: timestamptz("supervised_at").notNull(),
     approvedBy: p.text("approved_by").notNull(),
     approvedAt: timestamptz("approved_at").notNull(),
+    proofMode: p.text("proof_mode").notNull(),
+    proofStatus: p.text("proof_status").notNull(),
+    proofCompletedAt: timestamptz("proof_completed_at").notNull(),
+    reviewedCounts: jsonb("reviewed_counts")
+      .$type<EuCompletionReviewedCounts>()
+      .notNull(),
   },
   (t) => [
     p.primaryKey({
@@ -213,12 +232,34 @@ export const euCompletionApprovals = p.pgTable.withRLS(
       .onDelete("restrict"),
     p
       .foreignKey({
-        columns: [t.supervisedReceiptId],
-        foreignColumns: [euCompletionReceipts.id],
+        columns: [
+          t.supervisedReceiptId,
+          t.sourceId,
+          t.parserVersion,
+          t.proofMode,
+          t.proofStatus,
+          t.proofCompletedAt,
+        ],
+        foreignColumns: [
+          euCompletionReceipts.id,
+          euCompletionReceipts.sourceId,
+          euCompletionReceipts.parserVersion,
+          euCompletionReceipts.mode,
+          euCompletionReceipts.status,
+          euCompletionReceipts.completedAt,
+        ],
         name: "eu_completion_approvals_receipt_fk",
       })
       .onDelete("restrict"),
     p.index("eu_completion_approvals_receipt_idx").on(t.supervisedReceiptId),
+    p.check(
+      "eu_completion_approvals_proof_check",
+      sql`${t.proofMode} = 'dry-run' AND ${t.proofStatus} = 'dry-run' AND ${t.proofCompletedAt}::timestamptz <= ${t.supervisedAt}::timestamptz`,
+    ),
+    p.check(
+      "eu_completion_approvals_reviewed_check",
+      sql`jsonb_typeof(${t.reviewedCounts}) = 'object' AND jsonb_typeof(${t.reviewedCounts}->'reviewed') = 'number' AND jsonb_typeof(${t.reviewedCounts}->'accepted') = 'number' AND jsonb_typeof(${t.reviewedCounts}->'requiresReview') = 'number' AND (${t.reviewedCounts}->>'reviewed')::numeric BETWEEN 1 AND 1000000 AND (${t.reviewedCounts}->>'accepted')::numeric BETWEEN 0 AND 1000000 AND (${t.reviewedCounts}->>'requiresReview')::numeric BETWEEN 0 AND 1000000 AND (${t.reviewedCounts}->>'reviewed')::numeric = trunc((${t.reviewedCounts}->>'reviewed')::numeric) AND (${t.reviewedCounts}->>'accepted')::numeric = trunc((${t.reviewedCounts}->>'accepted')::numeric) AND (${t.reviewedCounts}->>'requiresReview')::numeric = trunc((${t.reviewedCounts}->>'requiresReview')::numeric) AND (${t.reviewedCounts}->>'accepted')::numeric + (${t.reviewedCounts}->>'requiresReview')::numeric = (${t.reviewedCounts}->>'reviewed')::numeric AND ${t.reviewedCounts} ?& ARRAY['reviewed','accepted','requiresReview']`,
+    ),
     p.check(
       "eu_completion_approvals_evidence_check",
       sql`${t.parserVersion} >= 0 AND length(trim(${t.evidenceRef})) BETWEEN 1 AND 2048 AND length(trim(${t.supervisedBy})) BETWEEN 1 AND 128 AND length(trim(${t.approvedBy})) BETWEEN 1 AND 128 AND ${t.supervisedAt}::timestamptz <= ${t.approvedAt}::timestamptz`,

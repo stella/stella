@@ -356,6 +356,7 @@ type RunPublisherLimit = {
 
 export type PublisherRunControls = {
   check: () => Promise<Result<void, unknown>>;
+  checkBeforeSend: () => Result<void, unknown>;
   chargeRequest: () => Promise<Result<void, unknown>>;
   /** The job boundary adapts typed failures to the adapter's Promise rejection contract. */
   raiseFailure: (error: unknown) => never;

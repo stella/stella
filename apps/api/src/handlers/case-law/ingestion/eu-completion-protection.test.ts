@@ -4,6 +4,7 @@ import {
   ecjCompletionFingerprint,
   ECJ_COMPLETION_PROTECTED_COLUMNS,
   protectEcjFormexParts,
+  protectEcjLegacyDocument,
   protectEcjCompletion,
   type EcjCompletionStoredDecision,
 } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
@@ -515,5 +516,58 @@ describe("additional stated boundaries", () => {
         judges: [],
       }),
     );
+  });
+});
+
+describe("legacy full-refetch preservation", () => {
+  const raw = "<p>Č\r\nJudgment</p>";
+  const storedRaw = new TextEncoder().encode(raw);
+  test("permits additional surfaces when every original document byte is retained", () => {
+    expect(
+      protectEcjLegacyDocument({
+        storedRaw,
+        storedRawContentType: "text/html",
+        candidate: {
+          sourceRaw: encodeSourceRawEnvelope({
+            document: raw,
+            listing: "new",
+            notice: "new",
+            formex: "new",
+          }),
+        },
+      }),
+    ).toEqual({ type: "accepted" });
+  });
+  test.each(["<p>Č\nJudgment</p>", "<p>Different</p>", ""])(
+    "rejects changed legacy bytes: %s",
+    (document) => {
+      expect(
+        protectEcjLegacyDocument({
+          storedRaw,
+          storedRawContentType: "text/html",
+          candidate: { sourceRaw: encodeSourceRawEnvelope({ document }) },
+        }),
+      ).toEqual({
+        type: "review-required",
+        fields: ["sourceRaw.parts.document"],
+      });
+    },
+  );
+  test("rejects missing document and invalid original UTF-8", () => {
+    expect(
+      protectEcjLegacyDocument({
+        storedRaw,
+        candidate: { sourceRaw: encodeSourceRawEnvelope({ notice: "new" }) },
+      }),
+    ).toEqual({
+      type: "review-required",
+      fields: ["sourceRaw.parts.document"],
+    });
+    expect(
+      protectEcjLegacyDocument({
+        storedRaw: Uint8Array.of(255),
+        candidate: { sourceRaw: encodeSourceRawEnvelope({ document: raw }) },
+      }),
+    ).toEqual({ type: "review-required", fields: ["sourceRaw"] });
   });
 });

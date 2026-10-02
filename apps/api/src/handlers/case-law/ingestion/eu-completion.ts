@@ -39,7 +39,11 @@ export type EuCompletionRowOutcome =
         | "dry-run"
         | "failed"
         | "retryable"
-        | "isolated";
+        | "isolated"
+        | "too-large"
+        | "publisher-gone"
+        | "superseded-by-crawl"
+        | "waiting-for-mirror";
     }
   | { type: "publisher-refused"; retryAt: Date }
   | { type: "stopped"; reason: CompletionStopReason };
@@ -65,6 +69,7 @@ export type EuCompletionReport = {
 
 export type EuCompletionRowOptions = {
   check: () => Promise<Result<void, unknown>>;
+  checkBeforeSend: () => Result<void, EuCompletionStop>;
   healthyEvidence: "adjacent-row" | "none";
 };
 
@@ -77,6 +82,7 @@ type EuCompletionDependencies = {
     | "reserve"
     | "pickup"
     | "recordFailure"
+    | "releaseBenign"
     | "recordTick"
     | "readSweepCursor"
   >;
@@ -108,6 +114,7 @@ const recordOutcome = (
     case "applied":
       report.applied++;
       break;
+    case "publisher-gone":
     case "unchanged":
       report.unchanged++;
       break;
@@ -116,9 +123,12 @@ const recordOutcome = (
     case "review-required":
       report.reviewRequired++;
       break;
+    case "too-large":
     case "failed":
       report.failed++;
       break;
+    case "superseded-by-crawl":
+    case "waiting-for-mirror":
     case "isolated":
       report.retries++;
       break;
@@ -138,52 +148,19 @@ const recordOutcome = (
   }
 };
 
-/** Every row is durably picked up before any publisher or storage work. */
-export const runEuCompletionTick = async ({
-  sourceId,
-  mode,
-  parserVersion,
-  maxRows,
-  signal,
-  now,
-  dependencies,
-}: RunEuCompletionTickOptions): Promise<EuCompletionReport> => {
-  if (
-    !Number.isSafeInteger(maxRows) ||
-    maxRows < 1 ||
-    maxRows > EU_COMPLETION_LIMITS.maxRows
-  ) {
-    panic("Completion row budget must be a bounded positive integer");
-  }
-  const startedAt = now();
-  const report: EuCompletionReport = {
-    status: "completed",
-    attempted: 0,
-    applied: 0,
-    unchanged: 0,
-    reviewRequired: 0,
-    retries: 0,
-    failed: 0,
-    requests: 0,
-    cursorMoved: 0,
-    noProgress: 0,
-    durationMs: 0,
-  };
-  const finish = async () => {
-    report.requests = dependencies.requestCount();
-    report.durationMs = Math.max(0, now() - startedAt);
-    const progress = await dependencies.store.recordTick({
-      sourceId,
-      applied: report.applied,
-      intentionallyHeld:
-        report.status === "held" ||
-        report.status === "off" ||
-        report.status === "approval-required",
-    });
-    report.noProgress = progress.ticksWithoutProgress;
-    return report;
-  };
-  const checkState = async () => {
+const createCompletionChecks = (
+  {
+    sourceId,
+    signal,
+    now,
+    dependencies,
+  }: Pick<
+    RunEuCompletionTickOptions,
+    "sourceId" | "signal" | "now" | "dependencies"
+  >,
+  startedAt: number,
+) => {
+  const checkBeforeSend = () => {
     if (signal.aborted) {
       return Result.err(
         new EuCompletionStop({
@@ -199,6 +176,13 @@ export const runEuCompletionTick = async ({
           reason: "time-limit",
         }),
       );
+    }
+    return Result.ok();
+  };
+  const checkState = async () => {
+    const stopped = checkBeforeSend();
+    if (stopped.isErr()) {
+      return stopped;
     }
     const controls = await dependencies.store.loadControls(sourceId);
     if (
@@ -234,24 +218,109 @@ export const runEuCompletionTick = async ({
       try: dependencies.fence,
       catch: (error) => error,
     });
-    if (fenced.isErr()) {return fenced;}
-    if (signal.aborted)
-      {return Result.err(
+    if (fenced.isErr()) {
+      return fenced;
+    }
+    if (signal.aborted) {
+      return Result.err(
         new EuCompletionStop({
           message: "Completion cancelled",
           reason: "cancelled",
         }),
-      );}
+      );
+    }
     return Result.ok();
   };
+  const checkImmediate = async () => {
+    const stopped = checkBeforeSend();
+    if (stopped.isErr()) {
+      return stopped;
+    }
+    if (!(await dependencies.isEnabled())) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion is disabled",
+          reason: "off",
+        }),
+      );
+    }
+    return await Result.tryPromise({
+      try: dependencies.fence,
+      catch: (error) => error,
+    });
+  };
   const check = async () =>
+    (
+      await Result.tryPromise({ try: checkImmediate, catch: (error) => error })
+    ).andThen((value) => value);
+  const checkAdmission = async () =>
     (
       await Result.tryPromise({
         try: checkState,
         catch: (error) => error,
       })
     ).andThen((value) => value);
-  const admission = await check();
+  return { check, checkAdmission, checkBeforeSend };
+};
+
+/** Every row is durably picked up before any publisher or storage work. */
+export const runEuCompletionTick = async ({
+  sourceId,
+  mode,
+  parserVersion,
+  maxRows,
+  signal,
+  now,
+  dependencies,
+}: RunEuCompletionTickOptions): Promise<EuCompletionReport> => {
+  if (
+    !Number.isSafeInteger(maxRows) ||
+    maxRows < 1 ||
+    maxRows > EU_COMPLETION_LIMITS.maxRows
+  ) {
+    panic("Completion row budget must be a bounded positive integer");
+  }
+  const startedAt = now();
+  const report: EuCompletionReport = {
+    status: "completed",
+    attempted: 0,
+    applied: 0,
+    unchanged: 0,
+    reviewRequired: 0,
+    retries: 0,
+    failed: 0,
+    requests: 0,
+    cursorMoved: 0,
+    noProgress: 0,
+    durationMs: 0,
+  };
+  let healthyCompleted = 0;
+  let eligibleAttempts = 0;
+  const finish = async () => {
+    report.requests = dependencies.requestCount();
+    report.durationMs = Math.max(0, now() - startedAt);
+    const progress = await dependencies.store.recordTick({
+      sourceId,
+      mode,
+      healthyCompleted,
+      intentionallyHeld:
+        report.status === "held" ||
+        report.status === "off" ||
+        report.status === "approval-required" ||
+        report.status === "time-limit" ||
+        report.status === "cancelled" ||
+        report.status === "request-budget" ||
+        report.status === "byte-budget" ||
+        eligibleAttempts === 0,
+    });
+    report.noProgress = progress.ticksWithoutProgress;
+    return report;
+  };
+  const { check, checkAdmission, checkBeforeSend } = createCompletionChecks(
+    { sourceId, signal, now, dependencies },
+    startedAt,
+  );
+  const admission = await checkAdmission();
   if (admission.isErr()) {
     report.status =
       admission.error instanceof EuCompletionStop
@@ -272,8 +341,8 @@ export const runEuCompletionTick = async ({
   report.cursorMoved = Number(
     beforeCursor !== (await dependencies.store.readSweepCursor(scope)),
   );
-  for (const receipt of rows) {
-    const admitted = await check();
+  for (const [index, receipt] of rows.entries()) {
+    const admitted = index === 0 ? await check() : await checkAdmission();
     if (admitted.isErr()) {
       report.status =
         admitted.error instanceof EuCompletionStop
@@ -290,10 +359,14 @@ export const runEuCompletionTick = async ({
       report.failed++;
       continue;
     }
-    const healthyEvidence = report.applied > 0 ? "adjacent-row" : "none";
+    const healthyEvidence = healthyCompleted > 0 ? "adjacent-row" : "none";
     const attempted = await Result.tryPromise({
       try: async () =>
-        await dependencies.runRow(receipt, { check, healthyEvidence }),
+        await dependencies.runRow(receipt, {
+          check,
+          checkBeforeSend,
+          healthyEvidence,
+        }),
       catch: (error) => error,
     });
     const result = attempted.andThen((value) => value);
@@ -301,17 +374,37 @@ export const runEuCompletionTick = async ({
     if (result.isErr()) {
       const stopped =
         result.error instanceof EuCompletionStop ? result.error : null;
-      const settlement = await dependencies.store.recordFailure(receipt, {
-        scope: "systemic",
-        code: stopped === null ? "unexpected" : "cancelled",
-        healthyEvidence,
-      });
-      outcome =
-        stopped === null
-          ? { type: settlement }
-          : { type: "stopped", reason: stopped.reason };
+      if (stopped !== null && stopped.reason !== "publisher-refused") {
+        await dependencies.store.releaseBenign(receipt.id);
+        outcome = { type: "stopped", reason: stopped.reason };
+      } else {
+        const settlement = await dependencies.store.recordFailure(receipt, {
+          scope: "systemic",
+          code: "unexpected",
+          healthyEvidence,
+        });
+        outcome = { type: settlement };
+      }
     } else {
       outcome = result.value;
+    }
+    if (
+      outcome.type !== "waiting-for-mirror" &&
+      outcome.type !== "superseded-by-crawl"
+    ) {
+      eligibleAttempts++;
+    }
+    if (
+      [
+        "applied",
+        "unchanged",
+        "dry-run",
+        "review-required",
+        "publisher-gone",
+        "too-large",
+      ].includes(outcome.type)
+    ) {
+      healthyCompleted++;
     }
     recordOutcome(report, outcome);
     if (report.status !== "completed") {

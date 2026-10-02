@@ -59,6 +59,8 @@ const fixture = (failCooldown = false) => {
     raiseFailure: (error: unknown): never => {
       throw error;
     },
+    checkBeforeSend: () =>
+      enabled ? Result.ok() : Result.err(new TypeError("fixture disabled")),
     chargeRequest: async () => {
       charges++;
       return Result.ok();
@@ -71,6 +73,10 @@ const fixture = (failCooldown = false) => {
     dependencies,
     controls,
     charges: () => charges,
+    cooldown: () => cooldown,
+    advance: (ms: number) => {
+      clock += ms;
+    },
     refused: () => refused,
     disable: () => {
       enabled = false;
@@ -79,6 +85,81 @@ const fixture = (failCooldown = false) => {
   };
 };
 describe("completion request boundary", () => {
+  test("slow budget bookkeeping cannot compress send spacing", async () => {
+    const state = fixture();
+    const sent: number[] = [];
+    let charged = 0;
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        sent.push(state.now());
+        return new Response("fixture");
+      }),
+    );
+    await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 1,
+      dependencies: state.dependencies,
+      controls: {
+        ...state.controls,
+        chargeRequest: async () => {
+          if (charged++ === 0) {
+            state.advance(1100);
+          }
+          return await state.controls.chargeRequest();
+        },
+      },
+      operation: async () => {
+        await fetchPublisher(target, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: 1000,
+        });
+        await fetchPublisher(target, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: 1000,
+        });
+      },
+    });
+    expect(sent).toEqual([1100, 2100]);
+  });
+  test.each([401, 403])(
+    "HTTP %s refuses the run after one request",
+    async (status) => {
+      const state = fixture();
+      let sent = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          sent++;
+          return new Response(null, {
+            status,
+            headers: { "Retry-After": "60" },
+          });
+        }),
+      );
+      const response = await Result.tryPromise({
+        try: async () =>
+          await withPublisherRequestRateLimit({
+            gateId: "cellar-eu",
+            requestsPerSecond: 1,
+            dependencies: state.dependencies,
+            controls: state.controls,
+            operation: async () =>
+              await fetchPublisher(target, {
+                adapterKey: ADAPTER_KEYS.EU_ECJ,
+                timeoutMs: 1000,
+              }),
+          }),
+        catch: (error) => error,
+      });
+      expect(response.isErr()).toBe(true);
+      if (response.isOk()) {
+        return expect.unreachable();
+      }
+      expect(response.error).toBeInstanceOf(PublisherRateLimitRefusalError);
+      expect(sent).toBe(1);
+      expect(state.refused()).not.toBeNull();
+    },
+  );
+
   test.each(["check", "charge"] as const)(
     "a returned %s Err prevents the HTTP effect",
     async (stage) => {
@@ -115,7 +196,9 @@ describe("completion request boundary", () => {
         catch: (error) => error,
       });
       expect(result.isErr()).toBe(true);
-      if (result.isErr()) {expect(result.error).toBe(failure);}
+      if (result.isErr()) {
+        expect(result.error).toBe(failure);
+      }
       expect(requests).toBe(0);
       expect(state.charges()).toBe(0);
     },
@@ -193,6 +276,7 @@ describe("completion request boundary", () => {
     expect(requests).toBe(1);
     expect(state.charges()).toBe(1);
     expect(state.refused()).toBeGreaterThanOrEqual(7_200_000);
+    expect(state.cooldown()).toBeLessThanOrEqual(15 * 60_000);
   });
   test("publisher-backoff preserves refusal redirects before the redirect can be followed", async () => {
     const state = fixture();
@@ -224,8 +308,9 @@ describe("completion request boundary", () => {
       catch: (error) => error,
     });
     expect(result.isErr()).toBe(true);
-    if (result.isErr())
-      {expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);}
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
+    }
     expect(visited).toEqual([target]);
     expect(state.charges()).toBe(1);
     expect(state.refused()).toBeGreaterThanOrEqual(60_000);

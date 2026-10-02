@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import {
   and,
   asc,
@@ -12,6 +12,7 @@ import {
   notExists,
   or,
   sql,
+  type SQLWrapper,
 } from "drizzle-orm";
 
 import { initialBatchState, type BatchState } from "@stll/db-load-gate/health";
@@ -22,6 +23,7 @@ import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawIndexJobs,
   databaseBackfillStates,
   euCompletionApprovals,
   euCompletionControls,
@@ -43,12 +45,15 @@ export type EuCompletionTerminalStatus =
   | "applied"
   | "unchanged"
   | "review-required"
-  | "dry-run";
+  | "dry-run"
+  | "too-large"
+  | "publisher-gone";
 const ACTIVE = [
   "pending",
   "fetched",
   "failed-backoff",
   "publisher-refused",
+  "superseded-by-crawl",
 ] as const;
 const TERMINAL = [
   "applied",
@@ -56,6 +61,8 @@ const TERMINAL = [
   "review-required",
   "dry-run",
   "failed",
+  "too-large",
+  "publisher-gone",
 ] as const;
 export const EU_COMPLETION_STORE_LIMITS = {
   maxRows: 100,
@@ -66,6 +73,32 @@ export const EU_COMPLETION_STORE_LIMITS = {
   retentionDays: 90,
   isolationThreshold: 3,
 } as const;
+const QUIESCENT = [
+  "applied",
+  "unchanged",
+  "review-required",
+  "publisher-gone",
+  "too-large",
+] as const;
+export class CompletionPayloadTooLarge extends TaggedError(
+  "CompletionPayloadTooLarge",
+)<{ message: string }> {}
+export class CompletionApprovalError extends TaggedError(
+  "CompletionApprovalError",
+)<{
+  message: string;
+  code:
+    | "not-found"
+    | "invalid-proof"
+    | "invalid-input"
+    | "already-approved"
+    | "database";
+  cause?: unknown;
+}> {}
+export const euCompletionDecisionNotWithdrawn = (
+  decisionId: SQLWrapper = caseLawDecisions.id,
+) =>
+  sql<boolean>`NOT EXISTS (SELECT 1 FROM ${caseLawIndexJobs} WHERE ${caseLawIndexJobs.decisionId} = ${decisionId} AND ${caseLawIndexJobs.operation} = 'withdraw' AND ${caseLawIndexJobs.status} = 'succeeded' LIMIT 1)`;
 const GLOBAL_CONTROL = "global";
 const sourceControl = (sourceId: EuCompletionReceipt["sourceId"]) =>
   `source:${sourceId}`;
@@ -112,7 +145,11 @@ type MarkFetchedOptions = {
 };
 type FinishOptions = {
   id: string;
-  status: EuCompletionTerminalStatus | "publisher-refused" | "failed-backoff";
+  status:
+    | EuCompletionTerminalStatus
+    | "publisher-refused"
+    | "failed-backoff"
+    | "superseded-by-crawl";
   retryAt?: Date;
   detail?: string;
 };
@@ -134,7 +171,13 @@ type ApprovalScope = Pick<
   EuCompletionReserveOptions,
   "sourceId" | "parserVersion"
 >;
-type ApproveOptions = typeof euCompletionApprovals.$inferInsert;
+type ApproveOptions = Omit<
+  typeof euCompletionApprovals.$inferInsert,
+  "proofMode" | "proofStatus" | "proofCompletedAt"
+>;
+type SettleOptions = Omit<FinishOptions, "status"> & {
+  status: FinishOptions["status"] | "pending" | "fetched";
+};
 type ControlOptions = {
   sourceId: EuCompletionReceipt["sourceId"] | null;
   state: "on" | "off";
@@ -216,7 +259,12 @@ const verifyWrittenTx = async (
         mirror: caseLawDecisions.corpusMirrorStatus,
       })
       .from(caseLawDecisions)
-      .where(eq(caseLawDecisions.id, receipt.decisionId))
+      .where(
+        and(
+          eq(caseLawDecisions.id, receipt.decisionId),
+          euCompletionDecisionNotWithdrawn(),
+        ),
+      )
       .for("update")
       .limit(1)
   ).at(0);
@@ -240,7 +288,10 @@ type ClassifyOptions = {
   progress: number;
 };
 const classifyFailure = ({ receipt, failure, progress }: ClassifyOptions) => {
+  const sourceUnreachable =
+    failure.code === "publisher" || failure.code === "timeout";
   const count =
+    !sourceUnreachable &&
     receipt.attemptState !== "idle" &&
     failure.scope === "systemic" &&
     failure.code !== "cancelled";
@@ -256,7 +307,8 @@ const classifyFailure = ({ receipt, failure, progress }: ClassifyOptions) => {
     count &&
     streak >= EU_COMPLETION_STORE_LIMITS.isolationThreshold &&
     (progress > baseline || failure.healthyEvidence === "adjacent-row");
-  const scope = isolated ? "row" : failure.scope;
+  const failureScope = sourceUnreachable ? "systemic" : failure.scope;
+  const scope = isolated ? "row" : failureScope;
   return {
     scope,
     isolated,
@@ -265,7 +317,7 @@ const classifyFailure = ({ receipt, failure, progress }: ClassifyOptions) => {
         ? Math.max(0, receipt.attempts - 1)
         : receipt.attempts +
           Number(scope === "row" && receipt.attemptState === "repair"),
-    systemicFailures: isolated ? 0 : streak,
+    systemicFailures: isolated || sourceUnreachable ? 0 : streak,
     systemicProgress: isolated ? progress : baseline,
   };
 };
@@ -283,40 +335,183 @@ const createStoreContext = ({
 });
 type StoreContext = ReturnType<typeof createStoreContext>;
 
-const createSettlementOperations = ({ transaction, now }: StoreContext) => {
-  const progressTx = async (
-    tx: Transaction,
-    receipt: EuCompletionReceipt,
-    applied: boolean,
-  ) => {
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
-    await tx
-      .insert(euCompletionControls)
-      .values({
-        key: sourceControl(receipt.sourceId),
-        sourceId: receipt.sourceId,
+const recordCompletionProgressTx = async (
+  tx: Transaction,
+  receipt: EuCompletionReceipt,
+  { status, now }: { status: SettleOptions["status"]; now: () => number },
+) => {
+  const applied = status === "applied";
+  const healthy =
+    status === "applied" ||
+    status === "dry-run" ||
+    status === "unchanged" ||
+    status === "review-required" ||
+    status === "publisher-gone" ||
+    status === "too-large";
+  // audit: skip — public case-law corpus bookkeeping, no workspace data
+  await tx
+    .insert(euCompletionControls)
+    .values({
+      key: sourceControl(receipt.sourceId),
+      sourceId: receipt.sourceId,
+      cursor: receipt.decisionId,
+      completedRows: Number(applied),
+      lastCompletedAt: applied ? new Date(now()) : null,
+    })
+    .onConflictDoUpdate({
+      target: euCompletionControls.key,
+      set: {
         cursor: receipt.decisionId,
-        completedRows: Number(applied),
-        lastCompletedAt: applied ? new Date(now()) : null,
-      })
-      .onConflictDoUpdate({
-        target: euCompletionControls.key,
-        set: {
-          cursor: receipt.decisionId,
-          completedRows: sql`${euCompletionControls.completedRows} + ${Number(applied)}`,
-          ...(applied
-            ? {
-                ticksWithoutProgress: 0,
-                batch: initialBatchState(),
-                lastCompletedAt: new Date(now()),
-              }
-            : {}),
-        },
-      });
+        completedRows: sql`${euCompletionControls.completedRows} + ${Number(applied)}`,
+        ...(healthy
+          ? { batch: initialBatchState(), ticksWithoutProgress: 0 }
+          : {}),
+        ...(applied
+          ? {
+              ticksWithoutProgress: 0,
+              batch: initialBatchState(),
+              lastCompletedAt: new Date(now()),
+            }
+          : {}),
+      },
+    });
+};
+
+type RetireReceiptsOptions = {
+  receipt: EuCompletionReceipt;
+  status: EuCompletionReceipt["status"];
+};
+const retireCompletedReceiptsTx = async (
+  tx: Transaction,
+  { receipt, status }: RetireReceiptsOptions,
+) => {
+  const older = tx
+    .select({ id: euCompletionReceipts.id })
+    .from(euCompletionReceipts)
+    .where(
+      and(
+        eq(euCompletionReceipts.sourceId, receipt.sourceId),
+        eq(euCompletionReceipts.decisionId, receipt.decisionId),
+        inArray(euCompletionReceipts.status, TERMINAL),
+        isNotNull(euCompletionReceipts.completedAt),
+        isNull(euCompletionReceipts.supersededAt),
+        sql`(${euCompletionReceipts.createdAt}, ${euCompletionReceipts.id}) < (SELECT newer.created_at, newer.id FROM eu_completion_receipts newer WHERE newer.id = ${receipt.id} LIMIT 1)`,
+        status === "applied"
+          ? undefined
+          : sql`${euCompletionReceipts.status} <> 'applied'`,
+      ),
+    )
+    .orderBy(asc(euCompletionReceipts.createdAt), asc(euCompletionReceipts.id))
+    .limit(EU_COMPLETION_STORE_LIMITS.maxRows);
+  // audit: skip — public case-law corpus bookkeeping, no workspace data
+  await tx
+    .update(euCompletionReceipts)
+    .set({
+      supersededAt: sql`(SELECT newer.completed_at FROM eu_completion_receipts newer WHERE newer.id = ${receipt.id} LIMIT 1)`,
+    })
+    .where(inArray(euCompletionReceipts.id, older));
+};
+
+type PublisherHoldOptions = {
+  receipt: EuCompletionReceipt;
+  retryAt: Date;
+  now: () => number;
+};
+const holdPublisherRefusalTx = async (
+  tx: Transaction,
+  { receipt, retryAt, now }: PublisherHoldOptions,
+) => {
+  const control = (
+    await tx
+      .select()
+      .from(euCompletionControls)
+      .where(eq(euCompletionControls.key, sourceControl(receipt.sourceId)))
+      .limit(1)
+  ).at(0);
+  const batch =
+    control === undefined || control.batch === null
+      ? initialBatchState()
+      : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
+          .batch;
+  const held = {
+    ...batch,
+    holdCause: "other" as const,
+    heldSince: batch.heldSince ?? now(),
+    holdUntil: Math.max(batch.holdUntil ?? 0, retryAt.getTime()),
+    holdCount: batch.holdCount + 1,
   };
+  // audit: skip — public case-law corpus bookkeeping, no workspace data
+  await tx
+    .insert(euCompletionControls)
+    .values({
+      key: sourceControl(receipt.sourceId),
+      sourceId: receipt.sourceId,
+      batch: held,
+    })
+    .onConflictDoUpdate({
+      target: euCompletionControls.key,
+      set: { batch: held },
+    });
+};
+
+type ReceiptTransitionOptions = {
+  receipt: EuCompletionReceipt;
+  settlement: SettleOptions;
+  decision:
+    | {
+        sourceHash: EuCompletionReceipt["claimedSourceHash"];
+        observationOrder: EuCompletionReceipt["claimedObservationOrder"];
+      }
+    | undefined;
+  at: Date;
+};
+const receiptTransition = ({
+  receipt,
+  settlement: { status, retryAt, detail },
+  decision,
+  at,
+}: ReceiptTransitionOptions) => {
+  const released = status === "pending" || status === "fetched";
+  const superseded = status === "superseded-by-crawl";
+  const retrying =
+    status === "failed-backoff" || status === "publisher-refused" || superseded;
+  return {
+    status,
+    detail: detail?.slice(0, 512) ?? null,
+    retryAt: retrying || released ? (retryAt ?? null) : null,
+    completionSourceHash:
+      retrying || released ? null : (decision?.sourceHash ?? null),
+    attempts:
+      (status === "publisher-refused" || superseded || released) &&
+      receipt.attemptState === "picked-up"
+        ? Math.max(0, receipt.attempts - 1)
+        : receipt.attempts,
+    attemptState: "idle" as const,
+    updatedAt: at,
+    completedAt: retrying || released ? null : at,
+    ...(retrying || released ? {} : { payload: null }),
+    ...(superseded
+      ? {
+          claimedSourceHash: decision?.sourceHash ?? null,
+          claimedObservationOrder: decision?.observationOrder ?? null,
+          claimedFingerprint: null,
+          payload: null,
+          payloadHash: null,
+          provenance: null,
+          target: null,
+          writtenAt: null,
+          writtenSourceHash: null,
+          writtenObservationOrder: null,
+          writtenParserVersion: null,
+        }
+      : {}),
+  };
+};
+
+const createSettlementOperations = ({ transaction, now }: StoreContext) => {
   const finishTx = async (
     tx: Transaction,
-    { id, status, retryAt, detail }: FinishOptions,
+    { id, status, retryAt, detail }: SettleOptions,
   ) => {
     const receipt = await receiptTx(tx, id);
     if (!ACTIVE.some((activeStatus) => activeStatus === receipt.status)) {
@@ -336,8 +531,25 @@ const createSettlementOperations = ({ transaction, now }: StoreContext) => {
       panic("Completion dry-run cannot settle apply work");
     }
     const retrying =
-      status === "failed-backoff" || status === "publisher-refused";
-    if (retrying && (!retryAt || retryAt.getTime() <= now())) {
+      status === "failed-backoff" ||
+      status === "publisher-refused" ||
+      status === "superseded-by-crawl";
+    const decision = (
+      await tx
+        .select({
+          sourceHash: caseLawDecisions.sourceHash,
+          observationOrder: caseLawDecisions.sourceObservationOrder,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, receipt.decisionId))
+        .for("update")
+        .limit(1)
+    ).at(0);
+    if (
+      (retrying && retryAt === undefined) ||
+      (retryAt !== undefined &&
+        (!Number.isFinite(retryAt.getTime()) || retryAt.getTime() <= now()))
+    ) {
       panic("Completion backoff requires a future time");
     }
     // audit: skip — public case-law corpus bookkeeping, no workspace data
@@ -345,57 +557,27 @@ const createSettlementOperations = ({ transaction, now }: StoreContext) => {
       (
         await tx
           .update(euCompletionReceipts)
-          .set({
-            status,
-            detail: detail?.slice(0, 512) ?? null,
-            retryAt: retrying ? retryAt : null,
-            attempts:
-              status === "publisher-refused" &&
-              receipt.attemptState === "picked-up"
-                ? Math.max(0, receipt.attempts - 1)
-                : receipt.attempts,
-            attemptState: "idle",
-            updatedAt: new Date(now()),
-            completedAt: retrying ? null : new Date(now()),
-            ...(retrying ? {} : { payload: null }),
-          })
+          .set(
+            receiptTransition({
+              receipt,
+              settlement: { id, status, retryAt, detail },
+              decision,
+              at: new Date(now()),
+            }),
+          )
           .where(eq(euCompletionReceipts.id, id))
           .returning()
       ).at(0) ?? panic("Completion locked receipt disappeared");
     if (status === "publisher-refused" && retryAt !== undefined) {
-      const control = (
-        await tx
-          .select()
-          .from(euCompletionControls)
-          .where(eq(euCompletionControls.key, sourceControl(receipt.sourceId)))
-          .limit(1)
-      ).at(0);
-      const batch =
-        control === undefined || control.batch === null
-          ? initialBatchState()
-          : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
-              .batch;
-      const held = {
-        ...batch,
-        holdCause: "other" as const,
-        heldSince: batch.heldSince ?? now(),
-        holdUntil: Math.max(batch.holdUntil ?? 0, retryAt.getTime()),
-        holdCount: batch.holdCount + 1,
-      };
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      await tx
-        .insert(euCompletionControls)
-        .values({
-          key: sourceControl(receipt.sourceId),
-          sourceId: receipt.sourceId,
-          batch: held,
-        })
-        .onConflictDoUpdate({
-          target: euCompletionControls.key,
-          set: { batch: held },
-        });
+      await holdPublisherRefusalTx(tx, { receipt, retryAt, now });
     }
-    await progressTx(tx, receipt, status === "applied");
+    if (settled.completedAt !== null) {
+      await retireCompletedReceiptsTx(tx, {
+        receipt: settled,
+        status: settled.status,
+      });
+    }
+    await recordCompletionProgressTx(tx, receipt, { status, now });
     return settled;
   };
   const assertApprovalTx = async (tx: Transaction, scope: ApprovalScope) => {
@@ -525,6 +707,7 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
             eq(euCompletionReceipts.mode, mode),
             eq(euCompletionReceipts.parserVersion, parserVersion),
             inArray(euCompletionReceipts.status, [...ACTIVE, "failed"]),
+            euCompletionDecisionNotWithdrawn(euCompletionReceipts.decisionId),
             or(
               isNull(euCompletionReceipts.retryAt),
               lte(
@@ -559,6 +742,22 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
             and(
               eq(caseLawDecisions.sourceId, sourceId),
               isNull(caseLawDecisions.redactedAt),
+              euCompletionDecisionNotWithdrawn(),
+              notExists(
+                tx
+                  .select({ id: euCompletionReceipts.id })
+                  .from(euCompletionReceipts)
+                  .where(
+                    and(
+                      eq(euCompletionReceipts.sourceId, sourceId),
+                      eq(euCompletionReceipts.decisionId, caseLawDecisions.id),
+                      eq(euCompletionReceipts.mode, mode),
+                      eq(euCompletionReceipts.parserVersion, parserVersion),
+                      inArray(euCompletionReceipts.status, QUIESCENT),
+                      sql`${euCompletionReceipts.completionSourceHash} IS NOT DISTINCT FROM ${caseLawDecisions.sourceHash}`,
+                    ),
+                  ),
+              ),
               after === null
                 ? undefined
                 : gt(caseLawDecisions.id, sql`${after}::uuid`),
@@ -610,33 +809,6 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
           })),
         )
         .returning();
-      const stale = tx
-        .select({ id: euCompletionReceipts.id })
-        .from(euCompletionReceipts)
-        .where(
-          and(
-            eq(euCompletionReceipts.sourceId, sourceId),
-            inArray(
-              euCompletionReceipts.decisionId,
-              page.map(({ id }) => id),
-            ),
-            inArray(euCompletionReceipts.status, TERMINAL),
-            isNull(euCompletionReceipts.supersededAt),
-            sql`EXISTS (SELECT 1 FROM eu_completion_receipts newer WHERE newer.source_id = ${euCompletionReceipts.sourceId} AND newer.decision_id = ${euCompletionReceipts.decisionId} AND (newer.created_at, newer.id) > (${euCompletionReceipts.createdAt}, ${euCompletionReceipts.id}))`,
-          ),
-        )
-        .orderBy(
-          asc(euCompletionReceipts.createdAt),
-          asc(euCompletionReceipts.id),
-        )
-        .limit(EU_COMPLETION_STORE_LIMITS.maxRows);
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      await tx
-        .update(euCompletionReceipts)
-        .set({
-          supersededAt: sql`coalesce(${euCompletionReceipts.completedAt}, now())`,
-        })
-        .where(inArray(euCompletionReceipts.id, stale));
       // audit: skip — public case-law corpus bookkeeping, no workspace data
       const advanced = await tx
         .update(databaseBackfillStates)
@@ -672,10 +844,16 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
     target,
     provenance,
   }: MarkFetchedOptions) => {
+    if (Buffer.byteLength(payload, "utf-8") > EU_COMPLETION_PAYLOAD_MAX_BYTES) {
+      return Result.err(
+        new CompletionPayloadTooLarge({
+          message: "Completion recovery payload exceeds the row byte limit",
+        }),
+      );
+    }
     if (
       new Bun.CryptoHasher("sha256").update(payload).digest("hex") !==
         payloadHash ||
-      Buffer.byteLength(payload, "utf-8") > EU_COMPLETION_PAYLOAD_MAX_BYTES ||
       !payloadHash ||
       !claimedFingerprint ||
       provenance.requestHashes.length > 100 ||
@@ -684,33 +862,38 @@ const createPayloadOperations = ({ transaction, now }: StoreContext) => {
     ) {
       panic("Completion fetched envelope exceeds recovery bounds");
     }
-    return await transaction(async (tx) => {
-      const receipt = await receiptTx(tx, id);
-      if (receipt.target !== null && receipt.target !== target) {
-        panic("Completion receipt target is immutable");
-      }
-      if (receipt.status !== "pending" && receipt.status !== "failed-backoff") {
-        return null;
-      }
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      return (
-        (
-          await tx
-            .update(euCompletionReceipts)
-            .set({
-              status: "fetched",
-              payload,
-              payloadHash,
-              claimedFingerprint,
-              target,
-              provenance,
-              updatedAt: new Date(now()),
-            })
-            .where(eq(euCompletionReceipts.id, id))
-            .returning()
-        ).at(0) ?? null
-      );
-    });
+    return Result.ok(
+      await transaction(async (tx) => {
+        const receipt = await receiptTx(tx, id);
+        if (receipt.target !== null && receipt.target !== target) {
+          panic("Completion receipt target is immutable");
+        }
+        if (
+          receipt.status !== "pending" &&
+          receipt.status !== "failed-backoff"
+        ) {
+          return null;
+        }
+        // audit: skip — public case-law corpus bookkeeping, no workspace data
+        return (
+          (
+            await tx
+              .update(euCompletionReceipts)
+              .set({
+                status: "fetched",
+                payload,
+                payloadHash,
+                claimedFingerprint,
+                target,
+                provenance,
+                updatedAt: new Date(now()),
+              })
+              .where(eq(euCompletionReceipts.id, id))
+              .returning()
+          ).at(0) ?? null
+        );
+      }),
+    );
   };
   const pickup = async (id: string): Promise<"ready" | "waiting" | "failed"> =>
     await transaction(async (tx) => {
@@ -768,6 +951,13 @@ const createFailureOperations = (
       const current = await receiptTx(tx, receipt.id);
       if (!ACTIVE.some((status) => status === current.status)) {
         return current.status === "applied" ? "applied" : "failed";
+      }
+      if (failure.code === "cancelled") {
+        await finishTx(tx, {
+          id: current.id,
+          status: current.payload === null ? "pending" : "fetched",
+        });
+        return "retryable";
       }
       const verified = await verifyWrittenTx(tx, current);
       if (verified === "applied") {
@@ -849,6 +1039,10 @@ const createFailureOperations = (
           set: { cursor: receipt.decisionId, batch: held },
         });
       if (exhausted) {
+        await retireCompletedReceiptsTx(tx, {
+          receipt: current,
+          status: "failed",
+        });
         return "failed";
       }
       return classification.isolated ? "isolated" : "retryable";
@@ -900,6 +1094,7 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
               sql`${new Date(now() - EU_COMPLETION_STORE_LIMITS.retentionDays * DAY_IN_MS)}::timestamptz`,
             ),
             inArray(euCompletionReceipts.status, TERMINAL),
+            sql`NOT EXISTS (SELECT 1 FROM eu_completion_receipts protected WHERE protected.id = ${euCompletionReceipts.id} AND protected.status = 'applied' AND NOT EXISTS (SELECT 1 FROM eu_completion_receipts newer WHERE newer.source_id = protected.source_id AND newer.decision_id = protected.decision_id AND newer.status = 'applied' AND newer.completed_at IS NOT NULL AND (newer.created_at, newer.id) > (protected.created_at, protected.id) LIMIT 1) LIMIT 1)`,
             notExists(
               tx
                 .select({ id: euCompletionApprovals.supervisedReceiptId })
@@ -957,38 +1152,97 @@ const createRetentionOperations = ({ transaction, now }: StoreContext) => {
 const createApprovalOperations = ({ transaction, now }: StoreContext) => {
   const getApproval = async (scope: ApprovalScope) =>
     await transaction(async (tx) => await approvalTx(tx, scope));
-  const approveSupervisedDryRun = async (approval: ApproveOptions) =>
-    await transaction(async (tx) => {
-      const receipt = await receiptTx(tx, approval.supervisedReceiptId);
-      if (
-        receipt.status !== "dry-run" ||
-        receipt.mode !== "dry-run" ||
-        receipt.completedAt === null ||
-        receipt.sourceId !== approval.sourceId ||
-        receipt.parserVersion !== approval.parserVersion ||
-        !Number.isFinite(approval.approvedAt.getTime()) ||
-        !Number.isFinite(approval.supervisedAt.getTime()) ||
-        approval.approvedAt.getTime() > now() ||
-        approval.supervisedAt.getTime() > approval.approvedAt.getTime() ||
-        !approval.evidenceRef.trim() ||
-        !approval.supervisedBy.trim() ||
-        !approval.approvedBy.trim()
-      ) {
-        panic(
-          "Completion approval requires explicit supervised dry-run evidence",
-        );
-      }
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      const rows = await tx
-        .insert(euCompletionApprovals)
-        .values(approval)
-        .onConflictDoNothing()
-        .returning();
-      if (rows.length !== 1) {
-        panic("Completion approval already exists for this generation");
-      }
-      return rows.at(0) ?? panic("Completion approval insert returned no row");
+  const approveSupervisedDryRun = async (approval: ApproveOptions) => {
+    const attempted = await Result.tryPromise({
+      try: async () =>
+        await transaction(async (tx) => {
+          const receipt = (
+            await tx
+              .select()
+              .from(euCompletionReceipts)
+              .where(eq(euCompletionReceipts.id, approval.supervisedReceiptId))
+              .for("update")
+              .limit(1)
+          ).at(0);
+          if (receipt === undefined)
+            {return Result.err(
+              new CompletionApprovalError({
+                code: "not-found",
+                message: "The supervised receipt does not exist",
+              }),
+            );}
+          const counts = approval.reviewedCounts;
+          if (
+            Object.values(counts).some(
+              (count) =>
+                !Number.isSafeInteger(count) || count < 0 || count > 1_000_000,
+            ) ||
+            counts.reviewed < 1 ||
+            counts.accepted + counts.requiresReview !== counts.reviewed ||
+            !Number.isFinite(approval.approvedAt.getTime()) ||
+            !Number.isFinite(approval.supervisedAt.getTime()) ||
+            approval.approvedAt.getTime() > now() ||
+            approval.supervisedAt.getTime() > approval.approvedAt.getTime() ||
+            !approval.evidenceRef.trim() ||
+            approval.evidenceRef.length > 2048 ||
+            !approval.supervisedBy.trim() ||
+            approval.supervisedBy.length > 128 ||
+            !approval.approvedBy.trim() ||
+            approval.approvedBy.length > 128
+          )
+            {return Result.err(
+              new CompletionApprovalError({
+                code: "invalid-input",
+                message:
+                  "Approval requires attributed times, evidence and bounded reviewed counts",
+              }),
+            );}
+          if (
+            receipt.status !== "dry-run" ||
+            receipt.mode !== "dry-run" ||
+            receipt.completedAt === null ||
+            receipt.sourceId !== approval.sourceId ||
+            receipt.parserVersion !== approval.parserVersion ||
+            approval.supervisedAt.getTime() < receipt.completedAt.getTime()
+          )
+            {return Result.err(
+              new CompletionApprovalError({
+                code: "invalid-proof",
+                message:
+                  "Approval must reference a completed dry-run receipt for the same source and parser, supervised after completion",
+              }),
+            );}
+          // audit: skip — public case-law corpus bookkeeping, no workspace data
+          const rows = await tx
+            .insert(euCompletionApprovals)
+            .values({
+              ...approval,
+              proofMode: "dry-run",
+              proofStatus: "dry-run",
+              proofCompletedAt: sql`(SELECT ${euCompletionReceipts.completedAt} FROM ${euCompletionReceipts} WHERE ${euCompletionReceipts.id} = ${receipt.id} LIMIT 1)`,
+            })
+            .onConflictDoNothing()
+            .returning();
+          const approved = rows.at(0);
+          if (approved === undefined)
+            {return Result.err(
+              new CompletionApprovalError({
+                code: "already-approved",
+                message:
+                  "This source and parser generation already has supervised approval",
+              }),
+            );}
+          return Result.ok(approved);
+        }),
+      catch: (cause) =>
+        new CompletionApprovalError({
+          code: "database",
+          message: "Supervised approval could not be persisted",
+          cause,
+        }),
     });
+    return attempted.andThen((result) => result);
+  };
   const setControl = async ({
     sourceId,
     state,
@@ -1065,14 +1319,18 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
     });
   const recordTick = async ({
     sourceId,
-    applied,
+    mode,
+    healthyCompleted,
     intentionallyHeld,
   }: {
     sourceId: EuCompletionReceipt["sourceId"];
-    applied: number;
+    mode: EuCompletionMode;
+    healthyCompleted: number;
     intentionallyHeld: boolean;
   }) =>
     await cleanup(async (tx) => {
+      const madeProgress = healthyCompleted > 0;
+      const shouldProgress = mode === "apply" && !intentionallyHeld;
       // Only verified settlement increments completedRows; caller metrics cannot
       // manufacture healthy evidence for systemic-failure isolation.
       // audit: skip — public case-law corpus bookkeeping, no workspace data
@@ -1082,15 +1340,15 @@ const createGateOperations = ({ transaction, cleanup }: StoreContext) => {
           .values({
             key: sourceControl(sourceId),
             sourceId,
-            ticksWithoutProgress: applied > 0 || intentionallyHeld ? 0 : 1,
+            ticksWithoutProgress: madeProgress || !shouldProgress ? 0 : 1,
           })
           .onConflictDoUpdate({
             target: euCompletionControls.key,
             set: {
               ticksWithoutProgress:
-                applied > 0
+                madeProgress || mode === "dry-run"
                   ? 0
-                  : sql`${euCompletionControls.ticksWithoutProgress} + ${Number(!intentionallyHeld)}`,
+                  : sql`${euCompletionControls.ticksWithoutProgress} + ${Number(shouldProgress)}`,
             },
           })
           .returning({
@@ -1210,6 +1468,15 @@ export const createEuCompletionStore = (options: EuCompletionStoreOptions) => {
   const settlement = createSettlementOperations(context);
   return {
     ...settlement,
+    releaseBenign: async (id: string, retryAt?: Date) =>
+      await context.cleanup(async (tx) => {
+        const receipt = await receiptTx(tx, id);
+        return await settlement.finishTx(tx, {
+          id,
+          status: receipt.payload === null ? "pending" : "fetched",
+          ...(retryAt === undefined ? {} : { retryAt }),
+        });
+      }),
     ...createReservationOperations(context),
     ...createPayloadOperations(context),
     ...createFailureOperations(context, settlement),

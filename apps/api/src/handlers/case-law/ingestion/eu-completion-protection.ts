@@ -344,6 +344,46 @@ export const protectEcjFormexParts = ({
     : { type: "accepted" };
 };
 
+type EcjCompletionLegacyDocumentOptions = EcjCompletionFormexPartsOptions;
+
+/** A full fetch may add surfaces, but cannot revise an existing bare document. */
+export const protectEcjLegacyDocument = ({
+  storedRaw,
+  storedRawContentType,
+  candidate,
+}: EcjCompletionLegacyDocumentOptions):
+  | { type: "accepted" }
+  | { type: "review-required"; fields: string[] } => {
+  const decoded = Result.try({
+    try: () => ({
+      before: new TextDecoder("utf-8", { fatal: true }).decode(storedRaw),
+      after:
+        candidate.sourceRawBytes === undefined
+          ? candidate.sourceRaw
+          : new TextDecoder("utf-8", { fatal: true }).decode(
+              candidate.sourceRawBytes,
+            ),
+    }),
+    catch: () => null,
+  }).unwrapOr(null);
+  if (decoded === null) {
+    return { type: "review-required", fields: ["sourceRaw"] };
+  }
+  if (decodeSourceRawEnvelope(decoded.before) !== null) {
+    return { type: "accepted" };
+  }
+  if (
+    storedRawContentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
+    decoded.after === undefined
+  ) {
+    return { type: "review-required", fields: ["sourceRaw"] };
+  }
+  const incoming = decodeSourceRawEnvelope(decoded.after);
+  return incoming?.["document"] === decoded.before
+    ? { type: "accepted" }
+    : { type: "review-required", fields: ["sourceRaw.parts.document"] };
+};
+
 type EcjCompletionFingerprintOptions = Pick<
   EcjCompletionProtectionOptions,
   "existing" | "judges"

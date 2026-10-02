@@ -24,6 +24,7 @@ const receipt = (id: string): EuCompletionReceipt => ({
   status: "pending",
   target: null,
   claimedSourceHash: null,
+  completionSourceHash: null,
   claimedObservationOrder: null,
   claimedFingerprint: null,
   payload: null,
@@ -52,10 +53,14 @@ const fixture = () => {
   let control: "on" | "off" = "on";
   let ticks = 0;
   let requests = 0;
+  let admissions = 0;
   const rows = [receipt("first"), receipt("second")];
   const dependencies = {
     store: {
-      loadControls: async () => ({ global: control, source: control }),
+      loadControls: async () => {
+        admissions++;
+        return { global: control, source: control };
+      },
       loadSourceGateState: async () => ({
         ...initialBatchState(),
         holdUntil: sourceHoldUntil,
@@ -74,10 +79,22 @@ const fixture = () => {
         events.push(`refund:${row.id}`);
         return "retryable" as const;
       },
-      recordTick: async () => ({
-        ticksWithoutProgress: ++ticks,
-        lastCompletedAt: null,
-      }),
+      releaseBenign: async (id: string) => {
+        events.push(`refund:${id}`);
+      },
+      recordTick: async ({
+        mode,
+        healthyCompleted,
+        intentionallyHeld,
+      }: Parameters<
+        RunEuCompletionTickOptions["dependencies"]["store"]["recordTick"]
+      >[0]) => {
+        ticks =
+          mode === "apply" && healthyCompleted === 0 && !intentionallyHeld
+            ? ticks + 1
+            : 0;
+        return { ticksWithoutProgress: ticks, lastCompletedAt: null };
+      },
     },
     isEnabled: async () => enabled,
     readGate: async () => ({ kind: "normal" as const, signals: [] }),
@@ -88,7 +105,9 @@ const fixture = () => {
       options: EuCompletionRowOptions,
     ): Promise<Result<EuCompletionRowOutcome, unknown>> => {
       const checked = await options.check();
-      if (checked.isErr()) {return checked;}
+      if (checked.isErr()) {
+        return checked;
+      }
       events.push(`run:${row.id}`);
       requests++;
       return Result.ok({ type: "dry-run" });
@@ -107,6 +126,7 @@ const fixture = () => {
     });
   return {
     events,
+    admissions: () => admissions,
     dependencies,
     run,
     rows,
@@ -126,6 +146,52 @@ const fixture = () => {
 };
 
 describe("bounded EU completion orchestration", () => {
+  test("per-request fences do not repeat document admission reads", async () => {
+    const state = fixture();
+    state.dependencies.runRow = async (_row, options) => {
+      for (let request = 0; request < 4; request++) {
+        const checked = await options.check();
+        if (checked.isErr()) {
+          return checked;
+        }
+        const immediate = options.checkBeforeSend();
+        if (immediate.isErr()) {
+          return immediate;
+        }
+      }
+      return Result.ok({ type: "dry-run" });
+    };
+    expect((await state.run()).status).toBe("completed");
+    expect(state.admissions()).toBe(state.rows.length);
+  });
+  test.each([
+    "off",
+    "held",
+    "time-limit",
+    "request-budget",
+    "byte-budget",
+    "cancelled",
+  ] as const)(
+    "benign %s refunds without recording a source failure",
+    async (reason) => {
+      const state = fixture();
+      let failures = 0;
+      state.dependencies.store.recordFailure = async () => {
+        failures++;
+        return "retryable";
+      };
+      state.dependencies.runRow = async () =>
+        Result.err(
+          new EuCompletionStop({ message: "fixture benign stop", reason }),
+        );
+      const report = await state.run();
+      expect(report.status).toBe(reason);
+      expect(failures).toBe(0);
+      expect(state.events).toEqual(["reserve", "pickup:first", "refund:first"]);
+      expect(report.noProgress).toBe(0);
+    },
+  );
+
   test.each(["env", "durable", "source-backoff"] as const)(
     "%s admission stops before queue selection",
     async (kind) => {
@@ -142,7 +208,7 @@ describe("bounded EU completion orchestration", () => {
       const report = await state.run();
       expect(report.status).toBe(kind === "source-backoff" ? "held" : "off");
       expect(state.events).toEqual([]);
-      expect(report.noProgress).toBe(1);
+      expect(report.noProgress).toBe(0);
     },
   );
   test("apply cannot infer supervised approval from enabled controls", async () => {
@@ -204,7 +270,9 @@ describe("bounded EU completion orchestration", () => {
     state.dependencies.runRow = async (_row, options) => {
       state.disable();
       const checked = await options.check();
-      if (checked.isErr()) {return checked;}
+      if (checked.isErr()) {
+        return checked;
+      }
       state.events.push("unexpected-effect");
       return Result.ok({ type: "applied" });
     };
@@ -223,14 +291,13 @@ describe("bounded EU completion orchestration", () => {
   });
   test("hard cancellation during work is durably refunded", async () => {
     const state = fixture();
-    state.dependencies.runRow = async () => 
+    state.dependencies.runRow = async () =>
       Result.err(
         new EuCompletionStop({
           message: "fixture deadline",
           reason: "cancelled",
         }),
-      )
-    ;
+      );
     expect((await state.run()).status).toBe("cancelled");
     expect(state.events).toEqual(["reserve", "pickup:first", "refund:first"]);
   });

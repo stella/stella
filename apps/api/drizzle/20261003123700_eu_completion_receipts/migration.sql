@@ -10,6 +10,7 @@ CREATE TABLE "eu_completion_receipts" (
   "status" text NOT NULL,
   "target" text,
   "claimed_source_hash" text,
+  "completion_source_hash" text,
   "claimed_observation_order" bigint,
   "claimed_fingerprint" text,
   "payload" jsonb,
@@ -30,6 +31,7 @@ CREATE TABLE "eu_completion_receipts" (
   "updated_at" timestamptz DEFAULT now() NOT NULL,
   "completed_at" timestamptz,
   CONSTRAINT "eu_completion_receipts_pkey" PRIMARY KEY ("id"),
+  CONSTRAINT "eu_completion_receipts_approval_proof_key" UNIQUE ("id", "source_id", "parser_version", "mode", "status", "completed_at"),
   CONSTRAINT "eu_completion_receipts_source_fk" FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id") ON DELETE RESTRICT,
   CONSTRAINT "eu_completion_receipts_mode_check" CHECK ("mode" IN ('dry-run', 'apply')),
   CONSTRAINT "eu_completion_receipts_target_check" CHECK ("target" IS NULL OR "target" IN ('formex', 'full')),
@@ -38,9 +40,9 @@ CREATE TABLE "eu_completion_receipts" (
   CONSTRAINT "eu_completion_receipts_payload_check" CHECK ("payload" IS NULL OR (jsonb_typeof("payload") = 'string' AND octet_length("payload" #>> '{}') <= 16777216)),
   CONSTRAINT "eu_completion_receipts_provenance_check" CHECK ("provenance" IS NULL OR (jsonb_typeof("provenance") = 'object' AND octet_length("provenance"::text) <= 32768)),
   CONSTRAINT "eu_completion_receipts_fetched_check" CHECK ("status" <> 'fetched' OR ("payload" IS NOT NULL AND "payload_hash" IS NOT NULL AND "claimed_fingerprint" IS NOT NULL AND "target" IS NOT NULL)),
-  CONSTRAINT "eu_completion_receipts_retry_check" CHECK ("status" NOT IN ('failed-backoff', 'failed', 'publisher-refused') OR "retry_at" IS NOT NULL),
+  CONSTRAINT "eu_completion_receipts_retry_check" CHECK ("status" NOT IN ('failed-backoff', 'failed', 'publisher-refused', 'superseded-by-crawl') OR "retry_at" IS NOT NULL),
   CONSTRAINT "eu_completion_receipts_written_check" CHECK ("written_at" IS NULL OR ("mode" = 'apply' AND "written_parser_version" IS NOT NULL AND "written_source_hash" IS NOT NULL AND "written_observation_order" IS NOT NULL)),
-  CONSTRAINT "eu_completion_receipts_status_check" CHECK ("status" IN ('pending', 'fetched', 'applied', 'unchanged', 'review-required', 'publisher-refused', 'failed-backoff', 'failed', 'dry-run'))
+  CONSTRAINT "eu_completion_receipts_status_check" CHECK ("status" IN ('pending', 'fetched', 'applied', 'unchanged', 'review-required', 'publisher-refused', 'failed-backoff', 'failed', 'dry-run', 'too-large', 'publisher-gone', 'superseded-by-crawl'))
 );--> statement-breakpoint
 ALTER TABLE "eu_completion_receipts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "eu_completion_receipts" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -69,9 +71,15 @@ CREATE TABLE "eu_completion_approvals" (
   "supervised_at" timestamptz NOT NULL,
   "approved_by" text NOT NULL,
   "approved_at" timestamptz NOT NULL,
+  "proof_mode" text NOT NULL,
+  "proof_status" text NOT NULL,
+  "proof_completed_at" timestamptz NOT NULL,
+  "reviewed_counts" jsonb NOT NULL,
   CONSTRAINT "eu_completion_approvals_pkey" PRIMARY KEY ("source_id", "parser_version"),
   CONSTRAINT "eu_completion_approvals_source_fk" FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id") ON DELETE RESTRICT,
-  CONSTRAINT "eu_completion_approvals_receipt_fk" FOREIGN KEY ("supervised_receipt_id") REFERENCES "eu_completion_receipts"("id") ON DELETE RESTRICT,
+  CONSTRAINT "eu_completion_approvals_receipt_fk" FOREIGN KEY ("supervised_receipt_id", "source_id", "parser_version", "proof_mode", "proof_status", "proof_completed_at") REFERENCES "eu_completion_receipts"("id", "source_id", "parser_version", "mode", "status", "completed_at") ON DELETE RESTRICT,
+  CONSTRAINT "eu_completion_approvals_proof_check" CHECK ("proof_mode" = 'dry-run' AND "proof_status" = 'dry-run' AND "proof_completed_at" <= "supervised_at"),
+  CONSTRAINT "eu_completion_approvals_reviewed_check" CHECK (jsonb_typeof("reviewed_counts") = 'object' AND jsonb_typeof("reviewed_counts"->'reviewed') = 'number' AND jsonb_typeof("reviewed_counts"->'accepted') = 'number' AND jsonb_typeof("reviewed_counts"->'requiresReview') = 'number' AND ("reviewed_counts"->>'reviewed')::numeric BETWEEN 1 AND 1000000 AND ("reviewed_counts"->>'accepted')::numeric BETWEEN 0 AND 1000000 AND ("reviewed_counts"->>'requiresReview')::numeric BETWEEN 0 AND 1000000 AND ("reviewed_counts"->>'reviewed')::numeric = trunc(("reviewed_counts"->>'reviewed')::numeric) AND ("reviewed_counts"->>'accepted')::numeric = trunc(("reviewed_counts"->>'accepted')::numeric) AND ("reviewed_counts"->>'requiresReview')::numeric = trunc(("reviewed_counts"->>'requiresReview')::numeric) AND ("reviewed_counts"->>'accepted')::numeric + ("reviewed_counts"->>'requiresReview')::numeric = ("reviewed_counts"->>'reviewed')::numeric AND "reviewed_counts" ?& ARRAY['reviewed','accepted','requiresReview']),
   CONSTRAINT "eu_completion_approvals_evidence_check" CHECK ("parser_version" >= 0 AND length(trim("evidence_ref")) BETWEEN 1 AND 2048 AND length(trim("supervised_by")) BETWEEN 1 AND 128 AND length(trim("approved_by")) BETWEEN 1 AND 128 AND "supervised_at" <= "approved_at")
 );--> statement-breakpoint
 ALTER TABLE "eu_completion_approvals" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint

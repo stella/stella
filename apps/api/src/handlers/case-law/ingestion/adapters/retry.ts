@@ -79,6 +79,8 @@ export const fetchPublisher = async (
   ): Promise<Result<Response, unknown>> =>
     await Result.gen(async function* () {
       yield* Result.await(controls.check());
+      const target = yield* publisherTarget(adapterKey, requestedTarget);
+      yield* Result.await(controls.chargeRequest());
       yield* Result.await(
         Result.tryPromise({
           try: async () =>
@@ -86,10 +88,7 @@ export const fetchPublisher = async (
           catch: (error) => error,
         }),
       );
-      // Recheck after pacing: switches and leases can change while the slot sleeps.
-      yield* Result.await(controls.check());
-      const target = yield* publisherTarget(adapterKey, requestedTarget);
-      yield* Result.await(controls.chargeRequest());
+      yield* controls.checkBeforeSend();
       const fetched = await Result.tryPromise({
         try: async () =>
           await request(target, { ...requestInit, redirect: "manual" }),
@@ -100,7 +99,12 @@ export const fetchPublisher = async (
         return fetched;
       }
       const response = fetched.value;
-      if (response.status === 429 || _isRateLimitRedirect?.(response)) {
+      if (
+        response.status === 401 ||
+        response.status === 403 ||
+        response.status === 429 ||
+        _isRateLimitRedirect?.(response)
+      ) {
         const refusalNow = Temporal.Now.instant().epochMilliseconds;
         const delay = Math.ceil(
           publisherRetryDelay({
@@ -115,11 +119,14 @@ export const fetchPublisher = async (
         const cooldownUntilEpochMs = yield* Result.await(
           Result.tryPromise({
             try: async () =>
-              await deferPublisherGate(gateId, delay, requestInit.signal),
+              await deferPublisherGate(
+                gateId,
+                Math.min(delay, RETRY_AFTER_MAX_MS),
+                requestInit.signal,
+              ),
             catch: (error) => error,
           }),
         );
-        controls.onRefusal?.(cooldownUntilEpochMs);
         yield* Result.await(
           Result.tryPromise({
             try: async () => await response.body?.cancel(),
@@ -439,6 +446,7 @@ export const retryPublisherRequest = async (
   dependencies?: PublisherRetryDependencies,
 ): Promise<Response> => {
   const gateId = init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey];
+  const controls = publisherRunControls(gateId);
   const runtime = dependencies ?? {
     request: fetchPublisher,
     defer: async (durationMs: number, signal?: AbortSignal) =>
@@ -467,6 +475,8 @@ export const retryPublisherRequest = async (
     if (
       Result.isOk(fetched) &&
       (fetched.value.status === 429 ||
+        (controls !== undefined &&
+          (fetched.value.status === 401 || fetched.value.status === 403)) ||
         init.isRateLimitRedirect?.(fetched.value))
     ) {
       const delay = Math.ceil(
@@ -475,15 +485,16 @@ export const retryPublisherRequest = async (
           retryAfter: fetched.value.headers.get("Retry-After"),
           now: runtime.now(),
           random: runtime.random(),
-          ...(publisherRunControls(gateId) === undefined
+          ...(controls === undefined
             ? {}
             : { retryAfterMaxMs: MAX_DATE_EPOCH_MS - runtime.now() }),
         }),
       );
-      const controls = publisherRunControls(gateId);
       controls?.onRefusal?.(runtime.now() + delay);
-      const cooldownUntilEpochMs = await runtime.defer(delay, init.signal);
-      controls?.onRefusal?.(cooldownUntilEpochMs);
+      const cooldownUntilEpochMs = await runtime.defer(
+        Math.min(delay, RETRY_AFTER_MAX_MS),
+        init.signal,
+      );
       await fetched.value.body?.cancel();
       throw new PublisherRateLimitRefusalError({
         cursor: null,

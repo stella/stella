@@ -58,9 +58,9 @@ const receipts = [
       "UPDATE eu_completion_request_hours SET requests = 2 RETURNING hour",
   },
   {
-    prepare: `INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status) VALUES ('approval-evidence', '${sourceId}', '${decisionId}', 'dry-run', 2, 'dry-run')`,
+    prepare: `INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completed_at) VALUES ('approval-evidence', '${sourceId}', '${decisionId}', 'dry-run', 2, 'dry-run', '2026-10-02T00:00:00Z')`,
     table: "eu_completion_approvals",
-    insert: `INSERT INTO eu_completion_approvals (source_id, parser_version, supervised_receipt_id, evidence_ref, supervised_by, supervised_at, approved_by, approved_at) VALUES ('${sourceId}', 2, 'approval-evidence', 'fixture://evidence', 'fixture-supervisor', now(), 'fixture-operator', now())`,
+    insert: `INSERT INTO eu_completion_approvals (source_id, parser_version, supervised_receipt_id, evidence_ref, supervised_by, supervised_at, approved_by, approved_at, proof_mode, proof_status, proof_completed_at, reviewed_counts) VALUES ('${sourceId}', 2, 'approval-evidence', 'fixture://evidence', 'fixture-supervisor', now(), 'fixture-operator', now(), 'dry-run', 'dry-run', '2026-10-02T00:00:00Z', '{"reviewed":1,"accepted":1,"requiresReview":0}')`,
     update:
       "UPDATE eu_completion_approvals SET evidence_ref = 'fixture://updated' RETURNING source_id",
   },

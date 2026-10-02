@@ -37,7 +37,10 @@ import {
   type CorpusByteSourceSeams,
 } from "@/api/lib/legal-search/corpus-storage";
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
-import { readS3ObjectBoundedIfPresent } from "@/api/lib/s3";
+import {
+  readS3ObjectBoundedIfPresent,
+  S3ObjectBudgetError,
+} from "@/api/lib/s3";
 
 import {
   EuCompletionStop,
@@ -49,7 +52,12 @@ import {
   ecjCompletionFingerprint,
   protectEcjCompletion,
   protectEcjFormexParts,
+  protectEcjLegacyDocument,
 } from "./eu-completion-protection";
+import {
+  CompletionPayloadTooLarge,
+  euCompletionDecisionNotWithdrawn,
+} from "./eu-completion-store";
 import type {
   createEuCompletionStore,
   EuCompletionReceipt,
@@ -57,6 +65,12 @@ import type {
 } from "./eu-completion-store";
 
 class CompletionReviewRequired extends TaggedError("CompletionReviewRequired")<{
+  message: string;
+}> {}
+class CompletionSupersededByCrawl extends TaggedError(
+  "CompletionSupersededByCrawl",
+)<{ message: string }> {}
+class CompletionPublisherGone extends TaggedError("CompletionPublisherGone")<{
   message: string;
 }> {}
 class CompletionStageFailure extends TaggedError("CompletionStageFailure")<{
@@ -67,6 +81,7 @@ class CompletionStageFailure extends TaggedError("CompletionStageFailure")<{
 }> {}
 
 const MAX_COMPLETION_JUDGES = 1000;
+const COMPLETION_DEFER_MS = 60_000;
 const digest = (payload: string) =>
   new Bun.CryptoHasher("sha256").update(payload).digest("hex");
 
@@ -86,6 +101,7 @@ const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
               and(
                 eq(caseLawDecisions.id, receipt.decisionId),
                 eq(caseLawDecisions.sourceId, receipt.sourceId),
+                euCompletionDecisionNotWithdrawn(),
               ),
             )
             .for("update")
@@ -148,6 +164,7 @@ type CompletionRunnerOptions = {
   check: () => Promise<Result<void, unknown>>;
   raiseFailure: (error: unknown) => never;
   onRequest: () => void;
+  isEnabled: () => boolean;
 };
 type CompletionPublisherState = {
   requests: number;
@@ -196,6 +213,13 @@ const readStoredRaw = ({ row, signal, ensure }: CandidateContext) =>
         }),
       );
     }
+    if (read.isErr() && read.error instanceof S3ObjectBudgetError) {
+      return Result.err(
+        new CompletionPayloadTooLarge({
+          message: "Stored raw exceeds the document byte limit",
+        }),
+      );
+    }
     if (read.isErr()) {
       return Result.err(
         new CompletionStageFailure({
@@ -203,6 +227,26 @@ const readStoredRaw = ({ row, signal, ensure }: CandidateContext) =>
           code: "storage",
           scope: "systemic",
           cause: read.error,
+        }),
+      );
+    }
+    if (
+      read.value !== null &&
+      read.value.byteLength > EU_COMPLETION_LIMITS.maxBytes
+    ) {
+      return Result.err(
+        new CompletionPayloadTooLarge({
+          message: "Stored raw exceeds the document byte limit",
+        }),
+      );
+    }
+    if (read.value === null && row.sourceRawS3Key !== null) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Stored raw reference is missing",
+          code: "storage",
+          scope: "systemic",
+          cause: null,
         }),
       );
     }
@@ -261,6 +305,13 @@ const fetchFullCompletionCandidate = (
         value.sourceDocumentId === row.sourceDocumentId &&
         value.language === row.language,
     );
+    if (matches.length === 0) {
+      return Result.err(
+        new CompletionPublisherGone({
+          message: "Selected publisher document is gone",
+        }),
+      );
+    }
     if (matches.length !== 1) {
       return Result.err(
         new CompletionReviewRequired({
@@ -268,9 +319,23 @@ const fetchFullCompletionCandidate = (
         }),
       );
     }
-    return Result.ok(
-      matches.at(0) ?? panic("Selected publisher candidate disappeared"),
-    );
+    const candidate =
+      matches.at(0) ?? panic("Selected publisher candidate disappeared");
+    if (raw !== null) {
+      const preserved = protectEcjLegacyDocument({
+        storedRaw: raw,
+        storedRawContentType: row.sourceRawContentType,
+        candidate,
+      });
+      if (preserved.type === "review-required") {
+        return Result.err(
+          new CompletionReviewRequired({
+            message: "Full completion changed existing legacy document bytes",
+          }),
+        );
+      }
+    }
+    return Result.ok(candidate);
   });
 
 const fetchCompletionCandidate = (
@@ -343,9 +408,14 @@ const fetchCompletionCandidate = (
             cause: null,
           }),
         );
+      case "formex-gone":
+        return Result.err(
+          new CompletionPublisherGone({
+            message: "Selected Formex manifestation is gone",
+          }),
+        );
       case "notice-missing":
       case "formex-not-located":
-      case "formex-gone":
       case "write-rejected":
         return Result.err(
           new CompletionReviewRequired({
@@ -412,7 +482,7 @@ const prepareCompletionCandidate = (
       row.sourceObservationOrder !== receipt.claimedObservationOrder
     ) {
       return Result.err(
-        new CompletionReviewRequired({
+        new CompletionSupersededByCrawl({
           message: "Decision source changed after reservation",
         }),
       );
@@ -457,7 +527,7 @@ const prepareCompletionCandidate = (
       );
     }
     yield* Result.await(ensure());
-    const saved = yield* Result.await(
+    const fetchedReceipt = yield* Result.await(
       legacyOperation(
         async () =>
           await store.markFetched({
@@ -476,6 +546,10 @@ const prepareCompletionCandidate = (
           }),
       ),
     );
+    if (fetchedReceipt.isErr()) {
+      return fetchedReceipt;
+    }
+    const saved = fetchedReceipt.value;
     if (saved === null) {
       return Result.err(
         new CompletionReviewRequired({
@@ -562,7 +636,7 @@ const checkCompletionWriteTx = (
         }) !== currentReceipt.claimedFingerprint)
     ) {
       return Result.err(
-        new CompletionReviewRequired({
+        new CompletionSupersededByCrawl({
           message: "Completion claimed statements changed before apply",
         }),
       );
@@ -672,16 +746,8 @@ const applyCompletionCandidate = (
   candidate: IngestionResult,
 ): Promise<RowResult> =>
   Result.gen(async function* () {
-    const {
-      ensure,
-      sourceLease,
-      receipt,
-      ingestionDb,
-      signal,
-      store,
-      healthyEvidence,
-      raiseFailure,
-    } = context;
+    const { ensure, sourceLease, receipt, ingestionDb, signal, raiseFailure } =
+      context;
     yield* Result.await(ensure());
     const lease =
       sourceLease() ?? panic("Completion apply has no source lease");
@@ -719,23 +785,7 @@ const applyCompletionCandidate = (
       ),
     );
     yield* Result.await(ensure());
-    const settled = yield* Result.await(
-      legacyOperation(async () => await store.finalize(receipt.id)),
-    );
-    if (settled === "retryable") {
-      const type = yield* Result.await(
-        legacyOperation(
-          async () =>
-            await store.recordFailure(receipt, {
-              scope: "systemic",
-              code: "write",
-              healthyEvidence,
-            }),
-        ),
-      );
-      return Result.ok({ type } satisfies EuCompletionRowOutcome);
-    }
-    return Result.ok({ type: settled } satisfies EuCompletionRowOutcome);
+    return await finalizeWrittenCompletion(context);
   });
 
 type HydrateOptions = Pick<
@@ -816,10 +866,42 @@ const hydrateCompletionStatements = ({
     return Result.ok({ ...row, fulltext: text.value, documentAst: ast.value });
   });
 
+const finalizeWrittenCompletion = (
+  context: CompletionContext,
+): Promise<RowResult> =>
+  Result.gen(async function* () {
+    yield* Result.await(context.ensure());
+    const settled = yield* Result.await(
+      legacyOperation(
+        async () => await context.store.finalize(context.receipt.id),
+      ),
+    );
+    if (settled === "retryable") {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await context.store.releaseBenign(
+              context.receipt.id,
+              new Date(
+                Temporal.Now.instant().epochMilliseconds + COMPLETION_DEFER_MS,
+              ),
+            ),
+        ),
+      );
+      return Result.ok({
+        type: "waiting-for-mirror",
+      } satisfies EuCompletionRowOutcome);
+    }
+    return Result.ok({ type: settled } satisfies EuCompletionRowOutcome);
+  });
+
 const executeCompletionRow = (context: CompletionContext): Promise<RowResult> =>
   Result.gen(async function* () {
     const { rootDb, receipt, ensure, store } = context;
     yield* Result.await(ensure());
+    if (receipt.writtenAt !== null) {
+      return await finalizeWrittenCompletion(context);
+    }
     const loaded = yield* Result.await(
       legacyOperation(
         async () =>
@@ -837,7 +919,7 @@ const executeCompletionRow = (context: CompletionContext): Promise<RowResult> =>
       !matchesWrittenMarker(receipt, row)
     ) {
       return Result.err(
-        new CompletionReviewRequired({
+        new CompletionSupersededByCrawl({
           message: "Decision changed after completion claim",
         }),
       );
@@ -919,9 +1001,8 @@ const completionResponseLimiter =
         transform(chunk, controller) {
           state.bytes += chunk.byteLength;
           if (state.bytes > EU_COMPLETION_LIMITS.maxBytes) {
-            const error = new EuCompletionStop({
-              message: "Completion byte budget reached",
-              reason: "byte-budget",
+            const error = new CompletionPayloadTooLarge({
+              message: "Completion document byte budget reached",
             });
             state.publisherFailure = { error };
             controller.error(error);
@@ -972,6 +1053,39 @@ const chargeCompletionRequest = (context: CompletionContext) =>
     onRequest();
     return Result.ok();
   });
+const checkCompletionBeforeSend = (
+  context: CompletionContext,
+): Result<void, unknown> => {
+  if (context.state.refusal !== null) {
+    return Result.err(
+      new EuCompletionStop({
+        message: "Publisher refused this run",
+        reason: "publisher-refused",
+      }),
+    );
+  }
+  if (context.state.publisherFailure !== null) {
+    return Result.err(context.state.publisherFailure.error);
+  }
+  if (context.signal.aborted) {
+    return Result.err(
+      new EuCompletionStop({
+        message: "Completion cancelled",
+        reason: "cancelled",
+      }),
+    );
+  }
+  if (!context.isEnabled()) {
+    return Result.err(
+      new EuCompletionStop({
+        message: "Completion is disabled",
+        reason: "off",
+      }),
+    );
+  }
+  return context.checkBeforeSend();
+};
+
 const runControlledCompletionRow = (
   context: CompletionContext,
 ): Promise<RowResult> =>
@@ -988,12 +1102,20 @@ const runControlledCompletionRow = (
               retry: "durable",
               raiseFailure: context.raiseFailure,
               check: ensure,
+              checkBeforeSend: () => checkCompletionBeforeSend(context),
               chargeRequest: async () => await chargeCompletionRequest(context),
               onRefusal: (deadline) => {
                 state.refusal = deadline;
               },
               onFailure: (error) => {
-                state.publisherFailure = { error };
+                state.publisherFailure = {
+                  error: context.signal.aborted
+                    ? new EuCompletionStop({
+                        message: "Completion cancelled",
+                        reason: "cancelled",
+                      })
+                    : error,
+                };
               },
               limitResponse: completionResponseLimiter(state),
             },
@@ -1012,6 +1134,43 @@ const settleCompletionFailure = ({
   error,
 }: FailureContext): Promise<RowResult> =>
   Result.gen(async function* () {
+    if (error instanceof CompletionPublisherGone) {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.finish({ id: receipt.id, status: "publisher-gone" }),
+        ),
+      );
+      return Result.ok({
+        type: "publisher-gone",
+      } satisfies EuCompletionRowOutcome);
+    }
+    if (error instanceof CompletionPayloadTooLarge) {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.finish({ id: receipt.id, status: "too-large" }),
+        ),
+      );
+      return Result.ok({ type: "too-large" } satisfies EuCompletionRowOutcome);
+    }
+    if (error instanceof CompletionSupersededByCrawl) {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.finish({
+              id: receipt.id,
+              status: "superseded-by-crawl",
+              retryAt: new Date(
+                Temporal.Now.instant().epochMilliseconds + COMPLETION_DEFER_MS,
+              ),
+            }),
+        ),
+      );
+      return Result.ok({
+        type: "superseded-by-crawl",
+      } satisfies EuCompletionRowOutcome);
+    }
     if (error instanceof CompletionReviewRequired) {
       yield* Result.await(
         legacyOperation(
@@ -1029,14 +1188,7 @@ const settleCompletionFailure = ({
     }
     if (error instanceof EuCompletionStop) {
       yield* Result.await(
-        legacyOperation(
-          async () =>
-            await store.recordFailure(receipt, {
-              scope: "systemic",
-              code: "cancelled",
-              healthyEvidence,
-            }),
-        ),
+        legacyOperation(async () => await store.releaseBenign(receipt.id)),
       );
       return Result.ok({
         type: "stopped",
@@ -1078,6 +1230,7 @@ export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
   ): Promise<RowResult> =>
     Result.gen(async function* () {
       state.publisherFailure = null;
+      state.bytes = 0;
       const receipt = yield* Result.await(
         legacyOperation(
           async () => await options.store.getReceipt(reserved.id),
@@ -1131,6 +1284,15 @@ export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
           type: "publisher-refused",
           retryAt,
         } satisfies EuCompletionRowOutcome);
+      }
+      if (state.publisherFailure !== null) {
+        const failed = yield* Result.await(
+          settleCompletionFailure({
+            ...context,
+            error: state.publisherFailure.error,
+          }),
+        );
+        return Result.ok(failed);
       }
       if (attempted.isOk()) {
         return attempted;

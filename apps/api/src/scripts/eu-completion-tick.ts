@@ -211,6 +211,7 @@ const loadRuntime = async () => {
 type CompletionRuntime = Awaited<ReturnType<typeof loadRuntime>>;
 type CompletionFixtureOptions = {
   healthConfig?: Pick<HealthConfig, "busyWindows">;
+  afterDocument?: () => Promise<void>;
 };
 type CompletionFenceOptions = {
   runtime: CompletionRuntime;
@@ -270,6 +271,21 @@ const createCompletionFence = async ({
         }
         slotHeld = true;
       }
+      await assertReplaySlot({
+        expectedBackend: backend,
+        signal,
+        queryBackend: async () =>
+          (
+            await connection.unsafe<{ pid: number }[]>(
+              "SELECT pg_backend_pid() AS pid",
+            )
+          ).at(0)?.pid,
+      });
+      await lease?.beforeDatabaseMark();
+      signal.throwIfAborted();
+    },
+    acquireDocument: async () => {
+      signal.throwIfAborted();
       lease ??= await runtime.acquireCaseLawSourceIngestionLease({
         scopedDb: handles.ingestionDb,
         sourceId,
@@ -281,18 +297,11 @@ const createCompletionFence = async ({
           reason: "held",
         });
       }
-      await assertReplaySlot({
-        expectedBackend: backend,
-        signal,
-        queryBackend: async () =>
-          (
-            await connection.unsafe<{ pid: number }[]>(
-              "SELECT pg_backend_pid() AS pid",
-            )
-          ).at(0)?.pid,
-      });
-      await lease.beforeDatabaseMark();
-      signal.throwIfAborted();
+    },
+    releaseDocument: async () => {
+      const acquired = lease;
+      lease = null;
+      await acquired?.release();
     },
     close: async () => {
       try {
@@ -349,6 +358,7 @@ const runCompletionSession = async (
     raiseFailure: (error) => {
       throw error;
     },
+    isEnabled: () => enabledNow(environment.CASE_LAW_EU_COMPLETION_MODE),
     onRequest: () => {
       requests++;
     },
@@ -371,7 +381,21 @@ const runCompletionSession = async (
             readGate: preflight.readVerdict,
             fence: resources.fence,
             requestCount: () => requests,
-            runRow: runner.runRow,
+            runRow: async (receipt, rowOptions) => {
+              const acquired = await Result.tryPromise({
+                try: resources.acquireDocument,
+                catch: (error) => error,
+              });
+              if (acquired.isErr()) {
+                return acquired;
+              }
+              try {
+                return await runner.runRow(receipt, rowOptions);
+              } finally {
+                await resources.releaseDocument();
+                await fixture.afterDocument?.();
+              }
+            },
           },
         }),
     );
@@ -392,7 +416,8 @@ const runCompletionSession = async (
     if (attempted.isErr()) {
       await cleanupStore.recordTick({
         sourceId,
-        applied: report.applied,
+        mode: environment.CASE_LAW_EU_COMPLETION_MODE,
+        healthyCompleted: 0,
         intentionallyHeld:
           report.status === "held" ||
           report.status === "off" ||

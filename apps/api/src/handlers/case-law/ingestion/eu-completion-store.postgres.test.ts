@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 
@@ -7,6 +8,7 @@ import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
   caseLawSources,
+  caseLawIndexJobs,
   databaseBackfillStates,
   euCompletionApprovals,
   euCompletionControls,
@@ -22,6 +24,7 @@ import {
 
 import {
   createEuCompletionStore,
+  CompletionPayloadTooLarge,
   EU_COMPLETION_STORE_LIMITS,
   type EuCompletionReceipt,
 } from "./eu-completion-store";
@@ -134,10 +137,10 @@ if (!databaseUrl || !enabled) {
         target: "full",
         provenance: { requestHashes: [], requestedSurfaces: ["notice"] },
       });
-      if (!result) {
+      if (result.isErr() || result.value === null) {
         throw new TypeError("Expected fetched receipt");
       }
-      return result;
+      return result.value;
     };
     const approve = async (
       fixtureState: Awaited<ReturnType<typeof fixture>>,
@@ -147,7 +150,7 @@ if (!databaseUrl || !enabled) {
         id: fixtureState.receipt.id,
         status: "dry-run",
       });
-      return await fixtureState.store.approveSupervisedDryRun({
+      const approval = await fixtureState.store.approveSupervisedDryRun({
         sourceId: fixtureState.sourceId,
         parserVersion: 2,
         supervisedReceiptId: fixtureState.receipt.id,
@@ -156,7 +159,10 @@ if (!databaseUrl || !enabled) {
         supervisedAt: new Date(fixtureState.currentTime()),
         approvedBy: "fixture-operator",
         approvedAt: new Date(fixtureState.currentTime()),
+        reviewedCounts: { reviewed: 1, accepted: 1, requiresReview: 0 },
       });
+      if (approval.isErr()) {throw new TypeError(approval.error.message);}
+      return approval.value;
     };
     test("reservation/CAS recovery is idempotent and durable before the cursor moves", async () => {
       const state = await fixture();
@@ -225,6 +231,46 @@ if (!databaseUrl || !enabled) {
         ),
       ).toBe(false);
     });
+    test("invalid or duplicate operator approvals return typed business errors", async () => {
+      const state = await fixture();
+      const approved = await approve(state);
+      const other = await fixture();
+      const cases = [
+        {
+          input: {
+            ...approved,
+            supervisedReceiptId: "missing-fixture-receipt",
+          },
+          code: "not-found",
+        },
+        {
+          input: { ...approved, sourceId: other.sourceId },
+          code: "invalid-proof",
+        },
+        { input: { ...approved, parserVersion: 3 }, code: "invalid-proof" },
+        {
+          input: {
+            ...approved,
+            sourceId: other.sourceId,
+            supervisedReceiptId: other.receipt.id,
+          },
+          code: "invalid-proof",
+        },
+        {
+          input: {
+            ...approved,
+            reviewedCounts: { reviewed: 0, accepted: 0, requiresReview: 0 },
+          },
+          code: "invalid-input",
+        },
+        { input: approved, code: "already-approved" },
+      ];
+      for (const item of cases) {
+        const result = await state.store.approveSupervisedDryRun(item.input);
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {expect(result.error.code).toBe(item.code);}
+      }
+    });
     test("canonical marker is atomic, pending mirrors cannot settle, and completion is exactly once", async () => {
       const state = await fixture();
       await approve(state);
@@ -274,6 +320,19 @@ if (!databaseUrl || !enabled) {
           .where(eq(euCompletionControls.sourceId, state.sourceId))
       ).at(0);
       expect(progress?.completedRows).toBe(1);
+      const newerDry = (
+        await state.store.reserve({ ...state.options, parserVersion: 3 })
+      ).at(0);
+      if (newerDry === undefined) {
+        throw new TypeError("Expected newer dry-run receipt");
+      }
+      await fetched(state.store, newerDry);
+      await state.store.finish({ id: newerDry.id, status: "dry-run" });
+      state.advance(100 * DAY_IN_MS);
+      await state.store.compact({ limit: 100 });
+      expect(
+        (await state.store.getReceipt(receipt.id)).supersededAt,
+      ).toBeNull();
     });
     test("an unrelated observation with the same semantic hash requires review", async () => {
       const state = await fixture();
@@ -390,7 +449,7 @@ if (!databaseUrl || !enabled) {
       expect(await state.store.pickup(state.receipt.id)).toBe("ready");
       expect((await state.store.getReceipt(state.receipt.id)).attempts).toBe(1);
     });
-    test("a true outage consumes no row attempts; adjacent healthy evidence isolates only a bounded streak", async () => {
+    test("publisher outages never exhaust rows; isolated storage failures retain a bounded attempt", async () => {
       const state = await fixture();
       const failure = {
         scope: "systemic",
@@ -411,8 +470,226 @@ if (!databaseUrl || !enabled) {
           ...failure,
           healthyEvidence: "adjacent-row",
         }),
-      ).toBe("isolated");
+      ).toBe("retryable");
+      expect((await state.store.getReceipt(state.receipt.id)).attempts).toBe(0);
+      for (let index = 0; index < 3; index++) {
+        state.advance(EU_COMPLETION_STORE_LIMITS.retryMaxMs);
+        expect(await state.store.pickup(state.receipt.id)).toBe("ready");
+        expect(
+          await state.store.recordFailure(state.receipt, {
+            scope: "systemic",
+            code: "storage",
+            healthyEvidence: "adjacent-row",
+          }),
+        ).toBe(index === 2 ? "isolated" : "retryable");
+      }
       expect((await state.store.getReceipt(state.receipt.id)).attempts).toBe(1);
+    });
+    test("benign stops refund without holding and healthy dry runs clear previous source backoff", async () => {
+      const state = await fixture();
+      await fetched(state.store, state.receipt);
+      const before = (await state.store.getReceipt(state.receipt.id)).payload;
+      await state.store.releaseBenign(
+        state.receipt.id,
+        new Date(state.currentTime() + 60_000),
+      );
+      expect((await state.store.getReceipt(state.receipt.id)).attempts).toBe(0);
+      expect((await state.store.getReceipt(state.receipt.id)).payload).toBe(
+        before,
+      );
+      expect(
+        (await state.store.loadSourceGateState(state.sourceId)).holdCount,
+      ).toBe(0);
+      expect(await state.store.pickup(state.receipt.id)).toBe("waiting");
+      state.advance(60_000);
+      expect(await state.store.pickup(state.receipt.id)).toBe("ready");
+      await state.store.recordFailure(state.receipt, {
+        scope: "systemic",
+        code: "publisher",
+        healthyEvidence: "adjacent-row",
+      });
+      expect(
+        (await state.store.loadSourceGateState(state.sourceId)).holdCount,
+      ).toBe(1);
+      state.advance(EU_COMPLETION_STORE_LIMITS.retryMaxMs);
+      expect(await state.store.pickup(state.receipt.id)).toBe("ready");
+      await state.store.finish({ id: state.receipt.id, status: "dry-run" });
+      expect(
+        (await state.store.loadSourceGateState(state.sourceId)).holdCount,
+      ).toBe(0);
+      expect(
+        (
+          await state.store.recordTick({
+            sourceId: state.sourceId,
+            mode: "dry-run",
+            healthyCompleted: 0,
+            intentionallyHeld: false,
+          })
+        ).ticksWithoutProgress,
+      ).toBe(0);
+      for (const mode of ["dry-run", "apply"] as const) {
+        const progress = await state.store.recordTick({
+          sourceId: state.sourceId,
+          mode,
+          healthyCompleted: 1,
+          intentionallyHeld: false,
+        });
+        expect(progress.ticksWithoutProgress).toBe(0);
+      }
+    });
+    test("terminal current hash and parser receipts quiesce across sweep wrap", async () => {
+      const state = await fixture();
+      const settled = [state.receipt];
+      for (let index = 0; index < state.ids.length; index++) {
+        const row = settled.at(index);
+        if (row === undefined) {
+          throw new TypeError("Expected receipt");
+        }
+        await state.store.finish({ id: row.id, status: "unchanged" });
+        const next = (await state.store.reserve(state.options)).at(0);
+        if (next !== undefined) {
+          settled.push(next);
+        }
+      }
+      expect(await state.store.reserve(state.options)).toEqual([]);
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceHash: "new-crawl-hash" })
+        .where(eq(caseLawDecisions.id, state.receipt.decisionId));
+      const next = (await state.store.reserve(state.options)).at(0);
+      expect(next?.decisionId).toBe(state.receipt.decisionId);
+      expect(next?.id).not.toBe(state.receipt.id);
+      expect(
+        (await state.store.reserve({ ...state.options, parserVersion: 3 }))
+          .length,
+      ).toBe(1);
+    });
+    test("crawl supersession refreshes a retry claim instead of becoming a terminal review", async () => {
+      const state = await fixture();
+      await fetched(state.store, state.receipt);
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceHash: "crawl", sourceObservationOrder: 101n })
+        .where(eq(caseLawDecisions.id, state.receipt.decisionId));
+      await state.store.finish({
+        id: state.receipt.id,
+        status: "superseded-by-crawl",
+        retryAt: new Date(state.currentTime() + 60_000),
+      });
+      const held = await state.store.getReceipt(state.receipt.id);
+      expect(held.attempts).toBe(0);
+      expect(held.completedAt).toBeNull();
+      expect(held.payload).toBeNull();
+      expect(held.claimedSourceHash).toBe("crawl");
+      expect(held.claimedObservationOrder).toBe(101n);
+      expect(
+        (await state.store.loadSourceGateState(state.sourceId)).holdCount,
+      ).toBe(0);
+      state.advance(60_000);
+      expect((await state.store.reserve(state.options)).at(0)?.id).toBe(
+        held.id,
+      );
+      expect(await state.store.pickup(held.id)).toBe("ready");
+    });
+    test("withdrawal audit markers exclude queued and fresh reservations", async () => {
+      const state = await fixture();
+      await db.insert(caseLawIndexJobs).values(
+        state.ids.map((decisionId) => ({
+          decisionId,
+          operation: "withdraw" as const,
+          status: "succeeded" as const,
+          detail: "fixture withdrawal",
+        })),
+      );
+      expect(await state.store.reserve(state.options)).toEqual([]);
+      expect(
+        await state.store.reserve({ ...state.options, parserVersion: 3 }),
+      ).toEqual([]);
+    });
+    test("oversize recovery envelopes are typed and leave the receipt unchanged", async () => {
+      const state = await fixture();
+      const payload = "x".repeat(16 * 1024 * 1024 + 1);
+      const saved = await state.store.markFetched({
+        id: state.receipt.id,
+        payload,
+        payloadHash: hash(payload),
+        claimedFingerprint: "claimed",
+        target: "full",
+        provenance: { requestHashes: [], requestedSurfaces: [] },
+      });
+      expect(saved.isErr()).toBe(true);
+      if (saved.isErr()) {
+        expect(saved.error).toBeInstanceOf(CompletionPayloadTooLarge);
+      }
+      expect((await state.store.getReceipt(state.receipt.id)).status).toBe(
+        "pending",
+      );
+    });
+    test("owner inserts cannot approve the wrong source, generation, state or completion time", async () => {
+      const state = await fixture();
+      const approved = await approve(state);
+      await db
+        .delete(euCompletionApprovals)
+        .where(eq(euCompletionApprovals.sourceId, state.sourceId));
+      const other = await fixture();
+      for (const mismatch of [
+        { sourceId: other.sourceId },
+        { parserVersion: 3 },
+        { proofStatus: "pending" },
+        { proofCompletedAt: new Date(approved.proofCompletedAt.getTime() + 1) },
+      ]) {
+        const inserted = await Result.tryPromise(
+          async () =>
+            await db
+              .insert(euCompletionApprovals)
+              .values({ ...approved, ...mismatch }),
+        );
+        expect(inserted.isErr()).toBe(true);
+      }
+      const restored = await state.store.approveSupervisedDryRun({
+        sourceId: approved.sourceId,
+        parserVersion: approved.parserVersion,
+        supervisedReceiptId: approved.supervisedReceiptId,
+        evidenceRef: approved.evidenceRef,
+        supervisedBy: approved.supervisedBy,
+        supervisedAt: approved.supervisedAt,
+        approvedBy: approved.approvedBy,
+        approvedAt: approved.approvedAt,
+        reviewedCounts: approved.reviewedCounts,
+      });
+      expect(restored.isOk()).toBe(true);
+    });
+    test("approval proofs preserve Postgres microseconds without a Date round trip", async () => {
+      const state = await fixture();
+      await fetched(state.store, state.receipt);
+      await state.store.finish({ id: state.receipt.id, status: "dry-run" });
+      await db
+        .update(euCompletionReceipts)
+        .set({ completedAt: sql`'2026-10-02 00:00:00.123456+00'::timestamptz` })
+        .where(eq(euCompletionReceipts.id, state.receipt.id));
+      state.advance(1000);
+      const approval = await state.store.approveSupervisedDryRun({
+        sourceId: state.sourceId,
+        parserVersion: 2,
+        supervisedReceiptId: state.receipt.id,
+        evidenceRef: "fixture://microsecond-proof",
+        supervisedBy: "fixture",
+        supervisedAt: new Date(state.currentTime()),
+        approvedBy: "fixture",
+        approvedAt: new Date(state.currentTime()),
+        reviewedCounts: { reviewed: 1, accepted: 1, requiresReview: 0 },
+      });
+      expect(approval.isOk()).toBe(true);
+      const proof = (
+        await db
+          .select({
+            microseconds: sql<string>`to_char(${euCompletionApprovals.proofCompletedAt}, 'US')`,
+          })
+          .from(euCompletionApprovals)
+          .where(eq(euCompletionApprovals.sourceId, state.sourceId))
+          .limit(1)
+      ).at(0);
+      expect(proof?.microseconds).toBe("123456");
     });
     test("hour budget serializes independent clients at the last request", async () => {
       const state = await fixture();
@@ -461,6 +738,16 @@ if (!databaseUrl || !enabled) {
       }
       expect(newer.decisionId).toBe(state.receipt.decisionId);
       expect(newer.id).not.toBe(state.receipt.id);
+      expect(await state.store.compact({ limit: 100 })).toBe(0);
+      await fetched(state.store, newer);
+      await state.store.finish({ id: newer.id, status: "dry-run" });
+      expect(await state.store.compact({ limit: 100 })).toBe(0);
+      expect(
+        (
+          await state.store.getReceipt(state.receipt.id)
+        ).supersededAt?.getTime(),
+      ).toBe(state.currentTime());
+      state.advance(91 * DAY_IN_MS);
       expect(await state.store.compact({ limit: 100 })).toBe(1);
       expect(await state.store.getReceipt(newer.id)).not.toBeNull();
       expect(await state.store.compact({ limit: 100 })).toBe(0);
