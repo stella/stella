@@ -1573,6 +1573,15 @@
     "currency": "العملة",
     "currentPage": "الصفحة الحالية",
     "date": "التاريخ",
+    "datePicker": {
+      "label": "منتقي التاريخ",
+      "nextDecade": "العقد التالي",
+      "nextMonth": "الشهر التالي",
+      "nextYear": "السنة التالية",
+      "previousDecade": "العقد السابق",
+      "previousMonth": "الشهر السابق",
+      "previousYear": "السنة السابقة"
+    },
     "decisions": "الأحكام",
     "decline": "رفض",
     "delete": "حذف",
