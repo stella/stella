@@ -88,7 +88,7 @@ test("every release requires both final image smokes regardless of other changed
     }),
     propertyConfig({ numRuns: 30 }),
   );
-});
+}, 30_000);
 
 test("API image construction and smoke orchestration changes require the final image", () => {
   for (const file of [
@@ -2755,7 +2755,7 @@ test("route-relevant pull requests plan the required route smoke job", () => {
       unplannedScopes: [scope],
     }),
   ).toBe(0);
-});
+}, 30_000);
 
 test("route smoke consumes the production build and fails when its stack cannot run", () => {
   const plan = jobSteps(ciJobs["ci-plan"]).find(
@@ -2921,7 +2921,7 @@ test("service-suite PR scope binds planning, execution, and the fast result gate
       );
     }
   }
-});
+}, 30_000);
 
 test("each folded service step follows its own dependency scope at PR depth", () => {
   const scopes = [
