@@ -202,17 +202,24 @@ if (!databaseUrl || !runPostgresTests) {
             expect(invoice?.totalAmount).toBe(stored?.amount);
           } finally {
             release.resolve(undefined);
-            await Promise.all([attaching, mutating]);
-            if (seeded) {
-              await setup.db.delete(expenses).where(eq(expenses.id, expenseId));
-              await setup.db.delete(invoices).where(eq(invoices.id, invoiceId));
-              await setup.db
-                .delete(workspaces)
-                .where(eq(workspaces.id, workspaceId));
-              await setup.db
-                .delete(organization)
-                .where(eq(organization.id, organizationId));
-              await setup.db.delete(user).where(eq(user.id, userId));
+            try {
+              await Promise.all([attaching, mutating]);
+            } finally {
+              if (seeded) {
+                await setup.db
+                  .delete(expenses)
+                  .where(eq(expenses.id, expenseId));
+                await setup.db
+                  .delete(invoices)
+                  .where(eq(invoices.id, invoiceId));
+                await setup.db
+                  .delete(workspaces)
+                  .where(eq(workspaces.id, workspaceId));
+                await setup.db
+                  .delete(organization)
+                  .where(eq(organization.id, organizationId));
+                await setup.db.delete(user).where(eq(user.id, userId));
+              }
             }
           }
         });
