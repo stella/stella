@@ -210,17 +210,22 @@ describe("counterparty_check chat tool", () => {
         return panic("Stop after reading the subject");
       },
     );
-    await execute({
-      check: "sanctions",
-      subject: {
-        type: "person",
-        first_name: "Ivan",
-        last_name: "Sidorov",
-        birth_date: null,
-        date_of_birth: null,
-        nationality_codes: null,
-      },
-    }).catch(() => undefined);
+    const outcome = await Result.tryPromise(
+      async () =>
+        await execute({
+          check: "sanctions",
+          subject: {
+            type: "person",
+            first_name: "Ivan",
+            last_name: "Sidorov",
+            birth_date: null,
+            date_of_birth: null,
+            nationality_codes: null,
+          },
+        }),
+    );
+    // The stub stops the check once it has read the subject.
+    expect(Result.isError(outcome)).toBe(true);
     expect(received?.subject).toEqual({
       type: "person",
       firstName: "Ivan",
