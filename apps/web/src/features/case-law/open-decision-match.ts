@@ -6,8 +6,9 @@ import { createCaseLawDecisionRouteParams } from "@stll/api-contract/case-law-de
 import { decisionDocketGrammarForJurisdiction } from "@stll/api-contract/decision-docket-grammar";
 import {
   type DecisionQueryIntent,
-  exactDecisionMatches,
   parseDecisionQuery,
+  resolveDecisionIdentity,
+  searchTextOfDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
 import type { SearchExcerpt } from "@stll/api-contract/search";
 
@@ -47,23 +48,6 @@ export const readDecisionIntent = (
   return parseDecisionQuery(q, { grammar: docketGrammarFor(jurisdiction) });
 };
 
-/** The text a query intent hands the search endpoint, if any. */
-const searchTextOfIntent = (
-  intent: DecisionQueryIntent,
-): string | undefined => {
-  switch (intent.type) {
-    case "identifier":
-      return intent.value;
-    case "text":
-      return intent.text;
-    case "empty":
-      return undefined;
-    default:
-      intent satisfies never;
-      return panic("Unhandled decision query intent");
-  }
-};
-
 type DecisionFiltersOptions = {
   /**
    * How much of the matched passage the results carry. A stored view
@@ -93,7 +77,7 @@ export const createDecisionFiltersFromSearch = (
     return panic("Case-law search requires a country.");
   }
   const range = decisionDateRange({ from, to, year });
-  const search = searchTextOfIntent(
+  const search = searchTextOfDecisionQuery(
     readDecisionIntent(q, { jurisdiction: scope }),
   );
 
@@ -134,9 +118,9 @@ type OpenDecisionMatchOptions = {
 
 /**
  * Open the decision the entry names, when exactly one answers to it. Several
- * (the same docket at several courts) are left to the reader to choose
- * between, so the caller falls back to its list; the return value says which
- * happened.
+ * (the decisions of one file, the same docket at several courts, or a sheet
+ * no decision is known to carry) are left to the reader to choose between,
+ * so the caller falls back to its list; the return value says which happened.
  */
 export const openDecisionMatch = async ({
   excerpt,
@@ -155,7 +139,7 @@ export const openDecisionMatch = async ({
     queryClient,
     decisionsInfiniteOptions(
       createDecisionFiltersFromSearch(
-        { ...search, q: intent.value },
+        { ...search, q: searchTextOfDecisionQuery(intent) },
         { excerpt },
       ),
     ),
@@ -168,11 +152,11 @@ export const openDecisionMatch = async ({
     return false;
   }
 
-  const matches = exactDecisionMatches(intent, firstPage.decisions);
-  const only = matches.length === 1 ? matches.at(0) : undefined;
-  if (only === undefined) {
+  const resolution = resolveDecisionIdentity(intent, firstPage.decisions);
+  if (resolution.status !== "unique") {
     return false;
   }
+  const only = resolution.decision;
 
   const preferred = pickPreferredCaseLawLanguageVariant({
     alternates: only.languageAlternates,

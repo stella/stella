@@ -189,6 +189,7 @@ const runQuery = async (
   let ranked = rankDocumentHits(scanned, depth);
   for (;;) {
     const searched = await client.search({
+      observer: "unobserved",
       indexId,
       query: engineQuery,
       maxHits: LIMITS.corpusIndexSearchCandidateLimit,

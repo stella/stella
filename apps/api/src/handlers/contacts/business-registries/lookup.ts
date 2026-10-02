@@ -20,6 +20,10 @@ import type {
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 // A tuple of literals keeps each option in the route types, where a mapped
 // array widens to `never`; `satisfies` fails when the contract list changes.
@@ -66,6 +70,10 @@ export const lookupBusinessRegistryShared = async ({
 }: LookupBusinessRegistryProps): Promise<
   Result<RegistryLookupResponse, HandlerError>
 > => {
+  const observer = actionRequestObserver(
+    organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const configured = await Result.tryPromise({
     try: async () =>
       await getOrganizationRegistryHandler({
@@ -94,7 +102,7 @@ export const lookupBusinessRegistryShared = async ({
     );
   }
 
-  const result = await executeLookup({ handler, query: q, detail });
+  const result = await executeLookup({ handler, query: q, detail, observer });
   if (result instanceof HandlerError) {
     return Result.err(result);
   }
