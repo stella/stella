@@ -2095,5 +2095,8 @@
       "packages/workspace-model/package.json": 2,
       "packages/workspace-ui/package.json": 22
     }
+  },
+  "no-direct-clause-variant-insert-suppressions": {
+    "files": {}
   }
 }
