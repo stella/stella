@@ -169,6 +169,42 @@ describe("buildArgsFromFlags (S3)", () => {
     });
   });
 
+  test("numeric clamp flags pass out-of-range numbers through to the server", async () => {
+    const intSpec = specWith([
+      {
+        flag: "--max-chars",
+        prop: "max_chars",
+        kind: "int",
+        min: 1,
+        max: 8000,
+        range: "clamp",
+        required: false,
+        repeatable: false,
+      },
+    ]);
+    expect(await buildArgsFromFlags(intSpec, { maxChars: "9000" })).toEqual({
+      ok: true,
+      args: { max_chars: 9000 },
+    });
+
+    const numberSpec = specWith([
+      {
+        flag: "--limit",
+        prop: "limit",
+        kind: "number",
+        min: 1,
+        max: 10,
+        range: "clamp",
+        required: false,
+        repeatable: false,
+      },
+    ]);
+    expect(await buildArgsFromFlags(numberSpec, { limit: "11.5" })).toEqual({
+      ok: true,
+      args: { limit: 11.5 },
+    });
+  });
+
   test("localized numeric spelling reaches the shared server normalizer", async () => {
     const spec = specWith([
       {

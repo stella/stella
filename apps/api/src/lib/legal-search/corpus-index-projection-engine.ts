@@ -219,7 +219,11 @@ export const appendCorpusProjectionBatch = async ({
     if (request === undefined) {
       return Result.ok(undefined);
     }
-    const ingested = await client.ingestCommittedBatch(indexId, request.ndjson);
+    const ingested = await client.ingestCommittedBatch(
+      indexId,
+      request.ndjson,
+      "unobserved",
+    );
     if (ingested.isErr()) {
       const unknownOutcomeObservedAt = clock();
       const unknownRevisions = [
@@ -344,6 +348,7 @@ export const censusCorpusProjectionRevisions = async ({
 > => {
   const query = corpusProjectionRevisionsQuery(revisions);
   const aggregated = await client.aggregate({
+    observer: "unobserved",
     indexId,
     query,
     aggs: {
@@ -430,6 +435,7 @@ export const deleteCorpusProjectionRevisions = async ({
   await client.deleteByQuery(
     indexId,
     corpusProjectionRevisionsQuery(revisions),
+    "unobserved",
   );
 
 type CountCorpusProjectionRevisionsOptions = {
@@ -446,6 +452,7 @@ export const countCorpusProjectionRevisions = async ({
   Result<number, CorpusIndexError>
 > => {
   const searched = await client.search({
+    observer: "unobserved",
     indexId,
     query: corpusProjectionRevisionsQuery(revisions),
     maxHits: 0,

@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { SEARCH_EXCERPTS, type SearchExcerpt } from "@stll/api-contract/search";
 
 import {
@@ -182,17 +184,27 @@ const snapToCodePoints = (
  * passage's words but not always the passage's line breaks, and a fold is the
  * one difference that makes an otherwise identical run miss.
  */
+type SnippetLocation = {
+  end: number;
+  start: number;
+  sourceOffsetAt: (snippetOffset: number) => number;
+};
+
 const locateSnippet = (
   passage: string,
   snippetText: string,
-): { end: number; start: number } | null => {
+): SnippetLocation | null => {
   if (snippetText.length === 0) {
     return null;
   }
 
   const exact = passage.indexOf(snippetText);
   if (exact !== -1) {
-    return { end: exact + snippetText.length, start: exact };
+    return {
+      end: exact + snippetText.length,
+      start: exact,
+      sourceOffsetAt: (offset) => exact + offset,
+    };
   }
 
   // The folded passage keeps one position per source position except where a
@@ -222,7 +234,34 @@ const locateSnippet = (
   const start = sourceIndexOfFolded[at];
   const endFolded = at + foldWhitespace(snippetText).length;
   const end = sourceIndexOfFolded[endFolded] ?? passage.length;
-  return start === undefined ? null : { end, start };
+  if (start === undefined) {
+    return null;
+  }
+
+  // Map every snippet unit through its folded position to the original
+  // passage. Collapsed whitespace units share the run's first position.
+  const sourceIndexOfSnippet: number[] = [];
+  let foldedIndex = at - 1;
+  previousWasSpace = false;
+  for (let index = 0; index < snippetText.length; index += 1) {
+    const isSpace = WHITESPACE.test(snippetText.charAt(index));
+    if (!isSpace || !previousWasSpace) {
+      foldedIndex += 1;
+    }
+    sourceIndexOfSnippet.push(
+      sourceIndexOfFolded[foldedIndex] ??
+        panic("Located snippet must map to a passage position"),
+    );
+    previousWasSpace = isSpace;
+  }
+  sourceIndexOfSnippet.push(end);
+  return {
+    end,
+    start,
+    sourceOffsetAt: (offset) =>
+      sourceIndexOfSnippet[offset] ??
+      panic("Snippet offset must lie within the located snippet"),
+  };
 };
 
 /**
@@ -298,8 +337,8 @@ const engineMarkRanges = (
  */
 type SnippetAnchor = {
   end: number;
-  /** The anchored fragment as the engine marked it, not the joined snippet. */
-  fragment: string;
+  /** The anchored fragment's marks in original passage coordinates. */
+  markRanges: readonly { end: number; start: number }[];
   start: number;
 };
 
@@ -319,7 +358,14 @@ const locateAnchor = (
   for (const fragment of fragments) {
     const at = locateSnippet(passage, stripSearchHighlightMarkup(fragment));
     if (at !== null) {
-      return { end: at.end, fragment, start: at.start };
+      return {
+        end: at.end,
+        markRanges: engineMarkRanges(fragment).map(({ end, start }) => ({
+          end: at.sourceOffsetAt(end),
+          start: at.sourceOffsetAt(start),
+        })),
+        start: at.start,
+      };
     }
   }
   return null;
@@ -329,6 +375,8 @@ type CorpusExcerptOptions = {
   /** What the engine itself returned for this hit, if anything. */
   engineSnippet: string | null;
   excerpt: SearchExcerpt;
+  /** Prefer complete sentences for agent triage, within the same character cap. */
+  sentenceAligned?: boolean | undefined;
   language: MorphologyLanguage | null;
   /** The hit's stored passage, as the index holds it. */
   passage: unknown;
@@ -375,11 +423,51 @@ const capToChars = (text: string, maxChars: number): string => {
   return text.slice(0, cut);
 };
 
+const sentenceWindow = (
+  passage: string,
+  matchStart: number,
+  maxChars: number,
+): { start: number; end: number } | null => {
+  const sentences = [
+    ...new Intl.Segmenter("und", { granularity: "sentence" }).segment(passage),
+  ];
+  const at = sentences.findIndex(
+    ({ index, segment }) =>
+      index <= matchStart && index + segment.length > matchStart,
+  );
+  const sentence = sentences.at(at);
+  if (at === -1 || sentence === undefined) {
+    return null;
+  }
+  if (sentence.segment.trim().length > maxChars) {
+    return null;
+  }
+  let start = sentence.index;
+  let end = start + sentence.segment.trimEnd().length;
+  // Grow around the matching sentence, keeping every accepted sentence whole.
+  for (let index = at - 1; index >= 0; index -= 1) {
+    const left = sentences.at(index);
+    if (left === undefined || end - left.index > maxChars) {
+      break;
+    }
+    start = left.index;
+  }
+  for (const right of sentences.slice(at + 1)) {
+    const nextEnd = right.index + right.segment.trimEnd().length;
+    if (nextEnd - start > maxChars) {
+      break;
+    }
+    end = nextEnd;
+  }
+  return { start, end };
+};
+
 export const corpusExcerpt = ({
   engineSnippet,
   excerpt,
   language,
   passage,
+  sentenceAligned = false,
   tokens,
 }: CorpusExcerptOptions): string | null => {
   if (usesEngineSnippet(excerpt)) {
@@ -392,8 +480,14 @@ export const corpusExcerpt = ({
   const { maxChars } = decisionExcerptWindow(excerpt);
   const anchor =
     engineSnippet === null ? null : locateAnchor(passage, engineSnippet);
-  const window =
+  const wordWindow =
     anchor === null ? null : growAroundSnippet(passage, anchor, maxChars);
+  const matchStart =
+    anchor === null ? null : (anchor.markRanges.at(0)?.start ?? anchor.start);
+  const window =
+    sentenceAligned && matchStart !== null
+      ? (sentenceWindow(passage, matchStart, maxChars) ?? wordWindow)
+      : wordWindow;
 
   // One window as plain text, however it was chosen, so the cap and the
   // marking below both apply whichever way this went.
@@ -410,37 +504,38 @@ export const corpusExcerpt = ({
   }
 
   const marked = markCorpusFragment({ text, tokens, language });
-  if (window === null || marked.includes("<mark>")) {
+  // A window always comes from an anchor; checking both narrows the type.
+  if (window === null || anchor === null || marked.includes("<mark>")) {
     return marked;
   }
 
   // The matcher found none of the query's words — the engine matched through
   // an expansion it does not reproduce. Its own marks are the answer.
   return markAtSnippet({
-    engineSnippet: anchor?.fragment ?? "",
-    snippetStart: (anchor?.start ?? 0) - window.start,
+    markRanges: anchor.markRanges,
+    windowStart: window.start,
     text,
   });
 };
 
 type MarkAtSnippetOptions = {
-  engineSnippet: string;
-  /** Where the snippet's text begins inside `text`. */
-  snippetStart: number;
+  markRanges: readonly { end: number; start: number }[];
+  /** Where `text` begins inside the passage. */
+  windowStart: number;
   text: string;
 };
 
 /** `text`, escaped, carrying the engine's marks at the snippet's position. */
 const markAtSnippet = ({
-  engineSnippet,
-  snippetStart,
+  markRanges,
+  windowStart,
   text,
 }: MarkAtSnippetOptions): string => {
   let html = "";
   let cursor = 0;
-  for (const range of engineMarkRanges(engineSnippet)) {
-    const start = snippetStart + range.start;
-    const end = snippetStart + range.end;
+  for (const range of markRanges) {
+    const start = range.start - windowStart;
+    const end = range.end - windowStart;
     if (start < cursor || end > text.length) {
       continue;
     }

@@ -8,7 +8,7 @@ import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 import { createObservationBuffer } from "./buffer";
 import {
   currentActionCostIdentity,
-  recordExternalActionCall,
+  actionCallObserver,
   type ActionCostObservation,
 } from "./context";
 
@@ -70,7 +70,7 @@ for (const enabled of [true, false]) {
           expect(
             currentActionCostIdentity(toSafeId<"organization">("other-org")),
           ).toBeUndefined();
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
           return "done";
         },
       });
@@ -124,7 +124,7 @@ test("refused actions produce no observations and disabled recording produces no
     },
     costRecorder: null,
     run: async () => {
-      recordExternalActionCall("fixture_provider");
+      actionCallObserver(organizationId)("fixture_provider");
       return await run();
     },
   });
@@ -180,7 +180,7 @@ test("nested same-identity work shares its observation scope, distinct phases re
         periodIdentity,
         costRecorder: recorder,
         run: async () => {
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
         },
       });
       await withActionAdmission({
@@ -191,7 +191,7 @@ test("nested same-identity work shares its observation scope, distinct phases re
         },
         costRecorder: recorder,
         run: async () => {
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
         },
       });
     },

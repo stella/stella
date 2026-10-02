@@ -121,7 +121,10 @@ test("establishment response mutations retain typed addresses or registry failur
       async (raw, selected, mutation) => {
         const original = [{ ...raw, Id: "6281106", Nombre: "Hotel" }];
         const operation = async () =>
-          lookupByEstablishmentId("6281106", { token: "property-token" });
+          lookupByEstablishmentId("6281106", {
+            observer: "unobserved",
+            token: "property-token",
+          });
         expect(await expectRegistryResponse(original, operation)).toMatchObject(
           { id: "6281106", name: "Hotel" },
         );
@@ -169,7 +172,10 @@ test("every consumed response field supports missing, null and wrong-type mutati
     } satisfies DenueRawEstablishment,
   ];
   const operation = async () =>
-    lookupByEstablishmentId("6281106", { token: "property-token" });
+    lookupByEstablishmentId("6281106", {
+      observer: "unobserved",
+      token: "property-token",
+    });
   expect(await expectRegistryResponse(original, operation)).toMatchObject({
     id: "6281106",
     name: "Hotel",

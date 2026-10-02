@@ -285,9 +285,11 @@ const aresGet = async <T>({
   url,
   isExpectedShape,
   signal,
+  observer,
 }: AresGetOptions<T>): Promise<T | null> => {
   const response = await performRegistryRequest({
     url,
+    observer,
     init: { headers: { Accept: "application/json" } },
     signal,
     wrapRequestError: (cause) =>
@@ -329,9 +331,11 @@ const aresPost = async <T>({
   payload,
   isExpectedShape,
   signal,
+  observer,
 }: AresPostOptions<T>): Promise<T> => {
   const response = await performRegistryRequest({
     url,
+    observer,
     init: {
       method: "POST",
       headers: {
@@ -380,7 +384,7 @@ export type LookupOptions = RegistryClientOptions & {
  */
 export const lookupByIco = async (
   ico: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<AresCompany | null> => {
   const normalized = normalizeIco(ico);
 
@@ -388,9 +392,9 @@ export const lookupByIco = async (
     throw new AresValidationError(`Invalid IČO: ${ico}`);
   }
 
-  const includeVr = options?.includeVr ?? true;
+  const includeVr = options.includeVr ?? true;
   const optionalVrController = new AbortController();
-  const optionalVrSignal = options?.signal
+  const optionalVrSignal = options.signal
     ? AbortSignal.any([options.signal, optionalVrController.signal])
     : optionalVrController.signal;
 
@@ -398,13 +402,15 @@ export const lookupByIco = async (
   const resPromise = aresGet({
     url: `${RES_URL}/${encodeRegistryComponent(normalized)}`,
     isExpectedShape: isAresResResponse,
-    signal: options?.signal,
+    signal: options.signal,
+    observer: options.observer,
   });
   const vrPromise = includeVr
     ? aresGet({
         url: `${VR_URL}/${encodeRegistryComponent(normalized)}`,
         isExpectedShape: isAresVrResponse,
         signal: optionalVrSignal,
+        observer: options.observer,
       })
     : null;
 
@@ -436,12 +442,12 @@ export const lookupByIco = async (
     if (vrResult.status === "rejected") {
       // Cancellation remains caller control flow even when it arrives after
       // VR headers and is wrapped while decoding the response body.
-      options?.signal?.throwIfAborted();
+      options.signal?.throwIfAborted();
       if (
         vrResult.reason instanceof AresAPIError ||
         vrResult.reason instanceof AresRequestError
       ) {
-        options?.onVrError?.(vrResult.reason);
+        options.onVrError?.(vrResult.reason);
         return { ...company, vrEnrichmentStatus: "unavailable" };
       }
       throw vrResult.reason;
@@ -476,14 +482,14 @@ export type SearchOptions = RegistryClientOptions & {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<AresSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     throw new AresValidationError("Search name must not be empty");
   }
 
-  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options.limit ?? DEFAULT_SEARCH_LIMIT;
   const limit = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
 
   const payload = {
@@ -496,7 +502,8 @@ export const searchByName = async (
     url: SEARCH_URL,
     payload,
     isExpectedShape: isAresSearchResponse,
-    signal: options?.signal,
+    signal: options.signal,
+    observer: options.observer,
   });
 
   return data.ekonomickeSubjekty.flatMap((entry) =>

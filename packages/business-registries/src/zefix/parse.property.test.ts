@@ -113,7 +113,8 @@ test("firm response mutations retain typed projections or registry failures", as
             },
           ],
         };
-        const operation = async () => lookupByUid("191546434");
+        const operation = async () =>
+          lookupByUid("191546434", { observer: "unobserved" });
         expect(await expectRegistryResponse(original, operation)).toMatchObject(
           { uid: "191546434", name: "Swiss Re AG" },
         );
@@ -148,7 +149,8 @@ test("every consumed response field supports missing, null and wrong-type mutati
       } satisfies ZefixRawFirm,
     ],
   };
-  const operation = async () => lookupByUid("191546434");
+  const operation = async () =>
+    lookupByUid("191546434", { observer: "unobserved" });
   expect(await expectRegistryResponse(original, operation)).toMatchObject({
     uid: "191546434",
     name: "Swiss Re AG",

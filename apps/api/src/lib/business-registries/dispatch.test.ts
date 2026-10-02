@@ -83,6 +83,7 @@ describe("executeRegistryLookup — details channel", () => {
     });
 
     const result = await executeRegistryLookup({
+      observer: "unobserved",
       handler,
       query: "27082440",
     });
@@ -115,6 +116,7 @@ describe("executeRegistryLookup — details channel", () => {
     });
 
     const result = await executeRegistryLookup({
+      observer: "unobserved",
       handler,
       query: "Alza",
     });
@@ -134,6 +136,7 @@ describe("executeRegistryLookup — details channel", () => {
       "sensitive transport detail",
     );
     const result = await executeRegistryLookup({
+      observer: "unobserved",
       handler: stubHandler({
         lookup: async () => {
           throw cause;
@@ -201,6 +204,7 @@ describe("ORSR lookup detail", () => {
     );
     try {
       const result = await executeRegistryLookup({
+        observer: "unobserved",
         handler: BUSINESS_REGISTRY_DISPATCH.orsr,
         query: "31333532",
         detail,
@@ -328,6 +332,7 @@ describe("VIES handler wiring", () => {
 
   test("name search is rejected with a useful error", async () => {
     const result = await executeRegistryLookup({
+      observer: "unobserved",
       handler: BUSINESS_REGISTRY_DISPATCH.vies,
       query: "Acme Corp",
     });
@@ -380,7 +385,7 @@ describe("Companies House hit address", () => {
     });
     try {
       const handler = BUSINESS_REGISTRY_DISPATCH["companies-house"];
-      const hit = await handler.lookup("12345678");
+      const hit = await handler.lookup("12345678", { observer: "unobserved" });
       expect(hit?.address?.line1).toBe(
         "c/o Acme Secretaries Limited PO Box 5000 1 Imaginary Street",
       );
@@ -457,7 +462,9 @@ describe("DENUE deployment gating", () => {
       preconnect: originalFetch.preconnect,
     });
     try {
-      const hit = await BUSINESS_REGISTRY_DISPATCH.denue.lookup("6281106");
+      const hit = await BUSINESS_REGISTRY_DISPATCH.denue.lookup("6281106", {
+        observer: "unobserved",
+      });
       expect(hit?.registry).toBe("denue");
       expect(hit?.legalForm).toBeNull();
       expect(hit?.address?.city).toBe("MUNICIPIO");
@@ -513,6 +520,7 @@ describe("DENUE deployment gating", () => {
 describe("executeRegistryLookup — canonical-id guard", () => {
   test("maps an isCanonicalId failure to a handler error instead of throwing", async () => {
     const result = await executeRegistryLookup({
+      observer: "unobserved",
       handler: stubHandler({
         isCanonicalId: () => {
           throw new Error("native binding unavailable");
