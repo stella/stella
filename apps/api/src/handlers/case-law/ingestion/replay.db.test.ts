@@ -30,6 +30,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/replay";
 import type {
   CaseLawReplayScope,
+  ReplayRowReport,
   ReplayVisitBound,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -849,6 +850,167 @@ describe("replay of a source", () => {
     expect(listed.size).toBe(REPLAY_LISTED_PROBLEMS_PER_OUTCOME);
     expect(inserted.filter((id) => listed.has(id))).toHaveLength(listed.size);
     expect(ran.report.resumeAfter).not.toBeNull();
+  });
+
+  test("the row sink receives every visited row, past the listing cap, in walk order", async () => {
+    const sourceId = await createSource();
+    const rowCount = 45;
+    for (let index = 0; index < rowCount; index += 1) {
+      await insertDecision({
+        sourceId,
+        id: createSafeId<"caseLawDecision">(),
+        sub: 300 + index,
+        caseNumber: `C-${300 + index}/26`,
+        storedRaw: true,
+        sourceHash: `stored-hash-${300 + index}`,
+      });
+    }
+    // Every third docket re-parses to a new document; the rest are rejected,
+    // which is more rejections than the report lists.
+    const reparsesToDocument = (caseNumber: string): boolean =>
+      Number.parseInt(caseNumber.slice(2), 10) % 3 === 0;
+
+    const recorded: ReplayRowReport[] = [];
+    const ran = await replayCaseLawSource({
+      adapter: stubAdapter({
+        reparse: (stored) =>
+          reparsesToDocument(stored.caseNumber)
+            ? {
+                type: "parsed",
+                result: {
+                  caseNumber: stored.caseNumber,
+                  court: stored.court,
+                  country: "EU",
+                  language: stored.language,
+                  metadata: stored.metadata,
+                  textFields: absentDecisionTextFields(
+                    TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+                  ),
+                  rawHash: `new-${stored.caseNumber}`,
+                  documentAst: EMPTY_AST,
+                },
+              }
+            : {
+                type: "rejected",
+                rejection: "no-document",
+                detail: "fixture rejection",
+              },
+      }),
+      scopedDb,
+      sourceId,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: storedRawReader([]),
+      sourceLease: null,
+      bound: { type: "all" },
+      pageSize: 7,
+      recordRow: async (row) => {
+        recorded.push(row);
+        await Promise.resolve();
+      },
+    });
+
+    if (ran.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    expect(recorded.map(({ id }) => id)).toEqual(await walkIds(sourceId, 7));
+    expect(recorded).toHaveLength(ran.report.visited);
+
+    const rejected = recorded.filter(
+      ({ outcome }) => outcome === REPLAY_ROW_OUTCOME.REJECTED,
+    );
+    expect(rejected).toHaveLength(30);
+    expect(rejected).toHaveLength(
+      ran.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED],
+    );
+    expect(ran.report.problems.length).toBeLessThan(rejected.length);
+    for (const row of recorded) {
+      if (reparsesToDocument(row.caseNumber)) {
+        expect(row.outcome).toBe(REPLAY_ROW_OUTCOME.WOULD_APPLY);
+        expect(row.rejection).toBeUndefined();
+      } else {
+        expect(row).toMatchObject({
+          outcome: REPLAY_ROW_OUTCOME.REJECTED,
+          rejection: "no-document",
+          detail: "fixture rejection",
+        });
+      }
+    }
+  });
+
+  test("a row the sink cannot record halts the run behind it, and a resume records it", async () => {
+    const sourceId = await createSource();
+    const ids: SafeId<"caseLawDecision">[] = [];
+    for (const sub of [1, 2, 3]) {
+      const id = createSafeId<"caseLawDecision">();
+      ids.push(id);
+      await insertDecision({
+        sourceId,
+        id,
+        sub,
+        caseNumber: `C-${sub}/26`,
+        storedRaw: true,
+        sourceHash: `hash-${sub}`,
+      });
+    }
+    const [firstId, secondId, thirdId] = ids;
+    if (
+      firstId === undefined ||
+      secondId === undefined ||
+      thirdId === undefined
+    ) {
+      throw new TypeError("Expected three fixture rows");
+    }
+
+    const recorded: SafeId<"caseLawDecision">[] = [];
+    const run = async (
+      after: SafeId<"caseLawDecision"> | null,
+      failOn: SafeId<"caseLawDecision"> | null,
+    ) =>
+      await replayCaseLawSource({
+        adapter: stubAdapter({
+          reparse: () => ({
+            type: "rejected",
+            rejection: "no-document",
+            detail: "stub",
+          }),
+        }),
+        scopedDb,
+        sourceId,
+        scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+        readStoredRaw: storedRawReader([]),
+        sourceLease: null,
+        bound: { type: "at-most", limit: 10 },
+        pageSize: 10,
+        after,
+        recordRow: async (row) => {
+          if (row.id === failOn) {
+            throw new Error("disk full");
+          }
+          recorded.push(row.id);
+          await Promise.resolve();
+        },
+      });
+
+    const failing = await run(null, secondId);
+    if (failing.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    // The row was replayed but never recorded, so it does not count as
+    // finished: the cursor stays behind it.
+    expect(failing.report.visited).toBe(1);
+    expect(failing.report.resumeAfter).toBe(firstId);
+    expect(failing.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
+    expect(failing.report.haltReason).toContain("C-2/26");
+    expect(failing.report.haltReason).toContain("could not be recorded");
+    expect(failing.report.haltReason).toContain("disk full");
+    expect(recorded).toEqual([firstId]);
+
+    const resumed = await run(failing.report.resumeAfter, null);
+    if (resumed.type !== "ran") {
+      throw new TypeError("Expected the capable adapter to run");
+    }
+    expect(resumed.report.haltReason).toBeNull();
+    expect(recorded).toEqual([firstId, secondId, thirdId]);
   });
 
   test("a row ingested after the run's end was read is not visited by it", async () => {

@@ -1100,6 +1100,13 @@ export type ReplayCaseLawSourceOptions = {
   rejectionPolicy?: ReplayRejectionPolicy;
   /** Test seam; production withdraws through the canonical stores. */
   withdraw?: WithdrawDocument;
+  /**
+   * Receives every visited row's report, in walk order. The report's
+   * problem listing is a sample; this sees every row. Awaited before the row
+   * counts as finished: a failure stops the run with the cursor behind the
+   * row, so a resume records it instead of stepping over it.
+   */
+  recordRow?: (row: ReplayRowReport) => Promise<void>;
 };
 
 export type ReplayRun =
@@ -1171,6 +1178,7 @@ export const replayCaseLawSource = async ({
   scope,
   rejectionPolicy = REPLAY_REJECTION_POLICY.REPORT,
   withdraw = withdrawCaseLawDecisionDocument,
+  recordRow,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
   const capability = replayCapability(adapter);
   if (capability.type === "unsupported") {
@@ -1245,6 +1253,19 @@ export const replayCaseLawSource = async ({
       return false;
     }
     const rowReport = attempt.value;
+
+    if (recordRow !== undefined) {
+      const recorded = await Result.tryPromise({
+        try: async () => {
+          await recordRow(rowReport);
+        },
+        catch: (cause) => cause,
+      });
+      if (Result.isError(recorded)) {
+        haltReason = `${row.caseNumber} (${row.language}) could not be recorded: ${failureDetail(recorded.error)}`;
+        return false;
+      }
+    }
 
     visited += 1;
     outcomes[rowReport.outcome] += 1;
