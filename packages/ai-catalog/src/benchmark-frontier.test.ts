@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
+
 import {
   classifyBenchmarkModelOptions,
   classifyBenchmarkPoints,
@@ -61,7 +63,8 @@ describe("Pareto model frontier", () => {
   });
 
   test("partitions every point into frontier, near frontier, or dominated", () => {
-    fc.assert(
+    assertProperty(
+      "benchmark-frontier.partitions-every-point",
       fc.property(
         fc.uniqueArray(
           fc.record({

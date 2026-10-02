@@ -519,6 +519,7 @@
         "valibot": "catalog:",
       },
       "devDependencies": {
+        "@stll/property-testing": "workspace:*",
         "@stll/typescript-config": "workspace:*",
         "@tanstack/ai-anthropic": "catalog:",
         "@tanstack/ai-bedrock": "catalog:",
