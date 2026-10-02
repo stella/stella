@@ -15,6 +15,13 @@
       "package": "image-size",
       "title": "image-size: ICNS parser allows denial of service through an infinite loop",
       "reason": "No patched image-size release exists. The only dependency path is Metro build tooling; it reads repository-controlled app assets and is not present in the API runtime or upload extraction path. Remove once Metro accepts a patched image-size release."
+    },
+    {
+      "id": "GHSA-86w9-cpqp-85rv",
+      "severity": "high",
+      "package": "node-forge",
+      "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
+      "reason": "No patched node-forge release exists. It is reached only through @expo/code-signing-certificates, which the Expo CLI and the expo-updates CLI (code-signing key generation and configuration) run on developer machines; the expo-updates runtime does not import it, so it is not in the shipped mobile bundle, and it is not present in the API runtime. Remove once Expo moves to a patched node-forge release."
     }
   ]
 }
