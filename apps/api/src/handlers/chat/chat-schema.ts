@@ -1038,17 +1038,15 @@ const canonicalToolCallBase = (
   if (!isRecord(canonicalValue)) {
     panic("Canonical chat tool call is not an object");
   }
-  const base: Record<string, unknown> = {};
-  for (const [property, disposition] of Object.entries(
-    CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION,
-  )) {
-    if (
-      disposition === "state-independent" &&
-      Object.hasOwn(canonicalValue, property)
-    ) {
-      base[property] = canonicalValue[property];
-    }
-  }
+  const base = Object.fromEntries(
+    Object.entries(CONTINUATION_TOOL_CALL_PROPERTY_DISPOSITION).flatMap(
+      ([property, disposition]) =>
+        disposition === "state-independent" &&
+        Object.hasOwn(canonicalValue, property)
+          ? [[property, canonicalValue[property]] as const]
+          : [],
+    ),
+  );
   const input: unknown = canonicalCall.input;
   const argumentsText =
     input === undefined ? undefined : JSON.stringify(canonicalCall.input);
