@@ -132,8 +132,15 @@ export const fetchManagedOpenRouterCompletion = async (request: Request) => {
     response.type === "opaqueredirect" ||
     (response.status >= 300 && response.status < 400)
   ) {
-    await Result.tryPromise(async () => await response.body?.cancel());
-    return Result.err(managedProviderUnavailable("openrouter"));
+    const cancelled = await Result.tryPromise(
+      async () => await response.body?.cancel(),
+    );
+    return Result.err(
+      managedProviderUnavailable(
+        "openrouter",
+        Result.isError(cancelled) ? cancelled.error : undefined,
+      ),
+    );
   }
   return Result.ok(response);
 };
