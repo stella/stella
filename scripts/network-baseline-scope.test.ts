@@ -147,6 +147,33 @@ describe("network baseline scope", () => {
     ).toEqual(recorded);
   });
 
+  test("rejects a budget for a request the route does not record", () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
+    try {
+      for (const field of ["requestCounts", "dbQueries", "responseSizes"]) {
+        const file = path.join(directory, `${field}.json`);
+        writeFileSync(
+          file,
+          JSON.stringify({ "/": { ...entry(1), [field]: { "GET /gone": 1 } } }),
+        );
+        const result = Bun.spawnSync([
+          "bun",
+          "scripts/network-baseline-scope.ts",
+          "validate",
+          file,
+        ]);
+        expect(result.exitCode, field).toBe(1);
+        writeFileSync(
+          file,
+          JSON.stringify({ "/": { ...entry(1), [field]: { "GET /1": 1 } } }),
+        );
+        expect(validateBaselineFile(file)["/"]?.requests).toEqual(["GET /1"]);
+      }
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
   test("validates schema and rejects oversized files and symlinks", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
     const validPath = path.join(directory, "baseline.json");

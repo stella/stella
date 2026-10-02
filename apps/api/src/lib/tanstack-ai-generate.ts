@@ -69,7 +69,12 @@ import {
   type ProviderSafeJsonSchemaProjectionOptions,
 } from "@/api/lib/provider-safe-json-schema";
 import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
-import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
+import {
+  joinLayeredSystemPrompt,
+  promptCachingUsesBreakpoints,
+  tanStackCacheControl,
+} from "@/api/lib/tanstack-ai-caching";
+import type { LayeredSystemPrompt } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
   getTanStackTextModelForRole,
@@ -1133,6 +1138,15 @@ const hashCacheScopeKey = (raw: string): string =>
     .digest("hex")
     .slice(0, PROVIDER_CACHE_KEY_MAX);
 
+/**
+ * The request's system prompt. A layered prompt (a chat turn's) is split at
+ * its layer ends for a provider that caches at markers
+ * (`PROVIDER_PROMPT_CACHING`): the static and organization layers each end in
+ * a marker, and the per-user and per-turn tail carries none. Every other
+ * provider, and every request with caching off, receives one string, the
+ * layers joined. A plain prompt keeps its single end-of-prompt marker on
+ * Anthropic.
+ */
 export const systemPromptsPatch = ({
   caching,
   model,
@@ -1140,29 +1154,70 @@ export const systemPromptsPatch = ({
 }: {
   caching: CachingDecision;
   model: ResolvedTanStackTextModel;
-  system: string | undefined;
+  system: string | LayeredSystemPrompt | undefined;
 }): { systemPrompts?: SystemPrompt[] } => {
-  if (!system) {
+  if (system === undefined) {
     return {};
   }
-
-  if (model.provider !== "anthropic") {
-    return { systemPrompts: [system] };
+  const joined =
+    typeof system === "string" ? system : joinLayeredSystemPrompt(system);
+  if (!joined) {
+    return {};
   }
 
   const cacheControl = tanStackCacheControl(caching);
   if (!cacheControl) {
-    return { systemPrompts: [system] };
+    return { systemPrompts: [joined] };
   }
 
+  if (typeof system === "string") {
+    return model.provider === "anthropic"
+      ? {
+          systemPrompts: [
+            { content: system, metadata: { cache_control: cacheControl } },
+          ],
+        }
+      : { systemPrompts: [joined] };
+  }
+
+  if (!promptCachingUsesBreakpoints(model)) {
+    return { systemPrompts: [joined] };
+  }
+
+  // A provider rejects an empty text block, so an empty layer is left out,
+  // and its marker with it.
+  const marked = [system.static, system.organization]
+    .filter((layer) => layer.length > 0)
+    .map((layer): SystemPrompt => ({
+      content: layer,
+      metadata: { cache_control: cacheControl },
+    }));
   return {
-    systemPrompts: [
-      {
-        content: system,
-        metadata: { cache_control: cacheControl },
-      },
-    ],
+    systemPrompts: system.turn.length === 0 ? marked : [...marked, system.turn],
   };
+};
+
+/**
+ * The request-level marker a layered request adds where the provider caches at
+ * markers. It lands on the request's last block, so it moves forward with the
+ * conversation: each request reads the prefix the request before it wrote,
+ * which is what caches history and every tool-loop iteration.
+ */
+const conversationCacheControl = ({
+  cacheConversation,
+  caching,
+  model,
+}: {
+  cacheConversation: boolean;
+  caching: CachingDecision;
+  model: ResolvedTanStackTextModel;
+}) => {
+  const cacheControl = tanStackCacheControl(caching);
+  return cacheConversation &&
+    cacheControl !== undefined &&
+    promptCachingUsesBreakpoints(model)
+    ? cacheControl
+    : undefined;
 };
 
 type AnthropicThinkingOption = Extract<
@@ -1236,18 +1291,29 @@ export const chatTurnOutputTokens = (
 };
 
 export const mergeGenerationOptions = ({
+  cacheConversation = false,
   caching,
   model,
   maxOutputTokens,
   serviceTier,
   temperature,
 }: {
+  /**
+   * The request carries a layered system prompt (a chat turn), so a provider
+   * that caches at markers gets the request-level marker too.
+   */
+  cacheConversation?: boolean | undefined;
   caching: CachingDecision;
   model: ResolvedTanStackTextModel;
   maxOutputTokens: number | undefined;
   serviceTier: AIRequestServiceTier;
   temperature: number | undefined;
 }): TanStackModelOptions => {
+  const conversationMarker = conversationCacheControl({
+    cacheConversation,
+    caching,
+    model,
+  });
   // Caller temperature overrides only apply where the role builder
   // itself emitted a temperature. Builder omission is always
   // deliberate — the model rejects, deprecates, or ignores sampling
@@ -1287,7 +1353,13 @@ export const mergeGenerationOptions = ({
                 anthropicThinkingReservation(model.modelOptions.thinking),
             }),
       };
-      return { ...anthropicOptions, ...temperatureOverride };
+      return {
+        ...anthropicOptions,
+        ...temperatureOverride,
+        ...(conversationMarker === undefined
+          ? {}
+          : { cache_control: conversationMarker }),
+      };
     }
     case "bedrock":
       return {
@@ -1323,6 +1395,9 @@ export const mergeGenerationOptions = ({
           : { maxCompletionTokens: maxOutputTokens }),
         ...temperatureOverride,
         ...openRouterServiceTierOptions(serviceTier),
+        ...(conversationMarker === undefined
+          ? {}
+          : { cacheControl: conversationMarker }),
       };
     default: {
       model satisfies never;
