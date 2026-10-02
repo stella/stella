@@ -39,6 +39,7 @@ import {
   completedSkUsRawEnvelope,
   completeSkUsRawObservation,
   runSkUsRawBatch,
+  SK_US_RAW_OUTCOME_DISPOSITIONS,
   selectSkUsRawPageStatement,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import type {
@@ -61,6 +62,7 @@ const pageSize = flagInteger({ name: "page", fallback: 200, usage: USAGE });
 const checkpointPath = requiredFlagValue({ name: "checkpoint", usage: USAGE });
 const mode = apply ? "apply" : "dry-run";
 const STATEMENT_TIMEOUT_MS = 15_000;
+const ROW_EVENT = "sk_us_raw_row";
 const { rootDb, ingestionDb } = apply
   ? await enterCaseLawMaintenanceLane()
   : await openCaseLawReadOnlySession();
@@ -246,6 +248,21 @@ const {
       }),
     );
     return "retry_later";
+  },
+  // One line per attempted row (ids and outcome, never content): in a task,
+  // the log stream keeps it after the task's local journal is gone.
+  record: (cursor, outcome) => {
+    console.info(
+      JSON.stringify({
+        event: ROW_EVENT,
+        mode,
+        sourceId,
+        id: cursor.id,
+        createdAt: cursor.createdAt,
+        outcome,
+        disposition: SK_US_RAW_OUTCOME_DISPOSITIONS[outcome],
+      }),
+    );
   },
   journal: async (cursor, outcome) =>
     await journalSkUsRawOutcome({ checkpointPath, sourceId, cursor, outcome }),
