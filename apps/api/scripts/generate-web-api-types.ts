@@ -1,13 +1,14 @@
 // Prints the API types apps/web consumes (`WebApiContract` in
 // src/eden-contract.ts) into apps/web/src/generated/api-routes.gen.ts. apps/web
 // type-checks against that snapshot instead of re-inferring the whole API
-// graph. The API implementation stays the source of truth: every run asserts,
+// graph. The API implementation stays the source of truth: --check asserts,
 // through the compiler's identity relation, that each printed type is
-// identical to the inferred one, and `--check` also fails on a stale file.
+// identical to the inferred one. `--check` generates twice and fails if the
+// bytes differ; the output is local build input rather than committed state.
 //
 // Modes:
 //   bun --filter @stll/api gen:web-api-types           regenerate the file
-//   bun --filter @stll/api gen:web-api-types --check   CI drift guard
+//   bun --filter @stll/api gen:web-api-types --check   CI determinism guard
 //
 // Printing rules:
 // - Types owned by a package apps/web depends on are imported by name, never
@@ -30,7 +31,7 @@
 //   expanded). The identity check runs on the same printout with `Date` kept.
 
 import { panic } from "better-result";
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
@@ -100,6 +101,23 @@ const createApiProgram = ({
   const getSourceFile = host.getSourceFile.bind(host);
   const fileExists = host.fileExists.bind(host);
   const readFile = host.readFile.bind(host);
+  const directoryExists = ts.sys.directoryExists.bind(ts.sys);
+  const virtualDirectories = new Set<string>();
+  for (const fileName of virtualFiles.keys()) {
+    let directory = path.dirname(fileName);
+    while (!virtualDirectories.has(directory)) {
+      virtualDirectories.add(directory);
+      const parent = path.dirname(directory);
+      if (parent === directory) {
+        break;
+      }
+      directory = parent;
+    }
+  }
+  // Resolution probes parent directories before fileExists. A clean checkout
+  // has no generated directory, but identity checks serve that tree in memory.
+  host.directoryExists = (directory) =>
+    virtualDirectories.has(directory) || directoryExists(directory);
   host.fileExists = (fileName) =>
     virtualFiles.has(fileName) || fileExists(fileName);
   host.readFile = (fileName) =>
@@ -1196,15 +1214,9 @@ const verifyIdentity = ({
 
 // --- CLI --------------------------------------------------------------------------
 
-const readCommitted = (): string | undefined =>
-  existsSync(OUTPUT_PATH) ? readFileSync(OUTPUT_PATH, "utf-8") : undefined;
+type GenerateOptions = { validation: "identity" | "print" };
 
-const main = () => {
-  const args = process.argv.slice(2);
-  const checkOnly = args.includes("--check");
-  if (args.some((arg) => arg !== "--check")) {
-    panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
-  }
+const generate = ({ validation }: GenerateOptions) => {
   const started = performance.now();
   const program = createApiProgram({ virtualFiles: new Map() });
   const contractSource =
@@ -1218,15 +1230,6 @@ const main = () => {
     responseDates: RESPONSE_DATES.wire,
   });
   const output = renderOutput(result);
-  const declaredOutput = renderOutput(
-    printContract({
-      program,
-      contractSource,
-      webDependencies,
-      responseDates: RESPONSE_DATES.declared,
-    }),
-  );
-  const outputRelative = path.relative(REPO_ROOT, OUTPUT_PATH);
 
   for (const [reason, occurrences] of result.fallbacks) {
     console.error(
@@ -1240,18 +1243,25 @@ const main = () => {
       .join(", ")}`,
   );
 
-  if (checkOnly && readCommitted() !== output) {
-    console.error(
-      `generate-web-api-types: ${outputRelative} is stale. Run \`${REGENERATE_COMMAND}\`.`,
+  const printed = performance.now();
+
+  // Consumer tasks only need the printout. The dedicated CI --check owns
+  // identity validation and determinism, without charging each compiler job.
+  if (validation === "print") {
+    console.log(
+      `generate-web-api-types: printed in ${Math.round(printed - started)} ms`,
     );
-    process.exit(1);
+    return output;
   }
 
-  if (!checkOnly) {
-    mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
-    writeFileSync(OUTPUT_PATH, output);
-  }
-  const printed = performance.now();
+  const declaredOutput = renderOutput(
+    printContract({
+      program,
+      contractSource,
+      webDependencies,
+      responseDates: RESPONSE_DATES.declared,
+    }),
+  );
 
   const diagnostics = verifyIdentity({
     names: result.declarations.map(({ name }) => name),
@@ -1271,10 +1281,27 @@ const main = () => {
     `generate-web-api-types: printed in ${Math.round(printed - started)} ms, ` +
       `identity verified in ${Math.round(performance.now() - printed)} ms`,
   );
+  return output;
+};
+
+const main = () => {
+  const args = process.argv.slice(2);
+  const check = args.includes("--check");
+  if (args.some((arg) => arg !== "--check")) {
+    panic(`generate-web-api-types: unknown arguments ${args.join(" ")}`);
+  }
+  const started = performance.now();
+  const output = generate({ validation: check ? "identity" : "print" });
+  if (check && generate({ validation: "print" }) !== output) {
+    panic(
+      "generate-web-api-types: output is not deterministic across two generations",
+    );
+  }
+  mkdirSync(path.dirname(OUTPUT_PATH), { recursive: true });
+  writeFileSync(OUTPUT_PATH, output);
   console.log(
-    `generate-web-api-types: ${checkOnly ? "verified" : "wrote"} ${outputRelative} ` +
-      `(${result.declarations.length} types, ${result.aliases.length} aliases, ` +
-      `${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
+    `generate-web-api-types: ${check ? "verified deterministic" : "wrote"} ${path.relative(REPO_ROOT, OUTPUT_PATH)} ` +
+      `(${Buffer.byteLength(output)} bytes) in ${Math.round(performance.now() - started)} ms`,
   );
 };
 
