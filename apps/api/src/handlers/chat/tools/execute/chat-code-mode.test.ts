@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -6,8 +6,14 @@ import { registerSandboxTestHygiene } from "@/api/handlers/chat/tools/execute/sa
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
+import type {
+  RecordingAnalytics,
+  RecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -360,5 +366,85 @@ return "saved";`,
       kind: "unavailable",
       reason: "anonymized mode is on",
     });
+  });
+});
+
+// A failed script's error text is document content: it reaches the model
+// through the tool result and nowhere else. patches/@tanstack%2Fai-code-mode
+// removes the dependency's console.error of it; these tests fail if a version
+// bump restores that log or text reaches any other process sink.
+describe("a failed chat script keeps its error text out of process logs", () => {
+  const MARKER = "Synthetic Private Marker";
+
+  const silenceProcessSinks = () => [
+    spyOn(console, "error").mockImplementation(() => {}),
+    spyOn(console, "warn").mockImplementation(() => {}),
+    spyOn(console, "info").mockImplementation(() => {}),
+    spyOn(console, "log").mockImplementation(() => {}),
+    spyOn(console, "debug").mockImplementation(() => {}),
+    spyOn(process.stdout, "write").mockImplementation(() => true),
+    spyOn(process.stderr, "write").mockImplementation(() => true),
+  ];
+
+  let logger: RecordingLogger;
+  let sinks: ReturnType<typeof silenceProcessSinks> = [];
+
+  beforeEach(() => {
+    logger = installRecordingLogger();
+    sinks = silenceProcessSinks();
+  });
+
+  afterEach(() => {
+    for (const sink of sinks) {
+      sink.mockRestore();
+    }
+    logger.restore();
+  });
+
+  const expectMarkerOnlyInResult = (output: unknown) => {
+    expect(output).toMatchObject({
+      success: false,
+      error: { name: "runtime", message: expect.stringContaining(MARKER) },
+    });
+    for (const sink of sinks) {
+      expect(Bun.inspect(sink.mock.calls)).not.toContain(MARKER);
+    }
+    expect(Bun.inspect(logger.records)).not.toContain(MARKER);
+    expect(Bun.inspect(analytics.events)).not.toContain(MARKER);
+  };
+
+  test("text the script threw itself", async () => {
+    const execute =
+      buildChatCodeMode(buildProps(selectScopedDb([]))).tool.execute ??
+      expect.unreachable("execute_typescript has no execute");
+
+    const output = await execute({
+      typescriptCode: `throw new Error(${JSON.stringify(MARKER)});`,
+    });
+
+    expectMarkerOnlyInResult(output);
+  });
+
+  test("text the script read from a tool and then threw", async () => {
+    const rows = [
+      {
+        id: WS_UUID,
+        name: MARKER,
+        reference: "REF-1",
+        status: "active",
+        lastActivityAt: new Date("2026-01-01T00:00:00.000Z"),
+        createdAt: new Date("2026-01-01T00:00:00.000Z"),
+      },
+    ];
+    const execute =
+      buildChatCodeMode(buildProps(selectScopedDb(rows))).tool.execute ??
+      expect.unreachable("execute_typescript has no execute");
+
+    const output = await execute({
+      typescriptCode: `const { matters } = await external_list_matters({});
+throw new Error(matters[0].name);`,
+    });
+
+    expectMarkerOnlyInResult(output);
   });
 });
