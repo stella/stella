@@ -759,7 +759,7 @@ test("untracked files cannot increase file, duplication, directory or dependency
     git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
     const before = check(root);
     expect(before.code, before.output).toBe(0);
-    for (const [relative, contents] of [
+    const untrackedFiles = [
       ["apps/api/src/untracked.ts", casts(10)],
       ["apps/api/src/lib/untracked/helper.ts", helper],
       ["apps/web/src/lib/domain/helper.ts", helper],
@@ -767,7 +767,8 @@ test("untracked files cannot increase file, duplication, directory or dependency
         "packages/untracked/package.json",
         '{"dependencies":{"untracked-dependency":"1.0.0"}}\n',
       ],
-    ]) {
+    ] as const;
+    for (const [relative, contents] of untrackedFiles) {
       write({ root, relative, contents });
     }
     const after = check(root);

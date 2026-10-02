@@ -728,7 +728,9 @@ const main = () => {
       return result.exitCode === 0 && base !== "" ? base : null;
     },
     measureDebt: measureResultBoundaryDebt,
-    report: (message) => process.stdout.write(message),
+    report: (message) => {
+      process.stdout.write(message);
+    },
   });
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");

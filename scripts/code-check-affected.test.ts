@@ -133,7 +133,9 @@ describe("changed-file result boundary lint", () => {
         measureDebt: () => {
           throw new Error("A missing base must not measure debt");
         },
-        report: (message) => messages.push(message),
+        report: (message) => {
+          messages.push(message);
+        },
       }),
     ).toBeNull();
     expect(messages).toEqual([
@@ -629,9 +631,13 @@ process.exit(result.exitCode);
       { mode: 0o755 },
     );
     try {
+      const environmentPath = process.env["PATH"];
+      if (environmentPath === undefined) {
+        throw new Error("PATH is required to run the code-check command");
+      }
       const result = Bun.spawnSync(
         ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
-        { env: { ...process.env, PATH: `${directory}:${process.env.PATH}` } },
+        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
       );
       expect(result.exitCode).toBe(0);
       const output = result.stdout.toString();
