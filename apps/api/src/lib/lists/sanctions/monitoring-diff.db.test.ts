@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
@@ -41,6 +42,7 @@ import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
+import { drainSanctionsContactMarks } from "./monitoring-drain";
 import {
   excludeSanctionsContact,
   includeSanctionsContact,
@@ -52,6 +54,7 @@ import {
   listOpenSanctionsMatches,
   listSanctionsMonitoringEvents,
 } from "./monitoring-read";
+import { requestSanctionsMonitoringRefresh } from "./monitoring-refresh";
 import { reviewSanctionsMatch } from "./monitoring-review";
 import { SANCTIONS_SOURCE_CONFIG, sanctionsSourceIds } from "./source-config";
 
@@ -85,7 +88,7 @@ beforeAll(async () => {
   await client.exec(`
     REVOKE ALL ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads FROM stella;
     GRANT SELECT ON organization, sanctions_sources, sanctions_editions, sanctions_edition_entries, sanctions_entry_payloads TO stella;
-    GRANT SELECT, INSERT, UPDATE ON sanctions_contact_marks, sanctions_organization_marks TO stella;
+    GRANT SELECT, INSERT, UPDATE, DELETE ON sanctions_contact_marks, sanctions_organization_marks TO stella;
     GRANT SELECT, INSERT, UPDATE, DELETE ON contacts, organization_settings, sanctions_contact_matches, sanctions_contact_screenings, sanctions_screening_events TO stella;
     ALTER TABLE contacts ENABLE ROW LEVEL SECURITY; ALTER TABLE contacts FORCE ROW LEVEL SECURITY;
     ALTER TABLE organization_settings ENABLE ROW LEVEL SECURITY; ALTER TABLE organization_settings FORCE ROW LEVEL SECURITY;
@@ -2067,6 +2070,144 @@ test(
     expect(boundary.reviewReason).toBe("x".repeat(2000));
     expect(audits).toHaveLength(4);
     expect(await eventsFor(contact.id)).toHaveLength(5);
+  },
+  TIMEOUT,
+);
+
+const scopedDrainFor =
+  (organizationId: typeof orgId): ScopedDb =>
+  async (run) =>
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella`);
+      await tx.execute(
+        sql`SELECT set_config('app.organization_id', ${organizationId}, true)`,
+      );
+      // PGlite returns { rows }; the production driver's execute returns the row array.
+      const transaction = asTestRaw<Transaction>({
+        select: tx.select.bind(tx),
+        insert: tx.insert.bind(tx),
+        update: tx.update.bind(tx),
+        delete: tx.delete.bind(tx),
+        rollback: tx.rollback.bind(tx),
+        execute: async (query: SQL) => (await tx.execute(query)).rows,
+      });
+      return await run(transaction);
+    });
+
+test.each([
+  "edited identity",
+  "explicit refresh",
+  "expired lease",
+  "edition switch",
+] as const)(
+  "open-hit feed suppresses pending %s work until current screening commits",
+  async (cause) => {
+    const organizationId = await isolatedOrganization();
+    const tenantDb = scopedFor(organizationId);
+    await activate("7");
+    const contact = await addContact(organizationId);
+    await commit(await prepare(contact), organizationId);
+    await db
+      .delete(sanctionsContactMarks)
+      .where(eq(sanctionsContactMarks.contactId, contact.id));
+    const open = async (readNow = now) =>
+      (
+        await tenantDb(
+          async (tx) =>
+            await listOpenSanctionsMatches(tx, {
+              organizationId,
+              now: readNow,
+            }),
+        )
+      ).unwrap();
+    expect((await open()).items.map(({ contactId }) => contactId)).toEqual([
+      contact.id,
+    ]);
+    const initialMatch = await matchFor(contact.id);
+    const initialCoverage = await screeningFor(contact.id);
+    if (cause === "edited identity") {
+      await db
+        .update(contacts)
+        .set({ dateOfBirthYear: 1981 })
+        .where(eq(contacts.id, contact.id));
+    } else {
+      await tenantDb(
+        async (tx) =>
+          await requestSanctionsMonitoringRefresh(tx, {
+            organizationId,
+            contactIds: [contact.id],
+          }),
+      );
+    }
+    if (cause === "expired lease") {
+      await db
+        .update(sanctionsContactMarks)
+        .set({ scheduledAt: new Date(now.getTime() - 1000) })
+        .where(eq(sanctionsContactMarks.contactId, contact.id));
+    }
+    const marks = await db
+      .select()
+      .from(sanctionsContactMarks)
+      .where(eq(sanctionsContactMarks.contactId, contact.id));
+    expect(marks).toHaveLength(1);
+    expect((await open()).items).toEqual([]);
+    expect(await matchFor(contact.id)).toEqual(initialMatch);
+    expect(await screeningFor(contact.id)).toEqual(initialCoverage);
+    // Prove the mark itself suppresses still-current evidence before changing the edition.
+    if (cause === "edition switch") {await activate("8");}
+    const drainNow = new Date(Date.now() + 1000);
+    await db
+      .update(sanctionsSources)
+      .set({ lastSuccessfulVerifiedAt: drainNow })
+      .where(eq(sanctionsSources.id, "eu"));
+    await db
+      .update(sanctionsContactMarks)
+      .set({ scheduledAt: new Date(drainNow.getTime() - 1000) })
+      .where(eq(sanctionsContactMarks.contactId, contact.id));
+    const drained = await drainSanctionsContactMarks({
+      db: scopedDrainFor(organizationId),
+      organizationId,
+      now: drainNow,
+      signal: new AbortController().signal,
+    });
+    expect(drained).toEqual({ claimed: 1, terminal: 1 });
+    expect(
+      await db
+        .select()
+        .from(sanctionsContactMarks)
+        .where(eq(sanctionsContactMarks.contactId, contact.id)),
+    ).toEqual([]);
+    const currentContact =
+      (await db.select().from(contacts).where(eq(contacts.id, contact.id))).at(
+        0,
+      ) ?? panic("Contact missing");
+    const currentMatch = await matchFor(contact.id);
+    expect(currentMatch.contactFingerprint).toBe(
+      monitoringFingerprint(currentContact),
+    );
+    expect((await screeningFor(contact.id)).contactFingerprint).toBe(
+      currentMatch.contactFingerprint,
+    );
+    const activeEdition = (
+      await db
+        .select()
+        .from(sanctionsSources)
+        .where(eq(sanctionsSources.id, "eu"))
+    ).at(0)?.activeEditionId;
+    expect(currentMatch.editionId).toBe(activeEdition);
+    const freshOpen = await open(drainNow);
+    expect(freshOpen.items).toHaveLength(1);
+    expect(freshOpen.items.at(0)).toMatchObject({
+      contactId: contact.id,
+      evidence: currentMatch.match,
+    });
+    for (const disposition of ["dismissed", "confirmed"] as const) {
+      await db
+        .update(sanctionsContactMatches)
+        .set({ disposition })
+        .where(eq(sanctionsContactMatches.contactId, contact.id));
+      expect((await open(drainNow)).items).toEqual([]);
+    }
   },
   TIMEOUT,
 );
