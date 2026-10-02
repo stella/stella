@@ -6,6 +6,7 @@ import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-sta
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
+import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
 import {
   assertOnlineMigrationsApplied,
@@ -272,6 +273,48 @@ describe("online migrations", () => {
       });
     }
   }
+
+  test("online migration retries share the hold through the actual index gate and alert once", async () => {
+    const harness = createHarness({
+      indexStates: { [REPORT_EXPORT_INDEX]: [undefined] },
+    });
+    const hold = createOnlineIndexHold();
+    let now = testClock();
+    const records: unknown[] = [];
+    const indexGate = {
+      ...heldIndexGate,
+      hold,
+      clock: () => now,
+      log: (record: unknown) => {
+        records.push(record);
+      },
+    };
+    const run = async () => {
+      expect(
+        await runOnlineMigrations(harness.pool, { indexGate }),
+      ).toMatchObject({
+        type: "deferred",
+        index: REPORT_EXPORT_INDEX,
+      });
+    };
+    const alerts = () =>
+      records.filter(
+        (record) =>
+          typeof record === "object" &&
+          record !== null &&
+          "event" in record &&
+          record.event === "database_load_gate_held_too_long",
+      );
+    await run();
+    expect(hold.current).toEqual({ type: "held", since: now });
+    expect(alerts()).toHaveLength(0);
+    now += indexGate.config.health.maxHeldMs + 1;
+    await run();
+    expect(alerts()).toHaveLength(1);
+    await run();
+    expect(alerts()).toHaveLength(1);
+    expect(hold.current).toEqual({ type: "alerted", since: testClock() });
+  });
 
   test("concurrently repairs an interrupted invalid build", async () => {
     const harness = createHarness({
