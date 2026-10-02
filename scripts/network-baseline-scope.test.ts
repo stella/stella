@@ -245,7 +245,9 @@ describe("network baseline workflows", () => {
         const prepare = job.steps.findIndex(
           (step) => step.uses === "./.github/actions/prepare-network-baseline",
         );
-        if (prepare === -1) {continue;}
+        if (prepare === -1) {
+          continue;
+        }
         const install = job.steps.findIndex(
           (step) => step.name === "Install dependencies",
         );
@@ -598,7 +600,7 @@ describe("merge-base preparation integration", () => {
           GITHUB_STEP_SUMMARY: summary,
         });
       expect(
-        run(["git", "show", `${advancedMain  }:apps/web/src/routeTree.gen.ts`])
+        run(["git", "show", `${advancedMain}:apps/web/src/routeTree.gen.ts`])
           .exitCode,
       ).not.toBe(0);
       const result = prepare(prepareScript);
