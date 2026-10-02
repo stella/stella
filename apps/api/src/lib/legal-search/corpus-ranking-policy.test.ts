@@ -12,6 +12,7 @@ import {
 import {
   CORPUS_BM25_PASSAGE_LIMIT,
   corpusRankingCursorTarget,
+  corpusQueryRankingMode,
 } from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import { collapseByLanguageGroup } from "@/api/lib/legal-search/language-group-collapse";
@@ -351,14 +352,12 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
   expect(requests).toEqual(
     Array.from({ length: 3 }, () => ({
       from: 0,
-      size: CORPUS_BM25_PASSAGE_LIMIT,
+      size: CORPUS_BM25_PASSAGE_LIMIT + 1,
     })),
   );
   scale = 0;
   const filterOnly = await read();
-  expect(
-    filterOnly.pageRanked.every(({ lexicalScore }) => lexicalScore === 0),
-  ).toBe(true);
+  expect(filterOnly.nextCursor?.rankingMode === "off").toBe(true);
 });
 
 test("BM25 ranking refuses a moving window or a transport without scores", () => {
@@ -388,6 +387,7 @@ test("BM25 ranking refuses a moving window or a transport without scores", () =>
         score: 1,
         id: "old",
         windowStart: 900,
+        rankingMode: "bm25-ratio",
         sort: "relevance",
       },
     }),
@@ -399,4 +399,123 @@ test("BM25 ranking refuses a moving window or a transport without scores", () =>
       order: { type: "newest", timestampField: "decision_date_ts" },
     }),
   ).rejects.toThrow("BM25 ranking requires");
+});
+
+test("ties below the cutoff page deterministically despite engine tie order", async () => {
+  await assertProperty(
+    "ties below the cutoff page deterministically despite engine tie order",
+    fc.asyncProperty(
+      fc.integer({ min: 2, max: 40 }),
+      fc.integer({ min: 1, max: 9 }),
+      async (count, limit) => {
+        let request = 0;
+        globalThis.fetch = Object.assign(
+          async () => {
+            request += 1;
+            const hits = Array.from({ length: count }, (_, index) =>
+              ["p0", "p1"].map((anchor_id) => ({
+                _source: {
+                  document_id: `doc-${String(index).padStart(3, "0")}`,
+                  anchor_id,
+                },
+                _score: 1,
+              })),
+            ).flat();
+            if (request % 2 === 0) {
+              hits.reverse();
+            }
+            return new Response(
+              JSON.stringify({ hits: { total: { value: hits.length }, hits } }),
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        );
+        const seen: string[] = [];
+        let cursor: SearchCursor | null = null;
+        for (let page = 0; page < Math.ceil(count / limit); page += 1) {
+          const result = await readCorpusIndexSearchPage({
+            ...rankingTestOptions,
+            limit,
+            rankingMode: page % 2 === 0 ? "bm25-ratio" : "off",
+            parsedCursor: cursor,
+          });
+          seen.push(...result.pageRanked.map(({ id }) => id));
+          for (const { id } of result.pageRanked) {
+            expect(result.anchorIdById.get(id)).toBe("p0");
+          }
+          cursor = result.nextCursor;
+          if (cursor !== null) {
+            expect(cursor.rankingMode).toBe("bm25-ratio");
+          }
+        }
+        expect(cursor).toBeNull();
+        expect(new Set(seen)).toEqual(
+          new Set(
+            Array.from(
+              { length: count },
+              (_, index) => `doc-${String(index).padStart(3, "0")}`,
+            ),
+          ),
+        );
+        expect(seen).toHaveLength(count);
+        expect(new Set(seen).size).toBe(count);
+      },
+    ),
+  );
+});
+
+test("a tied cutoff falls back once and every position page keeps that mode", async () => {
+  await assertProperty(
+    "a tied cutoff falls back once and every position page keeps that mode",
+    fc.asyncProperty(
+      fc.integer({ min: 1, max: 20 }),
+      fc.integer({ min: 100, max: 200 }),
+      async (extra, limit) => {
+        const count = CORPUS_BM25_PASSAGE_LIMIT + extra;
+        stubRankingScores(Array.from({ length: count }, () => 1));
+        let cursor: SearchCursor | null = null;
+        const seen: string[] = [];
+        for (
+          let page = 0;
+          page < Math.ceil(count / limit) + Math.ceil(count / 900) + 1;
+          page += 1
+        ) {
+          const result = await readCorpusIndexSearchPage({
+            ...rankingTestOptions,
+            limit,
+            rankingMode: "bm25-ratio",
+            parsedCursor: cursor,
+          });
+          seen.push(...result.pageRanked.map(({ id }) => id));
+          cursor = result.nextCursor;
+          if (cursor === null) {
+            break;
+          }
+          expect(cursor.rankingMode).toBe("off");
+        }
+        expect(cursor).toBeNull();
+        expect(seen).toHaveLength(count);
+        expect(new Set(seen).size).toBe(count);
+      },
+    ),
+    { numRuns: 3 },
+  );
+});
+
+test("filter-only and date queries always use position ranking", () => {
+  assertProperty(
+    "filter-only and date queries always use position ranking",
+    fc.property(
+      fc.constantFrom("off", "bm25-ratio"),
+      fc.constantFrom("relevance", "newest"),
+      fc.integer({ min: 0, max: 100 }),
+      (configuredMode, sort, textTokenCount) => {
+        expect(
+          corpusQueryRankingMode({ configuredMode, sort, textTokenCount }),
+        ).toBe(
+          sort === "relevance" && textTokenCount > 0 ? configuredMode : "off",
+        );
+      },
+    ),
+  );
 });

@@ -56,6 +56,8 @@ const corpusIndexSearchFailure = (error: CorpusIndexError): HandlerError =>
 export type SearchCursor = {
   score: number;
   id: string;
+  /** Effective experiment mode; absent on existing position cursors. */
+  rankingMode?: CorpusIndexRankingMode;
   /**
    * Order the scan behind this cursor ran in. The boundary below is a
    * position in that order and means nothing in another one, so a
@@ -134,6 +136,8 @@ type CorpusIndexSearchPageInput<TContext> = {
   order: CorpusSearchOrder;
   /** Fixed-window BM25 experiment; the default preserves the position scan. */
   rankingMode?: CorpusIndexRankingMode;
+  /** Main transport to restore when the experiment falls back. */
+  fallbackScanTransport?: CorpusIndexScanTransport;
   /**
    * Fields the engine highlights. Requested for the passages the page emits
    * and never for the scan: highlighting is per-hit work, and a scan reaches
@@ -925,23 +929,62 @@ const readPositionSearchPage = async <TContext>({
   };
 };
 
+type ScoredPassage = CorpusIndexScoredSearchResponse["hits"][number];
+
+const compareBm25Passages = (
+  left: ScoredPassage,
+  right: ScoredPassage,
+): number => {
+  const scoreOrder = right.score - left.score;
+  if (scoreOrder !== 0) {
+    return scoreOrder;
+  }
+  for (const field of ["document_id", "anchor_id", "chunk_id"] as const) {
+    const leftValue = left.fields[field];
+    const rightValue = right.fields[field];
+    const leftId = typeof leftValue === "string" ? leftValue : "";
+    const rightId = typeof rightValue === "string" ? rightValue : "";
+    if (leftId < rightId) {
+      return -1;
+    }
+    if (leftId > rightId) {
+      return 1;
+    }
+  }
+  return 0;
+};
+
+const bm25TopScore = (hits: readonly ScoredPassage[]): number | null => {
+  const topScore = hits.at(0)?.score ?? null;
+  if (topScore !== null && topScore < 0) {
+    panic("BM25 ratio ranking requires a nonnegative top score");
+  }
+  for (const { score } of hits) {
+    if (topScore === null || score < 0 || score > topScore) {
+      panic("BM25 ratio ranking received an invalid score");
+    }
+  }
+  return topScore;
+};
+
 /** A bounded candidate universe, replayed whole before grouping and paging. */
-const readBm25SearchPage = async <TContext>({
-  observer,
-  cluster,
-  indexId,
-  query,
-  limit,
-  order,
-  parsedCursor,
-  scanTransport,
-  snippetFields,
-  extractId,
-  extractSnippet,
-  rankCandidates,
-}: CorpusIndexSearchPageInput<TContext>): Promise<
-  CorpusIndexSearchPageResult<TContext>
-> => {
+const readBm25SearchPage = async <TContext>(
+  options: CorpusIndexSearchPageInput<TContext>,
+): Promise<CorpusIndexSearchPageResult<TContext>> => {
+  const {
+    observer,
+    cluster,
+    indexId,
+    query,
+    limit,
+    order,
+    parsedCursor,
+    scanTransport,
+    snippetFields,
+    extractId,
+    extractSnippet,
+    rankCandidates,
+  } = options;
   if (
     order.type !== "relevance" ||
     scanTransport?.type !== "scored" ||
@@ -957,21 +1000,45 @@ const readBm25SearchPage = async <TContext>({
     query,
     fields: scanTransport.fields,
     from: 0,
-    size: CORPUS_BM25_PASSAGE_LIMIT,
+    size: CORPUS_BM25_PASSAGE_LIMIT + 1,
   });
   const indexMs = performance.now() - startedAt;
-  const topScore = round.hits.at(0)?.score ?? null;
-  if (topScore !== null && topScore < 0) {
-    panic("BM25 ratio ranking requires a nonnegative top score");
+  const topScore = bm25TopScore(round.hits);
+  const cutoff = round.hits.at(CORPUS_BM25_PASSAGE_LIMIT - 1);
+  const lookahead = round.hits.at(CORPUS_BM25_PASSAGE_LIMIT);
+  if (
+    cutoff !== undefined &&
+    lookahead !== undefined &&
+    cutoff.score === lookahead.score
+  ) {
+    // The pinned engine cannot sort text identities. A tied cutoff cannot
+    // define a stable universe, so this query stays on the position path.
+    if (parsedCursor !== null) {
+      throw new HandlerError({ status: 400, message: "Invalid cursor" });
+    }
+    const page = await readPositionSearchPage({
+      ...options,
+      scanTransport: options.fallbackScanTransport ?? scanTransport,
+    });
+    if (page.nextCursor !== null) {
+      page.nextCursor = { ...page.nextCursor, rankingMode: "off" };
+    }
+    page.scan.indexMs += indexMs;
+    page.scan.rounds += 1;
+    page.scan.passagesScanned += round.hits.length;
+    return page;
   }
+  const hits = round.hits
+    .slice(0, CORPUS_BM25_PASSAGE_LIMIT)
+    .toSorted(compareBm25Passages);
   const candidates: ScoredCandidate[] = [];
   const bestScoreById = new Map<string, number>();
   const passageClauseById = new Map<string, string>();
   const anchorIdById = new Map<string, string>();
   const passageCountById = new Map<string, number>();
-  for (const { fields: hit, score } of round.hits) {
-    if (topScore === null || score < 0 || score > topScore) {
-      panic("BM25 ratio ranking received an invalid score");
+  for (const { fields: hit, score } of hits) {
+    if (topScore === null) {
+      panic("A nonempty BM25 universe requires a top score");
     }
     const id = extractId(hit);
     if (id === null) {
@@ -1005,7 +1072,13 @@ const readBm25SearchPage = async <TContext>({
   const last = pageRanked.at(-1);
   const nextCursor =
     windowed.length > limit && last !== undefined
-      ? { score: last.score, id: last.id, sort: order.type, windowStart: 0 }
+      ? {
+          score: last.score,
+          id: last.id,
+          sort: order.type,
+          windowStart: 0,
+          rankingMode: "bm25-ratio" as const,
+        }
       : null;
   const snippets = await readPageSnippets({
     observer,
@@ -1029,7 +1102,7 @@ const readBm25SearchPage = async <TContext>({
     nextCursor,
     scan: {
       rounds: 1,
-      passagesScanned: round.hits.length,
+      passagesScanned: hits.length,
       indexMs: indexMs + snippets.indexMs,
       earlyStopped: false,
       roundCapHit: false,
@@ -1039,16 +1112,39 @@ const readBm25SearchPage = async <TContext>({
       topScore,
       bestScoreById,
       passageClauseById,
-      nextOffset: round.hits.length,
+      nextOffset: hits.length,
       totalHits: round.numHits,
-      lastScore: round.hits.at(-1)?.score ?? null,
+      lastScore: hits.at(-1)?.score ?? null,
     },
   };
 };
 
 export const readCorpusIndexSearchPage = async <TContext>(
   options: CorpusIndexSearchPageInput<TContext>,
-): Promise<CorpusIndexSearchPageResult<TContext>> =>
-  options.rankingMode === "bm25-ratio"
-    ? await readBm25SearchPage(options)
-    : await readPositionSearchPage(options);
+): Promise<CorpusIndexSearchPageResult<TContext>> => {
+  const mode =
+    options.parsedCursor === null
+      ? (options.rankingMode ?? "off")
+      : (options.parsedCursor.rankingMode ?? "off");
+  switch (mode) {
+    case "bm25-ratio":
+      return await readBm25SearchPage(options);
+    case "off": {
+      const page = await readPositionSearchPage({
+        ...options,
+        scanTransport: options.fallbackScanTransport ?? options.scanTransport,
+      });
+      if (
+        page.nextCursor !== null &&
+        (options.rankingMode === "bm25-ratio" ||
+          options.parsedCursor?.rankingMode === "off")
+      ) {
+        page.nextCursor = { ...page.nextCursor, rankingMode: "off" };
+      }
+      return page;
+    }
+    default:
+      mode satisfies never;
+      return panic("Unknown corpus ranking mode");
+  }
+};

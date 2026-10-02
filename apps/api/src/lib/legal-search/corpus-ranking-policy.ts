@@ -1,6 +1,8 @@
 // parser-output-unchanged: Search ranking flag and policy; ingestion parsers never read them.
 import { createHash } from "node:crypto";
 
+import type { SearchSort } from "@/api/lib/legal-search/corpus-search-order";
+
 export const CORPUS_INDEX_RANKING_MODES = ["off", "bm25-ratio"] as const;
 
 export type CorpusIndexRankingMode =
@@ -28,3 +30,16 @@ export const corpusRankingCursorTarget = (
         )
         .digest("hex")
         .slice(0, 32);
+
+type CorpusQueryRankingModeOptions = {
+  configuredMode: CorpusIndexRankingMode;
+  sort: SearchSort;
+  textTokenCount: number;
+};
+
+export const corpusQueryRankingMode = ({
+  configuredMode,
+  sort,
+  textTokenCount,
+}: CorpusQueryRankingModeOptions): CorpusIndexRankingMode =>
+  sort === "relevance" && textTokenCount > 0 ? configuredMode : "off";

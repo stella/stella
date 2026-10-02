@@ -160,7 +160,10 @@ import {
   type CorpusTermExpander,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
-import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
+import {
+  corpusQueryRankingMode,
+  corpusRankingCursorTarget,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   type CorpusSearchCursor,
   decodeCorpusSearchCursor,
@@ -1907,8 +1910,11 @@ export const searchCorpusIndexDecisions = async (
     return status(503, { message: "Search is temporarily unavailable" });
   }
   const { serving, route, contract } = target.value;
-  const rankingMode =
-    sort === "relevance" ? envBase.CORPUS_INDEX_RANKING_MODE : "off";
+  const rankingMode = corpusQueryRankingMode({
+    configuredMode: envBase.CORPUS_INDEX_RANKING_MODE,
+    sort,
+    textTokenCount: tokenizeCorpusFreeText(body.query).length,
+  });
   const cursorTarget = corpusRankingCursorTarget(
     target.value.cursorTarget,
     rankingMode,

@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   CORPUS_CURSOR_GROUP_TOKEN_CHARS,
@@ -448,4 +448,32 @@ test.each([
       encodeCursor(0.5, `900:none:relevance:${segment}:${DECISION_ID}`),
     ),
   ).toBeNull();
+});
+
+test("ranking modes survive cursor encoding with targets and excluded groups", () => {
+  assertProperty(
+    "ranking modes survive cursor encoding with targets and excluded groups",
+    fc.property(
+      fc.constantFrom("off", "bm25-ratio"),
+      fc.constantFrom(null, TARGET_A),
+      fc.constantFrom([], ["AbC_1-"]),
+      (rankingMode, target, excludedGroups) => {
+        const cursor = {
+          dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+          id: DECISION_ID,
+          score: 1,
+          sort: "relevance" as const,
+          windowStart: 0,
+          rankingMode,
+          target,
+          ...(excludedGroups.length === 0 ? {} : { excludedGroups }),
+        };
+        const encoded = encodeCorpusSearchCursor(cursor);
+        expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+        expect(encoded.length).toBeLessThanOrEqual(
+          CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+        );
+      },
+    ),
+  );
 });

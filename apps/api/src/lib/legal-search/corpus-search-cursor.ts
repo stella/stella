@@ -36,6 +36,10 @@
  *
  *     base64("<score>:<windowStart>:<dictionary>:<sort>[:<target>]:x<tokens>:<id>")
  *
+ * An experimental session additionally carries `r-off` or `r-bm25-ratio`
+ * immediately before the id. The effective mode survives fallback and every
+ * continuation; existing position cursors omit it and remain position cursors.
+ *
  * The `x` cannot open a target (lowercase hex), so the two optional segments
  * never read as each other. A replica that predates the segment refuses such a
  * cursor as malformed rather than misreading it.
@@ -67,6 +71,7 @@
 import { panic } from "better-result";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
+import { CORPUS_INDEX_RANKING_MODES } from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
@@ -121,6 +126,10 @@ const GROUP_TOKEN_PATTERN = new RegExp(
   "u",
 );
 const GROUPS_SEGMENT_PREFIX = "x";
+const RANKING_MODE_PREFIX = "r-";
+const RANKING_MODE_MAX_CHARS =
+  RANKING_MODE_PREFIX.length +
+  Math.max(...CORPUS_INDEX_RANKING_MODES.map((mode) => mode.length));
 
 /** The excluded-groups segment, or null when there is nothing to carry. */
 const serializeExcludedGroups = (
@@ -198,6 +207,8 @@ export const CORPUS_SEARCH_CURSOR_MAX_LENGTH = base64Length(
     1 +
     CORPUS_READ_TARGET_IDENTITY_LENGTH +
     1 +
+    RANKING_MODE_MAX_CHARS +
+    1 +
     DECISION_ID_MAX_CHARS,
 );
 
@@ -221,6 +232,8 @@ export const CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH = base64Length(
     LIMITS.corpusIndexSearchMaxExcludedGroups *
       CORPUS_CURSOR_GROUP_TOKEN_CHARS +
     1 +
+    RANKING_MODE_MAX_CHARS +
+    1 +
     DECISION_ID_MAX_CHARS,
 );
 
@@ -232,11 +245,12 @@ export const encodeCorpusSearchCursor = ({
   sort,
   target,
   windowStart,
+  rankingMode,
 }: CorpusSearchCursor): string => {
   const groups = serializeExcludedGroups(excludedGroups);
   return encodeCursor(
     score,
-    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${id}`,
+    `${windowStart}:${serializeExpansionDictionaryIdentity(dictionary)}:${sort}:${target === null ? "" : `${target}:`}${groups === null ? "" : `${groups}:`}${rankingMode === undefined ? "" : `${RANKING_MODE_PREFIX}${rankingMode}:`}${id}`,
   );
 };
 
@@ -245,6 +259,7 @@ type CursorRanking = {
   dictionary: ExpansionDictionaryIdentity;
   windowStart: number;
   sort: SearchSort;
+  rankingMode?: SearchCursor["rankingMode"];
   target?: string | null;
   excludedGroups?: readonly string[];
 };
@@ -286,7 +301,19 @@ const parseCurrentForm = (
   const windowStart = parseWindowStart(segments.at(0) ?? "");
   const dictionary = parseExpansionDictionaryIdentity(segments.at(1) ?? "");
   const sort = parseSearchSort(segments.at(2) ?? "");
-  const optional = parseOptionalSegments(segments.slice(3));
+  const tail = segments.at(-1);
+  const hasRankingMode = tail?.startsWith(RANKING_MODE_PREFIX) === true;
+  const rankingMode = hasRankingMode
+    ? CORPUS_INDEX_RANKING_MODES.find(
+        (mode) => `${RANKING_MODE_PREFIX}${mode}` === tail,
+      )
+    : undefined;
+  if (hasRankingMode && rankingMode === undefined) {
+    return null;
+  }
+  const optional = parseOptionalSegments(
+    segments.slice(3, hasRankingMode ? -1 : undefined),
+  );
   if (
     windowStart === null ||
     dictionary === null ||
@@ -295,7 +322,13 @@ const parseCurrentForm = (
   ) {
     return null;
   }
-  return { dictionary, windowStart, sort, ...optional };
+  return {
+    dictionary,
+    windowStart,
+    sort,
+    ...optional,
+    ...(rankingMode === undefined ? {} : { rankingMode }),
+  };
 };
 
 export const decodeCorpusSearchCursor = (
@@ -354,7 +387,8 @@ export const decodeCorpusSearchCursor = (
     // The current form, with a read target, a groups segment, both or neither.
     case 4:
     case 5:
-    case 6: {
+    case 6:
+    case 7: {
       const ranking = parseCurrentForm(segments.slice(0, -1));
       return ranking === null ? null : cursorOf(ranking);
     }

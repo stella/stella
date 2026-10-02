@@ -30,7 +30,10 @@ import {
   caseLawCorpusQuery,
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
-import { corpusRankingCursorTarget } from "@/api/lib/legal-search/corpus-ranking-policy";
+import {
+  corpusQueryRankingMode,
+  corpusRankingCursorTarget,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -44,6 +47,7 @@ import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import {
   blendStableCitationAuthority,
+  type ScoredCandidate,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import {
@@ -159,6 +163,43 @@ export const rehydrateCorpusIndexProviderCandidates =
     ) => await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
   );
 
+const rankCorpusIndexProviderCandidates = async (
+  generation: string,
+  candidates: readonly ScoredCandidate[],
+) => {
+  const ids = candidates.map((candidate) =>
+    toSafeId<"caseLawDecision">(candidate.id),
+  );
+  const rows =
+    ids.length === 0
+      ? []
+      : await caseLawPublicReadDb(
+          async (tx) =>
+            await rehydrateCorpusIndexProviderCandidates(tx, {
+              generation,
+              ids,
+            }),
+        );
+
+  // Keyed by plain string id (candidate ids from corpus index are strings).
+  const displayById = new Map(rows.map((row) => [String(row.id), row]));
+  const authorityById = new Map(
+    rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+
+  // Drop candidates missing from Postgres (index/DB drift) so we never
+  // surface a hit we cannot render.
+  return {
+    context: { displayById },
+    ranked: blendStableCitationAuthority({
+      candidates: candidates.filter((candidate) =>
+        displayById.has(candidate.id),
+      ),
+      authorityById,
+    }),
+  };
+};
+
 const searchResult = async (
   query: LegalSearchQuery,
   observer: RegistryRequestObservation,
@@ -197,7 +238,11 @@ const searchResult = async (
     );
   }
   const { serving, route, contract } = target.value;
-  const rankingMode = envBase.CORPUS_INDEX_RANKING_MODE;
+  const rankingMode = corpusQueryRankingMode({
+    configuredMode: envBase.CORPUS_INDEX_RANKING_MODE,
+    sort: "relevance",
+    textTokenCount: tokenizeCorpusFreeText(query.query).length,
+  });
   const cursorTarget = corpusRankingCursorTarget(
     target.value.cursorTarget,
     rankingMode,
@@ -285,6 +330,7 @@ const searchResult = async (
     order: RELEVANCE_ORDER,
     parsedCursor,
     rankingMode,
+    fallbackScanTransport: { type: "native" },
     scanTransport:
       rankingMode === "bm25-ratio"
         ? { type: "scored", fields: ["document_id"] }
@@ -313,39 +359,8 @@ const searchResult = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) => {
-      const ids = candidates.map((candidate) =>
-        toSafeId<"caseLawDecision">(candidate.id),
-      );
-      const rows =
-        ids.length === 0
-          ? []
-          : await caseLawPublicReadDb(
-              async (tx) =>
-                await rehydrateCorpusIndexProviderCandidates(tx, {
-                  generation,
-                  ids,
-                }),
-            );
-
-      // Keyed by plain string id (candidate ids from corpus index are strings).
-      const displayById = new Map(rows.map((row) => [String(row.id), row]));
-      const authorityById = new Map(
-        rows.map((row) => [String(row.id), row.citationAuthority]),
-      );
-
-      // Drop candidates missing from Postgres (index/DB drift) so we never
-      // surface a hit we cannot render.
-      return {
-        context: { displayById },
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter((candidate) =>
-            displayById.has(candidate.id),
-          ),
-          authorityById,
-        }),
-      };
-    },
+    rankCandidates: async (candidates) =>
+      await rankCorpusIndexProviderCandidates(generation, candidates),
   });
 
   const {
