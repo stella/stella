@@ -24,6 +24,9 @@
 import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import {
   lockCitationGraph,
   reopenCitationsForKeys,
@@ -37,31 +40,15 @@ import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { primaryReferenceTypeFromStored } from "@/api/lib/legal-search/decision-primary-reference";
 import { isRecord } from "@/api/lib/type-guards";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
-const RECANONICALIZE_FLAG = "--recanonicalize";
-
-/** Which rows a pass rewrites: those with no key, or every stale one. */
-const KEY_SCOPE = {
-  MISSING: "missing",
-  STALE: "stale",
-} as const;
-
-type KeyScope = (typeof KEY_SCOPE)[keyof typeof KEY_SCOPE];
-
-const args = process.argv.slice(2);
-const unsupported = args.filter((argument) => argument !== RECANONICALIZE_FLAG);
-if (unsupported.length > 0) {
-  panic(`Unsupported argument: ${unsupported.join(" ")}`);
-}
-const scope: KeyScope = args.includes(RECANONICALIZE_FLAG)
-  ? KEY_SCOPE.STALE
-  : KEY_SCOPE.MISSING;
-
+const plan = backfillEntrypoints["citation-keys"]({
+  args: process.argv.slice(2),
+});
+const scope = plan.scope;
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
 const { rootDb } = await enterCaseLawMaintenanceLane();
-
-const BATCH = 5000;
 
 type KeyedTable = "case_law_decisions" | "case_law_citations";
 
@@ -84,29 +71,38 @@ const backfillTable = async (
   sourceColumn: "case_number" | "citation_text",
 ): Promise<BackfillTotals> => {
   const totals: BackfillTotals = { seen: 0, keyed: 0 };
-  let after: string | null = null;
-  const missingOnly = scope === KEY_SCOPE.MISSING;
+  const missingOnly = scope === "missing";
 
-  while (true) {
-    // db-await-in-loop: keyset page per iteration; the page is the batch
-    const result: unknown = await rootDb.execute(
-      sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored,
-                 ${sql.raw(table === "case_law_decisions" ? "case_number_type" : "NULL")} AS type
-            FROM ${sql.raw(table)}
-           WHERE ${missingOnly ? sql`citation_key IS NULL` : sql`TRUE`}
-             ${after === null ? sql`` : sql`AND id > ${after}`}
-           ORDER BY id
-           LIMIT ${BATCH}`,
-    );
-    const rows = executedRows(result).flatMap((row) =>
-      isRecord(row) &&
-      typeof row["id"] === "string" &&
-      typeof row["text"] === "string"
-        ? [
-            {
+  const runtime = plan.open(
+    (options) => createScriptBackfillRuntime({ ...options, db: rootDb }),
+    { name: `${plan.name}:${table}`, tableName: table },
+  );
+  try {
+    const pass = await runBackfillPass({
+      step: async () =>
+        await runtime.step(async ({ tx, size, cursor }) => {
+          await lockCitationGraph(tx);
+          const result: unknown = await tx.execute(
+            sql`SELECT id, ${sql.raw(sourceColumn)} AS text, citation_key AS stored,
+                   ${sql.raw(table === "case_law_decisions" ? "case_number_type" : "NULL")} AS type
+              FROM ${sql.raw(table)}
+             WHERE ${missingOnly ? sql`citation_key IS NULL` : sql`TRUE`}
+               ${cursor === null ? sql`` : sql`AND id > ${cursor}::uuid`}
+             ORDER BY id
+             LIMIT ${size}
+             FOR UPDATE`,
+          );
+          const rows = executedRows(result).map((row) => {
+            if (
+              !isRecord(row) ||
+              typeof row["id"] !== "string" ||
+              typeof row["text"] !== "string"
+            ) {
+              return panic("Citation key batch returned an invalid row");
+            }
+            return {
               id: row["id"],
-              // A decision whose primary reference is not a docket keeps no
-              // key: filling one here would undo what the pipeline wrote.
+              // A non-docket primary reference keeps no citation key.
               key:
                 table === "case_law_decisions"
                   ? decisionCitationKeyOf({
@@ -117,81 +113,77 @@ const backfillTable = async (
                     })
                   : citationKeyOf(row["text"]),
               stored: typeof row["stored"] === "string" ? row["stored"] : null,
-            },
-          ]
-        : [],
-    );
+            };
+          });
 
-    if (rows.length === 0) {
-      return totals;
-    }
+          if (rows.length === 0) {
+            return { cursor, done: true, value: { seen: 0, keyed: 0 } };
+          }
 
-    const keyed = rows.filter(({ key, stored }) =>
-      missingOnly ? key !== null : key !== stored,
-    );
-    if (keyed.length > 0) {
-      const values = sql.join(
-        keyed.map(({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`),
-        sql`, `,
-      );
-      // One transaction, because giving a decision a key is the same event the
-      // ingestion pipeline announces and it has to be announced the same way.
-      // The citation graph's advisory lock is taken before any row is written,
-      // the order the resolver takes it in, so the write and its announcement
-      // are serialized against the standing walk: without that, a resolver
-      // batch holding a pre-key snapshot can wait on this statement's row
-      // locks and then commit a target or an `unmatched` read off the old key
-      // over the reset, and the row stays settled forever. The maintenance
-      // lane held above serializes operator passes only, not the resolver.
-      //
-      // A citation gaining a key was `pending` all along — it was excluded
-      // from the walk by having no key, and now it is not. A citation whose
-      // key changes spelling was settled against the old one, so it goes back
-      // to `pending`; a decision's rekeying reopens the citations of both its
-      // old and its new key.
-      // db-await-in-loop: bounded batch per iteration under the graph lock
-      await rootDb.transaction(async (tx) => {
-        await lockCitationGraph(tx);
-        if (table === "case_law_decisions") {
-          await tx.execute(
-            sql`WITH v(id, key) AS (VALUES ${values})
-                UPDATE case_law_decisions AS t
-                   SET citation_key = v.key
-                  FROM v
-                 WHERE t.id = v.id`,
+          const keyed = rows.filter(({ key, stored }) =>
+            missingOnly ? key !== null : key !== stored,
           );
-          await reopenCitationsForKeys(
-            tx,
-            keyed.flatMap(({ key, stored }) =>
-              [key, stored].filter((value) => value !== null),
-            ),
-          );
-          return;
-        }
-        await tx.execute(
-          missingOnly
-            ? sql`WITH v(id, key) AS (VALUES ${values})
-                  UPDATE case_law_citations AS t
+          if (keyed.length > 0) {
+            const values = sql.join(
+              keyed.map(({ id, key }) => sql`(${id}::uuid, ${key}::varchar)`),
+              sql`, `,
+            );
+            // Rekeying and reopening affected citations share the checkpoint transaction.
+            if (table === "case_law_decisions") {
+              await tx.execute(
+                sql`WITH v(id, key) AS (VALUES ${values})
+                  UPDATE case_law_decisions AS t
                      SET citation_key = v.key
                     FROM v
-                   WHERE t.id = v.id`
-            : sql`WITH v(id, key) AS (VALUES ${values})
-                  UPDATE case_law_citations AS t
-                     SET citation_key = v.key,
-                         resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
-                         cited_decision_id = NULL,
-                         resolution_rule_id = NULL,
-                         resolution_attempted_at = NULL
-                    FROM v
                    WHERE t.id = v.id`,
+              );
+              await reopenCitationsForKeys(
+                tx,
+                keyed.flatMap(({ key, stored }) =>
+                  [key, stored].filter((value) => value !== null),
+                ),
+              );
+            } else {
+              await tx.execute(
+                missingOnly
+                  ? sql`WITH v(id, key) AS (VALUES ${values})
+                    UPDATE case_law_citations AS t
+                       SET citation_key = v.key
+                      FROM v
+                     WHERE t.id = v.id`
+                  : sql`WITH v(id, key) AS (VALUES ${values})
+                    UPDATE case_law_citations AS t
+                       SET citation_key = v.key,
+                           resolution_status = ${CITATION_RESOLUTION_STATUS.PENDING},
+                           cited_decision_id = NULL,
+                           resolution_rule_id = NULL,
+                           resolution_attempted_at = NULL
+                      FROM v
+                     WHERE t.id = v.id`,
+              );
+            }
+          }
+          return {
+            cursor: rows.at(-1)?.id ?? cursor,
+            done: rows.length < size,
+            value: { seen: rows.length, keyed: keyed.length },
+          };
+        }),
+      onBatch: ({ value: batch }) => {
+        totals.seen += batch.seen;
+        totals.keyed += batch.keyed;
+        console.log(
+          `  ${table}: ${totals.seen} scanned, ${totals.keyed} keyed`,
         );
-      });
+      },
+      sleep: Bun.sleep,
+    });
+    if (pass.isErr()) {
+      throw pass.error;
     }
-
-    totals.seen += rows.length;
-    totals.keyed += keyed.length;
-    console.log(`  ${table}: ${totals.seen} scanned, ${totals.keyed} keyed`);
-    after = rows.at(-1)?.id ?? after;
+    return totals;
+  } finally {
+    await runtime.close();
   }
 };
 

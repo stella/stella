@@ -2,8 +2,8 @@
  * Completion of an online repair whose postcondition is a validated CHECK: the
  * walk is what makes the rows satisfy the constraint, and
  * `pg_constraint.convalidated` is the catalog fact proving they do. Shared by
- * the repairs behind such a constraint, so the read one skips its walk on is
- * the read the deploy and the API's startup gate refuse on.
+ * the repairs behind such a constraint. A durable backfill checkpoint marks
+ * pending work that deploy and startup can admit while a later pass resumes.
  */
 
 import { panic } from "better-result";
@@ -31,6 +31,7 @@ type ConstraintCompletionOptions = {
   constraintName: string;
   repairName: string;
   tableName: string;
+  backfillName?: string;
 };
 
 export const readConstraintCompletion = async ({
@@ -38,6 +39,7 @@ export const readConstraintCompletion = async ({
   constraintName,
   repairName,
   tableName,
+  backfillName,
 }: ConstraintCompletionOptions): Promise<OnlineRepairCompletion> => {
   const row = (
     await connection.query(READ_CONSTRAINT_STATE_SQL, [
@@ -56,10 +58,43 @@ export const readConstraintCompletion = async ({
   if (!isRecord(row) || typeof row["isValidated"] !== "boolean") {
     panic(`Online repair ${repairName}: constraint state has an invalid shape`);
   }
-  return row["isValidated"]
-    ? { type: "complete" }
-    : {
-        reason: `constraint ${constraintName} is not validated`,
-        type: "incomplete",
-      };
+  if (row["isValidated"]) {
+    return { type: "complete" };
+  }
+  const reason = `constraint ${constraintName} is not validated`;
+  if (backfillName === undefined) {
+    return { type: "incomplete", reason };
+  }
+  const checkpoint = (
+    await connection.query(
+      "SELECT cursor, batch FROM public.database_backfill_states WHERE name = $1",
+      [backfillName],
+    )
+  ).at(0);
+  if (checkpoint === undefined) {
+    return { type: "incomplete", reason };
+  }
+  if (
+    !isRecord(checkpoint) ||
+    !(
+      checkpoint["cursor"] === null || typeof checkpoint["cursor"] === "string"
+    ) ||
+    !isRecord(checkpoint["batch"])
+  ) {
+    return panic(`Online repair ${repairName}: invalid pending checkpoint`);
+  }
+  const { batch } = checkpoint;
+  if (
+    !(batch["holdUntil"] === null || typeof batch["holdUntil"] === "number") ||
+    !(batch["heldSince"] === null || typeof batch["heldSince"] === "number")
+  ) {
+    return panic(`Online repair ${repairName}: invalid pending hold`);
+  }
+  return {
+    type: "pending",
+    reason,
+    cursor: checkpoint["cursor"],
+    holdUntil: batch["holdUntil"],
+    heldSince: batch["heldSince"],
+  };
 };

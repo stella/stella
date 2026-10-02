@@ -973,7 +973,24 @@ export const createChatRuntime = ({
 
 const toPersistedChatMessages = (
   messages: readonly UIMessage<ChatClientTools>[],
-): PersistedChatMessage[] => [...messages];
+): PersistedChatMessage[] =>
+  messages.map((message) => {
+    if (
+      message.role !== "assistant" ||
+      !message.parts.some(
+        (part) => part.type === "text" && part.content.trim().length === 0,
+      )
+    ) {
+      return message;
+    }
+    // RUN_ERROR can leave whitespace parts that server finalization drops.
+    return {
+      ...message,
+      parts: message.parts.filter(
+        (part) => part.type !== "text" || part.content.trim().length > 0,
+      ),
+    };
+  });
 
 const isChatUiMessage = (
   message: ModelMessage | UIMessage,

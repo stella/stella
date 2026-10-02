@@ -1,3 +1,6 @@
+import { panic } from "better-result";
+import { sql } from "drizzle-orm";
+
 /**
  * Backfill legacy workspace "Document Type" classifiers into properties.role.
  *
@@ -7,14 +10,18 @@
  *
  *   bun run src/scripts/backfill-property-roles.ts
  */
-import { sql } from "drizzle-orm";
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
 
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import type { Transaction } from "@/api/db/root";
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { openMaintenanceDb } from "@/api/lib/db/maintenance-db";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
-const WORKSPACE_BATCH_SIZE = Number(
-  process.env["PROPERTY_ROLE_BACKFILL_BATCH_SIZE"] ?? 100,
-);
+const plan = backfillEntrypoints["property-roles"]({
+  args: process.argv.slice(2),
+  environment: process.env,
+});
 const STATEMENT_TIMEOUT_MS = 60_000;
 
 const db = openMaintenanceDb({ readOnly: false });
@@ -25,17 +32,23 @@ type BatchResult = {
   updated: number;
 };
 
-const backfillBatch = async (
-  cursorWorkspaceId: string | null,
-): Promise<BatchResult | null> => {
+type BackfillBatchOptions = {
+  tx: Transaction;
+  cursorWorkspaceId: string | null;
+  size: number;
+};
+const backfillBatch = async ({
+  tx,
+  cursorWorkspaceId,
+  size,
+}: BackfillBatchOptions): Promise<BatchResult> => {
   const cursorClause = cursorWorkspaceId
     ? sql`WHERE workspace_id > ${cursorWorkspaceId}::uuid`
     : sql``;
 
-  const rows = await db.transaction(async (tx) => {
-    await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
+  await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
 
-    return await tx.execute(sql`
+  const rows = await tx.execute(sql`
       WITH workspace_batch AS (
         SELECT workspace_id
         FROM (
@@ -43,7 +56,7 @@ const backfillBatch = async (
           FROM properties
           ${cursorClause}
           ORDER BY workspace_id
-          LIMIT ${WORKSPACE_BATCH_SIZE}
+          LIMIT ${size}
         ) AS workspace_ids
       ),
       ranked AS (
@@ -90,11 +103,10 @@ const backfillBatch = async (
         (SELECT count(*)::int FROM workspace_batch) AS scanned_workspaces,
         (SELECT count(*)::int FROM updated) AS updated
     `);
-  });
 
   const row = rows.at(0);
   if (!row) {
-    return null;
+    return panic("Property role batch returned no result");
   }
 
   return {
@@ -107,38 +119,55 @@ const backfillBatch = async (
 
 console.log("=== BACKFILL PROPERTY ROLES ===");
 console.log(
-  `Workspace batch size: ${WORKSPACE_BATCH_SIZE}, statement timeout: ${STATEMENT_TIMEOUT_MS}ms`,
+  `Workspace batch size: ${plan.initialSize}, statement timeout: ${STATEMENT_TIMEOUT_MS}ms`,
 );
 
-let cursor: string | null = null;
 let totalScannedWorkspaces = 0;
 let totalUpdated = 0;
 let batchCount = 0;
+const runtime = plan.open((options) =>
+  createScriptBackfillRuntime({ ...options, db }),
+);
 
-while (true) {
-  // db-await-in-loop: keyset batch per iteration; each batch is one set-based update
-  const result = await backfillBatch(cursor);
+try {
+  const pass = await runBackfillPass({
+    step: async () =>
+      await runtime.step(async ({ tx, size, cursor }) => {
+        const value = await backfillBatch({
+          tx,
+          size,
+          cursorWorkspaceId: cursor,
+        });
+        return {
+          cursor: value.next_cursor ?? cursor,
+          done: value.scanned_workspaces === 0 || value.next_cursor === null,
+          value,
+        };
+      }),
+    onBatch: ({ value: result }) => {
+      if (result.scanned_workspaces === 0) {
+        return;
+      }
 
-  if (!result || result.scanned_workspaces === 0) {
-    break;
+      totalScannedWorkspaces += result.scanned_workspaces;
+      totalUpdated += result.updated;
+      batchCount++;
+
+      console.log(
+        `[batch ${batchCount}] scanned_workspaces=${result.scanned_workspaces} ` +
+          `updated=${result.updated} ` +
+          `total_scanned_workspaces=${totalScannedWorkspaces} ` +
+          `total_updated=${totalUpdated} ` +
+          `cursor=${result.next_cursor ?? "<end>"}`,
+      );
+    },
+    sleep: Bun.sleep,
+  });
+  if (pass.isErr()) {
+    throw pass.error;
   }
-
-  totalScannedWorkspaces += result.scanned_workspaces;
-  totalUpdated += result.updated;
-  batchCount++;
-
-  console.log(
-    `[batch ${batchCount}] scanned_workspaces=${result.scanned_workspaces} ` +
-      `updated=${result.updated} ` +
-      `total_scanned_workspaces=${totalScannedWorkspaces} ` +
-      `total_updated=${totalUpdated} ` +
-      `cursor=${result.next_cursor ?? "<end>"}`,
-  );
-
-  if (!result.next_cursor) {
-    break;
-  }
-  cursor = result.next_cursor;
+} finally {
+  await runtime.close();
 }
 
 console.log(

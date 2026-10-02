@@ -21,20 +21,25 @@
  *   bun apps/api/src/scripts/backfill-source-document-ids.ts --adapter sk-courts
  */
 
+import { panic } from "better-result";
 import { sql } from "drizzle-orm";
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
 import { executedRows } from "@/api/lib/db/executed-rows";
+import { isRecord } from "@/api/lib/type-guards";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the case-law tables serialize here instead of deadlocking on row locks.
 const { rootDb } = await enterCaseLawMaintenanceLane();
 
-const BATCH = 2000;
-
-const adapterArgIndex = process.argv.indexOf("--adapter");
-const ADAPTER_FILTER =
-  adapterArgIndex === -1 ? null : (process.argv[adapterArgIndex + 1] ?? null);
+const plan = backfillEntrypoints["source-document-ids"]({
+  args: process.argv.slice(2),
+});
+const ADAPTER_FILTER = plan.adapter;
 
 /**
  * How each source states its document id, as SQL over columns we already
@@ -59,33 +64,64 @@ const ID_EXPRESSION_BY_ADAPTER: Record<string, string> = {
 const fillFrom = async (
   adapterKey: string,
   expression: string,
-  filled: number,
 ): Promise<number> => {
-  const result = await rootDb.execute(sql`
-    WITH batch AS (
-      SELECT d.id
-      FROM case_law_decisions d
-      JOIN case_law_sources s ON s.id = d.source_id
-      WHERE s.adapter_key = ${adapterKey}
-        AND d.source_document_id IS NULL
-      LIMIT ${BATCH}
-    )
-    UPDATE case_law_decisions d
-    SET source_document_id = ${sql.raw(expression)}
-    FROM batch
-    WHERE d.id = batch.id
-      AND ${sql.raw(expression)} IS NOT NULL
-      AND ${sql.raw(expression)} <> ''
-    RETURNING d.id
-  `);
-
-  const updated = executedRows(result).length;
-  if (updated === 0) {
+  const runtime = plan.open(
+    (options) => createScriptBackfillRuntime({ ...options, db: rootDb }),
+    { name: `${plan.name}:${adapterKey}`, tableName: plan.tableName },
+  );
+  let filled = 0;
+  try {
+    const pass = await runBackfillPass({
+      sleep: Bun.sleep,
+      step: async () =>
+        await runtime.step(async ({ tx, size, cursor }) => {
+          const result = await tx.execute(sql`
+          WITH batch AS (
+            SELECT d.id
+            FROM case_law_decisions d
+            JOIN case_law_sources s ON s.id = d.source_id
+            WHERE s.adapter_key = ${adapterKey}
+              AND d.source_document_id IS NULL
+              AND ${sql.raw(expression)} IS NOT NULL
+              AND ${sql.raw(expression)} <> ''
+              ${cursor === null ? sql`` : sql`AND d.id > ${cursor}::uuid`}
+            ORDER BY d.id
+            LIMIT ${size}
+            FOR UPDATE OF d
+          )
+          UPDATE case_law_decisions d
+          SET source_document_id = ${sql.raw(expression)}
+          FROM batch
+          WHERE d.id = batch.id AND d.source_document_id IS NULL
+          RETURNING d.id
+        `);
+          const rows = executedRows(result);
+          const ids = rows
+            .map((row) => {
+              if (!isRecord(row) || typeof row["id"] !== "string") {
+                return panic("Source identity batch returned an invalid row");
+              }
+              return row["id"];
+            })
+            .toSorted();
+          return {
+            cursor: ids.at(-1) ?? cursor,
+            done: rows.length < size,
+            value: rows.length,
+          };
+        }),
+      onBatch: ({ value }) => {
+        filled += value;
+        console.info(`${adapterKey}: ${filled.toLocaleString()} filled`);
+      },
+    });
+    if (pass.isErr()) {
+      throw pass.error;
+    }
     return filled;
+  } finally {
+    await runtime.close();
   }
-  const total = filled + updated;
-  console.info(`${adapterKey}: ${total.toLocaleString()} filled`);
-  return await fillFrom(adapterKey, expression, total);
 };
 
 const adapters = Object.entries(ID_EXPRESSION_BY_ADAPTER).filter(
@@ -113,7 +149,7 @@ const fillEach = async (
     return;
   }
   const [adapterKey, expression] = next;
-  const filled = await fillFrom(adapterKey, expression, 0);
+  const filled = await fillFrom(adapterKey, expression);
   console.info(`${adapterKey}: done, ${filled.toLocaleString()} rows`);
   await fillEach(rest);
 };
