@@ -143,7 +143,7 @@ export const runSchedulerOnce = async ({
     const job = await acquireNextDueJob({
       db,
       leaseMs,
-      now: eligibilityNow,
+      ...(eligibilityNow && { now: eligibilityNow }),
       registry,
       runnerId,
     });
@@ -159,7 +159,7 @@ export const runSchedulerOnce = async ({
       job,
       leaseMs,
       maxRuntimeMs,
-      now: eligibilityNow,
+      ...(eligibilityNow && { now: eligibilityNow }),
       registry,
       runnerId,
       signal,

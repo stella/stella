@@ -56,7 +56,6 @@ import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-o
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 type SchedulerJobDefinition = {
-  db?: SchedulerDb;
   id: string;
   task: RegisteredSchedulerTaskName;
   description: string;
@@ -66,16 +65,24 @@ type SchedulerJobDefinition = {
   enabled?: boolean;
 };
 
-export const ensureSchedulerJob = async ({
-  db = rootDb,
-  description,
-  enabled = true,
-  id,
-  payload = null,
-  payloadUpdate = "replace",
-  schedule,
-  task,
-}: SchedulerJobDefinition): Promise<void> => {
+export const ensureSchedulerJob = async (
+  definition: SchedulerJobDefinition,
+): Promise<void> => {
+  await upsertSchedulerJob(definition, rootDb);
+};
+
+export const upsertSchedulerJob = async (
+  {
+    description,
+    enabled = true,
+    id,
+    payload = null,
+    payloadUpdate = "replace",
+    schedule,
+    task,
+  }: SchedulerJobDefinition,
+  db: SchedulerDb,
+): Promise<void> => {
   const nextRunAt = computeNextRunAt(schedule);
   const [existingJob] = await db
     .select({

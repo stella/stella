@@ -4,13 +4,18 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "scheduler_jobs"
   ADD COLUMN "paused_by" text,
   ADD COLUMN "paused_until" timestamp with time zone,
-  ADD COLUMN "pause_reason" text,
+  ADD COLUMN "pause_reason" text;
+--> statement-breakpoint
+
+-- Existing rows have NULL pause columns, so every one satisfies this check.
+-- NOT VALID avoids a scan under the additive DDL lock; writes enforce it immediately.
+ALTER TABLE "scheduler_jobs"
   ADD CONSTRAINT "scheduler_jobs_pause_attribution_check" CHECK (
     paused_until IS NULL OR (
       paused_by IS NOT NULL AND length(btrim(paused_by)) > 0
       AND pause_reason IS NOT NULL AND length(btrim(pause_reason)) >= 8
     )
-  );
+  ) NOT VALID;
 --> statement-breakpoint
 
 CREATE FUNCTION public.scheduler_job_pause_log() RETURNS trigger

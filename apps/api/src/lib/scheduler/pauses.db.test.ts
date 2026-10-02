@@ -8,7 +8,7 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
-import { DECLARED_SCHEDULER_JOBS, ensureSchedulerJob } from "./jobs";
+import { DECLARED_SCHEDULER_JOBS, upsertSchedulerJob } from "./jobs";
 import { acquireNextDueJob, runJob } from "./runner";
 import type { SchedulerTask } from "./types";
 
@@ -39,12 +39,15 @@ const withJob = async (exercise: (fixture: Fixture) => Promise<void>) => {
       return panic("Scheduler declarations must not be empty");
     }
     try {
-      await ensureSchedulerJob({
-        ...definition,
+      await upsertSchedulerJob(
+        {
+          description: definition.description,
+          id: jobId,
+          schedule: definition.schedule,
+          task: definition.task,
+        },
         db,
-        enabled: undefined,
-        id: jobId,
-      });
+      );
       const [created] = await db
         .select()
         .from(schedulerJobs)
@@ -87,17 +90,15 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const prefix = `pause.${Bun.randomUUIDv7()}.`;
-        const definitions = DECLARED_SCHEDULER_JOBS.map((definition) => ({
-          ...definition,
-          db,
-          enabled: "enabled" in definition ? definition.enabled : true,
-          id: `${prefix}${definition.id}`,
-        }));
+        const definitions = DECLARED_SCHEDULER_JOBS.map((definition) =>
+          ({ ...definition, enabled: "enabled" in definition ? definition.enabled : true,
+            id: `${prefix}${definition.id}`,}),
+        );
         const ids = definitions.map(({ id }) => id);
         expect(ids.length).toBeGreaterThan(0);
         try {
           for (const definition of definitions) {
-            await ensureSchedulerJob(definition);
+            await upsertSchedulerJob(definition, db);
           }
           const inserted = await db
             .select()
@@ -124,7 +125,7 @@ if (!databaseUrl || !runPostgresTests) {
             .where(inArray(schedulerJobs.id, ids));
           for (const enabled of [false, true, false]) {
             for (const definition of definitions) {
-              await ensureSchedulerJob({ ...definition, enabled });
+              await upsertSchedulerJob({ ...definition, enabled }, db);
             }
             const rebooted = await db
               .select()
