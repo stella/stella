@@ -1,3 +1,4 @@
+// parser-output-unchanged: Whole raw-text targets return retained guidance evidence; existing JSON field reads are unchanged.
 import { Result } from "better-result";
 
 import { isRecord } from "../type-guards";

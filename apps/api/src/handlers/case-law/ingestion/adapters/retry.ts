@@ -1,4 +1,4 @@
-// parser-output-unchanged: retries affect request scheduling only, not parsed output.
+// parser-output-unchanged: The publisher-gate type import resolves directly to its owner; request scheduling and parsed output are unchanged.
 /**
  * The only way a case-law adapter reaches its publisher.
  *

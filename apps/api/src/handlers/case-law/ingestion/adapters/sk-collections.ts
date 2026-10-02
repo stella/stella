@@ -1,3 +1,4 @@
+// parser-output-unchanged: The publisher-gate type import resolves directly to its existing owner; collection parsing is unchanged.
 import { panic, Result } from "better-result";
 
 import { readCappedBytes } from "@stll/skills/streaming";
