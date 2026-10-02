@@ -244,17 +244,22 @@ export const withProviderImageInput = (
     sources: new Map(),
     bytes: 0,
   };
-  const prepare = (messages: ModelMessage[]) =>
-    prepareProviderImageMessages({
+  // The SDK types `model` loosely; every TanStack text adapter names a string model.
+  const modelId =
+    typeof adapter.model === "string"
+      ? adapter.model
+      : panic("A text adapter must name its model");
+  const prepare = async (messages: ModelMessage[]) =>
+    await prepareProviderImageMessages({
       messages,
-      modelId: adapter.model,
+      modelId,
       provider,
       preparedImages,
     });
   const chatStream: AnyTextAdapter["chatStream"] = async function* (options) {
     const messages = await prepare(options.messages);
     if (Result.isError(messages)) {
-      yield runError(adapter.model, messages.error);
+      yield runError(modelId, messages.error);
       return;
     }
     yield* adapter.chatStream({ ...options, messages: messages.value });
@@ -279,7 +284,7 @@ export const withProviderImageInput = (
       : async function* (options) {
           const messages = await prepare(options.chatOptions.messages);
           if (Result.isError(messages)) {
-            yield runError(adapter.model, messages.error);
+            yield runError(modelId, messages.error);
             return;
           }
           yield* originalStream.call(adapter, {
@@ -302,7 +307,11 @@ export const withProviderImageInput = (
         return structuredOutputStream;
       }
       const value: unknown = Reflect.get(target, key, target);
-      return typeof value === "function" ? value.bind(target) : value;
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
     },
   });
 };

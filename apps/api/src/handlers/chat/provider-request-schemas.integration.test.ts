@@ -855,7 +855,7 @@ const checkImageRequest = async ({
         unknownLogs.some(
           ({ attributes }) =>
             attributes?.["provider"] === provider &&
-            attributes?.["image_capability_unknown"] === true,
+            attributes["image_capability_unknown"] === true,
         ),
       ).toBe(true);
       if (provider === "mistral" && modelId === "mistral-large-latest") {
