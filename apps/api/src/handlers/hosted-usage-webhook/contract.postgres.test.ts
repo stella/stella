@@ -780,7 +780,7 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
             type: "subscription.created",
             data: fixture.data,
             version: "2026-10",
-            headerVersion,
+            ...(headerVersion === undefined ? {} : { headerVersion }),
           });
           expect(
             (await readState(tx, fixture.organizationId)).entitlements.at(0)
