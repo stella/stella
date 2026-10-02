@@ -79,6 +79,7 @@ import type { LoopProperty, NamedCondition } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
 
 import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
+import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 import {
   authoredParagraphIndices,
   normalizeRowBlockMarkers,
@@ -1251,19 +1252,19 @@ export const processBlockDirectives = (
         removeBlockUnit(closerClone);
       }
 
-      rewriteEachPlaceholders(clonedRow, {
-        alias: block.alias,
-        arrayPath: block.arrayPath,
-        index: itemIdx,
-        loopIdentity,
-      });
-      rewriteNestedEachExpr(clonedRow, {
-        alias: block.alias,
-        arrayPath: block.arrayPath,
-        index: itemIdx,
-        loopIdentity,
-      });
       const clonedContentParas = clonedParas.filter((_, i) => !isMarker(i));
+      rewriteEachPlaceholders(clonedContentParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
+      rewriteNestedEachExpr(clonedContentParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
       rewriteContentParagraphs(clonedContentParas, {
         tokenMask,
         localNumKeys,
@@ -1355,20 +1356,18 @@ export const processBlockDirectives = (
       const clones = contentUnits.map((u) => cloneElement(u, doc));
       const clonedParas = paragraphsInUnits(clones);
 
-      for (const clone of clones) {
-        rewriteEachPlaceholders(clone, {
-          alias: block.alias,
-          arrayPath: block.arrayPath,
-          index: itemIdx,
-          loopIdentity,
-        });
-        rewriteNestedEachExpr(clone, {
-          alias: block.alias,
-          arrayPath: block.arrayPath,
-          index: itemIdx,
-          loopIdentity,
-        });
-      }
+      rewriteEachPlaceholders(clonedParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
+      rewriteNestedEachExpr(clonedParas, {
+        alias: block.alias,
+        arrayPath: block.arrayPath,
+        index: itemIdx,
+        loopIdentity,
+      });
       rewriteContentParagraphs(clonedParas, {
         tokenMask,
         localNumKeys,
@@ -1644,37 +1643,111 @@ type RewriteEachPlaceholdersOptions = {
   arrayPath: string;
   index: number;
   loopIdentity: string;
+  shadowedAliases?: ReadonlySet<string>;
 };
 
-const rewriteEachPlaceholdersWithIdentity = (
+const eachPlaceholderRanges = (
   text: string,
-  { alias, arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
-): string => {
-  // The alias is what an author writes; the declared array path still resolves
-  // so a template that reaches for the loop's own path keeps rendering (the
-  // `unaliased_item_path` warning names it at save time).
-  const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
+  {
+    alias,
+    arrayPath,
+    index,
+    loopIdentity,
+    shadowedAliases,
+  }: RewriteEachPlaceholdersOptions,
+) => {
+  const visibleHeads = [...new Set([alias, arrayPath])].filter(
+    (head) => !shadowedAliases?.has(head),
+  );
+  if (visibleHeads.length === 0) {return [];}
+  const heads = visibleHeads.map(escapeRegExp).join("|");
   const re = new RegExp(
     `\\{\\{\\s*(?:${heads})\\.(?<field>[.\\p{L}\\p{N}_-]+)\\s*(?:\\|${MARKER_OUTPUT_BODY})?\\}\\}`,
     "gu",
   );
-  return text.replace(
-    re,
-    (_match, field: string) => `{{${eachKey(loopIdentity, index, field)}}}`,
-  );
+  return [...text.matchAll(re)].map((match) => {
+    const field = match.groups?.["field"];
+    if (field === undefined)
+      {return panic("Loop placeholder matched without a field");}
+    return {
+      start: match.index,
+      end: match.index + match[0].length,
+      value: `{{${eachKey(loopIdentity, index, field)}}}`,
+    };
+  });
 };
 
-/**
- * Rewrite `{{ alias.field }}` → `{{__each_arrayPath_N_field}}`
- * in all `w:t` nodes of a paragraph (or any element subtree).
- */
+const rewriteEachPlaceholdersWithIdentity = (
+  text: string,
+  options: RewriteEachPlaceholdersOptions,
+): string => {
+  let result = "";
+  let cursor = 0;
+  for (const range of eachPlaceholderRanges(text, options)) {
+    result += text.slice(cursor, range.start) + range.value;
+    cursor = range.end;
+  }
+  return result + text.slice(cursor);
+};
+
+/** Visit each paragraph using the aliases already bound by enclosing loops. */
+const visitNestedLoopScopes = (
+  paragraphs: readonly slimdom.Element[],
+  visit: (
+    paragraph: slimdom.Element,
+    nestedAliases: ReadonlySet<string>,
+  ) => void,
+): void => {
+  const nestedAliases: string[] = [];
+  for (const paragraph of paragraphs) {
+    const directive = DIRECTIVE_RE.exec(paragraphSpanText(paragraph));
+    const tag = directive?.groups?.["tag"];
+    const expression = directive?.groups?.["expr"];
+    const marker =
+      tag === undefined || expression === undefined
+        ? null
+        : classifyMarker(`${tag} ${expression}`, "statement");
+    // A loop's source belongs to its enclosing scope, before its alias binds.
+    visit(paragraph, new Set(nestedAliases));
+    if (marker?.kind === "for") {nestedAliases.push(marker.alias);}
+    if (marker?.kind === "endfor") {nestedAliases.pop();}
+  }
+};
+
+/** Rewrite loop output markers across Word run boundaries. */
 const rewriteEachPlaceholders = (
-  root: slimdom.Element,
+  paragraphs: readonly slimdom.Element[],
   options: RewriteEachPlaceholdersOptions,
 ): void => {
-  rewriteTextNodes(root, (text) =>
-    rewriteEachPlaceholdersWithIdentity(text, options),
-  );
+  visitNestedLoopScopes(paragraphs, (paragraph, nestedAliases) => {
+    const text = paragraphSpanText(paragraph);
+    const scopedOptions = {
+      ...options,
+      shadowedAliases: nestedAliases,
+    };
+    const ranges = eachPlaceholderRanges(text, scopedOptions);
+    let offset = 0;
+    const spans = [...paragraph.getElementsByTagNameNS(W_NS, "t")].map(
+      (node) => {
+        const start = offset;
+        offset += node.textContent.length;
+        return { start, end: offset };
+      },
+    );
+    if (
+      ranges.every((range) =>
+        spans.some(
+          (span) => range.start >= span.start && range.end <= span.end,
+        ),
+      )
+    ) {
+      rewriteTextNodes(paragraph, (part) =>
+        rewriteEachPlaceholdersWithIdentity(part, scopedOptions),
+      );
+    } else {
+      replaceParagraphTextRanges(paragraph, ranges);
+    }
+  });
 };
 
 /**
@@ -1688,21 +1761,28 @@ const rewriteEachPlaceholders = (
  * instead of ending the match.
  */
 const rewriteNestedEachExpr = (
-  root: slimdom.Element,
+  paragraphs: readonly slimdom.Element[],
   { alias, arrayPath, index, loopIdentity }: RewriteEachPlaceholdersOptions,
 ): void => {
-  const heads = [...new Set([alias, arrayPath])].map(escapeRegExp).join("|");
-  const re = new RegExp(
-    `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)((?:\\s*\\|${MARKER_STATEMENT_BODY})?\\s*%\\})`,
-    "gu",
-  );
-  rewriteTextNodes(root, (text) =>
-    text.replace(
-      re,
-      (_match, pre: string, sub: string, post: string) =>
-        `${pre}${eachKey(loopIdentity, index, sub)}${post}`,
-    ),
-  );
+  visitNestedLoopScopes(paragraphs, (paragraph, nestedAliases) => {
+    const visibleHeads = [...new Set([alias, arrayPath])].filter(
+      (head) => !nestedAliases.has(head),
+    );
+    if (visibleHeads.length === 0) {return;}
+    const heads = visibleHeads.map(escapeRegExp).join("|");
+    const re = new RegExp(
+      `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)((?:\\s*\\|${MARKER_STATEMENT_BODY})?\\s*%\\})`,
+      "gu",
+    );
+    const ranges = [...paragraphSpanText(paragraph).matchAll(re)].map(
+      (match) => ({
+        start: match.index,
+        end: match.index + match[0].length,
+        value: `${match[1]}${eachKey(loopIdentity, index, match[2] ?? panic("Nested loop source matched without a path"))}${match[3]}`,
+      }),
+    );
+    if (ranges.length > 0) {replaceParagraphTextRanges(paragraph, ranges);}
+  });
 };
 
 /**

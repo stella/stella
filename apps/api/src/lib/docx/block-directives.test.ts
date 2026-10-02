@@ -16,6 +16,7 @@ import {
 } from "./block-directives";
 import { applyManifestFillSteps } from "./manifest-fill-steps";
 import { paragraphText, W_NS } from "./ooxml";
+import { patchParagraphPlaceholders } from "./rich-patch";
 import type { FieldMeta, TemplateData } from "./types";
 
 // ── Helpers ──────────────────────────────────────────────
@@ -1557,4 +1558,68 @@ describe("processBlockDirectives — iteration tokens", () => {
     // Outer tokens count groups (2); inner tokens count each group's items.
     expect(bodyTexts(body)).toEqual(["G1/2", "I1/2", "I2/2", "G2/2", "I1/1"]);
   });
+});
+
+test("loop output markers spanning Word runs resolve for each row", () => {
+  const body = parseBody(
+    WRAP(
+      `${P("{% for party in parties %}") 
+        }<w:p><w:r><w:t>Name: </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>{{ party.</w:t></w:r><w:r><w:t>name }}</w:t></w:r></w:p>${ 
+        P("{% endfor %}")}`,
+    ),
+  );
+  const { patchValues, errors } = processBlockDirectives(body, {
+    parties: [{ name: "Alpha" }, { name: "Beta" }],
+  });
+  expect(errors).toEqual([]);
+  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p"))
+    {patchParagraphPlaceholders(paragraph, patchValues);}
+  expect(bodyTexts(body)).toEqual(["Name: Alpha", "Name: Beta"]);
+});
+
+test("a nested loop alias shadows its parent only until the nested loop closes", () => {
+  const body = parseBody(
+    WRAP(
+      [
+        P("{% for item in parents %}"),
+        P("{{ item.name }}"),
+        P("{% for item in children %}"),
+        P("{{ item.name }}"),
+        P("{% endfor %}"),
+        P("{{ item.name }}"),
+        P("{% endfor %}"),
+      ].join(""),
+    ),
+  );
+  const { patchValues, errors } = processBlockDirectives(body, {
+    parents: [{ name: "Parent" }],
+    children: [{ name: "Child" }],
+  });
+  expect(errors).toEqual([]);
+  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p"))
+    {patchParagraphPlaceholders(paragraph, patchValues);}
+  expect(bodyTexts(body)).toEqual(["Parent", "Child", "Parent"]);
+});
+
+test("nested loop sources resolve before their declared alias shadows the parent", () => {
+  const body = parseBody(
+    WRAP(
+      [
+        P("{% for item in roots %}"),
+        P("{% for item in item.children %}"),
+        P("{% for leaf in item.children %}"),
+        P("{{ leaf.name }}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
+        P("{% endfor %}"),
+      ].join(""),
+    ),
+  );
+  const { patchValues, errors } = processBlockDirectives(body, {
+    roots: [{ children: [{ name: "Child", children: [{ name: "Leaf" }] }] }],
+  });
+  expect(errors).toEqual([]);
+  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p"))
+    {patchParagraphPlaceholders(paragraph, patchValues);}
+  expect(bodyTexts(body)).toEqual(["Leaf"]);
 });
