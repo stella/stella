@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
  * `JuDDGES/pl-nsa` (CC BY 4.0).
@@ -1686,6 +1687,7 @@ const productionCrawler = (config: Record<string, unknown>): PlNsaCrawler => {
 const lastSlice = sliceName(PL_NSA_SNAPSHOT.shards.length - 1);
 
 export const plNsaAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_NSA,
   language: PL_NSA_LANGUAGE,
   minRequestIntervalMs: publisherRequestIntervalMs(ADAPTER_KEYS.PL_NSA),

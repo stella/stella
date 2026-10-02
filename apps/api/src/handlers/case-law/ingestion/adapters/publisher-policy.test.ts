@@ -179,6 +179,7 @@ describe("a publisher's rate-limit refusal", () => {
       "https://ris.bka.gv.at/x",
       undefined,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_COURTS,
         maxRetries: 2,
       },
@@ -204,6 +205,7 @@ describe("a publisher's rate-limit refusal", () => {
       "https://ris.bka.gv.at/x",
       undefined,
       {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.AT_COURTS,
         maxRetries: 2,
       },
@@ -275,18 +277,22 @@ describe("a run-scoped publisher rate limit", () => {
       operation: async () => {
         const publisher = "https://publications.europa.eu";
         const listing = await fetchPublisher(`${publisher}/listing`, {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
         const notice = await fetchPublisher(`${publisher}/notice`, {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
         const html = await fetchPublisher(`${publisher}/html`, {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           timeoutMs: ADAPTER_TIMEOUT.REQUEST,
         });
         const formex = await fetchWithRetry(`${publisher}/formex`, undefined, {
+          fetchStage: "document",
           adapterKey: ADAPTER_KEYS.EU_ECJ,
           maxRetries: 1,
           baseDelayMs: 0,
@@ -348,6 +354,7 @@ describe("a run-scoped publisher rate limit", () => {
         const first = await fetchPublisher(
           "https://publications.europa.eu/formex",
           {
+            fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             timeoutMs: ADAPTER_TIMEOUT.REQUEST,
           },
@@ -355,6 +362,7 @@ describe("a run-scoped publisher rate limit", () => {
         const second = await fetchPublisher(
           "https://publications.europa.eu/formex",
           {
+            fetchStage: "document",
             adapterKey: ADAPTER_KEYS.EU_ECJ,
             timeoutMs: ADAPTER_TIMEOUT.REQUEST,
           },

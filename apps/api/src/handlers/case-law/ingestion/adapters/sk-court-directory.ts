@@ -1,3 +1,4 @@
+// parser-output-unchanged: listing-stage labels do not alter directory parsing.
 import { Result } from "better-result";
 
 import {
@@ -160,6 +161,7 @@ export const createSkCourtRegistryReader = (
           await fetchPublisher(
             `https://obcan.justice.sk/pilot/api/ress-isu-service/v1/sud/${encodeURIComponent(registreGuid)}`,
             {
+              fetchStage: "listing",
               adapterKey: ADAPTER_KEYS.SK_COURTS,
               signal: requestSignal ?? signal,
               timeoutMs: ADAPTER_TIMEOUT.REQUEST,
