@@ -90,12 +90,6 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
           import.meta.url,
         ),
       ).text();
-      const recoveryMigration = await Bun.file(
-        new URL(
-          "../../drizzle/20261003123600_case_law_replay_recovery/migration.sql",
-          import.meta.url,
-        ),
-      ).text();
       const completionMigration = await Bun.file(
         new URL(
           "../../drizzle/20261003123700_eu_completion_receipts/migration.sql",
@@ -123,7 +117,7 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
         await client.unsafe(
           `INSERT INTO case_law_sources VALUES ('${sourceId}')`,
         );
-        for (const statement of `${migration}--> statement-breakpoint${recoveryMigration}--> statement-breakpoint${completionMigration}`
+        for (const statement of `${migration}--> statement-breakpoint${completionMigration}`
           .replaceAll(
             '"public"."case_law_sources"',
             () => `"${schema}"."case_law_sources"`,

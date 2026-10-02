@@ -1,4 +1,4 @@
--- requires: 20261003123600_case_law_replay_recovery
+-- requires: 20261003123500_case_law_replay_receipts
 SET lock_timeout = '1s';--> statement-breakpoint
 SET statement_timeout = '5s';--> statement-breakpoint
 CREATE TABLE "eu_completion_receipts" (
