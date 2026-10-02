@@ -43,6 +43,10 @@
       "types": "./src/provision-citation-profile.ts",
       "import": "./src/provision-citation-profile.ts"
     },
+    "./provision-key": {
+      "types": "./src/provision-key.ts",
+      "import": "./src/provision-key.ts"
+    },
     "./provision-extraction-admission": {
       "types": "./src/provision-extraction-admission.ts",
       "import": "./src/provision-extraction-admission.ts"
@@ -72,7 +76,8 @@
   "dependencies": {
     "@stll/api-contract": "workspace:*",
     "@stll/legal-ast": "workspace:*",
-    "better-result": "catalog:"
+    "better-result": "catalog:",
+    "valibot": "catalog:"
   },
   "devDependencies": {
     "@stll/property-testing": "workspace:*",

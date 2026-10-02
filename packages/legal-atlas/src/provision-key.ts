@@ -1,0 +1,102 @@
+import { Result } from "better-result";
+import * as v from "valibot";
+
+import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import { provisionIdentitySchemas } from "@stll/api-contract/provision-key";
+import type { ProvisionRef } from "@stll/api-contract/provision-key";
+import { provisionReferenceSchema } from "@stll/legal-ast/provision-reference";
+import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
+
+import { PROVISION_CITATION_GRAMMARS } from "./provision-citation-grammars";
+
+const supportedGrammars = Object.values(PROVISION_CITATION_GRAMMARS).filter(
+  (grammar) => grammar.status === "supported",
+);
+const supportedJurisdictions = supportedGrammars.map(
+  (grammar) => grammar.jurisdiction,
+);
+export type SupportedProvisionJurisdiction =
+  (typeof supportedJurisdictions)[number];
+const schemas = provisionIdentitySchemas(supportedJurisdictions);
+const keyTuple = v.strictTuple([
+  v.picklist(supportedJurisdictions),
+  v.string(),
+  v.string(),
+]);
+
+/** Decode the canonical frame and revalidate its identifier with the owning grammar. */
+export const parseProvisionKey = (raw: string) => {
+  const value: unknown = Result.try(() => JSON.parse(raw)).unwrapOr(null);
+  if (JSON.stringify(value) !== raw) {
+    return null;
+  }
+  const tuple = v.safeParse(keyTuple, value);
+  if (!tuple.success) {
+    return null;
+  }
+  const [jurisdiction, workIdentifier, anchor] = tuple.output;
+  const key = v.safeParse(schemas.key, {
+    jurisdiction,
+    workIdentifier,
+    anchor,
+  });
+  if (!key.success) {
+    return null;
+  }
+  const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+  const work = grammar.gazette.parse(key.output.workIdentifier);
+  if (work?.identifier !== key.output.workIdentifier) {
+    return null;
+  }
+  return key.output;
+};
+
+type ProvisionRefOfOptions = {
+  jurisdiction: CaseLawJurisdiction;
+  workIdentifier: string;
+  reference: ProvisionReference;
+};
+
+type ProvisionRefOfResult =
+  | {
+      status: "resolved";
+      provision: ProvisionRef<SupportedProvisionJurisdiction>;
+    }
+  | { status: "unsupported" }
+  | { status: "invalid_work_identifier" }
+  | { status: "invalid_reference" };
+
+/** The minting boundary: normalize work and reference, then derive and brand their identity. */
+export const provisionRefOf = ({
+  jurisdiction,
+  workIdentifier,
+  reference,
+}: ProvisionRefOfOptions): ProvisionRefOfResult => {
+  const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+  if (grammar.status === "unsupported") {
+    return { status: "unsupported" };
+  }
+  const work = grammar.gazette.parse(workIdentifier);
+  if (work === null) {
+    return { status: "invalid_work_identifier" };
+  }
+  const validated = v.safeParse(provisionReferenceSchema, reference);
+  if (!validated.success) {
+    return { status: "invalid_reference" };
+  }
+  const normalized = grammar.normalizeReference(validated.output);
+  if (normalized === null) {
+    return { status: "invalid_reference" };
+  }
+  const provision = v.safeParse(schemas.ref, {
+    jurisdiction: grammar.jurisdiction,
+    workIdentifier: work.identifier,
+    workEli: work.eli,
+    reference: normalized,
+    anchor: grammar.anchor(normalized),
+  });
+  if (!provision.success) {
+    return { status: "invalid_reference" };
+  }
+  return { status: "resolved", provision: provision.output };
+};

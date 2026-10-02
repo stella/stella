@@ -1,102 +1,63 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import * as v from "valibot";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { CASE_LAW_JURISDICTIONS } from "./case-law-jurisdictions";
-import { formatProvisionKey, parseProvisionKey } from "./provision-key";
-import type { ProvisionRef } from "./provision-key";
+import { provisionKeyPartSchema } from "./provision-key";
 
-const key = {
-  jurisdiction: "CZE",
-  workIdentifier: "89/2012 Sb.",
-  anchor: "par_5-odst_2",
-} as const;
-const text = fc
-  .array(fc.integer({ min: 0, max: 0x10_ff_ff }), {
-    minLength: 1,
-    maxLength: 40,
-  })
-  .map((points) => String.fromCodePoint(...points));
+const weightedText = fc
+  .array(
+    fc.oneof(
+      {
+        weight: 6,
+        arbitrary: fc.constantFrom('"', "\\", ",", "]", "e\u0301", "r\u030c"),
+      },
+      {
+        weight: 1,
+        arbitrary: fc.constantFrom("a", "1", "_", "-", "🙂", "中", "é"),
+      },
+    ),
+    { minLength: 1, maxLength: 40 },
+  )
+  .map((parts) => parts.join(""));
 
-describe("provision keys", () => {
-  test("provision keys round-trip every jurisdiction and Unicode component", () => {
+describe("provision identity text", () => {
+  test("provision identity text normalizes delimiter-heavy Unicode to NFC", () => {
     assertProperty(
-      "provision keys round-trip every jurisdiction and Unicode component",
+      "provision identity text normalizes delimiter-heavy Unicode to NFC",
+      fc.property(weightedText, (raw) => {
+        expect(v.parse(provisionKeyPartSchema, raw)).toBe(raw.normalize("NFC"));
+      }),
+    );
+  });
+
+  test("control characters and lone surrogates cannot enter provision identity", () => {
+    assertProperty(
+      "control characters and lone surrogates cannot enter provision identity",
       fc.property(
-        fc.record({
-          jurisdiction: fc.constantFrom(...CASE_LAW_JURISDICTIONS),
-          workIdentifier: text,
-          anchor: text,
-        }),
-        (value) => {
-          const formatted = formatProvisionKey(value);
-          expect(parseProvisionKey(formatted)).toEqual(value);
-          const parsed = parseProvisionKey(formatted);
-          if (parsed !== null) {
-            expect(formatProvisionKey(parsed)).toBe(formatted);
-          }
+        fc.oneof(
+          fc.integer({ min: 0, max: 31 }),
+          fc.integer({ min: 127, max: 159 }),
+          fc.integer({ min: 0xd8_00, max: 0xdf_ff }),
+        ),
+        weightedText,
+        (code, text) => {
+          expect(
+            v.safeParse(
+              provisionKeyPartSchema,
+              `${text}${String.fromCodePoint(code)}`,
+            ).success,
+          ).toBe(false);
         },
       ),
     );
   });
 
-  test("ELI discovery and citation scope do not change identity", () => {
-    const reference = {
-      unit: "section",
-      section: 5,
-      sectionSuffix: null,
-      subsection: "2",
-      letter: null,
-      point: null,
-      sentence: null,
-      openEnded: false,
-    } as const;
-    const ref = {
-      ...key,
-      workEli: null,
-      reference,
-    } satisfies ProvisionRef;
-    expect(formatProvisionKey(ref)).toBe(
-      '["CZE","89/2012 Sb.","par_5-odst_2"]',
-    );
-    const withMetadata = {
-      ...ref,
-      workEli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
-      reference: { ...reference, sentence: "3", openEnded: true },
-    } satisfies ProvisionRef;
-    expect(formatProvisionKey(withMetadata)).toBe(formatProvisionKey(ref));
-  });
-
-  test.each([
-    "not json",
-    "null",
-    "{}",
-    '["CZE","89/2012 Sb."]',
-    '["CZE","89/2012 Sb.","par_5","2026-01-01"]',
-    '["XXX","89/2012 Sb.","par_5"]',
-    '["CZE","","par_5"]',
-    '["CZE","89/2012 Sb.",""]',
-    '["CZE",89,"par_5"]',
-    '[ "CZE", "89/2012 Sb.", "par_5" ]',
-  ])("rejects malformed or noncanonical key %s", (raw) => {
-    expect(parseProvisionKey(raw)).toBeNull();
-  });
-
-  test("formatting rejects empty identity components", () => {
-    expect(() => formatProvisionKey({ ...key, anchor: "" })).toThrow(
-      "Invalid provision key",
-    );
-    expect(() => formatProvisionKey({ ...key, workIdentifier: "" })).toThrow(
-      "Invalid provision key",
-    );
-  });
-
-  test("delimiters cannot alias another tuple", () => {
-    expect(
-      formatProvisionKey({ ...key, workIdentifier: "a|b", anchor: "c" }),
-    ).not.toBe(
-      formatProvisionKey({ ...key, workIdentifier: "a", anchor: "b|c" }),
-    );
-  });
+  test.each(["", "\0", "\n", "\t", "\ud800", "\udfff", "\u202e", "\u200b"])(
+    "rejects invalid identity text %j",
+    (raw) => {
+      expect(v.safeParse(provisionKeyPartSchema, raw).success).toBe(false);
+    },
+  );
 });

@@ -3,23 +3,20 @@ import fc from "fast-check";
 import { createHash } from "node:crypto";
 
 import { CASE_LAW_JURISDICTIONS } from "@stll/api-contract/case-law-jurisdictions";
-import {
-  formatProvisionKey,
-  parseProvisionKey,
-} from "@stll/api-contract/provision-key";
+import { formatProvisionKey } from "@stll/api-contract/provision-key";
 import { assertProperty } from "@stll/property-testing";
 
+import suffixFixture from "./__fixtures__/cz-esbirka-262-2006-par-1a.json" with { type: "json" };
+import suffixProvenance from "./__fixtures__/cz-esbirka-262-2006-par-1a.json.provenance.json" with { type: "json" };
 import fixture from "./__fixtures__/cz-esbirka-500-2004-par-64.json" with { type: "json" };
 import provenance from "./__fixtures__/cz-esbirka-500-2004-par-64.json.provenance.json" with { type: "json" };
 import {
   CZ_PROFILE,
   CZ_STATUTE_COLLECTION,
 } from "./cz-provision-citation-profile";
-import {
-  PROVISION_CITATION_GRAMMARS,
-  provisionRefOf,
-} from "./provision-citation-grammars";
+import { PROVISION_CITATION_GRAMMARS } from "./provision-citation-grammars";
 import { formatWorkIdentifier } from "./provision-citation-profile";
+import { provisionRefOf, parseProvisionKey } from "./provision-key";
 
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
 const reference = fc.record({
@@ -52,12 +49,7 @@ describe("provision identity construction", () => {
           ]
             .filter(Boolean)
             .join(" ");
-          const parsed = grammar.locateAbbreviatedProvisions(
-            `${printed} s. ř. s.`,
-          );
-          expect(parsed).toHaveLength(1);
-          expect(parsed.at(0)?.reference).toEqual(ref);
-          expect(parsed.at(0)?.anchor).toBe(grammar.anchor(ref));
+          expect(grammar.parseReference(printed)).toEqual(ref);
           const work = grammar.gazette.parse(`${number}/${year} Sb.`);
           expect(work).not.toBeNull();
           if (work === null) {
@@ -74,8 +66,6 @@ describe("provision identity construction", () => {
           }
           const { provision } = constructed;
           expect(provision.reference).toEqual(ref);
-          expect(provision.anchor).toBe(grammar.anchor(provision.reference));
-          expect(provision.anchor).toBe(parsed.at(0)?.anchor);
           expect(provision.workEli).toBe(work.eli);
           expect(parseProvisionKey(formatProvisionKey(provision))).toEqual({
             jurisdiction: provision.jurisdiction,
@@ -87,44 +77,201 @@ describe("provision identity construction", () => {
     );
   });
 
-  test("every recorded section 64 fragment retains the publisher's AST anchor", async () => {
-    const fixtureUrl = new URL(
-      "__fixtures__/cz-esbirka-500-2004-par-64.json",
-      import.meta.url,
-    );
-    const bytes = await Bun.file(fixtureUrl).bytes();
-    expect(provenance.capture).toBe("recorded");
-    expect(createHash("sha256").update(bytes).digest("hex")).toBe(
-      provenance.sha256,
-    );
-    expect(fixture.results.bindings).toHaveLength(13);
-    const levels = new Set<string>();
-    for (const { citace, url } of fixture.results.bindings) {
-      const parsed = grammar.locateAbbreviatedProvisions(
-        `${citace.value} s. ř. s.`,
+  const captures = [
+    {
+      file: "cz-esbirka-500-2004-par-64.json",
+      fixture,
+      provenance,
+      workIdentifier: "500/2004 Sb.",
+      rows: 13,
+    },
+    {
+      file: "cz-esbirka-262-2006-par-1a.json",
+      fixture: suffixFixture,
+      provenance: suffixProvenance,
+      workIdentifier: "262/2006 Sb.",
+      rows: 8,
+    },
+  ];
+
+  test.each(captures)(
+    "recorded fragments of $workIdentifier retain their publisher anchors",
+    async (capture) => {
+      const bytes = await Bun.file(
+        new URL(`__fixtures__/${capture.file}`, import.meta.url),
+      ).bytes();
+      expect(createHash("sha256").update(bytes).digest("hex")).toBe(
+        capture.provenance.sha256,
       );
-      expect(parsed).toHaveLength(1);
-      const ref = parsed.at(0)?.reference;
-      expect(ref).toBeDefined();
-      if (ref === undefined) {
-        continue;
+      expect(capture.provenance.capture).toBe("recorded");
+      expect(capture.fixture.results.bindings).toHaveLength(capture.rows);
+      for (const { citace, url } of capture.fixture.results.bindings) {
+        const ref = grammar.parseReference(citace.value);
+        expect(ref).not.toBeNull();
+        if (ref === null) {
+          continue;
+        }
+        const constructed = provisionRefOf({
+          jurisdiction: "CZE",
+          workIdentifier: capture.workIdentifier,
+          reference: ref,
+        });
+        expect(constructed.status).toBe("resolved");
+        if (constructed.status !== "resolved") {
+          continue;
+        }
+        expect(constructed.provision.workIdentifier).toBe(
+          capture.workIdentifier,
+        );
+        expect(constructed.provision.anchor).toBe(url.value.split("#").at(1));
       }
-      expect(grammar.anchor(ref)).toBe(url.value.split("#").at(1));
-      let level = "section";
-      if (ref.subsection !== null) {
-        level = "subsection";
-      }
-      if (ref.letter !== null) {
-        level = "letter";
-      }
-      if (ref.point !== null) {
-        level = "point";
-      }
-      levels.add(level);
-    }
-    expect(levels).toEqual(
-      new Set(["section", "subsection", "letter", "point"]),
+    },
+  );
+
+  const recorded = captures.flatMap((capture) =>
+    capture.fixture.results.bindings.map((row) => ({
+      ...row,
+      workIdentifier: capture.workIdentifier,
+    })),
+  );
+  test("recorded anchors remain invariant under numeric padding and Unicode typography", () => {
+    assertProperty(
+      "recorded anchors remain invariant under numeric padding and Unicode typography",
+      fc.property(
+        fc.constantFrom(...recorded),
+        fc.integer({ min: 0, max: 2 }),
+        fc.constantFrom(" ", "\u00a0", "\u202f"),
+        (row, padding, space) => {
+          const heading = row.citace.value
+            .replace(/\d+/gu, (digits) =>
+              digits.padStart(digits.length + padding, "0"),
+            )
+            .replaceAll(" ", () => space)
+            .normalize("NFD");
+          const ref = grammar.parseReference(heading);
+          expect(ref).not.toBeNull();
+          if (ref === null) {
+            return;
+          }
+          const constructed = provisionRefOf({
+            jurisdiction: "CZE",
+            workIdentifier: row.workIdentifier,
+            reference: ref,
+          });
+          expect(constructed.status).toBe("resolved");
+          if (constructed.status !== "resolved") {
+            return;
+          }
+          expect(constructed.provision.anchor).toBe(
+            row.url.value.split("#").at(1),
+          );
+        },
+      ),
     );
+  });
+
+  const weightedAnchors = fc
+    .array(
+      fc.oneof(
+        {
+          weight: 6,
+          arbitrary: fc.constantFrom('"', "\\", ",", "]", "e\u0301", "r\u030c"),
+        },
+        {
+          weight: 1,
+          arbitrary: fc.constantFrom("a", "1", "_", "-", "🙂", "中"),
+        },
+      ),
+      { minLength: 1, maxLength: 40 },
+    )
+    .map((parts) => parts.join(""));
+  test("provision keys preserve delimiter-heavy anchors and normalize Unicode", () => {
+    assertProperty(
+      "provision keys preserve delimiter-heavy anchors and normalize Unicode",
+      fc.property(weightedAnchors, (anchor) => {
+        const parsed = parseProvisionKey(
+          JSON.stringify(["CZE", "89/2012 Sb.", anchor]),
+        );
+        expect(parsed).not.toBeNull();
+        if (parsed === null) {
+          return;
+        }
+        expect(parsed.anchor).toBe(anchor.normalize("NFC"));
+        expect(formatProvisionKey(parsed)).toBe(
+          JSON.stringify(["CZE", "89/2012 Sb.", anchor.normalize("NFC")]),
+        );
+        expect(parseProvisionKey(formatProvisionKey(parsed))).toEqual(parsed);
+      }),
+    );
+  });
+
+  test.each([
+    "not json",
+    "null",
+    "{}",
+    '["CZE","89/2012 Sb."]',
+    '["CZE","89/2012 Sb.","par_5","2026-01-01"]',
+    '["XXX","89/2012 Sb.","par_5"]',
+    '["SVK","89/2012 Sb.","par_5"]',
+    '["CZE","","par_5"]',
+    '["CZE","89/2012 Sb.",""]',
+    '["CZE",89,"par_5"]',
+    '[ "CZE", "89/2012 Sb.", "par_5" ]',
+    '["CZE","00089/2012 Sb.","par_5"]',
+    '["CZE","89/2012 Sb","par_5"]',
+    '["CZE","89/2012 Sb.","par_5\\u0000"]',
+    '["CZE","89/2012 Sb.","par_5\\ud800"]',
+    '["CZE","89/2012 Sb.","par_5\\u000a"]',
+  ])("rejects invalid or noncanonical keys %s", (raw) => {
+    expect(parseProvisionKey(raw)).toBeNull();
+  });
+
+  test("reference scope changes leave the branded key unchanged", () => {
+    const ref = grammar.parseReference("§ 5 odst. 2");
+    expect(ref).not.toBeNull();
+    if (ref === null) {
+      return;
+    }
+    const original = provisionRefOf({
+      jurisdiction: "CZE",
+      workIdentifier: "89/2012 Sb.",
+      reference: ref,
+    });
+    const scoped = provisionRefOf({
+      jurisdiction: "CZE",
+      workIdentifier: "89/2012 Sb.",
+      reference: { ...ref, sentence: "3", openEnded: true },
+    });
+    expect(original.status).toBe("resolved");
+    expect(scoped.status).toBe("resolved");
+    if (original.status !== "resolved" || scoped.status !== "resolved") {
+      return;
+    }
+    expect(formatProvisionKey(original.provision)).toBe(
+      formatProvisionKey(scoped.provision),
+    );
+  });
+
+  test("construction rejects invalid reference paths before minting a brand", () => {
+    const ref = grammar.parseReference("§ 5 odst. 2");
+    expect(ref).not.toBeNull();
+    if (ref === null) {
+      return;
+    }
+    for (const invalid of [
+      { ...ref, unit: "article" as const },
+      { ...ref, section: -1 },
+      { ...ref, letter: "two" },
+      { ...ref, subsection: "\0" },
+    ]) {
+      expect(
+        provisionRefOf({
+          jurisdiction: "CZE",
+          workIdentifier: "89/2012 Sb.",
+          reference: invalid,
+        }),
+      ).toEqual({ status: "invalid_reference" });
+    }
   });
 
   test("gazette spelling normalizes consistently with extracted work ELIs", () => {
@@ -235,6 +382,15 @@ describe("provision identity construction", () => {
       ),
     );
   });
+
+  test.each(CZ_STATUTE_COLLECTION.spellings)(
+    "normalizes the declared collection spelling %s",
+    (spelling) => {
+      expect(grammar.gazette.parse(`89/2012 ${spelling}`)?.identifier).toBe(
+        "89/2012 Sb.",
+      );
+    },
+  );
 
   test("the profile and grammar share the statute collection declaration", () => {
     expect(CZ_PROFILE.collections).toContain(CZ_STATUTE_COLLECTION);

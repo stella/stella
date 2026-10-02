@@ -17,7 +17,6 @@
 import { panic } from "better-result";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
-import type { ProvisionRef } from "@stll/api-contract/provision-key";
 import type {
   ProvisionReference,
   ProvisionUnit,
@@ -105,6 +104,7 @@ export type SupportedProvisionCitationGrammar<
   TJurisdiction extends CaseLawJurisdiction = CaseLawJurisdiction,
 > = {
   anchor: (reference: ProvisionReference) => string;
+  unit: ProvisionUnit;
   gazette: {
     eli: (work: GazetteWork) => string;
     parse: (raw: string) => { identifier: string; eli: string } | null;
@@ -112,6 +112,10 @@ export type SupportedProvisionCitationGrammar<
   jurisdiction: TJurisdiction;
   locateAbbreviatedProvisions: (text: string) => LocatedProvisionCitation[];
   locateGazetteCitations: (text: string) => LocatedGazetteCitation[];
+  parseReference: (raw: string) => ProvisionReference | null;
+  normalizeReference: (
+    reference: ProvisionReference,
+  ) => ProvisionReference | null;
   status: "supported";
 };
 
@@ -155,8 +159,11 @@ const afterWhitespace = (text: string, index: number): number => {
   return gap === null ? index : gap.index + gap[0].length;
 };
 
+const canonicalDesignator = (value: string): string =>
+  value.replace(/^0+(?=\d)/u, "");
+
 const valueOf = (match: RegExpExecArray): string =>
-  (match.groups?.["value"] ?? match[0]).toLowerCase();
+  canonicalDesignator((match.groups?.["value"] ?? match[0]).toLowerCase());
 
 const referenceOf = (
   levels: readonly CompiledLevel[],
@@ -405,6 +412,59 @@ export const createProvisionCitationGrammar = <
 
   const gazetteInput = new RegExp(`^(?:${gazette.source})$`, "iu");
   return {
+    normalizeReference: (reference) => {
+      if (reference.unit !== unit) {
+        return null;
+      }
+      const values: (string | null)[] = [];
+      for (const level of compiledLevels) {
+        let value: string | null;
+        switch (level.key) {
+          case "section":
+            value = `${String(reference.section)}${reference.sectionSuffix ?? ""}`;
+            break;
+          case "subsection":
+            value = reference.subsection;
+            break;
+          case "letter":
+            value = reference.letter;
+            break;
+          case "point":
+            value = reference.point;
+            break;
+          default:
+            level.key satisfies never;
+            return panic("Unknown provision level");
+        }
+        if (value === null) {
+          values.push(null);
+          continue;
+        }
+        const match = matchAt(level.value, value, 0);
+        if (match === null || match[0].length !== value.length) {
+          return null;
+        }
+        values.push(valueOf(match));
+      }
+      const normalized = referenceOf(compiledLevels, values, unit);
+      if (normalized === null) {
+        return null;
+      }
+      return {
+        ...normalized,
+        sentence: reference.sentence,
+        openEnded: reference.openEnded,
+      };
+    },
+    unit,
+    parseReference: (raw) => {
+      const text = raw.trim().normalize("NFC");
+      const element = parseElement(text, 0, 0, []);
+      if (element === null || element.end !== text.length) {
+        return null;
+      }
+      return referenceOf(compiledLevels, element.values, unit);
+    },
     anchor,
     gazette: {
       eli: gazette.eli,
@@ -482,9 +542,13 @@ const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
 const czechProvisionAnchor = (reference: ProvisionReference): string =>
   [
     `par_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
-    ...(reference.subsection === null ? [] : [`odst_${reference.subsection}`]),
+    ...(reference.subsection === null
+      ? []
+      : [`odst_${canonicalDesignator(reference.subsection)}`]),
     ...(reference.letter === null ? [] : [`pism_${reference.letter}`]),
-    ...(reference.point === null ? [] : [`bod_${reference.point}`]),
+    ...(reference.point === null
+      ? []
+      : [`bod_${canonicalDesignator(reference.point)}`]),
   ].join("-");
 
 /**
@@ -515,7 +579,10 @@ export const PROVISION_CITATION_GRAMMARS = {
         }),
       // Reporters (`Sb. NSS`, `Sb. rozh.`) and the treaty collection
       // (`Sb. m. s.`) share the gazette's suffix and are not statutes.
-      source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|NSS|rozh\.))`,
+      source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>(?=\d{0,4}[1-9])\d{1,5})\/(?<year>[1-9]\d{3})\s+(?:${CZ_STATUTE_COLLECTION.spellings
+        .toSorted((left, right) => right.length - left.length)
+        .map(RegExp.escape)
+        .join("|")})(?![\p{L}\p{N}])(?!\.?\s*(?:m\.\s*s\.|NSS|rozh\.))`,
     },
     jurisdiction: "CZE",
     levels: [
@@ -566,46 +633,3 @@ export const locateGazetteCitations = (
   text: string,
 ): LocatedGazetteCitation[] =>
   SUPPORTED_GRAMMARS.flatMap((grammar) => grammar.locateGazetteCitations(text));
-
-type ProvisionRefOfOptions = {
-  jurisdiction: CaseLawJurisdiction;
-  workIdentifier: string;
-  reference: ProvisionReference;
-};
-
-type ProvisionRefOfResult =
-  | { status: "resolved"; provision: ProvisionRef }
-  | { status: "unsupported" }
-  | { status: "invalid_work_identifier" };
-
-/** Derive identity and citation metadata together; callers supply no anchor or ELI. */
-export const provisionRefOf = ({
-  jurisdiction,
-  workIdentifier,
-  reference,
-}: ProvisionRefOfOptions): ProvisionRefOfResult => {
-  const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
-  switch (grammar.status) {
-    case "unsupported":
-      return { status: "unsupported" };
-    case "supported": {
-      const work = grammar.gazette.parse(workIdentifier);
-      if (work === null) {
-        return { status: "invalid_work_identifier" };
-      }
-      return {
-        status: "resolved",
-        provision: {
-          jurisdiction,
-          workIdentifier: work.identifier,
-          workEli: work.eli,
-          reference: { ...reference },
-          anchor: grammar.anchor(reference),
-        },
-      };
-    }
-    default:
-      grammar satisfies never;
-      return panic("Unknown provision citation grammar status");
-  }
-};

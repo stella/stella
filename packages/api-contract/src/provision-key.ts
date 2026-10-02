@@ -1,57 +1,63 @@
-import { panic, Result } from "better-result";
 import * as v from "valibot";
 
-import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
+import { provisionReferenceSchema } from "@stll/legal-ast/provision-reference";
 
-import { CASE_LAW_JURISDICTIONS } from "./case-law-jurisdictions";
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 
+export const provisionKeyPartSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.check(
+    (value) => value.isWellFormed() && !/[\p{Cc}\p{Cf}]/u.test(value),
+    "Expected a well-formed provision identity without control characters",
+  ),
+  v.transform((value) => value.normalize("NFC")),
+);
+
+/** The jurisdiction grammar owner supplies its derived supported set. */
+export const provisionIdentitySchemas = <
+  const TJurisdiction extends CaseLawJurisdiction,
+>(
+  jurisdictions: readonly TJurisdiction[],
+) => {
+  const entries = {
+    jurisdiction: v.picklist(jurisdictions),
+    workIdentifier: provisionKeyPartSchema,
+    anchor: provisionKeyPartSchema,
+  };
+  return {
+    key: v.pipe(v.object(entries), v.brand("ProvisionKey"), v.readonly()),
+    ref: v.pipe(
+      v.object({
+        ...entries,
+        workEli: v.nullable(provisionKeyPartSchema),
+        reference: v.pipe(provisionReferenceSchema, v.readonly()),
+      }),
+      v.brand("ProvisionKey"),
+      v.brand("ProvisionRef"),
+      v.readonly(),
+    ),
+  };
+};
+
 /** Stable across consolidation versions and later discovery of a work's ELI. */
-export type ProvisionKey = {
-  jurisdiction: CaseLawJurisdiction;
-  workIdentifier: string;
-  anchor: string;
+export type ProvisionKey<
+  TJurisdiction extends CaseLawJurisdiction = CaseLawJurisdiction,
+> = v.InferOutput<ReturnType<typeof provisionIdentitySchemas>["key"]> & {
+  readonly jurisdiction: TJurisdiction;
 };
 
-/**
- * Construct values only with legal-atlas provisionRefOf: it derives the
- * identifier, ELI and anchor from the work and reference together.
- */
-export type ProvisionRef = ProvisionKey & {
-  workEli: string | null;
-  reference: ProvisionReference;
+/** Mint only through legal-atlas provisionRefOf, which derives identity from its grammar. */
+export type ProvisionRef<
+  TJurisdiction extends CaseLawJurisdiction = CaseLawJurisdiction,
+> = v.InferOutput<ReturnType<typeof provisionIdentitySchemas>["ref"]> & {
+  readonly jurisdiction: TJurisdiction;
 };
 
-const keyPartsSchema = v.tuple([
-  v.picklist(CASE_LAW_JURISDICTIONS),
-  v.pipe(v.string(), v.minLength(1)),
-  v.pipe(v.string(), v.minLength(1)),
-]);
-
-/** JSON tuple framing preserves delimiters and Unicode without country-specific syntax. */
+/** JSON tuple framing preserves delimiters; version and reference metadata are excluded. */
 export const formatProvisionKey = ({
   jurisdiction,
   workIdentifier,
   anchor,
-}: ProvisionKey): string => {
-  const parsed = v.safeParse(keyPartsSchema, [
-    jurisdiction,
-    workIdentifier,
-    anchor,
-  ]);
-  if (!parsed.success) {
-    return panic("Invalid provision key");
-  }
-  return JSON.stringify(parsed.output);
-};
-
-/** Accept only the canonical spelling; version and reference metadata are not key parts. */
-export const parseProvisionKey = (raw: string): ProvisionKey | null => {
-  const value: unknown = Result.try(() => JSON.parse(raw)).unwrapOr(null);
-  const parsed = v.safeParse(keyPartsSchema, value);
-  if (!parsed.success || JSON.stringify(parsed.output) !== raw) {
-    return null;
-  }
-  const [jurisdiction, workIdentifier, anchor] = parsed.output;
-  return { jurisdiction, workIdentifier, anchor };
-};
+}: ProvisionKey): string =>
+  JSON.stringify([jurisdiction, workIdentifier, anchor]);
