@@ -234,7 +234,7 @@ export type ClauseDetailTransport = {
     body: ClauseParagraph[],
     expectedBody: ClauseParagraph[],
   ) => Promise<ClauseHead>;
-  rewrite?: ClauseRewrite;
+  rewrite?: ClauseRewrite | undefined;
 };
 
 export const DetailContent = ({
@@ -843,7 +843,7 @@ const ClauseBodyEditor = ({
   detail: ClauseDetail;
   canEdit: boolean;
   bodySave: ReturnType<typeof useClauseBodySave>;
-  rewrite?: ClauseRewrite;
+  rewrite?: ClauseRewrite | undefined;
 }) => {
   if (!canEdit) {
     return (

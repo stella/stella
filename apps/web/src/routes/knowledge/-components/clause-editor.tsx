@@ -143,7 +143,7 @@ type ClauseEditorProps = {
    * normal autosave path.
    */
   onReviewResolved?: (body: ClauseParagraph[]) => Promise<unknown>;
-  rewrite?: ClauseRewrite;
+  rewrite?: ClauseRewrite | undefined;
 };
 
 export const ClauseEditor = ({

@@ -518,12 +518,12 @@ describe("MCP knowledge tools", () => {
     if (
       !isMcpEgressPlan(read) ||
       !("clause" in read.payload) ||
-      !isRecord(read.payload["clause"]) ||
-      !isClauseBody(read.payload["clause"]["body"])
+      !isRecord(read.payload.clause) ||
+      !isClauseBody(read.payload.clause.body)
     ) {
       throw new Error("Expected a clause detail payload");
     }
-    const expectedBody = read.payload["clause"]["body"];
+    const expectedBody = read.payload.clause.body;
     expect(expectedBody).toEqual(stored.body);
     const saved = await handleMcpToolCall({
       args: {

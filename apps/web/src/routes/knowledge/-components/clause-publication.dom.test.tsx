@@ -23,22 +23,25 @@ GlobalRegistrator.register({ url: "http://localhost:3000/knowledge" });
 // Importing the real page also initializes the auth client. Its unauthenticated
 // session probe is the only ambient transport this harness permits.
 const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
-  async (input) => {
-    let url;
-    if (typeof input === "string") {
-      url = new URL(input, "http://localhost:3000");
-    } else if (input instanceof URL) {
-      url = input;
-    } else {
-      url = new URL(input.url);
-    }
-    if (url.pathname.startsWith("/api/auth/")) {
-      return Response.json(null);
-    }
-    throw new Error(
-      `unexpected network transport in clause test: ${url.pathname}`,
-    );
-  },
+  Object.assign(
+    async (input: RequestInfo | URL) => {
+      let url;
+      if (typeof input === "string") {
+        url = new URL(input, "http://localhost:3000");
+      } else if (input instanceof URL) {
+        url = input;
+      } else {
+        url = new URL(input.url);
+      }
+      if (url.pathname.startsWith("/api/auth/")) {
+        return Response.json(null);
+      }
+      throw new Error(
+        `unexpected network transport in clause test: ${url.pathname}`,
+      );
+    },
+    { preconnect: () => undefined },
+  ),
 );
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
@@ -251,7 +254,6 @@ const mountDetail = () => {
     await click(
       view.getByRole("button", {
         name: englishMessages.ai.editWithAI,
-        exact: true,
       }),
     );
     await act(async () => {
@@ -374,9 +376,7 @@ describe("clause detail with the real editor", () => {
         if (!variantRow) {
           throw new Error("expected the variant row");
         }
-        await save.click(
-          within(variantRow).getByRole("button", { name: "", exact: true }),
-        );
+        await save.click(within(variantRow).getByRole("button", { name: "" }));
         await save.click(
           save.view.getByRole("menuitem", {
             name: englishMessages.clauses.useAsMainBody,
@@ -705,9 +705,7 @@ describe("clause detail with the real editor", () => {
         if (!row) {
           throw new Error("expected the variant row");
         }
-        await save.click(
-          within(row).getByRole("button", { name: "", exact: true }),
-        );
+        await save.click(within(row).getByRole("button", { name: "" }));
         await save.click(
           save.view.getByRole("menuitem", {
             name: englishMessages.clauses.useAsMainBody,
