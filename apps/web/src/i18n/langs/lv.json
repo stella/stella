@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Kopsavilkums",
+      "caseFileMayHoldOthers": "Šajā lietā var būt arī citi nolēmumi.",
       "citedBy": "Atsaucas uz",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
@@ -2175,6 +2176,7 @@
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
+      "publicCountryUnavailable": "Šīs valsts tiesību akti un judikatūra nav pieejami. Izvēlieties citu valsti.",
       "rateLimited": "Pārāk daudz pieprasījumu. Lūdzu, mēģiniet vēlāk.",
       "server": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "serviceUnavailable": "Pakalpojums īslaicīgi nav pieejams. Lūdzu, mēģiniet vēlreiz.",

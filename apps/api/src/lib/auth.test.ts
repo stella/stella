@@ -181,6 +181,7 @@ describe("resolveMemberAuthorization", () => {
 
     expect(authorization).toEqual({
       memberId: expect.any(String),
+      email: `${ownerInFull}@test.local`,
       role: "owner",
       workspace: null,
     });
@@ -193,6 +194,7 @@ describe("resolveMemberAuthorization", () => {
     );
     expect(authorization).toEqual({
       memberId: expect.any(String),
+      email: `${loneMemberInFull}@test.local`,
       role: "member",
       workspace: null,
     });
@@ -931,12 +933,13 @@ describe("organization lifecycle hook wiring", () => {
     }
     const hooks = orgPlugin.options.organizationHooks;
     expect(hooks.afterCreateOrganization).toBeFunction();
-    expect(hooks.afterUpdateOrganization).toBeFunction();
+    const afterUpdateOrganization = hooks.afterUpdateOrganization;
+    expect(afterUpdateOrganization).toBeFunction();
 
     const identify = spyOn(getServerAnalytics(), "identifyOrganizationGroup");
     try {
       const organizationId = orgId();
-      await hooks.afterUpdateOrganization({
+      await afterUpdateOrganization({
         organization: { id: organizationId, name: "Renamed Org" },
       });
       expect(identify).toHaveBeenCalledWith({

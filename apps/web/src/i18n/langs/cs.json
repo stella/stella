@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",
       "citedBy": "Citováno v",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
@@ -2175,6 +2176,7 @@
       "forbidden": "K této akci nemáte oprávnění.",
       "notFound": "Požadovanou položku se nepodařilo najít.",
       "payloadTooLarge": "Požadavek je příliš velký.",
+      "publicCountryUnavailable": "Právní předpisy a judikatura této země nejsou dostupné. Vyberte jinou zemi.",
       "rateLimited": "Příliš mnoho požadavků. Zkuste to prosím později.",
       "server": "Něco se pokazilo. Zkuste to prosím znovu.",
       "serviceUnavailable": "Služba je dočasně nedostupná. Zkuste to prosím znovu.",

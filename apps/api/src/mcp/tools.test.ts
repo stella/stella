@@ -984,6 +984,7 @@ const createContext = ({
     withTimeout: withTimeoutDependency,
   },
   userId: toSafeId<"user">("user_1"),
+  userEmail: "standard@example.test",
 });
 
 /**
@@ -2161,6 +2162,40 @@ describe("OpenAI-compatible MCP tools", () => {
       total: countedSearchTotal(SEARCH_TOTAL_TYPE.EXACT, 1),
     });
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+
+  test("pending public countries return typed unavailable through real MCP output contracts", async () => {
+    const calls = [
+      {
+        toolName: "search_case_law",
+        args: { country: "SVK", queries: ["synthetic"] },
+      },
+      {
+        toolName: "lookup_case_law",
+        args: { country: "SVK", identifiers: ["1 Cdo 1/2020"] },
+      },
+      {
+        toolName: "search_legislation",
+        args: { country: "SVK", query: "synthetic" },
+      },
+    ];
+    for (const call of calls) {
+      const result = await handleMcpToolCall({
+        ...call,
+        context: createContext(),
+        mode: "default",
+      });
+      expect(result.isError).not.toBe(true);
+      expect(result.structuredContent).toMatchObject({
+        status: "unavailable",
+        country: "SVK",
+        reason: "pending_public",
+      });
+      expect(result.structuredContent).not.toHaveProperty("results");
+    }
+    expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+    expect(lookupDecisionsByIdentityMock).not.toHaveBeenCalled();
+    expect(searchLegislationHandlerMock).not.toHaveBeenCalled();
   });
 
   // --- lookup_case_law -----------------------------------------------------

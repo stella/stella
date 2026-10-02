@@ -41,6 +41,7 @@
       "name": "@stll/api",
       "version": "0.0.0",
       "dependencies": {
+        "@aws-sdk/client-cloudwatch": "^3.1138.0",
         "@aws-sdk/client-s3": "^3.1138.0",
         "@aws-sdk/client-sesv2": "^3.1138.0",
         "@aws-sdk/client-sts": "^3.1138.0",
@@ -84,6 +85,7 @@
         "@stll/concurrency": "workspace:*",
         "@stll/conditions": "workspace:*",
         "@stll/country-codes": "workspace:*",
+        "@stll/db-load-gate": "workspace:*",
         "@stll/docx-core": "catalog:",
         "@stll/docx-utils": "workspace:*",
         "@stll/errors": "workspace:*",
@@ -537,7 +539,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "better-result": "catalog:",
@@ -606,7 +608,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.11.1",
+      "version": "0.12.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -680,7 +682,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.3.1",
+      "version": "3.3.2",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -749,6 +751,20 @@
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",
+      },
+    },
+    "packages/db-load-gate": {
+      "name": "@stll/db-load-gate",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/time": "workspace:*",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/property-testing": "workspace:*",
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "fast-check": "catalog:",
       },
     },
     "packages/docx-utils": {
@@ -855,6 +871,19 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/mcp-kit": {
+      "name": "@stll/mcp-kit",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/agent-input": "workspace:^",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "tsdown": "catalog:",
+      },
+    },
     "packages/mojibake": {
       "name": "@stll/mojibake",
       "version": "0.0.0",
@@ -897,6 +926,7 @@
       "name": "@stll/property-testing",
       "version": "0.0.0",
       "dependencies": {
+        "better-result": "catalog:",
         "fast-check": "catalog:",
       },
       "devDependencies": {
@@ -1270,9 +1300,9 @@
     "@oxlint/plugins": "1.83.0",
     "@shadcn/lint": "0.1.0",
     "@silurus/ooxml": "0.87.0",
-    "@stll/anonymize": "3.0.1",
+    "@stll/anonymize": "3.0.3",
     "@stll/anonymize-data": "0.0.10",
-    "@stll/anonymize-wasm": "3.0.1",
+    "@stll/anonymize-wasm": "3.0.3",
     "@stll/docx-core": "0.29.0",
     "@stll/folio-agents": "0.15.1",
     "@stll/folio-core": "0.54.0",
@@ -1412,6 +1442,8 @@
     "@aws-sdk/checksums": ["@aws-sdk/checksums@3.1001.1", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-x12Q17KYlJAd3nKf8LV5LV0vt8sh8/6YfQLGPtrGnQf/tW4jqxPGq5GPpuVitpQYM3eUR4XB7CbxZf751NMbLw=="],
 
     "@aws-sdk/client-bedrock-runtime": ["@aws-sdk/client-bedrock-runtime@3.1138.0", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/credential-provider-node": "^3.972.84", "@aws-sdk/eventstream-handler-node": "^3.972.35", "@aws-sdk/middleware-eventstream": "^3.972.30", "@aws-sdk/middleware-websocket": "^3.972.54", "@aws-sdk/token-providers": "3.1138.0", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/node-http-handler": "^4.12.1", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-MtYat/gbQkExaT1ZwOp7RdYQQy9TShHlEr2Go3++5M2bLZG9RJjx46m6HE+6UXSEsStOKSQN12YofuIZmDlPnA=="],
+
+    "@aws-sdk/client-cloudwatch": ["@aws-sdk/client-cloudwatch@3.1141.0", "", { "dependencies": { "@aws-sdk/core": "^3.978.1", "@aws-sdk/credential-provider-node": "^3.972.84", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/middleware-compression": "^4.6.2", "@smithy/node-http-handler": "^4.12.1", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-udD2i0AI4Tp6FnspqZdjex9EnIVi8b0fzhdwdl17RxxSlEMfnOC3oVOuBErKVQH4Hf5cOPGaR4QCd4YCjVDP6A=="],
 
     "@aws-sdk/client-s3": ["@aws-sdk/client-s3@3.1138.0", "", { "dependencies": { "@aws-sdk/checksums": "^3.1001.1", "@aws-sdk/core": "^3.978.1", "@aws-sdk/credential-provider-node": "^3.972.84", "@aws-sdk/middleware-sdk-s3": "^3.972.77", "@aws-sdk/signature-v4-multi-region": "^3.996.47", "@aws-sdk/types": "^3.974.6", "@smithy/core": "^3.35.0", "@smithy/fetch-http-handler": "^5.8.0", "@smithy/node-http-handler": "^4.12.1", "@smithy/types": "^4.19.0", "tslib": "^2.6.2" } }, "sha512-U7+dA10/2mk9PCoZ4JknQhGaw0atZfEtxMHT+vRGFS8z7fO8bb+Grvq5B4XkiL5epyrWImv8KwLclYWMq/4znA=="],
 
@@ -2677,6 +2709,8 @@
 
     "@smithy/is-array-buffer": ["@smithy/is-array-buffer@2.2.0", "", { "dependencies": { "tslib": "^2.6.2" } }, "sha512-GGP3O9QFD24uGeAXYUjwSTXARoqpZykHadOmA8G5vfJPK0/DC67qa//0qvqrJzL1xc8WQWX7/yc7fwudjPHPhA=="],
 
+    "@smithy/middleware-compression": ["@smithy/middleware-compression@4.6.2", "", { "dependencies": { "@smithy/core": "^3.33.2", "@smithy/types": "^4.17.2", "fflate": "0.8.3", "tslib": "^2.6.2" } }, "sha512-Q9d+luiRjyHT6kCL/9NyGpdZJgodh4vtvfHC6H8SqoVKrV2k9RoyI9/IloVfdCYks3/2DIi7BsYYLcda5KZS0A=="],
+
     "@smithy/node-http-handler": ["@smithy/node-http-handler@4.12.1", "", { "dependencies": { "@smithy/core": "^3.33.3", "@smithy/types": "^4.18.0", "tslib": "^2.6.2" } }, "sha512-ThMkboGeONWXAelq9FvGsuJC4rOi+qyC4/zhUF58xYpxUg5sQKx2VXZYJmtNjr4dSuBJ1HeJXETQILCz3wOHvw=="],
 
     "@smithy/signature-v4": ["@smithy/signature-v4@5.7.3", "", { "dependencies": { "@smithy/core": "^3.33.3", "@smithy/types": "^4.17.2", "tslib": "^2.6.2" } }, "sha512-7ImGm+FkHRLcBaRttIAMZ6bzJZWb2cJGoYjq46F2UjycujWzrL9GEN9h4w7eQyXJYnltrUhxbbieBAIRrdqpow=="],
@@ -2737,23 +2771,23 @@
 
     "@stll/analytics-config": ["@stll/analytics-config@workspace:packages/analytics-config"],
 
-    "@stll/anonymize": ["@stll/anonymize@3.0.1", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.1", "@stll/anonymize-darwin-x64": "3.0.1", "@stll/anonymize-linux-arm64-gnu": "3.0.1", "@stll/anonymize-linux-x64-gnu": "3.0.1", "@stll/anonymize-win32-x64-msvc": "3.0.1" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-XcuqzWvKjTi0TI/kbhKeppZDWsruL6pGuoyH8KcYoKPiCR86lhpxFOFwgtSKUnyuDfr6Hjash/a2NfwBKDWbqQ=="],
+    "@stll/anonymize": ["@stll/anonymize@3.0.3", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "optionalDependencies": { "@stll/anonymize-darwin-arm64": "3.0.3", "@stll/anonymize-darwin-x64": "3.0.3", "@stll/anonymize-linux-arm64-gnu": "3.0.3", "@stll/anonymize-linux-x64-gnu": "3.0.3", "@stll/anonymize-win32-x64-msvc": "3.0.3" }, "bin": { "stella-anonymize-build-native-package": "scripts/build-native-pipeline-package.mjs" } }, "sha512-WBUi9WIPWyAIS0THPGhy/u0NoNfYje2BT9phZglP7TGmL+5iaY21bGA+XOQR9np7drdlBFdtS5ydYytVLkF/bA=="],
 
     "@stll/anonymize-chat": ["@stll/anonymize-chat@workspace:packages/anonymize-chat"],
 
-    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@3.0.1", "", { "os": "darwin", "cpu": "arm64" }, "sha512-D8MKjVWKxlTn5uriku7OZGrWJIq2QdwX5k6wBN87AR3ghBGpeyiBxnRNO86Bjk0hmv3FGZS4BRE2r4mGmzTkdg=="],
+    "@stll/anonymize-darwin-arm64": ["@stll/anonymize-darwin-arm64@3.0.3", "", { "os": "darwin", "cpu": "arm64" }, "sha512-7+YSLx5cAC3t1yd0DDnBkANiyYtWpLm/oCSygoUIAJjn0Dr931fKbv4+aVGgSrOwzQ5ZBFgLvrHN1aeJ6gv7Zw=="],
 
-    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@3.0.1", "", { "os": "darwin", "cpu": "x64" }, "sha512-tVEbM4qGX+npetzWlvonxAWhtmoy39JF8dVqnKE6zG2PXrf0jsHFy6fCQ+zBZZbVQvy0Td8CK9G5NyZO9078EQ=="],
+    "@stll/anonymize-darwin-x64": ["@stll/anonymize-darwin-x64@3.0.3", "", { "os": "darwin", "cpu": "x64" }, "sha512-Q80MJzWVYBhwUZUqFwUd4rr2RlGEqkGyUPGSkOVQVUJphrhAAvqudLlPzU/8bXWbojtYeg3govGkRptCwFXEng=="],
 
     "@stll/anonymize-data": ["@stll/anonymize-data@0.0.10", "", {}, "sha512-Z6wxTw0dxpSV3htzWu2ROpy5mqdCBVMyyqVm07myA37w+KTk3AVfGaBlfwDDxj0DpSDyqukFxbc5psgroxZm+Q=="],
 
-    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@3.0.1", "", { "os": "linux", "cpu": "arm64" }, "sha512-T+PRXv1EkTBukoXXzeP9ThRRrxU0Bj34Rk5KeLNmqfz2+/eZjuI4nyt2REDNeGR4f7eGviJYG/GFT61yCHwUPQ=="],
+    "@stll/anonymize-linux-arm64-gnu": ["@stll/anonymize-linux-arm64-gnu@3.0.3", "", { "os": "linux", "cpu": "arm64" }, "sha512-4hA8zZU/Vb00INcdRxtNDBxoxRpImyisD7c3Ej6K3cf2yqUrvbwX/sjw66ILdSh+TCQZqRn7Xyu8tmYf1LfaEA=="],
 
-    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.1", "", { "os": "linux", "cpu": "x64" }, "sha512-UPTpUT7BZIQul0XSazAKNEpTpPThg6dzbdcPiS3riRzbIA2qWPsNpNQQ8GpG1YAnrH3+FGUOyOYT1VqRkCHNsQ=="],
+    "@stll/anonymize-linux-x64-gnu": ["@stll/anonymize-linux-x64-gnu@3.0.3", "", { "os": "linux", "cpu": "x64" }, "sha512-hfQ/eXrFNdStcAMssaa+d4sjCo7Y5okIypm8oZnAUlcwudTO6HzRafAIMEbXnc5IFvQ83T4mz0IxBad0cR/0PA=="],
 
-    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.1", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-71vgFq0/iByuWeVqq+hNkRqFqQ77K7leQeplQPQefqSO1tjmhELpgqO/jKSquoxmfBxSD5KMjhFXybNfBKFLhg=="],
+    "@stll/anonymize-wasm": ["@stll/anonymize-wasm@3.0.3", "", { "dependencies": { "@stll/anonymize-data": "^0.0.10" }, "peerDependencies": { "vite": ">=5 <10" }, "optionalPeers": ["vite"] }, "sha512-mbhG9AlEZJQug3EKHKYia4hMzB0o+KzG8ZbAr+m4WXwkTw1xapv113zSFxXya9DiWJDg8KS1BUKDJTccNYCgEg=="],
 
-    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.1", "", { "os": "win32", "cpu": "x64" }, "sha512-KC9UVwA2NDsrkwlqgynxOBPsYGt898gIplzvU+E3RT5KLT2nvkumNqoCSKciILFpfbKvcxIHYeI1CXvU3vvXTw=="],
+    "@stll/anonymize-win32-x64-msvc": ["@stll/anonymize-win32-x64-msvc@3.0.3", "", { "os": "win32", "cpu": "x64" }, "sha512-woYyWdS1x5ZKXz3F+ZBmfEdZqkME8k5jA9aD9B4x/Kk5gYPyH0QSSEQLge63FZ4UQPXO7nZ3fDCD1/68GNGFUA=="],
 
     "@stll/api": ["@stll/api@workspace:apps/api"],
 
@@ -2788,6 +2822,8 @@
     "@stll/conditions": ["@stll/conditions@workspace:packages/conditions"],
 
     "@stll/country-codes": ["@stll/country-codes@workspace:packages/country-codes"],
+
+    "@stll/db-load-gate": ["@stll/db-load-gate@workspace:packages/db-load-gate"],
 
     "@stll/desktop": ["@stll/desktop@workspace:apps/desktop"],
 
@@ -2834,6 +2870,8 @@
     "@stll/legal-atlas-runner": ["@stll/legal-atlas-runner@workspace:apps/legal-atlas-runner"],
 
     "@stll/locales": ["@stll/locales@workspace:packages/locales"],
+
+    "@stll/mcp-kit": ["@stll/mcp-kit@workspace:packages/mcp-kit"],
 
     "@stll/mobile": ["@stll/mobile@workspace:apps/mobile"],
 
@@ -5796,6 +5834,8 @@
     "@react-native/metro-config/metro-runtime": ["metro-runtime@0.84.4", "", { "dependencies": { "@babel/runtime": "^7.25.0", "flow-enums-runtime": "^0.0.6" } }, "sha512-Jibypds4g7AhzdRKY+kDoj51s5EXMwgyp5ddtlreDAsWefMdOx+agWqgm0H2XSZ/ueanHHVM89fnf5OJnlxa8Q=="],
 
     "@selderee/plugin-htmlparser2/domhandler": ["domhandler@5.0.3", "", { "dependencies": { "domelementtype": "^2.3.0" } }, "sha512-cgwlv/1iFQiFnU96XXgROh8xTeetsnJiDsTc7TYCLFd9+/WNkIqPTxiM/8pSd8VIrhXGTf1Ny1q1hquVqDJB5w=="],
+
+    "@smithy/middleware-compression/fflate": ["fflate@0.8.3", "", {}, "sha512-tbZNuJrLwGUp3zshBtdy4W+ORxZuIh8a5ilyIEQDC5rY1f3U20JMry0Ll3WBzU58EZKsEuJFXhb5gwv8CsPvgA=="],
 
     "@tailwindcss/node/lightningcss": ["lightningcss@1.32.0", "", { "dependencies": { "detect-libc": "^2.0.3" }, "optionalDependencies": { "lightningcss-android-arm64": "1.32.0", "lightningcss-darwin-arm64": "1.32.0", "lightningcss-darwin-x64": "1.32.0", "lightningcss-freebsd-x64": "1.32.0", "lightningcss-linux-arm-gnueabihf": "1.32.0", "lightningcss-linux-arm64-gnu": "1.32.0", "lightningcss-linux-arm64-musl": "1.32.0", "lightningcss-linux-x64-gnu": "1.32.0", "lightningcss-linux-x64-musl": "1.32.0", "lightningcss-win32-arm64-msvc": "1.32.0", "lightningcss-win32-x64-msvc": "1.32.0" } }, "sha512-NXYBzinNrblfraPGyrbPoD19C1h9lfI/1mzgWYvXUTe414Gz/X1FD2XBZSZM7rRTrMA8JL3OtAaGifrIKhQ5yQ=="],
 

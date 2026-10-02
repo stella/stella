@@ -7,6 +7,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
+  bindChatTurnRunId,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
@@ -565,6 +566,66 @@ describe("a producing run", () => {
 });
 
 describe("a run id", () => {
+  test("binding repeats for a live owner without changing its preflight expiry", async () => {
+    const first = await seedRunningTurn();
+    const second = await seedRunningTurn();
+    const runId = `run-${Bun.randomUUIDv7()}`;
+    const before = await readTurn(first.execution.id);
+    for (let attempt = 0; attempt < 2; attempt += 1) {
+      expect(
+        unwrap(
+          await bindChatTurnRunId({
+            execution: first.execution,
+            runId,
+            safeDb,
+          }),
+        ),
+      ).toBe("owned");
+      const bound = await readTurn(first.execution.id);
+      expect(bound.runId).toBe(runId);
+      expect(bound.leaseExpiresAt).toEqual(before.leaseExpiresAt);
+    }
+    expect(
+      unwrap(
+        await bindChatTurnRunId({ execution: second.execution, runId, safeDb }),
+      ),
+    ).toBe("run-taken");
+    unwrap(
+      await safeDb(
+        async (tx) =>
+          await settleChatTurnOnTx({
+            assistantMessageId: null,
+            execution: first.execution,
+            outcome: { type: "interrupted", reason: "client-disconnected" },
+            tx,
+          }),
+      ),
+    );
+    expect((await readTurn(first.execution.id)).runId).toBe(runId);
+    expect(
+      unwrap(
+        await bindChatTurnRunId({ execution: second.execution, runId, safeDb }),
+      ),
+    ).toBe("run-taken");
+    expect(
+      unwrap(
+        await bindChatTurnRunId({ execution: first.execution, runId, safeDb }),
+      ),
+    ).toBe("lost");
+  });
+
+  test("concurrent bindings give a run id to exactly one owned turn", async () => {
+    const first = await seedRunningTurn();
+    const second = await seedRunningTurn();
+    const runId = `run-${Bun.randomUUIDv7()}`;
+    const outcomes = await Promise.all(
+      [first, second].map(async ({ execution }) =>
+        unwrap(await bindChatTurnRunId({ execution, runId, safeDb })),
+      ),
+    );
+    expect(outcomes.toSorted()).toEqual(["owned", "run-taken"]);
+  });
+
   test("names one turn in its organization, and the turn keeps it once settled", async () => {
     const first = await seedRunningTurn();
     const second = await seedRunningTurn();

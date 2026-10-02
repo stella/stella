@@ -65,6 +65,7 @@ const readRateEntries = createSafeHandler(
     permissions: { rate: ["read"] },
     mcp: {
       type: "capability",
+      readClass: "tenant",
       reason: "billing_admin",
       consumesServices: false,
     },
