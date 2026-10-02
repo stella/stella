@@ -23,6 +23,7 @@ import * as v from "valibot";
 
 import {
   MODEL_DOCUMENT_INPUT_OPTIONS,
+  MODEL_IMAGE_INPUT_CAPABILITIES,
   MODEL_DEFAULT_REASONING_EFFORTS,
   MODEL_OUTPUT_TOKEN_LIMITS,
   MODEL_REASONING_EFFORTS,
@@ -61,6 +62,14 @@ export type ModelRole = (typeof MODEL_ROLES)[number];
 export const TEMPERATURE_POLICIES = ["emit", "omit"] as const;
 
 export type TemperaturePolicy = (typeof TEMPERATURE_POLICIES)[number];
+
+export const IMAGE_INPUT_CAPABILITIES = [
+  "supported",
+  "unsupported",
+  "unknown",
+] as const;
+
+export type ImageInputCapability = (typeof IMAGE_INPUT_CAPABILITIES)[number];
 
 export const STREAMING_TOOL_USE_SUPPORTS = [
   "supported",
@@ -362,6 +371,11 @@ export type BYOKProvider = keyof typeof BYOK_MODEL_OPTIONS;
 
 // Input data for the capability generator
 // (packages/scripts/src/model-catalog-capabilities-gen.ts).
+export { IMAGE_INPUT_OVERRIDES } from "./capabilities-overrides";
+export type {
+  ImageInputOverride,
+  ImageInputOverrides,
+} from "./capabilities-overrides";
 export { CAPABILITY_OVERRIDES } from "./capabilities-overrides";
 export type { CapabilityOverride } from "./capabilities-overrides";
 export { DOCUMENT_INPUT_OVERRIDES } from "./document-input-overrides";
@@ -638,6 +652,28 @@ export const getModelDisplayMetadata = (
  * the nightly upstream check rejects drift.
  */
 export const BYOK_DOCUMENT_INPUT_MODEL_OPTIONS = MODEL_DOCUMENT_INPUT_OPTIONS;
+
+export { MODEL_IMAGE_INPUT_CAPABILITIES } from "./capabilities.gen";
+
+const IMAGE_INPUT_BY_PROVIDER: Record<
+  BYOKProvider,
+  Readonly<Record<string, ImageInputCapability>>
+> = MODEL_IMAGE_INPUT_CAPABILITIES;
+
+/** Unoffered IDs have no entry; offered IDs explicitly include unknown. */
+export const getModelImageInputCapability = ({
+  provider,
+  modelId,
+}: {
+  provider: BYOKProvider;
+  modelId: string;
+}): ImageInputCapability | undefined => {
+  const capabilities = IMAGE_INPUT_BY_PROVIDER[provider];
+  const normalized = normalizeModelCatalogId(modelId);
+  return Object.hasOwn(capabilities, normalized)
+    ? capabilities[normalized]
+    : undefined;
+};
 
 export const isBYOKProviderRoleSupported = ({
   provider,
