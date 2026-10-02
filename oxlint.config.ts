@@ -139,6 +139,15 @@ const fixtureRuleOverrides = [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
   ]),
+  ...[
+    "no-swallowed-item-error.fixture.ts",
+    "no-swallowed-item-error.fixture.legacy.ts",
+    "no-swallowed-item-error.fixture.stale.ts",
+  ].map((file) =>
+    fixtureRuleOverride(file, [
+      "no-swallowed-item-error/no-swallowed-item-error",
+    ]),
+  ),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -1226,6 +1235,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
+    "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -3066,6 +3076,14 @@ export default defineConfig({
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
           "error",
       },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture*.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
     },
     {
       files: [

@@ -1,4 +1,4 @@
-// parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
+// parser-output-unchanged: SyncPage adds optional failure telemetry; decision parsing and stored output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -360,6 +360,8 @@ export type SliceCoverage = {
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
   decisions: IngestionResult[];
+  /** Failed item builds retained as listing-only rows for reconciliation. */
+  itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
   /**
    * Supplements read off the same page. The pipeline processes them after
    * the page's decisions, so a judgment and the reasons listed beside it are

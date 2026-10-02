@@ -16,7 +16,7 @@
  */
 
 import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
@@ -24,6 +24,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
+import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
@@ -31,6 +32,142 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+describe("Slovak court backfill rejects unreadable publisher listings", () => {
+  afterEach(() => mock.restore());
+
+  for (const body of [
+    "<html><script src='/challenge.js'></script></html>",
+    "{}",
+    '{"rozhodnutieList":[]}',
+    '{"numFound":0}',
+    '{"rozhodnutieList":',
+    "",
+  ]) {
+    test(`holds the page on ${JSON.stringify(body)}`, async () => {
+      spyOn(globalThis, "fetch").mockImplementation(
+        asFetchMock(async () => new Response(body)),
+      );
+      const page = await skCourtsAdapter.fetchPage(null, {});
+      expect(page.isErr()).toBe(true);
+      if (page.isErr()) {
+        expect(page.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+  }
+
+  test("accepts an explicit small empty collection", async () => {
+    spyOn(globalThis, "fetch").mockImplementation(
+      asFetchMock(
+        async () => new Response('{"rozhodnutieList":[],"numFound":0}'),
+      ),
+    );
+    const page = await skCourtsAdapter.fetchPage(null, {});
+    expect(page.isOk()).toBe(true);
+    if (page.isOk()) {
+      expect(page.value.decisions).toEqual([]);
+    }
+  });
+
+  for (const cursor of ["backfill:0", "frontier:2020-05-13:0"]) {
+    for (const malformed of [{ spisovaZnacka: 42 }, null, "invalid"]) {
+      test(`isolates a malformed member ${JSON.stringify(malformed)} at ${cursor}`, async () => {
+        const good = {
+          guid: "23ea32af-a671-41a6-b853-72f5d52b820c:26b85db6-ff6b-44ff-8fa4-a21c89805371",
+          spisovaZnacka: "7C/221/1991",
+          sud: { nazov: "Okresný súd Bratislava I" },
+          datumVydania: "14.05.2020",
+        };
+        spyOn(globalThis, "fetch").mockImplementation(
+          asFetchMock(async (input: string | URL | Request) => {
+            const url = new URL(
+              input instanceof Request ? input.url : String(input),
+            );
+            return Response.json(
+              url.searchParams.has("page")
+                ? {
+                    rozhodnutieList: [
+                      ...Array.from({ length: 99 }, () => good),
+                      malformed,
+                    ],
+                    numFound: 200,
+                  }
+                : { ecli: "ECLI:SK:OSBA1:2020:1.C.1.2020" },
+            );
+          }),
+        );
+        const page = await skCourtsAdapter.fetchPage(cursor, {});
+        expect(page.isOk()).toBe(true);
+        if (page.isOk()) {
+          expect(
+            page.value.decisions.map(({ caseNumber }) => caseNumber),
+          ).toEqual(Array.from({ length: 99 }, () => good.spisovaZnacka));
+          expect(page.value.itemBuildFailures).toEqual({
+            type: "item_build_failed",
+            count: 1,
+          });
+          expect(page.value.nextCursor).toBe(
+            cursor.startsWith("backfill:")
+              ? "backfill:100"
+              : "frontier:2020-05-13:1",
+          );
+        }
+      });
+    }
+
+    for (const detail of [{}, { ecli: 42 }]) {
+      test(`keeps a listing-only row for malformed detail ${JSON.stringify(detail)} at ${cursor}`, async () => {
+        const good = {
+          guid: "good-detail",
+          spisovaZnacka: "1C/1/2020",
+          sud: { nazov: "Okresný súd Bratislava I" },
+          datumVydania: "14.05.2020",
+        };
+        const bad = { ...good, guid: "bad-detail", spisovaZnacka: "1C/2/2020" };
+        spyOn(globalThis, "fetch").mockImplementation(
+          asFetchMock(async (input: string | URL | Request) => {
+            const url = new URL(
+              input instanceof Request ? input.url : String(input),
+            );
+            if (url.searchParams.has("page")) {
+              return Response.json({
+                rozhodnutieList: [
+                  ...Array.from({ length: 99 }, () => good),
+                  bad,
+                ],
+                numFound: 200,
+              });
+            }
+            if (url.pathname.endsWith("/bad-detail")) {
+              return Response.json(detail);
+            }
+            return Response.json({ ecli: "ECLI:SK:OSBA1:2020:1.C.1.2020" });
+          }),
+        );
+        const page = await skCourtsAdapter.fetchPage(cursor, {});
+        expect(page.isOk()).toBe(true);
+        if (page.isOk()) {
+          expect(
+            page.value.decisions.map(({ caseNumber }) => caseNumber),
+          ).toEqual([
+            ...Array.from({ length: 99 }, () => good.spisovaZnacka),
+            bad.spisovaZnacka,
+          ]);
+          expect(page.value.itemBuildFailures).toEqual({
+            type: "item_build_failed",
+            count: 1,
+          });
+          expect(page.value.nextCursor).toBe(
+            cursor.startsWith("backfill:")
+              ? "backfill:100"
+              : "frontier:2020-05-13:1",
+          );
+        }
+      });
+    }
+  }
+});
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 

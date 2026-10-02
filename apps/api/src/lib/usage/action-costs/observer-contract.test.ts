@@ -29,7 +29,7 @@ const corpusContracts = {
   scoredSearch: true,
   aggregate: true,
   deleteByQuery: true,
-  readDeleteSettlement: true,
+  readDeleteSettlements: true,
 } as const satisfies {
   [Key in keyof CorpusIndexClient]: ObservationIsRequired<
     CorpusIndexClient[Key]
