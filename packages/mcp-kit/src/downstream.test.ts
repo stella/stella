@@ -220,7 +220,7 @@ describe("downstream listing", () => {
     });
   });
 
-  test("compactSchema drops a maximum that only says integer", () => {
+  test("compactSchema omits a safe-integer maximum only when explicitly requested", () => {
     expect(
       compactSchema(
         { type: "integer", minimum: 0, maximum: Number.MAX_SAFE_INTEGER },
@@ -766,3 +766,59 @@ test("described full schemas and payload invocation are independent of discovery
   expect(invalid.isError).toBe(true);
   expect(context.calls).toEqual([]);
 });
+
+test("bounded discovery includes supplied short guidance while retaining its budget", async () => {
+  const configured = createToolSurface({
+    tools: [{ ...ARCHIVE, brief: "Use a stable id." }],
+  });
+  const result = await configured.callTool(
+    CAPABILITY_TOOL_NAMES.describe,
+    { capability: "archive_item" },
+    { calls: [] },
+  );
+  expect(payload(result)["description"]).toBe(
+    "Archive an item.\nUse a stable id.",
+  );
+  const large = createToolSurface({
+    tools: [{ ...ARCHIVE, brief: "guidance ".repeat(1000) }],
+  });
+  const bounded = await large.callTool(
+    CAPABILITY_TOOL_NAMES.describe,
+    { capability: "archive_item" },
+    { calls: [] },
+  );
+  expect(
+    new TextEncoder().encode(bounded.content.at(0)?.text).length,
+  ).toBeLessThan(2900);
+});
+
+test.each([1.5, "1.5", -2.5, "-2.5"])(
+  "argument preview rejects fractional integer spelling %s",
+  async (maxBlocks) => {
+    const configured = createToolSurface({
+      ...DOWNSTREAM_OPTIONS,
+      tools: [
+        {
+          ...SEARCH,
+          inputSchema: {
+            type: "object",
+            properties: {
+              maxBlocks: { type: "integer", minimum: 1, maximum: 1000 },
+            },
+          },
+        },
+      ],
+    });
+    const context: Context = { calls: [] };
+    const result = await configured.callTool(
+      CAPABILITY_TOOL_NAMES.invoke,
+      { capability: "search", input: { maxBlocks }, validate_only: true },
+      context,
+    );
+    expect(result.isError).toBe(true);
+    expect(payload(result)).toMatchObject({
+      error: { code: "validation_error", issues: [{ path: "maxBlocks" }] },
+    });
+    expect(context.calls).toEqual([]);
+  },
+);

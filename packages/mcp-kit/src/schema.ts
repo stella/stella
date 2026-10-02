@@ -129,9 +129,9 @@ const compactNode = (
 export type CompactSchemaOptions = {
   /** Keep descriptions this many property levels deep; 0 (the default) keeps none. */
   describedDepth?: number;
-  /** Omit the safe-integer ceiling at schema positions only. Default: false. */
+  /** Advertising only: omit a ceiling the host separately enforces; never use for validation. Default: false. */
   omitMaxSafeInteger?: boolean;
-  /** Preserve the dialect declaration by default, or omit it for compact advertising. */
+  /** Omit a dialect only when the transport already fixes it. Default: preserve. */
   schemaDialect?: "preserve" | "omit";
 };
 

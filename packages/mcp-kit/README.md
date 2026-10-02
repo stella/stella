@@ -89,7 +89,9 @@ const surface = createToolSurface({
 });
 ```
 
-In outline discovery, `brief` is appended to the summary; `guide` remains full-only.
+`brief` is appended to the summary in both discovery formats; bounded discovery
+retains its size limits, while outline discovery preserves the complete brief.
+`guide` remains full-only.
 Parameters are a name-to-type map with required markers, and `exampleInput`, when
 present, is returned as bare `example` arguments. Outline discovery has no byte
 budget. Full descriptions omit `domain` in this format; `fullSchema: "described"`
@@ -105,8 +107,12 @@ Use `compactSchema(schema, { omitMaxSafeInteger: true, schemaDialect: "omit" })`
 to omit safe-integer maximum bounds and dialect declarations in advertised
 schemas. These transformations only visit schema positions; enum, const and
 extension data remain intact. Prepare `direct.inputSchema` and `describedSchema`
-with these options as needed. Hoisting still preserves reference scopes and
-existing definitions.
+only when the host separately enforces the omitted ceiling and the transport
+already fixes the dialect. A safe-integer maximum is a real validation constraint;
+JSON Schema integer alone does not imply it. Preserve bounds and dialects in
+validation schemas and full discovery. A `describedSchema` selected for full
+discovery must preserve canonical validation constraints; the kit does not prove
+equivalence. Hoisting still preserves reference scopes and existing definitions.
 
 Published artifacts contain the bundled module and declarations; source contract
 tests run in this repository.

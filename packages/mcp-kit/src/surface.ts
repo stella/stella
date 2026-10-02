@@ -155,9 +155,11 @@ const describeCompact = <Context>(tool: ToolDefinition<Context>) => {
   const parameters: ParameterOutline[] = [];
   let description = "";
   let summaryLength = 0;
+  const guidance =
+    tool.brief === undefined ? tool.summary : `${tool.summary}\n${tool.brief}`;
   const segments = new Intl.Segmenter(undefined, {
     granularity: "grapheme",
-  }).segment(tool.summary);
+  }).segment(guidance);
   for (const { segment } of segments) {
     const candidate = description + segment;
     if (summaryLength === 120 || jsonBytes(candidate) > 720) {
