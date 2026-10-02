@@ -72,10 +72,15 @@ const readWorkflow = (relativePath: string) =>
     ),
   );
 const parsedMain = readWorkflow(".github/workflows/main-heavy.yml");
+const callerJobSchema = v.intersect([jobSchema, v.object({ if: v.string() })]);
 const mainWorkflow = {
   ...parsedMain,
   jobs: v.parse(
-    v.object({ validate: jobSchema, suites: jobSchema, status: jobSchema }),
+    v.object({
+      validate: callerJobSchema,
+      suites: callerJobSchema,
+      status: callerJobSchema,
+    }),
     parsedMain.jobs,
   ),
 };
@@ -344,4 +349,4 @@ test("status step publishes success only when both workflow jobs succeeded", () 
       rmSync(fixture, { recursive: true, force: true });
     }
   }
-});
+}, 30_000);

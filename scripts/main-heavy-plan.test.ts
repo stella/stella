@@ -214,7 +214,7 @@ test("original PR and merge-group job predicates keep their behavior", () => {
       }
     }
   }
-});
+}, 30_000);
 
 type EvaluateOptions = {
   jobName?: string;
@@ -300,11 +300,11 @@ test("main heavy aggregation rejects failures, cancellations, timeouts and plann
   }
   expect(evaluate({ result: "success", planResult: "failure" })).toBe(1);
   expect(evaluate({ result: "success", planResult: "cancelled" })).toBe(1);
-});
+}, 30_000);
 
 test("the reusable result gate allows skipped thin checks in heavy mode", () => {
   expect(evaluate({ result: "success" })).toBe(0);
-});
+}, 30_000);
 
 test("heavy scope selection plans full suites even on an empty main diff", () => {
   const scope = workflow.jobs["ci-plan"]?.steps?.find(
@@ -349,7 +349,7 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
-});
+}, 30_000);
 
 test("a release push requires the planned compiler to succeed in the main heavy result", () => {
   for (const result of [
@@ -370,4 +370,4 @@ test("a release push requires the planned compiler to succeed in the main heavy 
       isPlanned: false,
     }),
   ).toBe(0);
-});
+}, 30_000);

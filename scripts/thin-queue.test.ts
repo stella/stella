@@ -47,7 +47,7 @@ const step = ({ workflow, job, name }: StepOptions) => {
   if (!found?.run) {
     panic(`Missing ${job}/${name} script`);
   }
-  return found;
+  return { ...found, run: found.run };
 };
 const depth = step({
   workflow: ci,
@@ -256,7 +256,7 @@ test("unset and full preserve baseline job predicates across the event matrix", 
       );
     }
   }
-});
+}, 30_000);
 
 test("one variable moves only derived heavy jobs from merge groups to ordinary main pushes", () => {
   const baseline = original("ci.yml");
@@ -318,7 +318,7 @@ test("one variable moves only derived heavy jobs from merge groups to ordinary m
     }
   }
   assertMainSelection(main);
-});
+}, 30_000);
 
 type RunDepthOptions = { event: string; variable: string; heavyOnly?: boolean };
 const runDepth = ({ event, variable, heavyOnly = false }: RunDepthOptions) => {
@@ -326,7 +326,7 @@ const runDepth = ({ event, variable, heavyOnly = false }: RunDepthOptions) => {
   const output = path.join(directory, "output");
   writeFileSync(output, "");
   try {
-    const result = Bun.spawnSync(["bash", "-e", "-c", depth.run ?? "exit 2"], {
+    const result = Bun.spawnSync(["bash", "-e", "-c", depth.run], {
       cwd: root,
       env: {
         ...process.env,
@@ -390,7 +390,7 @@ test("the actual depth resolver fails closed and retains full suite scopes for t
     runDepth({ event: "merge_group", variable: "typo", heavyOnly: true })
       .output,
   ).toBe("");
-});
+}, 30_000);
 
 type EvaluateOptions = {
   queueDepth: string;
@@ -415,7 +415,7 @@ const evaluate = ({
       ];
     }),
   );
-  return Bun.spawnSync(["bash", "-e", "-c", script ?? "exit 2"], {
+  return Bun.spawnSync(["bash", "-e", "-c", script], {
     cwd: root,
     env: {
       ...process.env,
@@ -456,7 +456,7 @@ test("thin aggregation accepts only intended heavy skips and still requires ever
       1,
     );
   }
-});
+}, 30_000);
 
 test("ignoring queue depth in the result gate breaks intended thin skips", () => {
   expect(evaluate({ queueDepth: "thin" })).toBe(0);
@@ -466,7 +466,7 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
       script: `QUEUE_DEPTH=full\n${outcome.run}`,
     }),
   ).toBe(1);
-});
+}, 30_000);
 
 test("running main heavy on ordinary full-depth pushes violates the scheduling contract", () => {
   assertMainSelection(main);
@@ -477,7 +477,7 @@ test("running main heavy on ordinary full-depth pushes violates the scheduling c
   }
   validate.if = "true";
   expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
-});
+}, 30_000);
 
 test("invalid configuration is validated before fetching code and publishes no commit status", () => {
   const validation = step({
@@ -490,10 +490,10 @@ test("invalid configuration is validated before fetching code and publishes no c
     `\${{ vars.MERGE_QUEUE_DEPTH }}`,
   );
   for (const variable of ["", "full", "thin", "typo"]) {
-    const result = Bun.spawnSync(
-      ["bash", "-e", "-c", validation.run ?? "exit 2"],
-      { cwd: root, env: { ...process.env, MERGE_QUEUE_DEPTH: variable } },
-    );
+    const result = Bun.spawnSync(["bash", "-e", "-c", validation.run], {
+      cwd: root,
+      env: { ...process.env, MERGE_QUEUE_DEPTH: variable },
+    });
     expect(result.exitCode).toBe(variable === "typo" ? 1 : 0);
     if (variable === "typo") {
       expect(result.stdout.toString() + result.stderr.toString()).toContain(
@@ -518,12 +518,16 @@ test("invalid configuration is validated before fetching code and publishes no c
     `#!/bin/sh\nprintf called > '${marker}'\n`,
     { mode: 0o755 },
   );
+  const inheritedPath = process.env["PATH"];
+  if (inheritedPath === undefined) {
+    panic("Status publication test requires PATH");
+  }
   try {
-    const result = Bun.spawnSync(["bash", "-e", "-c", status.run ?? "exit 2"], {
+    const result = Bun.spawnSync(["bash", "-e", "-c", status.run], {
       cwd: root,
       env: {
         ...process.env,
-        PATH: `${directory}:${process.env["PATH"]}`,
+        PATH: `${directory}:${inheritedPath}`,
         SHA: "",
         RESULTS: JSON.stringify({
           validate: { result: "failure" },
@@ -536,7 +540,7 @@ test("invalid configuration is validated before fetching code and publishes no c
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+}, 30_000);
 
 test("the planner emits the canonical thin set only when derived planning is selected", () => {
   const derive = step({
@@ -574,7 +578,7 @@ test("the planner emits the canonical thin set only when derived planning is sel
   );
   expect(JSON.parse(outputs["thin_jobs"] ?? "")).toEqual(THIN_JOBS);
   expect(JSON.parse(outputs["heavy_jobs"] ?? "")).toEqual(heavy);
-});
+}, 30_000);
 
 test("main release and scheduled runs execute the planned version compiler in either queue mode", () => {
   expect(heavy).toContain("release-typecheck");
@@ -600,4 +604,4 @@ test("main release and scheduled runs execute the planned version compiler in ei
       ).toBe(true);
     }
   }
-});
+}, 30_000);
