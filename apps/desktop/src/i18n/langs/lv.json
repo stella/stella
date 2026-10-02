@@ -52,6 +52,11 @@
     "takenOverTitle": "Rediģēšana pārvietota uz citu ierīci"
   },
   "dialog": {
+    "accountWindowTitle": "Savienot kontu",
+    "accountTitle": "Savienot šo kontu?",
+    "accountSubtitle": "Savienojiet stella desktop ar šo kontu un organizāciju.",
+    "accountEmail": "Konts",
+    "organizationName": "Organizācija",
     "allow": "Atļaut",
     "apiUrl": "API adrese",
     "cancel": "Atcelt",

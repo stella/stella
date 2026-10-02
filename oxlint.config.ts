@@ -138,6 +138,19 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
+    "drizzle/no-direct-entity-reparent",
+  ]),
+  ...[
+    "no-swallowed-item-error.fixture.ts",
+    "no-swallowed-item-error.fixture.legacy.ts",
+    "no-swallowed-item-error.fixture.stale.ts",
+  ].map((file) =>
+    fixtureRuleOverride(file, [
+      "no-swallowed-item-error/no-swallowed-item-error",
+    ]),
+  ),
+  fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
+    "no-swallowed-item-error/no-test-swallowed-error",
   ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
@@ -187,6 +200,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-ad-hoc-find-shortcut.fixture.ts", [
     "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut",
+  ]),
+  fixtureRuleOverride("no-hand-rolled-typed-character.fixture.ts", [
+    "no-hand-rolled-typed-character/no-hand-rolled-typed-character",
   ]),
   fixtureRuleOverride("no-ambient-hotkey-format.fixture.ts", [
     "no-ambient-hotkey-format/no-ambient-hotkey-format",
@@ -962,6 +978,7 @@ export default defineConfig({
     "no-raw-user-avatar-primitive/no-raw-user-avatar-primitive": "error",
     "no-shadowed-user-name-helpers/no-shadowed-user-name-helpers": "error",
     "no-hand-rolled-user-identity/no-hand-rolled-user-identity": "error",
+    "no-hand-rolled-reference-chip/no-hand-rolled-reference-chip": "error",
     "no-unpaired-playbook-verdict/no-unpaired-playbook-verdict": "error",
     "require-relative-time-helpers/require-relative-time-helpers": "error",
     "no-raw-date-input/no-raw-date-input": "error",
@@ -1173,6 +1190,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
+    "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -1193,6 +1211,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-user-avatar-primitive.ts",
     "./.oxlint-plugins/no-shadowed-user-name-helpers.ts",
     "./.oxlint-plugins/no-hand-rolled-user-identity.ts",
+    "./.oxlint-plugins/no-hand-rolled-reference-chip.ts",
     "./.oxlint-plugins/no-unpaired-playbook-verdict.ts",
     "./.oxlint-plugins/require-relative-time-helpers.ts",
     "./.oxlint-plugins/no-crypto-random-uuid.ts",
@@ -1226,6 +1245,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
+    "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -2723,6 +2743,16 @@ export default defineConfig({
       },
     },
     {
+      // Which character a keystroke typed is decided by `typedCharacter` in
+      // `@stll/ui/typed-character`; hand-rolled Alt checks drop text typed
+      // with Option on macOS layouts or AltGr on Windows.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-hand-rolled-typed-character/no-hand-rolled-typed-character":
+          "error",
+      },
+    },
+    {
       // Locale-aware number/date formatting. Folio is excluded: its
       // document surface stays LTR-based and formats with its own
       // resolved locales rather than the UI numbering preference.
@@ -3066,6 +3096,22 @@ export default defineConfig({
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
           "error",
       },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture*.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
+    },
+    {
+      files: [
+        "{apps,packages,scripts}/**/*.{test,spec}.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        "{apps,packages,scripts}/**/{tests,__tests__}/**/*.{ts,tsx,js,jsx,mts,cts,mjs,cjs}",
+        ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
+      ],
+      rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
     },
     {
       files: [
@@ -3746,6 +3792,10 @@ export default defineConfig({
         "security-guards/no-raw-filename-write": "error",
         "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      rules: { "drizzle/no-direct-entity-reparent": "error" },
     },
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],

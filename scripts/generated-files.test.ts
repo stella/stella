@@ -5,6 +5,7 @@ import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import { pathToFileURL } from "node:url";
+import * as v from "valibot";
 
 import {
   GENERATORS,
@@ -192,9 +193,9 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["ratchet-improvements", "module-ownership", "route-tree"]);
+  ).toEqual(["module-ownership", "route-tree"]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
-    ["ratchet-improvements"],
+    [],
   );
   for (const file of [
     "apps/api/src/lib/format.ts",
@@ -381,18 +382,9 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
 
 test("the plan alone never authorizes the ratchet baseline", () => {
   const selected = generatorsForFiles(["apps/web/src/example.ts"]);
-  expect(selected.some(({ id }) => id === "ratchet-improvements")).toBe(true);
   expect(allowedOutputs(selected)).not.toContain(
     "scripts/ratchet-baseline.json",
   );
-  expect(
-    allowedOutputs([
-      {
-        ...generator("ratchet-improvements"),
-        outputs: ["scripts/**", "scripts/ratchet-baseline.json"],
-      },
-    ]),
-  ).not.toContain("scripts/ratchet-baseline.json");
 });
 
 test("autofix refuses an empty selected-generator handoff", () => {
@@ -482,6 +474,7 @@ const generationInputs = (name: string) => {
 test("CI determinism selectors cover the cached generators' input contracts", () => {
   for (const [name, marker] of [
     ["generate:api-types", "# The web API types"],
+    ["generate:route-tree", "# The route-tree generator"],
   ] as const) {
     const selectors = casePatternsAfter(marker);
     for (const glob of generationInputs(name)) {
@@ -527,4 +520,76 @@ test("CI diff path guards stay pinned to manifest outputs", () => {
   expect(bundle).toContain(
     `git diff --exit-code -- "${generator("mcp-app-bundles").outputs[0]}"`,
   );
+});
+
+test("route tree has one derived owner and a cache producer for every consumer", () => {
+  const owner = generator("route-tree");
+  expect(owner.outputKind).toBe("derived");
+  const config = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.looseObject({
+          dependsOn: v.optional(v.array(v.string())),
+          outputs: v.optional(v.array(v.string())),
+        }),
+      ),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
+  );
+  const output = "apps/web/src/routeTree.gen.ts";
+  expect(
+    GENERATORS.filter(({ outputs }) =>
+      outputs.some((file) => file === output),
+    ).map(({ id }) => id),
+  ).toEqual([owner.id]);
+  const ignored = Bun.spawnSync(["git", "check-ignore", "--no-index", output]);
+  expect(ignored.exitCode).toBe(0);
+  const producer = config.tasks["@stll/web#generate:route-tree"];
+  expect(producer?.outputs).toEqual(["src/routeTree.gen.ts"]);
+  expect(
+    generationInputs("generate:route-tree")
+      .map((input) =>
+        input.startsWith("$TURBO_ROOT$/")
+          ? input.replace("$TURBO_ROOT$/", "")
+          : `apps/web/${input}`,
+      )
+      .toSorted(),
+  ).toEqual([...owner.inputs].toSorted());
+  for (const name of [
+    "typecheck",
+    "lint",
+    "lint:fix",
+    "test",
+    "test:property",
+    "build",
+    "dev",
+  ]) {
+    expect(config.tasks[`@stll/web#${name}`]?.dependsOn, name).toContain(
+      "generate:route-tree",
+    );
+  }
+});
+
+test("the fresh-export proof runs nightly and alone on dispatch", () => {
+  const workflow = v.parse(
+    v.object({ jobs: v.record(v.string(), v.looseObject({ if: v.string() })) }),
+    Bun.YAML.parse(
+      readFileSync(
+        new URL("../.github/workflows/nightly-typecheck.yml", import.meta.url),
+        "utf-8",
+      ),
+    ),
+  );
+  expect(workflow.jobs["fresh-web-sources"]?.if).toBe(
+    `\${{ github.event_name == 'schedule' || inputs.fresh-web }}`,
+  );
+  for (const [name, job] of Object.entries(workflow.jobs)) {
+    if (name === "fresh-web-sources") {
+      continue;
+    }
+    expect(job.if, name).toBe(`\${{ !inputs.fresh-web }}`);
+  }
 });

@@ -10,6 +10,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   ActionAdmissionError,
   withActionAdmission,
@@ -27,7 +28,7 @@ const context = (signal?: AbortSignal) => ({
   route: "/action",
   user: { id: toSafeId<"user">("user_a") },
   session: { activeOrganizationId: toSafeId<"organization">("org_a") },
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   managedAIResidency: "eu" as const,
@@ -461,7 +462,10 @@ describe("finite HTTP action admission", () => {
       );
       expect(
         await endpoint.handler(
-          asTestRaw({ ...context(), memberRole: { role: "external" } }),
+          asTestRaw({
+            ...context(),
+            memberRole: sessionMemberRole("external"),
+          }),
         ),
       ).toMatchObject({ code: 403 });
       expect(deps.counts()).toEqual({ acquisitions: 0, releases: 0 });
@@ -491,4 +495,36 @@ describe("finite HTTP action admission", () => {
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
     });
   });
+
+  // A disconnect usually aborts with the platform's default reason, or none
+  // that survives signal composition; only the HandlerError case above was
+  // ever mapped to a client error.
+  test.each([
+    ["the default abort reason", undefined],
+    ["a plain error", new Error("socket closed")],
+    ["a non-error reason", "client went away"],
+  ])(
+    "a client disconnected with %s does no work and releases its admitted slot",
+    async (_label, reason) => {
+      await withFeature(true, async () => {
+        const deps = dependencies();
+        const controller = new AbortController();
+        controller.abort(reason);
+        let calls = 0;
+        const endpoint = createSafeRootHandler(
+          config,
+          async function* () {
+            calls += 1;
+            return Result.ok({ ok: true });
+          },
+          deps,
+        );
+        expect(
+          await endpoint.handler(asTestRaw(context(controller.signal))),
+        ).toMatchObject({ code: 400 });
+        expect(calls).toBe(0);
+        expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
+      });
+    },
+  );
 });

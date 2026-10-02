@@ -115,6 +115,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/organization/**/*.{ts,tsx}",
   "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
+  "apps/web/src/components/references/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
   "apps/web/src/features/desktop/**/*.{ts,tsx}",
@@ -193,6 +194,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
+  // reservation callbacks whose rejection rolls back the kickoff transaction.
+  "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   // Web worker entry modules. The browser, not our code, invokes the message

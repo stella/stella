@@ -771,7 +771,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
   // anonymization boundary cannot redact, so anonymized chat never sees them.
   const counterpartyCheckTools =
     thirdPartyBoundary.type === "raw"
-      ? createCounterpartyCheckTools({ organizationId })
+      ? createCounterpartyCheckTools({ scopedDb, organizationId })
       : {};
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();

@@ -52,6 +52,8 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { SESSION_CREDENTIAL } from "@/api/lib/permission-authorization";
+import type { CredentialAuthority } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -222,12 +224,15 @@ const readSplitSuccessors = async (id: SafeId<"timeEntry">) =>
 type ActorContextOptions = {
   recordAuditEvent?: AuditRecorder;
   workspaceIds?: SafeId<"workspace">[];
+  /** The credential behind the call; a person's session when omitted. */
+  credential?: CredentialAuthority | undefined;
 };
 const contextFor = (
   name: ActorName,
   {
     recordAuditEvent = noopAuditRecorder,
     workspaceIds = [workspaceId],
+    credential = SESSION_CREDENTIAL,
   }: ActorContextOptions = {},
 ) => {
   const actor = actors[name];
@@ -240,7 +245,7 @@ const contextFor = (
       workspaceIds.includes(targetWorkspaceId)
         ? { id: targetWorkspaceId, status: "active" as const }
         : null,
-    memberRole: { role: actor.role },
+    memberRole: { role: actor.role, credential },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
@@ -277,7 +282,11 @@ const statusOf = (result: unknown): number | null =>
 
 type EntryOperation = {
   name: string;
-  run: (actor: ActorName, id: SafeId<"timeEntry">) => Promise<unknown>;
+  run: (
+    actor: ActorName,
+    id: SafeId<"timeEntry">,
+    credential?: CredentialAuthority,
+  ) => Promise<unknown>;
   /** Refusal status when the caller may not touch the entry. */
   refusedStatus: number;
   /** Whether a plain member may run it on their own entry. */
@@ -289,10 +298,10 @@ type EntryOperation = {
 const entryOperations: EntryOperation[] = [
   {
     name: "update",
-    run: async (actor, id) =>
+    run: async (actor, id, credential) =>
       await updateTimeEntryById.handler(
         asTestRaw<UpdateCtx>({
-          ...contextFor(actor),
+          ...contextFor(actor, { credential }),
           body: { id, narrative: "Rewritten", durationMinutes: 90 },
         }),
       ),
@@ -307,9 +316,12 @@ const entryOperations: EntryOperation[] = [
   },
   {
     name: "delete",
-    run: async (actor, id) =>
+    run: async (actor, id, credential) =>
       await deleteTimeEntryById.handler(
-        asTestRaw<DeleteCtx>({ ...contextFor(actor), body: { id } }),
+        asTestRaw<DeleteCtx>({
+          ...contextFor(actor, { credential }),
+          body: { id },
+        }),
       ),
     refusedStatus: 404,
     memberMayRunOnOwn: true,
@@ -319,10 +331,10 @@ const entryOperations: EntryOperation[] = [
   },
   {
     name: "batch update",
-    run: async (actor, id) =>
+    run: async (actor, id, credential) =>
       await batchUpdate.handler(
         asTestRaw<BatchUpdateCtx>({
-          ...contextFor(actor),
+          ...contextFor(actor, { credential }),
           body: { ids: [id], action: "mark_non_billable" },
         }),
       ),
@@ -334,10 +346,10 @@ const entryOperations: EntryOperation[] = [
   },
   {
     name: "batch delete",
-    run: async (actor, id) =>
+    run: async (actor, id, credential) =>
       await batchDelete.handler(
         asTestRaw<BatchDeleteCtx>({
-          ...contextFor(actor),
+          ...contextFor(actor, { credential }),
           body: { ids: [id] },
         }),
       ),
@@ -349,10 +361,10 @@ const entryOperations: EntryOperation[] = [
   },
   {
     name: "split",
-    run: async (actor, id) =>
+    run: async (actor, id, credential) =>
       await splitEntry.handler(
         asTestRaw<SplitCtx>({
-          ...contextFor(actor),
+          ...contextFor(actor, { credential }),
           body: {
             id,
             splits: [
@@ -393,6 +405,33 @@ describe("time entry changes between members of one organization", () => {
           await operation.expectApplied(id);
         });
       }
+
+      test("an owner's key without the approve grant cannot change a member's entry", async () => {
+        const id = await seedEntry({ owner: "timekeeper" });
+        const before = await readEntry(id);
+
+        const result = await operation.run("owner", id, {
+          type: "attenuated",
+          permissions: { timeEntry: ["read", "create", "update", "delete"] },
+        });
+
+        expect(statusOf(result)).toBe(operation.refusedStatus);
+        expect(await readEntry(id)).toEqual(before);
+      });
+
+      test("an owner's key carrying the approve grant can", async () => {
+        const id = await seedEntry({ owner: "timekeeper" });
+
+        const result = await operation.run("owner", id, {
+          type: "attenuated",
+          permissions: {
+            timeEntry: ["read", "create", "update", "delete", "approve"],
+          },
+        });
+
+        expect(statusOf(result)).toBeNull();
+        await operation.expectApplied(id);
+      });
 
       if (operation.memberMayRunOnOwn) {
         test("a member can change their own entry", async () => {

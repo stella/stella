@@ -72,6 +72,7 @@ export * from "./lib/control-size";
 export * from "./lib/initials";
 export * from "./lib/option-color";
 export * from "./lib/overlay-layer";
+export * from "./lib/typed-character";
 export * from "./lib/utils";
 export * from "./lib/week";
 export * from "./review/review-author-avatar";

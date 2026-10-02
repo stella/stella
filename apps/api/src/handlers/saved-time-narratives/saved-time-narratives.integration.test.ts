@@ -7,6 +7,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { brandPersistedSavedTimeNarrativeId } from "@/api/lib/safe-id-boundaries";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -57,7 +58,7 @@ const context = (
   scopedDb: createScopedDb(testDb, [], organizationId, userId),
   session: { activeOrganizationId: organizationId },
   user: { id: userId },
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   recordAuditEvent: async (_tx: unknown, event: AuditEvent | AuditEvent[]) => {
     auditEvents.push(...(Array.isArray(event) ? event : [event]));
   },

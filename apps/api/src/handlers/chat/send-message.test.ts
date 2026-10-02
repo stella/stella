@@ -32,6 +32,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
@@ -285,7 +286,7 @@ const createContext = ({
     ],
     getActiveWorkspaceIds: async () => [activeWorkspaceId],
     getWorkspaceAccess: async () => null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
@@ -1238,168 +1239,223 @@ describe("send message disconnect handling", () => {
     );
   });
 
-  test("a refused bound phase persists its outcome before any provider work", async () => {
-    const refusal = actionAdmissionRefusal(
-      new ActionAdmissionError({
-        reason: "period_exhausted",
-        message: "Admission refused",
-      }),
-    );
-    const turnUpdates: unknown[] = [];
-    const selectWithThreadLock = () => ({
-      from: () => ({
-        innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
-        where: () => ({
-          for: async () => [{ id: threadId }],
-          limit: async () => [],
-          orderBy: emptyOrderedRows,
-        }),
-      }),
-    });
-    const insert = (table: unknown) => ({
-      values: () =>
-        table === chatTurns
-          ? {
-              onConflictDoNothing: () => ({
-                returning: async () => [
-                  { id: turnId, cancelRequestedAt: null },
-                ],
-              }),
-            }
-          : undefined,
-    });
-    const update = (table: unknown) => ({
-      set: (values: unknown) => {
-        if (table === chatTurns) {
-          turnUpdates.push(values);
-          return {
+  const refusalReasons = {
+    busy: "busy",
+    period_exhausted: "period_exhausted",
+    not_enabled: "not_enabled",
+    unavailable: "unavailable",
+  } as const satisfies { [Reason in ActionAdmissionError["reason"]]: Reason };
+  for (const reason of Object.values(refusalReasons)) {
+    for (const phase of ["period", "context", "dispatch"] as const) {
+      test(`${reason} ${phase} phase persists its canonical outcome before any provider work`, async () => {
+        const refusal = actionAdmissionRefusal(
+          new ActionAdmissionError({
+            reason,
+            message: "Admission refused",
+          }),
+        );
+        const admission = new AbortController();
+        const loseAdmission = () =>
+          admission.abort(
+            new ActionAdmissionError({ reason, message: "Admission refused" }),
+          );
+        const turnUpdates: unknown[] = [];
+        const selectWithThreadLock = () => ({
+          from: () => ({
+            innerJoin: () => ({ where: () => ({ limit: async () => [] }) }),
             where: () => ({
-              returning: async () => [{ id: turnId, cancelRequestedAt: null }],
+              for: async () => [{ id: threadId }],
+              limit: async () => [],
+              orderBy: emptyOrderedRows,
             }),
-          };
-        }
-        return { where: async () => undefined };
-      },
-    });
-    const lookup = mock(async (statement: SQL) => {
-      expect(new PgDialect().sqlToQuery(statement).sql).toContain(
-        "chat_turn_run_id_taken",
-      );
-      return { rows: [{ taken: false }] };
-    });
-    compactMessagesForContextMock.mockClear();
-    loadExternalMcpToolsForUserMock.mockClear();
-
-    let acquisitions = 0;
-    let releases = 0;
-    const insertedMessages: unknown[] = [];
-    const refusedSend = createSendMessage({
-      compactMessagesForContext: compactMessagesForContextMock,
-      createRefRegistry: createChatRefRegistry,
-      indexThread: upsertChatThreadSearchDocumentMock,
-      loadExternalMcpTools: loadExternalMcpToolsForUserMock,
-      loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
-      rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
-      streamResponse: streamChat,
-      uploadMessageFiles: uploadMessageFilesWithRollbackMock,
-      startAdmission: async (options) => {
-        expect(options.mode).toBe("concurrency-only");
-        acquisitions += 1;
-        return Result.ok({
-          signal: new AbortController().signal,
-          release: async () => {
-            releases += 1;
-          },
-          reservePeriod: async (identity: AdmittedActionIdentity) => {
-            expect(turnUpdates).toContainEqual({ runId: "run-test" });
-            expect(identity).toEqual({
-              actionKind: "chat.send",
-              logicalPhaseId: JSON.stringify([turnId, "run-test"]),
-            });
-            return Result.err(
-              new HandlerError({
-                ...refusal,
-              }),
-            );
+          }),
+        });
+        const insert = (table: unknown) => ({
+          values: () =>
+            table === chatTurns
+              ? {
+                  onConflictDoNothing: () => ({
+                    returning: async () => [
+                      { id: turnId, cancelRequestedAt: null },
+                    ],
+                  }),
+                }
+              : undefined,
+        });
+        const update = (table: unknown) => ({
+          set: (values: unknown) => {
+            if (table === chatTurns) {
+              turnUpdates.push(values);
+              if (
+                phase === "dispatch" &&
+                typeof values === "object" &&
+                values !== null &&
+                "leaseExpiresAt" in values &&
+                "runId" in values
+              ) {
+                loseAdmission();
+              }
+              return {
+                where: () => ({
+                  returning: async () => [
+                    { id: turnId, cancelRequestedAt: null },
+                  ],
+                }),
+              };
+            }
+            return { where: async () => undefined };
           },
         });
-      },
-    });
-    const result = await refusedSend.handler(
-      createContext({
-        contextMatterIds: [],
-        transaction: {
-          execute: lookup,
-          insert: withRunLogInsert((table) => {
-            const original = insert(table);
-            return {
-              values: (values: unknown) => {
-                if (table === chatMessages) {
-                  insertedMessages.push(values);
-                }
-                return original.values();
-              },
-            };
-          }),
-          query: {
-            chatMessages: { findFirst: async () => null },
-            chatThreadCompactions: { findFirst: async () => null },
-            chatThreads: {
-              findFirst: async () => ({
-                chatModel: null,
-                contextMatterIds: [],
-                dataWorkspaceIds: [],
-                id: threadId,
-                messages: [],
-                rollbackToken: null,
-                title: "Existing thread",
-                webSearchEnabled: false,
-                workspaceId: null,
-              }),
-            },
-            chatTurns: {
-              findFirst: async ({
-                where,
-              }: {
-                where?: { status?: { eq?: string } };
-              }) =>
-                where?.status?.eq === "running" ? undefined : { id: turnId },
-            },
-            organizationSettings: { findFirst: async () => null },
-          },
-          select: withThreadNameReads(selectWithThreadLock),
-          update: withRunLogUpdate(update),
-        },
-      }),
-    );
+        const lookup = mock(async (statement: SQL) => {
+          expect(new PgDialect().sqlToQuery(statement).sql).toContain(
+            "chat_turn_run_id_taken",
+          );
+          return { rows: [{ taken: false }] };
+        });
+        compactMessagesForContextMock.mockClear();
+        loadExternalMcpToolsForUserMock.mockClear();
 
-    expect(result).toEqual({
-      code: refusal.status,
-      response: {
-        message: refusal.message,
-        code: refusal.code,
-        retryable: refusal.retryable,
-        hint: refusal.hint,
-        ...(refusal.contactUrl === undefined
-          ? {}
-          : { contactUrl: refusal.contactUrl }),
-      },
-    });
-    expect(acquisitions).toBe(1);
-    expect(releases).toBe(1);
-    expect(insertedMessages).toHaveLength(2);
-    expect(JSON.stringify(insertedMessages)).toContain("quota_exhausted");
-    expect(lookup).toHaveBeenCalledTimes(1);
-    expect(compactMessagesForContextMock).not.toHaveBeenCalled();
-    expect(loadExternalMcpToolsForUserMock).not.toHaveBeenCalled();
-    expect(turnUpdates).toContainEqual(
-      expect.objectContaining({
-        failureCode: "boundary-refusal",
-        failureRetryable: false,
-        status: "failed",
-      }),
-    );
-  });
+        let acquisitions = 0;
+        let releases = 0;
+        const insertedMessages: unknown[] = [];
+        const loadTools = mock(async () => {
+          if (phase === "context") {
+            loseAdmission();
+          }
+          const close = async () => undefined;
+          return {
+            close,
+            connectors: [],
+            source: externalMcpToolsModule.createStellaMcpToolSource({
+              closeClients: close,
+              sourceTools: {},
+            }),
+            tools: {},
+          };
+        });
+        const refusedSend = createSendMessage({
+          compactMessagesForContext: compactMessagesForContextMock,
+          createRefRegistry: createChatRefRegistry,
+          indexThread: upsertChatThreadSearchDocumentMock,
+          loadExternalMcpTools: loadTools,
+          loadWebSearchProviders: loadWebSearchProvidersForOrgMock,
+          rollbackSideEffects: rollbackUnpersistedChatSideEffectsMock,
+          streamResponse: streamChat,
+          uploadMessageFiles: uploadMessageFilesWithRollbackMock,
+          startAdmission: async (options) => {
+            expect(options.mode).toBe("concurrency-only");
+            acquisitions += 1;
+            return Result.ok({
+              signal: admission.signal,
+              release: async () => {
+                releases += 1;
+              },
+              reservePeriod: async (identity: AdmittedActionIdentity) => {
+                expect(turnUpdates).toContainEqual({ runId: "run-test" });
+                expect(identity).toEqual({
+                  actionKind: "chat.send",
+                  logicalPhaseId: JSON.stringify([turnId, "run-test"]),
+                });
+                if (phase !== "period") {
+                  return Result.ok(undefined);
+                }
+                return Result.err(
+                  new HandlerError({
+                    ...refusal,
+                  }),
+                );
+              },
+            });
+          },
+        });
+        const result = await refusedSend.handler(
+          createContext({
+            contextMatterIds: [],
+            transaction: {
+              execute: lookup,
+              insert: withRunLogInsert((table) => {
+                const original = insert(table);
+                return {
+                  values: (values: unknown) => {
+                    if (table === chatMessages) {
+                      insertedMessages.push(values);
+                    }
+                    return original.values();
+                  },
+                };
+              }),
+              query: {
+                chatMessages: { findFirst: async () => null },
+                chatThreadCompactions: { findFirst: async () => null },
+                chatThreads: {
+                  findFirst: async () => ({
+                    chatModel: null,
+                    contextMatterIds: [],
+                    dataWorkspaceIds: [],
+                    id: threadId,
+                    messages: [],
+                    rollbackToken: null,
+                    title: "Existing thread",
+                    webSearchEnabled: false,
+                    workspaceId: null,
+                  }),
+                },
+                chatTurns: {
+                  findFirst: async ({
+                    where,
+                  }: {
+                    where?: { status?: { eq?: string } };
+                  }) =>
+                    where?.status?.eq === "running"
+                      ? undefined
+                      : { id: turnId },
+                },
+                organizationSettings: { findFirst: async () => null },
+              },
+              select: withThreadNameReads(selectWithThreadLock),
+              update: withRunLogUpdate(update),
+            },
+          }),
+        );
+
+        expect(result).toEqual({
+          code: refusal.status,
+          response: {
+            message: refusal.message,
+            code: refusal.code,
+            retryable: refusal.retryable,
+            hint: refusal.hint,
+            ...(refusal.contactUrl === undefined
+              ? {}
+              : { contactUrl: refusal.contactUrl }),
+          },
+        });
+        expect(acquisitions).toBe(1);
+        expect(releases).toBe(1);
+        expect(insertedMessages).toHaveLength(2);
+        const stored = structuredClone(insertedMessages).flat();
+        expect(stored).toContainEqual(
+          expect.objectContaining({
+            role: "assistant",
+            content: expect.objectContaining({
+              metadata: expect.objectContaining({
+                turnOutcome: { type: "failed", error: "unknown", refusal },
+              }),
+            }),
+          }),
+        );
+        expect(lookup).toHaveBeenCalledTimes(1);
+        expect(loadTools).toHaveBeenCalledTimes(phase === "period" ? 0 : 1);
+        expect(turnUpdates).toContainEqual(
+          expect.objectContaining({
+            failureCode: "boundary-refusal",
+            failureRetryable: false,
+            status: "failed",
+          }),
+        );
+      });
+    }
+  }
 
   test("stops before connector discovery when the client disconnects during persistence", async () => {
     const abortController = new AbortController();
@@ -1687,9 +1743,12 @@ describe("assistant turn settlement", () => {
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
-      return new Response("", {
-        headers: { "content-type": "text/event-stream" },
-      });
+      return {
+        type: "streaming",
+        response: new Response("", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      } as const;
     });
     const send = createSendMessage({
       compactMessagesForContext: compactMessagesForContextMock,

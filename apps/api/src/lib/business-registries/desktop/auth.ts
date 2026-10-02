@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import { rlsDb } from "@/api/db/root";
@@ -9,6 +10,7 @@ import { createMembershipScopedDb } from "@/api/db/scoped";
 import { getAuth, resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
+  DESKTOP_ACCOUNT_PERMISSION,
   DESKTOP_REGISTRY_KEY_CONFIG,
   DESKTOP_REGISTRY_KEY_PREFIX,
   DESKTOP_REGISTRY_PERMISSION,
@@ -16,13 +18,16 @@ import {
 } from "@/api/lib/business-registries/desktop/config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 const rejected = () =>
   new HandlerError({
     status: 401,
-    message: "Reconnect the desktop registry search to your account",
+    message: "Reconnect desktop to your account",
   });
 
 // Authentication owns the RLS bootstrap; registry handlers receive only the
@@ -34,8 +39,9 @@ type DesktopRegistryAuthorization = {
   scopedDb: ScopedDb;
 };
 
-export const authorizeDesktopRegistry = async (
+const authorizeDesktopCredential = async (
   request: Request,
+  permission: PermissionInput,
 ): Promise<Result<DesktopRegistryAuthorization, HandlerError<401 | 503>>> => {
   const authorization = request.headers.get("authorization");
   if (
@@ -92,10 +98,8 @@ export const authorizeDesktopRegistry = async (
   if (
     !member.value ||
     !isMemberRole(member.value.role) ||
-    !hasMemberPermission(
-      { role: member.value.role },
-      DESKTOP_REGISTRY_PERMISSION,
-    )
+    // The desktop account acts with the person's own live role.
+    !hasMemberPermission(sessionMemberRole(member.value.role), permission)
   ) {
     return Result.err(rejected());
   }
@@ -108,3 +112,9 @@ export const authorizeDesktopRegistry = async (
     }),
   });
 };
+
+export const authorizeDesktopAccount = async (request: Request) =>
+  await authorizeDesktopCredential(request, DESKTOP_ACCOUNT_PERMISSION);
+
+export const authorizeDesktopRegistry = async (request: Request) =>
+  await authorizeDesktopCredential(request, DESKTOP_REGISTRY_PERMISSION);
