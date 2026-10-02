@@ -1655,3 +1655,158 @@ test(
   },
   TIMEOUT,
 );
+
+test(
+  "backfill retries without advancing its cursor when a contact changes after preparation",
+  async () => {
+    const { organizationId, scoped } = await isolatedMonitoringOrganization(
+      "drain-backfill-edit",
+    );
+    const previousSource =
+      (
+        await db
+          .select()
+          .from(sanctionsSources)
+          .where(eq(sanctionsSources.id, "eu"))
+      ).at(0) ?? panic("Backfill EU source missing");
+    try {
+      const editionId = await emptyEdition();
+      const contact =
+        (
+          await scoped(
+            async (tx) =>
+              await tx
+                .insert(contacts)
+                .values({
+                  organizationId,
+                  type: "person",
+                  displayName: "Original Backfill Identity",
+                })
+                .returning(),
+          )
+        ).at(0) ?? panic("Backfill edit contact missing");
+      await scoped(
+        async (tx) =>
+          await tx
+            .insert(sanctionsMonitoringBackfills)
+            .values({ organizationId, sourceId: "eu", editionId }),
+      );
+      const now = futureNow();
+      // Warm the full source set so preparation only reads freshness before the commit transaction.
+      const warm = await prepareMonitoringContacts({
+        db: scoped,
+        contactRows: [contact],
+        now,
+      });
+      expect(
+        warm
+          .at(0)
+          ?.lists.map(({ source }) => source)
+          .toSorted(),
+      ).toEqual(sanctionsSourceIds().toSorted());
+      let calls = 0;
+      let edited = false;
+      const editBeforeCommit: ScopedDb = async (run) => {
+        calls += 1;
+        if (calls === 3) {
+          expect(
+            await scoped(
+              async (tx) => await tx.select().from(sanctionsContactScreenings),
+            ),
+          ).toEqual([]);
+          await scoped(
+            async (tx) =>
+              await tx
+                .update(contacts)
+                .set({ displayName: "Edited Backfill Identity" })
+                .where(eq(contacts.id, contact.id)),
+          );
+          edited = true;
+        }
+        return await scoped(run);
+      };
+      expect(
+        await advanceSanctionsMonitoringBackfill({
+          db: editBeforeCommit,
+          organizationId,
+          sourceId: "eu",
+          now,
+          signal: new AbortController().signal,
+        }),
+      ).toBe("retry");
+      expect(edited).toBe(true);
+      expect(calls).toBe(3);
+      const jobs = await scoped(
+        async (tx) => await tx.select().from(sanctionsMonitoringBackfills),
+      );
+      expect(jobs).toHaveLength(1);
+      expect(jobs.at(0)).toMatchObject({
+        cursorContactId: null,
+        state: "pending",
+        editionId,
+        scheduledAt: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS),
+      });
+      expect(
+        await scoped(
+          async (tx) => await tx.select().from(sanctionsContactScreenings),
+        ),
+      ).toEqual([]);
+      expect(
+        await advanceSanctionsMonitoringBackfill({
+          db: scoped,
+          organizationId,
+          sourceId: "eu",
+          now: new Date(now.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
+          signal: new AbortController().signal,
+        }),
+      ).toBe("advanced");
+      const completed =
+        (
+          await scoped(
+            async (tx) => await tx.select().from(sanctionsMonitoringBackfills),
+          )
+        ).at(0) ?? panic("Completed backfill job missing");
+      expect(completed).toMatchObject({
+        cursorContactId: contact.id,
+        state: "complete",
+        editionId,
+      });
+      const updated =
+        (await scoped(async (tx) => await tx.select().from(contacts))).at(0) ??
+        panic("Updated backfill contact missing");
+      const coverage = await scoped(
+        async (tx) => await tx.select().from(sanctionsContactScreenings),
+      );
+      expect(coverage).toHaveLength(1);
+      expect(coverage.at(0)).toMatchObject({
+        contactId: contact.id,
+        sourceId: "eu",
+        status: "clear",
+        contactFingerprint: monitoringFingerprint(updated),
+      });
+      expect(
+        await advanceSanctionsMonitoringBackfill({
+          db: scoped,
+          organizationId,
+          sourceId: "eu",
+          now: futureNow(),
+          signal: new AbortController().signal,
+        }),
+      ).toBe("idle");
+      expect(
+        await scoped(
+          async (tx) => await tx.select().from(sanctionsMonitoringBackfills),
+        ),
+      ).toEqual([completed]);
+    } finally {
+      await db
+        .update(sanctionsSources)
+        .set({
+          activeEditionId: previousSource.activeEditionId,
+          lastSuccessfulVerifiedAt: previousSource.lastSuccessfulVerifiedAt,
+        })
+        .where(eq(sanctionsSources.id, "eu"));
+    }
+  },
+  TIMEOUT,
+);
