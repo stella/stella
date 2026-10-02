@@ -1,0 +1,8 @@
+{
+  "capture": "recorded",
+  "sourceUrl": "https://opendata.eselpoint.gov.cz/sparql",
+  "query": "SELECT ?citace ?url WHERE {\n GRAPH <esel-esb:eli/czPravniAktZneni> {\n  <https://opendata.eselpoint.gov.cz/esel-esb/eli/cz/sb/2016/358/2026-02-01> <https://slovník.gov.cz/datový/sbírka/pojem/má-fragment-znění> ?zf .\n }\n GRAPH <esel-esb:eli/czPravniAktZneniFragment> {\n  ?zf <https://slovník.gov.cz/datový/sbírka/pojem/citace-označení-fragmentu-znění-právního-aktu> ?citace ;\n      <https://slovník.gov.cz/datový/sbírka/pojem/url-fragmentu-znění> ?url .\n  FILTER(STRSTARTS(STR(?url), \"/sb/2016/358/2026-02-01#par_1\"))\n }\n} ORDER BY ?url",
+  "capturedAt": "2026-10-02T10:22:01.956551+00:00",
+  "sha256": "12d826be60feb5ffda881f1fb3ff802b9b37071a8f34353049bc09d667cfb874",
+  "encoding": "gzip"
+}

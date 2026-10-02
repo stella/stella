@@ -27,6 +27,18 @@
       "types": "./src/index.ts",
       "import": "./src/index.ts"
     },
+    "./amendment-instruction": {
+      "types": "./src/amendment-instruction.ts",
+      "import": "./src/amendment-instruction.ts"
+    },
+    "./explanatory-report-heading": {
+      "types": "./src/explanatory-report-heading.ts",
+      "import": "./src/explanatory-report-heading.ts"
+    },
+    "./explanatory-report-resolver": {
+      "types": "./src/explanatory-report-resolver.ts",
+      "import": "./src/explanatory-report-resolver.ts"
+    },
     "./corpus": {
       "types": "./src/corpus.ts",
       "import": "./src/corpus.ts"
