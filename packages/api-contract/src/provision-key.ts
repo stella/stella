@@ -13,6 +13,10 @@ export type ProvisionKey = {
   anchor: string;
 };
 
+/**
+ * Construct values only with legal-atlas provisionRefOf: it derives the
+ * identifier, ELI and anchor from the work and reference together.
+ */
 export type ProvisionRef = ProvisionKey & {
   workEli: string | null;
   reference: ProvisionReference;

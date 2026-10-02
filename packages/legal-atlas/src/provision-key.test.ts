@@ -19,6 +19,7 @@ import {
   PROVISION_CITATION_GRAMMARS,
   provisionRefOf,
 } from "./provision-citation-grammars";
+import { formatWorkIdentifier } from "./provision-citation-profile";
 
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
 const reference = fc.record({
@@ -73,6 +74,7 @@ describe("provision identity construction", () => {
           }
           const { provision } = constructed;
           expect(provision.reference).toEqual(ref);
+          expect(provision.anchor).toBe(grammar.anchor(provision.reference));
           expect(provision.anchor).toBe(parsed.at(0)?.anchor);
           expect(provision.workEli).toBe(work.eli);
           expect(parseProvisionKey(formatProvisionKey(provision))).toEqual({
@@ -207,6 +209,31 @@ describe("provision identity construction", () => {
         }),
       ).toEqual({ status: "unsupported" });
     }
+  });
+
+  test("generated gazette identifiers equal the canonical work formatter", () => {
+    assertProperty(
+      "generated gazette identifiers equal the canonical work formatter",
+      fc.property(
+        fc.integer({ min: 1, max: 99_999 }),
+        fc.integer({ min: 1918, max: 2100 }),
+        (number, year) => {
+          const identifier = formatWorkIdentifier({
+            number,
+            year,
+            collection: CZ_STATUTE_COLLECTION.canonical,
+          });
+          expect(grammar.gazette.parse(identifier)?.identifier).toBe(
+            identifier,
+          );
+          expect(
+            grammar.gazette.parse(
+              `${String(number).padStart(5, "0")}/${year} Sb.`,
+            )?.identifier,
+          ).toBe(identifier);
+        },
+      ),
+    );
   });
 
   test("the profile and grammar share the statute collection declaration", () => {

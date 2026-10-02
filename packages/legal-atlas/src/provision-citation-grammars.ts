@@ -24,6 +24,7 @@ import type {
 } from "@stll/legal-ast/provision-reference";
 
 import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
+import { formatWorkIdentifier } from "./provision-citation-profile";
 
 export type StatuteAbbreviationEntry = {
   canonicalAbbreviation: string;
@@ -507,7 +508,11 @@ export const PROVISION_CITATION_GRAMMARS = {
       eli: ({ number, year }) =>
         `https://www.e-sbirka.cz/eli/cz/sb/${year}/${String(Number(number))}`,
       identifier: ({ number, year }) =>
-        `${String(Number(number))}/${year} ${CZ_STATUTE_COLLECTION.canonical}`,
+        formatWorkIdentifier({
+          number: Number(number),
+          year: Number(year),
+          collection: CZ_STATUTE_COLLECTION.canonical,
+        }),
       // Reporters (`Sb. NSS`, `Sb. rozh.`) and the treaty collection
       // (`Sb. m. s.`) share the gazette's suffix and are not statutes.
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|NSS|rozh\.))`,
