@@ -4,7 +4,6 @@ import { eq, type SQLWrapper } from "drizzle-orm";
 import { setTimeout as sleep } from "node:timers/promises";
 
 import {
-  defaultConfig,
   isHeldTooLong,
   nextBatch,
   type BatchState,
@@ -27,6 +26,7 @@ import type {
 import {
   BACKGROUND_REPLAY_LIMITS,
   REPLAY_ENROLMENT,
+  REPLAY_HEALTH_CONFIG,
   replayKillRequested,
   type ReplayEnrolment,
 } from "@/api/handlers/case-law/ingestion/replay-enrolment";
@@ -289,14 +289,16 @@ export const createReplayPreflightGate = ({
         state,
         verdict,
         lastDurationMs: null,
-        config: defaultConfig,
+        config: REPLAY_HEALTH_CONFIG,
         clock,
       });
       state = plan.state;
       if (plan.action === "hold" || recovering) {
         await saveState(state);
       }
-      return verdict;
+      return plan.action === "hold"
+        ? { kind: "unknown", signals: [] }
+        : verdict;
     },
   };
 };
@@ -435,7 +437,7 @@ const runReplayOnSlotSession = async ({
     db: rootDb,
     tableName: "case_law_decisions",
     clock: now,
-    config: { ...defaultConfig, ...fixture.healthConfig },
+    config: { ...REPLAY_HEALTH_CONFIG, ...fixture.healthConfig },
   });
   let lastVerdict: Verdict = { kind: "unknown", signals: [] };
   const leaseOwner = createReplayLeaseOwner({

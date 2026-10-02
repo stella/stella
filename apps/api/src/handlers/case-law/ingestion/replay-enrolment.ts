@@ -1,10 +1,18 @@
 import { panic } from "better-result";
 
+import { defaultConfig, type HealthConfig } from "@stll/db-load-gate/health";
+
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+
+// A load hold resumes only once the ordinary admission floor is recovered.
+export const REPLAY_HEALTH_CONFIG = {
+  ...defaultConfig,
+  resumeFloor: defaultConfig.startFloor,
+} satisfies HealthConfig;
 
 export type ReplayEnrolment =
   | { mode: "off" }

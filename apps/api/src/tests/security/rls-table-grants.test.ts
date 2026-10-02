@@ -151,6 +151,7 @@ const POST_BOOTSTRAP_APPEND_ONLY_TABLES = new Set(["chat_thread_names"]);
 // by the source row's cascading foreign key, never the request role.
 const POST_BOOTSTRAP_MUTABLE_PROJECTION_TABLES = new Set([
   "time_entry_timer_states",
+  "time_daily_targets",
 ]);
 const MUTABLE_PROJECTION_PRIVILEGES = new Set(["select", "insert", "update"]);
 
