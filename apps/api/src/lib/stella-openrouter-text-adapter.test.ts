@@ -148,7 +148,8 @@ describe("instance provider redirect policy", () => {
             };
             if (path === "structured") {
               const result = await Result.tryPromise({
-                try: () => instance.structuredOutput(structuredOptions),
+                try: async () =>
+                  await instance.structuredOutput(structuredOptions),
                 catch: (error) => error,
               });
               if (Result.isOk(result)) {

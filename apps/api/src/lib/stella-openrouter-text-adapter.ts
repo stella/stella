@@ -182,7 +182,10 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
         ...config,
         debugLogger: INSTANCE_DEBUG_LOGGER,
         httpClient: new HTTPClient({
-          fetcher: async (input, init) => {
+          fetcher: async (
+            input: Request | URL | string,
+            init?: RequestInit,
+          ) => {
             const request =
               input instanceof Request
                 ? input
