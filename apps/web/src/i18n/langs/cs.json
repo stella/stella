@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Žádné další spisy nejsou k dispozici",
       "operation": "Operace",
       "rootFolder": "(Kořenová složka)",
+      "sourceChanged": "Položka se během přesunu změnila. Zkuste to znovu.",
+      "sourceInUse": "Položka se právě používá. Dokončete zpracování, úpravy, spolupráci nebo podepisování a zkuste to znovu.",
+      "sourceReferenced": "Tato položka je propojena s časovými záznamy nebo výdaji a nelze ji přesunout.",
+      "sourceVersionLimit": "Tato položka má příliš mnoho verzí nebo hodnot polí a nelze ji přesunout.",
       "targetFolder": "Cílová složka (volitelné)",
       "targetMatter": "Cílový spis",
       "title": "Kopírovat do spisu"

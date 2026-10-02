@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Brak innych spraw",
       "operation": "Operacja",
       "rootFolder": "(Folder główny)",
+      "sourceChanged": "Element zmienił się podczas przenoszenia. Spróbuj ponownie.",
+      "sourceInUse": "Element jest obecnie używany. Zakończ przetwarzanie, edycję, współpracę lub podpisywanie i spróbuj ponownie.",
+      "sourceReferenced": "Ten element jest powiązany z wpisami czasu lub wydatkami i nie można go przenieść.",
+      "sourceVersionLimit": "Ten element ma zbyt wiele wersji lub wartości pól i nie można go przenieść.",
       "targetFolder": "Folder docelowy (opcjonalnie)",
       "targetMatter": "Sprawa docelowa",
       "title": "Kopiuj do sprawy"

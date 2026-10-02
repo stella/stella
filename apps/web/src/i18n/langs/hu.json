@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Nincs más elérhető ügyirat",
       "operation": "Művelet",
       "rootFolder": "(Gyökérmappa)",
+      "sourceChanged": "Az elem áthelyezés közben megváltozott. Próbálja újra.",
+      "sourceInUse": "Az elem jelenleg használatban van. Fejezze be a feldolgozást, szerkesztést, együttműködést vagy aláírást, majd próbálja újra.",
+      "sourceReferenced": "Ez az elem időbejegyzésekhez vagy költségekhez kapcsolódik, ezért nem helyezhető át.",
+      "sourceVersionLimit": "Ennek az elemnek túl sok verziója vagy mezőértéke van, ezért nem helyezhető át.",
       "targetFolder": "Célmappa (opcionális)",
       "targetMatter": "Célügyirat",
       "title": "Másolás ügyiratba"

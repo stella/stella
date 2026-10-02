@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Žiadne ďalšie spisy nie sú k dispozícii",
       "operation": "Operácia",
       "rootFolder": "(Koreňový priečinok)",
+      "sourceChanged": "Položka sa počas presunu zmenila. Skúste to znova.",
+      "sourceInUse": "Položka sa práve používa. Dokončite spracovanie, úpravy, spoluprácu alebo podpisovanie a skúste to znova.",
+      "sourceReferenced": "Táto položka je prepojená s časovými záznamami alebo výdavkami a nedá sa presunúť.",
+      "sourceVersionLimit": "Táto položka má príliš veľa verzií alebo hodnôt polí a nedá sa presunúť.",
       "targetFolder": "Cieľový priečinok (voliteľné)",
       "targetMatter": "Cieľový spis",
       "title": "Kopírovať do spisu"
