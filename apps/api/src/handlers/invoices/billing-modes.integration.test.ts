@@ -582,8 +582,9 @@ test("approved work in another currency does not block giving an older capped dr
     ),
   ).toMatchObject({ totals: { netAmountMinor: 1250 } });
   const written = await timeLines(invoiceId);
-  expect(written.map((line) => line.timeEntryId).toSorted()).toEqual(
-    [first, second].toSorted(),
+  expect(written).toHaveLength(2);
+  expect(new Set(written.map((line) => line.timeEntryId))).toEqual(
+    new Set([first, second]),
   );
   expect(await invoiceRow(invoiceId)).toMatchObject({ netAmount: 1250 });
   await expectForeignWorkUntouched(foreign);
