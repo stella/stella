@@ -224,8 +224,114 @@ const expressionValue = (value: unknown, context: object) => {
   const expression = v
     .parse(v.string(), value)
     .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1");
-  return new Script(expression).runInNewContext(context);
+  return new Script(
+    expression.replaceAll(
+      /needs\.([\w-]+)/gu,
+      (_, job: string) => `needs[${JSON.stringify(job)}]`,
+    ),
+  ).runInNewContext(context);
 };
+
+type CheckoutWorkflow = v.InferOutput<typeof workflowSchema>;
+const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
+  const outcome = workflow.jobs["ci-result"]?.steps?.find(
+    ({ name }) => name === "Evaluate CI outcome",
+  );
+  const scopes = v.parse(
+    v.record(v.string(), v.nullable(v.string())),
+    JSON.parse(outcome?.env?.["JOB_SCOPES"] ?? ""),
+  );
+  const plan = {
+    ...Object.fromEntries(
+      Object.values(scopes).flatMap((scope) =>
+        scope === null ? [] : [[scope, "true"]],
+      ),
+    ),
+    trusted: "true",
+    suite_depth: "full",
+    queue_depth: "full",
+    fix_tests_on_base_required: "false",
+  };
+  const context = {
+    inputs: { heavy_only: true, sha: "a".repeat(40) },
+    github: {
+      sha: "b".repeat(40),
+      event_name: "workflow_dispatch",
+      event: { pull_request: { draft: false } },
+    },
+    needs: Object.fromEntries(
+      Object.keys(workflow.jobs).map((job) => [
+        job,
+        {
+          result: THIN_JOBS.some((thin) => thin === job)
+            ? "skipped"
+            : "success",
+          outputs: plan,
+        },
+      ]),
+    ),
+    always: () => true,
+    cancelled: () => false,
+  };
+  const executed = new Set<string>();
+  const visit = (job: string) => {
+    if (executed.has(job)) {
+      return;
+    }
+    const body = workflow.jobs[job];
+    if (!body) {
+      panic(`Missing heavy dependency: ${job}`);
+    }
+    if (!expressionValue(body.if ?? "true", context)) {
+      return;
+    }
+    executed.add(job);
+    const dependencies =
+      typeof body.needs === "string" ? [body.needs] : (body.needs ?? []);
+    for (const dependency of dependencies) {
+      visit(dependency);
+    }
+  };
+  for (const job of mainHeavyJobs(workflow)) {
+    visit(job);
+  }
+  const checkouts = [...executed].flatMap((job) =>
+    (workflow.jobs[job]?.steps ?? [])
+      .filter(({ uses }) => uses?.startsWith("actions/checkout@"))
+      .map((step) => ({ job, step })),
+  );
+  expect(checkouts.length).toBeGreaterThan(0);
+  for (const { job, step } of checkouts) {
+    const reference = step.with?.["ref"];
+    if (typeof reference !== "string") {
+      panic(
+        `Missing validated checkout ref: ${job}/${step.name ?? "checkout"}`,
+      );
+    }
+    expect(expressionValue(reference, context), job).toBe(context.inputs.sha);
+  }
+  return checkouts;
+};
+
+test("every executed heavy checkout and dependency targets the validated SHA", () => {
+  const checkouts = heavyCheckoutCensus(ciWorkflow);
+  expect(checkouts.some(({ job }) => job === "ci-plan")).toBe(true);
+  expect(checkouts.some(({ job }) => job === "heavy-web-build")).toBe(true);
+  for (const { job, step } of checkouts) {
+    const mutant = structuredClone(ciWorkflow);
+    const checkout = mutant.jobs[job]?.steps?.find(
+      (candidate) =>
+        candidate.name === step.name && candidate.uses === step.uses,
+    );
+    if (!checkout?.with) {
+      panic(`Missing checkout mutation fixture: ${job}`);
+    }
+    delete checkout.with["ref"];
+    expect(() => heavyCheckoutCensus(mutant)).toThrow(
+      `Missing validated checkout ref: ${job}/`,
+    );
+  }
+});
 
 test("only main heavy forwards its validated SHA while ordinary checkouts use the event ref", () => {
   const validatedSha = "a".repeat(40);
@@ -239,7 +345,9 @@ test("only main heavy forwards its validated SHA while ordinary checkouts use th
       uses?.startsWith("actions/checkout@"),
     ) ?? []) {
       const reference = checkout.with?.["ref"];
-      if (reference === undefined) {continue;}
+      if (reference === undefined) {
+        continue;
+      }
       expect(expressionValue(reference, mainContext), job).toBe(validatedSha);
       for (const event of [
         "pull_request",
@@ -291,21 +399,25 @@ test("only main heavy forwards its validated SHA while ordinary checkouts use th
       ),
     ),
   );
-  const checkout = marketing.jobs["check"]?.steps?.find(({ uses }) =>
-    uses?.startsWith("actions/checkout@"),
-  );
-  expect(
-    expressionValue(checkout?.with?.["ref"], {
-      inputs: { ref: validatedSha },
-      github: { workflow: mainWorkflow.name },
-    }),
-  ).toBe(validatedSha);
-  expect(
-    expressionValue(checkout?.with?.["ref"], {
-      inputs: { ref: validatedSha },
-      github: { workflow: "CI Checks" },
-    }),
-  ).toBe("");
+  const marketingCheckouts =
+    marketing.jobs["check"]?.steps?.filter(({ uses }) =>
+      uses?.startsWith("actions/checkout@"),
+    ) ?? [];
+  expect(marketingCheckouts.length).toBeGreaterThan(0);
+  for (const checkout of marketingCheckouts) {
+    expect(
+      expressionValue(checkout.with?.["ref"], {
+        inputs: { ref: validatedSha },
+        github: { workflow: mainWorkflow.name },
+      }),
+    ).toBe(validatedSha);
+    expect(
+      expressionValue(checkout.with?.["ref"], {
+        inputs: { ref: validatedSha },
+        github: { workflow: "CI Checks" },
+      }),
+    ).toBe("");
+  }
 });
 
 test("only the final job can publish the main/heavy status", () => {
@@ -331,9 +443,10 @@ test("only the final job can publish the main/heavy status", () => {
 
 test("status step publishes success only when both workflow jobs succeeded", () => {
   const statusSteps = mainWorkflow.jobs.status.steps ?? [];
-  const statusScript = statusSteps.find(
+  const publication = statusSteps.find(
     ({ name }) => name === "Publish heavy conclusion",
-  )?.run;
+  );
+  const statusScript = publication?.run;
   if (statusScript === undefined) {
     panic("main-heavy.yml is missing the status publication step");
   }
@@ -346,58 +459,72 @@ test("status step publishes success only when both workflow jobs succeeded", () 
     ]),
   ];
 
-  for (const { validate, suites, expected, exit } of cases) {
-    const fixture = mkdtempSync(path.join(tmpdir(), "main-heavy-status-"));
-    try {
-      const bin = path.join(fixture, "bin");
-      const logPath = path.join(fixture, "gh-args");
-      const outputPath = path.join(fixture, "github-output");
-      const fakeGhPath = path.join(bin, "gh");
-      const sha = "c".repeat(40);
-      const runUrl = "https://github.example/actions/runs/123";
-      const repository = "stella/example";
-      const statusPath = `repos/${repository}/statuses/${sha}`;
-      const results = JSON.stringify({
-        validate: { result: validate },
-        suites: { result: suites },
-      });
-      mkdirSync(bin);
-      const fakeGh = `#!/bin/sh\nprintf '%s\\n' "$@" >> "$GH_LOG"\n`;
-      writeFileSync(fakeGhPath, fakeGh);
-      chmodSync(fakeGhPath, 0o755);
+  for (const event of ["push", "schedule", "workflow_dispatch"]) {
+    for (const { validate, suites, expected, exit } of cases) {
+      const fixture = mkdtempSync(path.join(tmpdir(), "main-heavy-status-"));
+      try {
+        const bin = path.join(fixture, "bin");
+        const logPath = path.join(fixture, "gh-args");
+        const outputPath = path.join(fixture, "github-output");
+        const fakeGhPath = path.join(bin, "gh");
+        const validatedSha = "a".repeat(40);
+        const eventSha = "b".repeat(40);
+        expect(validatedSha).not.toBe(eventSha);
+        const sha = v.parse(
+          v.string(),
+          expressionValue(publication?.env?.["SHA"], {
+            github: { sha: eventSha, event_name: event },
+            needs: {
+              validate: { result: validate, outputs: { sha: validatedSha } },
+            },
+          }),
+        );
+        expect(sha, event).toBe(validatedSha);
+        const runUrl = "https://github.example/actions/runs/123";
+        const repository = "stella/example";
+        const statusPath = `repos/${repository}/statuses/${validatedSha}`;
+        const results = JSON.stringify({
+          validate: { result: validate },
+          suites: { result: suites },
+        });
+        mkdirSync(bin);
+        const fakeGh = `#!/bin/sh\nprintf '%s\\n' "$@" >> "$GH_LOG"\n`;
+        writeFileSync(fakeGhPath, fakeGh);
+        chmodSync(fakeGhPath, 0o755);
 
-      const process = Bun.spawnSync(["bash", "-euc", statusScript], {
-        cwd: fixture,
-        env: {
-          ...Bun.env,
-          GH_LOG: logPath,
-          GH_TOKEN: "fixture-token",
-          GITHUB_OUTPUT: outputPath,
-          PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,
-          REPOSITORY: repository,
-          RESULTS: results,
-          RUN_URL: runUrl,
-          SHA: sha,
-        },
-      });
-      expect(process.exitCode).toBe(exit);
-      const args = readFileSync(logPath, "utf-8").trim().split("\n");
-      expect(args).toEqual([
-        "api",
-        "--method",
-        "POST",
-        statusPath,
-        "-f",
-        "context=main/heavy",
-        "-f",
-        `state=${expected}`,
-        "-f",
-        `description=Main heavy suites: ${expected}`,
-        "-f",
-        `target_url=${runUrl}`,
-      ]);
-    } finally {
-      rmSync(fixture, { recursive: true, force: true });
+        const process = Bun.spawnSync(["bash", "-euc", statusScript], {
+          cwd: fixture,
+          env: {
+            ...Bun.env,
+            GH_LOG: logPath,
+            GH_TOKEN: "fixture-token",
+            GITHUB_OUTPUT: outputPath,
+            PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,
+            REPOSITORY: repository,
+            RESULTS: results,
+            RUN_URL: runUrl,
+            SHA: sha,
+          },
+        });
+        expect(process.exitCode).toBe(exit);
+        const args = readFileSync(logPath, "utf-8").trim().split("\n");
+        expect(args).toEqual([
+          "api",
+          "--method",
+          "POST",
+          statusPath,
+          "-f",
+          "context=main/heavy",
+          "-f",
+          `state=${expected}`,
+          "-f",
+          `description=Main heavy suites: ${expected}`,
+          "-f",
+          `target_url=${runUrl}`,
+        ]);
+      } finally {
+        rmSync(fixture, { recursive: true, force: true });
+      }
     }
   }
 }, 30_000);

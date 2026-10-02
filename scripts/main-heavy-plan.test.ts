@@ -92,7 +92,9 @@ const heavyPlan = {
   fix_tests_on_base_required: "false",
 };
 
-const assertCoverage = (jobs: string[]) => {
+const heavyEvents = ["push", "schedule", "workflow_dispatch"] as const;
+
+const assertCoverage = (jobs: string[], event: string) => {
   expect(new Set(jobs)).toEqual(new Set(expectedHeavy));
   const scheduled = Object.entries(workflow.jobs)
     .filter(
@@ -100,7 +102,7 @@ const assertCoverage = (jobs: string[]) => {
         job !== "ci-plan" &&
         job !== "ci-result" &&
         ciNeeds.includes(job) &&
-        selected(body.if ?? "true", context("push", true, heavyPlan)),
+        selected(body.if ?? "true", context(event, true, heavyPlan)),
     )
     .map(([job]) => job);
   expect(new Set(scheduled)).toEqual(
@@ -109,15 +111,17 @@ const assertCoverage = (jobs: string[]) => {
 };
 
 test("main heavy scheduling equals the gated jobs minus thin checks", () => {
-  assertCoverage(heavy);
-  for (const thin of THIN_JOBS) {
-    expect(
-      selected(
-        workflow.jobs[thin]?.if ?? "true",
-        context("push", true, heavyPlan),
-      ),
-      thin,
-    ).toBe(false);
+  for (const event of heavyEvents) {
+    assertCoverage(heavy, event);
+    for (const thin of THIN_JOBS) {
+      expect(
+        selected(
+          workflow.jobs[thin]?.if ?? "true",
+          context(event, true, heavyPlan),
+        ),
+        `${event}/${thin}`,
+      ).toBe(false);
+    }
   }
   const planner = workflow.jobs["ci-plan"]?.steps?.find(
     ({ name }) => name === "Derive heavy jobs",
@@ -132,7 +136,7 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
 });
 
 test("main heavy runs execute the release compiler exactly when VERSION is planned", () => {
-  for (const event of ["push", "schedule", "workflow_dispatch"]) {
+  for (const event of heavyEvents) {
     for (const required of ["true", "false"]) {
       expect(
         selected(
@@ -151,9 +155,14 @@ test("main heavy runs execute the release compiler exactly when VERSION is plann
 test("dropping a heavy job cannot pass the scheduling invariant", () => {
   const removed = heavy.at(0);
   expect(removed).toBeDefined();
-  expect(() => assertCoverage(heavy.filter((job) => job !== removed))).toThrow(
-    "expect(received)",
-  );
+  for (const event of heavyEvents) {
+    expect(() =>
+      assertCoverage(
+        heavy.filter((job) => job !== removed),
+        event,
+      ),
+    ).toThrow("expect(received)");
+  }
 });
 
 test("heavy planning rejects gate drift instead of omitting a job", () => {
@@ -217,6 +226,7 @@ test("original PR and merge-group job predicates keep their behavior", () => {
 }, 30_000);
 
 type EvaluateOptions = {
+  event: string;
   jobName?: string;
   result: string;
   isPlanned?: boolean;
@@ -224,6 +234,7 @@ type EvaluateOptions = {
   thinResult?: string;
 };
 const evaluate = ({
+  event,
   jobName = "mobile-build",
   result,
   isPlanned = true,
@@ -264,7 +275,7 @@ const evaluate = ({
     env: {
       ...process.env,
       ...outcomeEnv,
-      EVENT: "push",
+      EVENT: event,
       HEAVY_ONLY: "true",
       HEAVY_JOBS: JSON.stringify(heavy),
       QUEUE_DEPTH: "full",
@@ -283,27 +294,36 @@ const evaluate = ({
 };
 
 test("main heavy aggregation rejects failures, cancellations, timeouts and planned skips", () => {
-  for (const result of [
-    "success",
-    "failure",
-    "skipped",
-    "cancelled",
-    "timed_out",
-  ]) {
-    for (const isPlanned of [true, false]) {
-      const accepted =
-        result === "success" || (result === "skipped" && !isPlanned);
-      expect(evaluate({ result, isPlanned }), `${result}/${isPlanned}`).toBe(
-        accepted ? 0 : 1,
-      );
+  for (const event of heavyEvents) {
+    for (const result of [
+      "success",
+      "failure",
+      "skipped",
+      "cancelled",
+      "timed_out",
+    ]) {
+      for (const isPlanned of [true, false]) {
+        const accepted =
+          result === "success" || (result === "skipped" && !isPlanned);
+        expect(
+          evaluate({ event, result, isPlanned }),
+          `${event}/${result}/${isPlanned}`,
+        ).toBe(accepted ? 0 : 1);
+      }
+    }
+    for (const planResult of ["failure", "cancelled"]) {
+      expect(
+        evaluate({ event, result: "success", planResult }),
+        `${event}/plan/${planResult}`,
+      ).toBe(1);
     }
   }
-  expect(evaluate({ result: "success", planResult: "failure" })).toBe(1);
-  expect(evaluate({ result: "success", planResult: "cancelled" })).toBe(1);
 }, 30_000);
 
 test("the reusable result gate allows skipped thin checks in heavy mode", () => {
-  expect(evaluate({ result: "success" })).toBe(0);
+  for (const event of heavyEvents) {
+    expect(evaluate({ event, result: "success" }), event).toBe(0);
+  }
 }, 30_000);
 
 test("heavy scope selection plans full suites even on an empty main diff", () => {
@@ -315,59 +335,66 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
   }
   const directory = mkdtempSync(path.join(tmpdir(), "main-heavy-plan-"));
   const output = path.join(directory, "output");
-  writeFileSync(output, "");
   try {
-    const run = Bun.spawnSync(["bash", "-e", "-c", scope.run], {
-      cwd: root,
-      env: {
-        ...process.env,
-        EVENT_NAME: "push",
-        HEAVY_ONLY: "true",
-        SUITE_DEPTH: "full",
-        GITHUB_OUTPUT: output,
-      },
-    });
-    expect(run.exitCode, run.stderr.toString()).toBe(0);
-    const outputs = Object.fromEntries(
-      readFileSync(output, "utf-8")
-        .trim()
-        .split("\n")
-        .map((line) => line.split("=", 2)),
-    );
-    for (const key of [
-      "desktop_rust_checks_required",
-      "docker_checks_required",
-      "api_image_smoke_required",
-      "e2e_production_required",
-      "e2e_core_required",
-      "mobile_build_required",
-      "route_smoke_required",
-      "windows_scripts_required",
-    ]) {
-      expect(outputs[key], key).toBe("true");
+    for (const event of heavyEvents) {
+      writeFileSync(output, "");
+      const run = Bun.spawnSync(["bash", "-e", "-c", scope.run], {
+        cwd: root,
+        env: {
+          ...process.env,
+          EVENT_NAME: event,
+          HEAVY_ONLY: "true",
+          SUITE_DEPTH: "full",
+          GITHUB_OUTPUT: output,
+        },
+      });
+      expect(run.exitCode, run.stderr.toString()).toBe(0);
+      const outputs = Object.fromEntries(
+        readFileSync(output, "utf-8")
+          .trim()
+          .split("\n")
+          .map((line) => line.split("=", 2)),
+      );
+      for (const key of [
+        "desktop_rust_checks_required",
+        "docker_checks_required",
+        "api_image_smoke_required",
+        "e2e_production_required",
+        "e2e_core_required",
+        "mobile_build_required",
+        "route_smoke_required",
+        "windows_scripts_required",
+      ]) {
+        expect(outputs[key], `${event}/${key}`).toBe("true");
+      }
     }
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
 }, 30_000);
 
-test("a release push requires the planned compiler to succeed in the main heavy result", () => {
-  for (const result of [
-    "success",
-    "failure",
-    "skipped",
-    "cancelled",
-    "timed_out",
-  ]) {
-    expect(evaluate({ jobName: "release-typecheck", result }), result).toBe(
-      result === "success" ? 0 : 1,
-    );
+test("every main heavy event requires the planned compiler to succeed", () => {
+  for (const event of heavyEvents) {
+    for (const result of [
+      "success",
+      "failure",
+      "skipped",
+      "cancelled",
+      "timed_out",
+    ]) {
+      expect(
+        evaluate({ event, jobName: "release-typecheck", result }),
+        `${event}/${result}`,
+      ).toBe(result === "success" ? 0 : 1);
+    }
+    expect(
+      evaluate({
+        event,
+        jobName: "release-typecheck",
+        result: "skipped",
+        isPlanned: false,
+      }),
+      `${event}/unplanned`,
+    ).toBe(0);
   }
-  expect(
-    evaluate({
-      jobName: "release-typecheck",
-      result: "skipped",
-      isPlanned: false,
-    }),
-  ).toBe(0);
 }, 30_000);
