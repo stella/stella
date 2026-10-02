@@ -124,7 +124,7 @@ type ReadSkillLastEditInput = {
   at: Date | null;
   origin: AgentSkillOrigin;
   authorId: string | null;
-  isStarterBody: boolean;
+  isStarterBody: boolean | null;
   editorId: string | null;
   editorName: string | null;
   editorImage: string | null;
@@ -143,7 +143,7 @@ const readSkillLastEdit = ({
     return null;
   }
   if (authorId === null) {
-    return origin === "default" && isStarterBody
+    return origin === "default" && isStarterBody === true
       ? { type: "stella", at }
       : { type: "unattributed", at };
   }
@@ -333,7 +333,7 @@ const listSkills = createSafeRootHandler(
             at: lastEditAt,
             authorId: lastEditAuthorId,
             // Null only when the skill has no revision, which `at` reports.
-            isStarterBody: lastEditIsStarterBody === true,
+            isStarterBody: lastEditIsStarterBody,
             editorId,
             editorName,
             editorImage,

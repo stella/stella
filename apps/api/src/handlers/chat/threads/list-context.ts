@@ -369,6 +369,8 @@ const toContextFile = (
   row: ChatThreadContextRow,
 ): ChatThreadContextFile | null => {
   switch (row.fileType) {
+    case null:
+      return panic("A chat thread file row has no file type");
     case CHAT_THREAD_FILE_TYPE.upload:
       return {
         id: row.itemId,
