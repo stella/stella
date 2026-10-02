@@ -1287,6 +1287,14 @@ test("a planned release screenshot check runs and must pass on the release pull 
   ).toBe(0);
 });
 
+test("path-scoped platform checks run on the pull requests that touch them", () => {
+  for (const job of ["desktop-clippy", "windows-scripts"]) {
+    expect(fastRequired, job).toContain(job);
+    expect(heavyJobs, job).not.toContain(job);
+    expect(typeof jobScopes[job], job).toBe("string");
+  }
+});
+
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   for (const job of fastRequired) {
