@@ -113,6 +113,10 @@ JSON Schema integer alone does not imply it. Preserve bounds and dialects in
 validation schemas and full discovery. A `describedSchema` selected for full
 discovery must preserve canonical validation constraints; the kit does not prove
 equivalence. Hoisting still preserves reference scopes and existing definitions.
+`hoistRepeatedSchemas(schema, { definitionNames: "property" })` names repeated
+union and item branches after their nearest property; the default uses the schema
+keyword. This changes definition and reference names without changing traversal
+or reference-scope safeguards.
 
 Published artifacts contain the bundled module and declarations; source contract
 tests run in this repository.

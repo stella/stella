@@ -192,7 +192,14 @@ const hasReferenceScope = (node: unknown): boolean => {
  */
 export const hoistRepeatedSchemas = (
   schema: McpJsonSchema,
-  { minBytes = 200 }: { minBytes?: number } = {},
+  {
+    minBytes = 200,
+    definitionNames = "keyword",
+  }: {
+    minBytes?: number;
+    /** Name union/item branches after their nearest property instead of the schema keyword. */
+    definitionNames?: "keyword" | "property";
+  } = {},
 ): McpJsonSchema => {
   if (hasReferenceScope(schema)) {
     return schema;
@@ -209,7 +216,12 @@ export const hoistRepeatedSchemas = (
     } else {
       occurrence.count += 1;
     }
-    mapSchemaChildren(node, (child, info) => countSubschemas(child, info.name));
+    mapSchemaChildren(node, (child, info) =>
+      countSubschemas(
+        child,
+        definitionNames === "property" && info.depth === 0 ? name : info.name,
+      ),
+    );
     return node;
   };
   mapSchemaChildren(schema, (child, info) => countSubschemas(child, info.name));
