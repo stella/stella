@@ -1808,7 +1808,7 @@ const buildApiEnv = ({
   rootDir,
 }: BuildApiEnvOptions) => {
   const envFilePath = path.resolve(rootDir, "apps/api/.env");
-  const env = {
+  const env: NodeJS.ProcessEnv = {
     ...expandEnvMap(loadEnvFile(envFilePath)),
     ...createApiEnv({
       baseEnv: stripAppEnvKeys({ baseEnv: process.env, envFilePath }),

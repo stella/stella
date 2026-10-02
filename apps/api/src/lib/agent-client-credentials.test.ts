@@ -35,7 +35,7 @@ describe("stored agent credential reads", () => {
       if (enabled) {
         expect(stored).toStartWith("stella-agent:v1:");
       } else {
-        expect(stored).toBe(credential);
+        expect(credential).toBe(stored);
       }
       for (const value of [credential, envelope]) {
         const updates: string[] = [];

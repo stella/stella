@@ -15,9 +15,10 @@ const script = readFileSync(
   "utf-8",
 );
 // Exercise the shell's source comparison directly, including its git base lookup.
-const comparison = script
-  .match(/^schema_file_has_migration_relevant_diff\(\) \{[\s\S]*?^\}/mu)
-  ?.at(0);
+const comparison =
+  /^schema_file_has_migration_relevant_diff\(\) \{[\s\S]*?^\}/mu
+    .exec(script)
+    ?.at(0);
 if (!comparison) {
   panic("Migration source comparison was not found");
 }
