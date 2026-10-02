@@ -30,6 +30,7 @@ import {
   extractId,
   type PublicCaseLawDecision,
 } from "@/routes/law/-case-detail.logic";
+import { PublicDecisionFileNote } from "@/routes/law/-components/public-decision-file-note";
 import { PublicDecisionTextNotice } from "@/routes/law/-components/public-decision-text-notice";
 
 const AuthenticatedCaseLawWorkspace = lazy(async () => {
@@ -41,6 +42,11 @@ const AuthenticatedCaseLawWorkspace = lazy(async () => {
 
 type PublicDecisionViewerProps = {
   decision: PublicCaseLawDecision;
+  /**
+   * The reader arrived by a docket that found this decision alone in a case
+   * file whose other decisions the read may not have reached.
+   */
+  fileMayHoldOthers?: boolean | undefined;
   initialSearchQuery?: string | undefined;
   /** The decision route rendering the page, which owns its details tab. */
   routeId: InspectorOwnerRouteId;
@@ -48,6 +54,7 @@ type PublicDecisionViewerProps = {
 
 export function PublicDecisionViewer({
   decision,
+  fileMayHoldOthers = false,
   initialSearchQuery,
   routeId,
 }: PublicDecisionViewerProps) {
@@ -131,7 +138,7 @@ export function PublicDecisionViewer({
   };
 
   return (
-    <main className="flex min-h-0 flex-1 overflow-hidden">
+    <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
       <DecisionDetailsTab
         decision={decision}
         key={decision.id}
@@ -161,38 +168,41 @@ export function PublicDecisionViewer({
           }
         />
       </ChromeHeaderActions>
-      {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
-      {!noDocument &&
-        (authStatus.isAuthenticated ? (
-          <Suspense
-            fallback={
-              <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
-                <DecisionWorkspace
-                  aiMode="gated"
-                  decision={decision}
-                  decisionId={decisionId}
-                  initialAnchorId={initialAnchorId}
-                  initialSearchQuery={initialSearchQuery}
-                />
-              </div>
-            }
-          >
-            <AuthenticatedCaseLawWorkspace
+      {fileMayHoldOthers && <PublicDecisionFileNote />}
+      <div className="flex min-h-0 flex-1 overflow-hidden">
+        {noDocument && <PublicDecisionTextNotice sourceUrl={originalUrl} />}
+        {!noDocument &&
+          (authStatus.isAuthenticated ? (
+            <Suspense
+              fallback={
+                <div className="flex min-w-0 flex-1 flex-col overflow-hidden">
+                  <DecisionWorkspace
+                    aiMode="gated"
+                    decision={decision}
+                    decisionId={decisionId}
+                    initialAnchorId={initialAnchorId}
+                    initialSearchQuery={initialSearchQuery}
+                  />
+                </div>
+              }
+            >
+              <AuthenticatedCaseLawWorkspace
+                decision={decision}
+                decisionId={decisionId}
+                initialAnchorId={initialAnchorId}
+                initialSearchQuery={initialSearchQuery}
+                user={authStatus.user}
+              />
+            </Suspense>
+          ) : (
+            <GuestDecisionWorkspace
               decision={decision}
               decisionId={decisionId}
               initialAnchorId={initialAnchorId}
               initialSearchQuery={initialSearchQuery}
-              user={authStatus.user}
             />
-          </Suspense>
-        ) : (
-          <GuestDecisionWorkspace
-            decision={decision}
-            decisionId={decisionId}
-            initialAnchorId={initialAnchorId}
-            initialSearchQuery={initialSearchQuery}
-          />
-        ))}
+          ))}
+      </div>
     </main>
   );
 }

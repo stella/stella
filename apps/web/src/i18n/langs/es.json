@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Resumen",
+      "caseFileMayHoldOthers": "Este expediente también puede contener otras resoluciones.",
       "citedBy": "Citado por",
       "cites": "Cita",
       "dissentByline": "Voto particular: <bdi>{names}</bdi>",

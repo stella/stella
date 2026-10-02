@@ -17,6 +17,7 @@ import {
 } from "@/features/case-law/case-law-jurisdiction";
 import { decisionHasNoDocument } from "@/features/case-law/components/case-viewer/decision-body-state.logic";
 import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import {
   decisionCitationsInfiniteOptions,
   decisionCitationSummaryOptions,
@@ -58,6 +59,11 @@ const optionalPublicDecisionSearchQuerySchema = v.optional(
 );
 
 export const publicDecisionSearchSchema = v.object({
+  // A stale or hand-edited value drops the note rather than failing the page.
+  match: v.fallback(
+    v.optional(v.picklist(Object.values(PUBLIC_DECISION_MATCH))),
+    undefined,
+  ),
   q: optionalPublicDecisionSearchQuerySchema,
 });
 
@@ -240,8 +246,10 @@ const redirectToCanonicalDecisionPath = ({
   hash,
   search,
 }: RedirectToCanonicalDecisionPathOptions) => {
-  const redirectSearch: PublicDecisionSearch =
-    search.q === undefined ? {} : { q: search.q };
+  const redirectSearch: PublicDecisionSearch = {
+    ...(search.match === undefined ? {} : { match: search.match }),
+    ...(search.q === undefined ? {} : { q: search.q }),
+  };
   // Omitted rather than passed empty, so a decision opened at no passage keeps
   // a bare canonical URL instead of gaining a trailing `#`.
   const redirectHash = hash === "" ? {} : { hash };
