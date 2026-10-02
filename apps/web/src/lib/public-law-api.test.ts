@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
 
-import { APIError } from "@/lib/errors/api";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
+
+import { shouldRetryAPIRequest, APIError } from "@/lib/errors/api";
 import {
   isSearchUnavailableError,
   PublicLawUnavailableError,
@@ -71,6 +73,20 @@ describe("unwrapPublicLawEden", () => {
 });
 
 describe("isSearchUnavailableError", () => {
+  test("country admission is localized and never treated as a retryable engine outage", () => {
+    const error = thrownBy(503, publicCountryUnavailable("SVK"));
+    expect(APIError.is(error)).toBe(true);
+    expect(isSearchUnavailableError(error)).toBe(false);
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
+    if (!APIError.is(error)) {
+      throw new TypeError("Expected APIError");
+    }
+    expect(error.code).toBe("public_country_unavailable");
+    expect(error.message).toBe(
+      "Public law for this country is not available. Choose another country.",
+    );
+  });
+
   test("recognizes the engine outage the search endpoint reports", () => {
     expect(
       isSearchUnavailableError(

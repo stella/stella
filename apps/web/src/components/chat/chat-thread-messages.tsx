@@ -1557,6 +1557,9 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "text") {
+      if (!part.content.trim()) {
+        return null;
+      }
       return (
         <AssistantTextPart
           className={cn(

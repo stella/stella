@@ -1,5 +1,6 @@
 // parser-output-unchanged: document-fetch routing metadata preserves parsed decision fields.
 import { panic, Result } from "better-result";
+import { decodeHTMLStrict } from "entities";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -58,6 +59,7 @@ import {
 import type {
   SkCourtRegistryReader,
   SkCourtRegistryObservation,
+  SkCourtRegistryRecord,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
 import {
   INGESTION_USER_AGENT,
@@ -419,6 +421,33 @@ const skCourtsSourceDocumentId = (
 /** The two fields this adapter refuses to store a decision without. */
 type SkCourtsIdentityFields = { caseNumber: string; court: string };
 
+// Decode publisher display text once; raw payloads, URLs and source IDs stay verbatim.
+const decodeSkCourtText = (value: string | null | undefined) => {
+  const text = toOptionalValue(value);
+  return text === undefined ? undefined : decodeHTMLStrict(text);
+};
+
+const decodeSkCourtTextList = (values: string[] | null | undefined) => {
+  if (values === null || values === undefined) {
+    return values;
+  }
+  return values.map((value) => decodeHTMLStrict(value));
+};
+
+/** The registry's display names decoded; a stated null or absence stays as stated. */
+const decodeSkCourtRegistryRecord = (
+  record: SkCourtRegistryRecord,
+): SkCourtRegistryRecord => ({
+  ...record,
+  nazov: decodeHTMLStrict(record.nazov),
+  ...(typeof record.typSudu === "string"
+    ? { typSudu: decodeHTMLStrict(record.typSudu) }
+    : {}),
+  ...(typeof record.skratka_string === "string"
+    ? { skratka_string: decodeHTMLStrict(record.skratka_string) }
+    : {}),
+});
+
 /**
  * The docket and the court an item must state for this adapter to keep it.
  *
@@ -430,8 +459,8 @@ type SkCourtsIdentityFields = { caseNumber: string; court: string };
 const skCourtsIdentityFields = (
   item: SkApiItem,
 ): SkCourtsIdentityFields | null => {
-  const caseNumber = item.spisovaZnacka;
-  const court = item.sud?.nazov;
+  const caseNumber = decodeSkCourtText(item.spisovaZnacka);
+  const court = decodeSkCourtText(item.sud?.nazov);
   if (!caseNumber || !court) {
     return null;
   }
@@ -568,17 +597,19 @@ export const assembleSkCourtsDecision = ({
 
   // Registry changes must reach already stored decisions; detail failures
   // still do not change the listing observation.
-  const directoryMetadata =
+  const registryRecord =
     courtRegistry?.status === "available"
-      ? skCourtDirectoryMetadata(courtRegistry.record, court)
+      ? decodeSkCourtRegistryRecord(courtRegistry.record)
       : undefined;
+  const directoryMetadata =
+    registryRecord === undefined
+      ? undefined
+      : skCourtDirectoryMetadata(registryRecord, court);
   const registryUnavailable =
     courtRegistry?.status === "unavailable" ? courtRegistry : undefined;
   const courtSuccession = skCourtSuccessionReferences(
     court,
-    courtRegistry?.status === "available"
-      ? courtRegistry.record.nazov
-      : undefined,
+    registryRecord?.nazov,
   );
   const rawJson = JSON.stringify({
     item,
@@ -600,7 +631,7 @@ export const assembleSkCourtsDecision = ({
   // no readable text, so the two must ship together.
 
   const decisionDate = parseSkDate(item.datumVydania);
-  const decisionType = toOptionalValue(item.formaRozhodnutia);
+  const decisionType = decodeSkCourtText(item.formaRozhodnutia);
   const ecli = toOptionalValue(detail?.ecli);
 
   const updateDate = toOptionalValue(detail?.updateDate);
@@ -652,14 +683,18 @@ export const assembleSkCourtsDecision = ({
       // senior court officer's, and the record carries no discriminator, so
       // it stays a stated name rather than becoming a bench role. See the
       // `judge-registry` surface for what would tell the two apart.
-      judge: toOptionalValue(item.sudca?.meno),
+      judge: decodeSkCourtText(item.sudca?.meno),
       judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
       courtRegistreGuid: toOptionalValue(item.sud?.registreGuid),
-      decisionNature: item.povaha,
-      area: detail?.oblast,
-      subArea: detail?.podOblast,
-      referencedLegislation: detail?.odkazovanePredpisy,
-      documentName: toOptionalValue(detail?.dokument?.name),
+      decisionNature: decodeSkCourtTextList(item.povaha),
+      area: decodeSkCourtTextList(detail?.oblast),
+      subArea: decodeSkCourtTextList(detail?.podOblast),
+      referencedLegislation:
+        detail?.odkazovanePredpisy?.map((reference) => ({
+          ...reference,
+          nazov: decodeSkCourtText(reference.nazov),
+        })) ?? detail?.odkazovanePredpisy,
+      documentName: decodeSkCourtText(detail?.dokument?.name),
       documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
       documentSize: detail?.dokument?.size,
       documentFileId: detail?.dokument?.id,
@@ -671,11 +706,11 @@ export const assembleSkCourtsDecision = ({
           : undefined,
       statedSourceUrl,
       sourceUrlStatus,
-      originCourt: toOptionalValue(detail?.povodnySud?.nazov),
+      originCourt: decodeSkCourtText(detail?.povodnySud?.nazov),
       originCourtRegistreGuid: toOptionalValue(
         detail?.povodnySud?.registreGuid,
       ),
-      originCaseNumber: toOptionalValue(detail?.povodnaSpisovaZnacka),
+      originCaseNumber: decodeSkCourtText(detail?.povodnaSpisovaZnacka),
     } satisfies SkCourtsMetadata),
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
@@ -1460,6 +1495,31 @@ const storedPart = <T>(
   return isShape(parsed) ? parsed : null;
 };
 
+type SkCourtsStoredDocketMatchOptions = { stored: string; replayed: string };
+
+type SkCourtsStoredDocketMatch = "same" | "legacy-encoded" | "different";
+
+/**
+ * How a row's stored docket relates to the one its payload now parses to.
+ *
+ * Rows written before display text was decoded hold the publisher's encoded
+ * spelling (`7C&#x2F;221/1991`). That is the same docket exactly when decoding
+ * it once, with the decoder ingestion now applies, yields the replayed value.
+ * Decoding is not repeated, so a stored value that only matches after a
+ * second pass is a different docket, as is anything else.
+ */
+const skCourtsStoredDocketMatch = ({
+  stored,
+  replayed,
+}: SkCourtsStoredDocketMatchOptions): SkCourtsStoredDocketMatch => {
+  if (stored === replayed) {
+    return "same";
+  }
+  return decodeSkCourtText(stored) === replayed
+    ? "legacy-encoded"
+    : "different";
+};
+
 /**
  * Rebuild a decision from the responses already stored for it.
  *
@@ -1534,14 +1594,34 @@ const reparseStoredRaw = (
       detail: `the stored listing row for ${stored.caseNumber} states no docket and court to key on`,
     };
   }
-  if (decision.caseNumber !== stored.caseNumber) {
+  const docket = skCourtsStoredDocketMatch({
+    stored: stored.caseNumber,
+    replayed: decision.caseNumber,
+  });
+  if (docket === "different") {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
       detail: `stored payload states ${decision.caseNumber}`,
     };
   }
-  return { type: "parsed", result: decision };
+  if (docket === "same") {
+    return { type: "parsed", result: decision };
+  }
+  // A row keyed by its docket cannot move to the decoded spelling: the write
+  // would find no row under it and insert the decision a second time.
+  if (decision.sourceDocumentId === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `stored docket decodes to ${decision.caseNumber}, but the row has no publisher id to migrate it under`,
+    };
+  }
+  return {
+    type: "parsed",
+    result: decision,
+    legacyCaseNumber: stored.caseNumber,
+  };
 };
 
 // ── Source surfaces ──────────────────────────────────────
