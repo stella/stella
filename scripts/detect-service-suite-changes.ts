@@ -1,8 +1,6 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 
-import apiPackage from "../apps/api/package.json" with { type: "json" };
-
 const repositoryRoot = path.resolve(import.meta.dir, "..");
 const infrastructurePaths = new Set([
   ".github/workflows/ci.yml",
@@ -18,20 +16,70 @@ const infrastructurePaths = new Set([
 ]);
 
 const SUITES = {
-  postgres: {
-    app: "api",
-    gate: apiPackage.ciGateTestRunners["test:postgres"].gate,
-    runner: apiPackage.ciGateTestRunners["test:postgres"].runner,
-  },
-  valkey: {
-    app: "api",
-    gate: apiPackage.ciGateTestRunners["test:valkey"].gate,
-    runner: apiPackage.ciGateTestRunners["test:valkey"].runner,
-  },
-  corpus: { app: "api", gate: "STELLA_RUN_CORPUS_ENGINE_TESTS", runner: "" },
-  collab: { app: "collab", gate: "", runner: "" },
+  postgres: { app: "api" },
+  valkey: { app: "api" },
+  corpus: { app: "api" },
+  collab: { app: "collab" },
 } as const;
 type ServiceSuite = keyof typeof SUITES;
+
+const readRunner = (runners: unknown, script: string) => {
+  if (typeof runners !== "object" || runners === null) {
+    return undefined;
+  }
+  const runner: unknown = Reflect.get(runners, script);
+  if (typeof runner !== "object" || runner === null) {
+    return undefined;
+  }
+  const gate: unknown = Reflect.get(runner, "gate");
+  const entrypoint: unknown = Reflect.get(runner, "runner");
+  const testFileGlob: unknown = Reflect.get(runner, "testFileGlob");
+  if (
+    typeof gate !== "string" ||
+    gate.length === 0 ||
+    typeof entrypoint !== "string" ||
+    entrypoint.length === 0 ||
+    typeof testFileGlob !== "string" ||
+    testFileGlob.length === 0
+  ) {
+    return undefined;
+  }
+  return { gate, runner: entrypoint, testFileGlob };
+};
+
+// Read metadata only while planning, inside the CLI's guarded path. Importing
+// this module must not dereference a runner that a package edit removed.
+const loadSuites = (root: string) => {
+  const manifest: unknown = JSON.parse(
+    readFileSync(path.join(root, "apps/api/package.json"), "utf-8"),
+  );
+  const runners: unknown =
+    typeof manifest === "object" && manifest !== null
+      ? Reflect.get(manifest, "ciGateTestRunners")
+      : undefined;
+  const postgres = readRunner(runners, "test:postgres");
+  const valkey = readRunner(runners, "test:valkey");
+  if (postgres === undefined || valkey === undefined) {
+    return {
+      status: "unresolved" as const,
+      message: "Missing or invalid API service test runner metadata",
+    };
+  }
+  return {
+    status: "complete" as const,
+    suites: {
+      postgres: { ...SUITES.postgres, ...postgres },
+      valkey: { ...SUITES.valkey, ...valkey },
+      corpus: {
+        ...SUITES.corpus,
+        gate: "STELLA_RUN_CORPUS_ENGINE_TESTS",
+        runner: "",
+        testFileGlob: "src/**/*.test.ts",
+      },
+      collab: { ...SUITES.collab, gate: "", runner: "", testFileGlob: "" },
+    },
+  };
+};
 
 const directlyRequired = (file: string, suite: ServiceSuite) => {
   if (infrastructurePaths.has(file) || file.startsWith("patches/")) {
@@ -122,9 +170,14 @@ export const serviceSuiteDependencies = (
   root = repositoryRoot,
   suite?: ServiceSuite,
 ) => {
+  const configuration = loadSuites(root);
+  if (configuration.status === "unresolved") {
+    return configuration;
+  }
+  const suites = configuration.suites;
   const dependencies = new Set<string>();
   const selected =
-    suite === undefined ? Object.values(SUITES) : [SUITES[suite]];
+    suite === undefined ? Object.values(suites) : [suites[suite]];
   const apps = new Set(selected.map(({ app }) => app));
   const pending: string[] = [];
   if (apps.has("collab")) {
@@ -136,7 +189,7 @@ export const serviceSuiteDependencies = (
   if (
     selected.some(
       ({ gate }) =>
-        gate === SUITES.postgres.gate || gate === SUITES.corpus.gate,
+        gate === suites.postgres.gate || gate === suites.corpus.gate,
     )
   ) {
     pending.push("apps/api/src/db/migrate.ts");
@@ -149,10 +202,9 @@ export const serviceSuiteDependencies = (
   const packageScopes = new Set<string>();
   if (apps.has("api")) {
     const testGlobs = new Set([
-      ...Object.values(apiPackage.ciGateTestRunners).map(
-        ({ testFileGlob }) => `apps/api/${testFileGlob}`,
-      ),
-      "apps/api/src/**/*.test.ts",
+      ...selected
+        .filter(({ app }) => app === "api")
+        .map(({ testFileGlob }) => `apps/api/${testFileGlob}`),
     ]);
     const testFiles = new Set<string>();
     for (const glob of testGlobs) {
@@ -186,13 +238,7 @@ export const serviceSuiteDependencies = (
       source.replace(/^#![^\n]*/u, ""),
     )) {
       if (specifier.startsWith("@stll/")) {
-        const name = specifier.split("/").at(1);
-        if (name === undefined) {
-          return {
-            status: "unresolved" as const,
-            message: `Invalid workspace import: ${specifier}`,
-          };
-        }
+        const name = specifier.slice("@stll/".length).replace(/\/.*$/u, "");
         const scope = `packages/${name}/`;
         if (packageScopes.has(scope)) {
           continue;
@@ -265,6 +311,11 @@ export const planServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
 ) => {
+  const configuration = loadSuites(root);
+  if (configuration.status === "unresolved") {
+    console.error(configuration.message);
+    return { postgres: true, corpus: true, valkey: true, collab: true };
+  }
   const required = (suite: ServiceSuite): boolean => {
     if (files.some((file) => directlyRequired(file, suite))) {
       return true;

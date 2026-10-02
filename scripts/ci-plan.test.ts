@@ -2461,3 +2461,66 @@ test("an empty full-depth diff preserves the original API service-suite selectio
   }
   expect(outputs.get("collaboration_suite_required")).toBe("false");
 });
+
+test("the production service-scope capture rejects crashed or malformed detectors", () => {
+  const start = selector.indexOf("          if ! service_suite_scopes=");
+  const end = selector.indexOf("          dependency_malware_required=", start);
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const capture = selector.slice(start, end);
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "service-scope-output-"),
+  );
+  writeFileSync(
+    nodePath.join(directory, "bun"),
+    '#!/bin/bash\nprintf "%s" "$DETECTOR_OUTPUT"\nexit "$DETECTOR_EXIT"\n',
+    { mode: 0o755 },
+  );
+  try {
+    for (const { output, exit, expected } of [
+      { output: "false true false false", exit: "0", expected: 0 },
+      { output: "false false false false", exit: "0", expected: 0 },
+      { output: "true true true true", exit: "1", expected: 1 },
+      { output: "", exit: "1", expected: 1 },
+      ...[
+        "",
+        "true",
+        "true false false",
+        "true false false false false",
+        "true false yes false",
+        "true false false false\nfalse false false false",
+      ].map((malformedOutput) => ({
+        output: malformedOutput,
+        exit: "0",
+        expected: 1,
+      })),
+    ]) {
+      const result = Bun.spawnSync(
+        [
+          "bash",
+          "-eu",
+          "-c",
+          `changed_files=(docs/guide.md)\n${capture}\nprintf 'SCOPES=%s %s %s %s\\n' "$postgres_suites_required" "$corpus_suites_required" "$valkey_suites_required" "$collaboration_suite_required"`,
+        ],
+        {
+          env: {
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            DETECTOR_OUTPUT: output,
+            DETECTOR_EXIT: exit,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, `${exit}: ${output}`).toBe(expected);
+      const stdout = new TextDecoder().decode(result.stdout);
+      if (expected === 0) {
+        expect(stdout).toContain(`SCOPES=${output}`);
+      } else {
+        expect(stdout).not.toContain("SCOPES=");
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});

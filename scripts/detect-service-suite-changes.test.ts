@@ -141,6 +141,10 @@ test("a newly added transitive import is picked up without editing the detector"
 test("each suite follows its own import closure without planning unrelated siblings", () => {
   const root = mkdtempSync(path.join(tmpdir(), "service-suite-scopes-"));
   const sources = {
+    "apps/api/package.json": readFileSync(
+      new URL("../apps/api/package.json", import.meta.url),
+      "utf-8",
+    ),
     "apps/api/src/tests/setup-env.ts": "",
     "apps/api/src/db/migrate.ts": "",
     "apps/api/scripts/run-postgres-tests.ts": "",
@@ -175,6 +179,49 @@ test("each suite follows its own import closure without planning unrelated sibli
         valkey: suite === "valkey",
         collab: suite === "collab",
       });
+    }
+  } finally {
+    rmSync(root, { recursive: true, force: true });
+  }
+});
+
+test("removed runner metadata widens the detector inside its guarded execution", () => {
+  const root = mkdtempSync(path.join(tmpdir(), "service-runner-metadata-"));
+  try {
+    mkdirSync(path.join(root, "scripts"));
+    mkdirSync(path.join(root, "apps/api"), { recursive: true });
+    writeFileSync(
+      path.join(root, "scripts/detect-service-suite-changes.ts"),
+      readFileSync(
+        new URL("detect-service-suite-changes.ts", import.meta.url),
+        "utf-8",
+      ),
+    );
+    for (const metadata of [
+      {},
+      { ciGateTestRunners: { "test:renamed": {} } },
+      { ciGateTestRunners: { "test:postgres": { gate: null } } },
+    ]) {
+      writeFileSync(
+        path.join(root, "apps/api/package.json"),
+        JSON.stringify(metadata),
+      );
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          path.join(root, "scripts/detect-service-suite-changes.ts"),
+          "--scopes",
+          "docs/guide.md",
+        ],
+        { stdout: "pipe", stderr: "pipe" },
+      );
+      expect(result.exitCode).toBe(0);
+      expect(new TextDecoder().decode(result.stdout).trim()).toBe(
+        "true true true true",
+      );
+      expect(new TextDecoder().decode(result.stderr)).toContain(
+        "Missing or invalid API service test runner metadata",
+      );
     }
   } finally {
     rmSync(root, { recursive: true, force: true });

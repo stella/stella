@@ -363,7 +363,18 @@ jobs:
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
-          read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}")"
+          # A crashed detector cannot certify a plan. Reject its exit status
+          # or malformed output before any empty scope can skip a suite.
+          if ! service_suite_scopes=$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}"); then
+            echo "::error::Service-suite scope detector failed."
+            exit 1
+          fi
+          service_scope_pattern='^(true|false) (true|false) (true|false) (true|false)$'
+          if [[ ! "$service_suite_scopes" =~ $service_scope_pattern ]]; then
+            echo "::error::Service-suite scope detector returned invalid output."
+            exit 1
+          fi
+          read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$service_suite_scopes"
           service_suites_pr_required=false
           if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
             service_suites_pr_required=true
