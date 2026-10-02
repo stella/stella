@@ -55,9 +55,7 @@ export const searchLegislationSuccessResponseSchema = t.Object(
         {
           match: t.Object(
             {
-              type: t.Union(
-                LEGISLATION_SEARCH_MATCH_TYPES.map((type) => t.Literal(type)),
-              ),
+              type: t.UnionEnum(LEGISLATION_SEARCH_MATCH_TYPES),
             },
             { additionalProperties: false },
           ),

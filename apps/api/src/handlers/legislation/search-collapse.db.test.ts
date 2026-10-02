@@ -415,12 +415,12 @@ describe("acts the query names come first", () => {
   );
 
   test.each(Object.entries(STATUTE_ALIASES.cze))(
-    "the shared alias %s resolves to its declared act",
+    "the whole-query shared alias %s resolves to its declared act",
     async (alias, target) => {
       const named = await legislationDb(
         async (tx) =>
           await readNamedLegislationWorks(tx, {
-            query: `Použití ${alias} při výkladu`,
+            query: alias,
             country: "CZE",
           }),
       );
@@ -431,6 +431,26 @@ describe("acts the query names come first", () => {
       expect(named.every((work) => work.fromCitation)).toBe(true);
     },
   );
+
+  test.each([
+    "Použití oz při výkladu smlouvy",
+    "Použití noz při výkladu smlouvy",
+    "Použití sr při vyřizování žádosti",
+    "Občan předložil občanský průkaz",
+    "Společnost předložila zakladatelskou listinu",
+    "Použití obc. zak. při výkladu smlouvy",
+    "Občanský průkaz občana obsahuje jeho jméno",
+    "Při zakladatelské listině společnosti se ověřuje podpis",
+  ])("ordinary prose %s never pins an alias target", async (query) => {
+    const named = await legislationDb(
+      async (tx) =>
+        await readNamedLegislationWorks(tx, { query, country: "CZE" }),
+    );
+    expect(named).toEqual([]);
+
+    const result = await rehydrate(query, [[amendment, 0.9]]);
+    expect(ids(result)).toEqual([String(amendment.id)]);
+  });
 
   test.each([
     ["Výklad zákona č. 57/2008 Sb.", domesticSameNumber],
@@ -511,6 +531,7 @@ describe("acts an earlier scan window showed", () => {
 
 describe("the Postgres search path", () => {
   const searchDependencies = {
+    provider: "pg-fts",
     loadSearchConfigs: async () =>
       await Promise.resolve([
         {
@@ -521,6 +542,35 @@ describe("the Postgres search path", () => {
         },
       ]),
   } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
+
+  test.each([
+    ["OZ", STATUTE_ALIASES.cze.oz],
+    ["ZP", STATUTE_ALIASES.cze.zp],
+    ["TrZ", STATUTE_ALIASES.cze.trz],
+    ["OSŘ", STATUTE_ALIASES.cze.osr],
+  ] as const)(
+    "the embedded abbreviation %s reaches the public search result as a strict pin",
+    async (abbreviation, target) => {
+      const response = await searchLegislationHandler(
+        {
+          query: `Použití ${abbreviation} při výkladu`,
+          jurisdiction: "CZE",
+          limit: 10,
+        },
+        legislationDb,
+        "unobserved",
+        searchDependencies,
+      );
+      if (!("items" in response)) {
+        return panic("the search refused an embedded act abbreviation");
+      }
+      const firstHit = response.items.at(0);
+      expect(firstHit?.eli).toBe(
+        `https://example.test/eli/cz/${target.collection}/${target.year}/${target.number}`,
+      );
+      expect(firstHit?.match).toEqual({ type: "strict" });
+    },
+  );
 
   /** Every page of a query, `limit` hits at a time. */
   const allPages = async (query: string, limit: number) => {

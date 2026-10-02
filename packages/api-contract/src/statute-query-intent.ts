@@ -8,7 +8,7 @@ import {
   type StatuteAliasTarget,
   type StatuteQueryCountry,
 } from "./statute-aliases";
-import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "./statute-gazette";
+import { CZE_CASE_LAW_REPORTER_TAIL_RE } from "./statute-gazette";
 
 /**
  * What a statute box entry asks for. An act is addressed by number (with the
@@ -258,10 +258,6 @@ const EMBEDDED_ALIAS_POLICY = {
 };
 
 const WORD_CHARACTER = /[\p{L}\p{M}\p{N}]/u;
-const ANOTHER_GAZETTE_SUFFIX = new RegExp(
-  `^ ?${CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE}`,
-  "iu",
-);
 
 /**
  * Uses the box parser's number grammar and alias owner inside longer text.
@@ -310,7 +306,7 @@ export const readStatuteQueryReferences = (
     if (
       docketOrDate ||
       (match[3] === undefined && !explicitPrefix) ||
-      ANOTHER_GAZETTE_SUFFIX.test(after)
+      CZE_CASE_LAW_REPORTER_TAIL_RE.test(after)
     ) {
       continue;
     }

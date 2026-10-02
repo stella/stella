@@ -77,7 +77,11 @@ export const listStatutesQuerySchema = t.Object({
   documentType: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
   /** Works still in force on `asOf`, or works that no longer are; both when absent. */
   validity: t.Optional(
-    t.Union(LEGISLATION_LIST_VALIDITIES.map((value) => t.Literal(value))),
+    t.Enum(
+      Object.fromEntries(
+        LEGISLATION_LIST_VALIDITIES.map((value) => [value, value] as const),
+      ),
+    ),
   ),
   limit: t.Optional(tPaginationLimit(LIMITS.legislationListPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),

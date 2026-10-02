@@ -470,6 +470,25 @@ describe("reading act references inside a full-text query", () => {
     },
   );
 
+  test("case-law reporters never pin statutes across spacing and case variants", () => {
+    assertProperty(
+      "case-law reporters never pin statutes across spacing and case variants",
+      fc.property(number, year, (n, y) => {
+        for (const gap of SPACES) {
+          for (const reporter of ["NSS", "nss", "rozh.", "ROZH."]) {
+            for (const actPrefix of ["", "č. ", "zákona č. "]) {
+              const citation = `${actPrefix}${n}/${y} Sb.${gap}${reporter}`;
+              expect(parseStatuteQuery("cze", citation).type).toBe("text");
+              expect(
+                readStatuteQueryReferences("cze", `výklad ${citation}`),
+              ).toEqual([]);
+            }
+          }
+        }
+      }),
+    );
+  });
+
   test("foreign gazettes and fragments of larger identifiers do not pin an act", () => {
     expect(
       readStatuteQueryReferences(

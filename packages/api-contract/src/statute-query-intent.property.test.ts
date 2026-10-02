@@ -46,9 +46,9 @@ describe("statute query parser properties", () => {
           number,
           year,
           fc.constantFrom(
-            { country: "cze", suffix: "", collection: null } as const,
+            { country: "cze", suffix: "", collection: "sb" } as const,
             { country: "cze", suffix: " Sb.", collection: "sb" } as const,
-            { country: "svk", suffix: "", collection: null } as const,
+            { country: "svk", suffix: "", collection: "zz" } as const,
             { country: "svk", suffix: " Z. z.", collection: "zz" } as const,
           ),
           (n, y, { country, suffix, collection }) => {
