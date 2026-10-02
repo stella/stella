@@ -417,7 +417,9 @@ for (const mode of ["database", "script"] as const) {
             checkpoint = { cursor: parameters.at(1), batch };
           }
         }
-        if (statement.startsWith("SELECT cursor, batch")) {return [checkpoint];}
+        if (statement.startsWith("SELECT cursor, batch")) {
+          return [checkpoint];
+        }
         return [{ acquired: true }];
       };
       const options = {
@@ -482,8 +484,9 @@ for (const mode of ["database", "script"] as const) {
             holdUntil: null,
             heldSince: null,
           });
-          if (outcome.error instanceof BackfillFailedError)
-            {expect(outcome.error.cause).toBe(cause);}
+          if (outcome.error instanceof BackfillFailedError) {
+            expect(outcome.error.cause).toBe(cause);
+          }
         }
         expect(checkpoint).toMatchObject({ cursor: "saved" });
       } finally {
