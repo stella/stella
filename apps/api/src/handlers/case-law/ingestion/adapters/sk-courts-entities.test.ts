@@ -281,8 +281,8 @@ describe("Slovak court display text decodes publisher entities once", () => {
 
   test("preserves literal ampersands, unknown entities, and unfinished references", () => {
     const text = "Novák & synovia; &neexistuje; &#x; &#; &amp bez bodkočiarky";
-    expect(decisionFor(text).metadata?.["judge"]).toBe(text);
-    expect(decisionFor(encodeHTML(text)).metadata?.["judge"]).toBe(text);
+    expect(decisionFor(text).metadata["judge"]).toBe(text);
+    expect(decisionFor(encodeHTML(text)).metadata["judge"]).toBe(text);
   });
 
   test("double encoding decodes exactly once even when output resembles an entity", () => {
@@ -292,7 +292,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
       { source: "&amp;#xFD;", expected: "&#xFD;" },
       { source: "&amp;nbsp;", expected: "&nbsp;" },
     ]) {
-      expect(decisionFor(source).metadata?.["judge"]).toBe(expected);
+      expect(decisionFor(source).metadata["judge"]).toBe(expected);
     }
   });
 
@@ -330,7 +330,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
         },
       },
     });
-    expect(registered?.metadata?.["courtRegistry"]).toMatchObject({
+    expect(registered?.metadata["courtRegistry"]).toMatchObject({
       nazov: "Okresný súd Žilina",
       typSudu: null,
       skratka_string: null,
@@ -343,8 +343,10 @@ describe("Slovak court display text decodes publisher entities once", () => {
       fc.property(judicialText, (text) => {
         const encodings = [
           encodeHTML(text),
-          [...text].map((character) => `&#${codePointOf(character)};`).join(""),
-          [...text]
+          Array.from(text)
+            .map((character) => `&#${codePointOf(character)};`)
+            .join(""),
+          Array.from(text)
             .map((character) => `&#x${codePointOf(character).toString(16)};`)
             .join(""),
         ];
