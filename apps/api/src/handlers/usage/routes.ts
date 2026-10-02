@@ -25,9 +25,9 @@ const VERSIONED_USAGE_PATH = `${STELLA_API_VERSION_PREFIX}${USAGE_PATH}`;
 // `usage_entitlements`/`usage_allocations` does not block them. Both
 // land in a follow-up PR per the original plan.
 export const usageRoute = new Elysia({ prefix: USAGE_PATH })
-  .onRequest(({ request, set }) => {
+  .onRequest(({ request, status }) => {
     if (env.FEATURE_USAGE) {
-      return;
+      return undefined;
     }
     const path = new URL(request.url).pathname;
     // Admission precedes body validation and authentication database access.
@@ -39,8 +39,7 @@ export const usageRoute = new Elysia({ prefix: USAGE_PATH })
         path.startsWith(`${VERSIONED_USAGE_PATH}/`)) &&
       path !== "/usage/hosted/webhook"
     ) {
-      set.status = 404;
-      return { error: "Not Found" } as const;
+      return status(404, { error: "Not Found" });
     }
     return undefined;
   })
