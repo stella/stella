@@ -605,9 +605,7 @@ const persistSoftLawPage = async (
             nextCursor: null,
           });
           if (checkpoint.status !== INGESTION_CHECKPOINT_STATUS.ADVANCED) {
-            return panic(
-              "Locked source checkpoint changed inside its transaction",
-            );
+            panic("Locked source checkpoint changed inside its transaction");
           }
           await tx
             .update(softLawSources)
@@ -636,7 +634,7 @@ const persistSoftLawPage = async (
         nextCursor: checkpointCursor,
       });
       if (checkpointResult.status !== INGESTION_CHECKPOINT_STATUS.ADVANCED) {
-        return panic("Locked source checkpoint changed inside its transaction");
+        panic("Locked source checkpoint changed inside its transaction");
       }
       if (checkpointCursor !== null) {
         return;
@@ -723,7 +721,7 @@ const settleSoftLawSource = async (
         return;
       default:
         state satisfies never;
-        return panic("Unknown ingestion settlement");
+        panic("Unknown ingestion settlement");
     }
   });
 const storeResult = async <Value>(

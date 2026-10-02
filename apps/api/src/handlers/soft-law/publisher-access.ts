@@ -157,6 +157,7 @@ export const createSoftLawFetch = ({
   let windowState: "open" | "deferred_window" = "open";
   let leaseState: "active" | "lost" = "active";
   const getLeaseState = () => leaseState;
+  const getBlockReason = () => blocked;
   const stop = (reason: SoftLawBlockReason) => {
     blocked = reason;
     return Result.err(
@@ -175,8 +176,9 @@ export const createSoftLawFetch = ({
         new SoftLawAccessError({ message: "Ingestion lease was lost" }),
       );
     }
-    if (blocked) {
-      return stop(blocked);
+    const initialBlock = getBlockReason();
+    if (initialBlock) {
+      return stop(initialBlock);
     }
     const gate = PUBLISHER_GATES[policy.publisherGate];
     if (
@@ -213,8 +215,9 @@ export const createSoftLawFetch = ({
       );
     }
     signal.throwIfAborted();
-    if (blocked) {
-      return stop(blocked);
+    const reservedBlock = getBlockReason();
+    if (reservedBlock) {
+      return stop(reservedBlock);
     }
     const lease = await Result.tryPromise(async () => await beforeRequest?.());
     if (
@@ -235,8 +238,9 @@ export const createSoftLawFetch = ({
         new SoftLawAccessError({ message: "Ingestion lease was lost" }),
       );
     }
-    if (blocked) {
-      return stop(blocked);
+    const renewedBlock = getBlockReason();
+    if (renewedBlock) {
+      return stop(renewedBlock);
     }
     const response = await request(url, {
       signal,
@@ -331,7 +335,7 @@ export const createSoftLawFetch = ({
       return result.andThen((response) => response);
     },
     {
-      getBlockReason: () => blocked,
+      getBlockReason,
       getWindowState: () => windowState,
       getLeaseState,
     },

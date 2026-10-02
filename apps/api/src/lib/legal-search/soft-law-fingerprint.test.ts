@@ -104,7 +104,7 @@ test("issue dates are validated before storage and reference keys use NFKC witho
       issuedOn: { state: "stated", value },
     });
     if (!Result.isError(result)) {
-      return panic("Invalid issue date was accepted");
+      panic("Invalid issue date was accepted");
     }
     expect(result.error).toBeInstanceOf(SoftLawItemError);
     expect(result.error).toMatchObject({
@@ -130,7 +130,7 @@ test("missing stated identity fields return classified errors", () => {
   for (const value of invalidMetadata) {
     const result = softLawIdentityKey("cz-uoou", value);
     if (!Result.isError(result)) {
-      return panic("Empty identity field was accepted");
+      panic("Empty identity field was accepted");
     }
     expect(result.error).toBeInstanceOf(SoftLawItemError);
     expect(result.error.tag).toBe("invalid_document");
