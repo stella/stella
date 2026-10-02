@@ -21,6 +21,7 @@ import { Button } from "./button";
 import {
   DATE_PICKER_MODE,
   DEFAULT_PICKER_TIME,
+  type DatePickerMode,
   formatDateTimeValue,
   getHourOptions,
   getMinuteOptions,
@@ -287,6 +288,12 @@ const deriveTodayLabel = (locale: string): string => {
   return raw.charAt(0).toUpperCase() + raw.slice(1);
 };
 
+const utcDateTimeFromDate = (date: Date): string =>
+  Temporal.Instant.fromEpochMilliseconds(date.getTime())
+    .toZonedDateTimeISO("UTC")
+    .toPlainDateTime()
+    .toString({ smallestUnit: "minute" });
+
 const normalizeDate = (v: string | Date | null | undefined): string => {
   if (v === null || v === undefined) {
     return "";
@@ -341,15 +348,17 @@ type PickerSelection =
     };
 
 const resolveSelection = (
-  props: DatePickerPopoverValueProps,
+  mode: DatePickerMode,
+  value: string | Date | null,
 ): PickerSelection => {
-  switch (props.mode) {
-    case undefined:
+  switch (mode) {
     case DATE_PICKER_MODE.date: {
-      return { mode: DATE_PICKER_MODE.date, date: normalizeDate(props.value) };
+      return { mode, date: normalizeDate(value) };
     }
     case DATE_PICKER_MODE.dateTime: {
-      const parsed = parseDateTimeValue(props.value);
+      const parsed = parseDateTimeValue(
+        value instanceof Date ? utcDateTimeFromDate(value) : value,
+      );
       return {
         mode: DATE_PICKER_MODE.dateTime,
         date: parsed?.date ?? "",
@@ -357,8 +366,8 @@ const resolveSelection = (
       };
     }
     default: {
-      props satisfies never;
-      return panic(`Unhandled date picker mode: ${String(props)}`);
+      mode satisfies never;
+      return panic(`Unhandled date picker mode: ${String(mode)}`);
     }
   }
 };
@@ -468,25 +477,16 @@ type DatePickerPopoverSize = "compact" | "touch";
  */
 type DatePickerPopoverVariant = "inline" | "field";
 
-type DatePickerPopoverValueProps =
-  | {
-      /** Calendar dates: `value` and `onChange` use `YYYY-MM-DD`. */
-      mode?: typeof DATE_PICKER_MODE.date;
-      value: string | Date | null;
-      onChange: (value: string | null) => void;
-    }
-  | {
-      /**
-       * Date and time: `value` and `onChange` use `YYYY-MM-DDTHH:mm`, a
-       * zone-less wall-clock time. The host converts to and from an instant
-       * in the time zone it owns, so a `Date` is not accepted here.
-       */
-      mode: typeof DATE_PICKER_MODE.dateTime;
-      value: string | null;
-      onChange: (value: string | null) => void;
-    };
-
-type DatePickerPopoverProps = DatePickerPopoverValueProps & {
+type DatePickerPopoverProps = {
+  /**
+   * `date` (default) reads and writes `YYYY-MM-DD`. `date-time` reads and
+   * writes `YYYY-MM-DDTHH:mm`, a zone-less wall-clock time the host converts
+   * to and from an instant in the time zone it owns. A `Date` is read in UTC
+   * in both modes, so a string is the way to keep a local wall-clock time.
+   */
+  mode?: DatePickerMode;
+  value: string | Date | null;
+  onChange: (value: string | null) => void;
   id?: string;
   /** ID of the visible field label, when the picker is part of a form field. */
   labelledBy?: string;
@@ -542,6 +542,8 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     hideClear,
     size = "compact",
     variant = "inline",
+    mode = DATE_PICKER_MODE.date,
+    value: rawValue,
     onChange,
     locale,
     isOverdue = false,
@@ -558,7 +560,7 @@ const DatePickerPopoverContent = (props: DatePickerPopoverContentProps) => {
     layer = "default",
     today,
   } = props;
-  const selection = resolveSelection(props);
+  const selection = resolveSelection(mode, rawValue);
   const value = selection.date;
   const labels = resolvePopupLabels(props);
   const sizeClassNames = PICKER_SIZE_CLASS_NAMES[size];

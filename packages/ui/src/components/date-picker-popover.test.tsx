@@ -8,7 +8,7 @@ const noop = () => undefined;
 
 /** The popup portals on open, so the trigger is the only server-rendered button. */
 const triggerTag = (markup: string): string =>
-  markup.match(/<button[^>]*>/u)?.[0] ?? "";
+  /<button[^>]*>/u.exec(markup)?.[0] ?? "";
 
 describe("DatePickerPopover trigger", () => {
   test("a disabled picker cannot be opened", () => {
@@ -77,5 +77,18 @@ describe("DatePickerPopover trigger", () => {
 
     expect(markup).toContain("Mar 5, 2026");
     expect(markup).not.toMatch(/\d:\d{2}/u);
+  });
+
+  test("date-time mode reads a Date at its UTC wall-clock time", () => {
+    const markup = renderToStaticMarkup(
+      <DatePickerPopover
+        locale="cs"
+        mode="date-time"
+        onChange={noop}
+        value={new Date(Date.UTC(2026, 2, 5, 14, 30))}
+      />,
+    );
+
+    expect(markup).toContain("14:30");
   });
 });
