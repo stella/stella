@@ -1,6 +1,7 @@
 import { TaggedError } from "better-result";
 import type { Result } from "better-result";
 
+import type { SafeId } from "@/api/lib/branded-types";
 import type {
   SourceFieldInventory,
   SourceSurfaceCensus,
@@ -50,6 +51,7 @@ export const SOFT_LAW_STATED_STATES = ["stated", "not_stated"] as const;
 export const SOFT_LAW_RUN_STATES = [
   "idle",
   "running",
+  "deciding",
   "blocked",
   "failed",
   "listing_incomplete",
@@ -71,6 +73,7 @@ export const SOFT_LAW_ATTEMPT_STATES = [
   "unchanged",
   "rejected",
   "retryable",
+  "deferred",
 ] as const;
 export const SOFT_LAW_AUTHORITIES = {
   "cz-uoou": { jurisdiction: "CZE", name: "Úřad pro ochranu osobních údajů" },
@@ -100,6 +103,14 @@ export type SoftLawDocumentInput = {
   text: string | null;
   extractionQuality: (typeof SOFT_LAW_EXTRACTION_QUALITIES)[number];
   sourceDates: Readonly<Record<string, string>>;
+};
+export type SoftLawDeferredObservation = {
+  entry: SoftLawEntry;
+  input: Omit<SoftLawDocumentInput, "raw">;
+  documentId: SafeId<"softLawDocument">;
+  identityKey: string;
+  contentHash: string;
+  rawObjects: { role: string; key: string; contentType: string }[];
 };
 export type SoftLawAccessPolicy = {
   publisherGate: PublisherGateId;

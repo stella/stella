@@ -3,11 +3,15 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
+import { createSafeId } from "@/api/lib/branded-types";
 import {
   SOFT_LAW_ATTEMPT_STATES,
   SOFT_LAW_ITEM_TAGS,
 } from "@/api/lib/legal-search/soft-law-types";
-import type { SoftLawEntry } from "@/api/lib/legal-search/soft-law-types";
+import type {
+  SoftLawDeferredObservation,
+  SoftLawEntry,
+} from "@/api/lib/legal-search/soft-law-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import * as softLawSchema from "./soft-law";
@@ -371,7 +375,7 @@ if (!databaseUrl || !enabled) {
         (tag) => tag !== "identity_collision",
       );
       const nonRejected = SOFT_LAW_ATTEMPT_STATES.filter(
-        (status) => status !== "rejected",
+        (status) => status !== "rejected" && status !== "deferred",
       );
       const accepted = [
         {
@@ -425,6 +429,127 @@ if (!databaseUrl || !enabled) {
         await db.execute(
           sql`DELETE FROM soft_law_ingestion_attempts WHERE source_id = ${sourceId}`,
         );
+        await db.execute(
+          sql`DELETE FROM soft_law_sources WHERE id = ${sourceId}`,
+        );
+      }
+    }));
+  test("deferred receipts require an object snapshot and retain its complete decision input", async () =>
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const sourceId = createSafeId<"softLawSource">();
+      const entry = {
+        url: "https://uoou.gov.cz/deferred-guidance",
+        metadata: {
+          title: "Deferred guidance",
+          kind: "recommendation",
+          statedReference: { state: "not_stated" },
+          issuedOn: { state: "not_stated" },
+          validity: { state: "not_stated", basis: "source_stated" },
+        },
+        sourceDates: {},
+      } satisfies SoftLawEntry;
+      const observation = {
+        entry,
+        input: {
+          metadata: entry.metadata,
+          text: "Deferred guidance text",
+          extractionQuality: "html",
+          sourceDates: entry.sourceDates,
+        },
+        documentId: createSafeId<"softLawDocument">(),
+        identityKey: "deferred-identity",
+        contentHash: "deferred-content-hash",
+        rawObjects: [
+          {
+            role: "document",
+            key: "test/retained.html",
+            contentType: "text/html",
+          },
+        ],
+      } satisfies SoftLawDeferredObservation;
+      await db.execute(sql`INSERT INTO soft_law_sources (id, adapter_key, descriptor)
+        VALUES (${sourceId}, ${`deferred-parity-${sourceId}`}, '{}'::jsonb)`);
+      const insert = async (snapshot: string | null) =>
+        await db.execute(sql`INSERT INTO soft_law_ingestion_attempts (
+          id, source_id, run_id, url, entry, status, count, observation, observed_at)
+          VALUES (${Bun.randomUUIDv7()}, ${sourceId}, ${Bun.randomUUIDv7()}, ${entry.url},
+            ${JSON.stringify(entry)}::text::jsonb, 'deferred', 1, ${snapshot}::text::jsonb, now())`);
+      try {
+        await insert(JSON.stringify(observation));
+        expect(
+          (
+            await db.execute<{ observation: SoftLawDeferredObservation }>(sql`
+            SELECT observation FROM soft_law_ingestion_attempts WHERE source_id = ${sourceId}
+          `)
+          ).map((row) => row.observation),
+        ).toEqual([observation]);
+        for (const malformed of [null, "null", "[]", '"scalar"', "42"]) {
+          const attempted = await Result.tryPromise(
+            async () => await insert(malformed),
+          );
+          if (attempted.status !== "error") {
+            panic("Deferred receipt accepted a missing or nonobject snapshot");
+          }
+          expect(postgresFailure(attempted.error.cause)).toEqual({
+            code: "23514",
+            constraint: "soft_law_attempts_deferred_check",
+          });
+        }
+      } finally {
+        await db.execute(
+          sql`DELETE FROM soft_law_ingestion_attempts WHERE source_id = ${sourceId}`,
+        );
+        await db.execute(
+          sql`DELETE FROM soft_law_sources WHERE id = ${sourceId}`,
+        );
+      }
+    }));
+  test("deciding sources may hold or release a paired lease while retaining their walk identity", async () =>
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const sourceId = createSafeId<"softLawSource">();
+      const runId = Bun.randomUUIDv7();
+      const leaseToken = createSafeId<"softLawIngestionLease">();
+      await db.execute(sql`INSERT INTO soft_law_sources (
+        id, adapter_key, descriptor, run_state, run_id, run_started_at, lease_token, lease_expires_at)
+        VALUES (${sourceId}, ${`deciding-parity-${sourceId}`}, '{}'::jsonb,
+          'deciding', ${runId}, now(), ${leaseToken}, now() + interval '5 minutes')`);
+      try {
+        const malformedLease = await Result.tryPromise(
+          async () =>
+            await db.execute(
+              sql`UPDATE soft_law_sources SET lease_expires_at = NULL WHERE id = ${sourceId}`,
+            ),
+        );
+        if (malformedLease.status !== "error") {
+          panic("Deciding source accepted an unpaired lease");
+        }
+        expect(postgresFailure(malformedLease.error.cause)).toEqual({
+          code: "23514",
+          constraint: "soft_law_sources_lease_check",
+        });
+        await db.execute(sql`UPDATE soft_law_sources
+          SET lease_token = NULL, lease_expires_at = NULL WHERE id = ${sourceId}`);
+        expect(
+          await db.execute<{ state: string; run: string }>(sql`
+            SELECT run_state AS state, run_id::text AS run FROM soft_law_sources WHERE id = ${sourceId}
+          `),
+        ).toEqual([{ state: "deciding", run: runId }]);
+        const missingRun = await Result.tryPromise(
+          async () =>
+            await db.execute(
+              sql`UPDATE soft_law_sources SET run_id = NULL WHERE id = ${sourceId}`,
+            ),
+        );
+        if (missingRun.status !== "error") {
+          panic("Deciding source lost its walk identity");
+        }
+        expect(postgresFailure(missingRun.error.cause)).toEqual({
+          code: "23514",
+          constraint: "soft_law_sources_run_check",
+        });
+      } finally {
         await db.execute(
           sql`DELETE FROM soft_law_sources WHERE id = ${sourceId}`,
         );

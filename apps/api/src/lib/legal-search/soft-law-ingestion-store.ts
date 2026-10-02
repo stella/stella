@@ -26,6 +26,7 @@ import {
 import type {
   SoftLawEntry,
   SoftLawDocumentInput,
+  SoftLawDeferredObservation,
   SoftLawSourceAdapter,
 } from "@/api/lib/legal-search/soft-law-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
@@ -112,7 +113,7 @@ const claimSoftLawSource = async ({
       await tx
         .update(softLawSources)
         .set({
-          runState: "running",
+          runState: row.runState === "deciding" ? "deciding" : "running",
           listingBaseline: listed,
           runId: restart
             ? Bun.randomUUIDv7()
@@ -167,6 +168,7 @@ export type SoftLawAttempt = {
   count: number;
 } & (
   | { status: "applied" | "unchanged" | "retryable"; tag: null }
+  | { status: "deferred"; tag: null; observation: SoftLawDeferredObservation }
   | { status: "rejected"; tag: "identity_collision"; identityKey: string }
   | {
       status: "rejected";
@@ -177,37 +179,6 @@ type LoadSoftLawMatchesOptions = {
   entries: readonly SoftLawEntry[];
   identityKeys: readonly string[];
 };
-type LoadSoftLawCollisionsOptions = {
-  entries: readonly { url: string; identityKey: string }[];
-};
-const loadSoftLawCollisions = async (
-  { sourceId, scopedDb }: SoftLawStoreContext,
-  { entries }: LoadSoftLawCollisionsOptions,
-) =>
-  await scopedDb(
-    async (tx) =>
-      await tx
-        .selectDistinct({
-          url: softLawIngestionAttempts.url,
-          identityKey: softLawIngestionAttempts.identityKey,
-        })
-        .from(softLawIngestionAttempts)
-        .where(
-          and(
-            eq(softLawIngestionAttempts.sourceId, sourceId),
-            sql`${softLawIngestionAttempts.tag} = 'identity_collision'`,
-            or(
-              ...entries.map(({ url, identityKey }) =>
-                and(
-                  eq(softLawIngestionAttempts.url, url),
-                  eq(softLawIngestionAttempts.identityKey, identityKey),
-                ),
-              ),
-            ),
-          ),
-        )
-        .limit(SOFT_LAW_BATCH_LIMIT),
-  );
 const loadSoftLawAttempts = async (
   { sourceId, scopedDb }: SoftLawStoreContext,
   { runId, entries }: { runId: string; entries: readonly SoftLawEntry[] },
@@ -273,6 +244,53 @@ const loadSoftLawMatches = async (
           ),
         ),
   );
+type PersistSoftLawAttemptsOptions = {
+  attempts: readonly SoftLawAttempt[];
+  sourceId: SafeId<"softLawSource">;
+  runId: string;
+  observedAt: Date;
+};
+const persistSoftLawAttempts = async (
+  tx: Transaction,
+  { attempts, sourceId, runId, observedAt }: PersistSoftLawAttemptsOptions,
+) => {
+  if (attempts.length) {
+    await tx
+      .insert(softLawIngestionAttempts)
+      .values(
+        attempts.map((attempt) => ({
+          sourceId,
+          runId,
+          url: attempt.entry.url,
+          entry: attempt.entry,
+          status: attempt.status,
+          tag: attempt.tag,
+          identityKey:
+            attempt.tag === "identity_collision" ? attempt.identityKey : null,
+          observation:
+            attempt.status === "deferred" ? attempt.observation : null,
+          count: attempt.count,
+          observedAt,
+        })),
+      )
+      .onConflictDoUpdate({
+        target: [
+          softLawIngestionAttempts.sourceId,
+          softLawIngestionAttempts.runId,
+          softLawIngestionAttempts.url,
+        ],
+        set: {
+          status: sql`excluded.status`,
+          entry: sql`excluded.entry`,
+          tag: sql`excluded.tag`,
+          identityKey: sql`excluded.identity_key`,
+          observation: sql`excluded.observation`,
+          count: sql`excluded.count`,
+          observedAt: sql`excluded.observed_at`,
+        },
+      });
+  }
+};
 type PersistSoftLawPageOptions = {
   observations: readonly SoftLawObservation[];
   attempts: readonly SoftLawAttempt[];
@@ -283,7 +301,7 @@ type PersistSoftLawPageOptions = {
   pendingRetries: boolean;
 };
 export type SoftLawPageResult =
-  | { status: "persisted" }
+  | { status: "persisted" | "deciding" }
   | {
       status: "listing_incomplete";
       seen: number;
@@ -578,41 +596,12 @@ const persistSoftLawPage = async (
         runId,
         observedAt,
       });
-      if (attempts.length) {
-        await tx
-          .insert(softLawIngestionAttempts)
-          .values(
-            attempts.map((attempt) => ({
-              sourceId,
-              runId,
-              url: attempt.entry.url,
-              entry: attempt.entry,
-              status: attempt.status,
-              tag: attempt.tag,
-              identityKey:
-                attempt.tag === "identity_collision"
-                  ? attempt.identityKey
-                  : null,
-              count: attempt.count,
-              observedAt,
-            })),
-          )
-          .onConflictDoUpdate({
-            target: [
-              softLawIngestionAttempts.sourceId,
-              softLawIngestionAttempts.runId,
-              softLawIngestionAttempts.url,
-            ],
-            set: {
-              status: sql`excluded.status`,
-              entry: sql`excluded.entry`,
-              tag: sql`excluded.tag`,
-              identityKey: sql`excluded.identity_key`,
-              count: sql`excluded.count`,
-              observedAt: sql`excluded.observed_at`,
-            },
-          });
-      }
+      await persistSoftLawAttempts(tx, {
+        attempts,
+        sourceId,
+        runId,
+        observedAt,
+      });
     },
     persistCheckpoint: async (tx, checkpointCursor) => {
       if (Result.isError(result) || pendingRetries) {
@@ -672,40 +661,201 @@ const persistSoftLawPage = async (
       if (checkpointCursor !== null) {
         return;
       }
-      await tx
-        .update(softLawDocuments)
-        .set({ listingState: "no_longer_listed" })
+      const pending = await tx
+        .select({ id: softLawIngestionAttempts.id })
+        .from(softLawIngestionAttempts)
         .where(
           and(
-            eq(softLawDocuments.sourceId, sourceId),
-            sql`${softLawDocuments.lastSeenRun} <> ${runId}`,
+            eq(softLawIngestionAttempts.sourceId, sourceId),
+            eq(softLawIngestionAttempts.runId, runId),
+            eq(softLawIngestionAttempts.status, "deferred"),
           ),
-        );
-      await tx
-        .update(softLawDocumentLocators)
-        .set({ state: "historical" })
-        .where(
-          and(
-            eq(softLawDocumentLocators.sourceId, sourceId),
-            sql`${softLawDocumentLocators.lastSeenRun} <> ${runId}`,
-          ),
-        );
-      await tx
-        .update(softLawSources)
-        .set({
-          runState: "idle",
-          runId: null,
-          runStartedAt: null,
-          leaseToken: null,
-          leaseExpiresAt: null,
-          listingBaseline: 0,
-          listingSeen: null,
-          listingExpectedTotal: null,
-        })
-        .where(ownsLease);
+        )
+        .limit(1);
+      if (pending.length) {
+        await tx
+          .update(softLawSources)
+          .set({ runState: "deciding" })
+          .where(ownsLease);
+        result = Result.ok({ status: "deciding" });
+        return;
+      }
+      await finishSoftLawWalk(tx, { sourceId, ownsLease, runId });
     },
   });
   return result;
+};
+type FinishSoftLawWalkOptions = Pick<
+  SoftLawStoreContext,
+  "sourceId" | "ownsLease"
+> & { runId: string };
+const finishSoftLawWalk = async (
+  tx: Transaction,
+  { sourceId, ownsLease, runId }: FinishSoftLawWalkOptions,
+) => {
+  await tx
+    .update(softLawDocuments)
+    .set({ listingState: "no_longer_listed" })
+    .where(
+      and(
+        eq(softLawDocuments.sourceId, sourceId),
+        sql`${softLawDocuments.lastSeenRun} <> ${runId}`,
+      ),
+    );
+  await tx
+    .update(softLawDocumentLocators)
+    .set({ state: "historical" })
+    .where(
+      and(
+        eq(softLawDocumentLocators.sourceId, sourceId),
+        sql`${softLawDocumentLocators.lastSeenRun} <> ${runId}`,
+      ),
+    );
+  await tx
+    .update(softLawSources)
+    .set({
+      runState: "idle",
+      runId: null,
+      runStartedAt: null,
+      leaseToken: null,
+      leaseExpiresAt: null,
+      listingBaseline: 0,
+      listingSeen: null,
+      listingExpectedTotal: null,
+    })
+    .where(ownsLease);
+};
+type DecideSoftLawWalkResult = Result<
+  { status: "deciding" | "complete" },
+  SoftLawIngestionError
+>;
+const decideSoftLawWalk = async (
+  context: SoftLawStoreContext,
+  runId: string,
+): Promise<DecideSoftLawWalkResult> => {
+  const { scopedDb, sourceId, ownsLease, adapter } = context;
+  return await scopedDb(async (tx) => {
+    const locked = (
+      await tx
+        .select({ id: softLawSources.id, now: sql<Date>`now()` })
+        .from(softLawSources)
+        .where(
+          and(
+            ownsLease,
+            eq(softLawSources.runId, runId),
+            eq(softLawSources.runState, "deciding"),
+          ),
+        )
+        .for("update")
+        .limit(1)
+    ).at(0);
+    if (!locked) {
+      return Result.err(
+        new SoftLawIngestionError({
+          message: "Ingestion lease was superseded",
+        }),
+      );
+    }
+    await tx
+      .update(softLawSources)
+      .set({
+        leaseExpiresAt: sql`now() + make_interval(secs => ${LEASE_SECONDS})`,
+      })
+      .where(ownsLease);
+    const pendingFilter = and(
+      eq(softLawIngestionAttempts.sourceId, sourceId),
+      eq(softLawIngestionAttempts.runId, runId),
+      eq(softLawIngestionAttempts.status, "deferred"),
+    );
+    const pending = await tx
+      .select()
+      .from(softLawIngestionAttempts)
+      .where(pendingFilter)
+      .orderBy(softLawIngestionAttempts.url)
+      .limit(SOFT_LAW_BATCH_LIMIT);
+    const candidates = pending.map((receipt) => ({
+      receipt,
+      observation:
+        receipt.observation ?? panic("Deferred attempt has no observation"),
+    }));
+    const known = candidates.length
+      ? await loadSoftLawMatches(
+          {
+            ...context,
+            scopedDb: async (work) => await work(tx),
+          },
+          {
+            entries: candidates.map(({ receipt }) => receipt.entry),
+            identityKeys: candidates.map(
+              ({ observation }) => observation.identityKey,
+            ),
+          },
+        )
+      : [];
+    const observations: SoftLawObservation[] = [];
+    const attempts: SoftLawAttempt[] = [];
+    const winners = new Map<string, SoftLawObservation>();
+    for (const { receipt, observation } of candidates) {
+      const matches = known.filter(
+        (row) =>
+          row.document.id === observation.documentId &&
+          row.document.identityKey === observation.identityKey,
+      );
+      if (!matches.length) {
+        panic("Deferred observation lost its source-owned document");
+      }
+      const listed = matches.find((row) => row.locator?.lastSeenRun === runId);
+      const accepted = winners.get(observation.documentId);
+      const winnerUrl = accepted?.entry.url ?? listed?.locator?.url;
+      const winnerHash = accepted?.contentHash ?? listed?.version?.contentHash;
+      if (
+        winnerUrl &&
+        winnerUrl !== receipt.url &&
+        winnerHash !== observation.contentHash
+      ) {
+        attempts.push({
+          entry: receipt.entry,
+          count: receipt.count,
+          status: "rejected",
+          tag: "identity_collision",
+          identityKey: observation.identityKey,
+        });
+        continue;
+      }
+      const item = { ...observation, input: { ...observation.input, raw: [] } };
+      observations.push(item);
+      winners.set(observation.documentId, item);
+      attempts.push({
+        entry: receipt.entry,
+        count: receipt.count,
+        status:
+          matches.at(0)?.version?.contentHash === observation.contentHash
+            ? "unchanged"
+            : "applied",
+        tag: null,
+      });
+    }
+    const observedAt = locked.now;
+    await persistSoftLawRows(tx, {
+      items: observations,
+      sourceId,
+      adapter,
+      runId,
+      observedAt,
+    });
+    await persistSoftLawVersions(tx, { items: observations, observedAt });
+    await persistSoftLawAttempts(tx, { attempts, sourceId, runId, observedAt });
+    const remaining = await tx
+      .select({ id: softLawIngestionAttempts.id })
+      .from(softLawIngestionAttempts)
+      .where(pendingFilter)
+      .limit(1);
+    if (remaining.length) {
+      return Result.ok({ status: "deciding" as const });
+    }
+    await finishSoftLawWalk(tx, { sourceId, ownsLease, runId });
+    return Result.ok({ status: "complete" as const });
+  });
 };
 type SoftLawSettlement =
   | { status: "paused"; reason?: "deferred_window" }
@@ -731,7 +881,7 @@ const settleSoftLawSource = async (
         await tx
           .update(softLawSources)
           .set({
-            runState: "failed",
+            runState: sql`CASE WHEN ${softLawSources.runState} = 'deciding' THEN 'deciding' ELSE 'failed' END`,
             failureTag: state.reason,
             leaseToken: null,
             leaseExpiresAt: null,
@@ -792,10 +942,10 @@ export const createSoftLawIngestionStore = (
     }) => await loadSoftLawAttempts(context, query),
     loadMatches: async (query: LoadSoftLawMatchesOptions) =>
       await loadSoftLawMatches(context, query),
-    loadCollisions: async (query: LoadSoftLawCollisionsOptions) =>
-      await loadSoftLawCollisions(context, query),
     persistPage: async (page: PersistSoftLawPageOptions) =>
       await storeResult(async () => await persistSoftLawPage(context, page)),
+    decideWalk: async (runId: string) =>
+      await storeResult(async () => await decideSoftLawWalk(context, runId)),
     settle: async (state: SoftLawSettlement) =>
       await settleSoftLawSource(context, state),
   };

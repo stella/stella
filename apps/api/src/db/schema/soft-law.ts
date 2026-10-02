@@ -3,6 +3,7 @@ import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-sourc
 import type {
   SoftLawMetadata,
   SoftLawEntry,
+  SoftLawDeferredObservation,
 } from "@/api/lib/legal-search/soft-law-types";
 import {
   SOFT_LAW_ATTEMPT_STATES,
@@ -25,6 +26,11 @@ const values = (items: readonly string[]) =>
     items.map((item) => sql.raw(`'${item}'`)),
     sql.raw(","),
   );
+
+const SOFT_LAW_LEASED_RUN_STATES = [
+  "running",
+  "deciding",
+] as const satisfies readonly (typeof SOFT_LAW_RUN_STATES)[number][];
 
 /** Global ingestion state; ordinary application roles have no access. */
 export const softLawSources = p.pgTable.withRLS(
@@ -68,7 +74,7 @@ export const softLawSources = p.pgTable.withRLS(
     ),
     p.check(
       "soft_law_sources_lease_check",
-      sql`(${t.leaseToken} IS NULL AND ${t.leaseExpiresAt} IS NULL) OR (${t.runState} = 'running' AND ${t.leaseToken} IS NOT NULL AND ${t.leaseExpiresAt} IS NOT NULL)`,
+      sql`(${t.leaseToken} IS NULL AND ${t.leaseExpiresAt} IS NULL) OR (${t.runState} IN (${values(SOFT_LAW_LEASED_RUN_STATES)}) AND ${t.leaseToken} IS NOT NULL AND ${t.leaseExpiresAt} IS NOT NULL)`,
     ),
   ],
 );
@@ -231,6 +237,7 @@ export const softLawIngestionAttempts = p.pgTable.withRLS(
     status: p.text({ enum: SOFT_LAW_ATTEMPT_STATES }).notNull(),
     tag: p.text({ enum: SOFT_LAW_ITEM_TAGS }),
     identityKey: p.text("identity_key"),
+    observation: jsonb().$type<SoftLawDeferredObservation>(),
     count: p.integer().notNull(),
     observedAt: timestamptz("observed_at").notNull(),
   },
@@ -238,15 +245,19 @@ export const softLawIngestionAttempts = p.pgTable.withRLS(
     ...caseLawIngestionOnlyPolicies(),
     p.unique("soft_law_attempts_item_unique").on(t.sourceId, t.runId, t.url),
     p
-      .index("soft_law_attempts_collision_idx")
-      .on(t.sourceId, t.url, t.identityKey)
-      .where(sql`${t.tag} = 'identity_collision'`),
+      .index("soft_law_attempts_deferred_idx")
+      .on(t.sourceId, t.runId, t.url)
+      .where(sql`${t.status} = 'deferred'`),
     p.foreignKey({
       name: "soft_law_attempts_source_fk",
       columns: [t.sourceId],
       foreignColumns: [softLawSources.id],
     }),
     p.check("soft_law_attempts_count_check", sql`${t.count} BETWEEN 1 AND 3`),
+    p.check(
+      "soft_law_attempts_deferred_check",
+      sql`(${t.status} <> 'deferred' OR ${t.observation} IS NOT NULL) AND (${t.observation} IS NULL OR jsonb_typeof(${t.observation}) = 'object')`,
+    ),
     p.check(
       "soft_law_attempts_identity_check",
       sql`(${t.tag} IS NOT DISTINCT FROM 'identity_collision') = (${t.identityKey} IS NOT NULL)`,

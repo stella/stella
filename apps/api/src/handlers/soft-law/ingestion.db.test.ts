@@ -1390,7 +1390,7 @@ if (!databaseUrl || !enabled) {
             .from(softLawDocuments)
             .where(eq(softLawDocuments.id, original.id))
         ).at(0);
-        expect(swept?.listingState).toBe("no_longer_listed");
+        expect(swept?.listingState).toBe("listed");
         expect(await run(sourceAdapter)).toEqual({ status: "complete" });
         const moved = (
           await db
@@ -1423,7 +1423,7 @@ if (!databaseUrl || !enabled) {
           .where(eq(softLawIngestionAttempts.sourceId, sourceId));
         expect(
           receipts.filter((receipt) => receipt.tag === "identity_collision"),
-        ).toHaveLength(2);
+        ).toHaveLength(1);
       }));
 
     test("collision receipts do not reject a different numbered identity at the same URL", async () =>

@@ -251,14 +251,6 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       })
     : [];
   const observations: SoftLawObservation[] = [];
-  const collisions = fetched.length
-    ? await store.loadCollisions({
-        entries: fetched.map(({ entry, identityKey }) => ({
-          url: entry.url,
-          identityKey,
-        })),
-      })
-    : [];
   const identities = new Map<string, SoftLawObservation>();
   for (const item of fetched) {
     const { entry, input, identityKey, contentHash, count } = item;
@@ -287,12 +279,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       (row) =>
         row.document.listingState === "listed" &&
         row.locator &&
-        (unnumbered ||
-          row.locator.lastSeenRun === runId ||
-          collisions.some(
-            (receipt) =>
-              receipt.url === entry.url && receipt.identityKey === identityKey,
-          )) &&
+        (unnumbered || row.locator.lastSeenRun === runId) &&
         row.locator.url !== entry.url &&
         row.version?.contentHash !== contentHash,
     );
@@ -333,6 +320,38 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       attempts.push(rejectedAttempt(entry, written.error.cause, count));
       continue;
     }
+    const deferMove =
+      !unnumbered &&
+      matches.some(
+        (row) =>
+          row.document.listingState === "listed" &&
+          row.locator &&
+          row.locator.url !== entry.url &&
+          row.version?.contentHash !== contentHash,
+      );
+    if (deferMove) {
+      const observation = written.value;
+      attempts.push({
+        entry,
+        count,
+        status: "deferred",
+        tag: null,
+        observation: {
+          entry: observation.entry,
+          documentId: observation.documentId,
+          identityKey: observation.identityKey,
+          contentHash: observation.contentHash,
+          rawObjects: observation.rawObjects,
+          input: {
+            metadata: input.metadata,
+            text: input.text,
+            extractionQuality: input.extractionQuality,
+            sourceDates: input.sourceDates,
+          },
+        },
+      });
+      continue;
+    }
     observations.push(written.value);
     identities.set(identityKey, written.value);
     attempts.push({
@@ -346,6 +365,30 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
     });
   }
   return Result.ok({ observations, attempts });
+};
+
+type FinishDeferredWalkOptions = {
+  store: ReturnType<typeof createSoftLawIngestionStore>;
+  runId: string;
+  signal: AbortSignal;
+};
+const finishDeferredWalk = async ({
+  store,
+  runId,
+  signal,
+}: FinishDeferredWalkOptions): Promise<Result<SoftLawRunResult, unknown>> => {
+  for (let batch = 0; batch < PAGE_BUDGET; batch++) {
+    signal.throwIfAborted();
+    // db-await-in-loop: Each bounded decision batch commits the locators that determine the next batch's move/collision decisions.
+    const decided = await store.decideWalk(runId);
+    if (decided.status === "error") {
+      return decided;
+    }
+    if (decided.value.status === "complete") {
+      return Result.ok({ status: "complete" });
+    }
+  }
+  return Result.ok({ status: "paused" });
 };
 
 /** Only the ingestion database capability may mutate this global corpus. */
@@ -384,6 +427,9 @@ export const runSoftLawIngestion = async ({
   let cursor = source.row.syncCursor;
   const attemptedOutcome = await Result.tryPromise(
     async (): Promise<Result<SoftLawRunResult, unknown>> => {
+      if (source.row.runState === "deciding") {
+        return await finishDeferredWalk({ store, runId, signal });
+      }
       const total = await adapter.getTotalCount({ signal, fetch });
       const available = assertPublisherAvailable(fetch);
       if (available.status === "error") {
@@ -461,6 +507,9 @@ export const runSoftLawIngestion = async ({
         }
         if (persisted.value.status === "listing_incomplete") {
           return Result.ok(persisted.value);
+        }
+        if (persisted.value.status === "deciding") {
+          return await finishDeferredWalk({ store, runId, signal });
         }
         if (retryable) {
           return Result.ok({ status: "paused" });
