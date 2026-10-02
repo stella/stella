@@ -1,8 +1,6 @@
 import { Result } from "better-result";
 import { and, eq, sql } from "drizzle-orm";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { agentSkillResources, agentSkills } from "@/api/db/schema";
@@ -20,6 +18,8 @@ import {
   unreachable,
 } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import type {
   FetchedSkillPackage,
@@ -42,7 +42,7 @@ type InstallSkillProps = InstallSkillSource & {
   // Install as a draft (hidden until the user finishes). Defaults to true so
   // existing upload/import callers keep installing enabled skills.
   enabled?: boolean;
-  memberRole: { role: string };
+  memberRole: AuthorizedMemberRole;
   onInstalled?: (
     tx: Transaction,
     skill: { id: SafeId<"agentSkill"> },
@@ -74,7 +74,7 @@ type InstallSkillTransactionResult =
   | { type: "team-limit-reached" };
 
 type PreflightSkillInstallProps = {
-  memberRole: { role: string };
+  memberRole: AuthorizedMemberRole;
   safeDb: SafeDb;
   scope: AgentSkillScope;
   session: { activeOrganizationId: SafeId<"organization"> };
@@ -500,10 +500,13 @@ export const authorizeSkillInstallScope = ({
   memberRole,
   scope,
 }: {
-  memberRole: { role: string };
+  memberRole: AuthorizedMemberRole;
   scope: AgentSkillScope;
 }): Result<void, HandlerError> => {
-  if (scope !== "team" || isOrganizationManagementRole(memberRole.role)) {
+  if (
+    scope !== "team" ||
+    hasManagementPermission(memberRole, { agentSkill: ["create"] })
+  ) {
     return Result.ok(undefined);
   }
 

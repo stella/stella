@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { BILLING_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { PG_ERROR } from "@/api/lib/pg-error";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -46,7 +47,7 @@ const createContext = ({
     scopedDb,
     recordAuditEvent,
     workspaceId: toSafeId<"workspace">("ws_test"),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test"),
     },
