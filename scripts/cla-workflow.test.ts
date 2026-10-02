@@ -35,10 +35,24 @@ const author = { id: 101, login: "fixture-author", type: "User" };
 const pull = (number = 17, user = author, sha = HEAD) => ({
   number,
   state: "open",
+  commits: 1,
   user,
   head: { sha },
-  base: { ref: "main", repo: { id: 200, full_name: "stella/stella" } },
+  base: {
+    ref: "main",
+    sha: BASE,
+    repo: { id: 200, full_name: "stella/stella" },
+  },
 });
+const commit = ({
+  user = author,
+  sha = HEAD,
+  committer = author,
+}: {
+  user?: typeof author | null;
+  sha?: string;
+  committer?: typeof author;
+} = {}) => ({ sha, author: user, committer });
 const signature = (id = author.id) => ({
   name: "original-name",
   id,
@@ -63,6 +77,11 @@ type FixtureOptions = {
   payload?: Record<string, unknown>;
   pulls?: ReturnType<typeof pull>[];
   memberships?: Record<string, { state: string; role: string }>;
+  commitsByPull?: Record<number, ReturnType<typeof commit>[]>;
+  changedPull?: ReturnType<typeof pull>;
+  comparedCommits?: ReturnType<typeof commit>[];
+  groupAncestor?: string;
+  groupedCommits?: ReturnType<typeof commit>[];
   comments?: ReturnType<typeof comment>[];
   signatures?: ReturnType<typeof signature>[];
   conflicts?: number;
@@ -79,6 +98,11 @@ const fixture = ({
   payload = { pull_request: { number: 17 } },
   pulls = [pull()],
   memberships = {},
+  commitsByPull,
+  changedPull,
+  comparedCommits,
+  groupAncestor,
+  groupedCommits,
   comments = [],
   signatures = [],
   conflicts = 0,
@@ -113,6 +137,7 @@ const fixture = ({
   let blob = BLOB;
   let writes = 0;
   let prompts = 0;
+  const pullReads = new Map<number, number>();
   const commentsByPull = new Map(
     pulls.map(({ number }) => [number, [...comments]]),
   );
@@ -212,7 +237,55 @@ const fixture = ({
             message: "Pull request unavailable",
           });
         }
-        return { data: selected };
+        const reads = (pullReads.get(selected.number) ?? 0) + 1;
+        pullReads.set(selected.number, reads);
+        return {
+          data:
+            reads > 1 && changedPull?.number === selected.number
+              ? changedPull
+              : selected,
+        };
+      }
+      if (route.endsWith("/compare/{basehead}")) {
+        const basehead = v.parse(v.string(), params["basehead"]);
+        const selected = pulls.find(
+          (candidate) =>
+            `${candidate.base.sha}...${candidate.head.sha}` === basehead,
+        );
+        const ancestryPull = pulls.find((candidate) =>
+          basehead.startsWith(`${candidate.head.sha}...`),
+        );
+        const entry = queuePages
+          .flat()
+          .find(
+            (candidate) =>
+              basehead ===
+              `${candidate.baseCommit.oid}...${candidate.headCommit.oid}`,
+          );
+        // Group fixtures may share their SHA with a PR; either route represents the same commits.
+        const groupPull = entry
+          ? pulls.find(
+              (candidate) => candidate.number === entry.pullRequest.number,
+            )
+          : undefined;
+        const candidate = selected ?? groupPull;
+        const commits =
+          (entry && !selected ? groupedCommits : undefined) ??
+          comparedCommits ??
+          (candidate
+            ? (commitsByPull?.[candidate.number] ?? [
+                commit({ user: candidate.user, sha: candidate.head.sha }),
+              ])
+            : []);
+        return {
+          data: {
+            commits,
+            total_commits: commits.length,
+            merge_base_commit: {
+              sha: groupAncestor ?? ancestryPull?.head.sha ?? BASE,
+            },
+          },
+        };
       }
       if (route === "POST /repos/{owner}/{repo}/check-runs") {
         expect(params["name"]).toBe("cla");
@@ -273,6 +346,25 @@ const fixture = ({
     }
     paginate = {
       async *iterator(route: string, params: Record<string, unknown>) {
+        if (route.endsWith("/pulls/{pull_number}/commits")) {
+          const number = v.parse(v.number(), params["pull_number"]);
+          const selected = pulls.find(
+            (candidate) => candidate.number === number,
+          );
+          const commits =
+            commitsByPull?.[number] ??
+            (selected
+              ? [commit({ user: selected.user, sha: selected.head.sha })]
+              : []);
+          for (
+            let index = 0;
+            index < Math.max(commits.length, 1);
+            index += 100
+          ) {
+            yield { data: commits.slice(index, index + 100) };
+          }
+          return;
+        }
         if (route.includes("/commits/")) {
           yield {
             data: pulls.filter(({ head }) => head.sha === params["commit_sha"]),
@@ -346,6 +438,187 @@ describe("contributor signature workflow", () => {
       expect(run.created.at(0)?.["head_sha"]).toBe(HEAD);
       expect(run.writes()).toBe(0);
       expect(run.prompts()).toBe(0);
+    }
+  });
+
+  test("a signed opener cannot carry unsigned commit authors", async () => {
+    const second = { ...author, id: 102, login: "second-author" };
+    const third = { ...author, id: 103, login: "third-author" };
+    const run = fixture({
+      signatures: [signature()],
+      pulls: [{ ...pull(), commits: 2 }],
+      commitsByPull: {
+        17: [
+          commit({ user: second }),
+          commit({ user: third, sha: OTHER_HEAD }),
+        ],
+      },
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).output.title).toBe("CLA_UNSIGNED");
+    expect(lastOutput(run).conclusion).toBe("failure");
+    for (const login of [second.login, third.login]) {
+      expect(lastOutput(run).output.summary).toContain(login);
+      expect(
+        run.requests.find(
+          ({ route }) =>
+            route.startsWith("POST") && route.endsWith("/comments"),
+        )?.params["body"],
+      ).toContain(login);
+    }
+  });
+
+  test("an exempt member opener does not exempt outsider commit authors", async () => {
+    const second = { ...author, id: 102, login: "second-author" };
+    const run = fixture({
+      memberships: { [author.login]: { state: "active", role: "member" } },
+      commitsByPull: { 17: [commit({ user: second })] },
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).output.title).toBe("CLA_UNSIGNED");
+    expect(lastOutput(run).output.summary).toContain(second.login);
+  });
+
+  test("each commit author signs only through their own exact comment", async () => {
+    const second = { ...author, id: 102, login: "second-author" };
+    const run = fixture({
+      signatures: [signature()],
+      comments: [comment(second)],
+      commitsByPull: { 17: [commit({ user: second })] },
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).conclusion).toBe("success");
+    expect(run.stored().signedContributors.map(({ id }) => id)).toEqual([
+      author.id,
+      second.id,
+    ]);
+  });
+
+  test("unlinked commit authors fail with the commit SHA even with a web-flow committer", async () => {
+    for (const committer of [
+      author,
+      { ...author, id: 19_864_447, login: "web-flow" },
+    ]) {
+      const run = fixture({
+        signatures: [signature()],
+        commitsByPull: { 17: [commit({ user: null, committer })] },
+      });
+      await run.execute();
+      expect(run.errors).toEqual([]);
+      expect(lastOutput(run).conclusion).toBe("failure");
+      expect(lastOutput(run).output.title).toBe("CLA_UNLINKED_AUTHOR");
+      expect(lastOutput(run).output.summary).toContain(HEAD);
+    }
+    const linked = fixture({
+      signatures: [signature()],
+      commitsByPull: {
+        17: [
+          commit({ committer: { ...author, id: 19_864_447, login: "web-flow" } }),
+        ],
+      },
+    });
+    await linked.execute();
+    expect(lastOutput(linked).conclusion).toBe("success");
+  });
+
+  test("commit author coverage is paginated through the 250 commit boundary", async () => {
+    const second = { ...author, id: 102, login: "last-page-author" };
+    const commits = Array.from({ length: 250 }, (_, index) =>
+      commit({
+        user: index === 249 ? second : author,
+        sha: index.toString(16).padStart(40, "0"),
+      }),
+    );
+    const run = fixture({
+      signatures: [signature()],
+      pulls: [{ ...pull(), commits: 250 }],
+      commitsByPull: { 17: commits },
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).output.title).toBe("CLA_UNSIGNED");
+    expect(lastOutput(run).output.summary).toContain(second.login);
+  });
+
+  test("duplicate, replaced and changing commit snapshots fail closed", async () => {
+    const duplicate = fixture({
+      signatures: [signature()],
+      pulls: [{ ...pull(), commits: 2 }],
+      commitsByPull: { 17: [commit(), commit()] },
+    });
+    await duplicate.execute();
+    expect(duplicate.errors).toEqual(["CLA_DUPLICATE_COMMIT"]);
+    const replaced = fixture({
+      signatures: [signature()],
+      comparedCommits: [commit({ sha: OTHER_HEAD })],
+    });
+    await replaced.execute();
+    expect(replaced.errors).toEqual(["CLA_COMMIT_SNAPSHOT_CHANGED"]);
+    const changed = fixture({
+      signatures: [signature()],
+      changedPull: pull(17, author, OTHER_HEAD),
+    });
+    await changed.execute();
+    expect(changed.errors).toEqual(["CLA_PULL_CHANGED"]);
+  });
+
+  test("merge groups cannot verify a replaced PR head or additional old commits", async () => {
+    const groupHead = "f".repeat(40);
+    const predecessor = "1".repeat(40);
+    const options = {
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: groupHead,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: "refs/heads/gh-readonly-queue/main/pr-17-deadbeef",
+        },
+      },
+      pulls: [pull(), pull(18, author, OTHER_HEAD)],
+      signatures: [signature()],
+      queuePages: [
+        [
+          {
+            baseCommit: { oid: predecessor },
+            headCommit: { oid: groupHead },
+            pullRequest: { number: 17 },
+          },
+          {
+            baseCommit: { oid: BASE },
+            headCommit: { oid: predecessor },
+            pullRequest: { number: 18 },
+          },
+        ],
+      ],
+    } satisfies FixtureOptions;
+    const changed = fixture({ ...options, groupAncestor: BASE });
+    await changed.execute();
+    expect(changed.errors).toEqual(["CLA_GROUP_PULL_CHANGED"]);
+    const extra = fixture({
+      ...options,
+      groupedCommits: [commit(), commit({ sha: "2".repeat(40) })],
+    });
+    await extra.execute();
+    expect(extra.errors).toEqual(["CLA_GROUP_COMMIT_SNAPSHOT_CHANGED"]);
+  });
+
+  test("more than 250 commits and incomplete commit lists fail closed", async () => {
+    for (const count of [251, 2]) {
+      const run = fixture({
+        signatures: [signature()],
+        pulls: [{ ...pull(), commits: count }],
+      });
+      await run.execute();
+      expect(lastOutput(run).conclusion).toBe("failure");
+      expect(run.errors).toEqual([
+        count > 250
+          ? "CLA_COMMIT_LIMIT_EXCEEDED"
+          : "CLA_INCOMPLETE_COMMIT_LIST",
+      ]);
     }
   });
 

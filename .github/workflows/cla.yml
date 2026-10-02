@@ -66,6 +66,7 @@ jobs:
             const STORE = { owner: "stella", repo: "cla", path: "signatures/cla.json" };
             const BRANCH = "cla-signatures";
             const MAX_WRITE_ATTEMPTS = 3;
+            const MAX_PULL_COMMITS = 250;
             const { owner, repo } = context.repo;
             const api = github;
             const store = new github.constructor({ auth: process.env.CLA_STORE_TOKEN });
@@ -143,37 +144,95 @@ jobs:
               if (!positiveInteger(number)) fail("CLA_INVALID_PULL_NUMBER");
               const { data } = await request("GET /repos/{owner}/{repo}/pulls/{pull_number}", { pull_number: number });
               if (data.number !== number || data.base?.repo?.full_name?.toLowerCase() !== `${owner}/${repo}`.toLowerCase() ||
-                  !validSha(data.head?.sha)) fail("CLA_INVALID_PULL_REQUEST");
+                  !validSha(data.head?.sha) || !validSha(data.base?.sha)) fail("CLA_INVALID_PULL_REQUEST");
               return data;
             };
-            const prompt = async (pull, comments) => {
+            const prompt = async (pull, comments, logins) => {
               const existing = comments.find((comment) => comment.user?.type === "Bot" &&
                 comment.user.login === "github-actions[bot]" && typeof comment.body === "string" && comment.body.startsWith(PROMPT_MARKER));
-              const body = `${PROMPT_MARKER}\nPlease read the [Contributor License Agreement](${DOCUMENT}), then post this exact sentence from the account that opened this pull request:\n\n\`${SENTENCE}\`\n\nSigning once covers future contributions. Active organization members and exempt bots do not need to sign.`;
+              const body = `${PROMPT_MARKER}\nPlease read the [Contributor License Agreement](${DOCUMENT}), then each unsigned contributor (${logins.join(", ")}) must post this exact sentence from their own linked GitHub account:\n\n\`${SENTENCE}\`\n\nSigning once covers future contributions. Active organization members and exempt bots do not need to sign.`;
               if (existing) {
                 if (existing.body !== body) await request("PATCH /repos/{owner}/{repo}/issues/comments/{comment_id}", { comment_id: existing.id, body });
                 return;
               }
               await request("POST /repos/{owner}/{repo}/issues/{issue_number}/comments", { issue_number: pull.number, body });
             };
-            const verifyPull = async (pull) => {
-              if (await exempt(pull.user)) return { type: "exempt" };
-              const { signatures } = await readSignatures();
-              if (signatures.signedContributors.some(({ id }) => id === pull.user.id)) return { type: "signed" };
-              const comments = await list("GET /repos/{owner}/{repo}/issues/{issue_number}/comments", { issue_number: pull.number });
-              const signingComment = comments.find((comment) => comment.user?.id === pull.user.id && comment.body === SENTENCE);
-              if (signingComment) {
+            const verifyPull = async (pull, groupEntry) => {
+              if (!positiveInteger(pull.commits) || pull.commits > MAX_PULL_COMMITS) fail("CLA_COMMIT_LIMIT_EXCEEDED");
+              const commits = [];
+              for await (const page of api.paginate.iterator("GET /repos/{owner}/{repo}/pulls/{pull_number}/commits", {
+                owner, repo, pull_number: pull.number, per_page: 100,
+              })) {
+                if (!Array.isArray(page.data)) fail("CLA_INVALID_API_LIST");
+                commits.push(...page.data);
+                if (commits.length > MAX_PULL_COMMITS) fail("CLA_COMMIT_LIMIT_EXCEEDED");
+              }
+              if (commits.length !== pull.commits) fail("CLA_INCOMPLETE_COMMIT_LIST");
+              const commitShas = new Set(commits.map(({ sha }) => sha));
+              if (commitShas.size !== commits.length) fail("CLA_DUPLICATE_COMMIT");
+              const { data: comparison } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+                basehead: `${pull.base.sha}...${pull.head.sha}`,
+              });
+              if (comparison.total_commits !== pull.commits || !Array.isArray(comparison.commits) ||
+                  comparison.commits.length !== pull.commits || comparison.commits.some(({ sha }) => !commitShas.has(sha)) ||
+                  new Set(comparison.commits.map(({ sha }) => sha)).size !== pull.commits) fail("CLA_COMMIT_SNAPSHOT_CHANGED");
+              if (groupEntry) {
+                const { data: ancestry } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+                  basehead: `${pull.head.sha}...${groupEntry.headCommit.oid}`,
+                });
+                if (ancestry.merge_base_commit?.sha !== pull.head.sha) fail("CLA_GROUP_PULL_CHANGED");
+                const { data: grouped } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+                  basehead: `${groupEntry.baseCommit.oid}...${groupEntry.headCommit.oid}`,
+                });
+                if (!Array.isArray(grouped.commits) || grouped.total_commits !== grouped.commits.length ||
+                    grouped.commits.some(({ sha }) => sha !== groupEntry.headCommit.oid && !commitShas.has(sha))) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
+              }
+              const current = await readPull(pull.number);
+              if (current.head.sha !== pull.head.sha || current.commits !== pull.commits) fail("CLA_PULL_CHANGED");
+              const authors = new Map([[pull.user.id, pull.user]]);
+              const unlinked = [];
+              for (const commit of commits) {
+                if (!validSha(commit.sha)) fail("CLA_INVALID_COMMIT");
+                // A web-flow committer alone cannot authenticate an unlinked author.
+                // Web edits with the opener's linked author ID pass the normal identity check.
+                if (!positiveInteger(commit.author?.id) || typeof commit.author.login !== "string") {
+                  unlinked.push(commit.sha);
+                  continue;
+                }
+                authors.set(commit.author.id, commit.author);
+              }
+              let signatures;
+              let comments;
+              const unsigned = [];
+              for (const author of authors.values()) {
+                if (await exempt(author)) continue;
+                signatures ??= (await readSignatures()).signatures;
+                if (signatures.signedContributors.some(({ id }) => id === author.id)) continue;
+                comments ??= await list("GET /repos/{owner}/{repo}/issues/{issue_number}/comments", { issue_number: pull.number });
+                const signingComment = comments.find((comment) => comment.user?.id === author.id && comment.body === SENTENCE);
+                if (!signingComment) {
+                  unsigned.push(author.login);
+                  continue;
+                }
                 if (!positiveInteger(signingComment.id) || typeof signingComment.created_at !== "string" || !positiveInteger(pull.base.repo.id)) {
                   fail("CLA_INVALID_SIGNING_COMMENT");
                 }
                 await recordSignature({
-                  name: pull.user.login, id: pull.user.id, comment_id: signingComment.id,
+                  name: author.login, id: author.id, comment_id: signingComment.id,
                   created_at: signingComment.created_at, repoId: pull.base.repo.id, pullRequestNo: pull.number,
                 });
-                return { type: "signed" };
               }
-              await prompt(pull, comments);
-              return { type: "unsigned" };
+              if (unsigned.length) await prompt(pull, comments, unsigned);
+              return { unsigned, unlinked };
+            };
+            const finishVerification = async (id, unsigned, unlinked) => {
+              const failed = unsigned.length > 0 || unlinked.length > 0;
+              const title = unlinked.length ? "CLA_UNLINKED_AUTHOR" : unsigned.length ? "CLA_UNSIGNED" : "CLA_VERIFIED";
+              const details = [];
+              if (unlinked.length) details.push(`Commit authors have no linked GitHub account: ${unlinked.join(", ")}. Link the author identity to a GitHub account before verification.`);
+              if (unsigned.length) details.push(`Unsigned contributors: ${unsigned.join(", ")}. Read [the CLA](${DOCUMENT}) and each contributor must post exactly: ${SENTENCE}`);
+              await completeCheck(id, failed ? "failure" : "success", title,
+                failed ? details.join("\n\n") : "Every pull request opener and every commit author is signed or exempt.");
             };
             const verifyNumber = async (number) => {
               const pull = await readPull(number);
@@ -189,14 +248,15 @@ jobs:
                 }
               }
               const unsigned = [];
+              const unlinked = [];
               for (const candidateNumber of numbers) {
                 const candidate = candidateNumber === number ? pull : await readPull(candidateNumber);
                 if (candidate.head.sha !== pull.head.sha) fail("CLA_SHARED_HEAD_CHANGED");
                 const verdict = await verifyPull(candidate);
-                if (verdict.type === "unsigned") unsigned.push(candidateNumber);
+                unsigned.push(...verdict.unsigned.map((login) => `${login} (#${candidateNumber})`));
+                unlinked.push(...verdict.unlinked.map((sha) => `${sha} (#${candidateNumber})`));
               }
-              await completeCheck(id, unsigned.length ? "failure" : "success", unsigned.length ? "CLA_UNSIGNED" : "CLA_VERIFIED",
-                unsigned.length ? `Unsigned pull request(s): ${unsigned.map((candidateNumber) => `#${candidateNumber}`).join(", ")}. Read [the CLA](${DOCUMENT}) and post exactly: ${SENTENCE}` : "All open pull request authors sharing this head are signed or exempt.");
+              await finishVerification(id, unsigned, unlinked);
             };
             const verifyGroup = async (group) => {
               const id = await startCheck(group?.head_sha);
@@ -235,6 +295,7 @@ jobs:
               // complete chain to the webhook base; commit-to-PR associations can omit
               // synthetic commits and therefore cannot prove group membership.
               const numbers = new Set();
+              const groupedEntries = new Map();
               const visited = new Set();
               let head = group.head_sha;
               while (head !== group.base_sha) {
@@ -243,18 +304,20 @@ jobs:
                 const entry = entries.get(head);
                 if (!entry) fail("CLA_INCOMPLETE_MERGE_GROUP");
                 numbers.add(entry.pullRequest.number);
+                groupedEntries.set(entry.pullRequest.number, entry);
                 head = entry.baseCommit.oid;
               }
               if (entries.get(group.head_sha)?.pullRequest.number !== Number(anchor[1])) fail("CLA_INCOMPLETE_MERGE_GROUP");
               const unsigned = [];
+              const unlinked = [];
               for (const number of numbers) {
                 const pull = await readPull(number);
                 if (pull.state !== "open" || pull.base.ref !== baseRef) fail("CLA_GROUP_PULL_CHANGED");
-                const verdict = await verifyPull(pull);
-                if (verdict.type === "unsigned") unsigned.push(number);
+                const verdict = await verifyPull(pull, groupedEntries.get(number));
+                unsigned.push(...verdict.unsigned.map((login) => `${login} (#${number})`));
+                unlinked.push(...verdict.unlinked.map((sha) => `${sha} (#${number})`));
               }
-              await completeCheck(id, unsigned.length ? "failure" : "success", unsigned.length ? "CLA_UNSIGNED" : "CLA_VERIFIED",
-                unsigned.length ? `Unsigned pull request(s): ${unsigned.map((number) => `#${number}`).join(", ")}. Read [the CLA](${DOCUMENT}) and post exactly: ${SENTENCE}` : "Every pull request in this merge group is signed or exempt.");
+              await finishVerification(id, unsigned, unlinked);
             };
             try {
               switch (context.eventName) {

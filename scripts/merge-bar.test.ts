@@ -1732,6 +1732,25 @@ describe("contributor signature check", () => {
     }
   });
 
+  test("unlinked commit authors are refused in both landing modes", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const snapshot = passingSnapshot({
+        landing,
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          checkRun("cla", "completed", "failure", {
+            id: 2,
+            outputTitle: "CLA_UNLINKED_AUTHOR",
+          }),
+        ],
+      });
+      expect(failedGate(snapshot)).toEqual({
+        decision: "abort",
+        reasons: ["CLA_UNLINKED_AUTHOR"],
+      });
+    }
+  });
+
   test("verified authors and newest signed verdicts are accepted", () => {
     for (const landing of ["merge", "merge-when-ready"] as const) {
       const snapshot = passingSnapshot({

@@ -19,4 +19,4 @@
 - [ ] ISSUE LINKED | Link an issue to this PR (not by mentioning it in the description, but by using the GitHub issue linking feature)
 - [ ] SCREENSHOT INCLUDED | If relevant, please include a screenshot / video of the functionality added (allows for a quick check of minor ux changes)
 
-- [ ] CLA | The pull request author has signed the CLA or is exempt (active organization member/owner, bot, or allowlisted automation account).
+- [ ] CLA | The pull request opener and every commit author have signed the CLA or are exempt (active organization member/owner, bot, or allowlisted automation account).

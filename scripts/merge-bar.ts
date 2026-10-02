@@ -194,6 +194,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
   ciPlanSkipped: "CI_PLAN_SKIPPED",
   claUnsigned: "CLA_UNSIGNED",
+  claUnlinkedAuthor: "CLA_UNLINKED_AUTHOR",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationIdentity: "MIGRATION_IDENTITY_VIOLATION",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
@@ -367,15 +368,21 @@ const evaluateRequiredCheck = ({
   const latestByName = latestRunByName(checkRuns);
   const cla = latestByName.get("cla");
   if (
-    cla?.outputTitle === "CLA_UNSIGNED" &&
+    (cla?.outputTitle === "CLA_UNSIGNED" ||
+      cla?.outputTitle === "CLA_UNLINKED_AUTHOR") &&
     !(cla.status === "completed" && cla.conclusion === "success")
   ) {
     return {
       gate: "required-check",
       status: "fail",
-      reason: MERGE_BAR_REASONS.claUnsigned,
+      reason:
+        cla.outputTitle === "CLA_UNLINKED_AUTHOR"
+          ? MERGE_BAR_REASONS.claUnlinkedAuthor
+          : MERGE_BAR_REASONS.claUnsigned,
       detail:
-        "Read https://github.com/stella/cla/blob/main/CLA.md and post exactly: I have read the CLA Document and I hereby sign the CLA",
+        cla.outputTitle === "CLA_UNLINKED_AUTHOR"
+          ? "Link every commit author to a GitHub account and rerun the cla check."
+          : "Read https://github.com/stella/cla/blob/main/CLA.md and post exactly: I have read the CLA Document and I hereby sign the CLA",
     };
   }
   const required = requiredCheckRuns.flatMap((name) => {
