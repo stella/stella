@@ -5,6 +5,13 @@ import { DAY_IN_MS } from "@stll/time";
 
 import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
 
+test("agent client storage format requires explicit enablement", () => {
+  const schema = envApiServerSchema.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  expect(v.parse(schema, undefined)).toBe(false);
+  expect(v.parse(schema, "false")).toBe(false);
+  expect(v.parse(schema, "true")).toBe(true);
+});
+
 test("accepted retention settings keep cutoff timestamps in positive ISO years", () => {
   const now = new Date("2021-03-04T10:00:00Z");
   for (const days of [1, 17, 365_000]) {
