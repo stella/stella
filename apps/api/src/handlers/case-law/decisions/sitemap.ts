@@ -7,6 +7,7 @@ import {
   publicCaseLawCountry,
   PUBLIC_CASE_LAW_COUNTRIES,
 } from "@stll/api-contract/case-law-launch-readiness";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import {
   caseLawDecisions,
@@ -243,6 +244,10 @@ export const listSitemapShardDecisionsHandler = async (
   query: SitemapShardDecisionsQuery,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
+  const unavailable = publicCountryUnavailable(query.country);
+  if (unavailable !== null) {
+    return status(503, unavailable);
+  }
   const country = publicCaseLawCountry(query.country);
   if (country === null) {
     return status(404, { message: "Not Found" });

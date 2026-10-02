@@ -160,12 +160,14 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
+import { imageInputUnsupportedError } from "@/api/lib/chat/provider-image-input";
 import {
   withProviderStreamContract,
   withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
+import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import {
   createStreamMessageCapture,
   type ChatStreamProcessor,
@@ -499,10 +501,23 @@ export const streamChat = async ({
     documentAttachmentMimeTypes.some(
       (mimeType) => !modelAcceptsDocumentAttachment({ model, mimeType }),
     );
+  const hasImageAttachments = preparedMessageList.some((message) =>
+    message.parts.some((part) => part.type === "image"),
+  );
+  const modelRejectsImages = (model: ResolvedTanStackTextModel): boolean =>
+    hasImageAttachments && getModelImageCapability(model) === "unsupported";
   const modelRejectsStreamingTools = (
     model: ResolvedTanStackTextModel,
   ): boolean =>
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
+
+  if (modelRejectsImages(primaryModel)) {
+    const error = imageInputUnsupportedError();
+    return new Response(
+      JSON.stringify({ code: error.code, message: error.message }),
+      { status: error.status, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
   if (modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
@@ -545,6 +560,7 @@ export const streamChat = async ({
   const fallbackModel =
     resolvedFallbackModel !== null &&
     (modelRejectsAnyDocument(resolvedFallbackModel) ||
+      modelRejectsImages(resolvedFallbackModel) ||
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
