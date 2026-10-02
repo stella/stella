@@ -1,1 +1,5 @@
-{ "top5Floor": null, "nonemptyQueryIds": null }
+{
+  "top5Floor": null,
+  "nonemptyQueryIds": null,
+  "measurement": null
+}

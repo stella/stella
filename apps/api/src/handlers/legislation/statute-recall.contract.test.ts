@@ -60,12 +60,34 @@ const BASELINE_PATH =
   "apps/api/src/handlers/legislation/fixtures/statute-recall/baseline.json";
 const baselineSchema = v.strictObject({
   top5Floor: v.nullable(
-    v.pipe(v.number(), v.integer(), v.minValue(0), v.maxValue(16)),
+    v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(16)),
   ),
-  nonemptyQueryIds: v.nullable(v.array(v.string())),
+  nonemptyQueryIds: v.nullable(v.pipe(v.array(v.string()), v.minLength(1))),
+  measurement: v.nullable(
+    v.strictObject({
+      runId: v.pipe(v.string(), v.regex(/^\d+$/u)),
+      fixtureFingerprint: v.pipe(v.string(), v.regex(/^[a-f0-9]{64}$/u)),
+      outcomes: v.pipe(
+        v.array(
+          v.strictObject({
+            id: v.string(),
+            rank: v.nullable(
+              v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(10)),
+            ),
+            match: v.nullable(v.picklist(["strict", "relaxed"])),
+            nonempty: v.boolean(),
+          }),
+        ),
+        v.length(16),
+      ),
+    }),
+  ),
 });
 const baseline = v.parse(baselineSchema, fixtureBaseline);
 export const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
+const fixtureFingerprint = createHash("sha256")
+  .update(JSON.stringify([fixtureQueries, fixtureDocuments]))
+  .digest("hex");
 const PROTECTED_RELAXED_QUERY_ID = "land-register-good-faith";
 const protectedRelaxedQuery =
   fixtureQueries.find(({ id }) => id === PROTECTED_RELAXED_QUERY_ID) ??
@@ -157,6 +179,38 @@ test("the committed statute recall floor and nonempty coverage only increase", (
     for (const id of baseline.nonemptyQueryIds) {
       expect(queryIds.has(id)).toBe(true);
     }
+  }
+  if (baseline.top5Floor !== null) {
+    expect(
+      baseline.measurement,
+      "A measured floor requires its CI outcomes",
+    ).not.toBeNull();
+    expect(baseline.nonemptyQueryIds).not.toBeNull();
+  }
+  if (baseline.measurement !== null) {
+    const { outcomes } = baseline.measurement;
+    expect(baseline.measurement.fixtureFingerprint).toBe(fixtureFingerprint);
+    expect(outcomes.map(({ id }) => id)).toEqual(
+      fixtureQueries.map(({ id }) => id),
+    );
+    expect(baseline.top5Floor).toBe(
+      outcomes.filter(({ rank }) => rank !== null && rank <= 5).length,
+    );
+    expect(baseline.nonemptyQueryIds).toEqual(
+      outcomes.filter(({ nonempty }) => nonempty).map(({ id }) => id),
+    );
+    expect(baseline.nonemptyQueryIds).toContain(PROTECTED_RELAXED_QUERY_ID);
+    for (const outcome of outcomes) {
+      expect(outcome.rank === null).toBe(outcome.match === null);
+      if (outcome.rank !== null) {
+        expect(outcome.nonempty).toBe(true);
+      }
+    }
+    const protectedOutcome = outcomes.find(
+      ({ id }) => id === PROTECTED_RELAXED_QUERY_ID,
+    );
+    expect(protectedOutcome?.match).toBe("relaxed");
+    expect(protectedOutcome?.rank).not.toBeNull();
   }
   const base = git(["merge-base", "origin/main", "HEAD"]);
   const previousPath = git([
@@ -446,9 +500,7 @@ describe.skipIf(!runEngineTests)(
           expect(response.status, fixture.id).toBe(200);
           const body: unknown = await response.json();
           if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
-            return panic(
-              "Public statute eval returned an invalid search response",
-            );
+            panic("Public statute eval returned an invalid search response");
           }
           const expected = new Set(
             fixture.expectedActs.map((act) => canonicalWorkEli(`cz/sb/${act}`)),
@@ -456,10 +508,15 @@ describe.skipIf(!runEngineTests)(
           const index = body.items.findIndex((hit) =>
             expected.has(canonicalWorkEli(hit.eli)),
           );
+          const expectedHit =
+            index === -1
+              ? null
+              : (body.items.at(index) ??
+                panic("Expected act rank has no corresponding hit"));
           rows.push({
             id: fixture.id,
             rank: index === -1 ? null : index + 1,
-            match: index === -1 ? null : body.items.at(index)?.match.type,
+            match: expectedHit === null ? null : expectedHit.match.type,
             nonempty: body.items.length > 0,
           });
         }
@@ -480,14 +537,26 @@ describe.skipIf(!runEngineTests)(
         if (
           STATUTE_RECALL_TOP5_FLOOR === null ||
           baseline.nonemptyQueryIds === null ||
-          top5 < STATUTE_RECALL_TOP5_FLOOR ||
+          baseline.measurement === null ||
+          baseline.measurement.fixtureFingerprint !== fixtureFingerprint ||
+          top5 !== STATUTE_RECALL_TOP5_FLOOR ||
           emptyRegressions.length > 0
         ) {
           console.table(
             rows.map(({ id, rank, match }) => ({ id, rank, match })),
           );
           console.info(
-            `Measured baseline: ${JSON.stringify({ top5Floor: top5, nonemptyQueryIds })}`,
+            `Measured baseline: ${JSON.stringify({
+              top5Floor: top5,
+              nonemptyQueryIds,
+              measurement: {
+                runId:
+                  process.env["GITHUB_RUN_ID"] ??
+                  panic("Measure statute recall in CI"),
+                fixtureFingerprint,
+                outcomes: rows,
+              },
+            })}`,
           );
         }
         expect(
@@ -498,6 +567,12 @@ describe.skipIf(!runEngineTests)(
           baseline.nonemptyQueryIds,
           "Commit measured nonempty query IDs before publication",
         ).not.toBeNull();
+        expect(
+          baseline.measurement,
+          "Commit the measured CI outcomes with the floor",
+        ).not.toBeNull();
+        expect(top5).toBeGreaterThan(0);
+        expect(nonemptyQueryIds.length).toBeGreaterThan(0);
         if (STATUTE_RECALL_TOP5_FLOOR === null) {
           return;
         }
