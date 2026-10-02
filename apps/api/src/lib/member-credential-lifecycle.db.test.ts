@@ -8,6 +8,7 @@ import {
   spyOn,
   test,
 } from "bun:test";
+import { createHash, randomBytes } from "node:crypto";
 import * as v from "valibot";
 
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
@@ -95,6 +96,37 @@ const postJson = async (
 const readCreatedKey = async (response: Response): Promise<string> => {
   expect(response.status, await response.clone().text()).toBe(200);
   return v.parse(createdKeySchema, await response.json()).key;
+};
+
+const createDesktopCredential = async (
+  browser: HumanBrowser,
+  organizationId: string,
+) => {
+  const correlationId = Bun.randomUUIDv7();
+  const verifier = randomBytes(32).toString("hex");
+  const grant = await postJson(
+    desktopRegistryRoute,
+    "/desktop-registry/grant",
+    browser,
+    {
+      correlationId,
+      verifierHash: createHash("sha256").update(verifier).digest("hex"),
+    },
+  );
+  expect(grant.status, await grant.clone().text()).toBe(200);
+  const redeemed = await desktopRegistryRoute.handle(
+    new Request(`${BASE}/desktop-registry/redeem-link`, {
+      method: "POST",
+      headers: { "content-type": "application/json" },
+      body: JSON.stringify({
+        correlationId,
+        verifier,
+        expectedUserId: browser.userId,
+        expectedOrganizationId: organizationId,
+      }),
+    }),
+  );
+  return await readCreatedKey(redeemed);
 };
 
 type MemberCredentials = {
@@ -234,14 +266,7 @@ describe("organization member credential lifecycle", () => {
           permissions: { workspace: ["read"] },
         }),
       ),
-      desktopKey: await readCreatedKey(
-        await postJson(
-          desktopRegistryRoute,
-          "/desktop-registry/grant",
-          member,
-          {},
-        ),
-      ),
+      desktopKey: await createDesktopCredential(member, organization.id),
       oauthClient,
       oauthGrant: await grantOAuthClient(member, oauthClient),
     };

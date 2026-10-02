@@ -81,6 +81,7 @@ export const ROUTE_CACHE_CLASSES = {
   "/settings/organization/document-types": "private-no-store",
   "/settings/organization/matter-numbering": "private-no-store",
   "/settings/organization/members": "private-no-store",
+  "/settings/organization/number-series": "private-no-store",
   "/settings/organization/time-policy": "private-no-store",
   "/settings/organization/usage": "private-no-store",
   "/settings/organization/vat-rates": "private-no-store",

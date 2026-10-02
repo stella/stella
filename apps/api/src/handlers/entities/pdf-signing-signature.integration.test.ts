@@ -145,7 +145,9 @@ const seedPreparedSession = async () => {
     tokenExpiresAt: expiresAt,
     workspaceId: ids.wsA1,
   });
-  const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb);
+  const redeemed = await redeemPdfSigningHandoff(handoffToken, tokenDb, {
+    identity: { userId: ids.userA1, organizationId: ids.orgA },
+  });
   return {
     sessionId,
     sessionToken: redeemed?.sessionToken ?? "",
