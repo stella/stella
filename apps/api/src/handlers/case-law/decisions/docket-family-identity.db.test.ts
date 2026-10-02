@@ -20,6 +20,7 @@ import {
   describeDocketFamilyIdentity,
   docketFamilyDecisionRows,
   docketFamilyIdentifierRows,
+  docketFamilyKeyGrantSql,
   docketFamilyScenario,
 } from "@/api/tests/helpers/docket-family-identity-scenario";
 import {
@@ -42,11 +43,16 @@ const DB_TEST_TIMEOUT_MS = 120_000;
 
 let client: PGlite;
 let caseLawDb: CaseLawPublicReadDb;
+let setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
 
 beforeAll(
   async () => {
     client = await createTestPglite();
     const db = drizzle({ client });
+    setFamilyKeyGrant = async (mode) => {
+      await db.execute(docketFamilyKeyGrantSql(mode));
+    };
+    await setFamilyKeyGrant("grant");
     const readDb = async <T>(
       fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
     ) =>
@@ -79,7 +85,11 @@ afterAll(async () => {
   await client.close();
 });
 
-describeDocketFamilyIdentity(() => ({ caseLawDb, scenario }));
+describeDocketFamilyIdentity(() => ({
+  caseLawDb,
+  scenario,
+  setFamilyKeyGrant,
+}));
 
 test("an entry naming two files is not read as either", () => {
   expect(
