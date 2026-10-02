@@ -11,12 +11,16 @@ const isRecord = (value: unknown): value is Record<string, unknown> =>
   typeof value === "object" && value !== null && !Array.isArray(value);
 
 const optionalString = (value: unknown): string | undefined => {
-  if (value === undefined || typeof value === "string") {return value;}
+  if (value === undefined || typeof value === "string") {
+    return value;
+  }
   throw new Error("Expected optional registry text");
 };
 
 const registryTool = (value: unknown) => {
-  if (!isRecord(value)) {throw new Error("Expected registry metadata");}
+  if (!isRecord(value)) {
+    throw new Error("Expected registry metadata");
+  }
   const {
     name,
     summary,
@@ -124,8 +128,9 @@ test("downstream configuration preserves all real registry discovery and invocat
     }
     if (entry["name"] === "describe_capability") {
       const capability = entry["args"]["capability"];
-      if (typeof capability !== "string")
-        {throw new Error("Expected a described registry capability");}
+      if (typeof capability !== "string") {
+        throw new TypeError("Expected a described registry capability");
+      }
       (entry["args"]["detail"] === "full"
         ? fullDescriptions
         : compactDescriptions
@@ -146,8 +151,9 @@ test("compact schemas preserve prototype-named nested properties and instance ke
   const schema: unknown = JSON.parse(
     '{"type":"object","properties":{"__proto__":{"type":"integer","maximum":9007199254740991},"constructor":{"type":"object","properties":{"toString":{"type":"string","description":"label"}}},"literal":{"const":{"__proto__":{"maximum":9007199254740991,"$schema":"instance"}}}}}',
   );
-  if (!isRecord(schema))
-    {throw new Error("Expected prototype-key schema fixture");}
+  if (!isRecord(schema)) {
+    throw new Error("Expected prototype-key schema fixture");
+  }
   const expected: unknown = JSON.parse(
     '{"type":"object","properties":{"__proto__":{"type":"integer"},"constructor":{"type":"object","properties":{"toString":{"type":"string"}}},"literal":{"const":{"__proto__":{"maximum":9007199254740991,"$schema":"instance"}}}}}',
   );
@@ -176,11 +182,14 @@ test.each(["__proto__", "constructor", "toString"])(
       access: "read",
     });
     expect(read.ok).toBe(true);
-    if (!read.ok) {throw new Error(read.message);}
+    if (!read.ok) {
+      throw new Error(read.message);
+    }
     expect(JSON.stringify(read.value)).toBe(JSON.stringify(value));
     const payload = read.value["payload"];
-    if (!isRecord(payload))
-      {throw new Error("Expected normalized nested object");}
+    if (!isRecord(payload)) {
+      throw new Error("Expected normalized nested object");
+    }
     expect(Object.hasOwn(payload, key)).toBe(true);
     expect(Object.getPrototypeOf(payload)).toBe(Object.prototype);
     expect(payload[key]).toEqual(entry);
