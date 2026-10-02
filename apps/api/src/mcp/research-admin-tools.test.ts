@@ -42,6 +42,7 @@ const createContext = (
   safeDb: toSafeDbMock(throwingScopedDb),
   scopedDb: throwingScopedDb,
   userId: toSafeId<"user">("user_1"),
+  userEmail: "standard@example.test",
 });
 
 const isRecord = (value: unknown): value is Record<string, unknown> =>

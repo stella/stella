@@ -399,6 +399,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("s3-object-boundary.fixture.ts", [
     "s3-object-boundary/no-native-s3-object-read",
+    "s3-object-boundary/no-etag-content-identity",
     "s3-object-boundary/no-native-s3-object-write",
   ]),
   fixtureRuleOverride("result-boundary.fixture.ts", [
@@ -891,6 +892,7 @@ export default defineConfig({
       "error",
     "require-tenant-page-limit/require-tenant-page-limit": "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
+    "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
@@ -953,6 +955,7 @@ export default defineConfig({
       },
     ],
     "no-nanoid/no-nanoid": "error",
+    "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
     "no-direct-lucide-import/no-direct-lucide-import": "error",
@@ -1232,6 +1235,7 @@ export default defineConfig({
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
+    "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
@@ -1252,6 +1256,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-running-entry-guard.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
+    "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
@@ -1338,6 +1343,10 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["**/*.{ts,tsx,mts,cts,js,mjs}"],
+      rules: { "s3-object-boundary/no-etag-content-identity": "error" },
+    },
     ...SHADCN_LINT_POLICY_OVERRIDES,
     ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
@@ -1814,7 +1823,11 @@ export default defineConfig({
       // Repository and workspace tooling: CLIs that print reports, plus the
       // on-demand eval runs. Anchored so `apps/api/src/scripts`, which ships
       // as runtime workers and backfills, keeps the product rules.
-      files: [...toolingScriptFiles, "apps/*/evals/**"],
+      files: [
+        ...toolingScriptFiles,
+        "apps/*/evals/**",
+        "packages/property-testing/src/index.ts",
+      ],
       rules: {
         "no-console": "off",
         // `noPropertyAccessFromIndexSignature` requires bracket access on the
@@ -3467,6 +3480,8 @@ export default defineConfig({
               // Side-effect-free schema modules are the API's environment
               // boundary. Runtime wrappers import them and instantiate env.
               "apps/api/src/env-base-schema.ts",
+              "apps/api/src/env-db-load-gate.ts",
+              "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",

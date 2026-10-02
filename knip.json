@@ -130,10 +130,21 @@
     "packages/concurrency": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/db-load-gate": {
+      "entry": [
+        "src/health.ts",
+        "src/indicators.ts",
+        "src/heavy-work-slot.ts",
+        "src/**/*.test.ts"
+      ]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/legal-ast": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/mcp-kit": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/mojibake": {

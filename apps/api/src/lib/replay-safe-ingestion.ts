@@ -26,7 +26,7 @@ type CommitReplaySafeIngestionBatchOptions<
   persistItems: (
     transaction: Transaction,
     items: readonly Item[],
-  ) => Promise<Persisted>;
+  ) => Persisted | Promise<Persisted>;
   runInTransaction: IngestionTransactionRunner<Transaction>;
 };
 

@@ -35,6 +35,8 @@ const admissionOptions = {
 };
 
 const registeredKinds = {
+  "chat.send": "chat.send",
+  "chat.generate-thread-title": "chat.generate-thread-title",
   "chat.improve-prompt": "chat.improve-prompt",
   "chat.suggest-thread-title": "chat.suggest-thread-title",
   "mcp.services/call": "mcp.services/call",
@@ -57,7 +59,10 @@ for (const enabled of [true, false]) {
         },
         periodIdentity,
         costRecorder: recorderFor(observations),
-        run: async () => {
+        run: async (_signal, control) => {
+          expect(Result.isOk(await control.reservePeriod(periodIdentity))).toBe(
+            true,
+          );
           expect(currentActionCostIdentity(organizationId)).toEqual({
             organizationId,
             ...periodIdentity,

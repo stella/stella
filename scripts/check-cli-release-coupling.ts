@@ -525,7 +525,7 @@ const readSurface = (
     readFileSync(path.join(root, locate(part)), "utf-8"),
   );
 
-const readHeadSurface = (root: string): CliContractSurface =>
+export const readHeadSurface = (root: string): CliContractSurface =>
   readSurface(path.join(root, CLI_DIRECTORY), (part) => part);
 
 /** Downloads the published tarball and reads the same surface parts from it. */

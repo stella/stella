@@ -20,6 +20,7 @@ import { loadChangesetPolicy } from "./changeset-guard";
 
 const SHARED_NPM_PACKAGES = [
   "agent-input",
+  "mcp-kit",
   "auth-model",
   "ai-catalog",
   "anonymize-chat",
