@@ -612,7 +612,7 @@ export const PROVISION_CITATION_GRAMMARS = {
       // (`Sb. m. s.`) share the gazette's suffix and are not statutes.
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>(?=\d{0,4}[1-9])\d{1,5})\/(?<year>[1-9]\d{3})\s+(?:${CZ_STATUTE_COLLECTION.spellings
         .toSorted((left, right) => right.length - left.length)
-        .map(RegExp.escape)
+        .map((spelling) => RegExp.escape(spelling))
         .join("|")})(?![\p{L}\p{N}])(?!\.?\s*(?:m\.\s*s\.|NSS|rozh\.))`,
     },
     jurisdiction: "CZE",

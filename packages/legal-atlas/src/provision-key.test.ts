@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { createHash } from "node:crypto";
@@ -133,6 +134,9 @@ describe("provision identity construction", () => {
         const collection = recordedPath.at(1);
         const year = recordedPath.at(2);
         const number = recordedPath.at(3);
+        if (collection !== "sb" || year === undefined || number === undefined) {
+          return panic("Malformed recorded publisher URL");
+        }
         expect(collection).toBe("sb");
         expect(year).toMatch(/^\d{4}$/u);
         expect(number).toMatch(/^\d+$/u);

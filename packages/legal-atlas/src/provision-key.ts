@@ -65,7 +65,10 @@ const keyTuple = v.strictTuple([
 
 /** Decode the canonical frame and revalidate its identifier with the owning grammar. */
 export const parseProvisionKey = (raw: string) => {
-  const value: unknown = Result.try(() => JSON.parse(raw)).unwrapOr(null);
+  const value = Result.try(() => {
+    const decoded: unknown = JSON.parse(raw);
+    return decoded;
+  }).unwrapOr(null);
   if (JSON.stringify(value) !== raw) {
     return null;
   }
