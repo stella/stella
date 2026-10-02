@@ -141,6 +141,7 @@ export const createPublicSanctionsSearchHandler = ({
 }: PublicSanctionsSearchOptions = {}) =>
   createSafePublicHandler(
     {
+      cache: { kind: "none" },
       mcp: { type: "internal", reason: "public_indexing" },
       body: bodySchema,
     },
