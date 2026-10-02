@@ -18,6 +18,10 @@ import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import { encodeCompatId } from "@/api/mcp/compat-ids";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
@@ -271,6 +275,10 @@ const searchDecisions = async ({
   if (countries.length === 0) {
     return { type: "page", page: EMPTY_PAGE };
   }
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.corpusRequest,
+  );
   const search =
     context.testDependencies?.searchDecisionsHandler ??
     defaultSearchDecisionsHandler;
@@ -306,6 +314,7 @@ const searchDecisions = async ({
               : { cursor: position.cursor }),
           },
           caseLawPublicReadDb,
+          observer,
         ),
       } as const;
     },
@@ -360,6 +369,10 @@ const searchStatutes = async ({
   if (countries.length === 0) {
     return { type: "page", page: EMPTY_PAGE };
   }
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.corpusRequest,
+  );
   const search =
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler;
@@ -395,6 +408,7 @@ const searchStatutes = async ({
               : { cursor: position.cursor }),
           },
           legislationPublicReadDb,
+          observer,
         ),
       } as const;
     },

@@ -6,6 +6,7 @@ import {
   describe,
   expect,
   mock,
+  spyOn,
   test,
 } from "bun:test";
 import JSZip from "jszip";
@@ -59,6 +60,7 @@ import { CORPUS_SEARCH_CURSOR_MAX_LENGTH } from "@/api/lib/legal-search/corpus-s
 import { LIMITS } from "@/api/lib/limits";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import type { SearchHit, SearchResult } from "@/api/lib/search/types";
+import * as actionCostContext from "@/api/lib/usage/action-costs/context";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { resolveMcpToolOutputContract } from "@/api/mcp/gateway/list-tools";
@@ -114,6 +116,29 @@ const handleMcpToolCall = async (
     ).toBe(true);
   }
   return result;
+};
+
+const handleMcpToolCallWithCapturedObserver = async (
+  call: Parameters<typeof dispatchMcpToolCall>[0],
+) => {
+  const capture = spyOn(actionCostContext, "actionRequestObserver");
+  try {
+    const result = await handleMcpToolCall(call);
+    expect(capture.mock.calls.length).toBeGreaterThan(0);
+    for (const args of capture.mock.calls) {
+      expect(args).toEqual([
+        call.context.organizationId,
+        actionCostContext.ACTION_COST_CALL_KIND.corpusRequest,
+      ]);
+    }
+    const captured = capture.mock.results.at(-1);
+    if (captured?.type !== "return") {
+      panic("Missing captured request observer");
+    }
+    return { result, observer: captured.value };
+  } finally {
+    capture.mockRestore();
+  }
 };
 
 /**
@@ -1965,7 +1990,7 @@ describe("OpenAI-compatible MCP tools", () => {
     });
 
     const context = createContext();
-    const result = await handleMcpToolCall({
+    const { result, observer } = await handleMcpToolCallWithCapturedObserver({
       args: {
         country: "CZE",
         court: "Nejvyšší soud",
@@ -1995,6 +2020,7 @@ describe("OpenAI-compatible MCP tools", () => {
         sourceId: "11111111-1111-4111-8111-111111111111",
       },
       caseLawPublicReadDb,
+      observer,
     );
 
     expect(parseToolPayload(result)).toEqual({
@@ -2639,7 +2665,7 @@ describe("OpenAI-compatible MCP tools", () => {
     );
 
     searchDecisionsHandlerMock.mockClear();
-    await handleMcpToolCall({
+    const { observer } = await handleMcpToolCallWithCapturedObserver({
       args: {
         country: "CZE",
         cursor: firstPage.nextCursor,
@@ -2655,6 +2681,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
       expect.objectContaining({ cursor: "engine-first-2", query: "first" }),
       caseLawPublicReadDb,
+      observer,
     );
   });
 
@@ -2755,15 +2782,17 @@ describe("OpenAI-compatible MCP tools", () => {
       advertised.properties.cursor.maxLength,
     );
 
-    const continued = await handleMcpToolCall({
-      args: { country: "CZE", cursor: emitted, queries },
-      context: createContext(),
-      toolName: "search_case_law",
-    });
+    const { result: continued, observer } =
+      await handleMcpToolCallWithCapturedObserver({
+        args: { country: "CZE", cursor: emitted, queries },
+        context: createContext(),
+        toolName: "search_case_law",
+      });
     expect(continued.isError).toBeUndefined();
     expect(searchDecisionsHandlerMock).toHaveBeenLastCalledWith(
       expect.objectContaining({ cursor: longestEngineCursor }),
       caseLawPublicReadDb,
+      observer,
     );
   });
 
@@ -3898,7 +3927,7 @@ describe("OpenAI-compatible MCP tools", () => {
       warnings: [],
     });
 
-    await handleMcpToolCall({
+    const { observer } = await handleMcpToolCallWithCapturedObserver({
       args: {
         country: "CZE",
         date_from: "1. 10. 2026",
@@ -3911,6 +3940,7 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).toHaveBeenCalledWith(
       expect.objectContaining({ dateFrom: "2026-10-01" }),
       caseLawPublicReadDb,
+      observer,
     );
   });
 

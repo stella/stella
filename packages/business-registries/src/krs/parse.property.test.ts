@@ -245,12 +245,18 @@ test(
     } satisfies KrsLookupResponse;
     for (const payload of [fixture, supplemental]) {
       const baseline = await expectRegistryResponse(payload, async () =>
-        lookupByKrsNumber("0000006865", { register: "RejP" }),
+        lookupByKrsNumber("0000006865", {
+          observer: "unobserved",
+          register: "RejP",
+        }),
       );
       expect(baseline?.krsNumber).toBe("0000006865");
       await forEachRegistryMutation(payload, async (mutated) => {
         const parsed = await expectRegistryResponse(mutated, async () =>
-          lookupByKrsNumber("0000006865", { register: "RejP" }),
+          lookupByKrsNumber("0000006865", {
+            observer: "unobserved",
+            register: "RejP",
+          }),
         );
         if (!parsed) {
           return;

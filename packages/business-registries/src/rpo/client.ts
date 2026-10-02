@@ -151,15 +151,19 @@ const readErrorMessage = async (response: Response): Promise<string | null> => {
 };
 
 /** GET a JSON resource. Resolves to `null` on 404 (no such record). */
+type RpoGetOptions<T> = RegistryClientOptions & {
+  isExpectedShape: (value: unknown) => value is T;
+};
+
 const rpoGet = async <T>(
   url: string,
-  isExpectedShape: (value: unknown) => value is T,
-  signal: AbortSignal | undefined,
+  { isExpectedShape, signal, observer }: RpoGetOptions<T>,
 ): Promise<Result<T | null, RpoUpstreamError>> => {
   const response = await Result.tryPromise({
     try: async () =>
       await performRegistryRequest({
         url,
+        observer,
         init: { headers: { Accept: "application/json" } },
         signal,
         timeoutMs: REQUEST_TIMEOUT_MS,
@@ -216,10 +220,13 @@ const rpoGet = async <T>(
 
 const search = async (
   params: Record<string, string>,
-  signal: AbortSignal | undefined,
+  options: RegistryClientOptions,
 ): Promise<Result<RpoRawSearchHit[], RpoUpstreamError>> => {
   const url = `${SEARCH_URL}?${new URLSearchParams(params).toString()}`;
-  const response = await rpoGet(url, isRpoSearchResponse, signal);
+  const response = await rpoGet(url, {
+    ...options,
+    isExpectedShape: isRpoSearchResponse,
+  });
   if (response.isErr()) {
     return Result.err(response.error);
   }
@@ -281,14 +288,13 @@ export type LookupOptions = RegistryClientOptions & {
  */
 export const lookupByIco = async (
   input: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<Result<RpoEntity | null, RpoClientError>> => {
   const ico = normalizeIco(input);
   if (!isIcoShape(ico)) {
     return Result.err(new RpoValidationError(`Invalid Slovak IČO: ${input}`));
   }
-  const signal = options?.signal;
-  const hits = await search({ identifier: ico }, signal);
+  const hits = await search({ identifier: ico }, options);
   if (hits.isErr()) {
     return Result.err(hits.error);
   }
@@ -297,13 +303,12 @@ export const lookupByIco = async (
     return Result.ok(null);
   }
 
-  const current = options?.view !== "historical";
+  const current = options.view !== "historical";
   // The API reads only the literal `true` as true.
   const query = current ? "" : "?showHistoricalData=true";
   const entity = await rpoGet(
     `${ENTITY_URL}/${encodeRegistryComponent(String(hit.id))}${query}`,
-    isRpoEntity,
-    signal,
+    { ...options, isExpectedShape: isRpoEntity },
   );
   if (entity.isErr()) {
     return Result.err(entity.error);
@@ -368,21 +373,21 @@ const nameRank = (name: string, query: string): number => {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<Result<RpoSearchResult[], RpoClientError>> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     return Result.err(new RpoValidationError("Search name must not be empty"));
   }
   const limit = clampSearchLimit(
-    options?.limit ?? DEFAULT_SEARCH_LIMIT,
+    options.limit ?? DEFAULT_SEARCH_LIMIT,
     MAX_SEARCH_LIMIT,
   );
   const query = foldForMatch(trimmed);
   const rank = (result: RpoSearchResult): number =>
     nameRank(foldForMatch(result.name), query) * 2 +
     (result.status.type === "active" ? 0 : 1);
-  const hits = await search({ fullName: trimmed }, options?.signal);
+  const hits = await search({ fullName: trimmed }, options);
   if (hits.isErr()) {
     return Result.err(hits.error);
   }
