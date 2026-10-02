@@ -71,6 +71,7 @@
  */
 
 import { panic, Result } from "better-result";
+import * as v from "valibot";
 
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
@@ -91,16 +92,6 @@ import {
 } from "@/api/lib/legal-search/morphology/dictionary";
 import { LIMITS } from "@/api/lib/limits";
 import { decodeCursor, encodeCursor } from "@/api/lib/search/cursor";
-import { isRecord } from "@/api/lib/type-guards";
-
-export type CorpusSearchPhase =
-  | { type: "strict"; fingerprint: string; generation: string }
-  | {
-      type: "relaxed";
-      fingerprint: string;
-      generation: string;
-      strictWorkTokens: readonly string[];
-    };
 
 /**
  * The scan's own boundary plus the dictionary that built the query it ranked
@@ -145,48 +136,28 @@ const GROUPS_SEGMENT_PREFIX = "x";
 const PHASE_SEGMENT_PREFIX = "p";
 const PHASE_FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/u;
 
+const phaseIdentityFields = {
+  fingerprint: v.pipe(v.string(), v.regex(PHASE_FINGERPRINT_PATTERN)),
+  generation: v.pipe(v.string(), v.check(isCorpusIndexGeneration)),
+};
+const corpusSearchPhaseSchema = v.variant("type", [
+  v.strictObject({ type: v.literal("strict"), ...phaseIdentityFields }),
+  v.strictObject({
+    type: v.literal("relaxed"),
+    ...phaseIdentityFields,
+    strictWorkTokens: v.pipe(
+      v.array(v.pipe(v.string(), v.regex(GROUP_TOKEN_PATTERN))),
+      v.maxLength(LIMITS.corpusIndexSearchMaxExcludedGroups),
+      v.check((tokens) => new Set(tokens).size === tokens.length),
+      v.readonly(),
+    ),
+  }),
+]);
+export type CorpusSearchPhase = v.InferOutput<typeof corpusSearchPhaseSchema>;
+
 const readPhase = (value: unknown): CorpusSearchPhase | null => {
-  if (
-    !isRecord(value) ||
-    typeof value["fingerprint"] !== "string" ||
-    !PHASE_FINGERPRINT_PATTERN.test(value["fingerprint"]) ||
-    typeof value["generation"] !== "string" ||
-    !isCorpusIndexGeneration(value["generation"])
-  ) {
-    return null;
-  }
-  const { fingerprint, generation } = value;
-  switch (value["type"]) {
-    case "strict": {
-      return Object.keys(value).length === 3
-        ? { type: "strict", fingerprint, generation }
-        : null;
-    }
-    case "relaxed": {
-      const tokens = value["strictWorkTokens"];
-      if (
-        Object.keys(value).length !== 4 ||
-        !Array.isArray(tokens) ||
-        tokens.length > LIMITS.corpusIndexSearchMaxExcludedGroups
-      ) {
-        return null;
-      }
-      const strictWorkTokens: string[] = [];
-      for (const token of tokens) {
-        if (typeof token !== "string" || !GROUP_TOKEN_PATTERN.test(token)) {
-          return null;
-        }
-        strictWorkTokens.push(token);
-      }
-      if (new Set(strictWorkTokens).size !== strictWorkTokens.length) {
-        return null;
-      }
-      return { type: "relaxed", fingerprint, generation, strictWorkTokens };
-    }
-    default: {
-      return null;
-    }
-  }
+  const result = v.safeParse(corpusSearchPhaseSchema, value);
+  return result.success ? result.output : null;
 };
 
 const serializePhase = (phase: CorpusSearchPhase): string => {

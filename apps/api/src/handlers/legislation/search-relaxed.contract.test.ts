@@ -13,7 +13,6 @@ import {
   legislationDocuments,
   legislationSources,
 } from "@/api/db/schema";
-import { envBase } from "@/api/env-base";
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { SearchLegislationBody } from "@/api/handlers/legislation/search-schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -37,6 +36,7 @@ import type {
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { encodeCursor } from "@/api/lib/search/cursor";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -141,10 +141,6 @@ describe.skipIf(!runEngineTests)(
     let legislationDb: LegislationReadDb;
     let restoreSearch: (() => void) | undefined;
     let fixtureIndexCreated = false;
-    const previousProviderDescriptor = Object.getOwnPropertyDescriptor(
-      envBase,
-      "LEGAL_SEARCH_PROVIDER",
-    );
     const searchCalls: Parameters<typeof corpusClient.search>[0][] = [];
 
     beforeAll(async () => {
@@ -271,23 +267,10 @@ describe.skipIf(!runEngineTests)(
         },
       );
       restoreSearch = () => searchSpy.mockRestore();
-      Object.defineProperty(envBase, "LEGAL_SEARCH_PROVIDER", {
-        configurable: true,
-        value: "corpus-index",
-      });
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
       restoreSearch?.();
-      if (previousProviderDescriptor === undefined) {
-        Reflect.deleteProperty(envBase, "LEGAL_SEARCH_PROVIDER");
-      } else {
-        Object.defineProperty(
-          envBase,
-          "LEGAL_SEARCH_PROVIDER",
-          previousProviderDescriptor,
-        );
-      }
       const deleted = fixtureIndexCreated
         ? await corpusClient.deleteIndex(INDEX_ID, "unobserved")
         : null;
@@ -302,6 +285,7 @@ describe.skipIf(!runEngineTests)(
         body,
         legislationDb,
         "unobserved",
+        { provider: "corpus-index", loadSearchConfigs: async () => [] },
       );
       return "items" in result
         ? result
@@ -547,6 +531,10 @@ describe.skipIf(!runEngineTests)(
       const { phase } = cursor;
       const invalid = [
         "malformed-cursor",
+        encodeCursor(
+          0.5,
+          `0:none:relevance:p${Buffer.from('{"type":"strict').toString("base64url")}:${String(code.id)}`,
+        ),
         encodeCorpusSearchCursor({
           ...cursor,
           phase: {
@@ -582,6 +570,7 @@ describe.skipIf(!runEngineTests)(
           },
           legislationDb,
           "unobserved",
+          { provider: "corpus-index", loadSearchConfigs: async () => [] },
         );
         expect(response).toMatchObject({
           code: 400,

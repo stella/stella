@@ -125,6 +125,7 @@ type LegislationHit = Static<
 type RawRow = Record<string, unknown>;
 
 type SearchLegislationDependencies = {
+  provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
   loadSearchConfigs: () => Promise<readonly FtsSearchConfig[]>;
 };
 
@@ -969,12 +970,14 @@ const corpusIndexSearch = async ({
     if (query === null) {
       return null;
     }
-    const excludedWorkTokens = [
-      ...new Set([
-        ...(cursor?.excludedGroups ?? []),
-        ...(active.type === "relaxed" ? active.strictWorkTokens : []),
-      ]),
-    ];
+    const excludedWorkTokens = new Set(
+      active.type === "relaxed" ? active.strictWorkTokens : [],
+    );
+    if (cursor !== null && cursor.excludedGroups !== undefined) {
+      for (const token of cursor.excludedGroups) {
+        excludedWorkTokens.add(token);
+      }
+    }
     return await readCorpusIndexSearchPage({
       observer,
       cluster,
@@ -1004,7 +1007,7 @@ const corpusIndexSearch = async ({
           legislationDb,
           cursorId: cursor?.id,
           namedWorks: active.type === "strict" ? namedWorks : [],
-          excludedWorkTokens,
+          excludedWorkTokens: [...excludedWorkTokens],
           ranking: active.type === "strict" ? "authority" : "lexical",
         }),
     });
@@ -1159,7 +1162,7 @@ export const searchLegislationHandler = async (
   }
 
   const serving =
-    envBase.LEGAL_SEARCH_PROVIDER === "corpus-index"
+    (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) === "corpus-index"
       ? await legislationDb(
           async (tx) =>
             await readServingCorpusIndexGenerationTx(tx, "legislation"),

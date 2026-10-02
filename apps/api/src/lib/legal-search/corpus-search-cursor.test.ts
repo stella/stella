@@ -647,6 +647,18 @@ test("phase segments are canonical base64url and occur once after other optional
   }
 });
 
+test.each(['{"type":"strict', "{", '"unterminated'])(
+  "malformed phase JSON %s rejects the cursor",
+  (json) => {
+    const segment = `p${Buffer.from(json).toString("base64url")}`;
+    expect(
+      decodeCorpusSearchCursor(
+        encodeCursor(0.5, `0:none:relevance:${segment}:${DECISION_ID}`),
+      ),
+    ).toBeNull();
+  },
+);
+
 test("the maximum phase and group payload fits the legislation-only cursor cap", () => {
   const tokens = Array.from(
     { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
