@@ -11,6 +11,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
+import { fileURLToPath } from "node:url";
 import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -18,22 +19,16 @@ import { propertyConfig } from "@stll/property-testing";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+import { extractPlanSelector, runPlanSelector } from "./ci-plan-selector";
 import { GENERATORS } from "./generated-files";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
 );
-const selectorStart = workflow.indexOf(
-  "          # Path scopes for the build/smoke jobs",
-);
-const selectorEnd = workflow.indexOf(
-  "          printf 'Changed files:",
-  selectorStart,
-);
-expect(selectorStart).toBeGreaterThan(-1);
-expect(selectorEnd).toBeGreaterThan(selectorStart);
-const selector = workflow.slice(selectorStart, selectorEnd);
+const selector = extractPlanSelector(workflow);
+const selectorStart = workflow.indexOf(selector);
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 const runSelector = (
   files: readonly string[],
@@ -43,31 +38,20 @@ const runSelector = (
   event = "pull_request",
   title = "",
 ) => {
-  const process = Bun.spawnSync({
-    cmd: [
-      "bash",
-      "-e",
-      "-c",
-      `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
-e2e_landing_required="$E2E_LANDING_REQUIRED"
-package_checks_required=true
-${selector}
-printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
-      "ci-plan-test",
-      ...files,
-    ],
-    env: {
-      E2E_LANDING_REQUIRED: e2eLandingRequired,
-      EVENT_NAME: event,
-      PATH: Bun.env["PATH"] ?? "",
-      PR_TITLE: title,
-      SUITE_DEPTH: suiteDepth,
-    },
-    stdout: "pipe",
-    stderr: "pipe",
+  const result = runPlanSelector({
+    selector,
+    files,
+    outputs,
+    cwd: REPO_ROOT,
+    suiteDepth,
+    e2eLandingRequired,
+    event,
+    title,
   });
-  expect(process.exitCode, new TextDecoder().decode(process.stderr)).toBe(0);
-  return new TextDecoder().decode(process.stdout).trim().split("\n");
+  if (result.isErr()) {
+    throw result.error;
+  }
+  return outputs.map((output) => result.value.get(output) ?? "");
 };
 
 const imageSmokePlan = (files: readonly string[]) =>

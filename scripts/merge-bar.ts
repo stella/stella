@@ -53,10 +53,14 @@
 // Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
 import { panic, Result, TaggedError } from "better-result";
-import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { findMigrationIdentityViolation } from "./check-migration-order";
+import {
+  extractPlanSelector,
+  type PlanSelectorError,
+  runPlanSelector,
+} from "./ci-plan-selector";
 
 const DEFAULT_REPO = "stella/stella";
 const MERGEABLE_POLL_ATTEMPTS = 8;
@@ -577,156 +581,158 @@ class StaleGreenResultError extends TaggedError("StaleGreenResultError")<{
   message: string;
 }> {}
 
-// --- CI plan inputs ---------------------------------------------------------
+// --- Current CI plan --------------------------------------------------------
 
 const CI_WORKFLOW = ".github/workflows/ci.yml";
 const CI_PLAN_JOB = "ci-plan";
+const CI_RESULT_JOB = "ci-result";
+const CI_RESULT_STEP = "Evaluate CI outcome";
+const CHANGED_FILES_OUTPUT =
+  /^\$\{\{ steps\.changed-files\.outputs\.([a-z0-9_]+) \}\}$/u;
 
-// A run step executing a repository script through an interpreter. Paths
-// a step only matches against (`case` patterns) are not inputs: they select
-// jobs for the pull request's own diff, which main's changes do not alter.
-const EXECUTED_SCRIPT_PATTERN =
-  /\b(?:bash|sh|bun|node)\s+(?:\.\/)?((?:[\w.-]+\/)+[\w.-]+\.(?:sh|ts|mts|js|mjs|cjs))\b/gu;
-// A shell script handing off to a sibling: exec node "$(dirname "$0")/x.mjs".
-const SIBLING_SCRIPT_PATTERN = /"\$\(dirname "\$0"\)\/([\w.-]+)"/gu;
-const RELATIVE_IMPORT_PATTERN =
-  /\b(?:from|import)\s*\(?\s*["'](\.{1,2}\/[^"']+)["']/gu;
-const MODULE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs", ".cjs"] as const;
+type JobScope =
+  | { type: "always" }
+  | { type: "selector"; variable: string }
+  // Planned from something other than the changed files, such as release
+  // recognition or an expression over several outputs.
+  | { type: "not-file-derived"; output: string };
 
-export type CiPlanInput = { type: "file" | "directory"; path: string };
+type FastRequiredJob = {
+  id: string;
+  scope: JobScope;
+  // Matches the job's names in a workflow run, matrix legs included.
+  runName: RegExp;
+};
 
-/** Contents by path; null for a path with no file. */
-type ReadRepositoryFiles = (
-  paths: readonly string[],
-) => ReadonlyMap<string, string | null>;
+const readJsonEnv = (env: Record<string, unknown>, key: string): unknown =>
+  JSON.parse(readString(env, key));
 
-const scriptReferences = ({
-  file,
-  source,
-}: {
-  file: string;
-  source: string;
-}): string[][] => {
-  const directory = path.posix.dirname(file);
-  if (file.endsWith(".sh")) {
-    return [
-      ...Array.from(source.matchAll(EXECUTED_SCRIPT_PATTERN), ([, script]) => [
-        script ?? panic("unreachable: the pattern captures a path"),
-      ]),
-      ...Array.from(source.matchAll(SIBLING_SCRIPT_PATTERN), ([, sibling]) => [
-        path.posix.join(
-          directory,
-          sibling ?? panic("unreachable: the pattern captures a path"),
-        ),
-      ]),
-    ];
-  }
-  return Array.from(source.matchAll(RELATIVE_IMPORT_PATTERN), ([, spec]) => {
-    const target = path.posix.join(
-      directory,
-      spec ?? panic("unreachable: the pattern captures a path"),
-    );
-    return MODULE_EXTENSIONS.some((extension) => target.endsWith(extension))
-      ? [target]
-      : MODULE_EXTENSIONS.map((extension) => `${target}${extension}`);
-  });
+const runNamePattern = (id: string, template: unknown): RegExp => {
+  const name = typeof template === "string" ? template : id;
+  const escaped = name
+    .split(/\$\{\{.*?\}\}/u)
+    .map((part) => part.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&"))
+    .join(".+");
+  return new RegExp(`^${escaped}(?: \\(.+\\))?$`, "u");
 };
 
 /**
- * Everything the `ci-plan` job reads to decide which jobs a pull request
- * runs: the workflow itself, the local actions it uses, the scripts its steps
- * execute, and what those scripts load in turn (sibling handoffs and relative
- * imports, read one layer per call). Data files a script reads at runtime are
- * not followed. Null when the repository has no such job.
+ * The jobs ci-result requires at fast depth, each with the ci-plan output
+ * that plans it, read from a workflow's own ci-result step so the bar cannot
+ * drift from the gate. Null when the workflow has no such planner and gate.
  */
-export const deriveCiPlanInputs = (
-  readFiles: ReadRepositoryFiles,
-): CiPlanInput[] | null => {
-  const workflowSource = readFiles([CI_WORKFLOW]).get(CI_WORKFLOW);
-  if (workflowSource === null || workflowSource === undefined) {
-    return null;
-  }
+export const readFastRequiredJobs = (
+  workflowSource: string,
+): FastRequiredJob[] | null => {
   const jobs = readRecord(
     readRecord(Bun.YAML.parse(workflowSource), "CI workflow")["jobs"],
     "CI workflow jobs",
   );
-  if (jobs[CI_PLAN_JOB] === undefined) {
+  const planJob = jobs[CI_PLAN_JOB];
+  const resultJob = jobs[CI_RESULT_JOB];
+  if (planJob === undefined || resultJob === undefined) {
     return null;
   }
-  const steps = readRecord(jobs[CI_PLAN_JOB], `${CI_PLAN_JOB} job`)["steps"];
+  const planOutputs = readRecord(
+    readRecord(planJob, `${CI_PLAN_JOB} job`)["outputs"],
+    `${CI_PLAN_JOB} outputs`,
+  );
+  const steps = readRecord(resultJob, `${CI_RESULT_JOB} job`)["steps"];
   if (!Array.isArray(steps)) {
-    return panic(`Expected \`steps\` in the ${CI_PLAN_JOB} job`);
+    return panic(`Expected \`steps\` in the ${CI_RESULT_JOB} job`);
   }
-
-  const inputs: CiPlanInput[] = [{ type: "file", path: CI_WORKFLOW }];
-  // Each reference lists candidate paths; the first that exists is the file.
-  let references: string[][] = [];
-  for (const rawStep of steps) {
-    const step = readRecord(rawStep, `${CI_PLAN_JOB} step`);
-    const uses = step["uses"];
-    if (typeof uses === "string" && uses.startsWith("./")) {
-      inputs.push({
-        type: "directory",
-        path: uses.slice(2).replace(/\/+$/u, ""),
-      });
-    }
-    const run = step["run"];
-    if (typeof run === "string") {
-      for (const [, script] of run.matchAll(EXECUTED_SCRIPT_PATTERN)) {
-        references.push([
-          script ?? panic("unreachable: the pattern captures a path"),
-        ]);
-      }
-    }
+  const step = steps
+    .map((candidate: unknown) => readRecord(candidate, `${CI_RESULT_JOB} step`))
+    .find((candidate) => candidate["name"] === CI_RESULT_STEP);
+  if (step === undefined) {
+    return panic(`Expected a "${CI_RESULT_STEP}" step in ${CI_RESULT_JOB}`);
   }
-
-  const visited = new Set<string>([CI_WORKFLOW]);
-  while (references.length > 0) {
-    const pending = references.filter((candidates) =>
-      candidates.every((candidate) => !visited.has(candidate)),
-    );
-    if (pending.length === 0) {
-      break;
-    }
-    const contents = readFiles([...new Set(pending.flat())]);
-    const loaded: { file: string; source: string }[] = [];
-    for (const candidates of pending) {
-      const found = candidates.find(
-        (candidate) => typeof contents.get(candidate) === "string",
-      );
-      // A script the plan names but cannot load still counts by name; an
-      // unresolved import is a package, not a repository file.
-      const file = found ?? (candidates.length === 1 ? candidates.at(0) : null);
-      if (file === null || file === undefined || visited.has(file)) {
-        continue;
-      }
-      visited.add(file);
-      inputs.push({ type: "file", path: file });
-      const source = contents.get(file);
-      if (typeof source === "string") {
-        loaded.push({ file, source });
-      }
-    }
-    references = loaded.flatMap(scriptReferences);
+  const env = readRecord(step["env"], `${CI_RESULT_STEP} env`);
+  const required = readJsonEnv(env, "FAST_REQUIRED");
+  if (
+    !Array.isArray(required) ||
+    !required.every((id) => typeof id === "string")
+  ) {
+    return panic("Expected FAST_REQUIRED to list job ids");
   }
-  return inputs;
+  // ci-result looks fast scopes up in JOB_SCOPES + FAST_JOB_SCOPES, the
+  // latter winning; an absent or null scope means always planned.
+  const scopes = {
+    ...readRecord(readJsonEnv(env, "JOB_SCOPES"), "JOB_SCOPES"),
+    ...readRecord(readJsonEnv(env, "FAST_JOB_SCOPES"), "FAST_JOB_SCOPES"),
+  };
+  return required.map((id) => {
+    const output = scopes[id];
+    const body = readRecord(jobs[id], `job ${id}`);
+    const runName = runNamePattern(id, body["name"]);
+    if (output === null || output === undefined) {
+      return { id, scope: { type: "always" }, runName };
+    }
+    if (typeof output !== "string") {
+      return panic(`Expected a ci-plan output name as the scope of ${id}`);
+    }
+    const expression = readString(planOutputs, output);
+    const variable = CHANGED_FILES_OUTPUT.exec(expression)?.[1];
+    return {
+      id,
+      scope:
+        variable === undefined
+          ? { type: "not-file-derived", output }
+          : { type: "selector", variable },
+      runName,
+    };
+  });
 };
 
-const isCiPlanInput = (
-  inputs: readonly CiPlanInput[],
-  changedPath: string,
-): boolean =>
-  inputs.some((input) => {
-    switch (input.type) {
-      case "file":
-        return changedPath === input.path;
-      case "directory":
-        return changedPath.startsWith(`${input.path}/`);
-      default:
-        input.type satisfies never;
-        return panic("Unhandled CI plan input");
-    }
-  });
+export type RunJob = { name: string; conclusion: string | null };
+
+type UnrunPlannedJobsOptions = {
+  jobs: readonly FastRequiredJob[];
+  plan: ReadonlyMap<string, string>;
+  runJobs: readonly RunJob[];
+};
+
+/**
+ * Fast-required jobs the current plan selects that the green run did not
+ * run to success. Every leg of a matrix job must have succeeded; a job its
+ * own plan skipped did not run.
+ */
+export const unrunPlannedJobs = ({
+  jobs,
+  plan,
+  runJobs,
+}: UnrunPlannedJobsOptions): string[] =>
+  jobs
+    .filter(({ scope }) => {
+      switch (scope.type) {
+        case "always":
+          return true;
+        case "selector":
+          return plan.get(scope.variable) === "true";
+        case "not-file-derived":
+          return false;
+        default:
+          scope satisfies never;
+          return panic("Unhandled job scope");
+      }
+    })
+    .filter(({ runName }) => {
+      const runs = runJobs.filter(({ name }) => runName.test(name));
+      return (
+        runs.length === 0 ||
+        runs.some(({ conclusion }) => conclusion !== "success")
+      );
+    })
+    .map(({ id }) => id);
+
+/** The selector variables a set of jobs is planned by. */
+const selectorVariables = (jobs: readonly FastRequiredJob[]): string[] => [
+  ...new Set(
+    jobs.flatMap(({ scope }) =>
+      scope.type === "selector" ? [scope.variable] : [],
+    ),
+  ),
+];
 
 type CheckGreenResultFreshnessOptions = {
   pullRequest: PullRequestSnapshot;
@@ -735,8 +741,15 @@ type CheckGreenResultFreshnessOptions = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
-  // What the base branch's planner reads today; null when it has none.
-  readCiPlanInputs: () => readonly CiPlanInput[] | null;
+  // The base branch's ci.yml as it stands now; null when it has none.
+  readBaseWorkflow: () => string | null;
+  runSelector: (input: {
+    selector: string;
+    files: readonly string[];
+    outputs: readonly string[];
+    title: string;
+  }) => Result<ReadonlyMap<string, string>, PlanSelectorError>;
+  readRunJobs: (runId: number) => readonly RunJob[];
 };
 
 export const checkGreenResultFreshness = ({
@@ -746,7 +759,9 @@ export const checkGreenResultFreshness = ({
   readWorkflowRun,
   readBaseComparison,
   readPullFiles,
-  readCiPlanInputs,
+  readBaseWorkflow,
+  runSelector,
+  readRunJobs,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -831,27 +846,48 @@ export const checkGreenResultFreshness = ({
       changedPaths.add(file["previous_filename"]);
     }
   }
-  // The green run planned its jobs with the old planner, so a planner change
-  // on main can require jobs that run never had, whatever files this PR
-  // touches.
-  const planInputs = readCiPlanInputs();
-  const planChanges =
-    planInputs === null
-      ? []
-      : [...changedPaths].filter((changedPath) =>
-          isCiPlanInput(planInputs, changedPath),
-        );
-  if (planChanges.length > 0) {
-    return refuse(
-      `main changed the CI plan since the green run (${planChanges.join(", ")})`,
-    );
-  }
-  const overlap = readPullFiles().filter((filename) =>
-    changedPaths.has(filename),
-  );
+  const pullFiles = readPullFiles();
+  const overlap = pullFiles.filter((filename) => changedPaths.has(filename));
   if (overlap.length > 0) {
     return refuse(
       `main changed files also touched by this PR: ${overlap.join(", ")}`,
+    );
+  }
+  // The green run planned its jobs with the planner of its own base. Re-plan
+  // this PR's files with main's planner now: a rule main gained since can
+  // require a job that run never had. A planner change that selects nothing
+  // new for these files leaves the green result standing.
+  const workflowSource = readBaseWorkflow();
+  const jobs =
+    workflowSource === null ? null : readFastRequiredJobs(workflowSource);
+  if (workflowSource === null || jobs === null) {
+    return Result.ok();
+  }
+  const plan = runSelector({
+    selector: extractPlanSelector(workflowSource),
+    files: pullFiles,
+    outputs: selectorVariables(jobs),
+    title: pullRequest.title,
+  });
+  if (plan.isErr()) {
+    return refuse(`cannot evaluate main's CI plan: ${plan.error.message}`);
+  }
+  const runId = run["id"];
+  if (typeof runId !== "number") {
+    return panic("Expected a numeric workflow run id");
+  }
+  const unrun = unrunPlannedJobs({
+    jobs,
+    plan: plan.value,
+    runJobs: readRunJobs(runId),
+  });
+  if (unrun.length > 0) {
+    return Result.err(
+      new StaleGreenResultError({
+        message:
+          `STALE_PLAN: main's CI plan now selects ${unrun.join(", ")} for this PR's files, ` +
+          "which its green run did not run; merge main and let CI re-run.",
+      }),
     );
   }
   return Result.ok();
@@ -969,18 +1005,18 @@ export const latestEjection = (
     (removal) => removalDisposition(removal.reason) === "ejected",
   );
 
-export type MergeGroupRecord =
+type MergeGroupRecord =
   | { type: "found"; baseSha: string; runUrl: string }
   | { type: "not-found" };
 
-export type BranchTip = { sha: string; committedAt: string };
+type BranchTip = { sha: string; committedAt: string };
 
 export type Ejection = {
   removal: MergeQueueRemoval;
   group: MergeGroupRecord;
 };
 
-export type EjectedHeadVerdict =
+type EjectedHeadVerdict =
   | { type: "retry-allowed"; changed: "head" | "main" }
   | { type: "unchanged-retry" };
 
@@ -1125,10 +1161,8 @@ type GitHubGateway = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
-  readRepositoryFiles: (input: {
-    ref: string;
-    paths: readonly string[];
-  }) => ReadonlyMap<string, string | null>;
+  readBaseWorkflow: (ref: string) => string | null;
+  readRunJobs: (runId: number) => readonly RunJob[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   // Both writes pin the head every gate was evaluated against, so GitHub
@@ -1742,59 +1776,45 @@ const createGhGateway = ({
           : [filename];
       }),
 
-    // One GraphQL request per call, however many paths: the plan's inputs are
-    // read one reference layer at a time.
-    readRepositoryFiles: ({ ref, paths }) => {
-      const variables = paths.flatMap((filePath, index) => [
-        "-f",
-        `e${index}=${ref}:${filePath}`,
+    readBaseWorkflow: (ref) => {
+      const result = runGhProcess([
+        "api",
+        "-H",
+        "Accept: application/vnd.github.raw",
+        `repos/${repo}/contents/${CI_WORKFLOW}?ref=${encodeURIComponent(ref)}`,
       ]);
-      const declarations = paths
-        .map((_, index) => `$e${index}: String!`)
-        .join(", ");
-      const fields = paths
-        .map(
-          (_, index) =>
-            `f${index}: object(expression: $e${index}) { ... on Blob { text isTruncated } }`,
-        )
-        .join("\n");
-      const repository = readRecord(
-        readRecord(
-          readRecord(
-            runGhJson([
-              "api",
-              "graphql",
-              "-f",
-              `query=query($owner: String!, $name: String!, ${declarations}) {
-                repository(owner: $owner, name: $name) { ${fields} }
-              }`,
-              "-f",
-              `owner=${owner}`,
-              "-f",
-              `name=${name}`,
-              ...variables,
-            ]),
-            "repository files response",
-          )["data"],
-          "data",
-        )["repository"],
-        "repository",
-      );
-      const files = new Map<string, string | null>();
-      for (const [index, filePath] of paths.entries()) {
-        const blob = repository[`f${index}`];
-        if (blob === null) {
-          files.set(filePath, null);
-          continue;
-        }
-        const record = readRecord(blob, `blob ${filePath}`);
-        if (readBoolean(record, "isTruncated")) {
-          panic(`${filePath} is too large to read through GraphQL`);
-        }
-        files.set(filePath, readString(record, "text"));
+      if (result.exitCode === 0) {
+        return result.stdout.toString();
       }
-      return files;
+      if (result.stderr.toString().includes("(HTTP 404)")) {
+        return null;
+      }
+      return panic(
+        `gh could not read ${CI_WORKFLOW} at ${ref} (${result.exitCode}): ${result.stderr.toString()}`,
+      );
     },
+
+    readRunJobs: (runId) =>
+      runGh([
+        "api",
+        "--paginate",
+        `repos/${repo}/actions/runs/${runId}/jobs?filter=latest&per_page=100`,
+        "--jq",
+        '.jobs[] | [.name, (.conclusion // "")] | @tsv',
+      ])
+        .split("\n")
+        .filter(Boolean)
+        .map((line) => {
+          const [jobName, conclusion] = line.split("\t");
+          if (jobName === undefined || jobName === "") {
+            return panic(`Malformed job row from gh: ${line}`);
+          }
+          return {
+            name: jobName,
+            conclusion:
+              conclusion === undefined || conclusion === "" ? null : conclusion,
+          };
+        }),
 
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
@@ -2339,10 +2359,14 @@ if (import.meta.main) {
     readWorkflowRun: gateway.readWorkflowRun,
     readBaseComparison: gateway.readBaseComparison,
     readPullFiles: gateway.readPullFiles,
-    readCiPlanInputs: () =>
-      deriveCiPlanInputs((paths) =>
-        gateway.readRepositoryFiles({ ref: pullRequest.baseRefName, paths }),
-      ),
+    readBaseWorkflow: () => gateway.readBaseWorkflow(pullRequest.baseRefName),
+    // The selector's detector scripts run from this checkout.
+    runSelector: (input) =>
+      runPlanSelector({
+        ...input,
+        cwd: fileURLToPath(new URL("..", import.meta.url)),
+      }),
+    readRunJobs: gateway.readRunJobs,
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);

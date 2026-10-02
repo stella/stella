@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   chmodSync,
-  existsSync,
   mkdtempSync,
   readFileSync,
   rmSync,
@@ -13,10 +12,14 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  extractPlanSelector,
+  PlanSelectorError,
+  runPlanSelector,
+} from "./ci-plan-selector";
+import {
   checkEjectedHead,
   checkMergeHold,
   checkGreenResultFreshness,
-  deriveCiPlanInputs,
   MergeHoldReadError,
   evaluateEjectedHead,
   evaluateMergeBar,
@@ -28,13 +31,15 @@ import {
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
   parseMergeQueueRemovals,
+  readFastRequiredJobs,
   readMergeHandoff,
   requiredChecksSucceeded,
+  unrunPlannedJobs,
   verifyFrontOfQueue,
-  type CiPlanInput,
   type Ejection,
   type MergeBarSnapshot,
   type MergeQueueRemoval,
+  type RunJob,
 } from "./merge-bar";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
@@ -138,11 +143,7 @@ const checkRun = (
 /** Any repository this one does not enumerate, which the bar treats alike. */
 const PRIVATE_REPO = "stella/private";
 
-const PLAN_INPUTS = [
-  { type: "file", path: ".github/workflows/ci.yml" },
-  { type: "file", path: "scripts/detect-e2e-changes.sh" },
-  { type: "directory", path: ".github/actions/setup-e2e" },
-] as const satisfies readonly CiPlanInput[];
+const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 
 describe("merge handoff state", () => {
   test("the merge gate reads with the workflow token and pins writes with the App token", () => {
@@ -1543,6 +1544,7 @@ esac
 
 describe("green result freshness", () => {
   const run = {
+    id: 77,
     head_sha: HEAD_SHA,
     pull_requests: [
       {
@@ -1563,7 +1565,13 @@ describe("green result freshness", () => {
       return comparison;
     },
     readPullFiles: () => ["scripts/shared.ts"],
-    readCiPlanInputs: () => PLAN_INPUTS,
+    readBaseWorkflow: () => null,
+    runSelector: () => {
+      throw new Error("unexpected plan run");
+    },
+    readRunJobs: () => {
+      throw new Error("unexpected run jobs read");
+    },
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1602,43 +1610,202 @@ describe("green result freshness", () => {
     }
   });
 
-  test.each([
-    { changed: ".github/workflows/ci.yml", refused: true },
-    { changed: "scripts/detect-e2e-changes.sh", refused: true },
-    { changed: ".github/actions/setup-e2e/action.yml", refused: true },
-    { changed: ".github/actions/setup-e2e-stack/action.yml", refused: false },
-    { changed: "apps/web/src/unrelated.ts", refused: false },
-  ])(
-    "main changing $changed, which this PR does not touch, refuses green: $refused",
-    ({ changed, refused }) => {
-      const options = readers({
-        status: "ahead",
-        ahead_by: 1,
-        files: [{ filename: changed }],
-      });
-      // Only the plan rule can refuse: the overlap rule never sees this path.
-      expect(options.readPullFiles()).not.toContain(changed);
-      const result = checkGreenResultFreshness(options);
-      expect(result.isErr()).toBe(refused);
-      if (result.isErr()) {
-        expect(result.error.message).toContain(
-          `STALE_GREEN_RESULT: main changed the CI plan since the green run (${changed})`,
-        );
-      }
+  // A production-shaped planner and gate: main's rule for the PR's file is
+  // the only thing that varies between cases.
+  const planWorkflow = (rule: string) => `
+jobs:
+  ci-plan:
+    outputs:
+      e2e_production_required: \${{ steps.changed-files.outputs.e2e_production_required }}
+      marketing_screenshots_required: \${{ steps.marketing-release.outputs.required }}
+    steps:
+      - id: changed-files
+        run: |
+          # Path scopes for the build/smoke jobs
+          e2e_production_required=false
+          for file in "\${changed_files[@]}"; do
+            case "$file" in
+              ${rule}) e2e_production_required=true ;;
+            esac
+          done
+          printf 'Changed files:\\n'
+  e2e-production-shard:
+    strategy:
+      matrix:
+        shard: [1, 2]
+  marketing-screenshots: {}
+  parser-version-guard: {}
+  ci-result:
+    steps:
+      - name: Evaluate CI outcome
+        env:
+          FAST_REQUIRED: '["e2e-production-shard", "marketing-screenshots", "parser-version-guard"]'
+          JOB_SCOPES: '{"e2e-production-shard": "e2e_production_required", "marketing-screenshots": "marketing_screenshots_required", "parser-version-guard": null}'
+          FAST_JOB_SCOPES: '{}'
+`;
+  const PR_FILE = "apps/web/e2e/production/new.spec.ts";
+  const SELECTING_RULE = "apps/web/e2e/*";
+  const UNRELATED_RULE = "docs/never/*";
+  const guard = { name: "parser-version-guard", conclusion: "success" };
+  const shard = (leg: number, conclusion: string) => ({
+    name: `e2e-production-shard (${leg})`,
+    conclusion,
+  });
+  const planReaders = ({
+    rule,
+    runJobs,
+  }: {
+    rule: string;
+    runJobs: readonly RunJob[];
+  }) => ({
+    // Main changed only its CI workflow since the green run.
+    ...readers({
+      status: "ahead",
+      ahead_by: 1,
+      files: [{ filename: ".github/workflows/ci.yml" }],
+    }),
+    readPullFiles: () => [PR_FILE],
+    readBaseWorkflow: () => planWorkflow(rule),
+    runSelector: (input: {
+      selector: string;
+      files: readonly string[];
+      outputs: readonly string[];
+      title: string;
+    }) => runPlanSelector({ ...input, cwd: REPO_ROOT }),
+    readRunJobs: (runId: number) => {
+      expect(runId).toBe(77);
+      return runJobs;
     },
-  );
+  });
 
-  test("a base branch without a planner keeps only the overlap rule", () => {
+  test.each([
+    {
+      name: "a ci.yml change that selects nothing new for the PR's files passes",
+      rule: UNRELATED_RULE,
+      runJobs: [guard, { name: "e2e-production-shard", conclusion: "skipped" }],
+      stale: [],
+    },
+    {
+      name: "a new rule selecting a job the green run skipped refuses",
+      rule: SELECTING_RULE,
+      runJobs: [guard, { name: "e2e-production-shard", conclusion: "skipped" }],
+      stale: ["e2e-production-shard"],
+    },
+    {
+      name: "a new rule selecting a job absent from the green run refuses",
+      rule: SELECTING_RULE,
+      runJobs: [guard],
+      stale: ["e2e-production-shard"],
+    },
+    {
+      name: "the selected job succeeded on every leg in the green run: passes",
+      rule: SELECTING_RULE,
+      runJobs: [guard, shard(1, "success"), shard(2, "success")],
+      stale: [],
+    },
+    {
+      name: "a selected matrix leg that did not succeed refuses",
+      rule: SELECTING_RULE,
+      runJobs: [guard, shard(1, "success"), shard(2, "cancelled")],
+      stale: ["e2e-production-shard"],
+    },
+    {
+      name: "an always-planned required job the green run lacked refuses",
+      rule: UNRELATED_RULE,
+      runJobs: [],
+      stale: ["parser-version-guard"],
+    },
+  ])("$name", ({ rule, runJobs, stale }) => {
+    const options = planReaders({ rule, runJobs });
+    // Only the plan rule can refuse: main and the PR touch disjoint files.
+    expect(options.readPullFiles()).not.toContain(".github/workflows/ci.yml");
+    const result = checkGreenResultFreshness(options);
+    expect(result.isErr()).toBe(stale.length > 0);
+    if (result.isErr()) {
+      expect(result.error.message).toBe(
+        `STALE_PLAN: main's CI plan now selects ${stale.join(", ")} for this PR's files, ` +
+          "which its green run did not run; merge main and let CI re-run.",
+      );
+    }
+  });
+
+  test("a planner main cannot evaluate refuses rather than passes", () => {
+    const result = checkGreenResultFreshness({
+      ...planReaders({ rule: SELECTING_RULE, runJobs: [] }),
+      runSelector: () =>
+        Result.err(new PlanSelectorError({ message: "selector exited 1" })),
+    });
+    expect(result.isErr() && result.error.message).toContain(
+      "cannot evaluate main's CI plan: selector exited 1",
+    );
+  });
+
+  test("main's real gate maps fast-required jobs to how they are planned", () => {
+    const jobs =
+      readFastRequiredJobs(
+        readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
+      ) ?? [];
+    const byId = new Map(jobs.map((job) => [job.id, job]));
+    expect(byId.get("e2e-production-shard")?.scope).toEqual({
+      type: "selector",
+      variable: "e2e_production_required",
+    });
+    expect(byId.get("parser-version-guard")?.scope).toEqual({
+      type: "always",
+    });
+    expect(byId.get("marketing-screenshots")?.scope).toEqual({
+      type: "not-file-derived",
+      output: "marketing_screenshots_required",
+    });
+    const shardName = byId.get("e2e-production-shard")?.runName;
+    expect(shardName?.test("e2e-production-shard (network-baseline)")).toBe(
+      true,
+    );
+    expect(shardName?.test("e2e-production-shard-extra")).toBe(false);
     expect(
-      checkGreenResultFreshness({
-        ...readers({
-          status: "ahead",
-          ahead_by: 1,
-          files: [{ filename: ".github/workflows/ci.yml" }],
-        }),
-        readCiPlanInputs: () => null,
-      }).isOk(),
+      byId
+        .get("api-image-smoke")
+        ?.runName.test("API release image (linux/arm64)"),
     ).toBe(true);
+
+    // Every variable the bar asks for is one the selector run actually sets.
+    const outputs = jobs.flatMap(({ scope }) =>
+      scope.type === "selector" ? [scope.variable] : [],
+    );
+    expect(outputs.length).toBeGreaterThan(0);
+    const plan = runPlanSelector({
+      selector: extractPlanSelector(
+        readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
+      ),
+      files: ["docs/example.md"],
+      outputs,
+      cwd: REPO_ROOT,
+    });
+    expect(plan.isOk()).toBe(true);
+    for (const output of outputs) {
+      expect(["true", "false"], output).toContain(
+        plan.isOk() ? plan.value.get(output) : undefined,
+      );
+    }
+  });
+
+  test("unrun planned jobs ignore jobs main plans from something other than files", () => {
+    expect(
+      unrunPlannedJobs({
+        jobs: [
+          {
+            id: "marketing-screenshots",
+            scope: {
+              type: "not-file-derived",
+              output: "marketing_screenshots_required",
+            },
+            runName: /^marketing-screenshots$/u,
+          },
+        ],
+        plan: new Map(),
+        runJobs: [],
+      }),
+    ).toEqual([]);
   });
 
   test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {
@@ -1701,7 +1868,9 @@ describe("green result freshness", () => {
       readWorkflowRun: noRead,
       readBaseComparison: noRead,
       readPullFiles: noRead,
-      readCiPlanInputs: noRead,
+      readBaseWorkflow: noRead,
+      runSelector: noRead,
+      readRunJobs: noRead,
     };
     expect(checkGreenResultFreshness({ ...options, jump: true }).isOk()).toBe(
       true,
@@ -1759,83 +1928,6 @@ describe("workflow run URL repository identity", () => {
     expect(result.stderr).toContain(
       "ci-result check does not link to a workflow run in this repository",
     );
-  });
-});
-
-describe("CI plan inputs", () => {
-  const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
-  const fixtureReader =
-    (files: Record<string, string>) => (paths: readonly string[]) =>
-      new Map(paths.map((file) => [file, files[file] ?? null]));
-
-  test("the live planner covers the workflow, its detectors and what they hand off to", () => {
-    const inputs = deriveCiPlanInputs(
-      (paths) =>
-        new Map(
-          paths.map((file) => {
-            const absolute = path.join(REPO_ROOT, file);
-            return [
-              file,
-              existsSync(absolute) ? readFileSync(absolute, "utf-8") : null,
-            ];
-          }),
-        ),
-    );
-    const files = inputs?.map((input) => input.path) ?? [];
-    expect(files).toContain(".github/workflows/ci.yml");
-    expect(files).toContain("scripts/detect-e2e-changes.sh");
-    // Reached only through the shell script's sibling handoff.
-    expect(files).toContain("scripts/production-e2e-inputs.mjs");
-  });
-
-  test("follows executed scripts, sibling handoffs and relative imports, not match patterns", () => {
-    const workflow = `
-jobs:
-  ci-plan:
-    steps:
-      - uses: ./.github/actions/setup-plan/
-      - uses: actions/checkout@v4
-      - run: |
-          # scripts/comment-only.ts decides the rest.
-          e2e=$(bash scripts/a.sh core "\${files[@]}")
-          scope=$(bun ./scripts/b.ts --scopes)
-          case "$file" in
-            apps/web/src/pattern.ts|scripts/pattern-only.sh) echo true;;
-          esac
-  other:
-    steps:
-      - run: bash scripts/other.sh
-`;
-    const inputs = deriveCiPlanInputs(
-      fixtureReader({
-        ".github/workflows/ci.yml": workflow,
-        "scripts/a.sh": 'exec node "$(dirname "$0")/c.mjs" "$@"\n',
-        "scripts/b.ts":
-          'import { readFileSync } from "node:fs";\nimport { d } from "./d";\n',
-        "scripts/c.mjs": "export {};\n",
-        // A cycle back to b.ts must terminate.
-        "scripts/d.ts": 'export { b } from "./b";\nexport const d = 1;\n',
-      }),
-    );
-    expect(inputs).toEqual([
-      { type: "file", path: ".github/workflows/ci.yml" },
-      { type: "directory", path: ".github/actions/setup-plan" },
-      { type: "file", path: "scripts/a.sh" },
-      { type: "file", path: "scripts/b.ts" },
-      { type: "file", path: "scripts/c.mjs" },
-      { type: "file", path: "scripts/d.ts" },
-    ]);
-  });
-
-  test("a repository without the workflow or the plan job has no planner", () => {
-    expect(deriveCiPlanInputs(fixtureReader({}))).toBeNull();
-    expect(
-      deriveCiPlanInputs(
-        fixtureReader({
-          ".github/workflows/ci.yml": "jobs:\n  test:\n    steps: []\n",
-        }),
-      ),
-    ).toBeNull();
   });
 });
 
