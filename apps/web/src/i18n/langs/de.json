@@ -27,6 +27,16 @@
     "errorNotFound": "Für diesen Code wurde keine ausstehende Anfrage gefunden. Überprüfen Sie den Code und versuchen Sie es erneut.",
     "title": "Verbinden Sie Ihren Agenten"
   },
+  "agentSetup": {
+    "addressLabel": "Ihr Assistent fragt nach dieser Adresse",
+    "copiedToast": "Anweisungen kopiert. Fügen Sie sie in einen Chat mit Ihrem Assistenten ein.",
+    "copy": "Anweisungen für ihn kopieren",
+    "description": "Fragen Sie Claude oder ChatGPT zu Ihren Akten und Dokumenten. Wählen Sie Ihren Assistenten für eine kurze Anleitung; es dauert etwa eine Minute.",
+    "instructions": "Verbinde mich mit stella, meinem juristischen Arbeitsbereich. Folge den Anweisungen für KI-Agenten unter {guideUrl} und verwende diese Serveradresse: {mcpUrl}",
+    "openGuide": "Anleitung für {assistant} öffnen",
+    "selfSetupHint": "Sie nutzen Claude Code oder Codex?",
+    "title": "stella in Ihrem KI-Assistenten nutzen"
+  },
   "ai": {
     "chooseRewriteInstruction": "Optionen zur Überarbeitung",
     "editWithAI": "Mit KI bearbeiten",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
     "filterStatus": "Nach Status filtern",
+    "globalTimer": {
+      "confirm": "Zeit bestätigen",
+      "discard": "Timer verwerfen",
+      "matterInaccessible": "Wählen Sie eine Akte, auf die Sie zugreifen können.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit bestätigen.",
+      "pause": "Pausieren",
+      "periodLocked": "Dieser Monat ist gesperrt. Bitten Sie einen Administrator, ihn zu entsperren.",
+      "resume": "Fortsetzen",
+      "timerUnavailable": "Dieser Timer ist nicht mehr verfügbar. Aktualisieren Sie die Liste.",
+      "title": "Timer"
+    },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
     "invoiceNarrative": "Rechnungstext",
@@ -567,6 +588,26 @@
     "selectMatter": "Akte auswählen...",
     "selectMatterToStart": "Wählen Sie eine Akte, um die Zeiterfassung zu starten",
     "selectedCount": "{count, plural, one {# ausgewählt} other {# ausgewählt}}",
+    "sellerProfiles": {
+      "add": "Verkäuferprofil hinzufügen",
+      "archiveConfirm": "Dieses Verkäuferprofil archivieren? Es steht dann für neue Rechnungen nicht mehr zur Verfügung.",
+      "bic": "BIC / SWIFT-Code",
+      "default": "Standardverkäufer",
+      "defaultCurrency": "Standardwährung",
+      "description": "Verwalten Sie die Angaben für die Rechnungsausstellung.",
+      "edit": "Verkäuferprofil bearbeiten",
+      "empty": "Keine Verkäuferprofile.",
+      "footerNotes": "Fußzeilenhinweise",
+      "invalidBic": "Geben Sie einen gültigen BIC ein.",
+      "invalidCurrency": "Geben Sie einen Währungscode mit drei Buchstaben ein.",
+      "invalidIban": "Geben Sie eine gültige IBAN ein.",
+      "legalName": "Offizieller Name",
+      "registrationId": "Registrierungsnummer",
+      "setDefault": "Als Standard festlegen",
+      "title": "Verkäuferprofile",
+      "vatId": "Umsatzsteuer-ID"
+    },
+    "settingsTitle": "Abrechnung",
     "split": {
       "addSplit": "Aufteilung hinzufügen",
       "percentValue": "{value}%",
@@ -948,6 +989,7 @@
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
         "question": "Diese Browseraktion erlauben?",
+        "realValues": "Diese Website erhält die unten angezeigten echten Werte. Der anonymisierte Modus gilt nur für das, was die KI sieht.",
         "within": "Innerhalb von"
       },
       "denied": "Abgelehnt",
@@ -1052,6 +1094,7 @@
     "focusSuggestion": "Vorschlag fokussieren: {topic}",
     "folioCitationFallback": "S. {n}",
     "forkFromHere": "Ab hier einen neuen Chat starten",
+    "forkInSidePanel": "Ab hier einen neuen Chat in der Seitenleiste starten",
     "forkedFrom": "Erstellt aus <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Erstellt aus einem nicht mehr verfügbaren Chat",
     "forkedThread": "Aus einem anderen Chat",
@@ -1059,6 +1102,10 @@
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
+    },
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
@@ -1111,6 +1158,7 @@
       "viaProvider": "über {provider}"
     },
     "newChat": "Neuer Chat",
+    "newChatInSidePanel": "Der neue Chat ist in der Seitenleiste verfügbar",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
@@ -1158,6 +1206,12 @@
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
     "richContentTitle": "Interaktiver Inhalt",
     "richContentUnavailable": "Dieser Inhalt kann nicht sicher angezeigt werden.",
+    "selection": {
+      "askInNewChat": "In neuem Chat fragen",
+      "quoteInReply": "In Antwort zitieren",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Markierter Text"
+    },
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
@@ -1311,7 +1365,8 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
-      "toggleDetails": "Details ein-/ausblenden"
+      "toggleDetails": "Details ein-/ausblenden",
+      "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
@@ -1555,6 +1610,7 @@
     },
     "fact": "Tatsache",
     "failed": "Fehlgeschlagen",
+    "files": "Dateien",
     "filter": "Filtern",
     "filters": "Filter",
     "find": "Suchen",
@@ -2105,6 +2161,13 @@
     "unnamedAttachment": "Unbenannter Anhang"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
+      "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
+      "contact": "Kontaktieren Sie uns",
+      "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
+      "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
+    },
     "actionFailed": "Aktion fehlgeschlagen",
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
@@ -2273,7 +2336,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumentteil existiert nur im Ziel",
       "missingInTarget": "Dokumentteil existiert nur in der Basis",
-      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden"
+      "notEditable": "Der Dokumentteil kann nicht bearbeitet werden",
+      "unsupportedContent": "Diese Version enthält Inhalte, die noch nicht verglichen werden können."
     },
     "compareUnverified": "Nicht verifizierter Vergleich",
     "compareVerificationFailures": "{count, plural, one {Eine Round-Trip-Prüfung ist fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.} other {# Round-Trip-Prüfungen sind fehlgeschlagen. Prüfen Sie diesen Vergleich, bevor Sie sich darauf verlassen.}}",
@@ -3211,7 +3275,6 @@
       "editSkill": "Skill bearbeiten",
       "enableSkill": "Skill aktivieren",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
-      "filesHeading": "Dateien",
       "howItRuns": "Ausführung",
       "importFailureFetch": "Die Skill-Quelle konnte nicht geladen werden.",
       "importFailureIntegrity": "Die Skill-Quelle hat sich nach der Erkennung geändert. Prüfen Sie sie erneut.",
@@ -3691,7 +3754,6 @@
     "aiTitle": "Verbinden Sie Ihren KI-Anbieter",
     "appsSubtitle": "stella funktioniert auch außerhalb des Browsers: auf Ihrem Desktop und in Ihrem KI-Assistenten. Sie können jederzeit später zu dieser Einrichtung zurückkehren.",
     "appsTitle": "Holen Sie sich stella überall",
-    "assistantDocsLink": "So verbinden Sie Ihren Assistenten",
     "catalogueAlwaysOn": "Immer aktiv",
     "catalogueClearSearch": "Suche löschen",
     "catalogueCommunityHeading": "Weitere",
@@ -4218,31 +4280,40 @@
       "wordEditShortcutPlaceholder": "z. B. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} darf",
+      "browseIntegrations": "Dienst hinzufügen",
       "cliDescription": "Installieren Sie den stella-Kommandozeilen-Client und melden Sie sich an, um Akten, Dokumente und Vorlagen per Terminal zu automatisieren.",
-      "cliHelpHint": "Führen Sie „stella --help“ aus, um die vollständige Befehlsliste zu sehen.",
       "cliInstallLabel": "Installation",
       "cliLoginLabel": "Anmeldung",
       "cliTitle": "Kommandozeile",
-      "connectedAppsDescription": "Anwendungen und Tools, denen Sie Zugriff auf Ihr Konto gewährt haben.",
-      "connectedAppsEmpty": "Apps, die Sie autorisieren, etwa Claude oder die stella-CLI, erscheinen hier.",
-      "connectedAppsTitle": "Verbundene Apps",
-      "connectedColumn": "Verbunden",
-      "description": "Verbinden Sie MCP-Clients und die Kommandozeile mit Ihrem Konto.",
+      "connected": "Verbunden",
+      "connectedAgo": "Verbunden {time}",
+      "connectedAppsDescription": "Apps, bei denen Sie sich mit stella angemeldet haben. Trennen Sie alle, die Sie nicht mehr nutzen.",
+      "connectedAppsEmpty": "Noch nichts. Richten Sie oben Claude oder ChatGPT ein, dann erscheint es hier.",
+      "connectedAppsTitle": "Apps mit Zugriff",
+      "description": "Nutzen Sie stella in Ihrem KI-Assistenten und sehen Sie, was auf Ihr Konto zugreifen kann.",
+      "developerDescription": "Serveradressen und das Kommandozeilen-Tool für technische Einrichtungen.",
+      "developerTitle": "Entwicklerzugang",
       "disconnectConfirmDescription": "Dies entzieht {clientName} den Zugriff auf Ihr Konto sowie alle ausgestellten Tokens. Sie können sich jederzeit erneut verbinden.",
       "disconnectConfirmTitle": "{clientName} trennen?",
       "disconnectSuccess": "{clientName} wurde getrennt",
+      "integrationsDescription": "Externe Dienste, die die KI für Sie nutzen kann, etwa Ihre Dokumentenablage.",
+      "integrationsEmpty": "Fügen Sie Ihren ersten Dienst hinzu",
+      "integrationsTitle": "Verbundene Dienste",
       "mcpAnonymizedLabel": "Anonymisierter Endpunkt",
-      "mcpAnonymizedNote": "Es ist auch ein anonymisierter Endpunkt verfügbar; er bietet dieselben Werkzeuge mit maskierten personenbezogenen Daten.",
-      "mcpDescription": "Verbinden Sie einen MCP-kompatiblen Client, etwa Claude oder Cursor, über diese Server-URL mit Ihrem stella-Konto.",
+      "mcpAnonymizedShortNote": "Dieselben Tools, personenbezogene Daten maskiert.",
+      "mcpFullNote": "Voller Zugriff auf Ihre Akten und Dokumente.",
       "mcpLawLabel": "Endpunkt für Rechtsquellen",
-      "mcpLawNote": "Es ist auch ein Endpunkt für Rechtsquellen verfügbar; er bietet ausschließlich öffentliche Rechtsprechung und Gesetze und greift auf keine Aktendaten zu.",
-      "mcpStep1": "Fügen Sie die obige URL in Ihrem Client als benutzerdefinierten Connector oder MCP-Server hinzu.",
-      "mcpStep2": "Melden Sie sich an, sobald der Browser dazu auffordert.",
-      "mcpStep3": "Bestätigen Sie den Zugriff auf dem Einwilligungsbildschirm.",
+      "mcpLawShortNote": "Nur öffentliche Rechtsprechung und Gesetze, keine Aktendaten.",
+      "mcpSetupHint": "Fügen Sie eine URL als benutzerdefinierten Connector in Claude, Cursor oder einem anderen MCP-Client hinzu, melden Sie sich an und bestätigen Sie den Zugriff.",
       "mcpTitle": "MCP-Server",
       "mcpUrlLabel": "Server-URL",
-      "scopesLabel": "Zugriff",
-      "title": "Verbindungen"
+      "noMatches": "Keine Verbindung passt zu „{query}“",
+      "notConnected": "Nicht verbunden",
+      "permissionCount": "{count, plural, one {# Berechtigung} other {# Berechtigungen}}",
+      "searchPlaceholder": "Verbindungen durchsuchen",
+      "title": "Verbindungen",
+      "turnedOff": "Ausgeschaltet"
     },
     "organization": {
       "activeMembers": "Aktive Mitglieder",
@@ -5032,6 +5103,11 @@
     "whenNotToUsePlaceholder": "Wann sollte diese Vorlage nicht verwendet werden?",
     "whenToUse": "Wann verwenden",
     "whenToUsePlaceholder": "Wann sollte diese Vorlage verwendet werden? (hilft der KI bei der Vorlagenauswahl)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Interne Arbeit"
+    }
   },
   "translate": {
     "dialog": {
@@ -5923,7 +5999,8 @@
         "openReport": "Bericht öffnen",
         "submit": "Bericht exportieren",
         "templateLabel": "Berichtsvorlage",
-        "title": "Bericht exportieren"
+        "title": "Bericht exportieren",
+        "withoutAiSummaries": "Ohne KI-Zusammenfassungen exportieren"
       },
       "saveAsTemplate": "Als Voreinstellung speichern…",
       "selectProperty": "Eigenschaft auswählen",

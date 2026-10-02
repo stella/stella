@@ -72,6 +72,10 @@ describe("counterparty_check chat tool", () => {
         birth_date: "1980-03-15",
       },
     });
+    expect(received?.observer).toMatchObject({
+      onRequest: expect.any(Function),
+      onError: expect.any(Function),
+    });
     expect(received?.subject).toEqual({
       type: "person",
       firstName: "Jan",
@@ -139,6 +143,10 @@ describe("counterparty_check chat tool", () => {
         date_of_birth: { precision: "year", year: 1960 },
         nationality_codes: ["RU"],
       },
+    });
+    expect(received?.dependencies.observer).toMatchObject({
+      onRequest: expect.any(Function),
+      onError: expect.any(Function),
     });
     expect(result).toEqual(unavailable);
     expect(received?.subject).toEqual({

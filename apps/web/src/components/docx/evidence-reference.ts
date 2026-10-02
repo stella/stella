@@ -1,6 +1,6 @@
+import type { Node as ProseMirrorNode, Schema } from "@tiptap/pm/model";
+import { Plugin, PluginKey } from "@tiptap/pm/state";
 import { panic, Result } from "better-result";
-import type { Node as ProseMirrorNode, Schema } from "prosemirror-model";
-import { Plugin, PluginKey } from "prosemirror-state";
 import * as v from "valibot";
 
 import { readFieldAttrs } from "@stll/folio-core/prosemirror/attrs";

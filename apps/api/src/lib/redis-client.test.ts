@@ -114,8 +114,14 @@ describe("connectWithColdStartRetries", () => {
     };
 
     // Resolving without throwing is the assertion; a rejection fails the test.
-    await connectWithColdStartRetries(connectOnce);
+    const delays: number[] = [];
+    await connectWithColdStartRetries(connectOnce, {
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+    });
     expect(calls).toBe(3);
+    expect(delays).toEqual([200, 500]);
   });
 
   test("rethrows the original error once retries are exhausted", async () => {
@@ -126,15 +132,21 @@ describe("connectWithColdStartRetries", () => {
       throw originalError;
     };
 
+    const delays: number[] = [];
     let caught: unknown;
     try {
-      await connectWithColdStartRetries(connectOnce);
+      await connectWithColdStartRetries(connectOnce, {
+        sleep: async (delayMs) => {
+          delays.push(delayMs);
+        },
+      });
     } catch (error) {
       caught = error;
     }
     // Identity check: the retries-exhausted rethrow must preserve the
     // original error object, not wrap it.
     expect(caught).toBe(originalError);
+    expect(delays).toEqual([200, 500, 1000, 2000]);
   });
 });
 
@@ -262,7 +274,12 @@ describe("createLazyRedisClient", () => {
       }
       await Promise.resolve();
     };
-    const lazy = createLazyRedisClient(() => client);
+    const delays: number[] = [];
+    const lazy = createLazyRedisClient(() => client, {
+      sleep: async (delayMs) => {
+        delays.push(delayMs);
+      },
+    });
 
     const rejection: unknown = await lazy.ready().then(
       () => null,
@@ -274,6 +291,7 @@ describe("createLazyRedisClient", () => {
 
     expect(rejection).toBeInstanceOf(Error);
     expect(client.connects).toBe(failingAttempts + 1);
+    expect(delays).toEqual([200, 500, 1000, 2000]);
   });
 
   test("closing drops the connection with the client", async () => {

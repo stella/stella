@@ -1,5 +1,7 @@
 import { Result } from "better-result";
-import { and, asc, eq, getColumns, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, getColumns, inArray, ne, or } from "drizzle-orm";
+
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 
 import type { SafeDb } from "@/api/db/safe-db";
 import { BILLING_STATUS, timeEntries, workspaces } from "@/api/db/schema";
@@ -67,6 +69,7 @@ export const timeApprovalRefusal = ({
   }
   if (
     action === "approve" &&
+    entry.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.CLIENT &&
     entry.billable &&
     entry.currency === UNPRICED_TIME_ENTRY_CURRENCY
   ) {
@@ -132,7 +135,7 @@ export const approveTimeEntryBatch = async ({
         running: timeEntryIsRunning(),
       })
       .from(timeEntries)
-      .innerJoin(
+      .leftJoin(
         workspaces,
         and(
           eq(workspaces.id, timeEntries.workspaceId),
@@ -143,7 +146,13 @@ export const approveTimeEntryBatch = async ({
         and(
           eq(timeEntries.organizationId, organizationId),
           inArray(timeEntries.id, uniqueIds),
-          ne(workspaces.status, "deleting"),
+          or(
+            eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
+            and(
+              eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+              ne(workspaces.status, "deleting"),
+            ),
+          ),
         ),
       )
       .orderBy(asc(timeEntries.id))

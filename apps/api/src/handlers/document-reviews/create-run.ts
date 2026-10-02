@@ -295,6 +295,7 @@ const createDocumentReviewRun = createSafeHandler(
     // through the review model's rate, one output budget per planned
     // finding. Large runs need the client to restate the estimate.
     const reviewModel = getTanStackTextModelInfoForRole("pdf", orgAIConfig, {
+      dataClass: "customer",
       organizationId,
     });
     const inputBytes =

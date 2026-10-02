@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { parseUsReporterReference } from "@stll/api-contract/us-reporter-citation";
 import type { InlineCitationPinPart } from "@stll/legal-ast/inline";
 import { propertyConfig, propertySeed } from "@stll/property-testing";
 
@@ -1044,12 +1045,11 @@ const unsupportedAuthority = fc.oneof(
       fc.stringMatching(/^[A-Z][A-Za-z]{1,6}$/u),
       fc.integer({ min: 1, max: 9999 }),
     )
-    .filter(
-      ([, word]) => !/^(?:Id|US|Wall|So|Mass|Tex|Pa|Pet|Ill)$/u.test(word),
-    )
     .map(
       ([volume, word, first]) => `${String(volume)} ${word} ${String(first)}`,
-    ),
+    )
+    // The reporter table reads some bare words (`Ny`, `So`) as reporters.
+    .filter((authority) => parseUsReporterReference(authority) === null),
   fc
     .tuple(
       fc.integer({ min: 1, max: 999 }),

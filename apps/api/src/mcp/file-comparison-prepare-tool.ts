@@ -135,6 +135,7 @@ export type PrepareFileComparisonOutput = v.InferInput<
 >;
 
 export const PREPARE_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   annotations: {
     title: "Prepare file comparison",
     destructiveHint: false,

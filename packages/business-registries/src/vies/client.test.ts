@@ -60,7 +60,9 @@ describe("validateVat (fixture)", () => {
       });
     });
 
-    const result = await validateVat("IT00159560366");
+    const result = await validateVat("IT00159560366", {
+      observer: "unobserved",
+    });
     expect(result.valid).toBe(true);
     expect(result.status).toEqual({ type: "valid" });
     expect(result.name).toBe("FERRARI S.P.A.");
@@ -78,7 +80,7 @@ describe("validateVat (fixture)", () => {
         }),
     );
 
-    const result = await validateVat("IE6388047V");
+    const result = await validateVat("IE6388047V", { observer: "unobserved" });
     expect(result.valid).toBe(true);
     expect(result.name).toBe("GOOGLE IRELAND LIMITED");
     expect(result.address).toContain("DUBLIN");
@@ -94,7 +96,7 @@ describe("validateVat (fixture)", () => {
         }),
     );
 
-    const result = await validateVat("DE811569869");
+    const result = await validateVat("DE811569869", { observer: "unobserved" });
     expect(result.valid).toBe(true);
     expect(result.name).toBeNull();
     expect(result.address).toBeNull();
@@ -110,7 +112,7 @@ describe("validateVat (fixture)", () => {
         }),
     );
 
-    const result = await validateVat("DE000000000");
+    const result = await validateVat("DE000000000", { observer: "unobserved" });
     expect(result.valid).toBe(false);
     expect(result.status).toEqual({ type: "not-registered" });
   });
@@ -134,7 +136,7 @@ describe("validateVat (fixture)", () => {
         }),
     );
 
-    const result = await validateVat("DE123456789");
+    const result = await validateVat("DE123456789", { observer: "unobserved" });
     expect(result.valid).toBe(false);
     expect(result.status).toEqual({ type: "not-registered" });
   });
@@ -144,7 +146,9 @@ describe("validateVat (fixture)", () => {
       async () => new Response("Bad Gateway", { status: 502 }),
     );
 
-    expect(validateVat("IE6388047V")).rejects.toMatchObject({
+    expect(
+      validateVat("IE6388047V", { observer: "unobserved" }),
+    ).rejects.toMatchObject({
       name: "ViesAPIError",
       httpStatus: 502,
     });
@@ -159,7 +163,9 @@ describe("validateVat (fixture)", () => {
         }),
     );
 
-    expect(validateVat("IE6388047V")).rejects.toMatchObject({
+    expect(
+      validateVat("IE6388047V", { observer: "unobserved" }),
+    ).rejects.toMatchObject({
       name: "ViesAPIError",
     });
   });
@@ -170,21 +176,21 @@ describe("validateVat (fixture)", () => {
 // ---------------------------------------------------------------------------
 describe("validateVat pre-flight validation", () => {
   test("throws ViesValidationError when no country prefix is present", () => {
-    expect(validateVat("143593636")).rejects.toBeInstanceOf(
-      ViesValidationError,
-    );
+    expect(
+      validateVat("143593636", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ViesValidationError);
   });
 
   test("throws ViesValidationError for unknown country prefix", () => {
-    expect(validateVat("ZZ123456789")).rejects.toBeInstanceOf(
-      ViesValidationError,
-    );
+    expect(
+      validateVat("ZZ123456789", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ViesValidationError);
   });
 
   test("throws ViesValidationError for GB (removed from VIES)", () => {
-    expect(validateVat("GB123456789")).rejects.toBeInstanceOf(
-      ViesValidationError,
-    );
+    expect(
+      validateVat("GB123456789", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ViesValidationError);
   });
 
   test("short-circuits malformed national part before fetching VIES", () => {
@@ -193,9 +199,11 @@ describe("validateVat pre-flight validation", () => {
     // a misleading "VAT exists but isn't registered" verdict for
     // what is actually a format violation. Pre-flight the per-
     // country rule and surface the format error directly.
-    expect(validateVat("DE123")).rejects.toBeInstanceOf(ViesValidationError);
-    expect(validateVat("DEABCDEFGHI")).rejects.toBeInstanceOf(
-      ViesValidationError,
-    );
+    expect(
+      validateVat("DE123", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ViesValidationError);
+    expect(
+      validateVat("DEABCDEFGHI", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ViesValidationError);
   });
 });

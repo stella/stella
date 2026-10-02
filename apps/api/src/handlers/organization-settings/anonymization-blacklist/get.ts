@@ -15,7 +15,11 @@ const config = {
     "matters.anonymization-terms.list.",
   permissions: { organizationSettings: ["update"] },
   access: "read",
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
 } satisfies HandlerConfig;
 
 // Restrict to org-wide rows (workspace_id IS NULL). Workspace-scoped

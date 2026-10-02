@@ -10,6 +10,7 @@ import {
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -21,9 +22,11 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { createAuditRecorder } from "@/api/lib/audit-log";
+import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -300,6 +303,28 @@ describe("return and reapproval lifecycle", () => {
 });
 
 describe("approval queue pages", () => {
+  test("bounds default and requested pages while retaining a continuation cursor", async () => {
+    await seedEntry();
+    await seedEntry();
+    for (const limit of [undefined, 4]) {
+      const page = await withTenantActionSizePolicy(
+        { requestBytes: 512, responseBytes: 512, pageSize: 1 },
+        async () =>
+          await listFor({
+            from: DAY,
+            to: DAY,
+            ...(limit === undefined ? {} : { limit }),
+          }),
+      );
+      expect(page).toHaveProperty("items");
+      if (!("items" in page)) {
+        return;
+      }
+      expect(page.items).toHaveLength(1);
+      expect(page.nextCursor).not.toBeNull();
+    }
+  });
+
   test("filters assigned drafts by date, member, and matter while preserving logged and billed minutes", async () => {
     const first = await seedEntry();
     const second = await seedEntry();
@@ -494,5 +519,125 @@ describe("approval policy serialization", () => {
         await db.insert(organizationSettings).values(saved);
       }
     }
+  });
+});
+
+describe("internal work approvals", () => {
+  const seedInternal = async (
+    overrides: Partial<Omit<typeof timeEntries.$inferInsert, "id">> = {},
+  ) =>
+    await seedEntry({
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      workspaceId: null,
+      billable: false,
+      noCharge: false,
+      billedMinutes: 0,
+      rateAtEntry: cents(0),
+      currency: UNPRICED_TIME_ENTRY_CURRENCY,
+      ...overrides,
+    });
+
+  test("assigned approvers can list, approve, and return internal work with no matter audit attribution", async () => {
+    const id = await seedInternal();
+    const page = await listFor({ from: DAY, to: DAY });
+    if (!("items" in page)) {
+      throw new Error(`unexpected internal queue: ${JSON.stringify(page)}`);
+    }
+    expect(page.items).toHaveLength(1);
+    expect(page.items.at(0)).toMatchObject({
+      id,
+      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+      workspaceId: null,
+      durationMinutes: 37,
+      billedMinutes: 0,
+    });
+    expect(await listFor({ matter: ids.wsA2 })).toMatchObject({ items: [] });
+    expect(await approveFor([id])).toEqual({
+      results: [{ id, status: "approved" }],
+    });
+    expect(await returnFor(id, "Clarify internal activity")).toEqual({
+      id,
+      status: "draft",
+    });
+    expect(await stored(id)).toMatchObject({
+      workspaceId: null,
+      billable: false,
+      billedMinutes: 0,
+      rateAtEntry: cents(0),
+      returnComment: "Clarify internal activity",
+      approvedAt: null,
+    });
+    const logs = await db
+      .select()
+      .from(auditLogs)
+      .where(eq(auditLogs.resourceId, id));
+    expect(logs).toHaveLength(2);
+    for (const log of logs) {
+      expect(log).toMatchObject({
+        userId: ids.userA2,
+        organizationId: ids.orgA,
+        workspaceId: null,
+      });
+    }
+  });
+
+  test("internal visibility stays with its owner and approvers, including admins, inside its tenant", async () => {
+    const assigned = await seedInternal();
+    const unassigned = await seedInternal({ approverUserId: null });
+    const foreign = await seedInternal({
+      organizationId: ids.orgB,
+      userId: ids.userB1,
+    });
+    const otherMember = await createSafeDb(
+      db,
+      [],
+      ids.orgA,
+      ids.userA2,
+    )((tx) =>
+      tx
+        .select({ id: timeEntries.id })
+        .from(timeEntries)
+        .where(inArray(timeEntries.id, [assigned, unassigned, foreign])),
+    );
+    expect(otherMember.isOk() && otherMember.value).toEqual([{ id: assigned }]);
+    const owner = await createSafeDb(
+      db,
+      [],
+      ids.orgA,
+      ids.userA1,
+    )((tx) =>
+      tx
+        .select({ id: timeEntries.id })
+        .from(timeEntries)
+        .where(inArray(timeEntries.id, [assigned, unassigned, foreign])),
+    );
+    expect(owner.isOk() && owner.value.map(({ id }) => id).toSorted()).toEqual(
+      [assigned, unassigned].toSorted(),
+    );
+    expect(await approveFor([unassigned, foreign])).toMatchObject({
+      results: [
+        { id: unassigned, status: "refused", reason: "not_found" },
+        { id: foreign, status: "refused", reason: "not_found" },
+      ],
+    });
+    expect(await approveFor([unassigned], ids.userAdmin, "owner")).toEqual({
+      results: [{ id: unassigned, status: "approved" }],
+    });
+    expect((await stored(foreign))?.status).toBe("draft");
+  });
+
+  test("internal approvals still refuse locked months", async () => {
+    const id = await seedInternal();
+    const date = Temporal.PlainDate.from(DAY);
+    await db
+      .update(organizationSettings)
+      .set({
+        timeLockedThroughMonth: date.with({ day: date.daysInMonth }).toString(),
+      })
+      .where(eq(organizationSettings.organizationId, ids.orgA));
+    expect(await approveFor([id])).toMatchObject({
+      results: [{ id, status: "refused", reason: "time_period_locked" }],
+    });
+    expect((await stored(id))?.status).toBe("draft");
   });
 });

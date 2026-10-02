@@ -22,6 +22,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalListGenerationCandidateId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
@@ -45,7 +46,11 @@ const config = {
     "own status is returned alongside the page.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: paramsSchema,
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -71,7 +76,9 @@ const decodeCursor = (value: string): CandidateCursor | null => {
 const readGenerationCandidates = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListGenerationCandidatesMax;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListGenerationCandidatesMax,
+    );
     const conditions = [
       eq(legalListGenerationCandidates.workspaceId, workspaceId),
       eq(legalListGenerationCandidates.listId, params.listId),

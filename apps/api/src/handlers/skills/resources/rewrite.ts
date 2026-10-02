@@ -35,7 +35,11 @@ const config = {
     "content without saving it: persist it with skills.resources.update. " +
     "Consumes AI usage.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: true,
+  },
   params: rewriteSkillResourceParamsSchema,
   body: rewriteSkillResourceBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -47,6 +51,7 @@ const rewriteSkillResource = createSafeRootHandler(
     body,
     memberRole,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     params,
     promptCachingEnabled,
@@ -55,6 +60,7 @@ const rewriteSkillResource = createSafeRootHandler(
     user,
   }) {
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -96,6 +102,7 @@ const rewriteSkillResource = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -120,12 +127,14 @@ const rewriteSkillResource = createSafeRootHandler(
     const generation = await Result.tryPromise({
       try: async () =>
         await generateTanStackTextForRole({
+          dataClass: "customer",
           abortSignal: AbortSignal.timeout(REWRITE_TIMEOUT_MS),
           finishPolicy: "require-complete",
           maxOutputTokens: REWRITE_MAX_OUTPUT_TOKENS,
           role: "fast",
           serviceTier: "standard",
           orgAIConfig,
+          managedAIResidency,
           organizationId: session.activeOrganizationId,
           // Root-scoped handler: no workspace id is available here.
           tenantWorkspaceIds: [],

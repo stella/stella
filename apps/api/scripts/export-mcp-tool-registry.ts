@@ -17,6 +17,8 @@
 import "../src/tests/setup-env";
 import { panic } from "better-result";
 
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
+
 import { WRITE_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import {
   dynamicToolNamespacePrefix,
@@ -404,6 +406,8 @@ export const CLI_KNOWN_SCOPES = ${JSON.stringify(cliKnownScopes, null, 2)} as co
 export const CLI_REQUIRED_RESOURCE_SCOPES = ${JSON.stringify(MCP_DEFAULT_RESOURCE_SCOPES, null, 2)} as const;
 export const MCP_ERROR_CODES = ${JSON.stringify(MCP_ERROR_CODES, null, 2)} as const;
 export type McpErrorCode = (typeof MCP_ERROR_CODES)[number];
+export const ACTION_ADMISSION_REFUSALS = ${JSON.stringify(ACTION_ADMISSION_REFUSALS, null, 2)} as const;
+export type ActionAdmissionCode = keyof typeof ACTION_ADMISSION_REFUSALS;
 export const MCP_CLI_TOOL_SCOPES = ${JSON.stringify(MCP_CLI_TOOL_SCOPES, null, 2)} as const;
 export type McpCliToolScope = (typeof MCP_CLI_TOOL_SCOPES)[number];
 `,

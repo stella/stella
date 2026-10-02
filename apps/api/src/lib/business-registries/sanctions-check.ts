@@ -1,5 +1,6 @@
 import { panic, Result } from "better-result";
 
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import type { CountryCode } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -89,6 +90,7 @@ export type SanctionsCheckResult = SanctionsScreening & {
 };
 
 export type SanctionsCheckDependencies = {
+  observer: RegistryRequestObservation;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   executeLookup?: typeof executeRegistryLookup | undefined;
@@ -153,6 +155,7 @@ const resolveCompanyName = async ({
     );
   }
   const lookup = await lookupBusinessRegistryShared({
+    observer: dependencies.observer,
     scopedDb: dependencies.scopedDb,
     organizationId: dependencies.organizationId,
     registry,

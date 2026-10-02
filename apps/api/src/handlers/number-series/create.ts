@@ -15,7 +15,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const config = {
   description: "Create a document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: createNumberSeriesBody,
 } satisfies HandlerConfig;
 

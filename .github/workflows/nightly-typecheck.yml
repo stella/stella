@@ -64,7 +64,11 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Generate types
-        run: bun run typegen
+        # This job calls the compiler directly rather than the Turbo
+        # typecheck graph, so materialize its ignored API contract first.
+        run: |
+          bun run generate
+          bun run typegen
 
       - name: Check cumulative type cost
         run: bun scripts/typecheck-baseline.ts --check

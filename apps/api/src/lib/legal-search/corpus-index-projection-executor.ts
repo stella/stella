@@ -10,8 +10,8 @@ import { corpusIndexProjectionStates } from "@/api/db/schema";
 import { PayloadBudgetError } from "@/api/lib/compression";
 import { settleBoth } from "@/api/lib/corpus-index/core";
 import { errorFingerprint } from "@/api/lib/errors/utils";
-import type {
-  CorpusIndexClient,
+import {
+  type CorpusIndexClient,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -19,6 +19,8 @@ import {
   legislationV2NeedsPassages,
 } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import {
+  censusCorpusProjectionRevisions,
+  CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
   CORPUS_PROJECTION_APPEND_COMMIT_MODE,
   CORPUS_PROJECTION_APPEND_MAX_REQUEST_BYTES,
   CORPUS_PROJECTION_APPEND_MAX_REVISIONS,
@@ -64,16 +66,15 @@ import { S3ObjectBudgetError } from "@/api/lib/s3";
 type ProjectionTransactionRunner = IngestionTransactionRunner<Transaction>;
 type ProjectionAppendClient = Pick<
   CorpusIndexClient,
-  "ingestCommittedBatch" | "ingestQueuedBatch"
+  "ingestCommittedBatch" | "ingestQueuedBatch" | "aggregate"
 >;
 
 /**
- * The cycle's only mode-dependent step. Everything after it (the batch start,
- * the commit, the abandon on an unknown outcome) reads the same durable
- * state either way, so a queued cycle settles exactly like a published one.
+ * Queued requests from existing coordinators also wait for publication. WAL
+ * acceptance cannot authorize applied state, including during catch-up.
  */
 export const ingestCorpusProjectionRequest = async (
-  client: ProjectionAppendClient,
+  client: Pick<ProjectionAppendClient, "ingestCommittedBatch">,
   {
     commitMode,
     indexId,
@@ -86,9 +87,8 @@ export const ingestCorpusProjectionRequest = async (
 ) => {
   switch (commitMode) {
     case CORPUS_PROJECTION_APPEND_COMMIT_MODE.published:
-      return await client.ingestCommittedBatch(indexId, ndjson);
     case CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued:
-      return await client.ingestQueuedBatch(indexId, ndjson);
+      return await client.ingestCommittedBatch(indexId, ndjson, "unobserved");
     default:
       commitMode satisfies never;
       return panic(`Unhandled append commit mode: ${String(commitMode)}`);
@@ -128,9 +128,8 @@ type ExecuteCorpusProjectionAppendCycleOptions<
   client: ProjectionAppendClient;
   generation: string;
   /**
-   * Required, like the client's own `commit`: the two modes differ in what
-   * the persisted acceptance means, and a default would let a caller inherit
-   * the wrong one silently.
+   * Coordinators may still request queued catch-up during rollout. Both
+   * modes now wait for publication before confirming applied state.
    */
   commitMode: CorpusProjectionAppendCommitMode;
   limit: number;
@@ -745,6 +744,87 @@ const logAppendFailure = ({
   return { fault, stopForEngine };
 };
 
+type ConfirmProjectionAppendOptions = {
+  client: ProjectionAppendClient;
+  indexId: string;
+  entries: readonly PreparedProjectionEntry[];
+};
+
+/** Each revision belongs to one document_id; require all of its passages. */
+const confirmProjectionAppend = async ({
+  client,
+  indexId,
+  entries,
+}: ConfirmProjectionAppendOptions): Promise<Result<void, CorpusIndexError>> => {
+  for (
+    let offset = 0;
+    offset < entries.length;
+    offset += CORPUS_PROJECTION_DELETE_MAX_REVISIONS
+  ) {
+    const batch = entries.slice(
+      offset,
+      offset + CORPUS_PROJECTION_DELETE_MAX_REVISIONS,
+    );
+    const census = await censusCorpusProjectionRevisions({
+      client,
+      indexId,
+      revisions: batch.map(({ material }) => material.lease.intentId),
+    });
+    if (census.isErr()) {
+      return Result.err(
+        new CorpusIndexError({
+          message: "projection append presence confirmation failed",
+          rejection: "transient",
+          cause: census.error,
+        }),
+      );
+    }
+    const counts = new Map(
+      census.value.present.map(({ revision, documentCount }) => [
+        revision,
+        documentCount,
+      ]),
+    );
+    if (
+      batch.some(
+        ({ material, documentCount }) =>
+          counts.get(material.lease.intentId) !== documentCount,
+      )
+    ) {
+      return Result.err(
+        new CorpusIndexError({
+          message:
+            "projection append is not fully searchable after publication",
+          rejection: "transient",
+        }),
+      );
+    }
+  }
+  return Result.ok(undefined);
+};
+
+type PublishAndConfirmProjectionAppendOptions =
+  ConfirmProjectionAppendOptions & {
+    commitMode: CorpusProjectionAppendCommitMode;
+  };
+
+const publishAndConfirmProjectionAppend = async ({
+  client,
+  commitMode,
+  indexId,
+  entries,
+}: PublishAndConfirmProjectionAppendOptions) => {
+  const published = await ingestCorpusProjectionRequest(client, {
+    commitMode,
+    indexId,
+    ndjson: entries.map(({ ndjson }) => ndjson).join("\n"),
+  });
+  if (published.isErr()) {
+    return published;
+  }
+  return await confirmProjectionAppend({ client, indexId, entries });
+};
+
 type ProcessPreparedRequestsOptions = {
   runInTransaction: ProjectionTransactionRunner;
   client: ProjectionAppendClient;
@@ -844,10 +924,11 @@ const processPreparedRequests = async ({
   result.requestCount += 1;
   const appended = await measured(
     async () =>
-      await ingestCorpusProjectionRequest(client, {
+      await publishAndConfirmProjectionAppend({
+        client,
         commitMode,
         indexId: request.indexId,
-        ndjson: started.map(({ ndjson }) => ndjson).join("\n"),
+        entries: started,
       }),
     (elapsedMs) => {
       result.timing.ingestMs += elapsedMs;
@@ -1108,6 +1189,31 @@ const processMultipartEntry = async ({
   }
   if (appendStatus !== "completed") {
     return appendStatus;
+  }
+  const confirmed = await measured(
+    async () =>
+      await confirmProjectionAppend({
+        client,
+        indexId: entry.indexId,
+        entries: [entry],
+      }),
+    (elapsedMs) => {
+      result.timing.ingestMs += elapsedMs;
+    },
+  );
+  if (confirmed.isErr()) {
+    const failure = logAppendFailure({
+      indexId: entry.indexId,
+      documents: entry.documentCount,
+      revisionCount: 1,
+      error: confirmed.error,
+    });
+    return await stop({
+      errorMessage: confirmed.error.message,
+      rejection: confirmed.error.rejection,
+      fault: failure.fault,
+      stopForEngine: failure.stopForEngine,
+    });
   }
   const committed = await measured(
     async () =>

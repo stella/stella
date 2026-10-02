@@ -1,6 +1,6 @@
 {
   "name": "@stll/docx-utils",
-  "version": "0.1.2",
+  "version": "0.1.4",
   "description": "Low-level helpers for reading and writing DOCX/OOXML zip packages: text and binary extraction, relationship and content-type management, and namespace constants.",
   "keywords": [
     "docx",
@@ -42,15 +42,19 @@
     "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/docx-utils",
     "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/docx-utils",
     "format": "bun ../../scripts/run-oxfmt.ts .",
-    "prepack": "bun run build"
+    "prepack": "bun run build",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlF 'fc.assert' src --include='*.test.ts')"
   },
   "dependencies": {
+    "better-result": "catalog:",
     "jszip": "catalog:",
     "slimdom": "^4.3.5"
   },
   "devDependencies": {
+    "@stll/property-testing": "workspace:*",
     "@stll/typescript-config": "workspace:*",
     "bun-types": "catalog:",
+    "fast-check": "catalog:",
     "tsdown": "catalog:"
   }
 }

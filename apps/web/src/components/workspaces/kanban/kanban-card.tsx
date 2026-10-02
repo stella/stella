@@ -151,6 +151,15 @@ export const KanbanCard = ({
       kind={entity.kind}
       mimeType={file?.mimeType}
       status={entity.status}
+      thumbnail={
+        file
+          ? {
+              fieldId: file.fieldId,
+              hasThumbnail: file.hasThumbnail,
+              workspaceId,
+            }
+          : null
+      }
     />
   );
 

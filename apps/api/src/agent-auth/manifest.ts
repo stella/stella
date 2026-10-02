@@ -65,3 +65,9 @@ receives a scoped, revocable OAuth access token.
 - events: \`${getAgentAuthUrl(AGENT_AUTH_EVENTS_PATH)}\`
 `;
 };
+
+export const AGENT_AUTH_MANIFEST_HEADERS = {
+  "Content-Type": "text/markdown; charset=utf-8",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+} as const;

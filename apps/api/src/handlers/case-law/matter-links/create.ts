@@ -72,7 +72,11 @@ const config = {
     "link past the matter's maximum. To link a selection at once, use the " +
     "batch call instead of repeating this one.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: {
+    type: "capability",
+    reason: "legal_corpus_admin",
+    consumesServices: false,
+  },
   body: createMatterLinkBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

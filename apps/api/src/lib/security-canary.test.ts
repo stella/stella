@@ -96,7 +96,7 @@ describe("security canary interceptor", () => {
     const response = await app.handle(requestWithCredential(CANARY_CREDENTIAL));
 
     expect(response.status).toBe(403);
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get("cache-control")).toBe("private, no-store");
     expect(response.headers.get(SECURITY_CANARY_WARNING_HEADER)).toBe(
       SECURITY_CANARY_WARNING,
     );

@@ -9,21 +9,12 @@ import { env } from "@/api/env";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { isRecord } from "@/api/lib/type-guards";
 import {
   APPROVAL_TOOL_NAME,
   createApprovalHarness,
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
-import type { HarnessModel } from "@/api/tests/helpers/chat-approval-harness";
-import {
-  createPromptPrefixLedger,
-  wirePromptBlocksOf,
-} from "@/api/tests/helpers/chat-prompt-prefix";
-import type {
-  PromptPrefixLedger,
-  WirePromptSections,
-} from "@/api/tests/helpers/chat-prompt-prefix";
+import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import {
   cassetteFor,
   loadProviderWireCassettes,
@@ -40,6 +31,7 @@ import {
 } from "@/api/tests/helpers/provider-wire-contract";
 import { installProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
 import type { ProviderWireReplay } from "@/api/tests/helpers/provider-wire-replay";
+import { replayedHarnessModel } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -81,7 +73,7 @@ beforeAll(async () => {
   previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay();
+  replay = installProviderWireReplay({ retryAfterMs: 1 });
 });
 
 afterAll(async () => {
@@ -100,124 +92,13 @@ afterAll(async () => {
   await releaseRlsFixture();
 });
 
-const entriesOf = (value: unknown): readonly unknown[] => {
-  if (value === undefined || value === null) {
-    return [];
-  }
-  return Array.isArray(value) ? value : [value];
-};
-
-/** Where each provider's request body holds its tools, system prompt and
- *  messages. */
-const WIRE_PROMPT_SECTIONS = {
-  anthropic: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: entriesOf(body["system"]),
-    tools: entriesOf(body["tools"]),
-  }),
-  bedrock: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: entriesOf(body["system"]),
-    tools: entriesOf(
-      isRecord(body["toolConfig"]) ? body["toolConfig"]["tools"] : undefined,
-    ),
-  }),
-  google: (body) => ({
-    messages: entriesOf(body["contents"]),
-    system: entriesOf(body["systemInstruction"]),
-    tools: entriesOf(body["tools"]),
-  }),
-  // The system prompt is the first message.
-  mistral: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: [],
-    tools: entriesOf(body["tools"]),
-  }),
-  openai: (body) => ({
-    messages: entriesOf(body["input"]),
-    system: entriesOf(body["instructions"]),
-    tools: entriesOf(body["tools"]),
-  }),
-  openrouter: (body) => ({
-    messages: entriesOf(body["messages"]),
-    system: [],
-    tools: entriesOf(body["tools"]),
-  }),
-} as const satisfies Record<
-  ProviderWireProvider,
-  (body: Record<string, unknown>) => WirePromptSections
->;
-
-/** The harness's model seam, answered by the replay: its queue is the
- *  conversation's script. Every request the chat model answered is held to
- *  `chat.provider.prefix-stable` as its SDK wrote it. */
-const replayedModel = ({
-  prompts,
-  provider,
-}: {
-  prompts: PromptPrefixLedger;
-  provider: ProviderWireProvider;
-}): HarnessModel => {
-  /** How many of the replay's requests `prompts` holds. */
-  let recorded = 0;
-  const recordNewRequests = () => {
-    const requests = replay.requests();
-    for (const { body, exchange } of requests.slice(recorded)) {
-      // Side calls go to another model; a refused request reached no one.
-      if (typeof exchange !== "number") {
-        continue;
-      }
-      const parsed: unknown = JSON.parse(body);
-      if (!isRecord(parsed)) {
-        panic("A chat request body is a JSON object");
-      }
-      prompts.record(
-        wirePromptBlocksOf(WIRE_PROMPT_SECTIONS[provider](parsed)),
-      );
-    }
-    recorded = requests.length;
-  };
-  return {
-    modelOptionsOf: () => [],
-    promptLedgerOf: () => {
-      recordNewRequests();
-      return prompts;
-    },
-    promptsOf: () => [],
-    restore: () => undefined,
-    script: (_threadId, ...runs) => {
-      expect(runs).toEqual([]);
-    },
-    stalled: async () => {
-      await Promise.reject(
-        new TypeError("A replayed provider does not stall on cue"),
-      );
-    },
-    takeFindings: () => {
-      recordNewRequests();
-      // Taking the replay's findings clears its requests.
-      const { unconsumed, unexpected } = replay.takeFindings();
-      recorded = 0;
-      // What the model is handed goes over the wire to a recorded answer, so
-      // the scripted provider's record of it has no counterpart here.
-      return {
-        changedToolResults: [],
-        unconsumedScripts: unconsumed,
-        unscriptedCalls: unexpected,
-      };
-    },
-    // The bodies the adapter sent, in its provider's wire format.
-    takeRequests: () => replay.takeRequests(),
-  };
-};
-
 /** A thread whose chat model is the one `cassette` was recorded with. */
 const openThread = async (cassette: ProviderWireCassette) => {
   const { model, provider } = cassette;
   const prompts = createPromptPrefixLedger();
   const harness = createApprovalHarness({
     ids,
-    model: replayedModel({ prompts, provider }),
+    model: replayedHarnessModel({ prompts, provider, replay }),
     organizationAIConfig: wireOrgAIConfig({
       apiKey: "cassette-replay-no-credentials",
       chatModel: model,

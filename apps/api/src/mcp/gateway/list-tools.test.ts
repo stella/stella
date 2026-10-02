@@ -62,6 +62,7 @@ const definitionWithSchema = (
     readOnlyHint: true,
   },
   anonymized: { exposure: "passthrough" },
+  consumesServices: true,
   description: "Test schema conversion",
   inputSchema,
   name: "test_schema_conversion",

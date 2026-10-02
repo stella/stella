@@ -3,6 +3,7 @@ import { timeEntries } from "@/api/db/schema";
 /** The columns a time-entry read returns, for the list and the by-id read. */
 export const timeEntryReadColumns = {
   id: timeEntries.id,
+  activityGroup: timeEntries.activityGroup,
   userId: timeEntries.userId,
   approverUserId: timeEntries.approverUserId,
   approvedByUserId: timeEntries.approvedByUserId,

@@ -1241,6 +1241,10 @@ export const CAPABILITY_DISPATCH = {
   "time-entries.get": {
     load: async () => await import("@/api/handlers/time-entries/get"),
   },
+  "time-entries.internal.create": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/internal/create"),
+  },
   "time-entries.ledes.export": {
     load: async () => await import("@/api/handlers/time-entries/ledes/export"),
   },

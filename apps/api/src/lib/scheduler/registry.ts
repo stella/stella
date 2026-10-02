@@ -1,5 +1,9 @@
 import { createBullMqDispatchTask } from "@/api/lib/scheduler/bullmq";
 import {
+  SWEEP_ACTION_COSTS_TASK,
+  sweepActionCostRecords,
+} from "@/api/lib/scheduler/tasks/action-cost-retention";
+import {
   RECONCILE_BILINGUAL_RUNS_TASK,
   reconcileBilingualRuns,
 } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
@@ -193,6 +197,7 @@ const SCHEDULER_TASKS = {
   [REPAIR_SEARCH_PROJECTIONS_TASK]: repairSearchProjections,
   [CHAT_THREAD_COMPACTOR_TASK]: compactChatThreads,
   [SWEEP_CHAT_RUN_LOGS_TASK]: sweepChatRunLogs,
+  [SWEEP_ACTION_COSTS_TASK]: sweepActionCostRecords,
   [BACKFILL_WORK_OBLIGATIONS_TASK]: backfillWorkObligations,
   [BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK]: backfillLegislationExpressionIds,
   [WORK_ATTENTION_SCOUT_TASK]: runWorkAttentionScoutTask,

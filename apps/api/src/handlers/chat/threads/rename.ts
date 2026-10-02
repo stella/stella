@@ -20,7 +20,11 @@ const config = {
     "afterwards. A thread that does not exist in the requested scope is a " +
     "404: this never creates one.",
   permissions: { chat: ["update"] },
-  mcp: { type: "capability", reason: "chat_thread_ui" },
+  mcp: {
+    type: "capability",
+    reason: "chat_thread_ui",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),

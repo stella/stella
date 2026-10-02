@@ -3,6 +3,7 @@ import { afterEach, beforeEach, expect, test } from "bun:test";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
+import { toSafeId } from "@/api/lib/branded-types";
 import {
   CORPUS_INDEX_CLUSTER_CONFIG,
   CORPUS_INDEX_COMMIT,
@@ -24,6 +25,12 @@ import {
   RELEVANCE_ORDER,
 } from "@/api/lib/legal-search/corpus-search-order";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+  runObservedAction,
+  type ActionCostObservation,
+} from "@/api/lib/usage/action-costs/context";
 
 // Pins the corpus-index HTTP request contract. The engine defaults search
 // hits to document-id order unless `sort_by` is sent, and the rank-based
@@ -120,6 +127,7 @@ test("a cluster without its endpoint pair reaches no host", async () => {
   });
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "case_law_v5_cs_sk",
     query: "text:smlouva",
     maxHits: 10,
@@ -140,6 +148,7 @@ test("q09 uses only its registered endpoint pair", async () => {
   });
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "case_law_v5_cs_sk",
     query: "text:smlouva",
     maxHits: 10,
@@ -157,6 +166,7 @@ test("q09 search falls back to its mutation endpoint", async () => {
   });
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "case_law_v5_cs_sk",
     query: "text:smlouva",
     maxHits: 10,
@@ -180,6 +190,7 @@ test("q09 mutations cannot leak onto its read endpoint", async () => {
   const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
     "case_law_v5_cs_sk",
     '{"document_id":"a"}',
+    "unobserved",
   );
 
   expect(result.isOk()).toBe(true);
@@ -198,8 +209,10 @@ test("config attestation distinguishes a missing immutable index", async () => {
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
   });
 
-  const result =
-    await getCorpusIndexClient("q09").attestIndexConfig(finalCaseLawConfig());
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(
+    finalCaseLawConfig(),
+    "unobserved",
+  );
 
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
@@ -245,7 +258,10 @@ test("config attestation accepts Quickwit-owned metadata and defaults", async ()
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
   });
 
-  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(
+    config,
+    "unobserved",
+  );
 
   expect(result.isOk()).toBe(true);
   if (result.isOk()) {
@@ -277,7 +293,10 @@ test("config attestation rejects text fast-field normalizer drift", async () => 
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
   });
 
-  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(
+    config,
+    "unobserved",
+  );
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -316,6 +335,7 @@ test("config attestation rejects semantic keys omitted from a manifest", async (
 
   const result = await getCorpusIndexClient("q09").attestIndexConfig(
     configWithoutTimestamp,
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -342,7 +362,10 @@ test("config attestation fails closed on physical mapping drift", async () => {
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
   });
 
-  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(
+    config,
+    "unobserved",
+  );
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -376,7 +399,10 @@ test("config attestation rejects an extra physical field mapping", async () => {
     CORPUS_INDEX_Q09_ENDPOINT: "http://localhost:7291",
   });
 
-  const result = await getCorpusIndexClient("q09").attestIndexConfig(config);
+  const result = await getCorpusIndexClient("q09").attestIndexConfig(
+    config,
+    "unobserved",
+  );
 
   expect(result.isErr()).toBe(true);
   if (result.isErr()) {
@@ -388,6 +414,7 @@ test("search sends the documented sort_by parameter", async () => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -409,6 +436,7 @@ test("search asks the engine for a compact response body", async () => {
   responseBody = { num_hits: 0, hits: [], snippets: [] };
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 300,
@@ -428,6 +456,7 @@ test("aggregation asks the engine for a compact response body", async () => {
   responseBody = { aggregations: {} };
 
   const result = await getCorpusIndexClient("q09").aggregate({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     aggs: { court: { terms: { field: "court" } } },
@@ -452,6 +481,7 @@ test("search accepts a response without snippets", async () => {
   };
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "seq:0",
     maxHits: 0,
@@ -468,6 +498,7 @@ test("search rejects a response without snippets when snippet fields were reques
   responseBody = { num_hits: 1, hits: [{ id: "a" }] };
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -481,6 +512,7 @@ test("search rejects a malformed snippets value", async () => {
   responseBody = { num_hits: 1, hits: [], snippets: "no" };
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "seq:0",
     maxHits: 0,
@@ -495,6 +527,7 @@ test("search reads no snippets when snippet fields were requested and nothing ma
   responseBody = { num_hits: 0, hits: [] };
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -513,6 +546,7 @@ test("search rejects a malformed external response", async () => {
   responseBody = [];
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -528,6 +562,7 @@ test("search rejects a malformed object response", async () => {
   responseBody = { error: "index unavailable" };
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -547,6 +582,7 @@ const readSortedPage = async (order: CorpusSearchOrder) => {
   };
 
   await readCorpusIndexSearchPage({
+    observer: "unobserved",
     cluster: "q09",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
@@ -608,6 +644,7 @@ test("ingest fails when the engine accepts fewer documents than sent", async () 
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -623,6 +660,7 @@ test("ingest fails when the engine reports rejected documents", async () => {
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -643,6 +681,7 @@ test("a compatible partial receipt remains unknown", async () => {
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -666,6 +705,7 @@ test("ingest HTTP failures classify whether the batch was rejected", async () =>
       "legal_corpus_v1_cze",
       '{"document_id":"a"}',
       CORPUS_INDEX_COMMIT.waitFor,
+      "unobserved",
     );
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
@@ -681,6 +721,7 @@ test("delete-by-query posts one document-scoped delete task", async () => {
   const result = await getCorpusIndexClient("q09").deleteByQuery(
     "legal_corpus_v1_cze",
     'document_id:"dec-1"',
+    "unobserved",
   );
 
   expect(result.isOk()).toBe(true);
@@ -707,6 +748,7 @@ test("delete-by-query rejects a response without a usable opstamp", async () => 
   const result = await getCorpusIndexClient("q09").deleteByQuery(
     "legal_corpus_v1_cze",
     'document_id:"dec-1"',
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -732,6 +774,7 @@ const publishedSplit = ({
 
 const readSettlement = async (requiredOpstamp: number) =>
   await getCorpusIndexClient("q09").readDeleteSettlement({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     requiredOpstamp,
     deleteCreatedAt: DELETE_TASK_CREATED_AT,
@@ -872,6 +915,7 @@ test("delete settlement without a delete instant keeps every split", async () =>
   };
 
   const result = await getCorpusIndexClient("q09").readDeleteSettlement({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     requiredOpstamp: 42,
     deleteCreatedAt: null,
@@ -1062,6 +1106,7 @@ test("ingest sends the commit mode the caller asked for", async () => {
       "legal_corpus_v1_cze",
       '{"document_id":"a"}',
       commit,
+      "unobserved",
     );
   }
 
@@ -1096,6 +1141,7 @@ test("ingest succeeds when every document is accepted", async () => {
     "legal_corpus_v1_cze",
     '{"document_id":"a"}\n{"document_id":"b"}',
     CORPUS_INDEX_COMMIT.waitFor,
+    "unobserved",
   );
 
   expect(result.isOk()).toBe(true);
@@ -1111,6 +1157,7 @@ test("final-generation ingest requires the exact committed V2 receipt", async ()
   const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
     "case_law_v5_cs_sk",
     '{"document_id":"a"}\n{"document_id":"b"}',
+    "unobserved",
   );
 
   expect(result.isOk()).toBe(true);
@@ -1127,10 +1174,18 @@ test("the two final-generation ingests differ only in their commit mode", async 
   const ndjson = '{"document_id":"a"}\n{"document_id":"b"}';
 
   expect(
-    (await client.ingestCommittedBatch("case_law_v5_cs_sk", ndjson)).isOk(),
+    (
+      await client.ingestCommittedBatch(
+        "case_law_v5_cs_sk",
+        ndjson,
+        "unobserved",
+      )
+    ).isOk(),
   ).toBe(true);
   expect(
-    (await client.ingestQueuedBatch("case_law_v5_cs_sk", ndjson)).isOk(),
+    (
+      await client.ingestQueuedBatch("case_law_v5_cs_sk", ndjson, "unobserved")
+    ).isOk(),
   ).toBe(true);
 
   // Both persist their acceptance, so both demand the exact receipt; only
@@ -1152,6 +1207,7 @@ test("queued ingest rejects a partial V2 receipt", async () => {
   const result = await getCorpusIndexClient("q09").ingestQueuedBatch(
     "case_law_v5_cs_sk",
     '{"document_id":"a"}\n{"document_id":"b"}',
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -1170,6 +1226,7 @@ test("an ingest receipt with zero ingested and rejected documents is definite", 
   const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
     "case_law_v5_cs_sk",
     '{"document_id":"a"}\n{"document_id":"b"}',
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -1196,6 +1253,7 @@ test("final-generation ingest rejects missing or partial V2 counters", async () 
     const result = await getCorpusIndexClient("q09").ingestCommittedBatch(
       "case_law_v5_cs_sk",
       '{"document_id":"a"}\n{"document_id":"b"}',
+      "unobserved",
     );
     expect(result.isErr()).toBe(true);
   }
@@ -1221,6 +1279,7 @@ test("ingest names the request and its budget when the transport fails", async (
     "legal_corpus_v1_cze",
     '{"document_id":"a"}',
     CORPUS_INDEX_COMMIT.waitFor,
+    "unobserved",
   );
 
   expect(result.isErr()).toBe(true);
@@ -1235,6 +1294,7 @@ test("each request reports its own budget, not a shared one", async () => {
   rejectFetchWith(new DOMException("The operation timed out.", "TimeoutError"));
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -1258,6 +1318,7 @@ test("an unreadable success body names the request too", async () => {
   });
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -1291,6 +1352,7 @@ test("a body that stalls past the budget is a timeout, not an unreadable body", 
   });
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -1310,6 +1372,7 @@ test("a request that never reaches the engine is not reported as a timeout", asy
   );
 
   const result = await getCorpusIndexClient("q09").search({
+    observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
     query: "text:smlouva",
     maxHits: 10,
@@ -1327,6 +1390,7 @@ test("a request that never reaches the engine is not reported as a timeout", asy
 test("a scored search projects named stored fields and sorts by score", () => {
   expect(
     corpusIndexScoredSearchRequest({
+      observer: "unobserved",
       indexId: "case_law_v5_cs_sk",
       query: 'text:"a" AND jurisdiction:"SVK"',
       from: 2000,
@@ -1362,6 +1426,7 @@ test.each([
   (fields, requiredFields) => {
     expect(() =>
       corpusIndexScoredSearchRequest({
+        observer: "unobserved",
         indexId: "case_law_v5_cs_sk",
         query: "text:a",
         from: 0,
@@ -1431,4 +1496,153 @@ test.each([
   expect(
     parseCorpusIndexScoredSearchResponse(response, ["document_id"]),
   ).toBeNull();
+});
+
+test("corpus outbound attempts carry distinct call identities inside the admitted action", async () => {
+  responseBody = { num_hits: 0, hits: [], snippets: [] };
+  const rows: ActionCostObservation[] = [];
+  await runObservedAction({
+    identity: {
+      organizationId: toSafeId<"organization">("fixture-org"),
+      actionKind: "mcp.services/call",
+      logicalPhaseId: "fixture-phase",
+    },
+    userId: null,
+    recorder: {
+      enqueue: (row) => {
+        rows.push(row);
+      },
+      estimate: () => null,
+      callRate: () => 7,
+    },
+    run: async () => {
+      const observer = actionRequestObserver(
+        toSafeId<"organization">("fixture-org"),
+        ACTION_COST_CALL_KIND.corpusRequest,
+      );
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const outcome = await getCorpusIndexClient("q09").search({
+          observer,
+          indexId: "fixture-index",
+          query: "fixture",
+          maxHits: 3,
+        });
+        expect(outcome.isOk()).toBe(true);
+      }
+    },
+  });
+  const calls = rows.filter((row) => row.type === "call");
+  expect(requests).toHaveLength(2);
+  expect(calls).toHaveLength(requests.length);
+  expect(calls.at(0)?.record).toMatchObject({
+    kind: ACTION_COST_CALL_KIND.corpusRequest,
+    measuredMicroUnits: 7,
+    logicalPhaseId: "fixture-phase",
+  });
+  expect(calls.at(0)?.record.callId).not.toBe(calls.at(1)?.record.callId);
+});
+
+test("cached corpus clients honor each request observer and observe every settlement pass", async () => {
+  responseBody = {
+    splits: [publishedSplit({ id: "fixture-split", deleteOpstamp: 42 })],
+  };
+  const client = getCorpusIndexClient("q09");
+  const calls = { first: 0, second: 0 };
+  const failures: unknown[] = [];
+  for (const owner of ["first", "second"] as const) {
+    const before = requests.length;
+    const result = await client.readDeleteSettlement({
+      indexId: "fixture-index",
+      requiredOpstamp: 42,
+      deleteCreatedAt: null,
+      observer: {
+        onRequest: () => {
+          calls[owner] += 1;
+        },
+        onError: (cause) => {
+          failures.push(cause);
+        },
+      },
+    });
+    expect(result.isOk()).toBe(true);
+    expect(calls[owner]).toBe(requests.length - before);
+    expect(calls[owner]).toBeGreaterThan(1);
+  }
+  expect(calls.first + calls.second).toBe(requests.length);
+  expect(failures).toEqual([]);
+});
+
+test("a failed corpus observer reports the failure and still sends the request", async () => {
+  responseBody = { num_hits: 0, hits: [], snippets: [] };
+  const cause = new Error("fixture observer failure");
+  const failures: unknown[] = [];
+  const result = await getCorpusIndexClient("q09").search({
+    indexId: "fixture-index",
+    query: "fixture",
+    maxHits: 3,
+    observer: {
+      onRequest: () => {
+        throw cause;
+      },
+      onError: (failure) => {
+        failures.push(failure);
+      },
+    },
+  });
+  expect(result.isOk()).toBe(true);
+  expect(requests).toHaveLength(1);
+  expect(failures).toEqual([cause]);
+});
+
+test("a caller retry records every corpus outbound attempt into its captured action", async () => {
+  responseBody = { num_hits: 0, hits: [], snippets: [] };
+  const rows: ActionCostObservation[] = [];
+  const organizationId = toSafeId<"organization">("fixture-org");
+  await runObservedAction({
+    identity: {
+      organizationId,
+      actionKind: "mcp.services/call",
+      logicalPhaseId: "fixture-retry-phase",
+    },
+    userId: null,
+    recorder: {
+      enqueue: (row) => {
+        rows.push(row);
+      },
+      estimate: () => null,
+      callRate: () => 7,
+    },
+    run: async () => {
+      const observer = actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.corpusRequest,
+      );
+      const input = {
+        indexId: "fixture-index",
+        query: "fixture",
+        maxHits: 3,
+        observer,
+      };
+      responseStatus = 429;
+      const failed = await getCorpusIndexClient("q09").search(input);
+      expect(failed.isErr()).toBe(true);
+      if (failed.isErr()) {
+        expect(failed.error.rejection).toBe("transient");
+      }
+      responseStatus = 200;
+      const retried = await getCorpusIndexClient("q09").search(input);
+      expect(retried.isOk()).toBe(true);
+    },
+  });
+  const calls = rows.filter((row) => row.type === "call");
+  expect(requests).toHaveLength(2);
+  expect(calls).toHaveLength(requests.length);
+  for (const call of calls) {
+    expect(call.record).toMatchObject({
+      organizationId,
+      kind: ACTION_COST_CALL_KIND.corpusRequest,
+      logicalPhaseId: "fixture-retry-phase",
+    });
+  }
+  expect(calls.at(0)?.record.callId).not.toBe(calls.at(1)?.record.callId);
 });

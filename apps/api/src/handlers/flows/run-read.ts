@@ -14,6 +14,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedFlowRunId } from "@/api/lib/safe-id-boundaries";
 
 // ── List (newest first, optional status filter) ─────────
@@ -41,7 +42,9 @@ export const listFlowRunsHandler = async function* ({
   workspaceId,
   query,
 }: ListFlowRunsProps) {
-  const limit = query.limit ?? LIMITS.flowRunsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.flowRunsPageSizeDefault,
+  );
   const conditions = [eq(flowRuns.workspaceId, workspaceId)];
   if (query.status) {
     conditions.push(eq(flowRuns.status, query.status));

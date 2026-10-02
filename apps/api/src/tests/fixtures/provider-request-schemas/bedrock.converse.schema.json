@@ -1,0 +1,1186 @@
+{
+  "$defs": {
+    "AccountId": {
+      "pattern": "[0-9]{12}",
+      "type": "string"
+    },
+    "AnyToolChoice": {
+      "properties": {},
+      "type": "object"
+    },
+    "AudioBlock": {
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ErrorBlock"
+        },
+        "format": {
+          "$ref": "#/$defs/AudioFormat"
+        },
+        "source": {
+          "$ref": "#/$defs/AudioSource"
+        }
+      },
+      "required": ["format", "source"],
+      "type": "object"
+    },
+    "AudioFormat": {
+      "enum": [
+        "mp3",
+        "opus",
+        "wav",
+        "aac",
+        "flac",
+        "mp4",
+        "ogg",
+        "mkv",
+        "mka",
+        "x-aac",
+        "m4a",
+        "mpeg",
+        "mpga",
+        "pcm",
+        "webm"
+      ],
+      "type": "string"
+    },
+    "AudioSource": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/AudioSourceBytesBlob"
+        },
+        "s3Location": {
+          "$ref": "#/$defs/S3Location"
+        }
+      },
+      "type": "object"
+    },
+    "AudioSourceBytesBlob": {
+      "type": "string"
+    },
+    "AutoToolChoice": {
+      "properties": {},
+      "type": "object"
+    },
+    "Blob": {
+      "type": "string"
+    },
+    "Boolean": {
+      "type": "boolean"
+    },
+    "CachePointBlock": {
+      "properties": {
+        "ttl": {
+          "$ref": "#/$defs/CacheTTL"
+        },
+        "type": {
+          "$ref": "#/$defs/CachePointType"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "CachePointType": {
+      "enum": ["default"],
+      "type": "string"
+    },
+    "CacheTTL": {
+      "enum": ["5m", "1h"],
+      "type": "string"
+    },
+    "Citation": {
+      "properties": {
+        "location": {
+          "$ref": "#/$defs/CitationLocation"
+        },
+        "source": {
+          "$ref": "#/$defs/String"
+        },
+        "sourceContent": {
+          "$ref": "#/$defs/CitationSourceContentList"
+        },
+        "title": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    },
+    "CitationGeneratedContent": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    },
+    "CitationGeneratedContentList": {
+      "items": {
+        "$ref": "#/$defs/CitationGeneratedContent"
+      },
+      "type": "array"
+    },
+    "CitationLocation": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "documentChar": {
+          "$ref": "#/$defs/DocumentCharLocation"
+        },
+        "documentChunk": {
+          "$ref": "#/$defs/DocumentChunkLocation"
+        },
+        "documentPage": {
+          "$ref": "#/$defs/DocumentPageLocation"
+        },
+        "searchResultLocation": {
+          "$ref": "#/$defs/SearchResultLocation"
+        },
+        "web": {
+          "$ref": "#/$defs/WebLocation"
+        }
+      },
+      "type": "object"
+    },
+    "CitationSourceContent": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    },
+    "CitationSourceContentList": {
+      "items": {
+        "$ref": "#/$defs/CitationSourceContent"
+      },
+      "type": "array"
+    },
+    "Citations": {
+      "items": {
+        "$ref": "#/$defs/Citation"
+      },
+      "type": "array"
+    },
+    "CitationsConfig": {
+      "properties": {
+        "enabled": {
+          "$ref": "#/$defs/Boolean"
+        }
+      },
+      "required": ["enabled"],
+      "type": "object"
+    },
+    "CitationsContentBlock": {
+      "properties": {
+        "citations": {
+          "$ref": "#/$defs/Citations"
+        },
+        "content": {
+          "$ref": "#/$defs/CitationGeneratedContentList"
+        }
+      },
+      "type": "object"
+    },
+    "ContentBlock": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "audio": {
+          "$ref": "#/$defs/AudioBlock"
+        },
+        "cachePoint": {
+          "$ref": "#/$defs/CachePointBlock"
+        },
+        "citationsContent": {
+          "$ref": "#/$defs/CitationsContentBlock"
+        },
+        "document": {
+          "$ref": "#/$defs/DocumentBlock"
+        },
+        "guardContent": {
+          "$ref": "#/$defs/GuardrailConverseContentBlock"
+        },
+        "image": {
+          "$ref": "#/$defs/ImageBlock"
+        },
+        "reasoningContent": {
+          "$ref": "#/$defs/ReasoningContentBlock"
+        },
+        "searchResult": {
+          "$ref": "#/$defs/SearchResultBlock"
+        },
+        "text": {
+          "$ref": "#/$defs/String"
+        },
+        "toolAddition": {
+          "$ref": "#/$defs/ToolAdditionBlock"
+        },
+        "toolRemoval": {
+          "$ref": "#/$defs/ToolRemovalBlock"
+        },
+        "toolResult": {
+          "$ref": "#/$defs/ToolResultBlock"
+        },
+        "toolUse": {
+          "$ref": "#/$defs/ToolUseBlock"
+        },
+        "video": {
+          "$ref": "#/$defs/VideoBlock"
+        }
+      },
+      "type": "object"
+    },
+    "ContentBlocks": {
+      "items": {
+        "$ref": "#/$defs/ContentBlock"
+      },
+      "type": "array"
+    },
+    "ConversationRole": {
+      "enum": ["user", "assistant", "system"],
+      "type": "string"
+    },
+    "ConverseRequest": {
+      "properties": {
+        "additionalModelRequestFields": {
+          "$ref": "#/$defs/Document"
+        },
+        "additionalModelResponseFieldPaths": {
+          "$ref": "#/$defs/ConverseRequestAdditionalModelResponseFieldPathsList"
+        },
+        "guardrailConfig": {
+          "$ref": "#/$defs/GuardrailConfiguration"
+        },
+        "inferenceConfig": {
+          "$ref": "#/$defs/InferenceConfiguration"
+        },
+        "messages": {
+          "$ref": "#/$defs/Messages"
+        },
+        "outputConfig": {
+          "$ref": "#/$defs/OutputConfig"
+        },
+        "performanceConfig": {
+          "$ref": "#/$defs/PerformanceConfiguration"
+        },
+        "promptVariables": {
+          "$ref": "#/$defs/PromptVariableMap"
+        },
+        "requestMetadata": {
+          "$ref": "#/$defs/RequestMetadata"
+        },
+        "serviceTier": {
+          "$ref": "#/$defs/ServiceTier"
+        },
+        "system": {
+          "$ref": "#/$defs/SystemContentBlocks"
+        },
+        "toolConfig": {
+          "$ref": "#/$defs/ToolConfiguration"
+        }
+      },
+      "type": "object"
+    },
+    "ConverseRequestAdditionalModelResponseFieldPathsList": {
+      "items": {
+        "$ref": "#/$defs/ConverseRequestAdditionalModelResponseFieldPathsListMemberString"
+      },
+      "maxItems": 10,
+      "minItems": 0,
+      "type": "array"
+    },
+    "ConverseRequestAdditionalModelResponseFieldPathsListMemberString": {
+      "maxLength": 256,
+      "minLength": 1,
+      "type": "string"
+    },
+    "Document": {
+      "properties": {},
+      "type": "object"
+    },
+    "DocumentBlock": {
+      "properties": {
+        "citations": {
+          "$ref": "#/$defs/CitationsConfig"
+        },
+        "context": {
+          "$ref": "#/$defs/String"
+        },
+        "format": {
+          "$ref": "#/$defs/DocumentFormat"
+        },
+        "name": {
+          "$ref": "#/$defs/DocumentBlockNameString"
+        },
+        "source": {
+          "$ref": "#/$defs/DocumentSource"
+        }
+      },
+      "required": ["name", "source"],
+      "type": "object"
+    },
+    "DocumentBlockNameString": {
+      "maxLength": 200,
+      "minLength": 1,
+      "type": "string"
+    },
+    "DocumentCharLocation": {
+      "properties": {
+        "documentIndex": {
+          "$ref": "#/$defs/DocumentCharLocationDocumentIndexInteger"
+        },
+        "end": {
+          "$ref": "#/$defs/DocumentCharLocationEndInteger"
+        },
+        "start": {
+          "$ref": "#/$defs/DocumentCharLocationStartInteger"
+        }
+      },
+      "type": "object"
+    },
+    "DocumentCharLocationDocumentIndexInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentCharLocationEndInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentCharLocationStartInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentChunkLocation": {
+      "properties": {
+        "documentIndex": {
+          "$ref": "#/$defs/DocumentChunkLocationDocumentIndexInteger"
+        },
+        "end": {
+          "$ref": "#/$defs/DocumentChunkLocationEndInteger"
+        },
+        "start": {
+          "$ref": "#/$defs/DocumentChunkLocationStartInteger"
+        }
+      },
+      "type": "object"
+    },
+    "DocumentChunkLocationDocumentIndexInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentChunkLocationEndInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentChunkLocationStartInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentContentBlock": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    },
+    "DocumentContentBlocks": {
+      "items": {
+        "$ref": "#/$defs/DocumentContentBlock"
+      },
+      "type": "array"
+    },
+    "DocumentFormat": {
+      "enum": ["pdf", "csv", "doc", "docx", "xls", "xlsx", "html", "txt", "md"],
+      "type": "string"
+    },
+    "DocumentPageLocation": {
+      "properties": {
+        "documentIndex": {
+          "$ref": "#/$defs/DocumentPageLocationDocumentIndexInteger"
+        },
+        "end": {
+          "$ref": "#/$defs/DocumentPageLocationEndInteger"
+        },
+        "start": {
+          "$ref": "#/$defs/DocumentPageLocationStartInteger"
+        }
+      },
+      "type": "object"
+    },
+    "DocumentPageLocationDocumentIndexInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentPageLocationEndInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentPageLocationStartInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "DocumentSource": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/DocumentSourceBytesBlob"
+        },
+        "content": {
+          "$ref": "#/$defs/DocumentContentBlocks"
+        },
+        "s3Location": {
+          "$ref": "#/$defs/S3Location"
+        },
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    },
+    "DocumentSourceBytesBlob": {
+      "type": "string"
+    },
+    "ErrorBlock": {
+      "properties": {
+        "message": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    },
+    "GuardrailConfiguration": {
+      "properties": {
+        "guardrailIdentifier": {
+          "$ref": "#/$defs/GuardrailIdentifier"
+        },
+        "guardrailVersion": {
+          "$ref": "#/$defs/GuardrailVersion"
+        },
+        "trace": {
+          "$ref": "#/$defs/GuardrailTrace"
+        }
+      },
+      "type": "object"
+    },
+    "GuardrailConverseContentBlock": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "image": {
+          "$ref": "#/$defs/GuardrailConverseImageBlock"
+        },
+        "text": {
+          "$ref": "#/$defs/GuardrailConverseTextBlock"
+        }
+      },
+      "type": "object"
+    },
+    "GuardrailConverseContentQualifier": {
+      "enum": ["grounding_source", "query", "guard_content"],
+      "type": "string"
+    },
+    "GuardrailConverseContentQualifierList": {
+      "items": {
+        "$ref": "#/$defs/GuardrailConverseContentQualifier"
+      },
+      "type": "array"
+    },
+    "GuardrailConverseImageBlock": {
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/GuardrailConverseImageFormat"
+        },
+        "source": {
+          "$ref": "#/$defs/GuardrailConverseImageSource"
+        }
+      },
+      "required": ["format", "source"],
+      "type": "object"
+    },
+    "GuardrailConverseImageFormat": {
+      "enum": ["png", "jpeg"],
+      "type": "string"
+    },
+    "GuardrailConverseImageSource": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/GuardrailConverseImageSourceBytesBlob"
+        }
+      },
+      "type": "object"
+    },
+    "GuardrailConverseImageSourceBytesBlob": {
+      "type": "string"
+    },
+    "GuardrailConverseTextBlock": {
+      "properties": {
+        "qualifiers": {
+          "$ref": "#/$defs/GuardrailConverseContentQualifierList"
+        },
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "required": ["text"],
+      "type": "object"
+    },
+    "GuardrailIdentifier": {
+      "maxLength": 2048,
+      "minLength": 0,
+      "pattern": "(|([a-z0-9]+)|(arn:aws(-[^:]+)?:bedrock:[a-z0-9-]{1,20}:[0-9]{12}:guardrail/[a-z0-9]+))",
+      "type": "string"
+    },
+    "GuardrailTrace": {
+      "enum": ["enabled", "disabled", "enabled_full"],
+      "type": "string"
+    },
+    "GuardrailVersion": {
+      "pattern": "(|([1-9][0-9]{0,7})|(DRAFT))",
+      "type": "string"
+    },
+    "ImageBlock": {
+      "properties": {
+        "error": {
+          "$ref": "#/$defs/ErrorBlock"
+        },
+        "format": {
+          "$ref": "#/$defs/ImageFormat"
+        },
+        "source": {
+          "$ref": "#/$defs/ImageSource"
+        }
+      },
+      "required": ["format", "source"],
+      "type": "object"
+    },
+    "ImageFormat": {
+      "enum": ["png", "jpeg", "gif", "webp"],
+      "type": "string"
+    },
+    "ImageSource": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/ImageSourceBytesBlob"
+        },
+        "s3Location": {
+          "$ref": "#/$defs/S3Location"
+        }
+      },
+      "type": "object"
+    },
+    "ImageSourceBytesBlob": {
+      "type": "string"
+    },
+    "InferenceConfiguration": {
+      "properties": {
+        "maxTokens": {
+          "$ref": "#/$defs/InferenceConfigurationMaxTokensInteger"
+        },
+        "stopSequences": {
+          "$ref": "#/$defs/InferenceConfigurationStopSequencesList"
+        },
+        "temperature": {
+          "$ref": "#/$defs/InferenceConfigurationTemperatureFloat"
+        },
+        "topP": {
+          "$ref": "#/$defs/InferenceConfigurationTopPFloat"
+        }
+      },
+      "type": "object"
+    },
+    "InferenceConfigurationMaxTokensInteger": {
+      "minimum": 1,
+      "type": "integer"
+    },
+    "InferenceConfigurationStopSequencesList": {
+      "items": {
+        "$ref": "#/$defs/NonEmptyString"
+      },
+      "maxItems": 2500,
+      "minItems": 0,
+      "type": "array"
+    },
+    "InferenceConfigurationTemperatureFloat": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number"
+    },
+    "InferenceConfigurationTopPFloat": {
+      "maximum": 1,
+      "minimum": 0,
+      "type": "number"
+    },
+    "JsonSchemaDefinition": {
+      "properties": {
+        "description": {
+          "$ref": "#/$defs/String"
+        },
+        "name": {
+          "$ref": "#/$defs/String"
+        },
+        "schema": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "required": ["schema"],
+      "type": "object"
+    },
+    "Message": {
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/ContentBlocks"
+        },
+        "role": {
+          "$ref": "#/$defs/ConversationRole"
+        }
+      },
+      "required": ["role", "content"],
+      "type": "object"
+    },
+    "Messages": {
+      "items": {
+        "$ref": "#/$defs/Message"
+      },
+      "type": "array"
+    },
+    "NonEmptyString": {
+      "minLength": 1,
+      "type": "string"
+    },
+    "OutputConfig": {
+      "properties": {
+        "effort": {
+          "$ref": "#/$defs/OutputConfigEffortString"
+        },
+        "textFormat": {
+          "$ref": "#/$defs/OutputFormat"
+        }
+      },
+      "type": "object"
+    },
+    "OutputConfigEffortString": {
+      "maxLength": 16,
+      "minLength": 0,
+      "type": "string"
+    },
+    "OutputFormat": {
+      "properties": {
+        "structure": {
+          "$ref": "#/$defs/OutputFormatStructure"
+        },
+        "type": {
+          "$ref": "#/$defs/OutputFormatType"
+        }
+      },
+      "required": ["type", "structure"],
+      "type": "object"
+    },
+    "OutputFormatStructure": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "jsonSchema": {
+          "$ref": "#/$defs/JsonSchemaDefinition"
+        }
+      },
+      "type": "object"
+    },
+    "OutputFormatType": {
+      "enum": ["json_schema"],
+      "type": "string"
+    },
+    "PerformanceConfigLatency": {
+      "enum": ["standard", "optimized"],
+      "type": "string"
+    },
+    "PerformanceConfiguration": {
+      "properties": {
+        "latency": {
+          "$ref": "#/$defs/PerformanceConfigLatency"
+        }
+      },
+      "type": "object"
+    },
+    "PromptVariableMap": {
+      "additionalProperties": {
+        "$ref": "#/$defs/PromptVariableValues"
+      },
+      "propertyNames": {
+        "$ref": "#/$defs/String"
+      },
+      "type": "object"
+    },
+    "PromptVariableValues": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    },
+    "ReasoningContentBlock": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "reasoningText": {
+          "$ref": "#/$defs/ReasoningTextBlock"
+        },
+        "redactedContent": {
+          "$ref": "#/$defs/Blob"
+        }
+      },
+      "type": "object"
+    },
+    "ReasoningTextBlock": {
+      "properties": {
+        "signature": {
+          "$ref": "#/$defs/String"
+        },
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "required": ["text"],
+      "type": "object"
+    },
+    "RequestMetadata": {
+      "additionalProperties": {
+        "$ref": "#/$defs/RequestMetadataValueString"
+      },
+      "maxProperties": 16,
+      "minProperties": 1,
+      "propertyNames": {
+        "$ref": "#/$defs/RequestMetadataKeyString"
+      },
+      "type": "object"
+    },
+    "RequestMetadataKeyString": {
+      "maxLength": 256,
+      "minLength": 1,
+      "pattern": "[a-zA-Z0-9\\s:_@$#=/+,-.]{1,256}",
+      "type": "string"
+    },
+    "RequestMetadataValueString": {
+      "maxLength": 256,
+      "minLength": 0,
+      "pattern": "[a-zA-Z0-9\\s:_@$#=/+,-.]{0,256}",
+      "type": "string"
+    },
+    "S3Location": {
+      "properties": {
+        "bucketOwner": {
+          "$ref": "#/$defs/AccountId"
+        },
+        "uri": {
+          "$ref": "#/$defs/S3Uri"
+        }
+      },
+      "required": ["uri"],
+      "type": "object"
+    },
+    "S3Uri": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "pattern": "s3://[a-z0-9][\\.\\-a-z0-9]{1,61}[a-z0-9](/.*)?",
+      "type": "string"
+    },
+    "SearchResultBlock": {
+      "properties": {
+        "citations": {
+          "$ref": "#/$defs/CitationsConfig"
+        },
+        "content": {
+          "$ref": "#/$defs/SearchResultContentBlocks"
+        },
+        "source": {
+          "$ref": "#/$defs/String"
+        },
+        "title": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "required": ["source", "title", "content"],
+      "type": "object"
+    },
+    "SearchResultContentBlock": {
+      "properties": {
+        "text": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "required": ["text"],
+      "type": "object"
+    },
+    "SearchResultContentBlocks": {
+      "items": {
+        "$ref": "#/$defs/SearchResultContentBlock"
+      },
+      "type": "array"
+    },
+    "SearchResultLocation": {
+      "properties": {
+        "end": {
+          "$ref": "#/$defs/SearchResultLocationEndInteger"
+        },
+        "searchResultIndex": {
+          "$ref": "#/$defs/SearchResultLocationSearchResultIndexInteger"
+        },
+        "start": {
+          "$ref": "#/$defs/SearchResultLocationStartInteger"
+        }
+      },
+      "type": "object"
+    },
+    "SearchResultLocationEndInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "SearchResultLocationSearchResultIndexInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "SearchResultLocationStartInteger": {
+      "minimum": 0,
+      "type": "integer"
+    },
+    "ServiceTier": {
+      "properties": {
+        "type": {
+          "$ref": "#/$defs/ServiceTierType"
+        }
+      },
+      "required": ["type"],
+      "type": "object"
+    },
+    "ServiceTierType": {
+      "enum": ["priority", "default", "flex", "reserved"],
+      "type": "string"
+    },
+    "SpecificToolChoice": {
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ToolName"
+        }
+      },
+      "required": ["name"],
+      "type": "object"
+    },
+    "String": {
+      "type": "string"
+    },
+    "SystemContentBlock": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "cachePoint": {
+          "$ref": "#/$defs/CachePointBlock"
+        },
+        "guardContent": {
+          "$ref": "#/$defs/GuardrailConverseContentBlock"
+        },
+        "text": {
+          "$ref": "#/$defs/NonEmptyString"
+        }
+      },
+      "type": "object"
+    },
+    "SystemContentBlocks": {
+      "items": {
+        "$ref": "#/$defs/SystemContentBlock"
+      },
+      "type": "array"
+    },
+    "SystemTool": {
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ToolName"
+        }
+      },
+      "required": ["name"],
+      "type": "object"
+    },
+    "Tool": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "cachePoint": {
+          "$ref": "#/$defs/CachePointBlock"
+        },
+        "systemTool": {
+          "$ref": "#/$defs/SystemTool"
+        },
+        "toolSpec": {
+          "$ref": "#/$defs/ToolSpecification"
+        }
+      },
+      "type": "object"
+    },
+    "ToolAdditionBlock": {
+      "properties": {
+        "tool": {
+          "$ref": "#/$defs/ToolReference"
+        }
+      },
+      "required": ["tool"],
+      "type": "object"
+    },
+    "ToolChoice": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "any": {
+          "$ref": "#/$defs/AnyToolChoice"
+        },
+        "auto": {
+          "$ref": "#/$defs/AutoToolChoice"
+        },
+        "tool": {
+          "$ref": "#/$defs/SpecificToolChoice"
+        }
+      },
+      "type": "object"
+    },
+    "ToolConfiguration": {
+      "properties": {
+        "toolChoice": {
+          "$ref": "#/$defs/ToolChoice"
+        },
+        "tools": {
+          "$ref": "#/$defs/ToolConfigurationToolsList"
+        }
+      },
+      "required": ["tools"],
+      "type": "object"
+    },
+    "ToolConfigurationToolsList": {
+      "items": {
+        "$ref": "#/$defs/Tool"
+      },
+      "minItems": 1,
+      "type": "array"
+    },
+    "ToolInputSchema": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "json": {
+          "$ref": "#/$defs/Document"
+        }
+      },
+      "type": "object"
+    },
+    "ToolName": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "[a-zA-Z0-9_-]+",
+      "type": "string"
+    },
+    "ToolReference": {
+      "properties": {
+        "name": {
+          "$ref": "#/$defs/ToolReferenceNameString"
+        },
+        "serverName": {
+          "$ref": "#/$defs/ToolReferenceServerNameString"
+        },
+        "type": {
+          "$ref": "#/$defs/ToolReferenceTypeString"
+        }
+      },
+      "type": "object"
+    },
+    "ToolReferenceNameString": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "ToolReferenceServerNameString": {
+      "maxLength": 128,
+      "minLength": 1,
+      "type": "string"
+    },
+    "ToolReferenceTypeString": {
+      "maxLength": 64,
+      "minLength": 1,
+      "type": "string"
+    },
+    "ToolRemovalBlock": {
+      "properties": {
+        "tool": {
+          "$ref": "#/$defs/ToolReference"
+        }
+      },
+      "required": ["tool"],
+      "type": "object"
+    },
+    "ToolResultBlock": {
+      "properties": {
+        "content": {
+          "$ref": "#/$defs/ToolResultContentBlocks"
+        },
+        "status": {
+          "$ref": "#/$defs/ToolResultStatus"
+        },
+        "toolUseId": {
+          "$ref": "#/$defs/ToolUseId"
+        },
+        "type": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "required": ["toolUseId", "content"],
+      "type": "object"
+    },
+    "ToolResultContentBlock": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "document": {
+          "$ref": "#/$defs/DocumentBlock"
+        },
+        "image": {
+          "$ref": "#/$defs/ImageBlock"
+        },
+        "json": {
+          "$ref": "#/$defs/Document"
+        },
+        "searchResult": {
+          "$ref": "#/$defs/SearchResultBlock"
+        },
+        "text": {
+          "$ref": "#/$defs/String"
+        },
+        "video": {
+          "$ref": "#/$defs/VideoBlock"
+        }
+      },
+      "type": "object"
+    },
+    "ToolResultContentBlocks": {
+      "items": {
+        "$ref": "#/$defs/ToolResultContentBlock"
+      },
+      "type": "array"
+    },
+    "ToolResultStatus": {
+      "enum": ["success", "error"],
+      "type": "string"
+    },
+    "ToolSpecification": {
+      "properties": {
+        "description": {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        "inputSchema": {
+          "$ref": "#/$defs/ToolInputSchema"
+        },
+        "name": {
+          "$ref": "#/$defs/ToolName"
+        },
+        "strict": {
+          "$ref": "#/$defs/Boolean"
+        }
+      },
+      "required": ["name", "inputSchema"],
+      "type": "object"
+    },
+    "ToolUseBlock": {
+      "properties": {
+        "input": {
+          "$ref": "#/$defs/Document"
+        },
+        "name": {
+          "$ref": "#/$defs/ToolName"
+        },
+        "toolUseId": {
+          "$ref": "#/$defs/ToolUseId"
+        },
+        "type": {
+          "$ref": "#/$defs/ToolUseType"
+        }
+      },
+      "required": ["toolUseId", "name", "input"],
+      "type": "object"
+    },
+    "ToolUseId": {
+      "maxLength": 64,
+      "minLength": 1,
+      "pattern": "[a-zA-Z0-9_.:-]+",
+      "type": "string"
+    },
+    "ToolUseType": {
+      "enum": ["server_tool_use"],
+      "type": "string"
+    },
+    "VideoBlock": {
+      "properties": {
+        "format": {
+          "$ref": "#/$defs/VideoFormat"
+        },
+        "source": {
+          "$ref": "#/$defs/VideoSource"
+        }
+      },
+      "required": ["format", "source"],
+      "type": "object"
+    },
+    "VideoFormat": {
+      "enum": [
+        "mkv",
+        "mov",
+        "mp4",
+        "webm",
+        "flv",
+        "mpeg",
+        "mpg",
+        "wmv",
+        "three_gp"
+      ],
+      "type": "string"
+    },
+    "VideoSource": {
+      "maxProperties": 1,
+      "minProperties": 1,
+      "properties": {
+        "bytes": {
+          "$ref": "#/$defs/VideoSourceBytesBlob"
+        },
+        "s3Location": {
+          "$ref": "#/$defs/S3Location"
+        }
+      },
+      "type": "object"
+    },
+    "VideoSourceBytesBlob": {
+      "type": "string"
+    },
+    "WebLocation": {
+      "properties": {
+        "domain": {
+          "$ref": "#/$defs/String"
+        },
+        "url": {
+          "$ref": "#/$defs/String"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/ConverseRequest",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

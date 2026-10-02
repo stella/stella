@@ -16,8 +16,8 @@ import { Suspense, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { RefObject } from "react";
 
 import { useQueryClient, useSuspenseQuery } from "@tanstack/react-query";
+import type { EditorView } from "@tiptap/pm/view";
 import { Result } from "better-result";
-import type { EditorView } from "prosemirror-view";
 import { useTranslations } from "use-intl";
 import { v7 as uuidv7 } from "uuid";
 
@@ -1411,6 +1411,7 @@ const TemplateStudioChatInner = ({
           anonymized={anonymized}
           attachmentsEnabled
           canSubmitNow={canSubmitWithCurrentSnapshot}
+          context={{ activeOrganizationId, threadRef }}
           editorController={editorController}
           emptyPlaceholder={
             <span

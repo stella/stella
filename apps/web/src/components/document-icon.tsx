@@ -9,6 +9,8 @@ import {
 } from "@stll/ui/icons";
 
 import { getDocumentIconKind } from "@/components/document-icon.logic";
+import { FileThumbnailIcon } from "@/components/file-thumbnail";
+import type { MatterFileThumbnailRef } from "@/components/file-thumbnail";
 import { MarkdownIcon } from "@/components/markdown-icon";
 
 // Page body shared by all three: white sheet, folded top-right corner, grey
@@ -413,14 +415,33 @@ type DocumentIconProps = {
   mimeType?: string | null | undefined;
   fileName?: string | null | undefined;
   className?: string | undefined;
+  /**
+   * The matter file this icon stands for. An image that has a generated
+   * preview then shows it, tiny, in the icon's slot; every other file (and an
+   * image whose preview is missing or fails) keeps its type icon.
+   */
+  thumbnail?: MatterFileThumbnailRef | null | undefined;
 };
 
 export const DocumentIcon = ({
   mimeType,
   fileName,
   className,
+  thumbnail,
 }: DocumentIconProps) => {
   const iconKind = getDocumentIconKind(mimeType, fileName);
+
+  if (iconKind === "image" && thumbnail?.hasThumbnail) {
+    return (
+      <FileThumbnailIcon
+        className={className}
+        fallbackIcon={<FileImage className={className} />}
+        fieldId={thumbnail.fieldId}
+        hasThumbnail
+        workspaceId={thumbnail.workspaceId}
+      />
+    );
+  }
 
   if (iconKind === "pdf") {
     return <PdfIcon className={className} />;

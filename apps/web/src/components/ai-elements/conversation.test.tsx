@@ -30,7 +30,7 @@ test("announces the scroll action in the active locale", () => {
   expect(html).not.toContain('aria-label="Scroll to bottom"');
 });
 
-test("keeps the inline scroll action outside the suggested-followups group", () => {
+test("leaves the scroll action out of the follow-up chips", () => {
   const html = renderToStaticMarkup(
     <IntlProvider locale="ar" messages={messages} timeZone="UTC">
       <StickToBottomContext value={STICK_TO_BOTTOM}>
@@ -39,31 +39,26 @@ test("keeps the inline scroll action outside the suggested-followups group", () 
     </IntlProvider>,
   );
 
-  const scrollActionIndex = html.indexOf('aria-label="التمرير إلى الأسفل"');
-  const suggestedGroupIndex = html.indexOf(
-    `aria-label="${messages.chat.suggestedFollowupsLabel}"`,
-  );
-  // The group holds only buttons and spans, so its first closing `</div>`
-  // is the group's own.
-  const suggestedGroupEnd = html.indexOf("</div>", suggestedGroupIndex);
-
-  expect(suggestedGroupIndex).toBeGreaterThan(-1);
-  expect(scrollActionIndex).toBeGreaterThan(suggestedGroupEnd);
-});
-
-test("reserves the inline scroll slot while the action is hidden", () => {
-  const html = renderToStaticMarkup(
-    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
-      <StickToBottomContext value={{ ...STICK_TO_BOTTOM, isAtBottom: true }}>
-        <SuggestedFollowupChips onSelect={() => {}} prompts={["لخّص النتيجة"]} />
-      </StickToBottomContext>
-    </IntlProvider>,
-  );
-
-  expect(html).toContain('aria-hidden="true"');
-  expect(html).toContain("invisible");
-  expect(html).not.toContain('aria-label="التمرير إلى الأسفل"');
   expect(html).toContain(
     `aria-label="${messages.chat.suggestedFollowupsLabel}"`,
   );
+  expect(html).not.toContain('aria-label="التمرير إلى الأسفل"');
+});
+
+test("renders nothing at the bottom or outside a conversation", () => {
+  const atBottom = renderToStaticMarkup(
+    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
+      <StickToBottomContext value={{ ...STICK_TO_BOTTOM, isAtBottom: true }}>
+        <ConversationScrollButton />
+      </StickToBottomContext>
+    </IntlProvider>,
+  );
+  const outside = renderToStaticMarkup(
+    <IntlProvider locale="ar" messages={messages} timeZone="UTC">
+      <ConversationScrollButton />
+    </IntlProvider>,
+  );
+
+  expect(atBottom).toBe("");
+  expect(outside).toBe("");
 });

@@ -32,7 +32,11 @@ const config = {
     "to change them. Bundled skills are read-only, team skills require admin " +
     "or owner, and private ones their author.",
   permissions: { agentSkill: ["update"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: updateSkillResourceParamsSchema,
   body: updateSkillResourceBodySchema,
 } satisfies HandlerConfig;

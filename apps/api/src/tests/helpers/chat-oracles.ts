@@ -79,6 +79,28 @@ export const CHAT_ORACLE = {
   ledgerCallsPresent: "chat.ledger.calls-present",
   /** An approved call runs once; a denied or unanswered one never runs. */
   ledgerEffectsAuthorized: "chat.ledger.effects-authorized",
+  // A settled turn against what its run showed (`chat-turn-outcome.ts`).
+  // A turn left running with no terminal event is
+  // `chat.persisted.turn-settles`.
+  /** A completed turn's run added a visible part (text, a tool call, other
+   *  content) to the message it wrote, beyond what that message held. */
+  turnCompletedShowsAnswer: "chat.turn.completed-shows-answer",
+  /** A turn that failed because its run answered nothing (an empty
+   *  completion) settles as `empty-response`, retryable. */
+  turnEmptyFailsRetryably: "chat.turn.empty-fails-retryably",
+  /** A failed turn stores its failure on its message, and a reload shows
+   *  it as an error. */
+  turnFailedShowsError: "chat.turn.failed-shows-error",
+  /** A response read to its end ends in exactly one run terminal event,
+   *  last, which is an error exactly when its turn failed. */
+  turnOneTerminal: "chat.turn.one-terminal",
+  /** The page that watched a turn shows an error exactly when a reload of
+   *  the thread does. */
+  turnLiveOutcomeEqualsReload: "chat.turn.live-outcome-equals-reload",
+  /** A builder that shows its output beside the chat (a thread title, a
+   *  recap, suggested prompts) shows nothing, never a blank, when the model
+   *  answers with nothing. */
+  surfaceEmptyShowsNothing: "chat.surface.empty-shows-nothing",
   /** Every action the page offers on the live view is one the conversation
    *  model's commands may take there. */
   modelCoversPageActions: "chat.model.covers-page-actions",
@@ -97,6 +119,11 @@ export const CHAT_ORACLE = {
   renderRequestsMatchRecorded: "chat.render.requests-match-recorded",
   /** A conversation grant answers each matching approval exactly once. */
   renderGrantAnswersOnce: "chat.render.grant-answers-once",
+  // Reported by the web app's streaming commit budget
+  // (`apps/web/src/features/chat/stream-chunk-commit-budget.ts`).
+  /** While a response streams any kind of chunk in small deltas, the thread
+   *  page commits no more often than that kind's budget. */
+  renderStreamCommitsBounded: "chat.render.stream-commits-bounded",
   // Reported by the provider wire replay
   // (`apps/api/src/lib/tanstack-ai-provider-wire.test.ts`).
   /** Every provider request went through `fetch` to a provider host and
@@ -128,6 +155,10 @@ export const CHAT_ORACLE = {
    *  protocol headers, and the body with its key order, minus the prompt
    *  text. */
   providerWireRequestShape: "chat.provider-wire.request-shape",
+  /** Every request an adapter sends holds to the request schema its
+   *  provider publishes and to the provider's documented rules the schema
+   *  leaves out (`provider-request-schema.ts`). */
+  providerWireRequestRules: "chat.provider-wire.request-rules",
 } as const;
 
 export type ChatOracleId = (typeof CHAT_ORACLE)[keyof typeof CHAT_ORACLE];

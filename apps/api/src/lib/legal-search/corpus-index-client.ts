@@ -1,5 +1,9 @@
 import { panic, Result, TaggedError } from "better-result";
 
+import {
+  observeRegistryRequest,
+  type RegistryRequestObservation,
+} from "@stll/business-registries/shared/request-observer";
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
@@ -129,6 +133,7 @@ export type CorpusIndexCommitMode =
   (typeof CORPUS_INDEX_COMMIT)[keyof typeof CORPUS_INDEX_COMMIT];
 
 export type CorpusIndexSearchInput = {
+  observer: RegistryRequestObservation;
   indexId: string;
   /** Full corpus index query string, including any field:value filter clauses. */
   query: string;
@@ -143,6 +148,7 @@ export type CorpusIndexSearchInput = {
 };
 
 export type CorpusIndexAggregateInput = {
+  observer: RegistryRequestObservation;
   indexId: string;
   /** Full corpus index query string the aggregation runs over. */
   query: string;
@@ -172,6 +178,7 @@ export type CorpusIndexSearchResponse = {
  * fields, and report the BM25 score beside the hit.
  */
 type CorpusIndexScoredSearchInput = {
+  observer: RegistryRequestObservation;
   indexId: string;
   /** Full corpus index query string, read exactly as `search` reads it. */
   query: string;
@@ -315,6 +322,7 @@ export type CorpusIndexDeleteTask = {
 };
 
 type CorpusIndexDeleteSettlementInput = {
+  observer: RegistryRequestObservation;
   indexId: string;
   requiredOpstamp: number;
   /**
@@ -350,9 +358,16 @@ export type CorpusIndexConfigAttestation =
 export type CorpusIndexClient = {
   createIndex: (
     config: CorpusIndexConfig,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<void, CorpusIndexError>>;
-  deleteIndex: (indexId: string) => Promise<Result<void, CorpusIndexError>>;
-  indexExists: (indexId: string) => Promise<Result<boolean, CorpusIndexError>>;
+  deleteIndex: (
+    indexId: string,
+    observer: RegistryRequestObservation,
+  ) => Promise<Result<void, CorpusIndexError>>;
+  indexExists: (
+    indexId: string,
+    observer: RegistryRequestObservation,
+  ) => Promise<Result<boolean, CorpusIndexError>>;
   /**
    * Read the engine's materialized config and compare every manifest-pinned
    * value. Quickwit adds defaults and a random doc-mapping UID to the GET
@@ -360,6 +375,7 @@ export type CorpusIndexClient = {
    */
   attestIndexConfig: (
     config: CorpusIndexConfig,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<CorpusIndexConfigAttestation, CorpusIndexError>>;
   /**
    * `commit` is required rather than defaulted: the difference between
@@ -370,11 +386,13 @@ export type CorpusIndexClient = {
     indexId: string,
     ndjson: string,
     commit: CorpusIndexCommitMode,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<void, CorpusIndexError>>;
   /** Final-generation append: durable commit plus an exact V2 receipt. */
   ingestCommittedBatch: (
     indexId: string,
     ndjson: string,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<void, CorpusIndexError>>;
   /**
    * Final-generation append that returns on acceptance instead of on the
@@ -384,6 +402,7 @@ export type CorpusIndexClient = {
   ingestQueuedBatch: (
     indexId: string,
     ndjson: string,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<void, CorpusIndexError>>;
   search: (
     input: CorpusIndexSearchInput,
@@ -398,6 +417,7 @@ export type CorpusIndexClient = {
   deleteByQuery: (
     indexId: string,
     query: string,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<CorpusIndexDeleteTask, CorpusIndexError>>;
   readDeleteSettlement: (
     input: CorpusIndexDeleteSettlementInput,
@@ -458,18 +478,28 @@ const fetchCorpusIndex = async (
   baseUrl: string,
   path: string,
   init: FetchWithTimeoutInit,
-): Promise<Response> =>
+  observer: RegistryRequestObservation,
+): Promise<Response> => {
+  init.signal?.throwIfAborted();
+  observeRegistryRequest(observer);
   // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- baseUrl is one of the configured corpus index cluster URLs; path is Stella-built
-  await fetchWithTimeout(`${baseUrl}${path}`, init);
+  return await fetchWithTimeout(`${baseUrl}${path}`, init);
+};
 
 /** Liveness of the cluster's search endpoint; resolves with the raw response. */
 export const probeCorpusIndexSearchLiveness = async (
   cluster: QuickwitCluster,
   timeoutMs: number,
+  observer: RegistryRequestObservation,
 ): Promise<Response> =>
-  await fetchCorpusIndex(searchBaseUrl(cluster), "/health/livez", {
-    timeoutMs,
-  });
+  await fetchCorpusIndex(
+    searchBaseUrl(cluster),
+    "/health/livez",
+    {
+      timeoutMs,
+    },
+    observer,
+  );
 
 const toCorpusIndexError = (error: unknown): CorpusIndexError =>
   error instanceof CorpusIndexError
@@ -496,6 +526,7 @@ const rejectionForHttpStatus = (
 };
 
 type CorpusIndexRequest = {
+  observer: RegistryRequestObservation;
   baseUrl: string;
   path: string;
   init: Omit<RequestInit, "signal">;
@@ -545,10 +576,15 @@ const requestFailure = ({
   });
 
 const sendRequest = async (request: CorpusIndexRequest): Promise<Response> =>
-  await fetchCorpusIndex(request.baseUrl, request.path, {
-    ...request.init,
-    timeoutMs: request.timeoutMs,
-  }).catch((error: unknown) => {
+  await fetchCorpusIndex(
+    request.baseUrl,
+    request.path,
+    {
+      ...request.init,
+      timeoutMs: request.timeoutMs,
+    },
+    request.observer,
+  ).catch((error: unknown) => {
     throw requestFailure({ request, error, unaborted: "could not be sent" });
   });
 
@@ -641,6 +677,7 @@ const parseRecordArray = (value: unknown): Record<string, unknown>[] | null => {
 type IngestReceiptMode = "compatible" | "exact-v2";
 
 type IngestBatchOptions = {
+  observer: RegistryRequestObservation;
   baseUrl: string;
   indexId: string;
   ndjson: string;
@@ -654,6 +691,7 @@ const ingestBatch = async ({
   ndjson,
   commit,
   receiptMode,
+  observer,
 }: IngestBatchOptions): Promise<Result<void, CorpusIndexError>> =>
   await Result.tryPromise({
     try: async () => {
@@ -661,6 +699,7 @@ const ingestBatch = async ({
         .split("\n")
         .filter((line) => line.trim().length > 0).length;
       const response = await requestJson({
+        observer,
         baseUrl,
         path: `/api/v1/${indexId}/ingest?commit=${commit}`,
         init: {
@@ -858,10 +897,11 @@ const configDifference = (
 };
 
 const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
-  createIndex: async (config) =>
+  createIndex: async (config, observer) =>
     await Result.tryPromise({
       try: async () => {
         await requestJson({
+          observer,
           baseUrl: mutationBaseUrl(cluster),
           path: "/api/v1/indexes",
           init: {
@@ -875,10 +915,11 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  deleteIndex: async (indexId) =>
+  deleteIndex: async (indexId, observer) =>
     await Result.tryPromise({
       try: async () => {
         await requestJson({
+          observer,
           baseUrl: mutationBaseUrl(cluster),
           path: `/api/v1/indexes/${indexId}`,
           init: { method: "DELETE" },
@@ -888,10 +929,11 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  indexExists: async (indexId) =>
+  indexExists: async (indexId, observer) =>
     await Result.tryPromise({
       try: async () => {
         const response = await sendRequest({
+          observer,
           baseUrl: mutationBaseUrl(cluster),
           path: `/api/v1/indexes/${indexId}`,
           init: { method: "GET" },
@@ -911,10 +953,11 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  attestIndexConfig: async (config) =>
+  attestIndexConfig: async (config, observer) =>
     await Result.tryPromise({
       try: async () => {
         const request = {
+          observer,
           baseUrl: mutationBaseUrl(cluster),
           path: `/api/v1/indexes/${config.index_id}`,
           init: { method: "GET" },
@@ -960,8 +1003,9 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  ingestBatch: async (indexId, ndjson, commit) =>
+  ingestBatch: async (indexId, ndjson, commit, observer) =>
     await ingestBatch({
+      observer,
       baseUrl: mutationBaseUrl(cluster),
       indexId,
       ndjson,
@@ -969,8 +1013,9 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       receiptMode: "compatible",
     }),
 
-  ingestCommittedBatch: async (indexId, ndjson) =>
+  ingestCommittedBatch: async (indexId, ndjson, observer) =>
     await ingestBatch({
+      observer,
       baseUrl: mutationBaseUrl(cluster),
       indexId,
       ndjson,
@@ -978,8 +1023,9 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       receiptMode: "exact-v2",
     }),
 
-  ingestQueuedBatch: async (indexId, ndjson) =>
+  ingestQueuedBatch: async (indexId, ndjson, observer) =>
     await ingestBatch({
+      observer,
       baseUrl: mutationBaseUrl(cluster),
       indexId,
       ndjson,
@@ -988,6 +1034,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
     }),
 
   search: async ({
+    observer,
     indexId,
     query,
     maxHits,
@@ -1012,6 +1059,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           body["snippet_fields"] = snippetFields.join(",");
         }
         const response = await requestJson({
+          observer,
           baseUrl: searchBaseUrl(cluster),
           path: `/api/v1/${indexId}/search`,
           init: {
@@ -1066,6 +1114,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       try: async () => {
         const { path, body } = corpusIndexScoredSearchRequest(input);
         const response = await requestJson({
+          observer: input.observer,
           baseUrl: searchBaseUrl(cluster),
           path,
           init: {
@@ -1089,10 +1138,11 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  aggregate: async ({ indexId, query, aggs }) =>
+  aggregate: async ({ indexId, query, aggs, observer }) =>
     await Result.tryPromise({
       try: async () => {
         const response = await requestJson({
+          observer,
           baseUrl: searchBaseUrl(cluster),
           path: `/api/v1/${indexId}/search`,
           init: {
@@ -1119,10 +1169,11 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  deleteByQuery: async (indexId, query) =>
+  deleteByQuery: async (indexId, query, observer) =>
     await Result.tryPromise({
       try: async () => {
         const response = await requestJson({
+          observer,
           baseUrl: mutationBaseUrl(cluster),
           path: `/api/v1/${indexId}/delete-tasks`,
           init: {
@@ -1158,7 +1209,12 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  readDeleteSettlement: async ({ indexId, requiredOpstamp, deleteCreatedAt }) =>
+  readDeleteSettlement: async ({
+    indexId,
+    requiredOpstamp,
+    deleteCreatedAt,
+    observer,
+  }) =>
     await Result.tryPromise({
       try: async () => {
         if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
@@ -1205,6 +1261,7 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           const provingSplits = new Map<string, number>();
           const readSplitPage = async (): Promise<void> => {
             const response = await requestJson({
+              observer,
               baseUrl: mutationBaseUrl(cluster),
               path: `/api/v1/indexes/${indexId}/splits?offset=${offset}&limit=${SPLIT_PAGE_SIZE}&split_states=${SETTLEMENT_SPLIT_STATES}`,
               init: { method: "GET" },
