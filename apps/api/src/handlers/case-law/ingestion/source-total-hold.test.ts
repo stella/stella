@@ -1,6 +1,6 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, isNotNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { databaseRelations } from "@/api/db/database-relations";
@@ -14,10 +14,14 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import {
-  recordSourceStoredTotalUnknownHold,
+  emitSourceStoredTotalHoldHeartbeats,
+  recordSourceStoredTotalHold,
   sourceStoredTotalHoldHeartbeat,
 } from "./source-total-hold";
-import { refreshSourceStoredTotal } from "./source-totals";
+import {
+  refreshNextSourceStoredTotal,
+  refreshSourceStoredTotal,
+} from "./source-totals";
 
 const NOW = new Date("2026-10-02T12:00:00Z");
 let client: Awaited<ReturnType<typeof createTestPglite>>;
@@ -128,6 +132,79 @@ test("UNKNOWN holds persist and warn once per source and durable slot across new
   }
 });
 
+test("an ordinary gate hold persists the yielded gauge and UNKNOWN warns once in that same slot", async () => {
+  const sourceId = await seed();
+  const warn = spyOn(logger, "warn").mockImplementation(() => {});
+  const holdAt = new Date(NOW.getTime() + 1000);
+  try {
+    expect(
+      await refreshSourceStoredTotal({
+        scopedDb,
+        sourceId,
+        readDatabaseNow: async () => holdAt,
+        acquireAdmission: async () => "held",
+        countSource: async () => panic("Held admission must not count"),
+      }),
+    ).toBe("held");
+    const held = await read(sourceId);
+    expect(held).toEqual({
+      heldSince: holdAt,
+      warnedSlot: null,
+      due: NOW,
+      attemptedAt: null,
+      total: null,
+      asOf: null,
+    });
+    expect(
+      sourceStoredTotalHoldHeartbeat({
+        heldSince: held.heldSince,
+        now: holdAt.getTime(),
+      }).BackfillYielded,
+    ).toBe(1);
+    expect(warn).not.toHaveBeenCalled();
+    expect(await unknownRefresh(sourceId, new Date(NOW.getTime() + 2000))).toBe(
+      "held",
+    );
+    expect(await unknownRefresh(sourceId, new Date(NOW.getTime() + 3000))).toBe(
+      "held",
+    );
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect((await read(sourceId)).heldSince).toEqual(holdAt);
+    expect((await read(sourceId)).warnedSlot).toEqual(NOW);
+    await recordSourceStoredTotalHold({
+      scopedDb,
+      sourceId,
+      now: new Date(NOW.getTime() + 4000),
+      slot: NOW,
+      admission: "held",
+    });
+    expect(warn).toHaveBeenCalledTimes(1);
+    expect((await read(sourceId)).heldSince).toEqual(holdAt);
+  } finally {
+    warn.mockRestore();
+  }
+});
+
+test("a source that is no longer due cannot acquire a durable gate hold", async () => {
+  const sourceId = await seed();
+  const futureSlot = new Date(NOW.getTime() + 60_000);
+  await db
+    .update(caseLawSources)
+    .set({ storedTotalNextRefreshAt: futureSlot })
+    .where(eq(caseLawSources.id, sourceId));
+  for (const admission of ["held", "unknown"] as const) {
+    await recordSourceStoredTotalHold({
+      scopedDb,
+      sourceId,
+      now: NOW,
+      slot: futureSlot,
+      admission,
+    });
+    expect((await read(sourceId)).heldSince).toBeNull();
+    expect((await read(sourceId)).warnedSlot).toBeNull();
+  }
+});
+
 test("a granted refresh clears the durable hold and a stale UNKNOWN result cannot restore it", async () => {
   const sourceId = await seed();
   const warn = spyOn(logger, "warn").mockImplementation(() => {});
@@ -173,11 +250,20 @@ test("a granted refresh clears the durable hold and a stale UNKNOWN result canno
     finishUnknown?.();
     expect(await oldUnknown).toBe("held");
     expect(await read(sourceId)).toEqual(granted);
-    await recordSourceStoredTotalUnknownHold({
+    await recordSourceStoredTotalHold({
       scopedDb,
       sourceId,
       now: new Date(grantedAt.getTime() + 1000),
       slot: NOW,
+      admission: "unknown",
+    });
+    expect(await read(sourceId)).toEqual(granted);
+    await recordSourceStoredTotalHold({
+      scopedDb,
+      sourceId,
+      now: new Date(grantedAt.getTime() + 1000),
+      slot: NOW,
+      admission: "held",
     });
     expect(await read(sourceId)).toEqual(granted);
     expect(warn).toHaveBeenCalledTimes(1);
@@ -206,7 +292,7 @@ test("the EMF hold gauge exposes the yielded alarm contract and clears after a g
     BackfillYielded: 1,
     heldSince: NOW.getTime(),
     heldTooLong: true,
-    holdCause: "indicators_unavailable",
+    holdCause: "admission_held",
   });
   expect(
     sourceStoredTotalHoldHeartbeat({
@@ -222,4 +308,98 @@ test("the EMF hold gauge exposes the yielded alarm contract and clears after a g
     heldTooLong: false,
     holdCause: "none",
   });
+});
+
+test("a selection permission failure warns and leaves the ingestion cycle's outcome recoverable", async () => {
+  const denied = Object.assign(new Error("selection permission denied"), {
+    code: "42501",
+  });
+  const warn = spyOn(logger, "warn").mockImplementation(() => {});
+  let admissions = 0;
+  let counts = 0;
+  try {
+    expect(
+      await refreshNextSourceStoredTotal({
+        scopedDb: async () => {
+          throw denied;
+        },
+        acquireAdmission: async () => {
+          admissions += 1;
+          return "granted";
+        },
+        countSource: async () => {
+          counts += 1;
+          return 5;
+        },
+      }),
+    ).toBe("unavailable");
+    expect(admissions).toBe(0);
+    expect(counts).toBe(0);
+    expect(warn).toHaveBeenCalledWith(
+      "case_law.source_stored_total.selection_unavailable",
+      expect.objectContaining({ "error.cause.pg_code": "42501" }),
+    );
+  } finally {
+    warn.mockRestore();
+  }
+});
+
+test("the emitted fixed-dimension gauge includes only due held sources on the database clock", async () => {
+  // This emission scenario owns its hold census; older fixture rows cannot contribute.
+  await db
+    .update(caseLawSources)
+    .set({ storedTotalHeldSince: null })
+    .where(isNotNull(caseLawSources.storedTotalHeldSince));
+  const clock = await db.execute(
+    sql`SELECT (extract(epoch FROM clock_timestamp()) * 1000)::float8 AS epoch_ms`,
+  );
+  const epoch = clock.rows.at(0)?.["epoch_ms"];
+  if (typeof epoch !== "number") {
+    return panic("Missing database clock in hold fixture");
+  }
+  const due = await seed();
+  const future = await seed();
+  const dueHeldSince = new Date(epoch - 2 * 60 * 60_000);
+  const futureSlot = new Date(epoch + 24 * 60 * 60_000);
+  await db
+    .update(caseLawSources)
+    .set({
+      storedTotalNextRefreshAt: new Date(epoch - 60_000),
+      storedTotalHeldSince: dueHeldSince,
+    })
+    .where(eq(caseLawSources.id, due));
+  await db
+    .update(caseLawSources)
+    .set({
+      storedTotalNextRefreshAt: futureSlot,
+      storedTotalHeldSince: new Date(epoch - 7 * 60 * 60_000),
+    })
+    .where(eq(caseLawSources.id, future));
+  const stdout = spyOn(process.stdout, "write").mockImplementation(() => true);
+  try {
+    await emitSourceStoredTotalHoldHeartbeats(scopedDb);
+    expect(JSON.parse(String(stdout.mock.calls.at(-1)?.at(0)))).toMatchObject({
+      Backfill: "caseLaw.sourceStoredTotal",
+      BackfillYielded: 1,
+      heldSince: dueHeldSince.getTime(),
+      heldTooLong: false,
+      holdCause: "admission_held",
+      _aws: { CloudWatchMetrics: [{ Dimensions: [["Backfill"]] }] },
+    });
+    await db
+      .update(caseLawSources)
+      .set({ storedTotalNextRefreshAt: futureSlot })
+      .where(eq(caseLawSources.id, due));
+    await emitSourceStoredTotalHoldHeartbeats(scopedDb);
+    expect(JSON.parse(String(stdout.mock.calls.at(-1)?.at(0)))).toMatchObject({
+      Backfill: "caseLaw.sourceStoredTotal",
+      BackfillYielded: 0,
+      heldSince: null,
+      heldTooLong: false,
+      holdCause: "none",
+    });
+    expect((await read(due)).heldSince).toEqual(dueHeldSince);
+  } finally {
+    stdout.mockRestore();
+  }
 });

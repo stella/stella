@@ -332,21 +332,20 @@ type IndicatorFailureCause =
   | "read_error";
 
 const warnIndicatorFailure = (
-  cause: IndicatorFailureCause,
+  failureCause: IndicatorFailureCause,
   now: number,
   sqlState?: string,
 ) => {
-  const previous = indicatorWarnings.get(cause);
+  const previous = indicatorWarnings.get(failureCause);
   if (
     previous !== undefined &&
     now - previous < INDICATOR_WARNING_INTERVAL_MS
   ) {
     return;
   }
-  indicatorWarnings.set(cause, now);
+  indicatorWarnings.set(failureCause, now);
   logger.warn("database_load_gate.indicators_unavailable", {
-    // oxlint-disable-next-line no-raw-error-logging/no-raw-error-logging -- cause is a closed diagnostic category, never an error object or message.
-    cause,
+    failureCause,
     ...(sqlState === undefined ? {} : { sqlState }),
   });
 };

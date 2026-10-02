@@ -54,6 +54,7 @@ describe.skipIf(!enabled)(
     const schema = `load_reader_${suffix}`;
     const role = `load_reader_noexec_${suffix}`;
     const target = `${schema}.target`;
+    const deniedTarget = `${schema}.denied_target`;
     const blindOwner = `load_reader_blind_${suffix}`;
     const config = {
       ...defaultConfig,
@@ -99,6 +100,15 @@ describe.skipIf(!enabled)(
       await db.execute(
         sql.raw(`CREATE TABLE ${target} (id integer, payload text)`),
       );
+      await db.execute(sql.raw(`CREATE TABLE ${deniedTarget} (id integer)`));
+      await db.execute(
+        sql.raw(
+          `REVOKE SELECT ON ${deniedTarget} FROM PUBLIC, stella_ingestion`,
+        ),
+      );
+      await db.execute(
+        sql.raw(`GRANT SELECT ON ${target} TO stella_ingestion`),
+      );
       await db.execute(
         sql.raw(`CREATE ROLE ${role} NOLOGIN NOSUPERUSER NOINHERIT`),
       );
@@ -130,6 +140,9 @@ describe.skipIf(!enabled)(
         await db.execute(
           sql.raw(`CREATE TABLE ${schema}.${name} (unexpected integer)`),
         );
+        await db.execute(
+          sql.raw(`GRANT SELECT ON ${schema}.${name} TO stella_ingestion`),
+        );
       }
     });
 
@@ -141,7 +154,7 @@ describe.skipIf(!enabled)(
         );
         const access = (
           await tx.execute(
-            sql`SELECT pg_catalog.has_table_privilege(session_user, ${target}::regclass, 'SELECT') AS permitted`,
+            sql`SELECT pg_catalog.has_table_privilege('stella_ingestion', ${target}::regclass, 'SELECT') AS permitted`,
           )
         ).at(0);
         expect(access?.["permitted"]).toBe(true);
@@ -266,6 +279,56 @@ describe.skipIf(!enabled)(
       });
     });
 
+    test("the non-superuser execute grantee cannot read indicators for an inaccessible target", async () => {
+      const permissions = (
+        await db.execute(sql`
+        SELECT
+          pg_catalog.has_table_privilege(session_user, ${deniedTarget}::regclass, 'SELECT') AS login_permitted,
+          pg_catalog.has_table_privilege('stella_ingestion', ${deniedTarget}::regclass, 'SELECT') AS grantee_permitted,
+          pg_catalog.has_function_privilege('stella_ingestion', 'public.stella_database_load_indicators(regclass)', 'EXECUTE') AS executable,
+          (SELECT rolsuper FROM pg_catalog.pg_roles WHERE rolname = 'stella_ingestion') AS superuser
+      `)
+      ).at(0);
+      expect(permissions).toEqual({
+        login_permitted: true,
+        grantee_permitted: false,
+        executable: true,
+        superuser: false,
+      });
+      const warn = spyOn(logger, "warn").mockImplementation(() => {});
+      try {
+        const read = createDatabaseLoadVerdictReader({
+          db: restrictedRunner(db, "stella_ingestion", schema),
+          tableName: deniedTarget,
+          config,
+          clock: () => Date.now() + 48 * 60 * 60_000,
+        });
+        for (let attempt = 0; attempt < 2; attempt += 1) {
+          // db-await-in-loop: repeat failure serially to verify the warning is rate-limited.
+          const verdict = await read();
+          expect(verdict.kind).toBe("unknown");
+          expect(verdict.signals).toEqual([
+            {
+              indicator: "long_transaction",
+              kind: "unknown",
+              value: null,
+              threshold: null,
+              observedAt: null,
+              reason: "Database indicators are unavailable",
+            },
+          ]);
+        }
+        expect(warn.mock.calls).toEqual([
+          [
+            "database_load_gate.indicators_unavailable",
+            { failureCause: "target_access_denied", sqlState: "42501" },
+          ],
+        ]);
+      } finally {
+        warn.mockRestore();
+      }
+    });
+
     for (const failure of [
       "function missing",
       "owner lacks statistics visibility",
@@ -312,7 +375,7 @@ describe.skipIf(!enabled)(
                   [
                     "database_load_gate.indicators_unavailable",
                     {
-                      cause:
+                      failureCause:
                         failure === "function missing"
                           ? "function_missing"
                           : "owner_lacks_visibility",

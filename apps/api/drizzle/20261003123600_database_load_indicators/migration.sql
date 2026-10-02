@@ -17,6 +17,7 @@ SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
 DECLARE
+  indicator_grantee CONSTANT pg_catalog.name := 'stella_ingestion';
   observation timestamptz;
 BEGIN
   IF NOT (
@@ -38,13 +39,14 @@ BEGIN
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
-  IF NOT pg_catalog.has_table_privilege(session_user, target_relation, 'SELECT') THEN
+  -- EXECUTE is granted only to this role. SECURITY DEFINER changes current_user
+  -- to the owner, while SET LOCAL ROLE leaves session_user as the login role;
+  -- neither identity bounds the ingestion grantee's permitted target tables.
+  IF NOT pg_catalog.has_table_privilege(indicator_grantee, target_relation, 'SELECT') THEN
     RAISE EXCEPTION 'Target relation access is unavailable'
       USING ERRCODE = 'insufficient_privilege', DETAIL = 'target_access_denied';
   END IF;
 
-  -- SET LOCAL ROLE changes current_user; session_user remains the authenticated
-  -- connection identity, whose target-table SELECT permission bounds this call.
   observation := pg_catalog.clock_timestamp();
   RETURN QUERY
   SELECT

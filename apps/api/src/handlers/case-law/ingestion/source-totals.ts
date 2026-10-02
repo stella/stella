@@ -12,13 +12,14 @@ import { caseLawSources } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabase, TransactionOf } from "@/api/db/scoped";
+import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
-import { recordSourceStoredTotalUnknownHold } from "./source-total-hold";
+import { recordSourceStoredTotalHold } from "./source-total-hold";
 
 /**
  * Both halves of a source's coverage figure, and the only writer of either.
@@ -140,6 +141,17 @@ export const sourceStoredTotalNextRefreshAt = (
 };
 
 export const SOURCE_STORED_TOTAL_GLOBAL_SPACING = 10 * 60_000;
+/**
+ * Global stored-total claims serialize on this database-local bigint key,
+ * hashed with seed 0. It is separate from db-load-gate's two-int lock namespace;
+ * releasing the transaction ends ownership without clearing the durable spacing.
+ */
+const SOURCE_STORED_TOTAL_CLAIM_LOCK_KEY = "case-law-source-stored-total";
+
+/** Selector and claim must agree on the deployment-wide start spacing. */
+const sourceStoredTotalSpacingAvailable = (now: Date) =>
+  sql`NOT EXISTS (SELECT 1 FROM case_law_sources AS recent WHERE recent.stored_total_attempted_at > ${new Date(now.getTime() - SOURCE_STORED_TOTAL_GLOBAL_SPACING).toISOString()}::timestamptz)`;
+
 const STORED_TOTAL_STATEMENT_TIMEOUT_MS = 120_000;
 const STORED_TOTAL_LOCK_TIMEOUT_MS = 1000;
 const STORED_TOTAL_ABORT_TIMEOUT_MS = 130_000;
@@ -263,7 +275,7 @@ export const sourceStoredTotalRefreshClaim = ({
     .where(
       and(
         eq(caseLawSources.id, sourceId),
-        sql`NOT EXISTS (SELECT 1 FROM case_law_sources AS recent WHERE recent.stored_total_attempted_at > ${new Date(now.getTime() - SOURCE_STORED_TOTAL_GLOBAL_SPACING).toISOString()}::timestamptz)`,
+        sourceStoredTotalSpacingAvailable(now),
         or(
           isNull(caseLawSources.storedTotalNextRefreshAt),
           sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
@@ -305,7 +317,12 @@ export const refreshSourceStoredTotal = async ({
             asOf: caseLawSources.storedTotalAsOf,
           })
           .from(caseLawSources)
-          .where(eq(caseLawSources.id, sourceId))
+          .where(
+            and(
+              eq(caseLawSources.id, sourceId),
+              sourceStoredTotalSpacingAvailable(now),
+            ),
+          )
           .limit(1)
       ).at(0);
       if (
@@ -321,20 +338,19 @@ export const refreshSourceStoredTotal = async ({
     }
     const admission = await acquireAdmission();
     if (admission !== "granted") {
-      if (admission === "unknown") {
-        await recordSourceStoredTotalUnknownHold({
-          scopedDb,
-          sourceId,
-          now: candidate.now,
-          slot: candidate.slot,
-        });
-      }
+      await recordSourceStoredTotalHold({
+        scopedDb,
+        sourceId,
+        now: candidate.now,
+        slot: candidate.slot,
+        admission,
+      });
       logger.info("case_law.source_stored_total.held", { sourceId });
       return "held" as const;
     }
     const claimed = await scopedDb(async (tx) => {
       await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended('case-law-source-stored-total', 0))`,
+        sql`SELECT pg_advisory_xact_lock(hashtextextended(${SOURCE_STORED_TOTAL_CLAIM_LOCK_KEY}, 0))`,
       );
       const now = await readDatabaseNow(tx);
       const rows = await sourceStoredTotalRefreshClaim({ tx, sourceId, now });
@@ -449,7 +465,10 @@ export const refreshNextSourceStoredTotal = async (
             .select({ id: caseLawSources.id })
             .from(caseLawSources)
             .where(
-              sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
+              and(
+                sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
+                sourceStoredTotalSpacingAvailable(now),
+              ),
             )
             .orderBy(
               asc(caseLawSources.storedTotalNextRefreshAt),
@@ -461,12 +480,13 @@ export const refreshNextSourceStoredTotal = async (
       }),
   );
   if (Result.isError(selected)) {
+    captureError(selected.error, {
+      step: "refreshNextSourceStoredTotal.select",
+    });
     logger.warn("case_law.source_stored_total.selection_unavailable", {
       ...errorSystemFields(selected.error),
+      ...pgErrorFields(selected.error),
     });
-    if (isPgError(selected.error, PG_ERROR.INSUFFICIENT_PRIVILEGE)) {
-      throw selected.error;
-    }
     return "unavailable";
   }
   if (selected.value === undefined) {

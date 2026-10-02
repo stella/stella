@@ -113,7 +113,10 @@ import {
   stepCadence,
   stepStallAlert,
 } from "./cycle-progress";
-import { ingestionHealthRecord } from "./ingestion-health";
+import {
+  createIngestionHealthRefresh,
+  ingestionHealthRecord,
+} from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
 import {
   RECOMPUTE_OUTCOME,
@@ -1040,8 +1043,25 @@ export const runCaseLawIngest = async (
   }
 
   // Health loop: heartbeat + S3 credential refresh.
+  const refreshHealth = createIngestionHealthRefresh({
+    clock: () => Temporal.Now.instant().epochMilliseconds,
+    emitStoredTotalHeartbeat: async () =>
+      await emitSourceStoredTotalHoldHeartbeats(ingestionDb),
+    warnHeartbeatFailure: (error) => {
+      logger.warn("case_law.source_stored_total.heartbeat_failed", {
+        "error.type": errorTag(error),
+      });
+    },
+    refreshCredentials: async () => {
+      if (isS3Stale()) {
+        await refreshS3();
+      }
+      if (isCorpusS3Stale()) {
+        await refreshCorpusS3();
+      }
+    },
+  });
   const healthLoop = (async () => {
-    let nextStoredTotalHeartbeatAt = 0;
     while (true) {
       if (isDraining()) {
         return;
@@ -1053,19 +1073,7 @@ export const runCaseLawIngest = async (
       writeHeartbeat();
       logHeartbeat();
       try {
-        if (
-          Temporal.Now.instant().epochMilliseconds >= nextStoredTotalHeartbeatAt
-        ) {
-          await emitSourceStoredTotalHoldHeartbeats(ingestionDb);
-          nextStoredTotalHeartbeatAt =
-            Temporal.Now.instant().epochMilliseconds + 60_000;
-        }
-        if (isS3Stale()) {
-          await refreshS3();
-        }
-        if (isCorpusS3Stale()) {
-          await refreshCorpusS3();
-        }
+        await refreshHealth();
       } catch (error) {
         logError("Health refresh failed:", error);
       }

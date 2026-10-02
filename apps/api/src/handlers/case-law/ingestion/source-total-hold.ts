@@ -1,4 +1,4 @@
-import { asc, eq } from "drizzle-orm";
+import { asc, eq, isNull, or, sql } from "drizzle-orm";
 
 import { isHeldTooLong } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
@@ -9,21 +9,24 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 
 const UNKNOWN_HOLD_CAUSE = "indicators_unavailable";
+const GATE_HOLD_CAUSE = "admission_held";
 
-type RecordUnknownHoldOptions = {
+type RecordSourceHoldOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   now: Date;
   slot: Date;
+  admission: "held" | "unknown";
 };
 
-/** A row lock deduplicates warnings across cycles, workers and restarts. */
-export const recordSourceStoredTotalUnknownHold = async ({
+/** Persist every due gate hold; a row lock deduplicates UNKNOWN warnings. */
+export const recordSourceStoredTotalHold = async ({
   scopedDb,
   sourceId,
   now,
   slot,
-}: RecordUnknownHoldOptions) => {
+  admission,
+}: RecordSourceHoldOptions) => {
   const warn = await scopedDb(async (tx) => {
     const row = (
       await tx
@@ -39,11 +42,14 @@ export const recordSourceStoredTotalUnknownHold = async ({
     ).at(0);
     if (
       row === undefined ||
-      (row.due !== null && row.due.getTime() !== slot.getTime())
+      (row.due?.getTime() ?? 0) !== slot.getTime() ||
+      (row.due !== null && row.due.getTime() > now.getTime())
     ) {
       return false;
     }
-    if (row.warnedSlot?.getTime() === slot.getTime()) {
+    const shouldWarn =
+      admission === "unknown" && row.warnedSlot?.getTime() !== slot.getTime();
+    if (row.heldSince !== null && !shouldWarn) {
       return false;
     }
     // audit: skip — public corpus refresh bookkeeping, no workspace data.
@@ -51,10 +57,10 @@ export const recordSourceStoredTotalUnknownHold = async ({
       .update(caseLawSources)
       .set({
         storedTotalHeldSince: row.heldSince ?? now,
-        storedTotalWarnedSlot: slot,
+        storedTotalWarnedSlot: shouldWarn ? slot : row.warnedSlot,
       })
       .where(eq(caseLawSources.id, sourceId));
-    return true;
+    return shouldWarn;
   });
   if (warn) {
     logger.warn("case_law.source_stored_total.held_unknown", {
@@ -89,7 +95,7 @@ export const sourceStoredTotalHoldHeartbeat = ({
   BackfillYielded: heldSince === null ? 0 : 1,
   heldSince: heldSince?.getTime() ?? null,
   heldTooLong: isHeldTooLong({ heldSince: heldSince?.getTime() ?? null }, now),
-  holdCause: heldSince === null ? "none" : UNKNOWN_HOLD_CAUSE,
+  holdCause: heldSince === null ? "none" : GATE_HOLD_CAUSE,
 });
 
 export const emitSourceStoredTotalHoldHeartbeats = async (
@@ -102,6 +108,12 @@ export const emitSourceStoredTotalHoldHeartbeats = async (
           heldSince: caseLawSources.storedTotalHeldSince,
         })
         .from(caseLawSources)
+        .where(
+          or(
+            isNull(caseLawSources.storedTotalNextRefreshAt),
+            sql`${caseLawSources.storedTotalNextRefreshAt} <= clock_timestamp()`,
+          ),
+        )
         .orderBy(asc(caseLawSources.storedTotalHeldSince))
         .limit(1)
     ).at(0),

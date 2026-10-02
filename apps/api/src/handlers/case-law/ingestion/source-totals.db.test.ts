@@ -1635,11 +1635,15 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         counts += 1;
         return 17;
       };
+      let restartedAdmissions = 0;
       const refresh = async (now: Date) =>
         await refreshNextSourceStoredTotal({
           scopedDb: restartScope,
           readDatabaseNow: async () => now,
-          acquireAdmission: async () => "granted",
+          acquireAdmission: async () => {
+            restartedAdmissions += 1;
+            return "granted";
+          },
           countSource,
         });
       expect(await refresh(NOW)).toBe("fresh");
@@ -1649,6 +1653,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         ),
       ).toBe("fresh");
       expect(counts).toBe(1);
+      expect(restartedAdmissions).toBe(0);
       expect(
         await refresh(
           new Date(NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING),
@@ -1661,6 +1666,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         ),
       ).toBe("fresh");
       expect(counts).toBe(2);
+      expect(restartedAdmissions).toBe(1);
     });
   });
 
