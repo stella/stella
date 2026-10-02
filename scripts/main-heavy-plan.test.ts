@@ -131,6 +131,23 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
 });
 
+test("main heavy runs execute the release compiler exactly when VERSION is planned", () => {
+  for (const event of ["push", "schedule", "workflow_dispatch"]) {
+    for (const required of ["true", "false"]) {
+      expect(
+        selected(
+          workflow.jobs["release-typecheck"]?.if ?? "true",
+          context(event, true, {
+            ...heavyPlan,
+            release_typecheck_required: required,
+          }),
+        ),
+        `${event}/${required}`,
+      ).toBe(required === "true");
+    }
+  }
+});
+
 test("dropping a heavy job cannot pass the scheduling invariant", () => {
   const removed = heavy.at(0);
   expect(removed).toBeDefined();

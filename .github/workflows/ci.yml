@@ -2908,7 +2908,8 @@ jobs:
     if: >-
       needs.ci-plan.outputs.queue_depth != 'thin'
       && ((github.event_name == 'pull_request'
-       || github.event_name == 'merge_group')
+       || github.event_name == 'merge_group'
+       || inputs.heavy_only == true)
       && needs.ci-plan.outputs.release_typecheck_required == 'true'
       && needs.ci-plan.outputs.trusted == 'true'
       )
