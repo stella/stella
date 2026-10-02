@@ -98,6 +98,26 @@ test("per-file increments retain their own shard baseline", () => {
     1700,
   );
 });
+test("solo isolation uses the planned singleton peak, not the shard's raw peak", () => {
+  // Raw peak 1100 MB is below the 60% threshold, but on the table baseline
+  // the file needs 1000 + 700 = 1700 MB, which is above it.
+  const rssTable = {
+    type: "measured",
+    baselineMb: 1000,
+    environment: ENVIRONMENT,
+    files: {
+      a: { peakMb: 1100, baselineMb: 400, source: SOURCE },
+      b: { peakMb: 1050, baselineMb: 1000, source: SOURCE },
+    },
+  } as const satisfies TestRssTable;
+  expect(
+    splitMemoryBoundedBatches({
+      batches: [["a", "b"]],
+      rssTable,
+      budgetMb: BUDGET_MB,
+    }),
+  ).toEqual([["a"], ["b"]]);
+});
 test("a noisy peak below its preload cannot reduce another file's estimate", () => {
   const rssTable = calibrated(1000, { a: 900, b: 1110 });
   expect(batchPeakRss({ files: ["a", "b"], rssTable, budgetMb: 2000 })).toBe(

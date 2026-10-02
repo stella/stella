@@ -228,7 +228,7 @@ export const splitMemoryBoundedBatches = ({
       }
       if (
         weight.type === "measured" &&
-        weight.peakMb >= budgetMb * SOLO_TEST_RSS_RATIO
+        singletonPeak >= budgetMb * SOLO_TEST_RSS_RATIO
       ) {
         if (current.length > 0) {
           result.push(current);
