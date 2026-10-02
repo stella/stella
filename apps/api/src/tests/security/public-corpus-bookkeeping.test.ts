@@ -3,13 +3,12 @@ import { sql } from "drizzle-orm";
 import { pgPolicy, pgTable, pgView, text, uuid } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
-
-import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "../../../../../.oxlint-plugins/audit-on-mutation/public-corpus-bookkeeping.ts";
+import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "@/api/lib/public-corpus-bookkeeping";
 import {
   verifyPublicCorpusCatalog,
   verifyPublicCorpusSchema,
   type PublicCorpusCatalogPosture,
-} from "../../../../../scripts/public-corpus-bookkeeping-verification.ts";
+} from "@/api/lib/public-corpus-bookkeeping-verification";
 
 const declaration = {
   schemaExport: "checkpoint",

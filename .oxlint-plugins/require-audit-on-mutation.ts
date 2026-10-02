@@ -45,7 +45,7 @@ import type { Ranged, Variable } from "@oxlint/plugins";
 import {
   PUBLIC_CORPUS_BOOKKEEPING_TABLES,
   type PublicCorpusBookkeepingTable,
-} from "./audit-on-mutation/public-corpus-bookkeeping.ts";
+} from "../apps/api/src/lib/public-corpus-bookkeeping.ts";
 import { isPublicCorpusMutation } from "./audit-on-mutation/public-corpus-mutations.ts";
 import {
   type ImportedFromOptions,

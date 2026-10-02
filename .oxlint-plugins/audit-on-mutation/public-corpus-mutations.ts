@@ -1,3 +1,4 @@
+import type { PublicCorpusBookkeepingTable } from "../../apps/api/src/lib/public-corpus-bookkeeping.ts";
 import {
   type ImportedFromOptions,
   isAstNode,
@@ -9,7 +10,6 @@ import {
   stableInitializer,
   unwrapExpression,
 } from "../utils.ts";
-import type { PublicCorpusBookkeepingTable } from "./public-corpus-bookkeeping.ts";
 
 type Context = ImportedFromOptions["context"];
 type Membership = Pick<

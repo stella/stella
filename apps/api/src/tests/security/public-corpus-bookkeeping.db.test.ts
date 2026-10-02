@@ -2,12 +2,11 @@ import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
 import { rootDb } from "@/api/db/root";
-
-import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "../../../../../.oxlint-plugins/audit-on-mutation/public-corpus-bookkeeping.ts";
+import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "@/api/lib/public-corpus-bookkeeping";
 import {
   verifyPublicCorpusCatalog,
   type PublicCorpusCatalogPosture,
-} from "../../../../../scripts/public-corpus-bookkeeping-verification.ts";
+} from "@/api/lib/public-corpus-bookkeeping-verification";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
