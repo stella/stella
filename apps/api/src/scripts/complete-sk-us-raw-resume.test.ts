@@ -316,6 +316,98 @@ test("checkpoint reload accepts terminal records and rejects ambiguous or foreig
   }
 });
 
+test("a torn journal tail is dropped before the next record so every line stays parseable", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "sk-us-journal-tail-"));
+  const sourceId = createSafeId<"caseLawSource">();
+  const checkpointPath = path.join(directory, "checkpoint.json");
+  const journalPath = `${checkpointPath}.outcomes.jsonl`;
+  const cursorAt = (createdAt: string) => ({
+    id: createSafeId<"caseLawDecision">(),
+    createdAt,
+  });
+  const first = cursorAt("2026-03-01T00:00:00.000001Z");
+  const torn = cursorAt("2026-03-01T00:00:00.000002Z");
+  const retried = cursorAt("2026-03-01T00:00:00.000003Z");
+  try {
+    await journalSkUsRawOutcome({
+      checkpointPath,
+      sourceId,
+      cursor: first,
+      outcome: "completed",
+    });
+    const clean = await readFile(journalPath, "utf-8");
+    // A crash after part of the next record reached the disk.
+    const tornRecord = JSON.stringify({ version: 1, sourceId, cursor: torn });
+    await writeFile(journalPath, `${clean}${tornRecord.slice(0, 37)}`);
+    await journalSkUsRawOutcome({
+      checkpointPath,
+      sourceId,
+      cursor: retried,
+      outcome: "retry_later",
+    });
+    const repaired = await readFile(journalPath, "utf-8");
+    expect(repaired.startsWith(clean)).toBe(true);
+    expect(repaired.endsWith("\n")).toBe(true);
+    expect(
+      (await readJournal(checkpointPath)).map(({ cursor, outcome }) => [
+        cursor.id,
+        outcome,
+      ]),
+    ).toEqual([
+      [first.id, "completed"],
+      [retried.id, "retry_later"],
+    ]);
+
+    // A journal holding only a fragment keeps nothing of it.
+    await writeFile(journalPath, tornRecord.slice(0, 12));
+    await journalSkUsRawOutcome({
+      checkpointPath,
+      sourceId,
+      cursor: first,
+      outcome: "completed",
+    });
+    expect(await readFile(journalPath, "utf-8")).toBe(clean);
+
+    // A complete journal is appended to byte for byte.
+    await journalSkUsRawOutcome({
+      checkpointPath,
+      sourceId,
+      cursor: retried,
+      outcome: "retry_later",
+    });
+    expect(await readFile(journalPath, "utf-8")).toBe(repaired);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
+test("an oversized unterminated journal tail is refused, never truncated", async () => {
+  const directory = await mkdtemp(path.join(tmpdir(), "sk-us-journal-tail-"));
+  const sourceId = createSafeId<"caseLawSource">();
+  const checkpointPath = path.join(directory, "checkpoint.json");
+  const journalPath = `${checkpointPath}.outcomes.jsonl`;
+  const content = `{"version":1}\n${"x".repeat(64 * 1024 + 1)}`;
+  try {
+    await writeFile(journalPath, content);
+    await expect(
+      journalSkUsRawOutcome({
+        checkpointPath,
+        sourceId,
+        cursor: {
+          id: createSafeId<"caseLawDecision">(),
+          createdAt: "2026-03-01T00:00:00.000001Z",
+        },
+        outcome: "completed",
+      }),
+    ).rejects.toThrow(
+      "Outcome journal ends with an oversized unterminated record",
+    );
+    expect(await readFile(journalPath, "utf-8")).toBe(content);
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+});
+
 test("every retryable row is durably journaled before stopping without advancing its checkpoint", async () => {
   for (const retryOutcome of [
     "retry_later",
@@ -375,7 +467,11 @@ test("every retryable row is durably journaled before stopping without advancing
           outcome: "completed",
           disposition: "terminal",
         },
-        { cursor: { id: failed.id }, outcome, disposition: "retryable" },
+        {
+          cursor: { id: failed.id },
+          outcome: retryOutcome,
+          disposition: "retryable",
+        },
       ]);
       const resumedVisits: string[] = [];
       const resumed = await runSkUsRawBatch({

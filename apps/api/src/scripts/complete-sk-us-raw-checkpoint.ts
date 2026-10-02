@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { open, readFile, rename } from "node:fs/promises";
+import { open, readFile, rename, type FileHandle } from "node:fs/promises";
 import * as v from "valibot";
 
 import type { SafeId } from "@/api/lib/branded-types";
@@ -67,6 +67,30 @@ type PersistSkUsRawCheckpointOptions = ReadSkUsRawCheckpointOptions & {
   outcome: SkUsRawOutcome;
 };
 
+const NEWLINE = 0x0a;
+// One record is well under this; a longer unterminated tail is not a torn write.
+const JOURNAL_TAIL_BYTES = 64 * 1024;
+
+/**
+ * A crash mid-append leaves a fragment after the last complete record. Its row
+ * was never checkpointed, so it is applied and journaled again; dropping the
+ * fragment keeps every line a parseable record.
+ */
+const truncateTornJournalTail = async (journal: FileHandle) => {
+  const { size } = await journal.stat();
+  const start = Math.max(0, size - JOURNAL_TAIL_BYTES);
+  const tail = Buffer.alloc(size - start);
+  await journal.read(tail, 0, tail.length, start);
+  if (tail.length === 0 || tail.at(-1) === NEWLINE) {
+    return;
+  }
+  const lastNewline = tail.lastIndexOf(NEWLINE);
+  if (lastNewline === -1 && start > 0) {
+    panic("Outcome journal ends with an oversized unterminated record");
+  }
+  await journal.truncate(start + lastNewline + 1);
+};
+
 // The maintenance lane serializes journal/checkpoint writers and releases on a crash.
 export const journalSkUsRawOutcome = async ({
   checkpointPath,
@@ -81,8 +105,9 @@ export const journalSkUsRawOutcome = async ({
     outcome,
     disposition: SK_US_RAW_OUTCOME_DISPOSITIONS[outcome],
   };
-  const journal = await open(`${checkpointPath}.outcomes.jsonl`, "a");
+  const journal = await open(`${checkpointPath}.outcomes.jsonl`, "a+");
   try {
+    await truncateTornJournalTail(journal);
     await journal.writeFile(`${JSON.stringify(record)}\n`);
     await journal.sync();
   } finally {
