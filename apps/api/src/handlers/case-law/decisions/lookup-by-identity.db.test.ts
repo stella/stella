@@ -38,6 +38,15 @@ const listingOnlyId = createSafeId<"caseLawDecision">();
 const restrictedId = createSafeId<"caseLawDecision">();
 const reportedId = createSafeId<"caseLawDecision">();
 
+/** A bare docket's locator: the case file, nothing singling a decision out. */
+const docketLocator = (value: string) =>
+  ({
+    kind: "docket",
+    value,
+    family: value,
+    selector: { kind: "none" },
+  }) as const;
+
 /** Same budget as the schema push: an embedded Postgres is not fast. */
 const DB_TEST_TIMEOUT_MS = 120_000;
 
@@ -234,7 +243,7 @@ test("a docket stored only as a parallel identifier resolves to its decision", a
   const rows = await lookupDecisionsByIdentity({
     caseLawDb,
     country: "CZE",
-    locator: { kind: "docket", value: "30 Cdo 400/2012" },
+    locator: docketLocator("30 Cdo 400/2012"),
   });
 
   expect(rows.map(({ id }) => id)).toEqual([supremeId]);
@@ -264,7 +273,7 @@ test("a decision with several parallel identifiers is one candidate", async () =
   const rows = await lookupDecisionsByIdentity({
     caseLawDb,
     country: "CZE",
-    locator: { kind: "docket", value: "23 Cdo 1572/2012" },
+    locator: docketLocator("23 Cdo 1572/2012"),
   });
 
   expect(rows.map(({ id }) => id)).toEqual([supremeId]);
@@ -274,14 +283,14 @@ test("the publication and redistribution gates apply to an identifier match", as
   const listingOnly = await lookupDecisionsByIdentity({
     caseLawDb,
     country: "CZE",
-    locator: { kind: "docket", value: "2 Afs 2/2020" },
+    locator: docketLocator("2 Afs 2/2020"),
   });
   expect(listingOnly).toEqual([]);
 
   const restricted = await lookupDecisionsByIdentity({
     caseLawDb,
     country: "CZE",
-    locator: { kind: "docket", value: "4 Tdo 4/2021" },
+    locator: docketLocator("4 Tdo 4/2021"),
   });
   expect(restricted).toEqual([]);
 
@@ -289,7 +298,7 @@ test("the publication and redistribution gates apply to an identifier match", as
   const elsewhere = await lookupDecisionsByIdentity({
     caseLawDb,
     country: "SVK",
-    locator: { kind: "docket", value: "30 Cdo 400/2012" },
+    locator: docketLocator("30 Cdo 400/2012"),
   });
   expect(elsewhere).toEqual([]);
 });
@@ -372,7 +381,7 @@ test("a typed reference resolves only through identifiers of its own type", asyn
   const reporterAsDocket = await lookupDecisionsByIdentity({
     caseLawDb,
     country: "USA",
-    locator: { kind: "docket", value: "347 U.S. 483" },
+    locator: docketLocator("347 U.S. 483"),
   });
   expect(reporterAsDocket).toEqual([]);
 });

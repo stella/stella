@@ -667,7 +667,7 @@ test("the result gate evaluates every job in the workflow", () => {
     }
     expect(jobIf(ciJobs[job]), job).not.toContain("always()");
   }
-  expect(reportOnlyJobs).toEqual(["migration-exact-base-upgrade"]);
+  expect(reportOnlyJobs).toEqual([]);
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
@@ -1006,6 +1006,27 @@ const fastRequired = v.parse(
   v.array(v.string()),
   JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
 );
+
+test("a planned release screenshot check runs and must pass on the release pull request", () => {
+  // The planner selects it only for release pull requests and tags, so a
+  // full-depth gate would skip it on the pull request every time.
+  expect(jobIf(ciJobs["marketing-screenshots"])).toContain(
+    "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
+  );
+  expect(heavyJobs).not.toContain("marketing-screenshots");
+  expect(fastRequired).toContain("marketing-screenshots");
+  const event = EVENT.pullRequest;
+  expect(
+    evaluateResult({ event, results: { "marketing-screenshots": "skipped" } }),
+  ).toBe(1);
+  expect(
+    evaluateResult({
+      event,
+      results: { "marketing-screenshots": "skipped" },
+      unplannedScopes: ["marketing_screenshots_required"],
+    }),
+  ).toBe(0);
+});
 
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
@@ -1361,34 +1382,157 @@ test("a failed API image run annotates the failing lines, escaped", () => {
   ]);
 });
 
-test("manual full-depth runs leave the merge-group-only exact-base job unplanned", () => {
-  const step = jobSteps(ciJobs["ci-plan"]).find(
-    ({ name }) => name === "Check changed file scope",
+test("marketing screenshots are planned only for ready same-repository releases or release tags", () => {
+  const plan = v.parse(
+    v.object({
+      outputs: v.record(v.string(), v.string()),
+      steps: v.array(
+        v.object({ name: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-plan"],
   );
-  expect(step?.run).toBeDefined();
-  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-exact-base-"));
+  expect(plan.outputs["marketing_screenshots_required"]).toBe(
+    ["$", "{{ steps.marketing-release.outputs.required }}"].join(""),
+  );
+  const command = v.parse(
+    v.string(),
+    plan.steps.find(({ name }) => name === "Plan release marketing screenshots")
+      ?.run,
+  );
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "marketing-release-plan-"),
+  );
   const output = nodePath.join(directory, "output");
+  const listing = [
+    {
+      number: 7,
+      title: "chore: release v1.2.3",
+      isDraft: false,
+      isCrossRepository: false,
+    },
+    {
+      number: 8,
+      title: "fix: ordinary",
+      isDraft: false,
+      isCrossRepository: false,
+    },
+    {
+      number: 9,
+      title: "chore: release v1.2.3",
+      isDraft: true,
+      isCrossRepository: false,
+    },
+    {
+      number: 10,
+      title: "chore: release v1.2.3",
+      isDraft: false,
+      isCrossRepository: true,
+    },
+  ];
+  writeFileSync(
+    nodePath.join(directory, "listing.json"),
+    JSON.stringify(listing),
+  );
+  writeFileSync(
+    nodePath.join(directory, "gh"),
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      '[[ "$*" == "pr list --repo stella/stella --state open --base main --limit 500 --json number,title,isDraft,isCrossRepository" ]] || exit 3',
+      'cat "$(dirname "$0")/listing.json"',
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  const cases = [
+    {
+      event: "pull_request",
+      number: "7",
+      ref: "refs/pull/7/merge",
+      head: "",
+      required: true,
+    },
+    {
+      event: "pull_request",
+      number: "8",
+      ref: "refs/pull/8/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "pull_request",
+      number: "9",
+      ref: "refs/pull/9/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "pull_request",
+      number: "10",
+      ref: "refs/pull/10/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "merge_group",
+      number: "",
+      ref: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      head: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      required: true,
+    },
+    {
+      event: "merge_group",
+      number: "",
+      ref: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      head: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      required: false,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/tags/v1.2.3",
+      head: "",
+      required: true,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/tags/ordinary",
+      head: "",
+      required: false,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/heads/main",
+      head: "",
+      required: false,
+    },
+  ];
   try {
-    const run = Bun.spawnSync({
-      cmd: ["bash", "-e", "-c", step?.run ?? "exit 1"],
-      env: {
-        EVENT_NAME: "workflow_dispatch",
-        SUITE_DEPTH: "full",
-        GITHUB_OUTPUT: output,
-        PATH: process.env["PATH"] ?? "",
-      },
-      stdout: "ignore",
-      stderr: "pipe",
-    });
-    expect(run.exitCode, new TextDecoder().decode(run.stderr)).toBe(0);
-    expect(readFileSync(output, "utf-8").split("\n")).toContain(
-      "migration_exact_base_required=false",
-    );
-    expect(jobIf(ciJobs["migration-exact-base-upgrade"])).toContain(
-      "github.event_name == 'merge_group'",
-    );
+    for (const { event, number, ref, head, required } of cases) {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["bash", "-eu", "-c", command], {
+        cwd: nodePath.resolve(import.meta.dir, ".."),
+        env: {
+          PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
+          EVENT_NAME: event,
+          PR_NUMBER: number,
+          GITHUB_REF: ref,
+          MERGE_GROUP_HEAD_REF: head,
+          REPOSITORY: "stella/stella",
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+      expect(readFileSync(output, "utf-8"), `${event} ${ref}`).toBe(
+        `required=${String(required)}\n`,
+      );
+    }
   } finally {
-    rmSync(directory, { force: true, recursive: true });
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
