@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { afterEach, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
@@ -227,14 +228,18 @@ test.each([
   { scores: [1, 2], message: "BM25 ratio ranking received an invalid score" },
 ])(
   "BM25 ranking rejects invalid engine scores $scores",
-  ({ scores, message }) => {
+  async ({ scores, message }) => {
     stubRankingScores(scores);
-    expect(
+    const result = await Result.tryPromise(() =>
       readCorpusIndexSearchPage({
         ...rankingTestOptions,
         rankingMode: "bm25-ratio",
       }),
-    ).rejects.toThrow(message);
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.cause).toMatchObject({ message });
+    }
   },
 );
 
@@ -360,45 +365,110 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
   expect(filterOnly.nextCursor?.rankingMode === "off").toBe(true);
 });
 
-test("BM25 ranking refuses a moving window or a transport without scores", () => {
-  const base = {
-    observer: "unobserved",
-    cluster: "q09",
-    indexId: "case_law_v7_cs_sk",
-    query: "text:fiction",
-    order: RELEVANCE_ORDER,
-    rankingMode: "bm25-ratio",
-    limit: 10,
-    parsedCursor: null,
-    snippetFields: [],
-    extractId: () => null,
-    extractSnippet: () => null,
-    unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async () => ({ context: null, ranked: [] }),
-  } satisfies Parameters<typeof readCorpusIndexSearchPage>[0];
-  expect(readCorpusIndexSearchPage(base)).rejects.toThrow(
-    "BM25 ranking requires",
-  );
-  expect(
-    readCorpusIndexSearchPage({
-      ...base,
-      scanTransport: { type: "scored", fields: ["document_id"] },
-      parsedCursor: {
-        score: 1,
-        id: "old",
-        windowStart: 900,
-        rankingMode: "bm25-ratio",
-        sort: "relevance",
+test("BM25 ranking refuses a transport without scores or a date order", async () => {
+  for (const options of [
+    { ...rankingTestOptions, scanTransport: undefined },
+    {
+      ...rankingTestOptions,
+      order: { type: "newest", timestampField: "decision_date_ts" } as const,
+    },
+  ]) {
+    const result = await Result.tryPromise(() =>
+      readCorpusIndexSearchPage({ ...options, rankingMode: "bm25-ratio" }),
+    );
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.cause).toMatchObject({
+        message: expect.stringContaining("BM25 ranking requires"),
+      });
+    }
+  }
+});
+
+test("client BM25 cursors require server eligibility and window zero", async () => {
+  for (const rankingMode of ["off", "bm25-ratio"] as const) {
+    for (const windowStart of [0, 900]) {
+      if (rankingMode === "bm25-ratio" && windowStart === 0) {
+        continue;
+      }
+      const result = await Result.tryPromise(() =>
+        readCorpusIndexSearchPage({
+          ...rankingTestOptions,
+          rankingMode,
+          parsedCursor: {
+            score: 1,
+            id: "old",
+            windowStart,
+            rankingMode: "bm25-ratio",
+            sort: "relevance",
+          },
+        }),
+      );
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error.cause).toMatchObject({
+          status: 400,
+          message: "Invalid cursor",
+        });
+      }
+    }
+  }
+});
+
+test("with ranking OFF no client cursor can enter the BM25 path", async () => {
+  await assertProperty(
+    "with ranking OFF no client cursor can enter the BM25 path",
+    fc.asyncProperty(
+      fc.option(fc.constantFrom("off", "bm25-ratio"), { nil: undefined }),
+      fc.integer({ min: 0, max: 100 }),
+      fc.double({ min: 0, max: 1, noNaN: true }),
+      async (rankingMode, window, score) => {
+        const sizes: number[] = [];
+        globalThis.fetch = Object.assign(
+          async (
+            _input: Parameters<typeof fetch>[0],
+            init?: Parameters<typeof fetch>[1],
+          ) => {
+            const body = init?.body;
+            if (typeof body !== "string") {
+              throw new TypeError("Expected a JSON request body");
+            }
+            sizes.push(JSON.parse(body).size);
+            return new Response(
+              JSON.stringify({ hits: { total: { value: 0 }, hits: [] } }),
+            );
+          },
+          { preconnect: originalFetch.preconnect },
+        );
+        const result = await Result.tryPromise(() =>
+          readCorpusIndexSearchPage({
+            ...rankingTestOptions,
+            rankingMode: "off",
+            parsedCursor: {
+              score,
+              id: "client-id",
+              windowStart: window * 900,
+              rankingMode,
+              sort: "relevance",
+            },
+          }),
+        );
+        expect(sizes).not.toContain(CORPUS_BM25_PASSAGE_LIMIT + 1);
+        if (rankingMode === "bm25-ratio") {
+          expect(sizes).toEqual([]);
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error.cause).toMatchObject({
+              status: 400,
+              message: "Invalid cursor",
+            });
+          }
+        } else {
+          expect(result.isOk()).toBe(true);
+        }
       },
-    }),
-  ).rejects.toThrow("BM25 ranking requires");
-  expect(
-    readCorpusIndexSearchPage({
-      ...base,
-      scanTransport: { type: "scored", fields: ["document_id"] },
-      order: { type: "newest", timestampField: "decision_date_ts" },
-    }),
-  ).rejects.toThrow("BM25 ranking requires");
+    ),
+  );
 });
 
 test("ties below the cutoff page deterministically despite engine tie order", async () => {
@@ -436,7 +506,7 @@ test("ties below the cutoff page deterministically despite engine tie order", as
           const result = await readCorpusIndexSearchPage({
             ...rankingTestOptions,
             limit,
-            rankingMode: page % 2 === 0 ? "bm25-ratio" : "off",
+            rankingMode: "bm25-ratio",
             parsedCursor: cursor,
           });
           seen.push(...result.pageRanked.map(({ id }) => id));

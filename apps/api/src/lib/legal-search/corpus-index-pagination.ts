@@ -1122,6 +1122,14 @@ const readBm25SearchPage = async <TContext>(
 export const readCorpusIndexSearchPage = async <TContext>(
   options: CorpusIndexSearchPageInput<TContext>,
 ): Promise<CorpusIndexSearchPageResult<TContext>> => {
+  const cursorMode = options.parsedCursor?.rankingMode;
+  if (
+    cursorMode === "bm25-ratio" &&
+    (options.rankingMode !== "bm25-ratio" ||
+      options.parsedCursor?.windowStart !== 0)
+  ) {
+    throw new HandlerError({ status: 400, message: "Invalid cursor" });
+  }
   const mode =
     options.parsedCursor === null
       ? (options.rankingMode ?? "off")
