@@ -60,9 +60,12 @@ describe("image input preparation", () => {
           );
           continue;
         }
-        await expect(
-          prepareProviderImageMessages({ messages, provider, modelId }),
-        ).resolves.toMatchObject({
+        const prepared = await prepareProviderImageMessages({
+          messages,
+          provider,
+          modelId,
+        });
+        expect(prepared).toMatchObject({
           status: "error",
           error: {
             _tag: "HandlerError",
@@ -285,13 +288,12 @@ describe("image input preparation", () => {
       new Uint8Array(BEDROCK_IMAGE_MAX_BYTES + 1),
     );
     try {
-      await expect(
-        prepareProviderImageMessages({
-          messages: imageMessages(source),
-          provider: "bedrock",
-          modelId: "us.amazon.nova-lite-v1:0",
-        }),
-      ).resolves.toMatchObject({
+      const prepared = await prepareProviderImageMessages({
+        messages: imageMessages(source),
+        provider: "bedrock",
+        modelId: "us.amazon.nova-lite-v1:0",
+      });
+      expect(prepared).toMatchObject({
         status: "error",
         error: {
           _tag: "HandlerError",
@@ -307,13 +309,12 @@ describe("image input preparation", () => {
 
   test("Bedrock refuses unreadable oversized images with a typed actionable error", async () => {
     const bytes = new Uint8Array(BEDROCK_IMAGE_MAX_BYTES + 1);
-    await expect(
-      prepareProviderImageMessages({
-        messages: imageMessages(bytes),
-        provider: "bedrock",
-        modelId: "us.amazon.nova-lite-v1:0",
-      }),
-    ).resolves.toMatchObject({
+    const prepared = await prepareProviderImageMessages({
+      messages: imageMessages(bytes),
+      provider: "bedrock",
+      modelId: "us.amazon.nova-lite-v1:0",
+    });
+    expect(prepared).toMatchObject({
       status: "error",
       error: {
         _tag: "HandlerError",
@@ -495,13 +496,15 @@ describe("image input preparation", () => {
         return chunks;
       };
       const calls = [
-        () => consume(adapter.chatStream(chatOptions)),
-        () => adapter.structuredOutput(structuredOptions),
-        () => {
+        async () => await consume(adapter.chatStream(chatOptions)),
+        async () => await adapter.structuredOutput(structuredOptions),
+        async () => {
           if (adapter.structuredOutputStream === undefined) {
             throw new TypeError("Expected structured stream");
           }
-          return consume(adapter.structuredOutputStream(structuredOptions));
+          return await consume(
+            adapter.structuredOutputStream(structuredOptions),
+          );
         },
       ];
       if (messages === TEXT) {
@@ -511,7 +514,14 @@ describe("image input preparation", () => {
       } else {
         for (const [index, call] of calls.entries()) {
           if (index === 1) {
-            await expect(call()).rejects.toBeInstanceOf(HandlerError);
+            const outcome = await Result.tryPromise({
+              try: async () => await call(),
+              catch: (cause: unknown) => cause,
+            });
+            expect(Result.isError(outcome)).toBe(true);
+            if (Result.isError(outcome)) {
+              expect(outcome.error).toBeInstanceOf(HandlerError);
+            }
             continue;
           }
           expect(await call()).toMatchObject([
