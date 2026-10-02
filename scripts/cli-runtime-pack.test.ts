@@ -9,6 +9,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import {
   CLI_CONTRACT_SURFACE,
@@ -99,6 +100,21 @@ const packedFiles = (root: string): string[] => {
       }
       return entry.path;
     })
+    .toSorted();
+};
+
+const publishedSkillFiles = (root: string): string[] => {
+  const manifest = v.parse(
+    v.object({ files: v.array(v.string()) }),
+    JSON.parse(
+      readFileSync(path.join(root, CLI_DIRECTORY, "package.json"), "utf-8"),
+    ),
+  );
+  expect(manifest.files).toContain("skills");
+  return run(["git", "ls-files", "-z", "--", `${CLI_DIRECTORY}/skills/`], root)
+    .split("\0")
+    .filter(Boolean)
+    .map((file) => file.slice(CLI_DIRECTORY.length + 1))
     .toSorted();
 };
 
@@ -193,7 +209,10 @@ test.skipIf(!process.env["CI"] || !runtimeSourcesAtBase())(
 
       const baseFiles = packedFiles(base);
       const headFiles = packedFiles(head);
-      expect(headFiles).toEqual(baseFiles);
+      const expectedFiles = [
+        ...new Set([...baseFiles, ...publishedSkillFiles(head)]),
+      ].toSorted();
+      expect(headFiles).toEqual(expectedFiles);
       for (const file of RUNTIME_SOURCES) {
         expect(headFiles).toContain(file);
       }
