@@ -10,6 +10,7 @@ import { Result } from "better-result";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { checkManagedOpenRouterModel } from "@/api/lib/chat/managed-provider-checks";
+import type { ManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
@@ -123,14 +124,15 @@ const isManagedRoutingRefusal = (error: unknown): boolean => {
   );
 };
 
-const withManagedRoutingErrors = async function* (
+const withManagedProviderErrors = async function* (
   stream: AsyncIterable<AdapterYieldChunk>,
+  isUnavailable: (error: unknown) => boolean,
 ): AsyncGenerator<AdapterYieldChunk> {
   for await (const chunk of stream) {
     if (
       chunk.type !== EventType.RUN_ERROR ||
       chunk.code === "aborted" ||
-      !isManagedRoutingRefusal(chunk.rawEvent ?? chunk)
+      !isUnavailable(chunk.rawEvent ?? chunk)
     ) {
       yield chunk;
       continue;
@@ -162,33 +164,67 @@ const INSTANCE_DEBUG_LOGGER = {
 } satisfies NonNullable<OpenRouterConfig["debugLogger"]>;
 
 class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
-  constructor(config: OpenRouterConfig, model: OpenRouterModel) {
+  private readonly credential: ManagedOpenRouterCredential;
+  constructor(
+    config: OpenRouterConfig,
+    model: OpenRouterModel,
+    credential: ManagedOpenRouterCredential,
+  ) {
     // A truthy logger also prevents OPENROUTER_DEBUG from enabling SDK logs.
     super({ ...config, debugLogger: INSTANCE_DEBUG_LOGGER }, model);
+    this.credential = credential;
   }
 
+  private isFederatedCredentialRefusal = (error: unknown): boolean => {
+    if (
+      this.credential.type !== "federated" ||
+      readProviderStatus(error)?.status !== 401
+    ) {
+      return false;
+    }
+    this.credential.invalidate();
+    return true;
+  };
+
   override chatStream(options: OpenRouterTextOptions) {
-    return super.chatStream({ ...options, logger: resolveDebugOption(false) });
+    return withManagedProviderErrors(
+      super.chatStream({ ...options, logger: resolveDebugOption(false) }),
+      this.isFederatedCredentialRefusal,
+    );
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return super.structuredOutputStream({
-      ...options,
-      chatOptions: {
-        ...options.chatOptions,
-        logger: resolveDebugOption(false),
-      },
-    });
+    return withManagedProviderErrors(
+      super.structuredOutputStream({
+        ...options,
+        chatOptions: {
+          ...options.chatOptions,
+          logger: resolveDebugOption(false),
+        },
+      }),
+      this.isFederatedCredentialRefusal,
+    );
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
-    return await super.structuredOutput({
-      ...options,
-      chatOptions: {
-        ...options.chatOptions,
-        logger: resolveDebugOption(false),
-      },
+    const result = await Result.tryPromise({
+      try: async () =>
+        await super.structuredOutput({
+          ...options,
+          chatOptions: {
+            ...options.chatOptions,
+            logger: resolveDebugOption(false),
+          },
+        }),
+      catch: (error) =>
+        this.isFederatedCredentialRefusal(error)
+          ? managedProviderUnavailable("openrouter")
+          : error,
     });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
@@ -205,17 +241,26 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
     {
       model,
       managedAIResidency,
-    }: Pick<ManagedOpenRouterTextOptions, "model" | "managedAIResidency">,
+      credential,
+    }: Pick<ManagedOpenRouterTextOptions, "model" | "managedAIResidency"> & {
+      credential: ManagedOpenRouterCredential;
+    },
   ) {
-    super(config, model);
+    super(config, model, credential);
     this.residency = managedAIResidency;
   }
   override chatStream(options: OpenRouterTextOptions) {
-    return withManagedRoutingErrors(super.chatStream(options));
+    return withManagedProviderErrors(
+      super.chatStream(options),
+      isManagedRoutingRefusal,
+    );
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return withManagedRoutingErrors(super.structuredOutputStream(options));
+    return withManagedProviderErrors(
+      super.structuredOutputStream(options),
+      isManagedRoutingRefusal,
+    );
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
@@ -260,33 +305,50 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
 
 type ManagedOpenRouterTextOptions = {
   model: OpenRouterModel;
-  apiKey: string;
   managedAIResidency: ManagedAIResidency;
-};
+} & (
+  | { apiKey: string; credential?: never }
+  | { credential: ManagedOpenRouterCredential; apiKey?: never }
+);
 
-export const createManagedOpenRouterText = ({
-  model,
-  apiKey,
-  managedAIResidency,
-}: ManagedOpenRouterTextOptions): StellaOpenRouterTextAdapter =>
-  new ManagedOpenRouterTextAdapter(
+export const createManagedOpenRouterText = (
+  options: ManagedOpenRouterTextOptions,
+): StellaOpenRouterTextAdapter => {
+  const credential =
+    options.credential === undefined
+      ? { type: "static" as const, apiKey: options.apiKey }
+      : options.credential;
+  return new ManagedOpenRouterTextAdapter(
     {
-      apiKey,
+      apiKey: credential.apiKey,
       retryConfig: OPENROUTER_RETRY,
       serverURL:
-        PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[managedAIResidency],
+        PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[
+          options.managedAIResidency
+        ],
     },
-    { model, managedAIResidency },
+    {
+      model: options.model,
+      managedAIResidency: options.managedAIResidency,
+      credential,
+    },
   );
+};
 
 export const createInstanceOpenRouterText = (
   model: OpenRouterModel,
-  apiKey: string,
-): StellaOpenRouterTextAdapter =>
-  new InstanceOpenRouterTextAdapter(
-    { apiKey, retryConfig: OPENROUTER_RETRY },
+  credential: string | ManagedOpenRouterCredential,
+): StellaOpenRouterTextAdapter => {
+  const resolved =
+    typeof credential === "string"
+      ? { type: "static" as const, apiKey: credential }
+      : credential;
+  return new InstanceOpenRouterTextAdapter(
+    { apiKey: resolved.apiKey, retryConfig: OPENROUTER_RETRY },
     model,
+    resolved,
   );
+};
 
 export const createStellaOpenRouterText = (
   model: OpenRouterModel,

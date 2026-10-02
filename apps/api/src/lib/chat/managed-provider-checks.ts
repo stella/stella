@@ -5,6 +5,7 @@ import { Temporal } from "@stll/time";
 import { env } from "@/api/env";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createManagedProviderAvailability } from "@/api/lib/chat/managed-provider-availability";
+import { getManagedOpenRouterCredential } from "@/api/lib/chat/openrouter-credential";
 import {
   managedProviderUnavailable,
   fetchManagedProviderCatalog,
@@ -43,17 +44,12 @@ export const startManagedProviderChecks = async (
   }
   const intervalMs = env.MANAGED_PROVIDER_CHECK_INTERVAL_MS;
   const timeoutMs = env.MANAGED_PROVIDER_CHECK_TIMEOUT_MS;
-  const apiKey = env.OPENROUTER_API_KEY;
-  if (
-    intervalMs === undefined ||
-    timeoutMs === undefined ||
-    apiKey === undefined
-  ) {
+  if (intervalMs === undefined || timeoutMs === undefined) {
     return panic("Managed provider check configuration was not validated.");
   }
   const controller = new AbortController();
   const monitor = createManagedProviderAvailability({
-    apiKey,
+    getApiKey: getManagedOpenRouterCredential,
     intervalMs,
     timeoutMs,
     signal: controller.signal,

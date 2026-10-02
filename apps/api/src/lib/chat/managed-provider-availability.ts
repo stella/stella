@@ -11,6 +11,7 @@ import {
   managedProviderUnavailable,
   PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 const regionalCatalogSchema = v.object({
@@ -30,7 +31,7 @@ type RegionalAvailability =
   | { status: "available"; models: ReadonlySet<string>; expiresAt: number };
 
 type ManagedProviderAvailabilityOptions = {
-  apiKey: string;
+  getApiKey: () => Promise<Result<string, HandlerError<503>>>;
   intervalMs: number;
   timeoutMs: number;
   signal?: AbortSignal | undefined;
@@ -41,7 +42,7 @@ type ManagedProviderAvailabilityOptions = {
 // This is a per-process safety observation, never an ownership or job lease.
 // Every replica boots unavailable and expires its own observations.
 export const createManagedProviderAvailability = ({
-  apiKey,
+  getApiKey,
   intervalMs,
   timeoutMs,
   signal: parentSignal,
@@ -55,8 +56,23 @@ export const createManagedProviderAvailability = ({
 
   // Completed observations survive one slow refresh, but never indefinite stalling.
   const maxStalenessMs = 2 * intervalMs + timeoutMs;
-  const refresh = async () =>
-    await Promise.all(
+  const refresh = async () => {
+    const credential = await getApiKey();
+    if (Result.isError(credential)) {
+      return MANAGED_AI_RESIDENCIES.map((residency) => {
+        const error = classifyFailure(
+          new ManagedProviderCheckError({
+            message: "Managed provider credential is unavailable",
+            residency,
+            cause: credential.error,
+          }),
+          "model_unavailable",
+        );
+        availability[residency] = { status: "unavailable", cause: error };
+        return Result.err(error);
+      });
+    }
+    return await Promise.all(
       MANAGED_AI_RESIDENCIES.map(async (residency) => {
         const observed = await Result.tryPromise({
           try: async () =>
@@ -68,7 +84,7 @@ export const createManagedProviderAvailability = ({
                 url.searchParams.set("region", residency);
                 url.searchParams.set("zdr", "true");
                 const response = await fetchCatalog(url.href, {
-                  headers: { Authorization: `Bearer ${apiKey}` },
+                  headers: { Authorization: `Bearer ${credential.value}` },
                   signal,
                   redirect: "error",
                 });
@@ -117,6 +133,7 @@ export const createManagedProviderAvailability = ({
         return Result.ok(undefined);
       }),
     );
+  };
 
   const check = (model: string, residency: ManagedAIResidency) => {
     const regional = availability[residency];

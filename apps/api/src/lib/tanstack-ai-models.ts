@@ -56,6 +56,10 @@ import type {
   AIRequestPolicy,
 } from "@/api/lib/chat/ai-data-policy";
 import {
+  getManagedOpenRouterConfiguration,
+  type ManagedOpenRouterCredential,
+} from "@/api/lib/chat/openrouter-credential";
+import {
   checkManagedProviderAvailable,
   isManagedProviderAvailable,
   managedProviderUnavailable,
@@ -334,7 +338,10 @@ type TanStackModelFactoryOptions = {
   region?: DataRegion | undefined;
 } & (
   | { apiKey: string; dataClass: AIDataClass }
-  | ({ apiKey?: undefined } & AIRequestPolicy)
+  | ({
+      apiKey?: undefined;
+      managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
+    } & AIRequestPolicy)
 );
 
 type BedrockTextAdapterConfig = {
@@ -582,18 +589,17 @@ const createExtendedOpenAIAdapter = (
   return openai(modelId, apiKey);
 };
 
-type OpenRouterAdapterOptions = { modelId: string; apiKey: string } & (
-  | { keySource: "byok" }
-  | { keySource: "public_corpus" }
-  | ({ keySource: "instance" } & Extract<
-      AIRequestPolicy,
-      { dataClass: "customer" }
-    >)
+type OpenRouterAdapterOptions = { modelId: string } & (
+  | { keySource: "byok"; apiKey: string }
+  | { keySource: "public_corpus"; credential: ManagedOpenRouterCredential }
+  | ({
+      keySource: "instance";
+      credential: ManagedOpenRouterCredential;
+    } & Extract<AIRequestPolicy, { dataClass: "customer" }>)
 );
 
 const createExtendedOpenRouterAdapter = ({
   modelId,
-  apiKey,
   ...policy
 }: OpenRouterAdapterOptions): AnyTextAdapter => {
   let createText;
@@ -601,16 +607,19 @@ const createExtendedOpenRouterAdapter = ({
     case "instance":
       createText = (
         model: Parameters<typeof createStellaOpenRouterText>[0],
-        key: string,
+        _key: string,
       ) =>
         createManagedOpenRouterText({
           model,
-          apiKey: key,
+          credential: policy.credential,
           managedAIResidency: policy.managedAIResidency,
         });
       break;
     case "public_corpus":
-      createText = createInstanceOpenRouterText;
+      createText = (
+        model: Parameters<typeof createInstanceOpenRouterText>[0],
+        _key: string,
+      ) => createInstanceOpenRouterText(model, policy.credential);
       break;
     case "byok":
       createText = createStellaOpenRouterText;
@@ -626,7 +635,10 @@ const createExtendedOpenRouterAdapter = ({
       modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
     }),
   ]);
-  return openrouter(modelId, apiKey);
+  return openrouter(
+    modelId,
+    policy.keySource === "byok" ? policy.apiKey : policy.credential.apiKey,
+  );
 };
 
 const createExtendedMistralAdapter = (
@@ -889,26 +901,49 @@ const createProviderTextAdapterFactory = (
       return (modelId) => createExtendedOpenAIAdapter(modelId, key);
     }
     case "openrouter": {
+      const managedCredential =
+        options.apiKey === undefined
+          ? options.managedOpenRouterCredential
+          : undefined;
+      const staticKey = env.OPENROUTER_API_KEY?.trim()
+        ? env.OPENROUTER_API_KEY
+        : undefined;
+      if (
+        options.apiKey === undefined &&
+        staticKey === undefined &&
+        managedCredential === undefined
+      ) {
+        throw managedProviderUnavailable("openrouter");
+      }
       const key = requireCredential(
         supportedProvider,
-        apiKey ?? env.OPENROUTER_API_KEY,
+        apiKey ?? staticKey ?? managedCredential?.apiKey,
         "OPENROUTER_API_KEY",
       );
-      if (
-        options.apiKey !== undefined ||
-        options.dataClass === "public_corpus"
-      ) {
+      if (options.apiKey !== undefined) {
         return (modelId) =>
           createExtendedOpenRouterAdapter({
             modelId,
             apiKey: key,
-            keySource: options.apiKey !== undefined ? "byok" : "public_corpus",
+            keySource: "byok",
+          });
+      }
+      const credential =
+        staticKey === undefined && managedCredential !== undefined
+          ? managedCredential
+          : { type: "static" as const, apiKey: key };
+      if (options.dataClass === "public_corpus") {
+        return (modelId) =>
+          createExtendedOpenRouterAdapter({
+            modelId,
+            credential,
+            keySource: "public_corpus",
           });
       }
       return (modelId) =>
         createExtendedOpenRouterAdapter({
           modelId,
-          apiKey: key,
+          credential,
           keySource: "instance",
           dataClass: options.dataClass,
           managedAIResidency: options.managedAIResidency,
@@ -943,7 +978,7 @@ const hasInstanceProviderCredentials = (provider: AIProvider): boolean => {
     case "google":
       return !!env.GOOGLE_GENERATIVE_AI_API_KEY;
     case "openrouter":
-      return !!env.OPENROUTER_API_KEY;
+      return getManagedOpenRouterConfiguration().type !== "unavailable";
     case "openai":
       return !!env.OPENAI_API_KEY;
     case "anthropic":
@@ -1408,7 +1443,9 @@ const getCachedFactory = (
 export const getActiveProvider = (): AIProvider => resolveProvider();
 
 const getInstanceFactory = (
-  policy: AIRequestPolicy,
+  policy: AIRequestPolicy & {
+    managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
+  },
 ): TanStackTextAdapterFactory =>
   createTanStackTextAdapterFactory({
     provider: getActiveProvider(),
@@ -1933,6 +1970,7 @@ const resolveInstanceTextModel = ({
   organizationId: SafeId<"organization"> | null;
   reasoningEffort?: ReasoningEffort | undefined;
   useRoleReasoningDefault?: boolean | undefined;
+  managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
 } & AIRequestPolicy): ResolvedTanStackTextModel => {
   if (!isMockTextAdapterActive()) {
     const availability = checkManagedProviderAvailable(
@@ -1964,6 +2002,7 @@ export const getTanStackTextModelForRole = (
   orgConfig: OrgAIConfig | null | undefined,
   options: {
     organizationId: SafeId<"organization"> | null;
+    managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   if (orgConfig) {
@@ -2130,6 +2169,7 @@ export const getTanStackTextModelById = (
     role: ModelRole;
     organizationId: SafeId<"organization"> | null;
     reasoningEffort?: ReasoningEffort | undefined;
+    managedOpenRouterCredential?: ManagedOpenRouterCredential | undefined;
   } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   const override = decodeModelOverride(modelId);
