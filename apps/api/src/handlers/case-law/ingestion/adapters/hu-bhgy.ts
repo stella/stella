@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Hungarian courts (Bírósági Határozatok Gyűjteménye) adapter.
  *

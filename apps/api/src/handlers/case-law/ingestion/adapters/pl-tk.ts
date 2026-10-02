@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *

@@ -12,6 +12,18 @@ import {
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
 } from "@/api/db/schema";
+import {
+  createPlNsaCrawler,
+  plNsaAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa";
+import {
+  localFileShardSource,
+  PL_NSA_SNAPSHOT,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-nsa-dataset";
+import {
+  plUokikAdapter,
+  readPlUokikView,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-uokik";
 import { runReconciliationWorkUnit } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import { createSafeId } from "@/api/lib/branded-types";
 import { toUtcDateString } from "@/api/lib/dates";
@@ -42,7 +54,11 @@ type Fixture = {
   sourceId: ReturnType<typeof createSafeId<"caseLawSource">>;
   now: Date;
   slice: string;
-  seed: (id: string, status: "parked" | "terminal") => Promise<void>;
+  seed: (
+    id: string,
+    status: "parked" | "terminal",
+    payload?: unknown,
+  ) => Promise<void>;
   row: (
     id: string,
   ) => Promise<typeof caseLawReconciliationItems.$inferSelect | undefined>;
@@ -52,7 +68,10 @@ type Fixture = {
   ) => ReturnType<typeof runReconciliationWorkUnit>;
   stale: () => Promise<void>;
 };
-const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
+const withFixture = async (
+  work: (fixture: Fixture) => Promise<void>,
+  requestedSlice?: string,
+) => {
   const databaseUrl =
     process.env["DATABASE_URL"] ??
     panic(
@@ -113,7 +132,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
       const sourceId = createSafeId<"caseLawSource">();
       const adapterKey = `listing-revision-${sourceId}`;
       const now = new Date();
-      const slice = toUtcDateString(now);
+      const slice = requestedSlice ?? toUtcDateString(now);
       await db
         .insert(caseLawSources)
         .values({ id: sourceId, adapterKey, name: "Listing revision fixture" });
@@ -134,13 +153,13 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
         sourceId,
         now,
         slice,
-        seed: async (id, status) => {
+        seed: async (id, status, payload = oldPayload(id)) => {
           await db.insert(caseLawReconciliationItems).values({
             id: createSafeId<"caseLawReconciliationItem">(),
             sourceId,
             slice,
             identityKey: key(id),
-            payload: oldPayload(id),
+            payload,
             status,
             attempts:
               status === "terminal" ? RECONCILIATION_TERMINAL_ATTEMPTS : 2,
@@ -217,6 +236,174 @@ const publisher = (
 describe.skipIf(!enabled)(
   "reconciliation listing revisions on PostgreSQL",
   () => {
+    for (const adapter of ["pl-nsa", "pl-uokik"] as const) {
+      for (const status of ["parked", "terminal"] as const) {
+        test(`${adapter} coordinate changes refresh retry inputs without changing the ${status} schedule`, async () => {
+          await withFixture(async (fixture) => {
+            const attempted: unknown[] = [];
+            const fixtureFiles = new URL(
+              "adapters/__fixtures__/",
+              import.meta.url,
+            );
+            const listing = await (async () => {
+              if (adapter === "pl-uokik") {
+                const view = readPlUokikView(
+                  await Bun.file(
+                    new URL("pl-uokik-view-head.json", fixtureFiles),
+                  ).json(),
+                );
+                const original =
+                  view?.rows.at(0) ?? panic("Missing UOKiK listing fixture");
+                const id =
+                  original.row.unid ?? panic("Missing UOKiK fixture identity");
+                return {
+                  id,
+                  previous: original.entry,
+                  current: { ...original.entry, "@position": "2" },
+                  revisionOf: plUokikAdapter.reconciliation.revisionOf,
+                  buildDecision: async (payload: unknown) => {
+                    attempted.push(payload);
+                    return { type: "detail-unavailable" } as const;
+                  },
+                };
+              }
+              const file = Bun.file(
+                new URL("pl-nsa-rows.parquet", fixtureFiles),
+              );
+              const crawler = createPlNsaCrawler({
+                snapshot: {
+                  ...PL_NSA_SNAPSHOT,
+                  revision: "1".repeat(40),
+                  shards: [
+                    {
+                      index: 0,
+                      path: "data/data_0.parquet",
+                      bytes: file.size,
+                      sha256: "",
+                      rows: 28,
+                    },
+                  ],
+                },
+                source: localFileShardSource(
+                  file.name ?? panic("Missing parquet path"),
+                ),
+              });
+              const item =
+                (
+                  await crawler.listSlicePage({ slice: "00", page: 0 })
+                ).items.at(0) ?? panic("Missing NSA listing fixture");
+              if (item.identity.type !== "document") {
+                panic("NSA listing fixture must have a document identity");
+              }
+              const current = {
+                revision: "1".repeat(40),
+                shard: 0,
+                row: 0,
+                identity: item.identity.sourceDocumentId,
+              };
+              expect(item.payload).toEqual(current);
+              const previous = { ...current, revision: "0".repeat(40) };
+              expect(await crawler.buildDecision(previous)).toEqual({
+                type: "unkeyable",
+              });
+              expect((await crawler.buildDecision(current)).type).toBe("built");
+              return {
+                id: item.identity.sourceDocumentId,
+                previous,
+                current,
+                revisionOf: plNsaAdapter.reconciliation.revisionOf,
+                buildDecision: async (payload: unknown) => {
+                  attempted.push(payload);
+                  const outcome = await crawler.buildDecision(payload);
+                  // Keep the retry observable in the ledger after proving the current snapshot builds.
+                  return outcome.type === "built"
+                    ? ({ type: "detail-unavailable" } as const)
+                    : outcome;
+                },
+              };
+            })();
+            expect(listing.current).not.toEqual(listing.previous);
+            expect(listing.revisionOf(listing.current)).toEqual(
+              listing.revisionOf(listing.previous),
+            );
+            await fixture.seed(listing.id, status, listing.previous);
+            const reconciliation: SourceReconciliation = {
+              ...publisher(fixture.slice, [], attempted),
+              sliceOf: () => fixture.slice,
+              revisionOf: listing.revisionOf,
+              listSlicePage: async () => ({
+                items: [
+                  {
+                    identity: {
+                      type: "document",
+                      sourceDocumentId: listing.id,
+                    },
+                    payload: listing.current,
+                  },
+                ],
+                totalPages: 1,
+              }),
+              buildDecision: listing.buildDecision,
+            };
+            await fixture.walk({
+              ...reconciliation,
+              listSlicePage: async () => ({
+                items: [
+                  {
+                    identity: {
+                      type: "document",
+                      sourceDocumentId: listing.id,
+                    },
+                    payload: listing.previous,
+                  },
+                ],
+                totalPages: 1,
+              }),
+            });
+            const before = await fixture.row(listing.id);
+            expect(before?.payloadHash).not.toBeNull();
+            await fixture.stale();
+            await fixture.walk(reconciliation);
+            expect(await fixture.row(listing.id)).toMatchObject({
+              payload: listing.current,
+              status,
+              attempts: before?.attempts,
+              revivalCount: before?.revivalCount,
+              nextAttemptAt: before?.nextAttemptAt,
+              lastAttemptAt: before?.lastAttemptAt,
+              lastError: before?.lastError,
+            });
+            expect(attempted).toEqual([]);
+            const versionBefore = await fixture.db.execute(
+              sql`SELECT xmin::text AS version FROM case_law_reconciliation_items WHERE source_id = ${fixture.sourceId}`,
+            );
+            await fixture.stale();
+            await fixture.walk(reconciliation);
+            const versionAfter = await fixture.db.execute(
+              sql`SELECT xmin::text AS version FROM case_law_reconciliation_items WHERE source_id = ${fixture.sourceId}`,
+            );
+            expect(versionBefore).toHaveLength(1);
+            expect(versionAfter).toEqual(versionBefore);
+            if (status === "terminal") {
+              expect(attempted).toEqual([]);
+              return;
+            }
+            await fixture.db
+              .update(caseLawReconciliationItems)
+              .set({ nextAttemptAt: fixture.now })
+              .where(eq(caseLawReconciliationItems.sourceId, fixture.sourceId));
+            await fixture.walk(reconciliation);
+            expect(attempted).toEqual([listing.current]);
+            expect(await fixture.row(listing.id)).toMatchObject({
+              status: RECONCILIATION_ITEM_STATUS.PARKED,
+              attempts: 3,
+              revivalCount: 0,
+              lastError: "detail-unavailable",
+            });
+          }, "00");
+        }, 60_000);
+      }
+    }
     for (const status of ["parked", "terminal"] as const) {
       test(`a completed walk reopens a corrected ${status} identity and retries U2`, async () => {
         await withFixture(async (fixture) => {

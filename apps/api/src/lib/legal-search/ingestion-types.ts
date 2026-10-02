@@ -1,4 +1,4 @@
-// parser-output-unchanged: SyncPage adds optional failure telemetry; decision parsing and stored output are unchanged.
+// parser-output-unchanged: The required reconciliation revision projection changes retry bookkeeping, not parsed decision output.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -1059,7 +1059,10 @@ export type HeldRowRules = {
  * what it holds for a slice, independently of the cursor the crawl advanced.
  */
 export type SourceReconciliation = SourceSliceWalk & {
-  /** Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions. */
+  /**
+   * Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions.
+   * Classify each new payload field as content/identity (include it) or traversal/repair metadata (exclude it).
+   */
   revisionOf: (payload: unknown) => unknown;
   /**
    * Whether a stored row counts as held only when it carries the document,

@@ -587,9 +587,14 @@ export const refreshTrackedReconciliationItems = async (
           status: caseLawReconciliationItems.status,
           revivalCount: caseLawReconciliationItems.revivalCount,
           payloadHash: caseLawReconciliationItems.payloadHash,
+          rawPayloadChanged: sql<boolean>`${caseLawReconciliationItems.payload} IS DISTINCT FROM incoming.payload`,
           payload: sql<unknown>`CASE WHEN ${caseLawReconciliationItems.payloadHash} IS NULL THEN ${caseLawReconciliationItems.payload} ELSE NULL END`,
         })
         .from(caseLawReconciliationItems)
+        .innerJoin(
+          sql`jsonb_to_recordset(${JSON.stringify(page)}::text::jsonb) AS incoming("identityKey" text, payload jsonb)`,
+          sql`${caseLawReconciliationItems.identityKey} = incoming."identityKey"`,
+        )
         .where(
           and(
             eq(caseLawReconciliationItems.sourceId, sourceId),
@@ -599,7 +604,7 @@ export const refreshTrackedReconciliationItems = async (
             ),
           ),
         )
-        .for("update")
+        .for("update", { of: caseLawReconciliationItems })
         .limit(page.length);
       const updates = [];
       const refreshed: string[] = [];
@@ -622,7 +627,12 @@ export const refreshTrackedReconciliationItems = async (
         if (revived) {
           refreshed.push(row.identityKey);
         }
-        if (changed || row.payloadHash === null || row.slice !== item.slice) {
+        if (
+          changed ||
+          row.rawPayloadChanged ||
+          row.payloadHash === null ||
+          row.slice !== item.slice
+        ) {
           updates.push({
             id: row.id,
             slice: item.slice,

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, TaggedError, panic } from "better-result";
 import * as cheerio from "cheerio";
 
@@ -2925,6 +2926,7 @@ export const czUsAdapter = defineSourceAdapter({
             sourceUrl: payload["sourceUrl"],
             sz: payload["sz"],
             ecli: payload["ecli"],
+            counter: payload["counter"],
             listingDocketMissing: payload["listingDocketMissing"],
           }
         : null,

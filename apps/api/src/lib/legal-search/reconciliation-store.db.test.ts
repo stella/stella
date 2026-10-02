@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -638,7 +639,9 @@ test("position-only listing movement keeps retry state and unchanged visits do n
     errorTag: "unavailable",
   };
   await retireReconciliationItem(scopedDb, options);
-  const before = await readRow(sourceId, DOCUMENT_KEY);
+  const before =
+    (await readRow(sourceId, DOCUMENT_KEY)) ??
+    panic("Expected the retained coordinate fixture");
   const refresh = await refreshTrackedReconciliationItems(scopedDb, {
     sourceId,
     leaseToken: LEASE_TOKEN,
@@ -656,7 +659,10 @@ test("position-only listing movement keeps retry state and unchanged visits do n
   if (refresh.outcome === "refreshed") {
     expect(refresh.refreshedIdentityKeys.size).toBe(0);
   }
-  expect(await readRow(sourceId, DOCUMENT_KEY)).toEqual(before);
+  expect(await readRow(sourceId, DOCUMENT_KEY)).toEqual({
+    ...before,
+    payload: { content: "decision", position: 2 },
+  });
   await refreshTrackedReconciliationItems(scopedDb, {
     sourceId,
     leaseToken: LEASE_TOKEN,

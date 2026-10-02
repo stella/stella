@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 /**
  * Polish administrative courts, imported from the Hugging Face dataset
  * `JuDDGES/pl-nsa` (CC BY 4.0).

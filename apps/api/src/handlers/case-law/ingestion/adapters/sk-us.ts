@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 import * as v from "valibot";
 /**

@@ -1,4 +1,4 @@
-// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result, TaggedError } from "better-result";
 
 import { classifyFailure } from "@stll/errors";

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { Result, panic } from "better-result";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
