@@ -1792,7 +1792,7 @@
       "GET /v1/workspaces/navigation": 1
     },
     "dbQueries": {
-      "GET /api/auth/get-session": 0,
+      "GET /api/auth/get-session": 2,
       "GET /api/auth/organization/get-active-member-role": 2,
       "GET /health": 0,
       "GET /v1/chat/threads": 4,
