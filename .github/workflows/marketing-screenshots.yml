@@ -68,6 +68,7 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
+          ref: ${{ inputs.ref }}
 
       - name: Capture marketing screenshots
         uses: ./.github/actions/marketing-capture

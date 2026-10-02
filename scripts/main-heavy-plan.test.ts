@@ -1,0 +1,330 @@
+import { panic } from "better-result";
+import { expect, test } from "bun:test";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
+import { Script } from "node:vm";
+import * as v from "valibot";
+
+import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
+
+const root = new URL("../", import.meta.url).pathname;
+const source = readFileSync(
+  new URL("../.github/workflows/ci.yml", import.meta.url),
+  "utf-8",
+);
+const stepSchema = v.looseObject({
+  name: v.optional(v.string()),
+  run: v.optional(v.string()),
+  env: v.optional(v.record(v.string(), v.string())),
+});
+const workflowSchema = v.object({
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      if: v.optional(v.string()),
+      needs: v.optional(v.union([v.string(), v.array(v.string())])),
+      steps: v.optional(v.array(stepSchema)),
+    }),
+  ),
+});
+const workflow = v.parse(workflowSchema, Bun.YAML.parse(source));
+const heavy = mainHeavyJobs(workflow);
+const outcome = workflow.jobs["ci-result"]?.steps?.find(
+  ({ name }) => name === "Evaluate CI outcome",
+);
+const outcomeEnv = outcome?.env;
+if (!outcome?.run || !outcomeEnv) {
+  panic("Missing CI outcome step");
+}
+const scopes = v.parse(
+  v.record(v.string(), v.nullable(v.string())),
+  JSON.parse(outcomeEnv["JOB_SCOPES"] ?? ""),
+);
+const expectedHeavy = Object.keys(scopes).filter(
+  (job) => !THIN_JOBS.some((thin) => thin === job),
+);
+const ciNeeds = v.parse(v.array(v.string()), workflow.jobs["ci-result"]?.needs);
+
+const selected = (condition: string, context: object) => {
+  const expression = condition.replaceAll(
+    /needs\.([\w-]+)/gu,
+    (_, job: string) => `needs[${JSON.stringify(job)}]`,
+  );
+  return new Script(`Boolean(${expression})`).runInNewContext(context);
+};
+const context = (
+  event: string,
+  heavyOnly: boolean,
+  plan: Record<string, string>,
+) => ({
+  github: { event_name: event, event: { pull_request: { draft: false } } },
+  inputs: { heavy_only: heavyOnly },
+  needs: Object.fromEntries(
+    ciNeeds.map((job) => [
+      job,
+      {
+        result:
+          heavyOnly && THIN_JOBS.some((thin) => thin === job)
+            ? "skipped"
+            : "success",
+        outputs: job === "ci-plan" ? plan : {},
+      },
+    ]),
+  ),
+  always: () => true,
+  cancelled: () => false,
+});
+
+const planned = (plan: Record<string, string>, job: string) => {
+  const scope = scopes[job];
+  return scope === null || (scope !== undefined && plan[scope] === "true");
+};
+const allPlanned = Object.fromEntries(
+  Object.values(scopes).flatMap((scope) =>
+    scope === null ? [] : [[scope, "true"]],
+  ),
+);
+const heavyPlan = {
+  ...allPlanned,
+  trusted: "true",
+  suite_depth: "full",
+  fix_tests_on_base_required: "false",
+};
+
+const assertCoverage = (jobs: string[]) => {
+  expect(new Set(jobs)).toEqual(new Set(expectedHeavy));
+  const scheduled = Object.entries(workflow.jobs)
+    .filter(
+      ([job, body]) =>
+        job !== "ci-plan" &&
+        job !== "ci-result" &&
+        ciNeeds.includes(job) &&
+        selected(body.if ?? "true", context("push", true, heavyPlan)),
+    )
+    .map(([job]) => job);
+  expect(new Set(scheduled)).toEqual(
+    new Set(jobs.filter((job) => planned(heavyPlan, job))),
+  );
+};
+
+test("main heavy scheduling equals the gated jobs minus thin checks", () => {
+  assertCoverage(heavy);
+  for (const thin of THIN_JOBS) {
+    expect(
+      selected(
+        workflow.jobs[thin]?.if ?? "true",
+        context("push", true, heavyPlan),
+      ),
+      thin,
+    ).toBe(false);
+  }
+  const planner = workflow.jobs["ci-plan"]?.steps?.find(
+    ({ name }) => name === "Derive heavy jobs",
+  );
+  expect(planner?.run).toContain(
+    'git show "$WORKFLOW_SHA:.github/workflows/ci.yml"',
+  );
+  expect(planner?.run).toContain(
+    'git show "$WORKFLOW_SHA:scripts/main-heavy-plan.ts"',
+  );
+  expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
+});
+
+test("dropping a heavy job cannot pass the scheduling invariant", () => {
+  const removed = heavy.at(0);
+  expect(removed).toBeDefined();
+  expect(() => assertCoverage(heavy.filter((job) => job !== removed))).toThrow(
+    "expect(received)",
+  );
+});
+
+test("heavy planning rejects gate drift instead of omitting a job", () => {
+  const mutated = structuredClone(workflow);
+  const needs = v.parse(v.array(v.string()), mutated.jobs["ci-result"]?.needs);
+  const result = mutated.jobs["ci-result"];
+  if (!result) {
+    panic("Missing result job");
+  }
+  result.needs = needs.filter((job) => job !== heavy.at(0));
+  expect(() => mainHeavyJobs(mutated)).toThrow(
+    "ci-result dependencies and JOB_SCOPES disagree",
+  );
+});
+
+test("original PR and merge-group job predicates keep their behavior", () => {
+  const base = Bun.spawnSync(["git", "merge-base", "origin/main", "HEAD"], {
+    cwd: root,
+  });
+  expect(base.exitCode).toBe(0);
+  const previous = Bun.spawnSync(
+    [
+      "git",
+      "show",
+      `${base.stdout.toString().trim()}:.github/workflows/ci.yml`,
+    ],
+    { cwd: root },
+  );
+  expect(previous.exitCode).toBe(0);
+  const original = v.parse(
+    workflowSchema,
+    Bun.YAML.parse(previous.stdout.toString()),
+  );
+  for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+    for (const depth of ["fast", "full"]) {
+      for (const required of ["true", "false"]) {
+        const plan = Object.fromEntries(
+          Object.keys(allPlanned).map((scope) => [scope, required]),
+        );
+        plan["trusted"] = "true";
+        plan["suite_depth"] = depth;
+        plan["heavy_web_build_required"] = "false";
+        for (const [job, body] of Object.entries(original.jobs)) {
+          expect(
+            selected(
+              workflow.jobs[job]?.if ?? "true",
+              context(event, false, plan),
+            ),
+            `${event}/${depth}/${required}/${job}`,
+          ).toBe(selected(body.if ?? "true", context(event, false, plan)));
+        }
+        expect(
+          selected(
+            workflow.jobs["heavy-web-build"]?.if ?? "true",
+            context(event, false, plan),
+          ),
+        ).toBe(false);
+      }
+    }
+  }
+});
+
+type EvaluateOptions = {
+  result: string;
+  isPlanned?: boolean;
+  planResult?: string;
+  thinResult?: string;
+};
+const evaluate = ({
+  result,
+  isPlanned = true,
+  planResult = "success",
+  thinResult = "skipped",
+}: EvaluateOptions) => {
+  const needs = Object.fromEntries(
+    ciNeeds.map((job) => {
+      let jobResult = "success";
+      if (job === "ci-plan") {
+        jobResult = planResult;
+      } else if (THIN_JOBS.some((thin) => thin === job)) {
+        jobResult = thinResult;
+      }
+      return [
+        job,
+        {
+          result: jobResult,
+          outputs:
+            job === "docker-checks"
+              ? {
+                  "agent-sandbox-docker": "success",
+                  "api-image-deps": "success",
+                }
+              : {},
+        },
+      ];
+    }),
+  );
+  const job = needs["mobile-build"];
+  if (!job) {
+    panic("Missing mobile job");
+  }
+  job.result = result;
+  const run = Bun.spawnSync(["bash", "-e", "-c", outcome.run ?? "exit 2"], {
+    cwd: root,
+    env: {
+      ...process.env,
+      ...outcomeEnv,
+      EVENT: "push",
+      HEAVY_ONLY: "true",
+      HEAVY_JOBS: JSON.stringify(heavy),
+      NEEDS: JSON.stringify(needs),
+      PLAN: JSON.stringify({
+        ...heavyPlan,
+        mobile_build_required: String(isPlanned),
+      }),
+      PLAN_RESULT: planResult,
+      TRUSTED: "true",
+      SUITE_DEPTH: "full",
+    },
+  });
+  return run.exitCode;
+};
+
+test("main heavy aggregation rejects failures, cancellations, timeouts and planned skips", () => {
+  for (const result of [
+    "success",
+    "failure",
+    "skipped",
+    "cancelled",
+    "timed_out",
+  ]) {
+    for (const isPlanned of [true, false]) {
+      const accepted =
+        result === "success" || (result === "skipped" && !isPlanned);
+      expect(evaluate({ result, isPlanned }), `${result}/${isPlanned}`).toBe(
+        accepted ? 0 : 1,
+      );
+    }
+  }
+  expect(evaluate({ result: "success", planResult: "failure" })).toBe(1);
+  expect(evaluate({ result: "success", planResult: "cancelled" })).toBe(1);
+});
+
+test("the reusable result gate allows skipped thin checks in heavy mode", () => {
+  expect(evaluate({ result: "success" })).toBe(0);
+});
+
+test("heavy scope selection plans full suites even on an empty main diff", () => {
+  const scope = workflow.jobs["ci-plan"]?.steps?.find(
+    ({ name }) => name === "Check changed file scope",
+  );
+  if (!scope?.run) {
+    panic("Missing changed file scope");
+  }
+  const directory = mkdtempSync(path.join(tmpdir(), "main-heavy-plan-"));
+  const output = path.join(directory, "output");
+  writeFileSync(output, "");
+  try {
+    const run = Bun.spawnSync(["bash", "-e", "-c", scope.run], {
+      cwd: root,
+      env: {
+        ...process.env,
+        EVENT_NAME: "push",
+        HEAVY_ONLY: "true",
+        SUITE_DEPTH: "full",
+        GITHUB_OUTPUT: output,
+      },
+    });
+    expect(run.exitCode, run.stderr.toString()).toBe(0);
+    const outputs = Object.fromEntries(
+      readFileSync(output, "utf-8")
+        .trim()
+        .split("\n")
+        .map((line) => line.split("=", 2)),
+    );
+    for (const key of [
+      "desktop_rust_checks_required",
+      "docker_checks_required",
+      "api_image_smoke_required",
+      "e2e_production_required",
+      "e2e_core_required",
+      "mobile_build_required",
+      "route_smoke_required",
+      "windows_scripts_required",
+    ]) {
+      expect(outputs[key], key).toBe("true");
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
