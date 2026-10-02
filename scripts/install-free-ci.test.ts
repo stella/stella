@@ -435,11 +435,15 @@ describe("install-free invocation classification", () => {
     ).toEqual(["install", "install", "files"]);
   });
 
-  test.each([
+  const continuationCases: readonly {
+    continuation: string;
+    kinds: Classification["type"][];
+  }[] = [
     { continuation: "true", kinds: ["install", "files"] },
     { continuation: `\${{ inputs.optional }}`, kinds: ["install", "files"] },
     { continuation: "false", kinds: ["install"] },
-  ])(
+  ];
+  test.each(continuationCases)(
     "an install with continue-on-error $continuation covers only successful steps",
     ({ continuation, kinds: expectedKinds }) => {
       for (const directive of [
