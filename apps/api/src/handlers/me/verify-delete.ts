@@ -3,6 +3,7 @@ import { t } from "elysia";
 
 import { createSafeSessionHandler } from "@/api/lib/api-handlers";
 import type { SessionHandlerConfig } from "@/api/lib/api-handlers";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import {
   ACCOUNT_DELETION_ERROR_CODE,
@@ -33,6 +34,7 @@ const config = {
 const deleteAccountVerify = createSafeSessionHandler(
   config,
   async function* (ctx) {
+    yield* checkDemoAccountOperation(ctx.user.email);
     const currentUserId = ctx.user.id;
     const { code, reassignments } = ctx.body;
 

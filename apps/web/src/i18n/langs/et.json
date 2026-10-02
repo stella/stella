@@ -2176,6 +2176,7 @@
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
+      "publicCountryUnavailable": "Selle riigi õigusaktid ja kohtupraktika ei ole saadaval. Valige teine riik.",
       "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
       "server": "Midagi läks valesti. Proovige uuesti.",
       "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",

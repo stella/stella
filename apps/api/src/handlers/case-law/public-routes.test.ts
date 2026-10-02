@@ -1,8 +1,32 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+} from "@stll/api-contract/public-country-capability";
+
 import { publicCaseLawRoute } from "@/api/handlers/case-law/public-routes";
 
 describe("public case-law routes", () => {
+  test.each(
+    PUBLIC_COUNTRIES.filter(
+      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+    ),
+  )(
+    "advertised %s reports its capability before reading data",
+    async (country) => {
+      const response = await publicCaseLawRoute.handle(
+        new Request(`http://localhost/case/decisions?country=${country}`),
+      );
+      expect(response.status).toBe(503);
+      expect(await response.json()).toMatchObject({
+        status: "unavailable",
+        country,
+        reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+      });
+    },
+  );
+
   test("rejects invalid public search source IDs before handler execution", async () => {
     const response = await publicCaseLawRoute.handle(
       new Request("http://localhost/case/decisions/search", {
@@ -41,33 +65,42 @@ describe("public case-law routes", () => {
     expect(await response.json()).toEqual({ message: "Invalid cursor" });
   });
 
-  test("rejects countries outside the public list before data access", async () => {
-    // A country the reader resolves and the corpus does not hold: admission,
-    // not spelling, so the answer is the same `not found` a missing decision
-    // gets. `Germany` states the same thing as a name rather than a code.
-    const requests = [
-      new Request("http://localhost/case/decisions?country=USA"),
-      new Request("http://localhost/case/decisions?country=Germany"),
-      new Request("http://localhost/case/decisions/facets?country=USA"),
-      new Request("http://localhost/case/decisions/status?country=USA"),
-      new Request("http://localhost/case/decisions/latest?country=USA"),
-      new Request(
-        "http://localhost/case/provisions/citing-decisions?jurisdiction=USA&work=synthetic",
-      ),
-      new Request(
-        "http://localhost/case/sitemap/decisions/shard?country=usa&year=2026&month=01",
-      ),
+  test("pending public countries return typed unavailable on every country-addressed route", async () => {
+    const urls = [
+      "/case/decisions?country=SVK",
+      "/case/decisions/facets?country=SVK",
+      "/case/decisions/status?country=SVK",
+      "/case/decisions/latest?country=SVK",
+      "/case/decisions/by-slug/a-case?country=SVK",
+      "/case/provisions/citing-decisions?jurisdiction=SVK&work=synthetic",
+      "/case/provisions/citation-counts?jurisdiction=SVK&eli=SK/2012/89",
+      "/case/sitemap/decisions/shard?country=svk&year=2026&month=01",
+    ];
+    const requests = urls.map((url) => new Request(`http://localhost${url}`));
+    requests.push(
       new Request("http://localhost/case/decisions/search", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ country: "USA", query: "synthetic" }),
+        body: JSON.stringify({ country: "SVK", query: "synthetic" }),
       }),
-    ];
-
+    );
     for (const request of requests) {
       const response = await publicCaseLawRoute.handle(request);
-      expect(response.status).toBe(404);
+      expect(response.status, request.url).toBe(503);
+      expect(await response.json()).toMatchObject({
+        status: "unavailable",
+        country: "SVK",
+        reason: "pending_public",
+        code: "public_country_unavailable",
+      });
     }
+  });
+
+  test("unadvertised countries remain a miss", async () => {
+    const response = await publicCaseLawRoute.handle(
+      new Request("http://localhost/case/decisions?country=Germany"),
+    );
+    expect(response.status).toBe(404);
   });
 
   test("every spelling of one country reaches the same admitted country", async () => {

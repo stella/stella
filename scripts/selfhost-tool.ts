@@ -189,7 +189,10 @@ const renderSelfhostDoc = () => {
   const documentWithContract = replaceGeneratedBlock(
     readFileSync(path.join(REPO_ROOT, SELFHOST_DOC_PATH), "utf-8"),
     SELFHOST_DOC_MARKERS,
-    renderSelfhostDocsContract(),
+    renderSelfhostDocsContract(
+      ENV_CATALOG.find(({ name }) => name === "DB_LOAD_GATE_EBS_SIGNAL")
+        ?.description ?? panic("Missing EBS load-gate environment description"),
+    ),
   );
   return replaceGeneratedBlock(
     documentWithContract,

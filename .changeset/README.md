@@ -17,6 +17,7 @@ include a Changeset describing the user-visible change and its semver impact:
 - `@stll/conditions`
 - `@stll/country-codes`
 - `@stll/docx-utils`
+- `@stll/mcp-kit`
 - `@stll/money`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`

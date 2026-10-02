@@ -268,7 +268,6 @@ if (isLocalDevOpen()) {
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
 const CORS_EXPOSED_HEADERS = [
-  "set-auth-token",
   "Content-Disposition",
   "X-Ai-Field-Errors",
   REQUEST_ID_HEADER,
