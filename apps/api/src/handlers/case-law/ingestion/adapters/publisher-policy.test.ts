@@ -376,13 +376,18 @@ describe("a run-scoped publisher rate limit", () => {
   });
 
   test("rejects rates above the gate's two requests per second", async () => {
-    await expect(
-      withPublisherRequestRateLimit({
-        gateId: "cellar-eu",
-        requestsPerSecond: 2.01,
-        operation: async () => "unreachable",
-      }),
-    ).rejects.toThrow("at most 2");
+    // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+    // type-aware lint; capture the refusal explicitly instead.
+    const refusal = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 2.01,
+      operation: async () => "unreachable",
+    }).then(
+      () => "accepted",
+      (error: unknown) =>
+        error instanceof Error ? error.message : String(error),
+    );
+    expect(refusal).toContain("at most 2");
   });
 });
 

@@ -260,7 +260,7 @@ describe("stored Formex refresh", () => {
     const outcome = await refreshEcjStoredFormex({
       stored: refreshStored(before),
       signal,
-      fetchFormex: () => Promise.resolve(response("<new-formex />")),
+      fetchFormex: async () => response("<new-formex />"),
     });
 
     expect(outcome.type).toBe("refreshed");
@@ -297,8 +297,7 @@ describe("stored Formex refresh", () => {
         }),
       }),
       signal,
-      fetchFormex: () =>
-        Promise.resolve(response(bytes, 200, "application/zip")),
+      fetchFormex: async () => response(bytes, 200, "application/zip"),
     });
 
     expect(outcome.type).toBe("refreshed");
@@ -325,7 +324,7 @@ describe("stored Formex refresh", () => {
         sourceDocumentId: `${CELEX}:fr`,
       },
       signal,
-      fetchFormex: () => Promise.resolve(response("<new-formex />")),
+      fetchFormex: async () => response("<new-formex />"),
     });
     expect(mismatched).toEqual({
       type: "write-rejected",
@@ -344,7 +343,8 @@ describe("stored Formex refresh", () => {
       await refreshEcjStoredFormex({
         stored: refreshStored(withoutNotice),
         signal,
-        fetchFormex: () => Promise.reject(new Error("must not fetch")),
+        fetchFormex: async () =>
+          await Promise.reject(new Error("must not fetch")),
       }),
     ).toEqual({ type: "notice-missing" });
 
@@ -361,7 +361,8 @@ describe("stored Formex refresh", () => {
           }),
         }),
         signal,
-        fetchFormex: () => Promise.reject(new Error("must not fetch")),
+        fetchFormex: async () =>
+          await Promise.reject(new Error("must not fetch")),
       }),
     ).toEqual({ type: "formex-not-located" });
 
@@ -383,7 +384,7 @@ describe("stored Formex refresh", () => {
           }),
         }),
         signal,
-        fetchFormex: () => Promise.resolve(response("", status)),
+        fetchFormex: async () => response("", status),
       });
       expect(outcome).toEqual({ type: expected });
     }
@@ -405,7 +406,7 @@ describe("stored Formex refresh", () => {
         }),
       }),
       signal,
-      fetchFormex: () => Promise.reject(refusal),
+      fetchFormex: async () => await Promise.reject(refusal),
     });
     expect(rateLimited).toEqual({
       type: "rate-limited",
@@ -430,8 +431,8 @@ describe("stored Formex refresh", () => {
         }),
       }),
       signal,
-      fetchFormex: () =>
-        Promise.reject(new Error("current row must not fetch")),
+      fetchFormex: async () =>
+        await Promise.reject(new Error("current row must not fetch")),
     });
     expect(outcome).toEqual({ type: "unchanged-already-current" });
   });
