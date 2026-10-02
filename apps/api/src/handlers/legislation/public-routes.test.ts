@@ -28,15 +28,21 @@ describe("public statute routes", () => {
   )(
     "advertised %s reports its capability before reading data",
     async (country) => {
-      const response = await publicLegislationRoute.handle(
-        new Request(`http://localhost/law/statutes?country=${country}`),
-      );
-      expect(response.status).toBe(503);
-      expect(await response.json()).toMatchObject({
-        status: "unavailable",
-        country,
-        reason: PUBLIC_COUNTRY_CAPABILITIES[country],
-      });
+      const urls = [
+        `/law/statutes?country=${country}`,
+        `/law/sitemap/statutes/shard?country=${country.toLowerCase()}`,
+      ];
+      for (const url of urls) {
+        const response = await publicLegislationRoute.handle(
+          new Request(`http://localhost${url}`),
+        );
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({
+          status: "unavailable",
+          country,
+          reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+        });
+      }
     },
   );
 
@@ -45,6 +51,7 @@ describe("public statute routes", () => {
       "/law/statutes?country=SVK",
       "/law/statutes/facets?country=SVK",
       "/law/statutes/by-slug/2012-89?country=SVK",
+      "/law/sitemap/statutes/shard?country=svk",
     ];
     const requests = urls.map((url) => new Request(`http://localhost${url}`));
     const search = await searchLegislationHandler(
