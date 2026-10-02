@@ -1,4 +1,6 @@
+import { createHash } from "node:crypto";
 import path from "node:path";
+import ts from "typescript";
 
 const REGISTRY_PATH =
   "apps/api/src/handlers/case-law/ingestion/adapters/adapter-registry.ts";
@@ -11,6 +13,100 @@ const PARSER_DIRECTORIES = [
 const OUTPUT_UNCHANGED = /^\s*\/\/\s*parser-output-unchanged:\s*(\S.*)$/u;
 const transpiler = new Bun.Transpiler({ loader: "ts" });
 const jsxTranspiler = new Bun.Transpiler({ loader: "tsx" });
+
+// Reviewed transport code shapes, with only scheduling literals masked. A new
+// import, export, parser, response branch, or use of a pacing value changes the
+// fingerprint and restores ordinary output ownership. Dependencies remain in
+// the closure; this never exempts an entire module or its imports. Renew a
+// fingerprint only after reviewing the full module and every masked use.
+const TRANSPORT_SHAPES = new Map([
+  [
+    `${ADAPTER_DIRECTORY}publisher-policy.ts`,
+    "8995fa6f09124c3ca81086c2be5c1e8ce1c39d736c3279ae1d6914f3195df10e",
+  ],
+  [
+    `${ADAPTER_DIRECTORY}retry.ts`,
+    "4ae35e4a5c1cd8ab389d277d1dd102bdf509093a4b9169c2051856c384247910",
+  ],
+]);
+const PACING_CONSTANTS = new Set([
+  "POLITE_INTERVAL_MS",
+  "NALUS_DAILY_REQUEST_LIMIT",
+  "NALUS_REQUEST_BUDGET_SHARE",
+]);
+const BACKOFF_DEFAULTS = new Set([
+  "baseMs",
+  "maxMs",
+  "baseDelayMs",
+  "maxDelayMs",
+]);
+
+const transportShape = (file: string, source: string): string => {
+  const ast = ts.createSourceFile(
+    file,
+    source,
+    ts.ScriptTarget.Latest,
+    true,
+    ts.ScriptKind.TS,
+  );
+  const masked = new Map<number, number>();
+  const policy = file === `${ADAPTER_DIRECTORY}publisher-policy.ts`;
+  const visit = (node: ts.Node) => {
+    if (ts.isNumericLiteral(node)) {
+      const parent = node.parent;
+      if (
+        policy &&
+        ts.isVariableDeclaration(parent) &&
+        ts.isIdentifier(parent.name) &&
+        PACING_CONSTANTS.has(parent.name.text) &&
+        ts.isVariableDeclarationList(parent.parent) &&
+        ts.isVariableStatement(parent.parent.parent) &&
+        ts.isSourceFile(parent.parent.parent.parent)
+      ) {
+        masked.set(node.getStart(ast), node.end);
+      }
+      if (
+        policy &&
+        ts.isPropertyAssignment(parent) &&
+        ts.isIdentifier(parent.name) &&
+        parent.name.text === "intervalMs" &&
+        parent.initializer === node
+      ) {
+        masked.set(node.getStart(ast), node.end);
+      }
+      if (
+        !policy &&
+        (ts.isParameter(parent) || ts.isBindingElement(parent)) &&
+        ts.isIdentifier(parent.name) &&
+        BACKOFF_DEFAULTS.has(parent.name.text) &&
+        parent.initializer === node
+      ) {
+        masked.set(node.getStart(ast), node.end);
+      }
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(ast);
+  const pieces: string[] = [];
+  let offset = 0;
+  for (const [start, end] of [...masked].toSorted(([a], [b]) => a - b)) {
+    pieces.push(source.slice(offset, start), "0");
+    // Only numeric literals enter the mask; retain every other source token.
+    offset = end;
+  }
+  pieces.push(source.slice(offset));
+  return ts
+    .createPrinter({ removeComments: true })
+    .printFile(
+      ts.createSourceFile(
+        file,
+        pieces.join(""),
+        ts.ScriptTarget.Latest,
+        true,
+        ts.ScriptKind.TS,
+      ),
+    );
+};
 
 type SourceTree = ReadonlyMap<string, string>;
 type StaticValue =
@@ -30,6 +126,7 @@ class StaticTree {
   private readonly versionDeclarations = new Map<string, Set<string>>();
   private readonly codeCache = new Map<string, string>();
   private readonly closureCache = new Map<string, Set<string>>();
+  private readonly transportSourceCache = new Map<string, string>();
 
   readonly files: SourceTree;
 
@@ -338,6 +435,20 @@ class StaticTree {
     let source = this.files.get(file);
     if (source === undefined) {
       return undefined;
+    }
+    if (TRANSPORT_SHAPES.has(file)) {
+      const cached = this.transportSourceCache.get(file);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const shape = transportShape(file, source);
+      const comparable =
+        createHash("sha256").update(shape).digest("hex") ===
+        TRANSPORT_SHAPES.get(file)
+          ? shape
+          : source;
+      this.transportSourceCache.set(file, comparable);
+      return comparable;
     }
     // Version declarations may share a module with parser helpers. Ignore only
     // their numeric values, so a bump does not demand another bump elsewhere.

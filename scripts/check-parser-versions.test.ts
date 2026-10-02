@@ -1,4 +1,6 @@
 import { expect, test } from "bun:test";
+import { readFileSync } from "node:fs";
+import path from "node:path";
 
 import { checkParserVersions, comparisonBase } from "./check-parser-versions";
 
@@ -465,4 +467,189 @@ test("published packages are external while unresolved workspace exports fail cl
       ),
     ]),
   );
+});
+
+// Real transport source enters the existing registry fixture. Dependencies are
+// inert source leaves: no publisher, Redis, logger, or adapter is initialized.
+const transportFixture = () => {
+  const tree = fixture();
+  const transpiler = new Bun.Transpiler({ loader: "ts" });
+  for (const name of ["publisher-policy", "retry"]) {
+    const file = `${ADAPTERS}${name}.ts`;
+    tree.set(
+      file,
+      readFileSync(path.join(import.meta.dir, "..", file), "utf-8"),
+    );
+  }
+  for (const name of ["publisher-policy", "retry"]) {
+    const file = `${ADAPTERS}${name}.ts`;
+    for (const { path: specifier } of transpiler.scanImports(
+      tree.get(file) ?? "",
+    )) {
+      let dependency: string | undefined;
+      if (specifier.startsWith("@/api/")) {
+        dependency = `apps/api/src/${specifier.slice("@/api/".length)}.ts`;
+      } else if (specifier.startsWith(".")) {
+        dependency = `${path.posix.join(ADAPTERS, specifier)}.ts`;
+      }
+      if (dependency !== undefined && !tree.has(dependency)) {
+        tree.set(dependency, "export {};\n");
+      }
+    }
+  }
+  for (const key of ["a", "b"]) {
+    const file = `${ADAPTERS}adapter-${key}.ts`;
+    tree.set(file, `import "./retry";\n${tree.get(file) ?? ""}`);
+  }
+  expect(changed(tree, tree)).toEqual([]);
+  return tree;
+};
+
+const PACING_EDITS = [
+  {
+    name: "publisher-policy",
+    before: "const POLITE_INTERVAL_MS = 500;",
+    after: "const POLITE_INTERVAL_MS = 750;",
+  },
+  {
+    name: "publisher-policy",
+    before: "NALUS_DAILY_REQUEST_LIMIT = 5000",
+    after: "NALUS_DAILY_REQUEST_LIMIT = 4500",
+  },
+  {
+    name: "publisher-policy",
+    before: "NALUS_REQUEST_BUDGET_SHARE = 0.96",
+    after: "NALUS_REQUEST_BUDGET_SHARE = 0.90",
+  },
+  {
+    name: "publisher-policy",
+    before: "intervalMs: 5000",
+    after: "intervalMs: 6000",
+  },
+  { name: "retry", before: "baseMs = 1000", after: "baseMs = 1200" },
+  { name: "retry", before: "maxMs = 30_000", after: "maxMs = 40_000" },
+  { name: "retry", before: "baseDelayMs = 1000", after: "baseDelayMs = 1200" },
+  {
+    name: "retry",
+    before: "maxDelayMs = 30_000",
+    after: "maxDelayMs = 40_000",
+  },
+];
+
+for (const { name, before, after } of PACING_EDITS) {
+  test(`reviewed ${name} pacing edit ${before} does not fan out`, () => {
+    const base = transportFixture();
+    const file = `${ADAPTERS}${name}.ts`;
+    const source = base.get(file) ?? "";
+    expect(source).toContain(before);
+    const head = new Map(base);
+    head.set(
+      file,
+      source.replace(before, () => after),
+    );
+    expect(head.get(file)).not.toBe(source);
+    expect(changed(base, head)).toEqual([]);
+  });
+}
+
+for (const name of ["publisher-policy", "retry"]) {
+  for (const mutation of [
+    'import "../parsers/parser-a";\n',
+    "export const parseTransport = (body: string) => JSON.parse(body);\n",
+    "export const normalizeTransport = (body: string) => body.trim();\n",
+    "export const mapTransport = (body: string) => ({ body });\n",
+    "export const output = () => `intervalMs: 123`;\n",
+  ]) {
+    test(`new output code in ${name} restores version enforcement: ${mutation.trim()}`, () => {
+      const base = transportFixture();
+      const head = new Map(base);
+      const file = `${ADAPTERS}${name}.ts`;
+      // Even a simultaneous allowed pacing edit cannot hide the mutation.
+      head.set(
+        file,
+        `${mutation}${(base.get(file) ?? "").replace("1000", "1100")}`,
+      );
+      expect(changed(base, head)).toEqual([
+        expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+        expect.stringContaining("test-b: parser version 1 must exceed base 1"),
+      ]);
+    });
+  }
+}
+
+test("transport response selection and publisher hosts remain output-owned", () => {
+  const base = transportFixture();
+  for (const { name, before, after } of [
+    { name: "retry", before: "status >= 500", after: "status >= 400" },
+    { name: "retry", before: "maxRetries = 2", after: "maxRetries = 3" },
+    {
+      name: "publisher-policy",
+      before: '"nalus.usoud.cz"',
+      after: '"example.com"',
+    },
+  ]) {
+    const head = new Map(base);
+    const file = `${ADAPTERS}${name}.ts`;
+    const source = base.get(file) ?? "";
+    expect(source).toContain(before);
+    head.set(
+      file,
+      source.replace(before, () => after),
+    );
+    expect(changed(base, head)).toHaveLength(2);
+  }
+});
+
+test("a parser edit still flags only its adapter after a shared pacing edit", () => {
+  const base = transportFixture();
+  const head = new Map(base);
+  const policy = `${ADAPTERS}publisher-policy.ts`;
+  head.set(
+    policy,
+    (base.get(policy) ?? "").replace("intervalMs: 5000", "intervalMs: 6000"),
+  );
+  head.set(`${PARSERS}parser-a.ts`, "export const parseA = () => 'changed';");
+  expect(changed(base, head)).toEqual([
+    expect.stringContaining("test-a: parser version 1 must exceed base 1"),
+  ]);
+});
+
+test("transport dependencies stay in the output closure", () => {
+  const base = transportFixture();
+  const head = new Map(base);
+  const gate = `${ADAPTERS}publisher-request-gate.ts`;
+  head.set(gate, "export const parseGate = () => 'changed';");
+  expect(changed(base, head)).toHaveLength(2);
+});
+
+test("pacing masks stop applying once either tree leaves the reviewed shape", () => {
+  const base = transportFixture();
+  const file = `${ADAPTERS}publisher-policy.ts`;
+  base.set(
+    file,
+    `${base.get(file) ?? ""}\nexport const output = () => NALUS_DAILY_REQUEST_LIMIT;`,
+  );
+  const head = new Map(base);
+  head.set(
+    file,
+    (base.get(file) ?? "").replace(
+      "NALUS_DAILY_REQUEST_LIMIT = 5000",
+      "NALUS_DAILY_REQUEST_LIMIT = 4500",
+    ),
+  );
+  expect(changed(base, head)).toHaveLength(2);
+});
+
+test("pacing expressions with new behavior still require version bumps", () => {
+  const base = transportFixture();
+  const head = new Map(base);
+  const file = `${ADAPTERS}publisher-policy.ts`;
+  head.set(
+    file,
+    (base.get(file) ?? "").replace(
+      "intervalMs: 5000",
+      "intervalMs: JSON.parse('5000')",
+    ),
+  );
+  expect(changed(base, head)).toHaveLength(2);
 });
