@@ -11,6 +11,7 @@ import {
   chatCodeModeSystemPrompt,
   chatScriptReadToolNames,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { CHAT_READ_SCRIPT_POLICY } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { runRegistryWriteTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-write-tool";
 import { buildChatWriteTools } from "@/api/handlers/chat/tools/registry-write-tools";
@@ -123,6 +124,30 @@ const contextFor = (
 };
 
 describe("feature descriptor discovery and admission", () => {
+  test.each([
+    "ordinary",
+    "enabled",
+    "hidden",
+    "missing",
+    "colleague",
+    "other-organization",
+  ] as const)(
+    "%s intersects script policy with caller feature access",
+    (kind) => {
+      const { context } = contextFor(kind);
+      const expected = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
+        ([name, policy]) =>
+          policy === "script" &&
+          (name !== "list_matters" || kind === "ordinary" || kind === "enabled")
+            ? [name]
+            : [],
+      );
+      expect(new Set<string>(chatScriptReadToolNames(context))).toEqual(
+        new Set(expected),
+      );
+    },
+  );
+
   for (const kind of [
     "missing",
     "hidden",
@@ -182,9 +207,7 @@ describe("feature descriptor discovery and admission", () => {
       expect(getMcpInstructions("default", context)).not.toContain(
         "prepare_feedback",
       );
-      expect(chatScriptReadToolNames(context)).not.toContain(
-        "list_matters",
-      );
+      expect(chatScriptReadToolNames(context)).not.toContain("list_matters");
       expect(chatCodeModeSystemPrompt([], context)).not.toContain(
         "list_matters",
       );
