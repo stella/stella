@@ -588,6 +588,14 @@ const lastOutput = (run: ReturnType<typeof fixture>, name?: string) =>
         }),
   );
 
+// bun-types declares `.rejects.toThrow` as void, so awaiting it trips
+// type-aware lint; capture the rejection explicitly instead.
+const rejectionOf = (promise: Promise<unknown>): Promise<unknown> =>
+  promise.then(
+    () => "resolved",
+    (error: unknown) => error,
+  );
+
 describe("contributor signature workflow", () => {
   test.each(["signed", "member"])(
     "unsigned opener cannot reuse fully signed or exempt commits (%s)",
@@ -910,7 +918,7 @@ describe("contributor signature workflow", () => {
       pulls: [pull(17, dependabot)],
       authorPreflightError: true,
     });
-    await expect(run.selectCredentials()).rejects.toThrow(
+    expect(String(await rejectionOf(run.selectCredentials()))).toContain(
       "Commit author preflight unavailable",
     );
     expect(run.credentials).toEqual({});
@@ -922,7 +930,7 @@ describe("contributor signature workflow", () => {
       pulls: [pull(17, dependabot)],
       authorsByCommit: { [HEAD]: { users: [dependabot], oid: OTHER_HEAD } },
     });
-    await expect(run.selectCredentials()).rejects.toThrow(
+    expect(String(await rejectionOf(run.selectCredentials()))).toContain(
       "CLA_INVALID_AUTHOR_LIST",
     );
     expect(run.credentials).toEqual({});
@@ -1013,7 +1021,7 @@ describe("contributor signature workflow", () => {
         },
         pulls: [pull(17, dependabot)],
       });
-      await expect(run.selectCredentials()).rejects.toThrow(
+      expect(String(await rejectionOf(run.selectCredentials()))).toContain(
         "CLA_UNTRUSTED_NOTIFICATION",
       );
       expect(run.created).toEqual([]);
