@@ -369,6 +369,70 @@ test("a compare-and-set skips a pointer changed by a concurrent writer", async (
   });
 });
 
+test("raw pointer completion compares nullable content types under an unchanged key", async () => {
+  const sourceId = await createSource();
+  for (const oldContentType of [null, "application/pdf"]) {
+    for (const currentContentType of [null, "application/pdf", "text/plain"]) {
+      const id = createSafeId<"caseLawDecision">();
+      const oldKey = `case-law/raw/legacy/${id}`;
+      const newKey = `case-law/raw/completed/${id}`;
+      await insertDecision({
+        sourceId,
+        id,
+        createdAt: "2026-03-01 12:00:00+00",
+        rawKey: oldKey,
+        contentType: oldContentType,
+      });
+      await db.execute(sql`
+        UPDATE case_law_decisions SET source_raw_content_type = ${currentContentType}
+        WHERE id = ${id}::uuid
+      `);
+      const before = executedRows(
+        await db.execute(sql`
+          SELECT to_jsonb(d) AS state FROM case_law_decisions d
+          WHERE id = ${id}::uuid
+        `),
+      );
+      const updated = executedRows(
+        await db.execute(
+          completeSkUsRawStatement({
+            sourceId,
+            id,
+            oldKey,
+            newKey,
+            oldContentType,
+          }),
+        ),
+      );
+      const unchanged = currentContentType === oldContentType;
+      expect(updated).toHaveLength(unchanged ? 1 : 0);
+      const after = executedRows(
+        await db.execute(sql`
+          SELECT to_jsonb(d) AS state FROM case_law_decisions d
+          WHERE id = ${id}::uuid
+        `),
+      );
+      if (!unchanged) {
+        expect(after).toEqual(before);
+        continue;
+      }
+      expect(
+        executedRows(
+          await db.execute(sql`
+            SELECT source_raw_s3_key, source_raw_content_type
+            FROM case_law_decisions WHERE id = ${id}::uuid
+          `),
+        ),
+      ).toEqual([
+        {
+          source_raw_s3_key: newKey,
+          source_raw_content_type: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        },
+      ]);
+    }
+  }
+});
+
 test("a compare-and-set skips a redacted decision", async () => {
   const sourceId = await createSource();
   const id = createSafeId<"caseLawDecision">();
