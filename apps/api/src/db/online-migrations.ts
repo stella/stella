@@ -385,21 +385,39 @@ type OnlineMigrationOptions = {
   }) => void;
 };
 
+/**
+ * Where the online phase stopped. An index build the database is not healthy
+ * enough to start, or that was cancelled for health, defers the phase at that
+ * index: every later step may depend on it, so none of them runs, and the
+ * caller runs the phase again after `retryAfterMs`.
+ */
+export type OnlineMigrationOutcome =
+  | { type: "complete" }
+  | { type: "deferred"; index: string; retryAfterMs: number };
+
+const COMPLETE = { type: "complete" } as const satisfies OnlineMigrationOutcome;
+
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
   options: OnlineMigrationOptions = {},
-): Promise<void> => await processOnlineMigrations(pool, "repair", options);
+): Promise<OnlineMigrationOutcome> =>
+  await processOnlineMigrations(pool, "repair", options);
 
 export const assertOnlineMigrationsApplied = async (
   pool: OnlineMigrationPool,
   options: OnlineMigrationOptions = {},
-): Promise<void> => await processOnlineMigrations(pool, "validate", options);
+): Promise<void> => {
+  const outcome = await processOnlineMigrations(pool, "validate", options);
+  if (outcome.type !== "complete") {
+    panic("Online migration validation cannot defer");
+  }
+};
 
 const processOnlineMigrations = async (
   pool: OnlineMigrationPool,
   operation: OnlineMigrationOperation,
   options: OnlineMigrationOptions,
-): Promise<void> => {
+): Promise<OnlineMigrationOutcome> => {
   const connection = await pool.reserve();
   let sessionStatus: "active" | "terminated" = "active";
   const sessionIsActive = () => sessionStatus === "active";
@@ -421,8 +439,22 @@ const processOnlineMigrations = async (
       await connection.execute("SET statement_timeout = '0'");
     }
 
-    await processOnlineIndexAt({ connection, operation, options });
-    await processOnlineIndexCutoverAt({ connection, operation, options });
+    const indexes = await processOnlineIndexAt({
+      connection,
+      operation,
+      options,
+    });
+    if (indexes.type === "deferred") {
+      return indexes;
+    }
+    const cutovers = await processOnlineIndexCutoverAt({
+      connection,
+      operation,
+      options,
+    });
+    if (cutovers.type === "deferred") {
+      return cutovers;
+    }
     if (operation === "repair") {
       await retireReplacedIndexAt(connection);
     }
@@ -434,6 +466,7 @@ const processOnlineMigrations = async (
         options.log ??
         ((record) => process.stderr.write(`${JSON.stringify(record)}\n`)),
     });
+    return COMPLETE;
   } finally {
     try {
       if (lockAcquired && sessionIsActive()) {
@@ -457,23 +490,26 @@ const processOnlineIndexAt = async ({
   operation,
   options,
   offset = 0,
-}: OnlineIndexWalkOptions): Promise<void> => {
+}: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
   const index = ONLINE_MIGRATION_INDEXES.at(offset);
   if (!index) {
-    return;
+    return COMPLETE;
   }
 
   if (operation === "repair") {
-    await ensureOnlineIndexValid({
+    const outcome = await ensureOnlineIndexValid({
       connection,
       index,
       gate: options.indexGate,
       reserveObserver: options.reserveObserver,
     });
+    if (outcome.type === "deferred") {
+      return outcome;
+    }
   } else {
     await assertIndexReady(connection, index);
   }
-  await processOnlineIndexAt({
+  return await processOnlineIndexAt({
     connection,
     operation,
     options,
@@ -486,18 +522,25 @@ const processOnlineIndexCutoverAt = async ({
   operation,
   options,
   offset = 0,
-}: OnlineIndexWalkOptions): Promise<void> => {
+}: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
   const cutover = ONLINE_MIGRATION_INDEX_CUTOVERS.at(offset);
   if (!cutover) {
-    return;
+    return COMPLETE;
   }
 
   if (operation === "repair") {
-    await completeIndexCutover({ connection, cutover, options });
+    const outcome = await completeIndexCutover({
+      connection,
+      cutover,
+      options,
+    });
+    if (outcome.type === "deferred") {
+      return outcome;
+    }
   } else {
     await assertIndexReady(connection, cutover.final);
   }
-  await processOnlineIndexCutoverAt({
+  return await processOnlineIndexCutoverAt({
     connection,
     operation,
     options,
@@ -774,7 +817,7 @@ export const ensureOnlineIndexValid = async ({
   index,
   gate,
   reserveObserver = openOnlineIndexObserver,
-}: EnsureOnlineIndexOptions): Promise<void> => {
+}: EnsureOnlineIndexOptions): Promise<OnlineMigrationOutcome> => {
   const initialState = await readIndexState(connection, index);
   if (initialState.type === "present") {
     assertIndexDefinition(index, initialState);
@@ -783,14 +826,14 @@ export const ensureOnlineIndexValid = async ({
       initialState.isReady &&
       (await readReindexArtifacts(connection, index)).length === 0
     ) {
-      return;
+      return COMPLETE;
     }
   } else if (!index.createSql) {
     panic(`Required migration index ${index.name} is missing`);
   }
   const observer = await reserveObserver();
   try {
-    let runtime = createOnlineIndexGate({
+    const runtime = createOnlineIndexGate({
       ...gate,
       connection,
       observer,
@@ -799,46 +842,46 @@ export const ensureOnlineIndexValid = async ({
       kind: initialState.type === "present" ? "index_repair" : "index_build",
     });
     try {
-      while (true) {
-        const outcome = await runtime.attempt(async (guardedConnection) => {
-          await cleanupFailedReindexArtifacts(guardedConnection, index);
-          const state = await readIndexState(guardedConnection, index);
-          if (state.type === "present") {
-            assertIndexDefinition(index, state);
-            if (state.isValid && state.isReady) {
-              return;
-            }
-            // An interrupted concurrent build can leave the index ready but
-            // invalid: PostgreSQL still maintains it, and a unique one still
-            // rejects duplicates. REINDEX builds the copy beside it and swaps
-            // only once the copy is valid, so enforcement never lapses; a
-            // DROP before CREATE would let a duplicate commit in between.
-            await guardedConnection.execute(
-              `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
-            );
+      const outcome = await runtime.attempt(async (guardedConnection) => {
+        await cleanupFailedReindexArtifacts(guardedConnection, index);
+        const state = await readIndexState(guardedConnection, index);
+        if (state.type === "present") {
+          assertIndexDefinition(index, state);
+          if (state.isValid && state.isReady) {
             return;
           }
+          // An interrupted concurrent build can leave the index ready but
+          // invalid: PostgreSQL still maintains it, and a unique one still
+          // rejects duplicates. REINDEX builds the copy beside it and swaps
+          // only once the copy is valid, so enforcement never lapses; a
+          // DROP before CREATE would let a duplicate commit in between.
           await guardedConnection.execute(
-            index.createSql ??
-              `CREATE ${index.isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(index.name)} ${index.definitionBody}`,
+            `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
           );
-        });
-        if (outcome === "done") {
-          await assertIndexReady(connection, index);
           return;
         }
-        await runtime.retry();
-        if (outcome === "retry") {
-          await runtime.close();
-          runtime = createOnlineIndexGate({
-            ...gate,
-            connection,
-            observer,
-            tableName: index.tableName,
-            name: index.name,
-            kind: "index_repair",
-          });
-        }
+        await guardedConnection.execute(
+          index.createSql ??
+            `CREATE ${index.isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(index.name)} ${index.definitionBody}`,
+        );
+      });
+      switch (outcome) {
+        case "done":
+          await assertIndexReady(connection, index);
+          return COMPLETE;
+        // Waiting here would hold the caller's corpus schema lane for as long
+        // as the database stays unhealthy. A build cancelled into INVALID is
+        // repaired, with repair priority, by the next run.
+        case "retry":
+        case "wait":
+          return {
+            type: "deferred",
+            index: index.name,
+            retryAfterMs: runtime.retryAfterMs,
+          };
+        default:
+          outcome satisfies never;
+          return panic(`Online index ${index.name}: unexpected gate outcome`);
       }
     } finally {
       await runtime.close();
@@ -858,7 +901,7 @@ const completeIndexCutover = async ({
   connection,
   cutover: { final, staged },
   options,
-}: CompleteIndexCutoverOptions): Promise<void> => {
+}: CompleteIndexCutoverOptions): Promise<OnlineMigrationOutcome> => {
   const finalState = await readIndexState(connection, final);
 
   if (finalState.type === "present") {
@@ -877,16 +920,19 @@ const completeIndexCutover = async ({
           `DROP INDEX CONCURRENTLY public.${quoteIdentifier(staged.name)}`,
         );
       }
-      return;
+      return COMPLETE;
     }
   }
 
-  await ensureOnlineIndexValid({
+  const stagedOutcome = await ensureOnlineIndexValid({
     connection,
     index: staged,
     gate: options.indexGate,
     reserveObserver: options.reserveObserver,
   });
+  if (stagedOutcome.type === "deferred") {
+    return stagedOutcome;
+  }
 
   if (finalState.type === "present") {
     await connection.execute(
@@ -897,6 +943,7 @@ const completeIndexCutover = async ({
     `ALTER INDEX public.${quoteIdentifier(staged.name)} RENAME TO ${quoteIdentifier(final.name)}`,
   );
   await assertIndexReady(connection, final);
+  return COMPLETE;
 };
 
 const POSTGRES_IDENTIFIER = /^[A-Za-z_][A-Za-z0-9_]*$/u;

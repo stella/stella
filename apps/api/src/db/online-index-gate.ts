@@ -28,8 +28,26 @@ import { isRecord } from "../lib/type-guards";
 import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
+/** How long index work has been held on database health. */
+type OnlineIndexHold =
+  | { type: "clear" }
+  | { type: "held"; since: number }
+  | { type: "alerted"; since: number };
+
+/**
+ * One hold shared by every gate of a migrate process. Each deferral ends its
+ * migrator run, so a per-gate hold would restart with every run and a long
+ * hold would never alert.
+ */
+export type OnlineIndexHoldRef = { current: OnlineIndexHold };
+
+export const createOnlineIndexHold = (): OnlineIndexHoldRef => ({
+  current: { type: "clear" },
+});
+
 export type OnlineIndexGateOptions = {
   config?: OnlineIndexConfig;
+  hold?: OnlineIndexHoldRef;
   clock?: () => number;
   readEbs?: () => Promise<Signal>;
   wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
@@ -350,6 +368,7 @@ export const createOnlineIndexGate = ({
   name,
   kind,
   config = readOnlineIndexConfig(),
+  hold = createOnlineIndexHold(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readEbs,
   cancelBackend = cancelWithIndependentObserver,
@@ -370,8 +389,6 @@ export const createOnlineIndexGate = ({
       }
       return await configuredEbs();
     });
-  let heldSince: number | null = null;
-  let holdAlerted = false;
   const emit = (record: unknown) =>
     log({ event: "online_index_decision", name, record });
   let lifecycle: "active" | "terminated" = "active";
@@ -389,17 +406,32 @@ export const createOnlineIndexGate = ({
     },
   });
   const markHeld = (record: unknown) => {
-    heldSince ??= clock();
+    const current = hold.current;
     emit(record);
-    if (!holdAlerted && isHeldTooLong({ heldSince }, clock(), config.health)) {
-      log({
-        event: "database_load_gate_held_too_long",
-        name,
-        heldSince,
-        now: clock(),
-        record,
-      });
-      holdAlerted = true;
+    switch (current.type) {
+      case "alerted":
+        return;
+      case "clear":
+        hold.current = { type: "held", since: clock() };
+        return;
+      case "held": {
+        const now = clock();
+        if (!isHeldTooLong({ heldSince: current.since }, now, config.health)) {
+          return;
+        }
+        log({
+          event: "database_load_gate_held_too_long",
+          name,
+          heldSince: current.since,
+          now,
+          record,
+        });
+        hold.current = { type: "alerted", since: current.since };
+        return;
+      }
+      default:
+        current satisfies never;
+        return panic("Unexpected online index hold state");
     }
   };
   const attempt = async (
@@ -443,8 +475,7 @@ export const createOnlineIndexGate = ({
       });
       return "wait";
     }
-    heldSince = null;
-    holdAlerted = false;
+    hold.current = { type: "clear" };
     try {
       const row = (
         await connection.query(
@@ -524,6 +555,6 @@ export const createOnlineIndexGate = ({
         await slot.close();
       }
     },
-    retry: async () => await wait(config.retryMs, new AbortController().signal),
+    retryAfterMs: config.retryMs,
   };
 };

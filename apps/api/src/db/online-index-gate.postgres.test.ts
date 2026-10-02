@@ -200,15 +200,17 @@ const blockBuild = async ({ blocker, table }: Fixture) => {
   );
 };
 const repair = async (fixture: Fixture, connection = fixture.connection) => {
-  await ensureOnlineIndexValid({
-    connection,
-    reserveObserver: async () => ({
-      ...fixture.observation,
-      release: () => undefined,
+  expect(
+    await ensureOnlineIndexValid({
+      connection,
+      reserveObserver: async () => ({
+        ...fixture.observation,
+        release: () => undefined,
+      }),
+      index: fixture.index,
+      gate: fixture.gate,
     }),
-    index: fixture.index,
-    gate: fixture.gate,
-  });
+  ).toEqual({ type: "complete" });
   expect(await indexState(fixture)).toMatchObject({ valid: true, ready: true });
   const invalid = await fixture.observer<
     { count: number }[]
@@ -273,7 +275,7 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
     });
   });
 
-  test("one runner cancels, retries with repair priority, and completes VALID", async () => {
+  test("a cancelled build defers its run, and the next run repairs it with repair priority", async () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);
       const priorities: (readonly OnlineMigrationParam[])[] = [];
@@ -289,45 +291,51 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           return await fixture.connection.query(statement, parameters);
         },
       };
-      await ensureOnlineIndexValid({
-        connection,
-        index: fixture.index,
-        reserveObserver: async () => ({
-          ...fixture.observation,
-          release: () => undefined,
-        }),
-        gate: {
-          ...fixture.gate,
-          readEbs: async () => {
-            readings++;
-            const unhealthy = readings === 2 || readings === 3;
-            return {
-              indicator: "ebs_balance",
-              kind: unhealthy ? "stop" : "normal",
-              value: unhealthy ? 1 : 100,
-              threshold: unhealthy ? 40 : 70,
-              observedAt: new Date(fixture.gate.clock()).toISOString(),
-              reason: "injected retry sequence",
-            };
+      const run = async () =>
+        await ensureOnlineIndexValid({
+          connection,
+          index: fixture.index,
+          reserveObserver: async () => ({
+            ...fixture.observation,
+            release: () => undefined,
+          }),
+          gate: {
+            ...fixture.gate,
+            readEbs: async () => {
+              readings++;
+              const unhealthy = readings === 2 || readings === 3;
+              return {
+                indicator: "ebs_balance",
+                kind: unhealthy ? "stop" : "normal",
+                value: unhealthy ? 1 : 100,
+                threshold: unhealthy ? 40 : 70,
+                observedAt: new Date(fixture.gate.clock()).toISOString(),
+                reason: "injected retry sequence",
+              };
+            },
+            wait: async (milliseconds, signal) => {
+              expect(milliseconds).toBe(fixture.gate.config.pollMs);
+              if (retryReached) {
+                await waitForAbort(milliseconds, signal);
+                return;
+              }
+              polls++;
+              expect(polls).toBeLessThanOrEqual(2);
+              await waitForPhase(fixture.observer, fixture.pid);
+            },
           },
-          wait: async (milliseconds, signal) => {
-            if (milliseconds === fixture.gate.config.retryMs) {
-              expect(await indexState(fixture)).toMatchObject({ valid: false });
-              retryReached = true;
-              await fixture.blocker`ROLLBACK`;
-              return;
-            }
-            if (retryReached) {
-              await waitForAbort(milliseconds, signal);
-              return;
-            }
-            polls++;
-            expect(polls).toBeLessThanOrEqual(2);
-            await waitForPhase(fixture.observer, fixture.pid);
-          },
-        },
+        });
+      // The cancelled run returns instead of sleeping, so a migrator can
+      // release its schema lane before the retry.
+      expect(await run()).toEqual({
+        type: "deferred",
+        index: fixture.name,
+        retryAfterMs: fixture.gate.config.retryMs,
       });
-      expect(retryReached).toBe(true);
+      expect(await indexState(fixture)).toMatchObject({ valid: false });
+      retryReached = true;
+      await fixture.blocker`ROLLBACK`;
+      expect(await run()).toEqual({ type: "complete" });
       expect(priorities).toHaveLength(2);
       const namespace = priorities.at(0)?.at(0);
       expect(typeof namespace).toBe("number");

@@ -16,7 +16,12 @@ import nodePath from "node:path";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import { assertMigrationHistory } from "../lib/db/migration-history";
 import { withGatedTestClients } from "../tests/gated-test-database";
-import { runMigrations } from "./migration-runner";
+import {
+  CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL,
+  isCorpusSchemaLaneGranted,
+} from "./corpus-schema-lane";
+import { runMigrations, runMigrationsUntilSettled } from "./migration-runner";
+import type { OnlineMigrationOutcome } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -32,6 +37,9 @@ const INSERT_B = "INSERT INTO migration_probe (event) VALUES ('B');";
 const INSERT_C = "INSERT INTO migration_probe (event) VALUES ('C');";
 const CREATE_PROBE_B = `CREATE TABLE migration_probe (event text NOT NULL);--> statement-breakpoint\n${INSERT_B}`;
 const CORPUS_DIR = nodePath.resolve(import.meta.dir, "../../drizzle");
+const ONLINE_COMPLETE = {
+  type: "complete",
+} as const satisfies OnlineMigrationOutcome;
 
 setDefaultTimeout(120_000);
 
@@ -128,6 +136,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
                   migrationsFolder: folder,
                   runOnline: async () => {
                     await onOnline?.();
+                    return ONLINE_COMPLETE;
                   },
                 });
               } finally {
@@ -385,6 +394,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             runOnline: async () => {
               entered.resolve(undefined);
               await release.promise;
+              return ONLINE_COMPLETE;
             },
           });
           try {
@@ -392,7 +402,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const secondRun = runMigrations({
               connection: second,
               migrationsFolder: folder,
-              runOnline: async () => undefined,
+              runOnline: async () => ONLINE_COMPLETE,
             });
             await waitUntilBlocked(observer, pidRow.pid);
             release.resolve(undefined);
@@ -407,6 +417,82 @@ if (!runPostgresTests || databaseUrl === undefined) {
             await firstRun.catch(() => undefined);
             first.release();
             second.release();
+          }
+        });
+      });
+    });
+
+    /**
+     * A held index build must not keep corpus writers out: they wait for the
+     * lane only within a bounded budget and then fail. The deferred run
+     * releases the lane, reports no completion, and a later run resumes.
+     */
+    test("a deferred online phase releases the lane while it waits and settles on a later run", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, openClient }) => {
+          const laneOpenToWriters = async () =>
+            await observer.begin(async (tx) =>
+              isCorpusSchemaLaneGranted(
+                await tx.unsafe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL),
+              ),
+            );
+          const deferred = {
+            type: "deferred",
+            index: "probe_idx",
+            retryAfterMs: 7,
+          } as const satisfies OnlineMigrationOutcome;
+          const connection = await openClient().reserve();
+          try {
+            const single = await runMigrations({
+              connection,
+              migrationsFolder: folder,
+              runOnline: async () => {
+                expect(await laneOpenToWriters()).toBe(false);
+                return deferred;
+              },
+            });
+            expect(single).toMatchObject({
+              status: "online_deferred",
+              index: deferred.index,
+              insertedNames: [A],
+            });
+            expect(await laneOpenToWriters()).toBe(true);
+
+            const outcomes: OnlineMigrationOutcome[] = [
+              deferred,
+              deferred,
+              ONLINE_COMPLETE,
+            ];
+            const holds = new Set<unknown>();
+            const sleeps: number[] = [];
+            const settled = await runMigrationsUntilSettled({
+              connection,
+              migrationsFolder: folder,
+              runOnline: async (_pool, options) => {
+                holds.add(options?.indexGate?.hold);
+                expect(await laneOpenToWriters()).toBe(false);
+                const outcome = outcomes.shift();
+                if (outcome === undefined) {
+                  throw new Error("Online phase ran after it completed");
+                }
+                return outcome;
+              },
+              sleep: async (milliseconds) => {
+                sleeps.push(milliseconds);
+                expect(await laneOpenToWriters()).toBe(true);
+              },
+            });
+            expect(appliedResult(settled).insertedNames).toEqual([]);
+            expect(outcomes).toEqual([]);
+            expect(sleeps).toEqual([7, 7]);
+            expect(holds.size).toBe(1);
+            expect(await laneOpenToWriters()).toBe(true);
+            expect(await probeEvents(observer)).toEqual(["A"]);
+            expect(
+              (await ledgerRows(observer)).map(({ name }) => name),
+            ).toEqual([A]);
+          } finally {
+            connection.release();
           }
         });
       });
@@ -621,7 +707,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   await runMigrations({
                     connection,
                     migrationsFolder: corpusFolder,
-                    runOnline: async () => undefined,
+                    runOnline: async () => ONLINE_COMPLETE,
                   }),
                 );
                 expect(result.predictedNames).toEqual([]);

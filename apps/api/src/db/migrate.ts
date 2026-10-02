@@ -4,7 +4,7 @@ import nodePath from "node:path";
 
 // Relative imports: this entrypoint also ships as a loose file without tsconfig.
 import { resolveDatabaseUrl } from "../db-url";
-import { runMigrations } from "./migration-runner";
+import { runMigrationsUntilSettled } from "./migration-runner";
 
 const url = resolveDatabaseUrl();
 if (!url) {
@@ -18,7 +18,10 @@ const client = new SQL({ url, max: 1 });
 const migrationsFolder = nodePath.resolve(import.meta.dir, "../../drizzle");
 const connection = await client.reserve();
 try {
-  const result = await runMigrations({ connection, migrationsFolder });
+  const result = await runMigrationsUntilSettled({
+    connection,
+    migrationsFolder,
+  });
   if (result.status === "applied") {
     // oxlint-disable-next-line no-console -- migrate CLI entrypoint; stdout is its interface
     console.info("[migrate] migrations applied");

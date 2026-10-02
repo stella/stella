@@ -6,6 +6,7 @@ import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-sta
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
+import type { OnlineIndexGateOptions } from "./online-index-gate";
 import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
@@ -15,28 +16,29 @@ import {
 } from "./online-migrations";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
+const healthyIndexGate = {
+  config: {
+    ...readOnlineIndexConfig({}),
+    health: { ...defaultConfig, busyWindows: [] },
+  },
+  clock: testClock,
+  readEbs: async () => ({
+    indicator: "ebs_balance",
+    kind: "normal",
+    value: 100,
+    threshold: 70,
+    observedAt: new Date(testClock()).toISOString(),
+    reason: "Injected balance",
+  }),
+  log: () => undefined,
+} satisfies OnlineIndexGateOptions;
 const runOnlineMigrations: typeof runOnlineMigrationsWithGate = async (
   pool,
   options,
 ) =>
   await runOnlineMigrationsWithGate(pool, {
+    indexGate: healthyIndexGate,
     ...options,
-    indexGate: {
-      config: {
-        ...readOnlineIndexConfig({}),
-        health: { ...defaultConfig, busyWindows: [] },
-      },
-      clock: testClock,
-      readEbs: async () => ({
-        indicator: "ebs_balance",
-        kind: "normal",
-        value: 100,
-        threshold: 70,
-        observedAt: new Date(testClock()).toISOString(),
-        reason: "Injected balance",
-      }),
-      log: () => undefined,
-    },
     reserveObserver: async () => ({
       execute: async () => undefined,
       query: async (query) => {
@@ -123,6 +125,83 @@ describe("online migrations", () => {
       indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT),
     ).toBeGreaterThan(-1);
     expect(harness.released()).toBe(true);
+  });
+
+  /**
+   * The migrator runs this phase holding the exclusive corpus schema lane, so
+   * a gate that sleeps until health returns pauses every corpus writer for
+   * that long. A held build ends the phase instead, and nothing after it runs:
+   * later steps may depend on the index it would have built.
+   */
+  test("defers at an index the gate holds, without waiting or running a later step", async () => {
+    const heldIndexAt = ONLINE_MIGRATION_INDEXES.findIndex(
+      ({ name }) => name === REPORT_EXPORT_INDEX,
+    );
+    const laterIndexes = ONLINE_MIGRATION_INDEXES.slice(heldIndexAt + 1);
+    expect(laterIndexes.length).toBeGreaterThan(0);
+    const harness = createHarness({
+      indexStates: {
+        [REPORT_EXPORT_INDEX]: [undefined, undefined, undefined, true],
+      },
+    });
+    const waits: number[] = [];
+
+    const held = await runOnlineMigrations(harness.pool, {
+      indexGate: {
+        ...healthyIndexGate,
+        readEbs: async () => ({
+          indicator: "ebs_balance",
+          kind: "unknown",
+          value: null,
+          threshold: 70,
+          observedAt: null,
+          reason: "Injected unavailable metric",
+        }),
+        wait: async (milliseconds) => {
+          waits.push(milliseconds);
+        },
+      },
+    });
+
+    expect(held).toEqual({
+      type: "deferred",
+      index: REPORT_EXPORT_INDEX,
+      retryAfterMs: healthyIndexGate.config.retryMs,
+    });
+    expect(waits).toEqual([]);
+    expect(indexOfStatement(harness.statements, CREATE_INDEX_FRAGMENT)).toBe(
+      -1,
+    );
+    for (const { name } of laterIndexes) {
+      expect(indexOfStatement(harness.statements, `"${name}"`), name).toBe(-1);
+    }
+    expect(indexOfStatement(harness.statements, FILTER_INDEX)).toBe(-1);
+    expect(
+      indexOfStatement(harness.statements, "DROP INDEX CONCURRENTLY IF EXISTS"),
+    ).toBe(-1);
+    expect(indexOfStatement(harness.statements, "pg_constraint")).toBe(-1);
+    expect(
+      indexOfStatement(
+        harness.statements,
+        "pg_advisory_unlock(hashtext('stella-online-migrations'))",
+      ),
+    ).toBeGreaterThan(-1);
+    expect(harness.released()).toBe(true);
+
+    // The next run resumes at the held index once the gate admits it, and
+    // only then reaches the steps after it.
+    const resumedAt = harness.statements.length;
+    expect(await runOnlineMigrations(harness.pool)).toEqual({
+      type: "complete",
+    });
+    const resumed = harness.statements.slice(resumedAt);
+    expect(
+      indexOfStatement(
+        resumed,
+        `${CREATE_INDEX_FRAGMENT} "${REPORT_EXPORT_INDEX}"`,
+      ),
+    ).toBeGreaterThan(-1);
+    expect(indexOfStatement(resumed, "pg_constraint")).toBeGreaterThan(-1);
   });
 
   test("concurrently repairs an interrupted invalid build", async () => {

@@ -10,7 +10,11 @@ import {
 import { propertyConfig } from "@stll/property-testing";
 
 import { readOnlineIndexConfig } from "../env-online-index";
-import { createOnlineIndexGate } from "./online-index-gate";
+import {
+  createOnlineIndexGate,
+  createOnlineIndexHold,
+  type OnlineIndexHoldRef,
+} from "./online-index-gate";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 
 const EXPECTED_WAITING_PHASES = [
@@ -55,6 +59,7 @@ type HarnessOptions = {
   onObserverFailure?: () => void;
   cancelBackend?: (pid: number) => Promise<boolean>;
   onCancel?: () => void;
+  hold?: OnlineIndexHoldRef;
 };
 
 const makeHarness = ({
@@ -70,6 +75,7 @@ const makeHarness = ({
   onObserverFailure,
   cancelBackend,
   onCancel,
+  hold = createOnlineIndexHold(),
 }: HarnessOptions) => {
   let now = Date.parse("2026-10-02T12:00:00.000Z");
   let readingOffset = 0;
@@ -188,6 +194,7 @@ const makeHarness = ({
     name: "test_idx",
     kind: "index_build",
     config: gateConfig,
+    hold,
     clock: () => now,
     readEbs: async () => takeReading(),
     wait: async (_milliseconds, signal) => {
@@ -533,6 +540,64 @@ describe("online index gate", () => {
     );
     expect(alerts).toHaveLength(1);
     await harness.gate.close();
+  });
+
+  /**
+   * A held build ends its migrator run so the schema lane is released, and
+   * the next run creates a new gate. The hold must outlive the gate, or it
+   * would restart with every run and never alert.
+   */
+  test("a hold shared across gates alerts once, measured from the first gate", async () => {
+    const gateConfig = config({
+      health: { ...config().health, maxHeldMs: 100 },
+    });
+    const statement =
+      "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)";
+    const hold = createOnlineIndexHold();
+    const heldGate = () =>
+      makeHarness({
+        readings: [ebs(69, "degraded")],
+        config: gateConfig,
+        hold,
+      });
+    const alertsOf = (records: readonly unknown[]) =>
+      records.filter(
+        (record) =>
+          typeof record === "object" &&
+          record !== null &&
+          "event" in record &&
+          record.event === "database_load_gate_held_too_long",
+      );
+
+    const first = heldGate();
+    expect(await first.gate.attempt(statement)).toBe("wait");
+    await first.gate.close();
+    expect(alertsOf(first.records)).toEqual([]);
+    const heldSince = Date.parse("2026-10-02T12:00:00.000Z");
+    expect(hold.current).toEqual({ type: "held", since: heldSince });
+
+    const second = heldGate();
+    second.advanceClock(101);
+    expect(await second.gate.attempt(statement)).toBe("wait");
+    await second.gate.close();
+    expect(alertsOf(second.records)).toEqual([
+      expect.objectContaining({ heldSince, now: heldSince + 101 }),
+    ]);
+
+    const third = heldGate();
+    third.advanceClock(202);
+    expect(await third.gate.attempt(statement)).toBe("wait");
+    await third.gate.close();
+    expect(alertsOf(third.records)).toEqual([]);
+
+    const healthy = makeHarness({
+      readings: [ebs(90), ebs(90)],
+      config: gateConfig,
+      hold,
+    });
+    expect(await healthy.gate.attempt(statement)).toBe("done");
+    await healthy.gate.close();
+    expect(hold.current).toEqual({ type: "clear" });
   });
 
   test("prevents the next repair statement when cancellation lands between statements", async () => {
