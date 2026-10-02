@@ -19,7 +19,8 @@ import nodePath from "node:path";
  * something the application knows.
  *
  * This runs the real entrypoint in a scrubbed environment carrying only a
- * database URL, and asserts it gets as far as the connection. Pointed at a
+ * database URL and the load-gate setting, which migrate requires before it
+ * connects, and asserts it gets as far as the connection. Pointed at a
  * closed port on purpose: reaching "connection refused" proves the module graph
  * loaded without the API environment, which is the property under test, and
  * needs no database to prove it.
@@ -53,9 +54,8 @@ const ENVIRONMENT_VALIDATION_MESSAGE = "Invalid environment variables";
 
 setDefaultTimeout(60_000);
 
-test("the migrate entrypoint needs no variable beyond the database", async () => {
+const runMigrateEntrypoint = async (environment: Record<string, string>) => {
   await Bun.write(EMPTY_ENV_FILE, "");
-
   const migrate = Bun.spawn({
     cmd: ["bun", "run", `--env-file=${EMPTY_ENV_FILE}`, MIGRATE_ENTRYPOINT],
     env: {
@@ -64,16 +64,23 @@ test("the migrate entrypoint needs no variable beyond the database", async () =>
       NODE_ENV: "test",
       // `bun` itself has to be findable; nothing else is inherited.
       PATH: process.env["PATH"] ?? "",
+      ...environment,
     },
     stderr: "pipe",
     stdout: "pipe",
   });
-  const [stderr, stdout] = await Promise.all([
+  const [stderr, stdout, exitCode] = await Promise.all([
     new Response(migrate.stderr).text(),
     new Response(migrate.stdout).text(),
+    migrate.exited,
   ]);
-  await migrate.exited;
-  const output = `${stdout}\n${stderr}`;
+  return { exitCode, output: `${stdout}\n${stderr}` };
+};
+
+test("the migrate entrypoint needs only the database and its load-gate setting", async () => {
+  const { output } = await runMigrateEntrypoint({
+    DB_LOAD_GATE_EBS_SIGNAL: "disabled",
+  });
 
   // The failure that matters: env validation ran and rejected the scrubbed
   // environment. Its message names the missing variables, so a regression
@@ -82,6 +89,17 @@ test("the migrate entrypoint needs no variable beyond the database", async () =>
   // And the positive half, so this cannot pass by failing earlier for an
   // unrelated reason: the entrypoint reached the database connection.
   expect(output).toContain("ERR_POSTGRES_CONNECTION_REFUSED");
+});
+
+test("the migrate entrypoint rejects a missing load-gate setting before connecting", async () => {
+  const { exitCode, output } = await runMigrateEntrypoint({});
+
+  expect(exitCode).toBe(1);
+  expect(output).toContain("EbsConfigurationMissingError");
+  expect(output).toContain("DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER");
+  expect(output).toContain("DB_LOAD_GATE_EBS_SIGNAL=disabled");
+  // Failing before the connection: an index build never gets to hold.
+  expect(output).not.toContain("ERR_POSTGRES_CONNECTION_REFUSED");
 });
 
 for (const scenario of [
