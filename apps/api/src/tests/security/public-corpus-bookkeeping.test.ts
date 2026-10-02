@@ -4,12 +4,12 @@ import { pgPolicy, pgTable, pgView, text, uuid } from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
 
-import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "../../../../../../.oxlint-plugins/public-corpus-bookkeeping";
+import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "../../../../../.oxlint-plugins/audit-on-mutation/public-corpus-bookkeeping.ts";
 import {
   verifyPublicCorpusCatalog,
   verifyPublicCorpusSchema,
   type PublicCorpusCatalogPosture,
-} from "../../../../../../scripts/public-corpus-bookkeeping-verification";
+} from "../../../../../scripts/public-corpus-bookkeeping-verification.ts";
 
 const declaration = {
   schemaExport: "checkpoint",
@@ -64,7 +64,7 @@ describe("public corpus bookkeeping admission", () => {
         [],
       );
       const module: Record<string, unknown> = await import(
-        new URL(`../../../../../../${entry.moduleId}.ts`, import.meta.url).href
+        new URL(`../../../../../${entry.moduleId}.ts`, import.meta.url).href
       );
       expect(module[entry.schemaExport]).toBe(
         tableExports.get(entry.schemaExport),

@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { staticCorpusWriteTargets } from "../public-corpus-mutations";
+import { staticCorpusWriteTargets } from "../audit-on-mutation/public-corpus-mutations";
 import { lintSingleRule } from "./lint-single-rule";
 
 const rulePath = path.resolve(

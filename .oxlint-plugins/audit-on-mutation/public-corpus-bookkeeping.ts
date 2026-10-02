@@ -1,6 +1,6 @@
 import type { PgTable } from "drizzle-orm/pg-core";
 
-import type * as schema from "../apps/api/src/db/schema.ts";
+import type * as schema from "../../apps/api/src/db/schema.ts";
 
 type Schema = typeof schema;
 type TableExport = {

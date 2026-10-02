@@ -45,8 +45,8 @@ import type { Ranged, Variable } from "@oxlint/plugins";
 import {
   PUBLIC_CORPUS_BOOKKEEPING_TABLES,
   type PublicCorpusBookkeepingTable,
-} from "./public-corpus-bookkeeping.ts";
-import { isPublicCorpusMutation } from "./public-corpus-mutations.ts";
+} from "./audit-on-mutation/public-corpus-bookkeeping.ts";
+import { isPublicCorpusMutation } from "./audit-on-mutation/public-corpus-mutations.ts";
 import {
   type ImportedFromOptions,
   getCalleeName,
@@ -64,6 +64,8 @@ import {
 } from "./utils.ts";
 
 type RuleContext = ImportedFromOptions["context"];
+
+const RULE_NAME = "require-audit-on-mutation";
 
 const MUTATION_METHODS: ReadonlySet<string> = new Set([
   "insert",
@@ -384,7 +386,7 @@ export const createAuditOnMutationPlugin = (
   eslintCompatPlugin({
     meta: { name: "require-audit-on-mutation" },
     rules: {
-      "require-audit-on-mutation": {
+      [RULE_NAME]: {
         meta: {
           type: "problem",
           messages: {
