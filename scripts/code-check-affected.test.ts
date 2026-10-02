@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -17,6 +19,7 @@ import {
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
   DEPENDENCY_CACHE_INPUTS,
   LINT_ONLY_CACHE_INPUTS,
+  executeCheckCommands,
   planCheck,
   planFullCheck,
   PLUGIN_FIXTURE_INPUTS,
@@ -166,6 +169,7 @@ describe("affected code-check planning", () => {
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
       "--filter=./apps/web",
       "--filter=./packages/ui",
     ]);
@@ -176,6 +180,7 @@ describe("affected code-check planning", () => {
       "run",
       "typecheck:repo",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -329,6 +334,7 @@ describe("affected code-check planning", () => {
       "run",
       "lint",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
     expect(commands).toContainEqual([
       "bun",
@@ -337,6 +343,7 @@ describe("affected code-check planning", () => {
       "run",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
       "--filter=./apps/web",
     ]);
   });
@@ -370,6 +377,7 @@ describe("affected code-check planning", () => {
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -569,6 +577,7 @@ describe("full and affected code-check parity", () => {
       "lint",
       "typecheck",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   });
 
@@ -819,4 +828,139 @@ describe("parallel code-quality legs", () => {
       ).toHaveLength(1);
     }
   });
+});
+
+describe("check failure reporting", () => {
+  const commands = [
+    ["bun", "turbo", "lint"],
+    ["bun", "turbo", "typecheck"],
+    ["bun", "turbo", "typecheck:repo"],
+  ];
+  test("reports every failed command after executing the complete plan", () => {
+    const executed: (readonly string[])[] = [];
+    const output: string[] = [];
+    expect(
+      executeCheckCommands({
+        commands,
+        runner: (command) => {
+          executed.push(command);
+          return command.includes("typecheck") ? 0 : 2;
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(1);
+    expect(executed).toEqual(commands);
+    expect(output.join("")).toBe(
+      "code-check: 2 failed command(s)\n  (2) bun turbo lint\n  (2) bun turbo typecheck:repo\n",
+    );
+  });
+  test("all successful commands and an empty plan exit zero without a failure summary", () => {
+    for (const successfulCommands of [commands, []]) {
+      const executed: (readonly string[])[] = [];
+      const output: string[] = [];
+      expect(
+        executeCheckCommands({
+          commands: successfulCommands,
+          runner: (command) => {
+            executed.push(command);
+            return 0;
+          },
+          write: (line) => {
+            output.push(line);
+          },
+        }),
+      ).toBe(0);
+      expect(executed).toEqual(successfulCommands);
+      expect(output).toEqual([]);
+    }
+  });
+  test("dry runs show the same continuation flags without executing checks", () => {
+    const plannedCommands = scopedCommands({
+      type: "scoped",
+      lint: { type: "all" },
+      typecheck: { type: "all" },
+      rootLintPaths: [],
+      rootChecks: ["repo-typecheck"],
+    });
+    const output: string[] = [];
+    expect(
+      executeCheckCommands({
+        commands: plannedCommands,
+        dryRun: true,
+        runner: () => {
+          throw new Error("dry run executed a check");
+        },
+        write: (line) => {
+          output.push(line);
+        },
+      }),
+    ).toBe(0);
+    expect(output.join("")).toBe(
+      plannedCommands.map((command) => `  ${command.join(" ")}\n`).join(""),
+    );
+    expect(plannedCommands.length).toBeGreaterThan(0);
+    for (const command of plannedCommands) {
+      expect(command).toContain("--continue=dependencies-successful");
+    }
+  });
+});
+
+test("the CLI completes later checks, reports failures, and propagates its exit code", () => {
+  const directory = mkdtempSync(path.join(tmpdir(), "code-check-runner-"));
+  const log = path.join(directory, "commands.log");
+  const fakeRunner = `#!/bin/sh
+printf '%s\n' "$*" >> "$CHECK_COMMAND_LOG"
+case "$CHECK_FAIL:$*" in
+  yes:*"turbo run lint"*|yes:*"turbo run typecheck:repo"*) exit 2 ;;
+esac
+`;
+  for (const executable of ["bun", "bash"]) {
+    writeFileSync(path.join(directory, executable), fakeRunner, {
+      mode: 0o755,
+    });
+  }
+  try {
+    for (const failure of ["yes", "no"]) {
+      writeFileSync(log, "");
+      const result = Bun.spawnSync(
+        [
+          process.execPath,
+          "--no-env-file",
+          path.join(import.meta.dir, "code-check-affected.ts"),
+          "--all",
+          "--leg",
+          "rest",
+        ],
+        {
+          cwd: path.resolve(import.meta.dir, ".."),
+          env: {
+            ...process.env,
+            PATH: `${directory}:${process.env["PATH"] ?? ""}`,
+            CHECK_COMMAND_LOG: log,
+            CHECK_FAIL: failure,
+          },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      const output = result.stdout.toString();
+      const commands = readFileSync(log, "utf-8");
+      expect(commands).toContain("turbo run lint typecheck");
+      expect(commands).toContain("turbo run typecheck:repo");
+      expect(result.exitCode, result.stderr.toString()).toBe(
+        failure === "yes" ? 1 : 0,
+      );
+      if (failure === "yes") {
+        expect(output).toContain("code-check: 2 failed command(s)");
+        expect(output).toContain("  (2) bun --bun turbo run lint typecheck");
+        expect(output).toContain("  (2) bun --bun turbo run typecheck:repo");
+      } else {
+        expect(output).not.toContain("failed command(s)");
+      }
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
