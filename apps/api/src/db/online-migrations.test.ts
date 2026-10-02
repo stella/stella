@@ -60,9 +60,13 @@ describe("online migrations", () => {
     "validates monitoring constraint $name once and rejects incomplete startup",
     async ({ name }) => {
       const harness = createHarness({ unvalidatedConstraints: [name] });
-      await expect(assertOnlineMigrationsApplied(harness.pool)).rejects.toThrow(
-        `constraint ${name} is not validated`,
+      const rejection = await assertOnlineMigrationsApplied(harness.pool).then(
+        () => null,
+        (error: unknown) => error,
       );
+      expect(rejection).toMatchObject({
+        message: `Online repair ${name} is not complete: constraint ${name} is not validated`,
+      });
       const beforeRepair = harness.statements.length;
       await runOnlineMigrations(harness.pool);
       await assertOnlineMigrationsApplied(harness.pool);
