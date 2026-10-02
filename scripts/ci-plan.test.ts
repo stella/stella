@@ -50,6 +50,7 @@ const runSelector = (
       "-e",
       "-c",
       `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
+desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
 ${selector}
@@ -3251,6 +3252,8 @@ test("every gated merge-group job has a required PR path or an explicit queue-on
     "VERSION",
     "apps/landing/src/pages/index.astro",
     "apps/api/src/modules/workspaces/workspace.test.ts",
+    "apps/desktop/src-tauri/src/lib.rs",
+    "apps/web/e2e/playwright.config.ts",
   ];
   const scopes = [...pathScopes];
   expect(
@@ -3402,9 +3405,15 @@ test("network-baseline PR coverage reuses the route-smoke profile and path scope
       file,
     ).toEqual(["true", "true"]);
   }
-  const network = jobSteps(ciJobs["route-smoke"]).find(
-    ({ name }) => name === "Check route network baseline",
-  );
+  // Loose steps keep `env`, which jobSteps' strict schema drops.
+  const network = v
+    .parse(
+      v.object({
+        steps: v.array(v.looseObject({ name: v.optional(v.string()) })),
+      }),
+      ciJobs["route-smoke"],
+    )
+    .steps.find(({ name }) => name === "Check route network baseline");
   const step = v.parse(
     v.object({ env: v.record(v.string(), v.string()), run: v.string() }),
     network,
