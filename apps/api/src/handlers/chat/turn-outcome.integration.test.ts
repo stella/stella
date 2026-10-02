@@ -164,13 +164,6 @@ const WHITESPACE_RULE: KnownRule = {
   oracles: [CHAT_ORACLE.liveEqualsReload],
 };
 
-/** The page of a summarized thread shows the thread, never the summary the
- *  model reads in its place, including when the turn pauses on a card. */
-const COMPACTION_SUMMARY_RULE: KnownRule = {
-  name: "a compacted thread's summary stays off the page",
-  oracles: [CHAT_ORACLE.liveEqualsReload],
-};
-
 /**
  * The rules a combination's turn does not keep yet. Each such combination
  * runs as a known finding under the rules' names: it must still break them,
@@ -193,9 +186,6 @@ const knownTurnRulesOf = ({
       position === "fallback")
   ) {
     rules.push(WHITESPACE_RULE);
-  }
-  if (shape === "tool-call" && position === "after-compaction") {
-    rules.push(COMPACTION_SUMMARY_RULE);
   }
   return rules;
 };
