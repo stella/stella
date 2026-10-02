@@ -118,11 +118,14 @@ const cappedStrictVersions = Array.from(
         LIMITS.corpusIndexSearchMaxRounds +
       1,
   },
-  () =>
+  (_, index) =>
     fixtureVersion({
       tail: "2002/701",
       title: "Pravidla závazků",
       text: "Závazek pohledávka patří do právního vztahu.",
+      validFrom: new Date(Date.UTC(2002, 0, index + 1))
+        .toISOString()
+        .slice(0, 10),
     }),
 );
 const VERSIONS = [
@@ -144,6 +147,12 @@ describe.skipIf(!runEngineTests)(
     const searchCalls: Parameters<typeof corpusClient.search>[0][] = [];
 
     beforeAll(async () => {
+      expect(
+        new Set(cappedStrictVersions.map((version) => version.eli)).size,
+      ).toBe(1);
+      expect(
+        new Set(cappedStrictVersions.map((version) => version.validFrom)).size,
+      ).toBe(cappedStrictVersions.length);
       databaseClient = await createTestPglite();
       const db = drizzle({ client: databaseClient });
       legislationDb = async <T>(
