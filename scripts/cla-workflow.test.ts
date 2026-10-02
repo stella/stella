@@ -279,7 +279,13 @@ const fixture = ({
             : []);
         return {
           data: {
-            commits,
+            commits:
+              typeof params["page"] === "number"
+                ? commits.slice(
+                    (params["page"] - 1) * 100,
+                    params["page"] * 100,
+                  )
+                : commits.slice(0, 250),
             total_commits: commits.length,
             merge_base_commit: {
               sha: groupAncestor ?? ancestryPull?.head.sha ?? BASE,
@@ -516,7 +522,9 @@ describe("contributor signature workflow", () => {
       signatures: [signature()],
       commitsByPull: {
         17: [
-          commit({ committer: { ...author, id: 19_864_447, login: "web-flow" } }),
+          commit({
+            committer: { ...author, id: 19_864_447, login: "web-flow" },
+          }),
         ],
       },
     });
@@ -529,7 +537,7 @@ describe("contributor signature workflow", () => {
     const commits = Array.from({ length: 250 }, (_, index) =>
       commit({
         user: index === 249 ? second : author,
-        sha: index.toString(16).padStart(40, "0"),
+        sha: index === 249 ? HEAD : index.toString(16).padStart(40, "0"),
       }),
     );
     const run = fixture({
@@ -595,6 +603,10 @@ describe("contributor signature workflow", () => {
         ],
       ],
     } satisfies FixtureOptions;
+    const verified = fixture(options);
+    await verified.execute();
+    expect(verified.errors).toEqual([]);
+    expect(lastOutput(verified).conclusion).toBe("success");
     const changed = fixture({ ...options, groupAncestor: BASE });
     await changed.execute();
     expect(changed.errors).toEqual(["CLA_GROUP_PULL_CHANGED"]);
@@ -604,6 +616,50 @@ describe("contributor signature workflow", () => {
     });
     await extra.execute();
     expect(extra.errors).toEqual(["CLA_GROUP_COMMIT_SNAPSHOT_CHANGED"]);
+  });
+
+  test("a 250 commit PR and its synthetic queue commit verify across comparison pages", async () => {
+    const groupHead = "f".repeat(40);
+    const commits = Array.from({ length: 250 }, (_, index) =>
+      commit({
+        sha: index === 249 ? HEAD : index.toString(16).padStart(40, "0"),
+      }),
+    );
+    const run = fixture({
+      event: "merge_group",
+      payload: {
+        merge_group: {
+          head_sha: groupHead,
+          base_sha: BASE,
+          base_ref: "refs/heads/main",
+          head_ref: "refs/heads/gh-readonly-queue/main/pr-17-deadbeef",
+        },
+      },
+      pulls: [{ ...pull(), commits: 250 }],
+      signatures: [signature()],
+      commitsByPull: { 17: commits },
+      groupedCommits: [...commits, commit({ sha: groupHead })],
+      queuePages: [
+        [
+          {
+            baseCommit: { oid: BASE },
+            headCommit: { oid: groupHead },
+            pullRequest: { number: 17 },
+          },
+        ],
+      ],
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run).conclusion).toBe("success");
+    const pages = run.requests
+      .filter(
+        ({ route, params }) =>
+          route.endsWith("/compare/{basehead}") &&
+          params["basehead"] === `${BASE}...${groupHead}`,
+      )
+      .map(({ params }) => params["page"]);
+    expect(pages).toEqual([1, 2, 3]);
   });
 
   test("more than 250 commits and incomplete commit lists fail closed", async () => {

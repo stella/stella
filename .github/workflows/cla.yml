@@ -67,6 +67,7 @@ jobs:
             const BRANCH = "cla-signatures";
             const MAX_WRITE_ATTEMPTS = 3;
             const MAX_PULL_COMMITS = 250;
+            const MAX_GROUP_COMMITS = MAX_PULL_COMMITS + 1;
             const { owner, repo } = context.repo;
             const api = github;
             const store = new github.constructor({ auth: process.env.CLA_STORE_TOKEN });
@@ -181,11 +182,20 @@ jobs:
                   basehead: `${pull.head.sha}...${groupEntry.headCommit.oid}`,
                 });
                 if (ancestry.merge_base_commit?.sha !== pull.head.sha) fail("CLA_GROUP_PULL_CHANGED");
-                const { data: grouped } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
-                  basehead: `${groupEntry.baseCommit.oid}...${groupEntry.headCommit.oid}`,
-                });
-                if (!Array.isArray(grouped.commits) || grouped.total_commits !== grouped.commits.length ||
-                    grouped.commits.some(({ sha }) => sha !== groupEntry.headCommit.oid && !commitShas.has(sha))) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
+                const grouped = [];
+                let total;
+                for (let page = 1; page <= Math.ceil(MAX_GROUP_COMMITS / 100); page++) {
+                  const { data } = await request("GET /repos/{owner}/{repo}/compare/{basehead}", {
+                    basehead: `${groupEntry.baseCommit.oid}...${groupEntry.headCommit.oid}`, per_page: 100, page,
+                  });
+                  if (!positiveInteger(data.total_commits) || data.total_commits > MAX_GROUP_COMMITS || !Array.isArray(data.commits)) fail("CLA_INVALID_GROUP_COMMIT_LIST");
+                  total ??= data.total_commits;
+                  if (data.total_commits !== total) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
+                  grouped.push(...data.commits);
+                  if (grouped.length >= total) break;
+                }
+                if (grouped.length !== total || new Set(grouped.map(({ sha }) => sha)).size !== total ||
+                    grouped.some(({ sha }) => sha !== groupEntry.headCommit.oid && !commitShas.has(sha))) fail("CLA_GROUP_COMMIT_SNAPSHOT_CHANGED");
               }
               const current = await readPull(pull.number);
               if (current.head.sha !== pull.head.sha || current.commits !== pull.commits) fail("CLA_PULL_CHANGED");
