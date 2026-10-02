@@ -36,7 +36,6 @@ import { cn } from "@stll/ui/utils";
 import {
   Conversation,
   ConversationContent,
-  ConversationScrollButton,
   ConversationScrollProvider,
 } from "@/components/ai-elements/conversation";
 import { PromptBar } from "@/components/ai-suggestions/host";
@@ -609,6 +608,10 @@ export const ChatTabPanel = ({
               ) : (
                 <ChatThreadMessages
                   approvalPendingMessageId={approvalPendingMessageId}
+                  branchSource={{
+                    contextMatterIds: tab.contextMatterIds,
+                    threadRef,
+                  }}
                   error={error}
                   hasOlderMessages={olderCursor !== null}
                   isGenerating={isGenerating}
@@ -632,10 +635,6 @@ export const ChatTabPanel = ({
                 />
               )}
             </ConversationContent>
-            {/* Clear the floating composer block (veil + pill + row). */}
-            <ConversationScrollButton
-              className={cn("bottom-32", hasSuggestedFollowups && "hidden")}
-            />
           </Conversation>
 
           <ChatAnonymizationLayer
@@ -653,6 +652,7 @@ export const ChatTabPanel = ({
           <PromptBar
             anonymized={anonymized}
             attachmentsEnabled
+            context={{ activeOrganizationId, threadRef }}
             editorController={editorController}
             emptyPlaceholder={
               <PromptBarPlaceholderContent>

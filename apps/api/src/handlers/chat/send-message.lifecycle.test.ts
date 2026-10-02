@@ -1,9 +1,12 @@
+import { EventType } from "@tanstack/ai";
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
@@ -14,6 +17,84 @@ import { ChatSendLifecycle } from "./send-message";
 import { createLazyExternalMcpToolsLoader } from "./tools/external-mcp-tools";
 
 describe("send lifecycle checkpoint indexing", () => {
+  test("replays retain their turn/run identity and a fresh turn can reuse an old run id", async () => {
+    const identities: string[] = [];
+    for (const turn of ["turn-a", "turn-b"]) {
+      const db = createScopedDbMock({});
+      const lifecycle = new ChatSendLifecycle({
+        mode: "raw",
+        indexThread: async () => undefined,
+        startAdmission: async (options) => {
+          expect(options.mode).toBe("concurrency-only");
+          return Result.ok({
+            signal: new AbortController().signal,
+            release: async () => undefined,
+            reservePeriod: async (
+              identity: AdmittedActionIdentity,
+              organizationStateDb?: ScopedDb,
+            ) => {
+              expect(organizationStateDb).toBe(db.scopedDb);
+              expect(identity.actionKind).toBe("chat.send");
+              identities.push(identity.logicalPhaseId);
+              return Result.ok(undefined);
+            },
+          });
+        },
+        externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
+          throw new ActionAdmissionError({
+            message: "Connector discovery was not expected",
+            reason: "unavailable",
+          });
+        }),
+        recordAuditEvent: async () => undefined,
+        rollbackSideEffects: async () => Result.ok(undefined),
+        safeDb: db.safeDb,
+        scopedDb: db.scopedDb,
+        threadId: toSafeId<"chatThread">("same-thread"),
+        userId: toSafeId<"user">("phase_user"),
+        workspaceId: null,
+      });
+      expect(
+        Result.isOk(
+          await lifecycle.admitExecution({
+            organizationId: toSafeId<"organization">("phase_org"),
+            checkpoint: undefined,
+          }),
+        ),
+      ).toBe(true);
+      lifecycle.claimTurn(
+        { id: toSafeId<"chatTurn">(turn), executionId: turn },
+        undefined,
+      );
+      for (const runId of [
+        "initial",
+        "initial",
+        "regeneration",
+        "approved-child",
+      ]) {
+        const outcome = await lifecycle.reserveExecutionPeriod(runId);
+        expect(Result.isOk(outcome)).toBe(true);
+      }
+      const run = lifecycle.startRun(undefined);
+      const response = run.produce(
+        (async function* () {
+          yield {
+            type: EventType.RUN_STARTED,
+            runId: "matrix-run",
+            threadId: "same-thread",
+            timestamp: 0,
+          } as const;
+          await run.settle(async () => ({ type: "not-owned" }));
+        })(),
+      );
+      await response.text();
+      await lifecycle.cleanup();
+    }
+    expect(identities.at(0)).toBe(identities.at(1));
+    expect(identities.at(4)).toBe(identities.at(5));
+    expect(new Set(identities).size).toBe(6);
+  });
+
   test("uses the injected indexer when admission loss restores before and after run handoff", async () => {
     for (const phase of ["preflight", "handed-over"] as const) {
       const checkpoint = toPersistableChatMessage({
@@ -65,14 +146,34 @@ describe("send lifecycle checkpoint indexing", () => {
       const indexedThreads: string[] = [];
       const threadId = toSafeId<"chatThread">("thread_lifecycle");
       const lifecycle = new ChatSendLifecycle({
+        mode: "raw",
         indexThread: async (indexedThreadId) => {
           indexedThreads.push(indexedThreadId);
         },
-        startAdmission: async () =>
-          Result.ok({
+        startAdmission: async (options) => {
+          expect(options).toMatchObject({
+            mode: "concurrency-only",
+            actionKind: "chat.send",
+          });
+          return Result.ok({
             signal: admission.signal,
+            reservePeriod: async (
+              identity: AdmittedActionIdentity,
+              organizationStateDb?: ScopedDb,
+            ) => {
+              expect(organizationStateDb).toBe(db.scopedDb);
+              expect(identity).toEqual({
+                actionKind: "chat.send",
+                logicalPhaseId: JSON.stringify([
+                  "turn_lifecycle",
+                  "run_lifecycle",
+                ]),
+              });
+              return Result.ok(undefined);
+            },
             release: async () => undefined,
-          }),
+          });
+        },
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
           throw new ActionAdmissionError({
             message: "Connector discovery was not expected",
@@ -82,6 +183,7 @@ describe("send lifecycle checkpoint indexing", () => {
         recordAuditEvent: async () => undefined,
         rollbackSideEffects: async () => Result.ok(undefined),
         safeDb: db.safeDb,
+        scopedDb: db.scopedDb,
         threadId,
         userId: toSafeId<"user">("user_lifecycle"),
         workspaceId: null,
@@ -98,6 +200,9 @@ describe("send lifecycle checkpoint indexing", () => {
         checkpoint,
       });
       expect(Result.isOk(acquired)).toBe(true);
+      expect(
+        Result.isOk(await lifecycle.reserveExecutionPeriod("run_lifecycle")),
+      ).toBe(true);
       const run =
         phase === "handed-over" ? lifecycle.startRun(undefined) : undefined;
       admission.abort(

@@ -19,7 +19,6 @@ import {
 import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -30,6 +29,7 @@ import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
 import {
@@ -59,7 +59,10 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
-import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
+import type {
+  ChatTurnRun,
+  ChatTurnStoredSettlement,
+} from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
   findHandedOutInteraction,
@@ -131,6 +134,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   chatToolMapToArray,
   type ChatTool,
@@ -172,9 +176,11 @@ import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+} from "@/api/lib/errors/tagged-errors";
+import type {
+  ChatTerminalError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
@@ -246,11 +252,16 @@ type StreamChatProps = {
   resume?: RunAgentResumeItem[] | undefined;
   messages: ChatMessage[];
   owningAssistantMessageId?: SafeId<"chatMessage"> | undefined;
-  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  /**
+   * Store the finished turn, and say what its row now holds: the run counts
+   * that, not the outcome it proposed.
+   */
+  onFinish: (event: StreamChatFinishEvent) => Promise<ChatTurnStoredSettlement>;
   /** What the client is shown of the history `messages` came from. */
   storedHistory: StoredHistory;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   /**
@@ -376,6 +387,7 @@ export const streamChat = async ({
   onFinish,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCacheKey,
   promptCachingEnabled,
   reasoningEffort,
@@ -457,12 +469,15 @@ export const streamChat = async ({
   });
 
   const primaryModel = resolveTanStackTextModel({
+    dataClass: "customer",
     modelId: devModelId,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     reasoningEffort,
     role: "chat",
   });
+  run.attributeProvider(primaryModel.provider);
 
   // Tool schemas are mostly server-built but may include org-configured
   // external MCP tool descriptions, so a hit here is telemetry, not a
@@ -521,6 +536,7 @@ export const streamChat = async ({
       ? resolveFallbackTextModel({
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           primaryModel,
           threadId,
         })
@@ -548,6 +564,7 @@ export const streamChat = async ({
     fallbackModel,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     primaryModel,
     promptCacheKey,
     promptCachingEnabled,
@@ -645,9 +662,7 @@ export const streamChat = async ({
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
       await shadow.flush();
-      await run.settle(async () => {
-        await onFinish(event);
-      });
+      await run.settle(async () => await onFinish(event));
     },
     owningAssistantMessageId,
     restorationPairs,
@@ -693,11 +708,13 @@ export const resolveAgentRunBoundaryError = ({
     return null;
   }
 
-  return new HandlerError({
-    code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-    status: 422,
+  return refuseAnonymizedCrossing({
     message:
       "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",
+    offerRawRetry: true,
+    reason: "mode_policy",
+    site: "agent_run",
+    status: 422,
   });
 };
 
@@ -885,6 +902,7 @@ const projectMcpToolSourceSchemasForProvider = ({
 type ResolveFallbackTextModelProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
   threadId: SafeId<"chatThread">;
 };
@@ -892,13 +910,16 @@ type ResolveFallbackTextModelProps = {
 const resolveFallbackTextModel = ({
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   primaryModel,
   threadId,
 }: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
   try {
     const fallbackModel = resolveTanStackTextModel({
+      dataClass: "customer",
       organizationId,
       orgAIConfig,
+      managedAIResidency,
       role: "reasoning",
     });
     if (
@@ -945,6 +966,7 @@ const createChatAttemptAnalytics = ({
   workspaceId,
 }: CreateChatAttemptAnalyticsProps): TanStackAIAnalyticsCallbacks =>
   createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       lane: usageLane,
@@ -997,6 +1019,7 @@ type RunChatAttemptsProps = {
   fallbackModel: ResolvedTanStackTextModel | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
@@ -1024,6 +1047,7 @@ const runChatAttempts = async function* ({
   fallbackModel,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   primaryModel,
   promptCacheKey,
   promptCachingEnabled,
@@ -1055,6 +1079,7 @@ const runChatAttempts = async function* ({
     modelId: devModelId,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
     runId,
@@ -1106,6 +1131,7 @@ const runChatAttempts = async function* ({
     modelId: undefined,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
     role: "reasoning",
@@ -1181,6 +1207,7 @@ type RunChatAttemptProps = {
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   runId?: string | undefined;
@@ -1215,6 +1242,7 @@ const runChatAttempt = async function* ({
   modelId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCacheKey,
   promptCachingEnabled,
   runId,
@@ -1318,6 +1346,7 @@ const runChatAttempt = async function* ({
           modelId,
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           role,
           state,
           tenantWorkspaceIds,
@@ -1370,6 +1399,7 @@ const runChatAttempt = async function* ({
         modelId,
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         role,
         state,
         tenantWorkspaceIds,
@@ -1436,6 +1466,7 @@ type ChatRuntimeMiddlewareProps = {
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   role: ChatAttemptRole;
   state: ChatAttemptState;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -1451,6 +1482,7 @@ const createChatRuntimeMiddleware = ({
   modelId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   role,
   state,
   tenantWorkspaceIds,
@@ -1514,6 +1546,7 @@ const createChatRuntimeMiddleware = ({
         modelId,
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         role,
         tenantWorkspaceIds,
         onSummaryError: (error) => {
@@ -3810,10 +3843,12 @@ export const hydrateMessages = async ({
           hydratedPart.type !== "anonymizable"
         ) {
           return Result.err(
-            new HandlerError({
-              code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-              status: 422,
+            refuseAnonymizedCrossing({
               message: THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE,
+              offerRawRetry: true,
+              reason: "unsupported_content",
+              site: "file_hydration",
+              status: 422,
             }),
           );
         }

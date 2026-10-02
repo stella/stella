@@ -1,0 +1,356 @@
+[
+  {
+    "file": "apps/api/drizzle/20260603120000_case_law_public_slugs/migration.sql",
+    "line": 30,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "6f9aa2475f2686aa63185a32b2e7aab286e7f6796ee73a6726f7dd6bc323ee6e"
+  },
+  {
+    "file": "apps/api/drizzle/20260605120000_legal_corpus/migration.sql",
+    "line": 56,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "2dab03f1d8a193fed6a90d3d08da19abb73fa1cef954327aa1560196b3da49b1"
+  },
+  {
+    "file": "apps/api/drizzle/20260605120000_legal_corpus/migration.sql",
+    "line": 60,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "b5f1935a9bdb55b90f4349a25a756af373dff3116624c86542e78dccfa8051aa"
+  },
+  {
+    "file": "apps/api/drizzle/20260727100000_case_law_document_fetch_priority/migration.sql",
+    "line": 37,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "ce4f545cc10e4fe04fde025ff5ad5cd6f52d45e6440f50b27492cd5a89e52f22"
+  },
+  {
+    "file": "apps/api/drizzle/20260727100000_case_law_document_fetch_priority/migration.sql",
+    "line": 48,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "8166c35d4fec764c83c099bc2cfdccd1626ef090f3ecb5aa9883c227f73d9d47"
+  },
+  {
+    "file": "apps/api/drizzle/20260729010000_corpus_index_pending_partial_idx/migration.sql",
+    "line": 34,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "30ffaeab9a8278568b09703dac58f2f05ff2d5544d8fd050795c784f499267ba"
+  },
+  {
+    "file": "apps/api/drizzle/20260729120000_case_law_filter_search_index/migration.sql",
+    "line": 32,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "665bcb143010f4cd76848d7d5bf9f7522a65b00f9848a717aeb823fe793f5fe0"
+  },
+  {
+    "file": "apps/api/drizzle/20260730180000_citation_key/migration.sql",
+    "line": 34,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "329a32cfdbed26fafcc0452f222e2dba4cfa70a8cc7241814facef4005f7d5bb"
+  },
+  {
+    "file": "apps/api/drizzle/20260730180000_citation_key/migration.sql",
+    "line": 41,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "792df476fc065c8e84c67b977f35cc553bbe0cd67925c22fc5ea1ee9dcfd29b4"
+  },
+  {
+    "file": "apps/api/drizzle/20260731090000_citation_kind/migration.sql",
+    "line": 47,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "358f26937cb46314c96db577abb23925a47fc1f2498bab79cabee30c1bfcada1"
+  },
+  {
+    "file": "apps/api/drizzle/20260731130000_decision_source_document_id/migration.sql",
+    "line": 39,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "c05784b38783f4c34eb3126135b35d973e6dea0d36f385ed2d0d21008a1859a0"
+  },
+  {
+    "file": "apps/api/drizzle/20260731130000_decision_source_document_id/migration.sql",
+    "line": 43,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "045532d3f095449a0bd7d2d0b21fc5db2a3f3a3ee7e9a173c7a279b43d8ddb58"
+  },
+  {
+    "file": "apps/api/drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
+    "line": 528,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "5bee72a385e3f961d2a12f9211b86b742b60dc6279780a4b8d365a40a398c86f"
+  },
+  {
+    "file": "apps/api/drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
+    "line": 533,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "84bd30c9331862a817381e92d567136af040ef6be7796bc077b2a9db6d6463c3"
+  },
+  {
+    "file": "apps/api/drizzle/20260731170000_case_law_corpus_generation_backfill/migration.sql",
+    "line": 542,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "3d9a464f2ad22333153db2a929a59a6ba754db09f28dd99765ea6afad5abdcf4"
+  },
+  {
+    "file": "apps/api/drizzle/20260801110000_case_law_redaction_audit_index/migration.sql",
+    "line": 20,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "bbcaa0cb4e25ec694a64b1e6da73ba7b1be7268da68a7162b7574192683ef025"
+  },
+  {
+    "file": "apps/api/drizzle/20260816122000_citation_resolution_indexes/migration.sql",
+    "line": 40,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "0cb938605bc6f70136f7ba165ffb740c02fb43bbba841c5d8219e764f8b0965d"
+  },
+  {
+    "file": "apps/api/drizzle/20260816122000_citation_resolution_indexes/migration.sql",
+    "line": 54,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "82dc998b93175ceca2362a93209c2179d65ac8363ce9cf2d5b06651b172816c2"
+  },
+  {
+    "file": "apps/api/drizzle/20260816122000_citation_resolution_indexes/migration.sql",
+    "line": 63,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "6e70eb9494613a24638bc3e7a3f741574f26f85fab2e7639a04cfb40290e2cad"
+  },
+  {
+    "file": "apps/api/drizzle/20260816210000_citation_authority_due_index/migration.sql",
+    "line": 38,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "b3b941b415cf5d82ecda9c5f0380ab580e670399da86ef130433af94f43f60b2"
+  },
+  {
+    "file": "apps/api/drizzle/20260817150000_corpus_generation_date_walk/migration.sql",
+    "line": 226,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "cc4204649c90f6c84f332c9a5fc2fdab65d6a3832d285582a2b4e9a8da49e9e6"
+  },
+  {
+    "file": "apps/api/drizzle/20260819100000_polarity_rule_retired_source/migration.sql",
+    "line": 30,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "2e6be3d123eb094d5ddb89379a6045bf8f970860780c92e5ad4e8820915c1125"
+  },
+  {
+    "file": "apps/api/drizzle/20260819110000_case_law_provision_citations/migration.sql",
+    "line": 65,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "c375ff251adadb2120baba0b3ef4d164e35f4f1dfeba538dd1e40d92a77e894d"
+  },
+  {
+    "file": "apps/api/drizzle/20260819110000_case_law_provision_citations/migration.sql",
+    "line": 72,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "a013e6ed4bed2c86a664f822351195eab8ae5644dac5949227f2db1eb0be68ad"
+  },
+  {
+    "file": "apps/api/drizzle/20260819110000_case_law_provision_citations/migration.sql",
+    "line": 78,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "40d0718c364accb2ba95c41d401a60b45bd0d0fb91de54dbe23eba684ff8cc9f"
+  },
+  {
+    "file": "apps/api/drizzle/20260819110000_case_law_provision_citations/migration.sql",
+    "line": 84,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "912fcbc984bdabbf00a0fe1750ea818884e819051fc93acd830ec2893baec083"
+  },
+  {
+    "file": "apps/api/drizzle/20260819130000_case_law_provision_citations_eli_idx/migration.sql",
+    "line": 33,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "bd45a4f1b8124772dd102e06bd11f24c6645f8d595a9490c5342592e3d87f111"
+  },
+  {
+    "file": "apps/api/drizzle/20260819130000_case_law_provision_citations_eli_idx/migration.sql",
+    "line": 51,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "506a0d5f246a64e99668d46c201f641db75e1ddd3c4bdba8b6f19b6731f404e2"
+  },
+  {
+    "file": "apps/api/drizzle/20260820140000_case_law_citation_pages/migration.sql",
+    "line": 16,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "2807001f3dd3b1b3f963dfcfbda7d4e5b84fb5942f5c7d413d7b26f274890cf3"
+  },
+  {
+    "file": "apps/api/drizzle/20260820140000_case_law_citation_pages/migration.sql",
+    "line": 24,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "3a2fb52c74bbc40133a42a44f57903a6b83b76a45ec951713523f3d8df4c2093"
+  },
+  {
+    "file": "apps/api/drizzle/20260824230000_case_law_decision_identifiers/migration.sql",
+    "line": 96,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "c183792abad423c03da43217ee469396574c3d60efbc6cea5b2f2aed7891528d"
+  },
+  {
+    "file": "apps/api/drizzle/20260825110000_decision_identifier_backfill_checkpoint/migration.sql",
+    "line": 49,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "99c3ee15c51c88b4e2c4e1d67df4b08ba496097e6ac72a53ec9fddf3f3eececf"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003500_corpus_projection_settlement_indexes/migration.sql",
+    "line": 15,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "e52f692e7d04feff433b6b19ca8d237317dcbe870a516180fa234ebf87ec8fac"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003500_corpus_projection_settlement_indexes/migration.sql",
+    "line": 23,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "1c46b3293012b247c95410d9f2628e31f6082a287c969756aa3e60fdca50e9aa"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003500_corpus_projection_settlement_indexes/migration.sql",
+    "line": 31,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "b23fe0f1cff692bff207ee356628c50f4b63396023adbc3d457b2604b46111ec"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003530_corpus_projection_replacement_order/migration.sql",
+    "line": 9,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "6dfedbb848984f8696b8c327ac7bf1482ea056bdaef3460e181503203470d4ca"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003530_corpus_projection_replacement_order/migration.sql",
+    "line": 25,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "4ebacedf7e9d4e300d94a18687702b45ddc473456600819a4985ca9b797022cb"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003700_corpus_projection_work_schedule/migration.sql",
+    "line": 88,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "15116fed9415f804cc149f0415858865f05c2eb1f4ae8eed7a4e93d6b92999f1"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003700_corpus_projection_work_schedule/migration.sql",
+    "line": 108,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "b652a07d1fe660d6aadc92e84940b96558cad085ff695c649886f82a4962f004"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003700_corpus_projection_work_schedule/migration.sql",
+    "line": 118,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "6fc23d715e5646b55601cad1620793d89627eac42cf6bc57121985c103db8e2d"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003900_corpus_projection_launch_probe/migration.sql",
+    "line": 135,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "4f899d79ceba00f5b88eff4a98e5f1ae95b78a2220571c962169635f83c88117"
+  },
+  {
+    "file": "apps/api/drizzle/20260826003900_corpus_projection_launch_probe/migration.sql",
+    "line": 158,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "effe5e4129ad91607f1da25eebea66d4bb94f2b6ad693902f5f3d0356da8876c"
+  },
+  {
+    "file": "apps/api/drizzle/20260831100000_corpus_projection_route_scope/migration.sql",
+    "line": 24,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "d83a6b4b634f046bb5944c0f6999fd778ade49dbc116436b547a46d44b99487e"
+  },
+  {
+    "file": "apps/api/drizzle/20260831100000_corpus_projection_route_scope/migration.sql",
+    "line": 53,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "a3003fc4e8c2ea9df1d1beb4f34c6b3d3026421a47cbafd3bc5c47bebd36caeb"
+  },
+  {
+    "file": "apps/api/drizzle/20260901190000_case_law_decisions_country_court_date_idx/migration.sql",
+    "line": 30,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "b47f58667cd194428c87fd6aa1a95d70d02ff19e3b4ef2a830979ab2b28f9900"
+  },
+  {
+    "file": "apps/api/drizzle/20260906120000_corpus_projection_outstanding_intent_idx/migration.sql",
+    "line": 34,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "6f3ba39b4a3d7f97ebdfef72b0f41da174ce56a0e2f19d614e978db6ef6c2c43"
+  },
+  {
+    "file": "apps/api/drizzle/20260907090000_sk_document_pending_retry_order/migration.sql",
+    "line": 35,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "9a9f0053a75c816f0e426f8fc7e36941251207444c68e579f6fb9c59b7f82220"
+  },
+  {
+    "file": "apps/api/drizzle/20260911120000_corpus_projection_erase_pending_idx/migration.sql",
+    "line": 35,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "2b4ff196c5fd37eb0cea63fb1da2bba0fb2fc1c8d00763e55688c232b85ec082"
+  },
+  {
+    "file": "apps/api/drizzle/20260912160000_case_law_decisions_country_updated_idx/migration.sql",
+    "line": 28,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "ab122db47ac1f04ad770897e937f177ad140862cf84aa588551c03d54107b7e3"
+  },
+  {
+    "file": "apps/api/drizzle/20260914230000_case_law_decisions_country_court_updated_idx/migration.sql",
+    "line": 29,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "a7ba8b64b0326b7c710b7d1f76c09bacc9138e8fa7fa834b39a72f35b7d6d005"
+  },
+  {
+    "file": "apps/api/drizzle/20260917120000_case_law_decisions_search_candidate_idx/migration.sql",
+    "line": 72,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "1a6b2213c9d2bd5162e18fb9504cb056e02bb97d835741a8f64605d9b4dea668"
+  },
+  {
+    "file": "apps/api/drizzle/20260921200000_case_law_decisions_coverage_window_idx/migration.sql",
+    "line": 38,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "38edff9b18055243d0a18e718539a8e0f06ca83420824dba6a30e9cd34f1e2c1"
+  },
+  {
+    "file": "apps/api/drizzle/20260921200000_case_law_decisions_coverage_window_idx/migration.sql",
+    "line": 46,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "21c3411607feab05768b9e958d0a7429fbb6012c2441d43bd5e08f8f8420aca6"
+  },
+  {
+    "file": "apps/api/drizzle/20260924090000_case_law_decisions_country_date_idx/migration.sql",
+    "line": 33,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "06641c8b007702a8cb08b34e8804575fb09ee5392c86bbae974c1d37a382e91a"
+  },
+  {
+    "file": "apps/api/drizzle/20260927230100_case_law_decisions_sitemap_shard_idx/migration.sql",
+    "line": 28,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "65443af95a17f5a67c9fd2ed8859947e10de644bd3c0915bdcbd2c060d7956da"
+  },
+  {
+    "file": "apps/api/drizzle/20260928171000_case_law_live_legacy_raw_source_idx/migration.sql",
+    "line": 17,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "1f0e06aec52f56349642456979d37e98f793098a2ea2c8ae1c0728ab29c7ac44"
+  },
+  {
+    "file": "apps/api/drizzle/20260928171100_case_law_source_id_page_idx/migration.sql",
+    "line": 16,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "2c3b4e23240736cc378669acba122a7a0d163b367cc3cf0d28e5a198b440ef11"
+  },
+  {
+    "file": "apps/api/drizzle/20261003120600_case_law_document_parked_idx/migration.sql",
+    "line": 19,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "3ac4f27390a4a5eefabc51f3d455986be11d0bc510e31f382f688095efe3131b"
+  },
+  {
+    "file": "apps/api/drizzle/20261003122700_case_law_textless_detail_recheck/migration.sql",
+    "line": 12,
+    "ruleId": "high-volume-index-build",
+    "statementHash": "b5fc464a545893f465ce26b2249686b21f486fab7ce0384c332d9d6ce46eee68"
+  }
+]

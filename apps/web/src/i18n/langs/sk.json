@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nepodarilo sa spustiť časovač",
     "failedToStopTimer": "Nepodarilo sa zastaviť časovač",
     "filterStatus": "Filtrovať podľa stavu",
+    "globalTimer": {
+      "confirm": "Potvrdiť čas",
+      "discard": "Zahodiť časovač",
+      "matterInaccessible": "Vyberte spis, ku ktorému máte prístup.",
+      "narrativeRequired": "Pred potvrdením času pridajte popis.",
+      "pause": "Pozastaviť",
+      "periodLocked": "Tento mesiac je uzamknutý. Požiadajte správcu o jeho odomknutie.",
+      "resume": "Pokračovať",
+      "timerUnavailable": "Tento časovač už nie je dostupný. Obnovte zoznam.",
+      "title": "Časovače"
+    },
     "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktúry",
@@ -858,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
@@ -978,6 +990,7 @@
         "description": "Dôkladne skontrolujte web a cieľ. Obsah stránky nie je dôveryhodný a nemôže schváliť ďalšiu akciu.",
         "modeReads": "Čítanie stránok sa do konca tejto relácie vykonáva bez opýtania.",
         "question": "Povoliť túto akciu v prehliadači?",
+        "realValues": "Táto webová stránka dostane skutočné hodnoty uvedené nižšie. Anonymizovaný režim sa vzťahuje len na to, čo vidí AI.",
         "within": "V rámci"
       },
       "denied": "Zamietnuté",
@@ -1082,6 +1095,7 @@
     "focusSuggestion": "Zamerať návrh: {topic}",
     "folioCitationFallback": "str. {n}",
     "forkFromHere": "Vytvoriť odtiaľto nový chat",
+    "forkInSidePanel": "Vytvoriť odtiaľto nový chat v bočnom paneli",
     "forkedFrom": "Vytvorené z chatu: <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Vytvorené z chatu, ktorý už nie je dostupný",
     "forkedThread": "Z iného chatu",
@@ -1089,6 +1103,10 @@
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
+    },
     "improvePrompt": "Vylepšiť zadanie",
     "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
     "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",
@@ -1141,6 +1159,7 @@
       "viaProvider": "cez {provider}"
     },
     "newChat": "Nový chat",
+    "newChatInSidePanel": "Nový chat je dostupný v bočnom paneli",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
@@ -1188,6 +1207,12 @@
     "richContentLoading": "Načítava sa interaktívny obsah…",
     "richContentTitle": "Interaktívny obsah",
     "richContentUnavailable": "Tento obsah nemožno bezpečne zobraziť.",
+    "selection": {
+      "askInNewChat": "Opýtať sa v novom chate",
+      "quoteInReply": "Citovať v odpovedi",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Vybraný text"
+    },
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
@@ -1341,7 +1366,8 @@
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
-      "toggleDetails": "Prepnúť podrobnosti"
+      "toggleDetails": "Prepnúť podrobnosti",
+      "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
@@ -1585,6 +1611,7 @@
     },
     "fact": "Fakt",
     "failed": "Zlyhalo",
+    "files": "Súbory",
     "filter": "Filtrovať",
     "filters": "Filtre",
     "find": "Nájsť",
@@ -3249,7 +3276,6 @@
       "editSkill": "Upraviť zručnosť",
       "enableSkill": "Zapnúť zručnosť",
       "fileExists": "Súbor s touto cestou už existuje",
-      "filesHeading": "Súbory",
       "howItRuns": "Ako sa spúšťa",
       "importFailureFetch": "Zdroj zručnosti sa nepodarilo načítať.",
       "importFailureIntegrity": "Zdroj zručnosti sa po nájdení zmenil. Skontrolujte ho znova.",
@@ -5974,7 +6000,8 @@
         "openReport": "Otvoriť správu",
         "submit": "Exportovať správu",
         "templateLabel": "Vzor správy",
-        "title": "Exportovať správu"
+        "title": "Exportovať správu",
+        "withoutAiSummaries": "Exportovať bez zhrnutí pomocou AI"
       },
       "saveAsTemplate": "Uložiť ako predvoľbu…",
       "selectProperty": "Vybrať vlastnosť",

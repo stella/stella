@@ -97,6 +97,7 @@ const MCP_ERROR_CODE_EXIT_MAP = {
   action_not_enabled: EXIT_CODES.featureDisabled,
   action_admission_unavailable: EXIT_CODES.server,
   validation_error: EXIT_CODES.validation,
+  result_too_large: EXIT_CODES.validation,
   missing_scope: EXIT_CODES.auth,
   feature_disabled: EXIT_CODES.featureDisabled,
   not_found: EXIT_CODES.notFound,

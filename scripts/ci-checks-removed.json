@@ -1,0 +1,18 @@
+[
+  {
+    "name": "ci-checks-generated: Install Safe Chain",
+    "reason": "Safe Chain moved to the dedicated lockfile-change dependency-malware gate (and the nightly)"
+  },
+  {
+    "name": "ci-checks-policy: Install Safe Chain",
+    "reason": "Safe Chain moved to the dedicated lockfile-change dependency-malware gate (and the nightly)"
+  },
+  {
+    "name": "ci-checks-rest: Install Safe Chain",
+    "reason": "Safe Chain moved to the dedicated lockfile-change dependency-malware gate (and the nightly)"
+  },
+  {
+    "name": "Web API types drift guard",
+    "reason": "Replaced by the determinism guard; the generated API types file is no longer committed"
+  }
+]

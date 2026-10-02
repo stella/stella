@@ -62,7 +62,9 @@ describe("lookupByBusinessId (fixture)", () => {
         }),
     );
 
-    const company = await lookupByBusinessId("0112038-9");
+    const company = await lookupByBusinessId("0112038-9", {
+      observer: "unobserved",
+    });
     expect(company).not.toBeNull();
     expect(company?.businessId).toBe("0112038-9");
     expect(company?.name).toBe("Nokia Oyj");
@@ -96,7 +98,9 @@ describe("lookupByBusinessId (fixture)", () => {
         }),
     );
 
-    const company = await lookupByBusinessId("0112038-9");
+    const company = await lookupByBusinessId("0112038-9", {
+      observer: "unobserved",
+    });
     expect(company).toBeNull();
   });
 
@@ -116,7 +120,9 @@ describe("lookupByBusinessId (fixture)", () => {
         ),
     );
 
-    expect(lookupByBusinessId("0112038-9")).rejects.toMatchObject({
+    expect(
+      lookupByBusinessId("0112038-9", { observer: "unobserved" }),
+    ).rejects.toMatchObject({
       name: "PrhAPIError",
       httpStatus: 400,
       upstreamCode: 1005,
@@ -132,9 +138,9 @@ describe("lookupByBusinessId (fixture)", () => {
         }),
     );
 
-    expect(lookupByBusinessId("0112038-9")).rejects.toBeInstanceOf(
-      PrhRequestError,
-    );
+    expect(
+      lookupByBusinessId("0112038-9", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(PrhRequestError);
   });
 });
 
@@ -159,7 +165,7 @@ describe("searchByName (fixture)", () => {
         }),
     );
 
-    const results = await searchByName("Supercell");
+    const results = await searchByName("Supercell", { observer: "unobserved" });
     expect(results.length).toBeGreaterThan(0);
     const supercell = results.find((entry) => entry.name === "Supercell Oy");
     expect(supercell).toBeDefined();
@@ -178,7 +184,10 @@ describe("searchByName (fixture)", () => {
       });
     });
 
-    const results = await searchByName("Supercell", { limit: 1 });
+    const results = await searchByName("Supercell", {
+      observer: "unobserved",
+      limit: 1,
+    });
     expect(results).toHaveLength(1);
     expect(requestedUrls.at(0)).toContain("maxResults=1");
   });
@@ -189,25 +198,29 @@ describe("searchByName (fixture)", () => {
 // ---------------------------------------------------------------------------
 describe("lookupByBusinessId validation", () => {
   test("rejects format violations", () => {
-    expect(lookupByBusinessId("01120389")).rejects.toBeInstanceOf(
-      PrhValidationError,
-    );
-    expect(lookupByBusinessId("abcdefg-1")).rejects.toBeInstanceOf(
-      PrhValidationError,
-    );
+    expect(
+      lookupByBusinessId("01120389", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(PrhValidationError);
+    expect(
+      lookupByBusinessId("abcdefg-1", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(PrhValidationError);
   });
 
   test("rejects bad checksum", () => {
     // 0112038-9 is valid; bump the check digit and it should fail.
-    expect(lookupByBusinessId("0112038-0")).rejects.toBeInstanceOf(
-      PrhValidationError,
-    );
+    expect(
+      lookupByBusinessId("0112038-0", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(PrhValidationError);
   });
 });
 
 describe("searchByName validation", () => {
   test("rejects empty input", () => {
-    expect(searchByName("")).rejects.toBeInstanceOf(PrhValidationError);
-    expect(searchByName("  ")).rejects.toBeInstanceOf(PrhValidationError);
+    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
+      PrhValidationError,
+    );
+    expect(
+      searchByName("  ", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(PrhValidationError);
   });
 });

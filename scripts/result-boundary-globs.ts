@@ -53,7 +53,6 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/notifications/**/*.ts",
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
-  "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
@@ -121,6 +120,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/guides/**/*.{ts,tsx}",
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
+  "apps/web/src/features/time-timers/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
@@ -175,6 +175,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
+  // TanStack consumes this adapter through its Promise rejection contract;
+  // structuredOutput cannot return a Result to the SDK.
+  "apps/api/src/lib/stella-openrouter-text-adapter.ts",
   // TanStack invokes these server-tool callbacks and turns thrown
   // ChatToolError values into tool failures; it cannot consume Result.err.
   "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
@@ -207,6 +210,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // assertion failures to test runners.
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  "packages/property-testing/src/index.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

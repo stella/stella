@@ -15,6 +15,7 @@ const OUTCOMES = [
   { type: "up-to-date" },
   { type: "no-summary" },
   { type: "superseded" },
+  { type: "anonymized" },
 ] as const satisfies readonly ChatCompactionOutcome[];
 
 describe("compaction outcome settlement", () => {

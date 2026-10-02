@@ -1,12 +1,30 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import { Result } from "better-result";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
+import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { McpEgressPlan } from "@/api/mcp/tool-types";
 import { serializeToolResult } from "@/api/mcp/tool-utils";
+import {
+  createRewritingAnonymizeDependencies,
+  replaceFirstFieldDelimiterToken,
+} from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -48,16 +66,18 @@ const redactGazetteerTerms = async ({
     catalogs.gazetteerEntries,
   ).map((entry) => entry.canonical);
 
-  return await Promise.resolve({
-    entityCount: canonicals.length,
-    fields: fields.map((field) => {
-      let redacted = field;
-      for (const canonical of canonicals) {
-        redacted = redacted.replaceAll(canonical, "[ORG_1]");
-      }
-      return redacted;
+  return await Promise.resolve(
+    Result.ok({
+      entityCount: canonicals.length,
+      fields: fields.map((field) => {
+        let redacted = field;
+        for (const canonical of canonicals) {
+          redacted = redacted.replaceAll(canonical, "[ORG_1]");
+        }
+        return redacted;
+      }),
     }),
-  });
+  );
 };
 
 /** The `ws_2` gazetteer carries the term; the firm-wide catalog does not. */
@@ -184,10 +204,12 @@ describe("finalizeMcpEgress", () => {
     // window edge and numbered consistently across windows.
     const person = "[PERSON_1]";
     const anonText = `${person}0123456789${person}abcdefghijTAIL`;
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["[PERSON_1] SPA", anonText],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["[PERSON_1] SPA", anonText],
+      }),
+    );
 
     const basePlan = {
       egress: "compatFetch" as const,
@@ -283,10 +305,12 @@ describe("finalizeMcpEgress", () => {
     expect(defaultPayload.results[0]?.title).toBe("John Smith SPA");
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
 
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["[PERSON_1] SPA"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["[PERSON_1] SPA"],
+      }),
+    );
     const anonPayload = asTestRaw<{
       results: { workspaceId?: string; title: string }[];
     }>(
@@ -310,8 +334,12 @@ describe("finalizeMcpEgress", () => {
       { id: "ws_2", name: "Jane Doe GmbH" },
     ];
     anonymizeTextFieldsMock
-      .mockResolvedValueOnce({ entityCount: 1, fields: ["[PERSON_1] Ltd"] })
-      .mockResolvedValueOnce({ entityCount: 1, fields: ["[PERSON_1] GmbH"] });
+      .mockResolvedValueOnce(
+        Result.ok({ entityCount: 1, fields: ["[PERSON_1] Ltd"] }),
+      )
+      .mockResolvedValueOnce(
+        Result.ok({ entityCount: 1, fields: ["[PERSON_1] GmbH"] }),
+      );
 
     const payload = asTestRaw<{ matters: { id: string; name: string }[] }>(
       parseText(
@@ -349,10 +377,12 @@ describe("finalizeMcpEgress", () => {
   test("structured plan anonymizes the whole field before windowing it", async () => {
     // The window field is anonymized first, so the redacted placeholder is
     // intact at the window edge and the raw name never appears in any slice.
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["[PERSON_1] doc", `[PERSON_1] signed here and there`],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["[PERSON_1] doc", `[PERSON_1] signed here and there`],
+      }),
+    );
     const payload: {
       name: string;
       text: string;
@@ -478,10 +508,12 @@ describe("finalizeMcpEgress", () => {
       { id: "ws_2", name: "Jane Doe GmbH" },
       { id: "ws_3", name: "Erika Mustermann AG" },
     ];
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 1,
-      fields: ["[PERSON_1]"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 1,
+        fields: ["[PERSON_1]"],
+      }),
+    );
 
     await finalizeMcpEgress({
       context: createContext(),
@@ -620,5 +652,205 @@ describe("finalizeMcpEgress", () => {
     expect(result.text).toBe("John Smith");
     expect(result.charCount).toBe("John Smith signed here".length);
     expect(anonymizeTextFieldsMock).not.toHaveBeenCalled();
+  });
+});
+
+describe("an anonymizer failure at egress", () => {
+  beforeEach(() => {
+    anonymizeTextFieldsMock.mockReset();
+    anonymizeTextFieldsMock.mockRejectedValue(
+      new Error("anonymizer unavailable"),
+    );
+    loadGazetteerByWorkspaceMock.mockReset();
+    loadGazetteerByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+    loadAllowlistByWorkspaceMock.mockReset();
+    loadAllowlistByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+  });
+
+  afterEach(() => {
+    resetMetricLineSinkForTesting();
+  });
+
+  /** One anonymized plan per egress variant, each carrying tenant text. */
+  const ANONYMIZED_PLANS = {
+    compatFetch: () => ({
+      cursor: undefined,
+      egress: "compatFetch",
+      id: "entity_1",
+      maxChars: 100,
+      subject: { kind: "document", workspaceId: "ws_1" },
+      text: "John Smith signed here",
+      title: "John Smith SPA",
+      url: "https://example.test/doc",
+    }),
+    compatSearch: () => ({
+      egress: "compatSearch",
+      nextCursor: null,
+      results: [
+        {
+          id: "entity_1",
+          kind: "matter",
+          title: "John Smith SPA",
+          url: "https://example.test/1",
+          workspaceId: "ws_1",
+        },
+      ],
+    }),
+    structured: () => {
+      const payload = { name: "John Smith Ltd" };
+      return {
+        egress: "structured",
+        payload,
+        textFields: [
+          {
+            apply: (value: string) => {
+              payload.name = value;
+            },
+            value: payload.name,
+            workspaceId: "ws_1",
+          },
+        ],
+      };
+    },
+  } as const satisfies Record<McpEgressPlan["egress"], () => McpEgressPlan>;
+
+  for (const [egress, plan] of Object.entries(ANONYMIZED_PLANS)) {
+    test(`${egress} is refused without its text and counts one refusal`, async () => {
+      const lines: string[] = [];
+      setMetricLineSinkForTesting((line) => {
+        lines.push(line);
+      });
+
+      const result = await finalizeMcpEgress({
+        context: createContext(),
+        mode: "anonymized",
+        response: plan(),
+      });
+      expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result)).toContain(
+        "Tool output could not be anonymized",
+      );
+      expect(JSON.stringify(result)).not.toContain("John Smith");
+      expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          AnonymizationRefusals: 1,
+          reason: "pipeline_error",
+          site: "mcp_egress",
+        }),
+      ]);
+    });
+  }
+});
+
+describe("egress whose anonymization output lost its field structure", () => {
+  const RAW_NAME = "John Smith";
+  const damagingDependencies = createRewritingAnonymizeDependencies((text) =>
+    replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
+  );
+  const finalizeWithDamagedOutput = async (
+    response: Parameters<typeof finalizeToolEgress>[0]["response"],
+  ) => {
+    let anonymizeCalls = 0;
+    const metricLines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metricLines.push(line);
+    });
+    const result = serializeToolResult(
+      await finalizeToolEgress(
+        { context: createContext(), mode: "anonymized", response },
+        {
+          anonymizeTextFields: async (input) => {
+            anonymizeCalls += 1;
+            return await anonymizeTextFieldsWithDependencies({
+              ...input,
+              dependencies: damagingDependencies,
+            });
+          },
+          loadAnonymizationAllowlistCanonicalsByWorkspace: asTestRaw(
+            emptyCatalogsByWorkspace,
+          ),
+          loadAnonymizationGazetteerEntriesByWorkspace: asTestRaw(
+            emptyCatalogsByWorkspace,
+          ),
+        },
+      ),
+    );
+    return { anonymizeCalls, metricLines, result };
+  };
+
+  afterEach(() => {
+    resetMetricLineSinkForTesting();
+  });
+
+  const expectRefusedWithoutRawText = ({
+    anonymizeCalls,
+    metricLines,
+    result,
+  }: Awaited<ReturnType<typeof finalizeWithDamagedOutput>>) => {
+    // The fixture must reach the anonymizer, or the refusal proves nothing.
+    expect(anonymizeCalls).toBeGreaterThan(0);
+    expect(result.isError).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(RAW_NAME);
+    // The refusal is counted once, as a damaged field structure.
+    expect(metricLines.map((line): unknown => JSON.parse(line))).toEqual([
+      expect.objectContaining({
+        AnonymizationRefusals: 1,
+        reason: "field_boundary",
+        site: "mcp_egress",
+      }),
+    ]);
+  };
+
+  test("a fetched document is refused", async () => {
+    expectRefusedWithoutRawText(
+      await finalizeWithDamagedOutput({
+        egress: "compatFetch",
+        cursor: undefined,
+        id: "entity_1",
+        maxChars: 100,
+        subject: { kind: "document", workspaceId: "ws_1" },
+        text: `${RAW_NAME} signed the SPA.`,
+        title: `${RAW_NAME} SPA`,
+        url: "https://example.test/doc",
+      }),
+    );
+  });
+
+  test("search titles are refused", async () => {
+    expectRefusedWithoutRawText(
+      await finalizeWithDamagedOutput({
+        egress: "compatSearch",
+        nextCursor: null,
+        results: [
+          {
+            kind: "matter",
+            id: "entity_1",
+            title: `${RAW_NAME} SPA`,
+            url: "https://example.test/1",
+            workspaceId: "ws_1",
+          },
+        ],
+      }),
+    );
+  });
+
+  test("a structured payload is refused", async () => {
+    const payload = { name: `${RAW_NAME} Ltd` };
+    expectRefusedWithoutRawText(
+      await finalizeWithDamagedOutput({
+        egress: "structured",
+        payload,
+        textFields: [
+          {
+            apply: (value: string) => {
+              payload.name = value;
+            },
+            value: payload.name,
+            workspaceId: "ws_1",
+          },
+        ],
+      }),
+    );
   });
 });

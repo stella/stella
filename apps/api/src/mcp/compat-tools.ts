@@ -7,6 +7,7 @@ import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -32,6 +33,7 @@ import {
 import {
   compatCorpusFetchResponse,
   compatSearchCursorError,
+  compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
@@ -292,6 +294,31 @@ const compatFetchArgsSchema = nullAsAbsent(
   }),
 );
 
+export const resolveCompatFetchReadClass = (args: unknown) => {
+  if (
+    typeof args !== "object" ||
+    args === null ||
+    !("id" in args) ||
+    typeof args.id !== "string"
+  ) {
+    return undefined;
+  }
+  const target = decodeCompatId(args.id);
+  if (target === null) {
+    return undefined;
+  }
+  switch (target.kind) {
+    case "document":
+      return "tenant";
+    case "decision":
+    case "statute":
+      return "public";
+    default:
+      target satisfies never;
+      return panic("Unhandled compat read target");
+  }
+};
+
 export const COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
     consumesServices: true,
@@ -302,6 +329,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "both",
     anonymized: {
       exposure: "anonymize",
       textFields: ["title"],
@@ -329,6 +357,7 @@ export const COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: resolveCompatFetchReadClass,
     anonymized: {
       exposure: "anonymize",
       textFields: ["title", "text"],
@@ -404,7 +433,7 @@ const searchMatterKnowledge = async ({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
-    limit: DEFAULT_COMPAT_SEARCH_LIMIT,
+    limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
     ...(cursor === undefined ? {} : { cursor }),
   });
 
@@ -441,6 +470,13 @@ const handleCompatSearchTool: McpToolHandler<
     : matterOnlyPosition(cursor);
   if (position === null) {
     return compatSearchCursorError(cursor ?? "");
+  }
+
+  const pageLimitResult = corpusEnabled
+    ? compatSearchPageLimitResult("tenant")
+    : null;
+  if (pageLimitResult !== null) {
+    return pageLimitResult;
   }
 
   const matter =

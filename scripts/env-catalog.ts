@@ -58,6 +58,15 @@ const INTERNAL_SERVER_KEYS = new Set([
   "ACTION_ADMISSION_LEASE_MS",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
+  "ACTION_REQUEST_MAX_BYTES",
+  "ACTION_RESPONSE_MAX_BYTES",
+  "ACTION_PAGE_SIZE_MAX",
+  "MCP_READ_WINDOW_MS",
+  "MCP_READ_WINDOW_MAX_ENTRIES",
+  "MCP_READ_TENANT_ORG_BYTES",
+  "MCP_READ_TENANT_USER_BYTES",
+  "MCP_READ_PUBLIC_ORG_BYTES",
+  "MCP_READ_PUBLIC_USER_BYTES",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -119,7 +128,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MCP",
+  "FEATURE_MCP_READ_FENCE",
   "FEATURE_ORG_ACCESS_STATE",
+  "FEATURE_ORG_SERVICE_BUDGETS",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_KNOWLEDGE",
   "FEATURE_PUBLIC_TOOLS",
@@ -364,8 +375,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
     "Microsoft OAuth tenant selector accepted by the configured application registration.",
-  OPERATOR_METRICS_TOKEN:
-    "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
@@ -780,6 +789,13 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // ci-result evaluates each independently scoped suite in folded jobs.
+  "FOLDED_SUITES",
+  // Preserve Bun global-store links inside browser containers.
+  "BUN_INSTALL_CACHE_DIR",
+  // Browser commands use only executables baked into the pinned image.
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
   "AGENT_ENGINE_DOCKER_NETWORK",
@@ -815,6 +831,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",
+  // Nightly issue reporter: suppress writes while exercising failure reporting.
+  "DRY_RUN",
   "E2E_API_URL",
   "E2E_EDGE_HEADER_NAME",
   "E2E_EDGE_HEADER_VALUE",
@@ -830,6 +848,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "EVENT_NAME",
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
+  "HEAD_SHA",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -842,11 +861,20 @@ export const TOOLING_ENV_KEYS = new Set([
   "MERGE_GROUP_HEAD_REF",
   "MODE",
   "NETWORK_CANARY_URL",
+  "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY",
+  "OSV_SCANNER_MIRROR_RELEASE_URL",
+  "OSV_SCANNER_PRIMARY_RELEASE_URL",
+  "OSV_SCANNER_RELEASE_VERSION",
+  "OSV_SCANNER_SHA256",
   "PGLITE_TEST_SNAPSHOT",
+  "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
+  "PROPERTY_TEST_PATH",
+  "PROPERTY_TEST_REDACT",
   "PROPERTY_TEST_SEED",
+  "PROPERTY_TEST_TIME_LIMIT_MS",
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
   "PROVIDER_REQUEST_COMBINATIONS",
   "PROVIDER_REQUEST_SHARD",
@@ -874,10 +902,13 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPOSITORY",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // Nightly issue reporter: workflow run linked from the failure issue.
+  "RUN_URL",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STAGING_STATE",
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
@@ -901,7 +932,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
+  "TURBO_HASH",
   "TURBO_SCM_BASE",
+  "TURN_OUTCOME_COMBINATIONS",
+  "TURN_OUTCOME_SHARD",
   "UPDATE_PROVIDER_REQUEST_PATHS",
   "WXT_STELLA_ORIGINS",
 ]);

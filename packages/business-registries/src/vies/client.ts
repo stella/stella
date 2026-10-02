@@ -1,4 +1,6 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
+import type { RegistryClientOptions } from "../shared/http.js";
 import {
   ViesAPIError,
   ViesRequestError,
@@ -34,7 +36,10 @@ const BASE = "https://ec.europa.eu/taxation_customs/vies/rest-api";
  * @throws {ViesAPIError} on a non-2xx HTTP response.
  * @throws {ViesRequestError} on a network/transport failure.
  */
-export const validateVat = async (input: string): Promise<ViesValidation> => {
+export const validateVat = async (
+  input: string,
+  options: RegistryClientOptions,
+): Promise<ViesValidation> => {
   const parsed = parseVatNumber(input);
   if (!parsed) {
     throw new ViesValidationError(
@@ -64,10 +69,12 @@ export const validateVat = async (input: string): Promise<ViesValidation> => {
       `Invalid VAT format for ${parsed.country}: ${parsed.vat}.`,
     );
   }
-  const url = `${BASE}/ms/${parsed.country}/vat/${encodeURIComponent(parsed.vat)}`;
+  const url = `${BASE}/ms/${encodeRegistryComponent(parsed.country)}/vat/${encodeRegistryComponent(parsed.vat)}`;
 
   const response = await performRegistryRequest({
     url,
+    observer: options.observer,
+    signal: options.signal,
     init: { headers: { Accept: "application/json" } },
     wrapRequestError: (cause) =>
       new ViesRequestError(url, "VIES request failed", { cause }),

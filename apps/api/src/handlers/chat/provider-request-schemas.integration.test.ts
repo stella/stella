@@ -47,18 +47,16 @@ import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
 import { createPromptPrefixLedger } from "@/api/tests/helpers/chat-prompt-prefix";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
-import { emptyCompletionAnswer } from "@/api/tests/helpers/provider-reasoning-answers";
 import {
   ATTACHMENTS,
   cassetteForModel,
+  chatCombinationValues,
   combinationKey,
   enumerateChatCombinations,
   findForeignRequestArtifacts,
   modelOf,
-  pairwiseChatCombinations,
+  planCombinationRun,
   reasoningModelOf,
-  shardOf,
-  threeWiseChatCombinations,
   toolCallAnswerFor,
 } from "@/api/tests/helpers/provider-request-matrix";
 import type {
@@ -102,6 +100,7 @@ import {
   WIRE_PROMPT_SECTIONS,
 } from "@/api/tests/helpers/replayed-harness-model";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { silentAnswerOf } from "@/api/tests/helpers/turn-outcome-matrix";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
   getRlsFixture,
@@ -263,28 +262,12 @@ const combinations = enumerateChatCombinations(cassettes);
  * every combination with `all` (both nightly), either split by
  * `PROVIDER_REQUEST_SHARD=<index>/<count>`.
  */
-const runPlan = (() => {
-  const requested = process.env["PROVIDER_REQUEST_COMBINATIONS"];
-  if (requested !== "all" && requested !== "three-wise") {
-    return {
-      mode: "all-pairs",
-      runs: pairwiseChatCombinations(combinations.included),
-    } as const;
-  }
-  const shard = /^(?<index>\d+)\/(?<count>\d+)$/u.exec(
-    process.env["PROVIDER_REQUEST_SHARD"] ?? "0/1",
-  )?.groups;
-  const index = Number(shard?.["index"] ?? "0");
-  const count = Number(shard?.["count"] ?? "1");
-  const pool =
-    requested === "all"
-      ? combinations.included
-      : threeWiseChatCombinations(combinations.included);
-  return {
-    mode: `${requested === "all" ? "every combination" : "all-triples"}, shard ${String(index)} of ${String(count)}`,
-    runs: shardOf(pool, { count, index }),
-  } as const;
-})();
+const runPlan = planCombinationRun({
+  included: combinations.included,
+  mode: process.env["PROVIDER_REQUEST_COMBINATIONS"],
+  shard: process.env["PROVIDER_REQUEST_SHARD"],
+  valuesOf: chatCombinationValues,
+});
 
 /** Each provider's own model continuing its own plain history with a plain
  *  turn: the conversation the per-provider checks read, run in every mode. */
@@ -317,33 +300,11 @@ const selectedCombinations: readonly ChatCombination[] = (() => {
 /**
  * What a combination's turn breaks today, by the rule it breaks. Each such
  * combination runs as a test marked failing under the finding's name, so it
- * fails loudly once the turn stops breaking the rule.
+ * fails loudly once the turn stops breaking the rule. None today: a new
+ * finding is a condition on the combination that returns the rule it breaks.
  */
-const knownFindingOf = (combination: ChatCombination): string | undefined => {
-  // Hydration hands an image to the model as a data URL
-  // (`createRawChatFilePart`), and the Bedrock Converse adapter takes only
-  // inline image bytes, so the turn fails before its request is sent.
-  // Minimal repro: a Bedrock chat turn with a PNG attached.
-  if (
-    combination.target.provider === "bedrock" &&
-    combination.attachment === "image"
-  ) {
-    return "a Bedrock turn with an image attachment fails before its request";
-  }
-  // OpenAI's reasoning is stored as a thinking part whose signature packs
-  // its encrypted content, and the Anthropic adapter sends every signed
-  // thinking part back as a thinking block: Anthropic is handed a signature
-  // it did not issue. Minimal repro: an OpenAI turn that reasoned before a
-  // tool call, continued on an Anthropic model.
-  if (
-    combination.history === "reasoning" &&
-    combination.origin.provider === "openai" &&
-    combination.target.provider === "anthropic"
-  ) {
-    return "an Anthropic turn is sent the signed reasoning an OpenAI model wrote";
-  }
-  return undefined;
-};
+const knownFindingOf = (_combination: ChatCombination): string | undefined =>
+  undefined;
 
 // --- Conversations ------------------------------------------------------------
 
@@ -620,6 +581,7 @@ const converse = async (
           abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
           dataWorkspaceIds: [],
           orgAIConfig: orgConfigOf(origin),
+          managedAIResidency: "eu",
           organizationId: ids.orgA,
           preserveTokens: 1,
           safeDb,
@@ -659,7 +621,7 @@ const converse = async (
   try {
     replay.serve(
       attempt === "fallback"
-        ? emptyCompletionAnswer(second.answer)
+        ? silentAnswerOf(target.provider, second.answer)
         : second.answer,
     );
     const attached = ATTACHMENTS[attachment];

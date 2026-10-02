@@ -94,11 +94,6 @@ export const timeEntriesKeys = {
     ...timeEntriesKeys.all(workspaceId),
     id,
   ],
-  activeTimer: (workspaceId: string, userId: string) => [
-    ...timeEntriesKeys.all(workspaceId),
-    userId,
-    "timer",
-  ],
   summary: (
     workspaceId: string,
     userId: string,
@@ -318,25 +313,4 @@ export const timeEntrySuggestionsOptions = (
         query: { date, timezoneId },
         signal,
       }),
-  });
-
-export const activeTimerOptions = (workspaceId: string, userId: string) =>
-  queryOptions({
-    staleTime: 0,
-    queryKey: timeEntriesKeys.activeTimer(workspaceId, userId),
-    queryFn: async ({ signal }) => {
-      const page = await fetchTimeEntries({
-        workspaceId,
-        query: {
-          scope: "me",
-          source: "timer",
-          status: "draft",
-          hasActiveTimer: true,
-        },
-        signal,
-      });
-
-      return page.items.at(0) ?? null;
-    },
-    refetchInterval: 60_000,
   });

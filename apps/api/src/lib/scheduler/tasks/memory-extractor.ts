@@ -24,6 +24,10 @@ import {
   createChatRefRegistry,
 } from "@/api/lib/chat/ref-registry";
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
+import {
+  readThreadStoredContentSendModeOnTx,
+  THREAD_STORED_CONTENT_SEND_MODE,
+} from "@/api/lib/chat/thread-stored-content-send-mode";
 import { errorTag } from "@/api/lib/errors/utils";
 import { loadCompactionTranscript } from "@/api/lib/memory/compaction-transcript";
 import { sanitizeMemoryContent } from "@/api/lib/memory/memory-content-safety";
@@ -344,7 +348,8 @@ const extractCandidates = async (
   if (Result.isError(settings)) {
     return Result.err(settings.error);
   }
-  const { orgAIConfig, promptCachingEnabled } = settings.value;
+  const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+    settings.value;
 
   let analytics:
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
@@ -353,6 +358,7 @@ const extractCandidates = async (
   const result = await Result.tryPromise({
     try: async () => {
       analytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         feature: "memory.extractor",
         modelRole: "fast",
         orgAIConfig,
@@ -379,12 +385,24 @@ const extractCandidates = async (
       if (!(await hasCurrentExtractionConsent(db, compaction))) {
         return null;
       }
+      // Extraction has no anonymization step: a thread that switched to
+      // anonymized mode after the claim is not sent, and later claims skip it.
+      if (
+        (await readThreadStoredContentSendModeOnTx({
+          threadId: compaction.threadId,
+          tx: db,
+        })) === THREAD_STORED_CONTENT_SEND_MODE.anonymized
+      ) {
+        return null;
+      }
 
       return await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "batch",
         organizationId: compaction.threadOrganizationId,
         orgAIConfig,
+        managedAIResidency,
         tenantWorkspaceIds: compaction.threadDataWorkspaceIds,
         analytics,
         caching: resolveCaching({

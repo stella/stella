@@ -20,6 +20,7 @@ import { createScopedDbMock, toSafeDbMock } from "@/api/tests/scoped-db-mock";
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
 }));
 // Waive one capability so the refusal path is exercised; the real table is empty.

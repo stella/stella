@@ -22,6 +22,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTemplateId } from "@/api/lib/safe-id-boundaries";
 
 type TemplateRow = typeof templates.$inferSelect;
@@ -174,7 +175,9 @@ export const listTemplatesHandler = async function* ({
   organizationId,
   query,
 }: ListTemplatesProps) {
-  const limit = query.limit ?? LIMITS.templatesPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.templatesPageSizeDefault,
+  );
   const conditions = [eq(templates.organizationId, organizationId)];
 
   if (query.categoryId === UNCATEGORIZED) {

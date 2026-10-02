@@ -83,7 +83,7 @@ const readAIConfig = createSafeRootHandler(
     const ciphertext = row?.aiConfigEncrypted;
     const iv = row?.aiConfigIv;
     const instanceProvisioned = hasTanStackInstanceProvider();
-    const decisionInstanceProvisioned = hasInstanceDecisionModel();
+    const decisionInstanceProvisioned = hasInstanceDecisionModel("customer");
 
     let result: AIConfigResult = {
       configured: false,

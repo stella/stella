@@ -1,7 +1,7 @@
 import { HarmBlockThreshold, HarmCategory } from "@google/genai";
 import { FetchHttpHandler } from "@smithy/fetch-http-handler";
 import { createModel, extendAdapter } from "@tanstack/ai";
-import type { AnyTextAdapter } from "@tanstack/ai";
+import type { AnyTextAdapter, ContentPart, ModelMessage } from "@tanstack/ai";
 import { createAnthropicChat } from "@tanstack/ai-anthropic";
 import type { AnthropicTextProviderOptions } from "@tanstack/ai-anthropic";
 import { BedrockConverseTextAdapter } from "@tanstack/ai-bedrock";
@@ -51,9 +51,23 @@ import {
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { orgAIConfigStatusError } from "@/api/lib/ai-config-response";
 import type { SafeId } from "@/api/lib/branded-types";
+import type {
+  AIDataClass,
+  AIRequestPolicy,
+} from "@/api/lib/chat/ai-data-policy";
+import {
+  checkManagedProviderAvailable,
+  isManagedProviderAvailable,
+  managedProviderUnavailable,
+} from "@/api/lib/chat/provider-data-policy";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
+import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { createStellaOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
+import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
+import {
+  createManagedOpenRouterText,
+  createStellaOpenRouterText,
+} from "@/api/lib/stella-openrouter-text-adapter";
 
 const AI_PROVIDER_VALUES = new Set<string>(AI_PROVIDERS);
 const ANTHROPIC_LEGACY_THINKING_BUDGET_TOKENS = 10_000;
@@ -212,7 +226,7 @@ export type ResolvedTanStackTextModel = {
 export type ResolvedTanStackTextModelInfo = Pick<
   ResolvedTanStackTextModel,
   "keySource" | "modelId" | "provider" | "region"
->;
+> & { availability: "available" | "unavailable" };
 
 /**
  * The model identity as a run records it: provider and model in one string, so
@@ -310,9 +324,11 @@ type ModelOverride = {
 
 type TanStackModelFactoryOptions = {
   provider: AIProvider;
-  apiKey?: string | undefined;
   region?: DataRegion | undefined;
-};
+} & (
+  | { apiKey: string; dataClass: AIDataClass }
+  | ({ apiKey?: undefined } & AIRequestPolicy)
+);
 
 type BedrockTextAdapterConfig = {
   apiKey?: string;
@@ -559,17 +575,40 @@ const createExtendedOpenAIAdapter = (
   return openai(modelId, apiKey);
 };
 
-const createExtendedOpenRouterAdapter = (
-  modelId: string,
-  apiKey: string,
-): AnyTextAdapter => {
-  const openrouter = extendAdapter(createStellaOpenRouterText, [
-    createModel(modelId, {
-      input: ["text", "image", "document"] as const,
-      features: ["structured_outputs"] as const,
-      modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
-    }),
-  ]);
+type OpenRouterAdapterOptions = { modelId: string; apiKey: string } & (
+  | { keySource: "byok" }
+  | { keySource: "public_corpus" }
+  | ({ keySource: "instance" } & Extract<
+      AIRequestPolicy,
+      { dataClass: "customer" }
+    >)
+);
+
+const createExtendedOpenRouterAdapter = ({
+  modelId,
+  apiKey,
+  ...policy
+}: OpenRouterAdapterOptions): AnyTextAdapter => {
+  const openrouter = extendAdapter(
+    policy.keySource === "instance"
+      ? (
+          model: Parameters<typeof createStellaOpenRouterText>[0],
+          key: string,
+        ) =>
+          createManagedOpenRouterText({
+            model,
+            apiKey: key,
+            managedAIResidency: policy.managedAIResidency,
+          })
+      : createStellaOpenRouterText,
+    [
+      createModel(modelId, {
+        input: ["text", "image", "document"] as const,
+        features: ["structured_outputs"] as const,
+        modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
+      }),
+    ],
+  );
   return openrouter(modelId, apiKey);
 };
 
@@ -602,6 +641,45 @@ const requestOptionsOf = (input: object): { abortSignal?: AbortSignal } => {
   return signal instanceof AbortSignal ? { abortSignal: signal } : {};
 };
 
+/**
+ * `part` with an image given as a data URL (how a chat attachment reaches the
+ * model, `createRawChatFilePart`) carried as its inline bytes, the only image
+ * source Converse reads. The payload is bounded by the chat attachment limit
+ * before it is decoded. Any other URL is left as it is for the adapter to
+ * refuse: nothing is fetched on the model's behalf.
+ */
+const withInlineImageBytes = (part: ContentPart): ContentPart => {
+  if (part.type !== "image" || part.source.type !== "url") {
+    return part;
+  }
+  const inline = validateDataUrl({
+    maxBytes: FILE_SIZE_LIMIT_BYTES.chatContextFile,
+    url: part.source.value,
+  });
+  return Result.isError(inline)
+    ? part
+    : {
+        ...part,
+        source: {
+          type: "data",
+          value: inline.value.payload,
+          mimeType: inline.value.mimeType,
+        },
+      };
+};
+
+const withContent = (
+  message: ModelMessage,
+  content: ContentPart[],
+): ModelMessage => ({ ...message, content });
+
+const withInlineImages = (messages: ModelMessage[]): ModelMessage[] =>
+  messages.map((message) =>
+    Array.isArray(message.content)
+      ? withContent(message, message.content.map(withInlineImageBytes))
+      : message,
+  );
+
 // The AWS SDK's default Node HTTP/2 transport closes Converse streams early in Bun.
 class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   private readonly requestHandler = new FetchHttpHandler();
@@ -615,8 +693,12 @@ class BunBedrockTextAdapter extends BedrockConverseTextAdapter<never> {
   // The run's cancel travels with the input built for it: every request path
   // (streaming, structured, structured streaming) builds on this input, and
   // spreading it keeps the symbol-keyed signal, which no command serializes.
+  // Its images go inline, the one form Converse reads.
   protected override buildInput(options: BedrockTextOptions) {
-    const input = super.buildInput(options);
+    const input = super.buildInput({
+      ...options,
+      messages: withInlineImages(options.messages),
+    });
     const signal = options.request?.signal;
     if (signal) {
       Reflect.set(input, REQUEST_SIGNAL, signal);
@@ -711,6 +793,10 @@ const createExtendedBedrockAdapter = (
 export const createTanStackTextAdapterFactory = (
   options: TanStackModelFactoryOptions,
 ): TanStackTextAdapterFactory => {
+  if (options.provider === "bedrock" && options.apiKey?.trim().length === 0) {
+    throw missingProviderCredentialError(options.provider, "BEDROCK_API_KEY");
+  }
+
   const stopReasons = TANSTACK_AI_PROVIDERS.find(
     (provider) => provider === options.provider,
   );
@@ -733,15 +819,23 @@ export const createTanStackTextAdapterFactory = (
       return adapter;
     };
   }
+  if (options.apiKey === undefined) {
+    const availability = checkManagedProviderAvailable(
+      options.provider,
+      options.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
+  }
   const factory = createProviderTextAdapterFactory(options);
   return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
 };
 
-const createProviderTextAdapterFactory = ({
-  provider,
-  apiKey,
-  region,
-}: TanStackModelFactoryOptions): TanStackTextAdapterFactory => {
+const createProviderTextAdapterFactory = (
+  options: TanStackModelFactoryOptions,
+): TanStackTextAdapterFactory => {
+  const { provider, apiKey, region } = options;
   const supportedProvider = resolveTanStackTextProvider({ provider, region });
 
   switch (supportedProvider) {
@@ -779,7 +873,25 @@ const createProviderTextAdapterFactory = ({
         apiKey ?? env.OPENROUTER_API_KEY,
         "OPENROUTER_API_KEY",
       );
-      return (modelId) => createExtendedOpenRouterAdapter(modelId, key);
+      if (
+        options.apiKey !== undefined ||
+        options.dataClass === "public_corpus"
+      ) {
+        return (modelId) =>
+          createExtendedOpenRouterAdapter({
+            modelId,
+            apiKey: key,
+            keySource: options.apiKey !== undefined ? "byok" : "public_corpus",
+          });
+      }
+      return (modelId) =>
+        createExtendedOpenRouterAdapter({
+          modelId,
+          apiKey: key,
+          keySource: "instance",
+          dataClass: options.dataClass,
+          managedAIResidency: options.managedAIResidency,
+        });
     }
     case "mistral": {
       const key = requireCredential(
@@ -852,7 +964,7 @@ const resolveProvider = (): AIProvider => {
   );
 };
 
-export const hasTanStackInstanceProvider = (): boolean => {
+const hasConfiguredTanStackInstanceProvider = (): boolean => {
   if (env.REQUIRE_PERSONAL_AI_KEY) {
     return false;
   }
@@ -868,6 +980,11 @@ export const hasTanStackInstanceProvider = (): boolean => {
     hasInstanceProviderCredentials(env.AI_PROVIDER)
   );
 };
+
+export const hasTanStackInstanceProvider = (): boolean =>
+  hasConfiguredTanStackInstanceProvider() &&
+  (isMockTextAdapterActive() ||
+    isManagedProviderAvailable(resolveProvider(), "customer"));
 
 const providerRegion = (
   config: OrgAIProviderConfig,
@@ -1005,7 +1122,9 @@ export const requireTanStackAIAvailableForRole = ({
   configStatus,
   orgConfig,
   role,
+  dataClass,
 }: {
+  dataClass: AIDataClass;
   configStatus: OrgAIConfigStatus;
   orgConfig: OrgAIConfig | null;
   role: ModelRole;
@@ -1019,13 +1138,18 @@ export const requireTanStackAIAvailableForRole = ({
   }
 
   if (!orgConfig) {
-    if (!hasTanStackInstanceProvider()) {
+    if (!hasConfiguredTanStackInstanceProvider()) {
       return Result.err(byokRoleNotConfiguredError(role));
     }
 
-    const provider = resolveTanStackTextProvider({
-      provider: getActiveProvider(),
-    });
+    const activeProvider = getActiveProvider();
+    if (
+      !isMockTextAdapterActive() &&
+      !isManagedProviderAvailable(activeProvider, dataClass)
+    ) {
+      return Result.err(managedProviderUnavailable(activeProvider));
+    }
+    const provider = resolveTanStackTextProvider({ provider: activeProvider });
     if (!supportsTanStackProviderRole(provider, role)) {
       if (isBYOKProvider(provider)) {
         return Result.err(byokProviderRoleUnsupportedError(provider, role));
@@ -1246,6 +1370,7 @@ const getCachedFactory = (
   const factory = createTanStackTextAdapterFactory({
     provider: config.provider,
     apiKey: config.apiKey,
+    dataClass: "customer",
     ...factoryExtras(config),
   });
   byokCache.set(key, factory);
@@ -1261,9 +1386,12 @@ const getCachedFactory = (
  */
 export const getActiveProvider = (): AIProvider => resolveProvider();
 
-const getInstanceFactory = (): TanStackTextAdapterFactory =>
+const getInstanceFactory = (
+  policy: AIRequestPolicy,
+): TanStackTextAdapterFactory =>
   createTanStackTextAdapterFactory({
     provider: getActiveProvider(),
+    ...policy,
   });
 
 const MODEL_OVERRIDES = {
@@ -1776,6 +1904,7 @@ const resolveInstanceTextModel = ({
   organizationId,
   reasoningEffort,
   useRoleReasoningDefault,
+  ...policy
 }: {
   role: ModelRole;
   modelId: string;
@@ -1783,13 +1912,22 @@ const resolveInstanceTextModel = ({
   organizationId: SafeId<"organization"> | null;
   reasoningEffort?: ReasoningEffort | undefined;
   useRoleReasoningDefault?: boolean | undefined;
-}): ResolvedTanStackTextModel => {
+} & AIRequestPolicy): ResolvedTanStackTextModel => {
+  if (!isMockTextAdapterActive()) {
+    const availability = checkManagedProviderAvailable(
+      provider,
+      policy.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
+  }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
   assertInstanceModelRated(modelId);
 
   return buildResolvedTextModel({
-    adapter: getInstanceFactory()(modelId),
+    adapter: getInstanceFactory(policy)(modelId),
     keySource: "instance",
     provider: supportedProvider,
     modelId,
@@ -1805,7 +1943,7 @@ export const getTanStackTextModelForRole = (
   orgConfig: OrgAIConfig | null | undefined,
   options: {
     organizationId: SafeId<"organization"> | null;
-  },
+  } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   if (orgConfig) {
     const selection = orgConfig.overrideModels[role];
@@ -1817,24 +1955,34 @@ export const getTanStackTextModelForRole = (
     });
   }
 
-  if (!hasTanStackInstanceProvider()) {
+  if (!hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
   const provider = getActiveProvider();
+  if (!isMockTextAdapterActive()) {
+    const availability = checkManagedProviderAvailable(
+      provider,
+      options.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
+  }
   const modelId = MODEL_OVERRIDES[role] ?? DEFAULT_MODELS[provider][role];
   return resolveInstanceTextModel({
     role,
     modelId,
     provider,
-    organizationId: options.organizationId,
+    ...options,
   });
 };
 
 export const getTanStackTextModelInfoForRole = (
   role: ModelRole,
   orgConfig: OrgAIConfig | null | undefined,
-  _options: {
+  options: {
+    dataClass: AIDataClass;
     organizationId: SafeId<"organization"> | null;
   },
 ): ResolvedTanStackTextModelInfo => {
@@ -1854,6 +2002,7 @@ export const getTanStackTextModelInfoForRole = (
     });
 
     return {
+      availability: "available",
       keySource: "byok",
       modelId: selection.modelId,
       provider,
@@ -1861,7 +2010,7 @@ export const getTanStackTextModelInfoForRole = (
     };
   }
 
-  if (!hasTanStackInstanceProvider()) {
+  if (!hasConfiguredTanStackInstanceProvider()) {
     throw byokRoleNotConfiguredError(role);
   }
 
@@ -1873,6 +2022,11 @@ export const getTanStackTextModelInfoForRole = (
   // model that resolveInstanceTextModel would refuse as unrated.
   assertInstanceModelRated(modelId);
   return {
+    availability:
+      isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, options.dataClass)
+        ? "available"
+        : "unavailable",
     keySource: "instance",
     modelId,
     provider: supportedProvider,
@@ -1909,6 +2063,7 @@ export const getTanStackTextModelInfoById = (
   modelId: string,
   orgConfig: OrgAIConfig | null | undefined,
   role: ModelRole,
+  dataClass: AIDataClass,
 ): ResolvedTanStackTextModelInfo => {
   const override = decodeModelOverride(modelId);
 
@@ -1922,6 +2077,7 @@ export const getTanStackTextModelInfoById = (
       region,
     });
     return {
+      availability: "available",
       keySource: "byok",
       modelId: override.modelId,
       provider,
@@ -1929,12 +2085,17 @@ export const getTanStackTextModelInfoById = (
     };
   }
 
-  if (!hasTanStackInstanceProvider() && !override.provider) {
+  if (!hasConfiguredTanStackInstanceProvider() && !override.provider) {
     throw byokRoleNotConfiguredError(role);
   }
 
   const provider = override.provider ?? getActiveProvider();
   return {
+    availability:
+      isMockTextAdapterActive() ||
+      isManagedProviderAvailable(provider, dataClass)
+        ? "available"
+        : "unavailable",
     keySource: "instance",
     modelId: override.modelId,
     provider: resolveTanStackTextProvider({ provider }),
@@ -1948,7 +2109,7 @@ export const getTanStackTextModelById = (
     role: ModelRole;
     organizationId: SafeId<"organization"> | null;
     reasoningEffort?: ReasoningEffort | undefined;
-  },
+  } & AIRequestPolicy,
 ): ResolvedTanStackTextModel => {
   const override = decodeModelOverride(modelId);
 
@@ -1966,16 +2127,26 @@ export const getTanStackTextModelById = (
     });
   }
 
-  if (!hasTanStackInstanceProvider() && !override.provider) {
+  if (!hasConfiguredTanStackInstanceProvider() && !override.provider) {
     throw byokRoleNotConfiguredError(options.role);
   }
 
   const provider = override.provider ?? getActiveProvider();
+  if (!isMockTextAdapterActive()) {
+    const availability = checkManagedProviderAvailable(
+      provider,
+      options.dataClass,
+    );
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
+  }
   const supportedProvider = resolveTanStackTextProvider({ provider });
   const resolvedModelId = override.modelId;
   if (override.provider) {
     assertInstanceModelRated(resolvedModelId);
     const factory = createTanStackTextAdapterFactory({
+      ...options,
       provider: supportedProvider,
     });
     return buildResolvedTextModel({
@@ -1991,11 +2162,9 @@ export const getTanStackTextModelById = (
   }
 
   return resolveInstanceTextModel({
-    role: options.role,
+    ...options,
     modelId: resolvedModelId,
     provider: supportedProvider,
-    organizationId: options.organizationId,
-    reasoningEffort: options.reasoningEffort,
     useRoleReasoningDefault: false,
   });
 };

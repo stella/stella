@@ -71,6 +71,7 @@ const externalMcpToolAccess = ({
 }):
   | {
       access: "read";
+      readClass: "tenant";
       annotations: McpToolAnnotations & {
         destructiveHint: false;
         readOnlyHint: true;
@@ -88,6 +89,7 @@ const externalMcpToolAccess = ({
   readOnlyHint === true
     ? {
         access: "read",
+        readClass: "tenant",
         annotations: {
           title,
           destructiveHint: false,
@@ -219,6 +221,7 @@ export const skillToolDefinition = (
   skill: Pick<ResolvedSkillTool, "description" | "displayName" | "exposedName">,
 ): McpToolDefinition => ({
   access: "read",
+  readClass: "tenant",
   annotations: {
     ...SKILL_TOOL_ANNOTATIONS,
     title: toDynamicToolTitle(skill.displayName) || skill.exposedName,

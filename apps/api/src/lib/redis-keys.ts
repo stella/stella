@@ -31,9 +31,11 @@ import { FOLIO_COLLAB_REDIS_SCOPE } from "@stll/api-contract/folio-collab";
  */
 export const COORDINATION_KEY_EXPIRY = {
   "api-ratelimit": "ttl",
+  "case-law-publisher-gate": "ttl",
   "auth-ratelimit": "ttl",
   "mcp-gateway-ratelimit": "ttl",
   "action-admission": "ttl",
+  "mcp-read-fence": "ttl",
   "feedback-intake": "ttl",
   // Pub/sub channels do not materialize values. The only stored key under this
   // scope is Hocuspocus's Redlock key, whose lockTimeout supplies its TTL.

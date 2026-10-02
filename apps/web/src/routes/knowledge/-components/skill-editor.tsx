@@ -13,7 +13,7 @@ import {
   FilePlusIcon,
   FileTextIcon,
   FolderPlusIcon,
-  MessageSquarePlusIcon,
+  NewChatIcon,
   PencilIcon,
   PlusIcon,
   PowerIcon,
@@ -679,7 +679,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
                 size="icon-sm"
                 variant="ghost"
               >
-                <MessageSquarePlusIcon className="size-4" />
+                <NewChatIcon className="size-4" />
               </Button>
             )}
             {detail.data && (
@@ -771,7 +771,7 @@ export function SkillEditor({ skillId }: SkillEditorProps) {
       >
         <div className="mb-2 flex items-center gap-1 px-1">
           <p className="text-muted-foreground me-auto text-xs font-semibold tracking-wider uppercase">
-            {tSkills("filesHeading")}
+            {t("common.files")}
           </p>
           {allFolderIds.size > 0 && (
             <FolderExpandToggle

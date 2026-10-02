@@ -268,6 +268,7 @@ jobs:
   promote-staging:
     name: Promote staging images
     needs: [build-api, build-web]
+    if: github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     timeout-minutes: 360
     # Deployment and its smoke verification are one serialized side-effecting
@@ -279,6 +280,7 @@ jobs:
     permissions:
       contents: read
       deployments: write
+      statuses: write
     # Release App key lives in this environment (main and v* tags only).
     environment: release-app
     steps:
@@ -336,6 +338,7 @@ jobs:
 
       # The commit staging is running, recorded where it outlives this run.
       - name: Record staging deployment
+        id: deployment
         if: steps.current.outputs.promoted == 'true'
         env:
           DEPLOY_ENVIRONMENT: staging
@@ -359,8 +362,15 @@ jobs:
                 --method POST --input - --jq '.id'
           )"
 
-          jq -n '{state: "success", environment_url: "https://staging.stll.app"}' |
+          echo "id=${deployment_id}" >>"$GITHUB_OUTPUT"
+
+          jq -n '{state: "in_progress", environment_url: "https://staging.stll.app"}' |
             gh api "repos/${GITHUB_REPOSITORY}/deployments/${deployment_id}/statuses" \
+              --method POST --input - >/dev/null
+
+          jq -n --arg run "$GITHUB_RUN_ID" \
+            '{state: "pending", context: "staging/verified", description: ("Staging smoke pending: run " + $run)}' |
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
               --method POST --input - >/dev/null
 
       # Post-deploy verification stays in the serialized promotion job. If it
@@ -384,26 +394,16 @@ jobs:
         env:
           NPM_TOKEN: ""
 
-      # Playwright installs its pinned browser; the runner's Chrome channel is unrelated.
-      - name: Disable runner Chrome apt source
+      - name: Verify image-provided Chromium
         if: steps.current.outputs.promoted == 'true'
-        run: |
-          chrome_apt_source=/etc/apt/sources.list.d/google-chrome.list
-          if [[ -f "$chrome_apt_source" ]]; then
-            sudo mv "$chrome_apt_source" "$chrome_apt_source.disabled"
-          fi
-
-      - name: Install Playwright browser
-        if: steps.current.outputs.promoted == 'true'
-        run: |
-          cd apps/web
-          bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/install-deps.sh" chromium
-          bunx playwright install chromium
+        uses: ./.github/actions/setup-playwright
 
       - name: Run staging web smoke
+        id: web-smoke
         if: steps.current.outputs.promoted == 'true'
-        run: bun --filter @stll/web test:e2e:staging
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging
         env:
+          STAGING_STATE: ${{ vars.STAGING_STATE }}
           E2E_WEB_URL: https://staging.stll.app
           E2E_API_URL: https://api-staging.stll.app
           SMOKE_SESSION_SECRET: ${{ secrets.SMOKE_SESSION_SECRET }}
@@ -438,6 +438,7 @@ jobs:
       # deps condition this step ran after a failed deploy with no toolchain
       # installed and died with `bun: command not found`.
       - name: Run staging API chat smoke
+        id: api-smoke
         if: ${{ steps.current.outputs.promoted == 'true' && !cancelled() && steps.smoke-deps.conclusion == 'success' }}
         run: bun apps/api/src/scripts/post-deploy-smoke.ts "$E2E_API_URL"
         env:
@@ -473,9 +474,33 @@ jobs:
           SMOKE_AI_OPENAI_API_KEY: ${{ secrets.STAGING_SMOKE_OPENAI_API_KEY }}
 
       - name: Upload Playwright report
-        if: ${{ steps.current.outputs.promoted == 'true' && failure() }}
+        if: ${{ always() && steps.web-smoke.outcome != '' && steps.web-smoke.outcome != 'skipped' }}
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: staging-smoke-report
           path: apps/web/playwright-report/
           retention-days: 7
+
+      - name: Record staging verification
+        if: ${{ always() && steps.deployment.outputs.id != '' }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          WEB_SMOKE: ${{ steps.web-smoke.outcome }}
+          API_SMOKE: ${{ steps.api-smoke.outcome }}
+          JOB_STATUS: ${{ job.status }}
+        run: |
+          set -euo pipefail
+          state=failure
+          if [[ "$WEB_SMOKE" == "success" && "$API_SMOKE" == "success" && "$JOB_STATUS" != "cancelled" ]]; then
+            state=success
+          fi
+          run_url="${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          jq -n --arg state "$state" --arg run "$GITHUB_RUN_ID" --arg url "$run_url" \
+            '{state: $state, context: "staging/verified", description: ("Staging smoke " + $state + ": run " + $run), target_url: $url}' |
+            gh api "repos/${GITHUB_REPOSITORY}/statuses/${GITHUB_SHA}" \
+              --method POST --input - >/dev/null
+          jq -n --arg state "$state" --arg url "$run_url" \
+            '{state: $state, environment_url: "https://staging.stll.app", log_url: $url}' |
+            gh api "repos/${GITHUB_REPOSITORY}/deployments/${DEPLOYMENT_ID}/statuses" \
+              --method POST --input - >/dev/null

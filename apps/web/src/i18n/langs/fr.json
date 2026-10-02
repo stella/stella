@@ -487,6 +487,17 @@
     "failedToStartTimer": "Impossible de démarrer le chronomètre",
     "failedToStopTimer": "Impossible d'arrêter le chronomètre",
     "filterStatus": "Filtrer par statut",
+    "globalTimer": {
+      "confirm": "Confirmer le temps",
+      "discard": "Abandonner le chronomètre",
+      "matterInaccessible": "Choisissez un dossier auquel vous avez accès.",
+      "narrativeRequired": "Ajoutez une description avant de confirmer le temps.",
+      "pause": "Mettre en pause",
+      "periodLocked": "Ce mois est verrouillé. Demandez à un administrateur de le déverrouiller.",
+      "resume": "Reprendre",
+      "timerUnavailable": "Ce chronomètre n’est plus disponible. Actualisez la liste.",
+      "title": "Chronomètres"
+    },
     "hourlyRateMustBeNonNegative": "Le taux horaire ne peut pas être négatif",
     "hours": "Heures",
     "invoiceNarrative": "Description de la facture",
@@ -858,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Résumé",
+      "caseFileMayHoldOthers": "Ce dossier peut également contenir d’autres décisions.",
       "citedBy": "Cité par",
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
@@ -978,6 +990,7 @@
         "description": "Vérifiez attentivement le site web et la cible. Le contenu de la page n’est pas fiable et ne peut pas autoriser une autre action.",
         "modeReads": "La lecture des pages s’exécute sans confirmation jusqu’à la fin de cette session.",
         "question": "Autoriser cette action dans le navigateur ?",
+        "realValues": "Ce site web reçoit les valeurs réelles affichées ci-dessous. Le mode anonymisé ne s’applique qu’à ce que voit l’IA.",
         "within": "Dans"
       },
       "denied": "Refusé",
@@ -1082,6 +1095,7 @@
     "focusSuggestion": "Cibler la suggestion : {topic}",
     "folioCitationFallback": "p. {n}",
     "forkFromHere": "Créer une nouvelle conversation à partir d’ici",
+    "forkInSidePanel": "Créer une nouvelle conversation à partir d’ici dans le panneau latéral",
     "forkedFrom": "Créée à partir de <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Créée à partir d’une conversation qui n’est plus disponible",
     "forkedThread": "Issue d’une autre conversation",
@@ -1089,6 +1103,10 @@
     "greeting": "Sur quoi souhaitez-vous travailler ?",
     "greetingSubtitle": "Commencez par un dossier, un document ou une question simple.",
     "hideThread": "Masquer la conversation",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {et # autre} many {et # autres} other {et # autres}}"
+    },
     "improvePrompt": "Améliorer le prompt",
     "improvePromptDraftChanged": "Le brouillon a changé, l'amélioration n'a donc pas été appliquée.",
     "improvePromptPlainTextOnly": "L'amélioration du prompt est disponible uniquement pour le texte brut.",
@@ -1141,6 +1159,7 @@
       "viaProvider": "par {provider}"
     },
     "newChat": "Nouvelle conversation",
+    "newChatInSidePanel": "La nouvelle conversation est disponible dans le panneau latéral",
     "noPromptPresetOnly": "Aucun message, préréglage uniquement",
     "noThreads": "Aucune conversation",
     "officeCitationUnavailable": "Cette citation n’est plus disponible.",
@@ -1188,6 +1207,12 @@
     "richContentLoading": "Chargement du contenu interactif…",
     "richContentTitle": "Contenu interactif",
     "richContentUnavailable": "Ce contenu ne peut pas être affiché en toute sécurité.",
+    "selection": {
+      "askInNewChat": "Demander dans une nouvelle conversation",
+      "quoteInReply": "Citer dans la réponse",
+      "quotedText": "« {quote} »",
+      "toolbarLabel": "Texte sélectionné"
+    },
     "sendError": "Un problème est survenu lors de l’envoi de votre message. Contactez le support si l’erreur persiste.",
     "sendErrorAnonymizationBlocked": "stella n’a pas pu anonymiser une pièce jointe, donc rien n’a été envoyé. Retirez le fichier ou envoyez ce message sans anonymisation.",
     "sendErrorEmptyCompletion": "L’IA a renvoyé une réponse vide. Réessayez ou reformulez votre message.",
@@ -1341,7 +1366,8 @@
       "interrupted": "Interrompu avant la fin",
       "output": "Résultat",
       "sourceCode": "Code source",
-      "toggleDetails": "Afficher les détails"
+      "toggleDetails": "Afficher les détails",
+      "unrestoredFields": "En mode anonymisé, {count, plural, one {# champ n’a pas pu être rempli} other {# champs n’ont pas pu être remplis}} avec des valeurs réelles. À vérifier : {fields}"
     },
     "unsupportedFileType": "Type de fichier non pris en charge",
     "uploadFailed": "Échec du traitement du fichier",
@@ -1585,6 +1611,7 @@
     },
     "fact": "Fait",
     "failed": "Échec",
+    "files": "Fichiers",
     "filter": "Filtrer",
     "filters": "Filtres",
     "find": "Rechercher",
@@ -3249,7 +3276,6 @@
       "editSkill": "Modifier la compétence",
       "enableSkill": "Activer la compétence",
       "fileExists": "Un fichier avec ce chemin existe déjà",
-      "filesHeading": "Fichiers",
       "howItRuns": "Mode d’exécution",
       "importFailureFetch": "La source de la compétence n’a pas pu être chargée.",
       "importFailureIntegrity": "La source de la compétence a changé après sa détection. Vérifiez-la à nouveau.",
@@ -5974,7 +6000,8 @@
         "openReport": "Ouvrir le rapport",
         "submit": "Exporter le rapport",
         "templateLabel": "Modèle de rapport",
-        "title": "Exporter le rapport"
+        "title": "Exporter le rapport",
+        "withoutAiSummaries": "Exporter sans résumés générés par IA"
       },
       "saveAsTemplate": "Enregistrer comme préréglage…",
       "selectProperty": "Sélectionner une propriété",

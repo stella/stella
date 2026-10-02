@@ -11,6 +11,11 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  rulingGroupKeys,
+  rulingKeysOf,
+} from "@stll/api-contract/decision-ruling-identity";
+
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildPlDecision,
@@ -106,13 +111,20 @@ describe("an administrative court's ruling filed by the UODO portal", () => {
         "sa|wojewódzki sąd administracyjny w warszawie|IISA/WA996/23|2023-11-06|wyrok",
       ].toSorted(),
     );
+    const groups = rulingGroupKeys(rulingKeysOf(uodo));
+    expect(groups).toHaveLength(1);
+    expect(rulingGroupKeys(rulingKeysOf(nsa))).toEqual(groups);
   });
 
   test("pairs on court, docket, date and kind where one side states no portal id", async () => {
     const nsa = await nsaRow({ judgment_id: "dataset-row-without-portal-id" });
-    expect(shared(await uodoRuling(), nsa)).toEqual([
+    const uodo = await uodoRuling();
+    expect(shared(uodo, nsa)).toEqual([
       "sa|wojewódzki sąd administracyjny w warszawie|IISA/WA996/23|2023-11-06|wyrok",
     ]);
+    const groups = rulingGroupKeys(rulingKeysOf(uodo));
+    expect(groups).toHaveLength(1);
+    expect(rulingGroupKeys(rulingKeysOf(nsa))).toEqual(groups);
   });
 
   test("another ruling in the same case does not pair", async () => {
@@ -158,6 +170,9 @@ describe("a Constitutional Tribunal ruling in SAOS and on the Tribunal's portal"
     expect(shared(saosTribunalRow(), portal)).toEqual([
       "tk|sk 14/11|2013-10-22|wyrok",
     ]);
+    const groups = rulingGroupKeys(rulingKeysOf(saosTribunalRow()));
+    expect(groups).toHaveLength(1);
+    expect(rulingGroupKeys(rulingKeysOf(portal))).toEqual(groups);
   });
 
   test("another ruling in the same case does not pair", async () => {

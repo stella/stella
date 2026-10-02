@@ -299,8 +299,8 @@ describe("durable chat turn persistence", () => {
       });
       expect(turn).toMatchObject({
         assistantMessageId,
-        failureCode: "internal",
-        failureRetryable: canonical.retryable,
+        failureCode: "boundary-refusal",
+        failureRetryable: false,
         status: "failed",
       });
       const assistant = await testDb.query.chatMessages.findFirst({
@@ -371,6 +371,7 @@ describe("durable chat turn persistence", () => {
 
     unwrap(
       await persistFailedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         code: "connector-discovery",
         execution,
         owningAssistantMessage,
@@ -466,6 +467,7 @@ describe("durable chat turn persistence", () => {
     // owning id, no parts, and only this run's metadata.
     unwrap(
       await finalizeAssistantTurn({
+        indexThread: async () => await Promise.resolve(),
         acceptedSendMode: null,
         threadNames: NO_THREAD_NAMES,
         existingIds: new Set([userMessageId, assistantMessageId]),
@@ -569,6 +571,7 @@ describe("durable chat turn persistence", () => {
     }
 
     const result = await finalizeAssistantTurn({
+      indexThread: async () => await Promise.resolve(),
       acceptedSendMode: null,
       threadNames: NO_THREAD_NAMES,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
@@ -657,6 +660,7 @@ describe("durable chat turn persistence", () => {
     let auditCalls = 0;
 
     const result = await finalizeAssistantTurn({
+      indexThread: async () => await Promise.resolve(),
       acceptedSendMode: null,
       threadNames: NO_THREAD_NAMES,
       dataScopeExpansion: { newWorkspaceIds: [ids.wsA1] },
@@ -2041,6 +2045,7 @@ describe("settling a continuation reports a stored message that breaks the rules
     const analytics = installRecordingAnalytics();
     try {
       const result = await finalizeAssistantTurn({
+        indexThread: async () => await Promise.resolve(),
         acceptedSendMode: null,
         threadNames: NO_THREAD_NAMES,
         existingIds: new Set([userMessageId, assistantMessageId]),

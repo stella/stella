@@ -411,3 +411,68 @@ describe("the excerpt a corpus hit shows", () => {
     expect(cut("long", { passage })).toBe(ENGINE);
   });
 });
+
+describe("sentence excerpts for agent triage", () => {
+  test.each(["Match", "unmatched"])(
+    "translates a folded snippet's mark across a sentence boundary with query %s",
+    (query) => {
+      const preceding = `${"a".repeat(384)} tail.`;
+      const matched = "Match explains the holding.";
+      const passage = `${preceding}${" ".repeat(10)}${matched}`;
+      expect(preceding).toHaveLength(390);
+      expect(passage.indexOf("Match")).toBe(400);
+
+      const excerpt = corpusExcerpt({
+        engineSnippet: "tail. <mark>Match</mark>",
+        excerpt: "long",
+        language: null,
+        passage,
+        sentenceAligned: true,
+        tokens: tokenizeCorpusFreeText(query),
+      });
+
+      expect(stripSearchHighlightMarkup(excerpt ?? "")).toBe(matched);
+      expect(excerpt).toContain("<mark>Match</mark>");
+    },
+  );
+
+  test("keeps the matched sentence whole at every position within a bounded window", () => {
+    const sentences = Array.from(
+      { length: 12 },
+      (_, index) =>
+        `Sentence ${index} explains the legal principle in some detail. `,
+    );
+    const passage = sentences.join("");
+    for (const sentence of sentences) {
+      const result = corpusExcerpt({
+        engineSnippet: `<mark>${sentence.trim()}</mark>`,
+        excerpt: "long",
+        sentenceAligned: true,
+        language: null,
+        passage,
+        tokens: [],
+      });
+      const plain = stripSearchHighlightMarkup(result ?? "");
+      expect(plain).toContain(sentence.trim());
+      expect(plain.length).toBeLessThanOrEqual(400);
+      expect(plain).toMatch(/^Sentence \d+ /u);
+      expect(plain).toEndWith(".");
+      expect(passage).toContain(plain);
+    }
+  });
+
+  test("bounds an unusually long sentence without cutting a word", () => {
+    const result = corpusExcerpt({
+      engineSnippet: "<mark>náhrada</mark>",
+      excerpt: "long",
+      sentenceAligned: true,
+      language: null,
+      passage: `${"word ".repeat(100)}náhrada ${"word ".repeat(100)}ends.`,
+      tokens: [],
+    });
+    const plain = stripSearchHighlightMarkup(result ?? "");
+    expect(plain).toContain("náhrada");
+    expect(plain.length).toBeLessThanOrEqual(400);
+    expect(plain.trimEnd()).toMatch(/(?:word|ends\.)$/u);
+  });
+});

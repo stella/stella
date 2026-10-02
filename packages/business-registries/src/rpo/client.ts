@@ -1,6 +1,12 @@
 import { Result } from "better-result";
 
-import { isRecord } from "../shared/guards.js";
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
+import {
+  hasOptionalString,
+  hasOptionalNumber,
+  isRecord,
+  isOptionalArrayOf,
+} from "../shared/guards.js";
 import {
   performRegistryRequest,
   readRegistryJson,
@@ -38,37 +44,71 @@ export type RpoClientError = RpoAPIError | RpoRequestError | RpoValidationError;
 
 type RpoUpstreamError = RpoAPIError | RpoRequestError;
 
-// Record lists may be absent; when present, every entry is an object.
-const isOptionalRecordList = (value: unknown): boolean =>
-  value === undefined || (Array.isArray(value) && value.every(isRecord));
+const isRpoTimed = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "validFrom") &&
+  hasOptionalString(value, "validTo");
+
+const isRpoCode = (value: unknown): boolean =>
+  value === undefined || (isRecord(value) && hasOptionalString(value, "code"));
+
+const isRpoAddress = (value: unknown): boolean =>
+  isRpoTimed(value) &&
+  isRecord(value) &&
+  isRpoCode(value["country"]) &&
+  isRpoCode(value["municipality"]);
+
+const isRpoSourceRegister = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isRpoCode(value["value"]) &&
+    isOptionalArrayOf(value["registrationOffices"], isRpoTimed) &&
+    isOptionalArrayOf(value["registrationNumbers"], isRpoTimed));
+
+const isRpoCodedRecord = (value: unknown): boolean =>
+  isRpoTimed(value) && isRecord(value) && isRpoCode(value["value"]);
+
+const isRpoPerson = (value: unknown): boolean =>
+  isRpoTimed(value) &&
+  isRecord(value) &&
+  isRpoCode(value["stakeholderType"]) &&
+  isRpoCode(value["statutoryBodyMember"]);
+
+const isRpoEquity = (value: unknown): boolean =>
+  isRpoTimed(value) &&
+  isRecord(value) &&
+  hasOptionalNumber(value, "value") &&
+  hasOptionalNumber(value, "valuePaid") &&
+  isRpoCode(value["currency"]);
+
+const isRpoStatisticalCodes = (value: unknown): boolean =>
+  value === undefined || (isRecord(value) && isRpoCode(value["mainActivity"]));
 
 const isRpoSearchHit = (value: unknown): value is RpoRawSearchHit =>
   isRecord(value) &&
   typeof value["id"] === "number" &&
-  isOptionalRecordList(value["identifiers"]) &&
-  isOptionalRecordList(value["fullNames"]) &&
-  isOptionalRecordList(value["addresses"]);
+  isRpoSourceRegister(value["sourceRegister"]) &&
+  isOptionalArrayOf(value["identifiers"], isRpoTimed) &&
+  isOptionalArrayOf(value["fullNames"], isRpoTimed) &&
+  isOptionalArrayOf(value["addresses"], isRpoAddress);
 
 const isRpoSearchResponse = (value: unknown): value is RpoRawSearchResponse =>
   isRecord(value) &&
   Array.isArray(value["results"]) &&
   value["results"].every(isRpoSearchHit);
 
-const ENTITY_LIST_FIELDS = [
-  "legalForms",
-  "legalStatuses",
-  "activities",
-  "statutoryBodies",
-  "stakeholders",
-  "authorizations",
-  "equities",
-  "predecessors",
-  "successors",
-] as const;
-
 const isRpoEntity = (value: unknown): value is RpoRawEntity =>
   isRecord(value) &&
-  ENTITY_LIST_FIELDS.every((field) => isOptionalRecordList(value[field])) &&
+  isOptionalArrayOf(value["legalForms"], isRpoCodedRecord) &&
+  isOptionalArrayOf(value["legalStatuses"], isRpoCodedRecord) &&
+  isOptionalArrayOf(value["activities"], isRpoTimed) &&
+  isOptionalArrayOf(value["statutoryBodies"], isRpoPerson) &&
+  isOptionalArrayOf(value["stakeholders"], isRpoPerson) &&
+  isOptionalArrayOf(value["authorizations"], isRpoTimed) &&
+  isOptionalArrayOf(value["equities"], isRpoEquity) &&
+  isOptionalArrayOf(value["predecessors"], isRpoTimed) &&
+  isOptionalArrayOf(value["successors"], isRpoTimed) &&
+  isRpoStatisticalCodes(value["statisticalCodes"]) &&
   isRpoSearchHit(value);
 
 // The guards check the record structure; a payload whose leaf fields break the
@@ -111,15 +151,19 @@ const readErrorMessage = async (response: Response): Promise<string | null> => {
 };
 
 /** GET a JSON resource. Resolves to `null` on 404 (no such record). */
+type RpoGetOptions<T> = RegistryClientOptions & {
+  isExpectedShape: (value: unknown) => value is T;
+};
+
 const rpoGet = async <T>(
   url: string,
-  isExpectedShape: (value: unknown) => value is T,
-  signal: AbortSignal | undefined,
+  { isExpectedShape, signal, observer }: RpoGetOptions<T>,
 ): Promise<Result<T | null, RpoUpstreamError>> => {
   const response = await Result.tryPromise({
     try: async () =>
       await performRegistryRequest({
         url,
+        observer,
         init: { headers: { Accept: "application/json" } },
         signal,
         timeoutMs: REQUEST_TIMEOUT_MS,
@@ -176,10 +220,13 @@ const rpoGet = async <T>(
 
 const search = async (
   params: Record<string, string>,
-  signal: AbortSignal | undefined,
+  options: RegistryClientOptions,
 ): Promise<Result<RpoRawSearchHit[], RpoUpstreamError>> => {
   const url = `${SEARCH_URL}?${new URLSearchParams(params).toString()}`;
-  const response = await rpoGet(url, isRpoSearchResponse, signal);
+  const response = await rpoGet(url, {
+    ...options,
+    isExpectedShape: isRpoSearchResponse,
+  });
   if (response.isErr()) {
     return Result.err(response.error);
   }
@@ -241,14 +288,13 @@ export type LookupOptions = RegistryClientOptions & {
  */
 export const lookupByIco = async (
   input: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<Result<RpoEntity | null, RpoClientError>> => {
   const ico = normalizeIco(input);
   if (!isIcoShape(ico)) {
     return Result.err(new RpoValidationError(`Invalid Slovak IČO: ${input}`));
   }
-  const signal = options?.signal;
-  const hits = await search({ identifier: ico }, signal);
+  const hits = await search({ identifier: ico }, options);
   if (hits.isErr()) {
     return Result.err(hits.error);
   }
@@ -257,13 +303,12 @@ export const lookupByIco = async (
     return Result.ok(null);
   }
 
-  const current = options?.view !== "historical";
+  const current = options.view !== "historical";
   // The API reads only the literal `true` as true.
   const query = current ? "" : "?showHistoricalData=true";
   const entity = await rpoGet(
-    `${ENTITY_URL}/${encodeURIComponent(String(hit.id))}${query}`,
-    isRpoEntity,
-    signal,
+    `${ENTITY_URL}/${encodeRegistryComponent(String(hit.id))}${query}`,
+    { ...options, isExpectedShape: isRpoEntity },
   );
   if (entity.isErr()) {
     return Result.err(entity.error);
@@ -328,21 +373,21 @@ const nameRank = (name: string, query: string): number => {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<Result<RpoSearchResult[], RpoClientError>> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     return Result.err(new RpoValidationError("Search name must not be empty"));
   }
   const limit = clampSearchLimit(
-    options?.limit ?? DEFAULT_SEARCH_LIMIT,
+    options.limit ?? DEFAULT_SEARCH_LIMIT,
     MAX_SEARCH_LIMIT,
   );
   const query = foldForMatch(trimmed);
   const rank = (result: RpoSearchResult): number =>
     nameRank(foldForMatch(result.name), query) * 2 +
     (result.status.type === "active" ? 0 : 1);
-  const hits = await search({ fullName: trimmed }, options?.signal);
+  const hits = await search({ fullName: trimmed }, options);
   if (hits.isErr()) {
     return Result.err(hits.error);
   }

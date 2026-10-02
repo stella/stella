@@ -11,6 +11,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AIUsageMetering } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
 import { splitPropertiesForBudget } from "@/api/lib/structured-output-budget";
@@ -71,6 +72,7 @@ type GenerateWorkflowDataProps = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: string;
   orgAIConfig?: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering?: AIUsageMetering | undefined;
@@ -143,6 +145,7 @@ export const buildWorkflowAIAnalyticsProps = ({
   usageMetering,
   workspaceId,
 }: BuildWorkflowAIAnalyticsPropsInput): WorkflowAIAnalyticsProps => ({
+  dataClass: "customer" as const,
   feature: "workflow.generate-batch",
   modelRole: "pdf",
   orgAIConfig,
@@ -233,6 +236,7 @@ const askSystemOne = async ({
   }
 
   const { decisions } = await decideMany({
+    dataClass: "customer",
     id: "workflow.table-batch",
     orgAIConfig,
     state: plan.state,
@@ -283,6 +287,7 @@ export const generateWorkflowData = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   serviceTier,
   usageMetering,
@@ -315,7 +320,13 @@ export const generateWorkflowData = async ({
   // and cannot know how many of them one request may carry.
   const model = Result.try({
     try: () =>
-      resolveTanStackTextModel({ role: "pdf", orgAIConfig, organizationId }),
+      resolveTanStackTextModel({
+        dataClass: "customer",
+        managedAIResidency,
+        role: "pdf",
+        orgAIConfig,
+        organizationId,
+      }),
     catch: (error) =>
       new WorkflowIntegrationError({
         message: "Workflow AI model resolution failed",
@@ -460,8 +471,10 @@ export const generateWorkflowData = async ({
     return await Result.tryPromise({
       try: async () => {
         const stream = streamTanStackObjectForRole({
+          dataClass: "customer",
           role: "pdf",
           orgAIConfig,
+          managedAIResidency,
           organizationId,
           tenantWorkspaceIds: [workspaceId],
           analytics: aiAnalytics,
