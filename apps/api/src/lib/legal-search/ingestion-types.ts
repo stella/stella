@@ -736,7 +736,18 @@ export type StoredRawReparseRejection =
   (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
 
 export type StoredRawReparseOutcome =
-  | { type: "parsed"; result: IngestionResult }
+  | {
+      type: "parsed";
+      result: IngestionResult;
+      /**
+       * The docket the selected row is stored under, where the adapter proved
+       * it is an older spelling of `result.caseNumber` (for example one an
+       * earlier parser stored before decoding it). A replay compares identity
+       * under it and writes the new spelling over the row; absent, the docket
+       * must match exactly.
+       */
+      legacyCaseNumber?: string | undefined;
+    }
   /**
    * The payload is a supplement to another decision. A replay does not write
    * it over the row it was read from; the supplement fold does.

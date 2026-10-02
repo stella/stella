@@ -1483,6 +1483,31 @@ const storedPart = <T>(
   return isShape(parsed) ? parsed : null;
 };
 
+type SkCourtsStoredDocketMatchOptions = { stored: string; replayed: string };
+
+type SkCourtsStoredDocketMatch = "same" | "legacy-encoded" | "different";
+
+/**
+ * How a row's stored docket relates to the one its payload now parses to.
+ *
+ * Rows written before display text was decoded hold the publisher's encoded
+ * spelling (`7C&#x2F;221/1991`). That is the same docket exactly when decoding
+ * it once, with the decoder ingestion now applies, yields the replayed value.
+ * Decoding is not repeated, so a stored value that only matches after a
+ * second pass is a different docket, as is anything else.
+ */
+const skCourtsStoredDocketMatch = ({
+  stored,
+  replayed,
+}: SkCourtsStoredDocketMatchOptions): SkCourtsStoredDocketMatch => {
+  if (stored === replayed) {
+    return "same";
+  }
+  return decodeSkCourtText(stored) === replayed
+    ? "legacy-encoded"
+    : "different";
+};
+
 /**
  * Rebuild a decision from the responses already stored for it.
  *
@@ -1557,14 +1582,34 @@ const reparseStoredRaw = (
       detail: `the stored listing row for ${stored.caseNumber} states no docket and court to key on`,
     };
   }
-  if (decision.caseNumber !== stored.caseNumber) {
+  const docket = skCourtsStoredDocketMatch({
+    stored: stored.caseNumber,
+    replayed: decision.caseNumber,
+  });
+  if (docket === "different") {
     return {
       type: "rejected",
       rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
       detail: `stored payload states ${decision.caseNumber}`,
     };
   }
-  return { type: "parsed", result: decision };
+  if (docket === "same") {
+    return { type: "parsed", result: decision };
+  }
+  // A row keyed by its docket cannot move to the decoded spelling: the write
+  // would find no row under it and insert the decision a second time.
+  if (decision.sourceDocumentId === undefined) {
+    return {
+      type: "rejected",
+      rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      detail: `stored docket decodes to ${decision.caseNumber}, but the row has no publisher id to migrate it under`,
+    };
+  }
+  return {
+    type: "parsed",
+    result: decision,
+    legacyCaseNumber: stored.caseNumber,
+  };
 };
 
 // ── Source surfaces ──────────────────────────────────────

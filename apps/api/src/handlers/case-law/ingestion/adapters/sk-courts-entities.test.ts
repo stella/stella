@@ -5,7 +5,10 @@ import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  STORED_RAW_REPARSE_REJECTION,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assembleSkCourtsDecision,
   skCourtsListingIdentity,
@@ -146,6 +149,131 @@ describe("Slovak court display text decodes publisher entities once", () => {
     const second = replay(input);
     expect(first).toMatchObject({ type: "parsed", result: original });
     expect(second).toEqual(first);
+  });
+
+  describe("a row stored before decoding replays under its encoded docket", () => {
+    const replay =
+      skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
+    const storedRowFor = ({
+      listedDocket,
+      storedDocket,
+      guid = "sk-guid-1",
+    }: {
+      listedDocket: string;
+      storedDocket: string;
+      guid?: string | null;
+    }) => {
+      const parts = fixture();
+      const assembled =
+        assembleSkCourtsDecision({
+          ...parts,
+          item: { ...parts.item, guid, spisovaZnacka: listedDocket },
+        }) ?? panic("fixture is unkeyable");
+      return {
+        raw: new TextEncoder().encode(
+          assembled.sourceRaw ?? panic("fixture stores no raw"),
+        ),
+        contentType: assembled.sourceRawContentType ?? "",
+        caseNumber: storedDocket,
+        sourceDocumentId: assembled.sourceDocumentId ?? null,
+        language: "sk",
+        court: assembled.court,
+        ecli: null,
+        decisionDate: null,
+        decisionType: null,
+        sourceUrl: null,
+        documentUrl: null,
+        metadata: {},
+      };
+    };
+
+    test("the encoded docket a pre-decoding parser stored is the decoded one", () => {
+      const outcome = replay(
+        storedRowFor({
+          listedDocket: "7C&#x2F;221/1991",
+          storedDocket: "7C&#x2F;221/1991",
+        }),
+      );
+      expect(outcome).toMatchObject({
+        type: "parsed",
+        result: { caseNumber: "7C/221/1991", sourceDocumentId: "sk-guid-1" },
+        legacyCaseNumber: "7C&#x2F;221/1991",
+      });
+    });
+
+    test("a docket stored as decoded needs no legacy match", () => {
+      const outcome = replay(
+        storedRowFor({
+          listedDocket: "7C&#x2F;221/1991",
+          storedDocket: "7C/221/1991",
+        }),
+      );
+      expect(outcome.type).toBe("parsed");
+      expect(outcome).not.toHaveProperty("legacyCaseNumber");
+    });
+
+    test("a genuinely different docket is still another decision", () => {
+      for (const storedDocket of [
+        "7C&#x2F;222/1991",
+        "7C/222/1991",
+        "7C&#x2f;221/1991 ",
+        "7c/221/1991",
+      ]) {
+        expect(
+          replay(
+            storedRowFor({ listedDocket: "7C&#x2F;221/1991", storedDocket }),
+          ),
+        ).toMatchObject({
+          type: "rejected",
+          rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+        });
+      }
+    });
+
+    test("a double-encoded docket decodes once on both sides, never twice", () => {
+      // The listing itself is double-encoded: ingestion decodes it once, and
+      // the legacy row, stored verbatim, decodes once to the same value.
+      expect(
+        replay(
+          storedRowFor({
+            listedDocket: "7C&amp;#x2F;221/1991",
+            storedDocket: "7C&amp;#x2F;221/1991",
+          }),
+        ),
+      ).toMatchObject({
+        type: "parsed",
+        result: { caseNumber: "7C&#x2F;221/1991" },
+        legacyCaseNumber: "7C&amp;#x2F;221/1991",
+      });
+      // A stored value that reaches the replayed docket only on a second
+      // decode is not the same docket.
+      expect(
+        replay(
+          storedRowFor({
+            listedDocket: "7C&#x2F;221/1991",
+            storedDocket: "7C&amp;#x2F;221/1991",
+          }),
+        ),
+      ).toMatchObject({
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      });
+    });
+
+    test("a row keyed by its docket is not migrated to a new spelling", () => {
+      expect(
+        replay(
+          storedRowFor({
+            listedDocket: "7C&#x2F;221/1991",
+            storedDocket: "7C&#x2F;221/1991",
+            guid: null,
+          }),
+        ),
+      ).toMatchObject({
+        type: "rejected",
+        rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+      });
+    });
   });
 
   test("preserves literal ampersands, unknown entities, and unfinished references", () => {

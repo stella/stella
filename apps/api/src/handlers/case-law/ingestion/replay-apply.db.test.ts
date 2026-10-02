@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -27,9 +27,14 @@ import { envBase } from "@/api/env-base";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
 import {
   EMPTY_AST,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  assembleSkCourtsDecision,
+  skCourtsAdapter,
+} from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import {
   CASE_LAW_REPLAY_SCOPE,
@@ -51,7 +56,10 @@ import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -990,5 +998,113 @@ test("a version bump that changes only a described column goes through the pipel
     .from(caseLawSources)
     .where(eq(caseLawSources.id, fixture.sourceId));
   expect(source?.order).toBe(1n);
+  await lease.release();
+});
+
+test("a row stored under an encoded docket replays to the decoded docket in place", async () => {
+  const sourceId = createSafeId<"caseLawSource">();
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: `replay-apply-${sourceId}`,
+    name: "replay apply legacy docket fixture",
+  });
+  const court = "Okresný súd Bratislava I";
+  const legacyPayloadFor = (guid: string | null) =>
+    assembleSkCourtsDecision({
+      item: { guid, spisovaZnacka: "7C&#x2F;221/1991", sud: { nazov: court } },
+      detail: null,
+    })?.sourceRaw ?? panic("legacy fixture stores no raw");
+  const keyedId = createSafeId<"caseLawDecision">();
+  const docketKeyedId = createSafeId<"caseLawDecision">();
+  const payloads = new Map([
+    [keyedId, legacyPayloadFor("sk-guid-legacy")],
+    [docketKeyedId, legacyPayloadFor(null)],
+  ]);
+  // The legacy key, or the content-addressed one the applied write moves the
+  // row to; both name the decision.
+  const payloadAt = (key: string) =>
+    [...payloads].find(([id]) => key.includes(id))?.[1] ?? panic(key);
+  const legacyVersion = PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS] - 1;
+  // What an earlier parser wrote: the publisher's encoded docket, verbatim.
+  await db.insert(caseLawDecisions).values(
+    (
+      [
+        [keyedId, "sk-guid-legacy"],
+        [docketKeyedId, null],
+      ] as const
+    ).map(([id, sourceDocumentId]) => ({
+      id,
+      sourceId,
+      caseNumber: "7C&#x2F;221/1991",
+      court,
+      country: "SVK",
+      language: "sk",
+      sourceDocumentId,
+      sourceRawS3Key: `case-law/raw/legacy/${id}`,
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      sourceHash: "hash-before-decoding",
+      parserVersion: legacyVersion,
+      metadata: {},
+    })),
+  );
+  const lease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId,
+  });
+  if (lease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+  const reparse =
+    skCourtsAdapter.reparseStoredRaw ?? panic("adapter has no replay reader");
+  const replay = async () =>
+    await replayCaseLawSource({
+      adapter: stubAdapter(reparse),
+      scopedDb,
+      sourceId,
+      sourceLease: lease,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async (key) =>
+        await Promise.resolve(new TextEncoder().encode(payloadAt(key))),
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+    });
+  const readRows = async () => {
+    const rows = await db
+      .select({
+        id: caseLawDecisions.id,
+        caseNumber: caseLawDecisions.caseNumber,
+        version: caseLawDecisions.parserVersion,
+      })
+      .from(caseLawDecisions)
+      .where(eq(caseLawDecisions.sourceId, sourceId));
+    return Object.fromEntries(
+      rows.map(({ id, ...row }) => [String(id), row] as const),
+    );
+  };
+
+  const first = await replay();
+  if (first.type !== "ran") {
+    throw new TypeError("Expected replay to run");
+  }
+  expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+  // The docket-keyed row has no publisher id the write could find it by, so
+  // it is refused rather than inserted again under the new spelling.
+  expect(first.report.rejections["identity-mismatch"]).toBe(1);
+  expect(await readRows()).toEqual({
+    [docketKeyedId]: { caseNumber: "7C&#x2F;221/1991", version: legacyVersion },
+    [keyedId]: {
+      caseNumber: "7C/221/1991",
+      version: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+    },
+  });
+
+  // The migrated row now matches its payload exactly: a second run converges.
+  const second = await replay();
+  if (second.type !== "ran") {
+    throw new TypeError("Expected replay to run");
+  }
+  expect(second.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+  expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  expect(second.report.rejections["identity-mismatch"]).toBe(1);
   await lease.release();
 });
