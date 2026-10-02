@@ -101,7 +101,7 @@ const collectClauseRefIds = (
 
 // A position may list each source document only once. The list records where
 // the position came from, and readers look sources up by document id.
-export const hasDuplicatePositionSource = (position: Position): boolean => {
+const hasDuplicatePositionSource = (position: Position): boolean => {
   const entityIds = arrayOrEmpty(position.sources).map(
     ({ entityId }) => entityId,
   );

@@ -219,7 +219,7 @@ export type AskConfig = Static<typeof askConfigSchema>;
 // document id (as in `referencePassageSchema`) because every consumer needs
 // the matter to locate the document. Extra properties are rejected, so no
 // writer can store a name next to the ids.
-export const positionSourceSchema = t.Object(
+const positionSourceSchema = t.Object(
   {
     workspaceId: t.String({ format: "uuid" }),
     entityId: t.String({ format: "uuid" }),
