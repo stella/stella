@@ -85,9 +85,8 @@ const mapSchemaChildren = (
     }),
   );
 
-type CompactNodeOptions = CompactSchemaOptions & {
+type CompactNodeOptions = Required<CompactSchemaOptions> & {
   depth: number;
-  describedDepth: number;
 };
 
 const compactNode = (
