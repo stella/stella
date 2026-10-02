@@ -457,7 +457,11 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_aliases",
       "case_law_raw_sweeps",
       "case_law_decision_supplements",
-      "case_law_citation_reviews"
+      "case_law_citation_reviews",
+      "soft_law_sources",
+      "soft_law_documents",
+      "soft_law_document_versions",
+      "soft_law_document_locators"
     FROM stella
   `,
   // Global sanctions lists are readable by requests and writable by ingestion.

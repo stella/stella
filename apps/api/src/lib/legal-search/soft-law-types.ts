@@ -1,0 +1,116 @@
+import { TaggedError } from "better-result";
+
+import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import type { SoftLawFetch } from "@/api/handlers/soft-law/publisher-access";
+import type {
+  SourceFieldInventory,
+  SourceSurfaceCensus,
+  SourceTotalCount,
+  SourceSliceWalk,
+} from "@/api/lib/legal-search/ingestion-types";
+
+export const SOFT_LAW_KINDS = [
+  "methodology",
+  "recommendation",
+  "opinion",
+  "faq",
+  "guideline",
+  "position",
+  "inspection_report",
+  "annual_report",
+  "other",
+] as const;
+export const SOFT_LAW_LISTING_STATES = ["listed", "no_longer_listed"] as const;
+export const SOFT_LAW_VALIDITY_STATES = [
+  "not_stated",
+  "withdrawn",
+  "superseded",
+  "historical_repealed_basis",
+] as const;
+export const SOFT_LAW_VALIDITY_BASES = [
+  "source_stated",
+  "archived_source_stated",
+] as const;
+export const SOFT_LAW_EXTRACTION_QUALITIES = [
+  "html",
+  "text_layer",
+  "needs_ocr",
+  "scanned_ocr",
+  "extraction_failed",
+] as const;
+export const SOFT_LAW_STATED_STATES = ["stated", "not_stated"] as const;
+export const SOFT_LAW_RUN_STATES = [
+  "idle",
+  "running",
+  "blocked",
+  "failed",
+] as const;
+export const SOFT_LAW_AUTHORITIES = {
+  "cz-uoou": { jurisdiction: "CZE", name: "Úřad pro ochranu osobních údajů" },
+} as const;
+export type SoftLawAuthority = keyof typeof SOFT_LAW_AUTHORITIES;
+export type SoftLawStated<T> =
+  | { state: "stated"; value: T }
+  | { state: "not_stated" };
+export type SoftLawMetadata = {
+  title: string;
+  kind: (typeof SOFT_LAW_KINDS)[number];
+  statedReference: SoftLawStated<string>;
+  issuedOn: SoftLawStated<string>;
+  validity: {
+    state: (typeof SOFT_LAW_VALIDITY_STATES)[number];
+    basis: (typeof SOFT_LAW_VALIDITY_BASES)[number];
+  };
+};
+export type SoftLawEntry = {
+  url: string;
+  metadata: SoftLawMetadata;
+  sourceDates: Readonly<Record<string, string>>;
+};
+export type SoftLawDocumentInput = {
+  metadata: SoftLawMetadata;
+  raw: readonly { role: string; bytes: Uint8Array; contentType: string }[];
+  text: string | null;
+  extractionQuality: (typeof SOFT_LAW_EXTRACTION_QUALITIES)[number];
+  sourceDates: Readonly<Record<string, string>>;
+};
+export type SoftLawAccessPolicy = {
+  publisherGate: PublisherGateId;
+  userAgent: `Stella/${string} (+https://${string})`;
+  window:
+    | { type: "any_time" }
+    | {
+        type: "off_peak";
+        timeZone: string;
+        startHour: number;
+        endHour: number;
+      };
+};
+export type SoftLawSourceAdapter = {
+  key: string;
+  authority: SoftLawAuthority;
+  access: SoftLawAccessPolicy;
+  discover: (options: {
+    cursor: string | null;
+    signal: AbortSignal;
+    fetch: SoftLawFetch;
+  }) => Promise<{
+    entries: readonly SoftLawEntry[];
+    nextCursor: string | null;
+  }>;
+  fetchDocument: (
+    entry: SoftLawEntry,
+    context: { signal: AbortSignal; fetch: SoftLawFetch },
+  ) => Promise<SoftLawDocumentInput>;
+  getTotalCount: (context: {
+    signal: AbortSignal;
+    fetch: SoftLawFetch;
+  }) => Promise<SourceTotalCount>;
+  sliceWalk: SourceSliceWalk | { type: "unsupported"; reason: string };
+  sourceFields: SourceFieldInventory;
+  sourceSurfaces: SourceSurfaceCensus;
+};
+
+export class SoftLawIngestionError extends TaggedError(
+  "SoftLawIngestionError",
+)<{ message: string }> {}

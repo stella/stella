@@ -67,6 +67,7 @@ const NALUS_REQUEST_BUDGET_SHARE = 0.96;
  * Austrian tribunals is one budget, not ten.
  */
 export const PUBLISHER_GATES = {
+  "uoou-cz": { publisher: "ÚOOÚ", intervalMs: 1000, hosts: ["uoou.gov.cz"] },
   /**
    * nalus.usoud.cz. 4,800 requests a day against the 5,000 the court allows,
    * and it redirects a client past the ceiling to a limit page rather than
