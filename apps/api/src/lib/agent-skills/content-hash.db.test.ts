@@ -23,6 +23,7 @@ import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { createSkillTools } from "@/api/lib/agent-skills/skill-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import type { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";
 import { installSkill } from "@/api/lib/skills/install";
 import {
@@ -405,7 +406,7 @@ describe("skill content hash", () => {
     }
     const install = async () =>
       await installSkill({
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         origin: "url",
         parsed: fetched.value,
         recordAuditEvent: async () => undefined,

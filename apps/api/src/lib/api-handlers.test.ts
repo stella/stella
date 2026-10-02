@@ -27,6 +27,7 @@ import {
   HandlerError,
   UsageLimitExceededError,
 } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -69,7 +70,7 @@ describe("createSafeHandler workspace audit binding", () => {
           "019e7000-0000-7000-8000-000000000002",
         ),
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       safeDb,
       scopedDb: async () => {
         throw new DatabaseError({ message: "scopedDb should not be called" });
@@ -262,7 +263,7 @@ const createContext = (
         "019e7000-0000-7000-8000-000000000002",
       ),
     },
-    memberRole: { role },
+    memberRole: sessionMemberRole(role),
     safeDb,
     scopedDb: async () => {
       throw new DatabaseError({ message: "scopedDb should not be called" });
