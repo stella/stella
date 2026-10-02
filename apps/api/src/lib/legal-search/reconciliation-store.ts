@@ -160,8 +160,9 @@ export const parkReconciliationItem = async (
 ): Promise<ParkReconciliationItemResult> => {
   const payloadHash = fingerprintReconciliationPayload(payload);
   const result = await scopedDb(async (tx) => {
-    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken })))
-      {return { outcome: "superseded" as const };}
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     const existing = (
       await tx
         .select({
@@ -183,8 +184,9 @@ export const parkReconciliationItem = async (
     if (
       existing !== undefined &&
       fingerprintReconciliationPayload(existing.payload) !== payloadHash
-    )
-      {return { outcome: "superseded" as const };}
+    ) {
+      return { outcome: "superseded" as const };
+    }
     const attempts = (existing?.attempts ?? 0) + 1;
     const schedule = reconciliationSchedule({ attempts, now });
     const status =
@@ -230,7 +232,9 @@ export const parkReconciliationItem = async (
         },
       })
       .returning({ id: caseLawReconciliationItems.id });
-    if (written.length === 0) {return { outcome: "superseded" as const };}
+    if (written.length === 0) {
+      return { outcome: "superseded" as const };
+    }
 
     return {
       outcome: "recorded" as const,
@@ -242,7 +246,9 @@ export const parkReconciliationItem = async (
     };
   });
 
-  if (result.outcome === "superseded") {return result;}
+  if (result.outcome === "superseded") {
+    return result;
+  }
   if (result.becameTerminal) {
     // Once, on the transition: an item leaving the hunt is a decision the
     // publisher lists and the corpus will not hold, and it must not happen
@@ -292,8 +298,9 @@ export const retireReconciliationItem = async (
 ): Promise<ReconciliationMutationOutcome> => {
   const payloadHash = fingerprintReconciliationPayload(payload);
   const result = await scopedDb(async (tx) => {
-    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken })))
-      {return { outcome: "superseded" as const };}
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     const existing = (
       await tx
         .select({
@@ -314,8 +321,9 @@ export const retireReconciliationItem = async (
     if (
       existing !== undefined &&
       fingerprintReconciliationPayload(existing.payload) !== payloadHash
-    )
-      {return { outcome: "superseded" as const };}
+    ) {
+      return { outcome: "superseded" as const };
+    }
 
     // audit: skip — ingestion bookkeeping for public source data
     const written = await tx
@@ -351,7 +359,9 @@ export const retireReconciliationItem = async (
         },
       })
       .returning({ id: caseLawReconciliationItems.id });
-    if (written.length === 0) {return { outcome: "superseded" as const };}
+    if (written.length === 0) {
+      return { outcome: "superseded" as const };
+    }
 
     return {
       outcome: "recorded" as const,
@@ -359,7 +369,9 @@ export const retireReconciliationItem = async (
     };
   });
 
-  if (result.outcome === "superseded") {return result;}
+  if (result.outcome === "superseded") {
+    return result;
+  }
   if (result.becameTerminal) {
     logger.warn("case_law.reconciliation.item_terminal", {
       sourceId,
@@ -388,8 +400,9 @@ export const resolveReconciliationItem = async (
   }: ResolveReconciliationItemInput,
 ): Promise<ReconciliationMutationOutcome> =>
   await scopedDb(async (tx) => {
-    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken })))
-      {return { outcome: "superseded" as const };}
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     // audit: skip — ingestion bookkeeping for public source data
     const removed = await tx
       .delete(caseLawReconciliationItems)
@@ -518,8 +531,9 @@ export const refreshTrackedReconciliationItems = async (
     const page = items.slice(offset, offset + LISTING_REVISION_BATCH_SIZE);
     // db-await-in-loop: bounded 250-item transitions from one completed listing walk, under its source lease
     const result = await scopedDb(async (tx) => {
-      if (!(await hasReconciliationLease(tx, { sourceId, leaseToken })))
-        {return { outcome: "superseded" as const };}
+      if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+        return { outcome: "superseded" as const };
+      }
       const incoming = new Map(page.map((item) => [item.identityKey, item]));
       const rows = await tx
         .select()
@@ -539,25 +553,29 @@ export const refreshTrackedReconciliationItems = async (
       const refreshed: string[] = [];
       for (const row of rows) {
         const item = incoming.get(row.identityKey);
-        if (item === undefined)
-          {return panic("Tracked revision was not in its listing batch");}
+        if (item === undefined) {
+          return panic("Tracked revision was not in its listing batch");
+        }
         const payloadHash = fingerprintReconciliationPayload(item.payload);
         const changed =
           fingerprintReconciliationPayload(row.payload) !== payloadHash;
-        if (changed) {refreshed.push(row.identityKey);}
+        if (changed) {
+          refreshed.push(row.identityKey);
+        }
         if (
           changed ||
           row.payloadHash !== payloadHash ||
           row.slice !== item.slice
-        )
-          {updates.push({
+        ) {
+          updates.push({
             id: row.id,
             slice: item.slice,
             payload: item.payload,
             payload_hash: payloadHash,
             expected_payload: row.payload,
             disposition: changed ? "revived" : "retained",
-          });}
+          });
+        }
       }
       if (updates.length > 0) {
         const updated = executedRows(
@@ -576,10 +594,11 @@ export const refreshTrackedReconciliationItems = async (
         RETURNING tracked.id
       `),
         );
-        if (updated.length !== updates.length)
-          {return panic(
+        if (updated.length !== updates.length) {
+          return panic(
             "Locked reconciliation listing revision changed during refresh",
-          );}
+          );
+        }
       }
       return {
         outcome: "refreshed" as const,
@@ -587,9 +606,15 @@ export const refreshTrackedReconciliationItems = async (
         refreshed,
       };
     });
-    if (result.outcome === "superseded") {return result;}
-    for (const key of result.tracked) {trackedIdentityKeys.add(key);}
-    for (const key of result.refreshed) {refreshedIdentityKeys.add(key);}
+    if (result.outcome === "superseded") {
+      return result;
+    }
+    for (const key of result.tracked) {
+      trackedIdentityKeys.add(key);
+    }
+    for (const key of result.refreshed) {
+      refreshedIdentityKeys.add(key);
+    }
   }
   return { outcome: "refreshed", trackedIdentityKeys, refreshedIdentityKeys };
 };
@@ -633,8 +658,9 @@ export const pruneUnlistedTerminalItems = async (
   }: PruneUnlistedTerminalItemsInput,
 ): Promise<PruneUnlistedTerminalItemsResult> =>
   await scopedDb(async (tx) => {
-    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken })))
-      {return { outcome: "superseded" as const };}
+    if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+      return { outcome: "superseded" as const };
+    }
     const listed = new Set(listedIdentityKeys);
     const rows = await tx
       .select({ identityKey: caseLawReconciliationItems.identityKey })

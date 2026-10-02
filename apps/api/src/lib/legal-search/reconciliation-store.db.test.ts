@@ -62,15 +62,13 @@ afterAll(async () => {
 
 const seedSource = async (): Promise<SafeId<"caseLawSource">> => {
   const id = createSafeId<"caseLawSource">();
-  await db
-    .insert(caseLawSources)
-    .values({
-      id,
-      adapterKey: `reconciliation-${id}`,
-      name: "store fixture",
-      ingestionLeaseToken: LEASE_TOKEN,
-      ingestionLeaseExpiresAt: new Date("2100-01-01T00:00:00Z"),
-    });
+  await db.insert(caseLawSources).values({
+    id,
+    adapterKey: `reconciliation-${id}`,
+    name: "store fixture",
+    ingestionLeaseToken: LEASE_TOKEN,
+    ingestionLeaseExpiresAt: new Date("2100-01-01T00:00:00Z"),
+  });
   return id;
 };
 
@@ -243,7 +241,9 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
       now,
     });
     expect(parked.outcome).toBe("recorded");
-    if (parked.outcome === "recorded") {attempts = parked.attempts;}
+    if (parked.outcome === "recorded") {
+      attempts = parked.attempts;
+    }
   }
 
   const row = await readRow(sourceId, DOCUMENT_KEY);

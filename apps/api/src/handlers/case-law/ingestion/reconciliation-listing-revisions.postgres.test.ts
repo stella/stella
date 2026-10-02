@@ -108,16 +108,14 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
       await db
         .insert(caseLawSources)
         .values({ id: sourceId, adapterKey, name: "Listing revision fixture" });
-      await db
-        .insert(caseLawCoverageSlices)
-        .values({
-          id: createSafeId<"caseLawCoverageSlice">(),
-          sourceId,
-          slice,
-          reported: 0,
-          collected: 0,
-          checkedAt: new Date(now.getTime() - 2 * DAY_IN_MS),
-        });
+      await db.insert(caseLawCoverageSlices).values({
+        id: createSafeId<"caseLawCoverageSlice">(),
+        sourceId,
+        slice,
+        reported: 0,
+        collected: 0,
+        checkedAt: new Date(now.getTime() - 2 * DAY_IN_MS),
+      });
       const key = (id: string) =>
         listingIdentityKey({ type: "document", sourceDocumentId: id }) ??
         panic("Fixture identity must be keyable");

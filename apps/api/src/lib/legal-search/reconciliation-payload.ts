@@ -16,8 +16,9 @@ export const fingerprintReconciliationPayload = (payload: unknown): string => {
   const normalized = Result.try({
     try: () => {
       const serialized = JSON.stringify(payload);
-      if (serialized === undefined)
-        {return panic("Reconciliation payload must have a JSON representation");}
+      if (serialized === undefined) {
+        return panic("Reconciliation payload must have a JSON representation");
+      }
       const decoded: unknown = JSON.parse(serialized);
       return toJsonValue(decoded);
     },
