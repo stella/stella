@@ -25,7 +25,12 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 const config = {
   description: "List synthetic billing-code merge probes.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

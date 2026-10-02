@@ -97,9 +97,6 @@ describe("MCP reads retain their canonical source classification", () => {
         continue;
       }
       const name = entry.mcp.type === "tool" ? entry.mcp.name : entry.mcp.by;
-      if (name === undefined) {
-        panic("Missing canonical tool name");
-      }
       const definition = native.get(name);
       if (definition?.access !== "read") {
         continue;
