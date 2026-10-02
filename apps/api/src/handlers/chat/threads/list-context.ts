@@ -394,8 +394,10 @@ const toContextFile = (
         name: row.name,
         type: CHAT_THREAD_FILE_TYPE.entity,
       };
-    default:
-      return panic(`Unhandled chat thread file type: ${String(row.fileType)}`);
+    default: {
+      row.fileType satisfies never;
+      return panic("Unhandled chat thread file type");
+    }
   }
 };
 
