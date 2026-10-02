@@ -27,6 +27,7 @@ import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
 type ReadableDecision = Extract<DecisionRead, { documentPending: boolean }>;
@@ -40,19 +41,31 @@ export type DecisionReadCaller = "anonymous" | "attributed";
 
 /**
  * Whether this read may fetch a document the ingestion queue has not stored
- * yet. A fetch is a publisher crawl, so a caller reading many decisions at
- * once reads the stored state first and spends its own fetch budget
- * deliberately, rather than crawling once per id.
+ * yet. A fetch is a publisher crawl, a third-party request, so only a caller
+ * holding a permit may ask for one. A caller reading many decisions at once
+ * reads the stored state first and spends its own fetch budget deliberately,
+ * rather than crawling once per id.
  */
-export const DECISION_DOCUMENT_HYDRATION = {
-  /** Fetch the document when the read finds one pending. */
-  onDemand: "on-demand",
-  /** Answer from what is stored; a pending document stays pending. */
-  storedOnly: "stored-only",
-} as const;
-
 export type DecisionDocumentHydration =
-  (typeof DECISION_DOCUMENT_HYDRATION)[keyof typeof DECISION_DOCUMENT_HYDRATION];
+  /** Fetch the document when the read finds one pending. */
+  | { type: "on-demand"; permit: ThirdPartyOutboundPermit }
+  /** Answer from what is stored; a pending document stays pending. */
+  | { type: "stored-only" };
+
+export const STORED_ONLY_DOCUMENT_HYDRATION = {
+  type: "stored-only",
+} as const satisfies DecisionDocumentHydration;
+
+/**
+ * On demand for a caller holding a permit. A caller without one (a chat
+ * script) answers from what is stored, so its read never crawls a publisher.
+ */
+export const documentHydrationFor = (
+  permit: ThirdPartyOutboundPermit | undefined,
+): DecisionDocumentHydration =>
+  permit === undefined
+    ? STORED_ONLY_DOCUMENT_HYDRATION
+    : { type: "on-demand", permit };
 
 /**
  * A development process reading a shared corpus shows the parser in this
@@ -112,7 +125,7 @@ const hydrate = async (
   if (readsSharedPublicLawCorpus()) {
     return await reparsedForDev(decision);
   }
-  if (documentHydration === DECISION_DOCUMENT_HYDRATION.storedOnly) {
+  if (documentHydration.type === "stored-only") {
     return decision;
   }
 

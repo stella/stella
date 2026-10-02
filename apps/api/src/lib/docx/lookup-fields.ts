@@ -96,6 +96,7 @@ import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 import {
   mapRepeatablePath,
@@ -168,6 +169,7 @@ export type LookupResolver = (input: {
 
 type CreateDispatchLookupResolverOptions = {
   observer: RegistryRequestObservation;
+  permit: ThirdPartyOutboundPermit;
   dispatch?: Record<LookupRegistry, RegistryHandler>;
 };
 
@@ -181,6 +183,7 @@ export const createDispatchLookupResolver =
   ({
     dispatch = BUSINESS_REGISTRY_DISPATCH,
     observer,
+    permit,
   }: CreateDispatchLookupResolverOptions): LookupResolver =>
   async ({ registry, query }) => {
     const handler = dispatch[registry];
@@ -195,7 +198,12 @@ export const createDispatchLookupResolver =
         message: `The ${registry} registry is not available in this deployment.`,
       };
     }
-    const response = await executeRegistryLookup({ handler, query, observer });
+    const response = await executeRegistryLookup({
+      handler,
+      query,
+      observer,
+      permit,
+    });
     if (response instanceof Error) {
       return { type: "error", message: response.message };
     }

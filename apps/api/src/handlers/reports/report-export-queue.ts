@@ -73,6 +73,7 @@ import {
   fillStoredTemplateDocx,
   fillTemplateDocx,
 } from "@/api/lib/templates/template-fill-service";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
@@ -701,6 +702,7 @@ const fillReportDocx = async ({
         values,
         scopedDb: actor.scopedDb,
         organizationId: actor.organizationId,
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         ...generators,
       }),
@@ -732,6 +734,7 @@ const fillReportDocx = async ({
       values,
       scopedDb: actor.scopedDb,
       organizationId: actor.organizationId,
+      thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
       requiredFields: "enforce",
       ...generators,
     }),

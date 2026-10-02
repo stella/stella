@@ -93,6 +93,7 @@ import {
   deriveTextFieldPaths,
   runTextFieldSpecs,
 } from "@/api/mcp/text-field-spec";
+import { withThirdPartyOutbound } from "@/api/mcp/third-party-outbound";
 import type {
   McpTextFieldSpec,
   McpToolDefinition,
@@ -992,9 +993,9 @@ const lookupBusinessRegistryArgsSchema = nullAsAbsent(
   }),
 );
 
-const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
+const handleLookupBusinessRegistryTool = withThirdPartyOutbound<
   v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
-> = async ({ args, context }) => {
+>(async ({ args, context, permit }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
@@ -1010,6 +1011,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
   );
   const result = await lookupBusinessRegistryShared({
     observer,
+    permit,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     registry: parsed.output.registry,
@@ -1028,7 +1030,7 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     v.InferInput<typeof LOOKUP_BUSINESS_REGISTRY_PROJECTION>
   >;
   return toolDataResult(result.value satisfies LookupBusinessRegistryPayload);
-};
+});
 
 // --- check_counterparty -------------------------------------------------
 
@@ -1204,9 +1206,9 @@ export const toCounterpartyCheckSubject = (
   }
 };
 
-const handleCheckCounterpartyTool: TypedMcpToolHandler<
+const handleCheckCounterpartyTool = withThirdPartyOutbound<
   v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
-> = async ({ args, context }) => {
+>(async ({ args, context, permit }) => {
   if (!hasEffectiveAuthority(context, { workspace: ["read"] })) {
     return errorResult("Forbidden");
   }
@@ -1226,6 +1228,7 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
   );
   const result = await runEntityCheckShared({
     observer,
+    permit,
     check: parsed.output.check,
     subject: subject.value,
     runCheck: context.testDependencies?.runEntityCheck,
@@ -1246,7 +1249,7 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
     v.InferInput<typeof CHECK_COUNTERPARTY_PROJECTION>
   >;
   return toolDataResult(result.value satisfies CheckCounterpartyPayload);
-};
+});
 
 // --- list_tasks ---------------------------------------------------------
 

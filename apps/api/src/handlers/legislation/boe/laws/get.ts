@@ -1,10 +1,10 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import { getConsolidatedLaw } from "@stll/boe";
-
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { boeClient } from "@/api/lib/boe-client";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 const paramsSchema = t.Object({
   lawId: t.String({ pattern: "^BOE-[A-Z]-\\d{4}-\\d+$" }),
@@ -33,7 +33,11 @@ const boeGetLaw = createSafeRootHandler(
   async function* ({ params: { lawId }, query }) {
     const result = yield* Result.await(
       Result.tryPromise({
-        try: async () => await getConsolidatedLaw(lawId, query),
+        try: async () =>
+          await boeClient(grantThirdPartyOutboundPermit()).getConsolidatedLaw(
+            lawId,
+            query,
+          ),
         catch: mapBoeError,
       }),
     );

@@ -87,6 +87,8 @@ import type {
   fillStoredTemplateWithTextStrict,
 } from "@/api/lib/templates/template-fill-service";
 import type { writeStoredTemplate } from "@/api/lib/templates/write-template";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import type { withTimeout } from "@/api/lib/with-timeout";
 import type { startWorkflow } from "@/api/lib/workflow-queue";
 import type { materializePlaybookRun } from "@/api/lib/workflow/materialize-playbook-run";
@@ -265,6 +267,14 @@ export type McpRequestContext = {
    */
   request?: Request;
   recordAuditEvent: AuditRecorder;
+  /**
+   * Authority to reach a third-party service (a public register, the BOE API,
+   * a court publisher). An MCP transport request holds one: the caller invoked
+   * the tool directly. The chat script runner's context never does, so a read
+   * a script calls cannot send to a third party; a handler that needs one is
+   * declared with `withThirdPartyOutbound`.
+   */
+  thirdPartyOutboundPermit?: ThirdPartyOutboundPermit | undefined;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
@@ -517,6 +527,9 @@ export const resolveMcpSessionContext = async (
     }),
     pinServerValidatedWorkspaceId:
       requestDatabaseScope.pinServerValidatedWorkspaceId,
+    // The MCP caller invokes each tool directly, so the request may reach the
+    // third-party services its tools front.
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     safeDb: requestDatabaseScope.safeDb,
     scopedDb: requestDatabaseScope.scopedDb,
     userId,

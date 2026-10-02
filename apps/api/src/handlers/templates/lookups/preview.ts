@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/docx/lookup-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -101,6 +102,7 @@ const lookupPreview = createSafeRootHandler(
     }
     const resolveLookup = createDispatchLookupResolver({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       dispatch: { ...BUSINESS_REGISTRY_DISPATCH, [registry]: handler },
     });
     const cacheKey = `${session.activeOrganizationId}:${registry}:${handler.cacheVersion ?? "deployment"}:${number.replaceAll(/\s/gu, "")}`;

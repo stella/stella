@@ -1,15 +1,13 @@
 import { Result } from "better-result";
 import { t } from "elysia";
 
-import {
-  BOE_SEARCH_PAGE_LIMITS,
-  BoeValidationError,
-  searchConsolidatedLegislation,
-} from "@stll/boe";
+import { BOE_SEARCH_PAGE_LIMITS, BoeValidationError } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { boeClient } from "@/api/lib/boe-client";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 const querySchema = t.Object({
   text: t.Optional(
@@ -113,7 +111,9 @@ const boeSearch = createSafeRootHandler(
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
-          await searchConsolidatedLegislation({
+          await boeClient(
+            grantThirdPartyOutboundPermit(),
+          ).searchConsolidatedLegislation({
             ...searchOptions,
             limit: normalizeTenantPageLimit(
               searchOptions.limit ?? BOE_SEARCH_PAGE_LIMITS.default,

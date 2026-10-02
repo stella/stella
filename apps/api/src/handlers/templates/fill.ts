@@ -21,6 +21,7 @@ import { containsNull } from "@/api/lib/templates/template-data";
 import { fillTemplateDocx } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
 import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { isRecord } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
@@ -134,6 +135,7 @@ export const fillHandler = async ({
     values: parsed,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     // A required, user-entered field left absent or empty must never download
     // as an invented value or a raw `{{marker}}`.
     requiredFields: "enforce",

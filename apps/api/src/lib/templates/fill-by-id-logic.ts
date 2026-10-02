@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
 import { scanTemplateOutput } from "@/api/lib/templates/validate-template-output";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { OCTET_STREAM_MIME_TYPE } from "@/api/mime-types";
 
 export type FillByIdLogicProps = {
@@ -74,6 +75,7 @@ export const fillByIdLogic = async function* ({
     values,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     clauseOverrides,
     // A required, user-entered field left absent or empty must never download
     // as an invented value or a raw `{{marker}}`.

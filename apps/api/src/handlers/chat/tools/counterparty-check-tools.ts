@@ -14,6 +14,7 @@ import { runEntityCheckShared } from "@/api/lib/business-registries/entity-check
 import type { CounterpartyCheckResult } from "@/api/lib/business-registries/entity-checks";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,
@@ -108,6 +109,7 @@ export const createCounterpartyCheckTools = ({
           const checked = yield* toCounterpartyCheckSubject(subject);
           return await runEntityCheckShared({
             observer,
+            permit: grantThirdPartyOutboundPermit(),
             check,
             subject: checked,
             runCheck,

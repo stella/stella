@@ -37,6 +37,10 @@ import {
   extractDocxDocument,
 } from "@/api/lib/docx/extract-text";
 import { createDispatchLookupResolver } from "@/api/lib/docx/lookup-fields";
+import type {
+  LookupOutcome,
+  LookupResolver,
+} from "@/api/lib/docx/lookup-fields";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
 import { applyManifestFillSteps } from "@/api/lib/docx/manifest-fill-steps";
 import { fillTemplate } from "@/api/lib/docx/patch-template";
@@ -77,6 +81,7 @@ import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -526,6 +531,10 @@ type FillServiceOptions<TRejection = never> = {
   values: FillValues;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
+  /** Lookup fields ask a business register, a third-party service. Without a
+   *  permit, a lookup field fails the fill naming the field. Mandatory so each
+   *  boundary names its stance. */
+  thirdPartyOutboundPermit: ThirdPartyOutboundPermit | undefined;
   /** Whether a required, user-entered field left absent or empty rejects the
    *  fill. `"enforce"` is the contract for every real fill; `"allow-partial"`
    *  is the live preview's deliberate exception (see
@@ -573,6 +582,15 @@ type FilledDocx = {
   conditionDecisions: ResolvedAiCondition[];
 };
 
+/** A fill without a permit cannot ask a register for a lookup field. */
+const LOOKUP_WITHOUT_PERMIT: LookupOutcome = {
+  type: "error",
+  message: "Registry lookups are not available for this fill",
+};
+
+const lookupsWithoutPermit: LookupResolver = async () =>
+  await Promise.resolve(LOOKUP_WITHOUT_PERMIT);
+
 type FillDocxOptions<TRejection = never> = Omit<
   FillServiceOptions<TRejection>,
   "templateId"
@@ -597,6 +615,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   values,
   scopedDb,
   organizationId,
+  thirdPartyOutboundPermit,
   requiredFields,
   clauseOverrides,
   aiCollaborators,
@@ -736,13 +755,17 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   const stepError = await applyManifestFillSteps({
     values: record,
     manifest,
-    resolveLookup: createDispatchLookupResolver({
-      observer,
-      dispatch: await getOrganizationRegistryDispatch({
-        scopedDb,
-        organizationId,
-      }),
-    }),
+    resolveLookup:
+      thirdPartyOutboundPermit === undefined
+        ? lookupsWithoutPermit
+        : createDispatchLookupResolver({
+            observer,
+            permit: thirdPartyOutboundPermit,
+            dispatch: await getOrganizationRegistryDispatch({
+              scopedDb,
+              organizationId,
+            }),
+          }),
     bindingContext,
   });
   if (stepError !== null) {

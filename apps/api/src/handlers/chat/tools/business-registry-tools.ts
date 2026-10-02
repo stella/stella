@@ -14,6 +14,7 @@ import {
   LOOKUP_DETAIL_DESCRIPTION,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -168,6 +169,7 @@ export const createBusinessRegistryTools = ({
       }
       const result = await executeRegistryLookup({
         observer,
+        permit: grantThirdPartyOutboundPermit(),
         handler,
         query,
         detail,

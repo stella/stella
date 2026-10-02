@@ -30,6 +30,7 @@ import {
   fillTemplateDocx,
   loadStoredTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const fillToWorkspaceParamsSchema = workspaceParams({
@@ -213,6 +214,7 @@ const fillTemplateToWorkspace = createSafeHandler(
             values: body.values,
             scopedDb,
             organizationId,
+            thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
             workspaceId,
             requiredFields: "enforce",
             clauseOverrides: body.clauseOverrides,

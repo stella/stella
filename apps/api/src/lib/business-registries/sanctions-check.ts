@@ -25,6 +25,7 @@ import type {
   SanctionsScreeningSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
 import type { SanctionsUnavailableReason } from "@/api/lib/lists/sanctions/screening-vocabulary";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 // The sanctions check of the counterparty check: resolves the subject the
 // caller named into a name to screen, reads the firm's practice
@@ -91,6 +92,8 @@ export type SanctionsCheckResult = SanctionsScreening & {
 
 export type SanctionsCheckDependencies = {
   observer: RegistryRequestObservation;
+  /** Resolving a company ID to its name asks the company's register. */
+  permit: ThirdPartyOutboundPermit;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   executeLookup?: typeof executeRegistryLookup | undefined;
@@ -156,6 +159,7 @@ const resolveCompanyName = async ({
   }
   const lookup = await lookupBusinessRegistryShared({
     observer: dependencies.observer,
+    permit: dependencies.permit,
     scopedDb: dependencies.scopedDb,
     organizationId: dependencies.organizationId,
     registry,

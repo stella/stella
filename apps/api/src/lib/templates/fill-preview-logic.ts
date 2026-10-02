@@ -23,6 +23,7 @@ import {
   loadStoredTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 export type FillPreviewLogicProps = {
   safeDb: SafeDb;
@@ -91,6 +92,7 @@ export const fillPreviewLogic = async ({
     values: parsed,
     scopedDb,
     organizationId,
+    thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
     // Live preview: the values are typically still in progress (the person is
     // mid-typing in the fill form), so partial values are explicitly allowed
     // here — the one deliberate exception to the required-fields gate every

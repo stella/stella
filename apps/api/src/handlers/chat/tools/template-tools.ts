@@ -32,6 +32,7 @@ import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/lib/templates/template-fill-service";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 const LIST_TEMPLATES_TOOL_NAME = "list_templates" as const;
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;
@@ -259,6 +260,7 @@ export const createTemplateTools = ({
         values,
         scopedDb,
         organizationId,
+        thirdPartyOutboundPermit: grantThirdPartyOutboundPermit(),
         requiredFields: "enforce",
         aiCollaborators: () => aiCollaborators(unrestoredFields),
       });

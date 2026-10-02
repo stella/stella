@@ -12,7 +12,7 @@ import {
 import { mapWithConcurrency } from "@stll/concurrency";
 import { hasUsableAst } from "@stll/legal-ast/document-ast";
 
-import { DECISION_DOCUMENT_HYDRATION } from "@/api/handlers/case-law/decisions/get-deferred-document";
+import { documentHydrationFor } from "@/api/handlers/case-law/decisions/get-deferred-document";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
@@ -541,7 +541,7 @@ export const readCompatDecision = async ({
     // An agent holding a token is a reader we can attribute, so its interest
     // counts as demand for the publisher document.
     caller: "attributed",
-    documentHydration: DECISION_DOCUMENT_HYDRATION.onDemand,
+    documentHydration: documentHydrationFor(context.thirdPartyOutboundPermit),
   });
   if (decision === null || !isReadCaseLawDecisionSuccess(decision)) {
     return { type: "not_found" };

@@ -1364,6 +1364,7 @@ const handleFillTemplateTool: McpToolHandler<
     values: parsed.output.values,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
+    thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
     requiredFields: "enforce",
     assertUsageAvailable,
     aiCollaborators,

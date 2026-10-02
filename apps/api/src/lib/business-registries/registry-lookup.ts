@@ -12,9 +12,11 @@ import type {
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 type LookupBusinessRegistryProps = {
   observer: RegistryRequestObservation;
+  permit: ThirdPartyOutboundPermit;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   registry: BusinessRegistrySlug;
@@ -26,6 +28,7 @@ type LookupBusinessRegistryProps = {
 // Native-tool preferences control discovery, not access to public records.
 export const lookupBusinessRegistryShared = async ({
   observer,
+  permit,
   scopedDb,
   organizationId,
   registry,
@@ -63,7 +66,13 @@ export const lookupBusinessRegistryShared = async ({
     );
   }
 
-  const result = await executeLookup({ handler, query: q, detail, observer });
+  const result = await executeLookup({
+    handler,
+    query: q,
+    detail,
+    observer,
+    permit,
+  });
   if (result instanceof HandlerError) {
     return Result.err(result);
   }

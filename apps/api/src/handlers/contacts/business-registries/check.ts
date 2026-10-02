@@ -17,6 +17,7 @@ import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/ent
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -183,6 +184,7 @@ const businessRegistriesCheck = createSafeRootHandler(
     const result = yield* Result.await(
       runEntityCheckShared({
         observer,
+        permit: grantThirdPartyOutboundPermit(),
         check: body.check,
         subject,
         signal: request.signal,

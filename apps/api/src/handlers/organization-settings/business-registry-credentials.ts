@@ -22,6 +22,7 @@ import {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -109,6 +110,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
     );
     const probe = await executeRegistryLookup({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       handler: bindRegistryCredential(
         BUSINESS_REGISTRY_DISPATCH[body.registry],
         credential,

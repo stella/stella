@@ -12,6 +12,7 @@ import {
   LOOKUP_DETAIL_DESCRIPTION,
 } from "@/api/lib/business-registries/dispatch";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -60,6 +61,7 @@ const businessRegistriesLookup = createSafeRootHandler(
     );
     const result = await lookupBusinessRegistryShared({
       observer,
+      permit: grantThirdPartyOutboundPermit(),
       scopedDb,
       organizationId: session.activeOrganizationId,
       registry: query.registry,

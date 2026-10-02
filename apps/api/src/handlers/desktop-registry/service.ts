@@ -32,6 +32,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveLookupFormatDefault } from "@/api/lib/templates/lookup-formats/resolve-default";
 import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,
@@ -180,6 +181,7 @@ export const searchDesktopRegistry = async (
   }
   const lookup = await executeRegistryLookup({
     observer,
+    permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,
     query,
     limit: SEARCH_LIMIT,
@@ -216,6 +218,7 @@ export const searchDesktopRegistry = async (
         }
         const detail = await executeRegistryLookup({
           observer,
+          permit: grantThirdPartyOutboundPermit(),
           handler: configured.value,
           query: hit.id,
         });
@@ -377,6 +380,7 @@ export const formatDesktopRegistry = async (
   }
   const lookup = await executeRegistryLookup({
     observer,
+    permit: grantThirdPartyOutboundPermit(),
     handler: configured.value,
     query: id,
   });

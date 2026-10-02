@@ -21,6 +21,7 @@ import type {
 } from "@/api/lib/business-registries/sanctions-check";
 import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 // Shared by the HTTP route, the check_counterparty MCP tool and the
 // counterparty_check chat tool.
@@ -65,12 +66,14 @@ export type CounterpartyCheckResult = EntityCheckResult | SanctionsCheckResult;
 
 export type RunEntityCheckSharedProps = {
   observer: RegistryRequestObservation;
+  /** Every check asks a third-party source: an official register or list. */
+  permit: ThirdPartyOutboundPermit;
   check: CounterpartyCheckKind;
   subject: CounterpartyCheckSubject;
   signal?: AbortSignal | undefined;
   runCheck?: typeof runEntityCheck | undefined;
   /** What the sanctions check reads: the lists, the register, the firm's jurisdictions. */
-  sanctions: Omit<SanctionsCheckDependencies, "observer"> & {
+  sanctions: Omit<SanctionsCheckDependencies, "observer" | "permit"> & {
     runSanctionsCheck?: typeof runSanctionsCheck | undefined;
   };
 };
@@ -293,6 +296,7 @@ const runRegisterCheck = async ({
  */
 export const runEntityCheckShared = async ({
   observer,
+  permit,
   check,
   subject,
   signal,
@@ -318,5 +322,8 @@ export const runEntityCheckShared = async ({
   }
   const { runSanctionsCheck: run = runSanctionsCheck, ...dependencies } =
     sanctions;
-  return await run({ subject, dependencies: { ...dependencies, observer } });
+  return await run({
+    subject,
+    dependencies: { ...dependencies, observer, permit },
+  });
 };
