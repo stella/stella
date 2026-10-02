@@ -63,11 +63,14 @@ const checkpointPath = requiredFlagValue({ name: "checkpoint", usage: USAGE });
 const mode = apply ? "apply" : "dry-run";
 const STATEMENT_TIMEOUT_MS = 15_000;
 const ROW_EVENT = "sk_us_raw_row";
-const { rootDb, ingestionDb } = apply
+const { ingestionDb } = apply
   ? await enterCaseLawMaintenanceLane()
   : await openCaseLawReadOnlySession();
+// Reads run under the ingestion role as well as the write: a scoped login
+// that is not the tables' owner sees case-law rows only through that role's
+// policy, so it needs no grants of its own.
 const execute = async (statement: SQLWrapper) =>
-  await rootDb.transaction(async (tx) => {
+  await ingestionDb(async (tx) => {
     await setSharedStatementTimeout(tx, STATEMENT_TIMEOUT_MS);
     await tx.execute(sql`SET LOCAL max_parallel_workers_per_gather = 0`);
     return await tx.execute(statement);
