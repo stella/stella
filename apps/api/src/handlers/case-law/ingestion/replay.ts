@@ -27,6 +27,7 @@ import type {
   StoredRawReparseOutcome,
   StoredRawReparseRejection,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -51,7 +52,6 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
-import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored

@@ -10,6 +10,7 @@ import type {
 } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { PL_COURTS_RULING_DECISION_TYPES } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import {
   composeDecisionWithSupplements,
   DOCUMENT_SUPPLEMENTS_METADATA_KEY,
@@ -25,7 +26,6 @@ import {
 } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
-import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 
 type Ruling = SupplementJudgmentCandidate & { id: string };

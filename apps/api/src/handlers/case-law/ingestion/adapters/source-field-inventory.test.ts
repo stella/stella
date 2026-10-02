@@ -42,6 +42,10 @@ import {
   listSourceRegistrations,
   type SourceRegistrationKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  composedMetadataUrlSchema,
+  metadataUrlSchemaForAdapter,
+} from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
@@ -49,10 +53,6 @@ import {
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
 } from "@/api/lib/legal-search/ingestion-types";
-import {
-  composedMetadataUrlSchema,
-  metadataUrlSchemaForAdapter,
-} from "@/api/lib/legal-search/metadata-url-schemas";
 import {
   approveMetadataUrls,
   metadataUrlAddresses,

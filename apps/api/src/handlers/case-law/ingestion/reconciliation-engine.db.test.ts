@@ -25,6 +25,7 @@ import {
 } from "@/api/db/schema";
 import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { resolveSourceMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
@@ -60,7 +61,6 @@ import type {
   ReconciliationSlicePageOptions,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
-import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";

@@ -3,8 +3,8 @@ import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
-import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 
 /** Both pipeline entries classify metadata from the persisted source, before any text projection. */
 export const resolveSourceMetadataUrlSchema = async (

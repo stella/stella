@@ -31,10 +31,10 @@ import type {
   EmptyAst,
   IngestionResult,
 } from "@/api/handlers/case-law/ingestion/adapter";
+import { composedMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import type { SafeId } from "@/api/lib/branded-types";
 import { supplementAnchorPrefix } from "@/api/lib/case-law/decision-absorption";
 import type { DecisionSupplementKind } from "@/api/lib/legal-search/decision-supplement-kind";
-import { composedMetadataUrlSchema } from "@/api/lib/legal-search/metadata-url-schemas";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { segmentDecision } from "@/api/lib/legal-search/segment-decision";
 

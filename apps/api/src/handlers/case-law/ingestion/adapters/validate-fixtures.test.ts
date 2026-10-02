@@ -13,12 +13,12 @@
 import { Glob } from "bun";
 import { describe, expect, test } from "bun:test";
 
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
 import { readGzipJson } from "@/api/lib/gzip-json";
 import {
   toPlainTextIngestionResult,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
-import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
