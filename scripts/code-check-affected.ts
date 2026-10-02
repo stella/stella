@@ -16,6 +16,11 @@ import { panic } from "better-result";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
 
+import {
+  CODE_CHECK_LEGS,
+  ownsCodeCheckPath,
+  type CodeCheckLeg,
+} from "../packages/scripts/src/code-quality-partition";
 import { isChangedLintPath } from "./lint-paths";
 import {
   isResultConventionExcludedFile,
@@ -338,12 +343,23 @@ export const planCheck = ({
 
 type CheckScope = { type: "all" } | { type: "affected"; base: string };
 
+export const codeCheckExclusions = (
+  workspaces: ReadonlySet<string>,
+  leg: CodeCheckLeg,
+): string[] =>
+  [...workspaces]
+    .filter((workspace) => !ownsCodeCheckPath(workspace, leg))
+    .toSorted()
+    .map((workspace) => `--filter=!./${workspace}`);
+
 type Options = {
+  leg?: CodeCheckLeg;
   scope: CheckScope;
   dryRun: boolean;
 };
 
 const parseArgs = (args: readonly string[]): Options => {
+  let leg: CodeCheckLeg | undefined;
   let base: string | null = null;
   let all = false;
   let dryRun = false;
@@ -356,6 +372,14 @@ const parseArgs = (args: readonly string[]): Options => {
     }
     if (argument === "--all") {
       all = true;
+      continue;
+    }
+    if (argument === "--leg") {
+      const value = argv.next().value;
+      leg = CODE_CHECK_LEGS.find((candidate) => candidate === value);
+      if (leg === undefined) {
+        panic("--leg requires api, web or rest");
+      }
       continue;
     }
     if (argument === "--base") {
@@ -373,6 +397,7 @@ const parseArgs = (args: readonly string[]): Options => {
     panic("--all checks every tracked file and takes no --base");
   }
   return {
+    ...(leg === undefined ? {} : { leg }),
     scope: all
       ? { type: "all" }
       : { type: "affected", base: base ?? DEFAULT_BASE },
@@ -526,7 +551,32 @@ export const resultBoundaryLintCommand = (
   ];
 };
 
-export const scopedCommands = (plan: ScopedCheckPlan): string[][] => {
+type ScopedCommandsOptions = {
+  leg: CodeCheckLeg;
+  workspaces: ReadonlySet<string>;
+};
+
+export const scopedCommands = (
+  plan: ScopedCheckPlan,
+  partition?: ScopedCommandsOptions,
+): string[][] => {
+  if (partition !== undefined) {
+    const ownsRoot = partition.leg === "rest";
+    const commands = scopedCommands({
+      type: "scoped",
+      lint: plan.lint,
+      typecheck: plan.typecheck,
+      rootLintPaths: ownsRoot ? plan.rootLintPaths : [],
+      rootChecks: ownsRoot ? plan.rootChecks : [],
+    });
+    return commands.map((command) =>
+      command[2] === "turbo" && !command.includes("typecheck:repo")
+        ? command.concat(
+            codeCheckExclusions(partition.workspaces, partition.leg),
+          )
+        : command,
+    );
+  }
   const commands: string[][] = [];
   const rootChecks = new Set(plan.rootChecks);
   if (rootChecks.has(ROOT_CHECKS.env)) {
@@ -664,7 +714,12 @@ const planScope = (scope: CheckScope): ScopeCheck => {
 const main = () => {
   const options = parseArgs(process.argv.slice(2));
   const { plan, presentChangedPaths } = planScope(options.scope);
-  const resultBoundaryCommand = resultBoundaryLintCommand(presentChangedPaths);
+  const leg = options.leg;
+  const resultBoundaryCommand = resultBoundaryLintCommand(
+    leg === undefined
+      ? presentChangedPaths
+      : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
+  );
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");
     if (options.dryRun) {
@@ -679,7 +734,12 @@ const main = () => {
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
     );
     if (!options.dryRun) {
-      run(["bun", "run", "code-check"]);
+      run([
+        "bun",
+        "run",
+        "code-check",
+        ...(leg === undefined ? [] : ["--leg", leg]),
+      ]);
     }
     return;
   }
@@ -696,7 +756,10 @@ const main = () => {
   process.stdout.write(
     `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
   );
-  const commands = scopedCommands(plan);
+  const commands = scopedCommands(
+    plan,
+    leg === undefined ? undefined : { leg, workspaces: workspacePaths() },
+  );
   if (options.dryRun) {
     for (const command of commands) {
       process.stdout.write(`  ${command.join(" ")}\n`);

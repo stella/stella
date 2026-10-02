@@ -19,7 +19,7 @@ import { COMPOSER_CONTROL_BUTTON_SIZE } from "@stll/ui/composer";
 import {
   AtSignIcon,
   CpuIcon,
-  MessageSquarePlusIcon,
+  NewChatIcon,
   PaperclipIcon,
   PlusIcon,
   ServerIcon,
@@ -304,7 +304,7 @@ export const ComposerPlusMenu = ({
           {onNewThread && (
             <>
               <MenuItem onClick={onNewThread}>
-                <MessageSquarePlusIcon />
+                <NewChatIcon />
                 {t("chat.newChat")}
               </MenuItem>
               <MenuSeparator />

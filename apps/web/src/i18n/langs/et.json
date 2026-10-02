@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Fookusta soovitus: {topic}",
     "folioCitationFallback": "lk {n}",
     "forkFromHere": "Alusta siit uut vestlust",
+    "forkInSidePanel": "Alusta siit uut vestlust külgpaneelis",
     "forkedFrom": "Loodud vestlusest <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Loodud vestlusest, mis pole enam saadaval",
     "forkedThread": "Teisest vestlusest",
@@ -1153,6 +1154,7 @@
       "viaProvider": "teenuse {provider} kaudu"
     },
     "newChat": "Uus vestlus",
+    "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -1200,6 +1202,12 @@
     "richContentLoading": "Interaktiivse sisu laadimine…",
     "richContentTitle": "Interaktiivne sisu",
     "richContentUnavailable": "Seda sisu ei saa turvaliselt kuvada.",
+    "selection": {
+      "askInNewChat": "Küsi uues vestluses",
+      "quoteInReply": "Tsiteeri vastuses",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Valitud tekst"
+    },
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
@@ -5987,7 +5995,8 @@
         "openReport": "Ava aruanne",
         "submit": "Ekspordi aruanne",
         "templateLabel": "Aruandemall",
-        "title": "Ekspordi aruanne"
+        "title": "Ekspordi aruanne",
+        "withoutAiSummaries": "Ekspordi ilma AI kokkuvõteteta"
       },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",

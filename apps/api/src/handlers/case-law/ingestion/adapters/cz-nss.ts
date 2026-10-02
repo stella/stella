@@ -1,5 +1,11 @@
 import { panic, Result } from "better-result";
 
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_FIELD_KEYS,
+  TEXT_FIELD_TYPE,
+  type TextField,
+} from "@stll/api-contract/case-law-text-field";
 import { classifyFailure } from "@stll/errors";
 import { Temporal } from "@stll/time";
 
@@ -55,10 +61,10 @@ import { czDecisionCourt } from "@/api/lib/case-law/cz-ecli-courts";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  absentTextField,
   checkedDecisionMetadata,
   sourceTextField,
   splitStoredDecisionTextMetadata,
-  storeTextField,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -670,7 +676,7 @@ type CzNssSourceHashOptions = {
   sheetNumber: string | undefined;
   decisionDate: string | undefined;
   decisionType: string | undefined;
-  legalSentence: string | undefined;
+  legalSentence: TextField;
 };
 
 /**
@@ -692,9 +698,9 @@ type CzNssSourceHashOptions = {
  * why: the court writes it when it selects an already published decision for
  * its collection, and edits it afterwards. Left out, a row stored before that
  * would be skipped as unchanged for good. It is appended only where the court
- * states one, so a decision that has none hashes exactly as it did and is not
- * rewritten for this. The replay hashes the value off the row's own metadata,
- * which is where the crawl put it, so the two agree.
+ * states text or a typed absence other than not_published. A genuinely missing
+ * headnote keeps its existing hash; a placeholder changes it so refresh writes
+ * the distinction. Crawl and replay hash the same classified value.
  */
 const czNssSourceHash = ({
   caseNumber,
@@ -708,9 +714,19 @@ const czNssSourceHash = ({
   const sheet = sheetNumber ?? carried;
   const reference = sheet === undefined ? docket : `${docket}-${sheet}`;
   const base = `${reference}|${decisionDate ?? ""}|${decisionType ?? ""}`;
-  return hashContent(
-    legalSentence === undefined ? base : `${base}|${legalSentence}`,
-  );
+  switch (legalSentence.type) {
+    case TEXT_FIELD_TYPE.PRESENT:
+      return hashContent(JSON.stringify([base, legalSentence]));
+    case TEXT_FIELD_TYPE.ABSENT:
+      return hashContent(
+        legalSentence.reason === TEXT_ABSENCE_REASON.NOT_PUBLISHED
+          ? base
+          : JSON.stringify([base, legalSentence]),
+      );
+    default:
+      legalSentence satisfies never;
+      return panic(`Unhandled NSS sentence: ${String(legalSentence)}`);
+  }
 };
 
 /**
@@ -1246,8 +1262,18 @@ export type CzNssDetailMetadata = {
   legalSentence: string | undefined;
 };
 
+type ExtractDivTextOptions = {
+  html: string;
+  divId: string;
+  emptyValue?: "preserve" | "omit";
+};
+
 /** Extract a div's value text by its ID, skipping the label span. */
-const extractDivText = (html: string, divId: string): string | undefined => {
+const extractDivText = ({
+  html,
+  divId,
+  emptyValue = "omit",
+}: ExtractDivTextOptions): string | undefined => {
   const pattern = new RegExp(`id="${divId}"[^>]*>([\\s\\S]*?)</div>`, "iu");
   const match = html.match(pattern);
   if (!match?.[1]) {
@@ -1260,7 +1286,9 @@ const extractDivText = (html: string, divId: string): string | undefined => {
     /class="det-textval[^"]*"[^>]*>(?<value>[\s\S]*?)<\/span>/giu;
   let valMatch: RegExpExecArray | null;
   const texts: string[] = [];
+  let statedValueCount = 0;
   while ((valMatch = valPattern.exec(match[1])) !== null) {
+    statedValueCount += 1;
     const text = stripHtml(valMatch.groups?.["value"] ?? "").trim();
     if (text) {
       texts.push(text);
@@ -1270,7 +1298,7 @@ const extractDivText = (html: string, divId: string): string | undefined => {
     return texts.join(", ");
   }
 
-  return undefined;
+  return emptyValue === "preserve" && statedValueCount > 0 ? "" : undefined;
 };
 
 /**
@@ -1283,24 +1311,34 @@ const extractDivText = (html: string, divId: string): string | undefined => {
 export const parseCzNssDetailMetadata = (
   html: string,
 ): CzNssDetailMetadata => ({
-  ecli: extractDivText(html, "ecli"),
-  judge: extractDivText(html, "soudcezpravodaj"),
-  senate: extractDivText(html, "soudsenat"),
-  legalArea: extractDivText(html, "oblastupravy"),
-  decisionType: extractDivText(html, "druhdokumentuavyrokrozhodnuti"),
-  decisionDate: extractDivText(html, "datumvydanirozhodnuti"),
-  outcome: extractDivText(html, "vyrokrozhodnuti"),
-  caseType: extractDivText(html, "typrizeni"),
-  parties: extractDivText(html, "ucastnicirizeniz"),
-  caseStatus: extractDivText(html, "stavrizeni"),
-  administrativeAuthority: extractDivText(html, "nazevspravnihoorganu"),
-  citation: extractDivText(html, "citace"),
+  ecli: extractDivText({ html, divId: "ecli" }),
+  judge: extractDivText({ html, divId: "soudcezpravodaj" }),
+  senate: extractDivText({ html, divId: "soudsenat" }),
+  legalArea: extractDivText({ html, divId: "oblastupravy" }),
+  decisionType: extractDivText({
+    html,
+    divId: "druhdokumentuavyrokrozhodnuti",
+  }),
+  decisionDate: extractDivText({ html, divId: "datumvydanirozhodnuti" }),
+  outcome: extractDivText({ html, divId: "vyrokrozhodnuti" }),
+  caseType: extractDivText({ html, divId: "typrizeni" }),
+  parties: extractDivText({ html, divId: "ucastnicirizeniz" }),
+  caseStatus: extractDivText({ html, divId: "stavrizeni" }),
+  administrativeAuthority: extractDivText({
+    html,
+    divId: "nazevspravnihoorganu",
+  }),
+  citation: extractDivText({ html, divId: "citace" }),
   // The headnote the court writes for a decision it selects into its
   // collection, under `pravnivetaupravena` ("Právní věta (text)"). The
   // neighbouring `pravnivetaanv` is the ano/ne flag, not the sentence,
   // and the field is on the detail page alone: neither document
   // endpoint carries it.
-  legalSentence: extractDivText(html, "pravnivetaupravena"),
+  legalSentence: extractDivText({
+    html,
+    divId: "pravnivetaupravena",
+    emptyValue: "preserve",
+  }),
 });
 
 /**
@@ -1456,6 +1494,14 @@ const statedDetailMetadataFields = (
     ),
   );
 
+/** An explicitly blank NSS prose value is a publisher placeholder. */
+const czNssTextField = (raw: string | undefined) => {
+  if (raw?.trim().length === 0) {
+    return absentTextField(TEXT_ABSENCE_REASON.PUBLISHER_PLACEHOLDER);
+  }
+  return sourceTextField(ADAPTER_KEYS.CZ_NSS, raw);
+};
+
 /** Convert a parsed row into an IngestionResult. */
 const rowToResult = ({
   content,
@@ -1464,6 +1510,7 @@ const rowToResult = ({
   row,
 }: RowToResultOptions): IngestionResult => {
   const sourceDocumentId = czNssSourceDocumentId(row);
+  const legalSentenceField = czNssTextField(detail.legalSentence);
   const court = czNssCourt(detail.ecli, sourceDocumentId);
   const decisionDate = (() => {
     if (detail.decisionDate) {
@@ -1520,7 +1567,7 @@ const rowToResult = ({
     documentUrl: row.documentUrl,
     textFields: {
       ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      legalSentence: sourceTextField(ADAPTER_KEYS.CZ_NSS, detail.legalSentence),
+      legalSentence: legalSentenceField,
     },
     metadata: checkedDecisionMetadata({
       caseNumber: row.caseNumber,
@@ -1540,7 +1587,7 @@ const rowToResult = ({
       sheetNumber,
       decisionDate,
       decisionType,
-      legalSentence: detail.legalSentence,
+      legalSentence: legalSentenceField,
     }),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
     documentAst: content.documentAst ?? EMPTY_AST,
@@ -1752,12 +1799,25 @@ const reparseStoredRaw = (
   const publishedCaseNumber = storedPublishedCaseNumber(stored);
   const { sheetNumber } = splitCaseReference(publishedCaseNumber);
   const storedDecisionText = splitStoredDecisionTextMetadata(stored.metadata);
-  const statedLegalSentence = nonEmptyString(storedDetail?.legalSentence);
+  const textFields = { ...storedDecisionText.textFields };
+  // Only legacy text without a sidecar, or text already read as present, can
+  // be reclassified. A sidecar's absence (including quarantine) stays closed.
+  for (const key of DECISION_TEXT_FIELD_KEYS) {
+    const storedText = stored.metadata[key];
+    const field = textFields[key];
+    if (
+      typeof storedText === "string" &&
+      (field.type === TEXT_FIELD_TYPE.PRESENT ||
+        stored.metadata[DECISION_TEXT_ABSENCE_METADATA_KEY] === undefined)
+    ) {
+      textFields[key] = czNssTextField(storedText);
+    }
+  }
+  const statedLegalSentence = storedDetail?.legalSentence;
   const legalSentenceField =
     statedLegalSentence === undefined
-      ? storedDecisionText.textFields.legalSentence
-      : sourceTextField(ADAPTER_KEYS.CZ_NSS, statedLegalSentence);
-  const legalSentence = storeTextField(legalSentenceField);
+      ? textFields.legalSentence
+      : czNssTextField(statedLegalSentence);
 
   return {
     type: "parsed",
@@ -1781,7 +1841,7 @@ const reparseStoredRaw = (
       sourceUrl,
       documentUrl: stored.documentUrl ?? undefined,
       textFields: {
-        ...storedDecisionText.textFields,
+        ...textFields,
         legalSentence: legalSentenceField,
       },
       // Written back rather than passed through: a legacy row states the
@@ -1807,7 +1867,7 @@ const reparseStoredRaw = (
         sheetNumber,
         decisionDate,
         decisionType,
-        legalSentence,
+        legalSentence: legalSentenceField,
       }),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS],
       documentAst: rebuilt.documentAst,
