@@ -134,7 +134,7 @@ export const buildContactRatePayload = ({
   if (trimmedInput === "") {
     return { status: "valid", payload: { defaultHourlyRate: null } } as const;
   }
-  if (!currency) {
+  if (!currency || trimmedInput.startsWith("-")) {
     return { status: "invalid" } as const;
   }
   const amount = tryToMinorUnits({ amount: trimmedInput, currency });

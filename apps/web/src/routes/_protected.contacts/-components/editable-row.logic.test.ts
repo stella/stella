@@ -154,6 +154,16 @@ describe("contact hourly rates", () => {
     }
   });
 
+  test("refuses negative amounts before currency rounding", () => {
+    for (const currency of ["EUR", "JPY", "KWD"]) {
+      for (const trimmedInput of ["-0", "-0.001", "-0.0001"]) {
+        expect(buildContactRatePayload({ trimmedInput, currency })).toEqual({
+          status: "invalid",
+        });
+      }
+    }
+  });
+
   test("refuses invalid, negative and unsafe amounts", () => {
     for (const trimmedInput of [
       "oops",
