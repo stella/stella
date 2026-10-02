@@ -1,4 +1,4 @@
-// parser-output-unchanged: run pacing and shared cooldown coordination only; parsing and stored output are unchanged.
+// parser-output-unchanged: completion admission uses typed Results and job-boundary rejection; parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
