@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
@@ -14,10 +15,45 @@ type RunGatedTestsOptions = {
 
 const apiRoot = path.resolve(import.meta.dir, "..");
 
+type SelectGatedTestFilesOptions = {
+  discoveredGatedFiles: readonly string[];
+  requestedFiles: readonly string[];
+  root?: string;
+};
+
+type SelectGatedTestFilesResult =
+  | { type: "selected"; files: string[] }
+  | { type: "invalid_file"; file: string };
+
+export const selectGatedTestFiles = ({
+  discoveredGatedFiles,
+  requestedFiles,
+  root = apiRoot,
+}: SelectGatedTestFilesOptions): SelectGatedTestFilesResult => {
+  if (requestedFiles.length === 0) {
+    return { type: "selected", files: [...discoveredGatedFiles].toSorted() };
+  }
+
+  const discoveredByPath = new Map(
+    discoveredGatedFiles.map((file) => [path.resolve(root, file), file]),
+  );
+  const selected = new Set<string>();
+  for (const requestedFile of requestedFiles) {
+    const absolutePath = path.resolve(root, requestedFile);
+    const discoveredFile = discoveredByPath.get(absolutePath);
+    if (!discoveredFile) {
+      return { type: "invalid_file", file: requestedFile };
+    }
+    selected.add(discoveredFile);
+  }
+
+  return { type: "selected", files: [...selected].toSorted() };
+};
+
 /**
- * Runs every test file that declares the script's gate, with the gate set.
+ * Runs discovered test files that declare the script's gate, with the gate set.
  * Discovery reads the same `ciGateTestRunners` declaration the CI coverage
- * guard reads, so a gated suite cannot be left out of its runner.
+ * guard reads, so a gated suite cannot be left out of the default run.
  */
 export const runGatedTests = async ({
   requiredEnv,
@@ -36,7 +72,7 @@ export const runGatedTests = async ({
       onlyFiles: true,
     }),
   ];
-  const testFiles = (
+  const discoveredGatedFiles = (
     await Promise.all(
       discoveredTests.map(async (testFile) => ({
         isGated: (await Bun.file(path.join(apiRoot, testFile)).text()).includes(
@@ -49,6 +85,23 @@ export const runGatedTests = async ({
     .filter(({ isGated }) => isGated)
     .map(({ testFile }) => testFile)
     .toSorted();
+
+  const selection = selectGatedTestFiles({
+    discoveredGatedFiles,
+    requestedFiles: process.argv.slice(2),
+  });
+  switch (selection.type) {
+    case "invalid_file":
+      console.error(`Not a discovered gated test file: ${selection.file}`);
+      return 1;
+    case "selected":
+      break;
+    default: {
+      selection satisfies never;
+      return panic("Unhandled gated test selection");
+    }
+  }
+  const testFiles = selection.files;
 
   if (testFiles.length === 0) {
     console.error(`No test files declaring ${runner.gate} were discovered.`);

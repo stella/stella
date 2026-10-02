@@ -9,11 +9,13 @@ import {
   BackfillHeldError,
   createScriptBackfillRuntime,
 } from "@/api/db/backfill-runtime";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import { backfillStatuteSlugsPage } from "./slug-backfill";
 
+const DIVISION_BY_ZERO_SQLSTATE = "22012";
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
@@ -168,11 +170,8 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
             if (outcome === "timeout") {
               expect(rejection).toBeInstanceOf(BackfillHeldError);
             } else {
-              expect(
-                rejection instanceof Error
-                  ? rejection.message
-                  : String(rejection),
-              ).toMatch(/division by zero/u);
+              // Drizzle wraps the driver message; assert the underlying PostgreSQL fault.
+              expect(getPgErrorCode(rejection)).toBe(DIVISION_BY_ZERO_SQLSTATE);
             }
           }
           expect((await index.tryAcquire()).unwrap()).toBe(true);
@@ -227,7 +226,8 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
             ),
           ).toHaveLength(0);
           for (const record of records) {
-            expect(record).toMatchObject({
+            // Bun replaces nested values with asymmetric matchers; preserve shared verdicts.
+            expect(structuredClone(record)).toMatchObject({
               config: { hardFloor: defaultConfig.hardFloor },
               verdict: { signals: expect.any(Array) },
             });
@@ -386,7 +386,8 @@ describe.skipIf(!enabled)("slug backfill poison-page recovery", () => {
           );
           expect(mismatch).toHaveLength(0);
           for (const record of decisions) {
-            expect(record).toMatchObject({
+            // Bun replaces nested values with asymmetric matchers; preserve shared verdicts.
+            expect(structuredClone(record)).toMatchObject({
               verdict: { signals: expect.any(Array) },
               config: { hardFloor: defaultConfig.hardFloor },
             });

@@ -10,6 +10,7 @@ import {
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
 
+import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "../lib/decision-date-bounds-sql";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import { createCorpusProjectionDeleteReceiptRepair } from "./corpus-projection-delete-receipt-repair";
 import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
@@ -157,7 +158,7 @@ const createFixture = async (client: SQL, kind: "date" | "receipt") => {
     kind === "date" ? caseLawDecisions : corpusIndexProjectionIntents;
   const checkName =
     kind === "date"
-      ? "case_law_decision_date_bounds"
+      ? CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT
       : "corpus_index_projection_intents_delete_receipt_paired";
   const check = getTableConfig(table).checks.find(
     ({ name }) => name === checkName,
@@ -273,7 +274,7 @@ describe.skipIf(!enabled)(
           await assertOnlineMigrationsApplied(pool, runnerOptions);
           expect(events).toHaveLength(2);
           for (const event of events) {
-            expect(event).toMatchObject({
+            expect(structuredClone(event)).toMatchObject({
               event: "online_repair_pending",
               completion: {
                 type: "pending",
@@ -298,7 +299,8 @@ describe.skipIf(!enabled)(
           );
           expect(differences).toHaveLength(0);
           for (const record of decisions) {
-            expect(record).toMatchObject({
+            // Bun replaces nested values with asymmetric matchers; preserve shared verdicts.
+            expect(structuredClone(record)).toMatchObject({
               config: { hardFloor: defaultConfig.hardFloor },
               verdict: { signals: expect.any(Array) },
             });

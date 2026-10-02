@@ -5,7 +5,7 @@ import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 import type { BatchState, Verdict } from "@stll/db-load-gate/health";
 import { tryAcquireBackfillTransactionSlot } from "@stll/db-load-gate/slot";
 
-import { isPgError, PG_ERROR } from "../lib/pg-error";
+import { getPgDriverErrorCode, isPgError, PG_ERROR } from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { withGatedTestClients } from "../tests/gated-test-database";
 import { runAdaptiveBackfillBatch } from "./adaptive-backfill";
@@ -118,7 +118,8 @@ const withFixture = async (
         }
         expect(records.length).toBeGreaterThan(0);
         for (const record of records) {
-          expect(record).toMatchObject({
+          // Bun replaces nested values with asymmetric matchers; preserve shared verdicts.
+          expect(structuredClone(record)).toMatchObject({
             config: { hardFloor: config.hardFloor },
             verdict: { signals: expect.any(Array) },
           });
@@ -276,9 +277,10 @@ describe.skipIf(!enabled)(
           (error: unknown) => error,
         );
         expect(rejection).toBeInstanceOf(Error);
-        expect(
-          rejection instanceof Error ? rejection.message : String(rejection),
-        ).toMatch(/connection|closed|terminated|socket/iu);
+        // Bun reports an interrupted read through its driver code, beneath Result's wrapper.
+        expect(getPgDriverErrorCode(rejection)).toBe(
+          "ERR_POSTGRES_EXPECTED_REQUEST",
+        );
         expect(
           (
             await writer.unsafe<StateRow[]>(
@@ -518,7 +520,8 @@ describe.skipIf(!enabled)(
           expect(finished?.cursor).toBeNull();
           await invariant(true);
           for (const record of records) {
-            expect(record).toMatchObject({
+            // Bun replaces nested values with asymmetric matchers; preserve shared verdicts.
+            expect(structuredClone(record)).toMatchObject({
               config: { hardFloor: config.hardFloor },
               verdict: { signals: expect.any(Array) },
             });
