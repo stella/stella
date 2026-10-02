@@ -237,9 +237,11 @@ test("the measured base overrides stale headroom and explicit merge-group bases"
 
 test("a counter cannot supply an inflated total detached from its files", () => {
   expect(() =>
-    scanAll(ROOT, [
-      { ...metric, count: () => ({ count: 999, files: { "a.ts": 1 } }) },
-    ]),
+    scanAll(ROOT, {
+      metrics: [
+        { ...metric, count: () => ({ count: 999, files: { "a.ts": 1 } }) },
+      ],
+    }),
   ).toThrow("does not equal its per-file total");
 });
 
@@ -588,5 +590,246 @@ test("merge-group base_sha funds only allowances absent from that event base", (
     const inherited = check(root);
     expect(inherited.code, inherited.output).toBe(1);
     expect(inherited.output).toContain("actual increase 1, funded 0");
+  });
+}, 30_000);
+
+for (const allowanceChange of ["added", "changed"] as const) {
+  test(`an allowance ${allowanceChange} for paint transitions can accompany its utility without invalidating the base`, () => {
+    withClone((root) => {
+      const relative =
+        allowanceChange === "added"
+          ? "packages/ui/src/components/paint-control.ts"
+          : "packages/ui/src/components/input-control.ts";
+      write({
+        root,
+        relative,
+        contents: 'export const style = "transition-opacity";\n',
+      });
+      commit(root, "base control without paint utility");
+      git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+      const script = path.join(root, "scripts/ratchet.ts");
+      const original = readFileSync(script, "utf-8");
+      const utility = "transition-colors";
+      const updated =
+        allowanceChange === "added"
+          ? original.replace(
+              "> = new Map([",
+              () =>
+                `> = new Map([ [${JSON.stringify(relative)}, { utility: ${JSON.stringify(utility)}, reason: "fixture paint exception" }],`,
+            )
+          : original.replace(
+              "[transition:background-color_5000000s_ease-in-out_0s]",
+              () => utility,
+            );
+      expect(updated).not.toBe(original);
+      writeFileSync(script, updated);
+      write({
+        root,
+        relative,
+        contents: `export const style = "${utility}";\n`,
+      });
+      commit(root, "allow the control paint utility");
+      const accepted = check(root);
+      expect(accepted.code, accepted.output).toBe(0);
+      expect(accepted.output).toContain("ratchet --check: OK");
+
+      // Restoring head-only consistency checking on base must reject this PR.
+      const mutant = updated.replace(
+        'allowed === 0 && role === "head"',
+        "allowed === 0",
+      );
+      expect(mutant).not.toBe(updated);
+      writeFileSync(script, mutant);
+      const rejectedBase = check(root);
+      expect(rejectedBase.code, rejectedBase.output).not.toBe(0);
+      expect(rejectedBase.output).toContain(
+        `allowance for ${relative} no longer matches`,
+      );
+      writeFileSync(script, updated);
+
+      // A stale entry on the working head still fails before comparison.
+      write({
+        root,
+        relative,
+        contents: 'export const style = "transition-opacity";\n',
+      });
+      const rejectedHead = check(root);
+      expect(rejectedHead.code, rejectedHead.output).not.toBe(0);
+      expect(rejectedHead.output).toContain(
+        `allowance for ${relative} no longer matches`,
+      );
+    });
+  }, 30_000);
+}
+
+test("the base may predate a required domain action definition but head may not lose it", () => {
+  withClone((root) => {
+    const relative = "apps/api/scripts/lib/capability-catalog.ts";
+    write({
+      root,
+      relative,
+      contents: 'export const unrelated = "fixture";\n',
+    });
+    commit(root, "base before domain actions");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    write({
+      root,
+      relative,
+      contents: 'export const DOMAIN_ACTION_VERBS = ["create"] as const;\n',
+    });
+    commit(root, "define domain actions");
+    const accepted = check(root);
+    expect(accepted.code, accepted.output).toBe(0);
+    const script = path.join(root, "scripts/ratchet.ts");
+    const original = readFileSync(script, "utf-8");
+    const mutant = original.replace(
+      'if (role === "base") {\n      return 0;\n    }',
+      "",
+    );
+    expect(mutant).not.toBe(original);
+    writeFileSync(script, mutant);
+    const rejectedBase = check(root);
+    expect(rejectedBase.code, rejectedBase.output).not.toBe(0);
+    expect(rejectedBase.output).toContain(
+      "capability-domain-action-verbs: DOMAIN_ACTION_VERBS not found",
+    );
+    writeFileSync(script, original);
+    write({
+      root,
+      relative,
+      contents: 'export const unrelated = "fixture";\n',
+    });
+    const rejected = check(root);
+    expect(rejected.code, rejected.output).not.toBe(0);
+    expect(rejected.output).toContain(
+      "capability-domain-action-verbs: DOMAIN_ACTION_VERBS not found",
+    );
+  });
+}, 30_000);
+
+test("untracked files cannot increase file, duplication, directory or dependency metrics", () => {
+  withClone((root) => {
+    const libFile = "apps/api/src/lib/domain/helper.ts";
+    const helper = `export const duplicateHelperBinding = () => { ${Array.from(
+      { length: 25 },
+      (_, index) => `const value${index} = source${index} + ${index};`,
+    ).join(" ")} };\n`;
+    write({ root, relative: libFile, contents: helper });
+    commit(root, "tracked helper");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    const before = check(root);
+    expect(before.code, before.output).toBe(0);
+    for (const [relative, contents] of [
+      ["apps/api/src/untracked.ts", casts(10)],
+      ["apps/api/src/lib/untracked/helper.ts", helper],
+      ["apps/web/src/lib/domain/helper.ts", helper],
+      [
+        "packages/untracked/package.json",
+        '{"dependencies":{"untracked-dependency":"1.0.0"}}\n',
+      ],
+    ]) {
+      write({ root, relative, contents });
+    }
+    const after = check(root);
+    const report = ratchet(root);
+    expect(report).toMatch(/as-casts\s+6\s+\(baseline 6, 0\)/u);
+    expect(report).toMatch(
+      /cross-app-lib-path-copies\s+0\s+\(baseline 0, 0\)/u,
+    );
+    expect(after.code, after.output).toBe(0);
+    expect(after.output).toContain("ratchet --check: OK");
+    // Removing the tracked-set boundary makes the same tree regress.
+    const script = path.join(root, "scripts/ratchet.ts");
+    const original = readFileSync(script, "utf-8");
+    const mutant = original.replaceAll(
+      "const current = scanAll(REPO_ROOT, { trackedFiles });",
+      "const current = scanAll(REPO_ROOT);",
+    );
+    expect(mutant).not.toBe(original);
+    writeFileSync(script, mutant);
+    const rejected = check(root);
+    expect(rejected.code, rejected.output).toBe(1);
+    expect(rejected.output).toContain("as-casts: 6 -> 16");
+    expect(rejected.output).toContain("cross-app-lib-path-copies");
+    expect(rejected.output).toContain("duplicate-token-blocks");
+    expect(rejected.output).toContain("cross-workspace-duplicate-export-names");
+    expect(rejected.output).toContain("api-lib-top-level-entries");
+    expect(rejected.output).toContain("direct-third-party-declarations");
+    writeFileSync(script, original);
+    // Staged additions belong to the head scan, and local tracked edits remain visible.
+    git(root, "add", "apps/api/src/untracked.ts");
+    const staged = check(root);
+    expect(staged.code, staged.output).toBe(1);
+    expect(staged.output).toContain("as-casts: 6 -> 16");
+  });
+}, 30_000);
+
+test("malformed ledger and dependency schemas fail in both measurement roles", () => {
+  withClone((root) => {
+    for (const { relative, contents, diagnostic } of [
+      {
+        relative: "scripts/internal-module-mock-ledger.json",
+        contents: "{}",
+        diagnostic: "internal-module-mock ledger must be a JSON array",
+      },
+      {
+        relative: "scripts/parser-validator-call-ledger.json",
+        contents: "{}",
+        diagnostic: "parser-validator-call ledger must be a JSON array",
+      },
+      {
+        relative: "packages/invalid/package.json",
+        contents: '{"dependencies":[]}',
+        diagnostic: "dependencies must be an object",
+      },
+      {
+        relative: "packages/invalid/package.json",
+        contents: '{"dependencies":{"example":1}}',
+        diagnostic: "dependencies values must be strings",
+      },
+      {
+        relative: "packages/invalid/package.json",
+        contents: "invalid JSON",
+        diagnostic: "must contain a JSON5 object",
+      },
+    ]) {
+      write({ root, relative, contents });
+      for (const role of ["head", "base"] as const) {
+        expect(() => scanAll(root, { role })).toThrow(diagnostic);
+      }
+      rmSync(path.join(root, relative));
+    }
+  });
+}, 30_000);
+
+test("the full counter self-test exercises both file and repository measurement contracts", () => {
+  withClone((root) => {
+    expect(ratchet(root, "--self-test")).toContain("ratchet --self-test: PASS");
+  });
+}, 30_000);
+
+test("staged removal excludes untracked root manifests and lockfiles from all modes", () => {
+  withClone((root) => {
+    git(root, "rm", "--cached", "package.json", "bun.lock");
+    write({
+      root,
+      relative: "package.json",
+      contents: '{"dependencies":{"untracked":"1.0.0"}}\n',
+    });
+    write({
+      root,
+      relative: "bun.lock",
+      contents: '{"packages":{"untracked@1.0.0":[]}}\n',
+    });
+    const result = check(root);
+    expect(result.code, result.output).toBe(0);
+    expect(result.output).toContain(
+      "lockfile-package-entries: 0 (report only)",
+    );
+    const report = ratchet(root);
+    expect(report).toMatch(
+      /direct-third-party-declarations\s+0\s+\(baseline 0, 0\)/u,
+    );
+    expect(report).toContain("lockfile-package-entries: 0 (report only)");
   });
 }, 30_000);

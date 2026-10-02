@@ -509,6 +509,37 @@ export const resultBoundaryLintCommand = (
   ];
 };
 
+type PlanResultBoundaryLintOptions = {
+  files: readonly string[];
+  mergeBase: string | null;
+  resolveMergeBase: () => string | null;
+  measureDebt: (base: string) => ReadonlySet<string>;
+  report: (message: string) => void;
+};
+
+export const planResultBoundaryLint = ({
+  files,
+  mergeBase,
+  resolveMergeBase,
+  measureDebt,
+  report,
+}: PlanResultBoundaryLintOptions): string[] | null => {
+  const candidates = files
+    .filter(isResultConventionSourceFile)
+    .filter((file) => !isResultConventionExcludedFile(file));
+  if (candidates.length === 0) {
+    return null;
+  }
+  const base = mergeBase ?? resolveMergeBase();
+  if (base === null) {
+    report(
+      `code-check: skipping exact result boundary lint; no merge base for ${DEFAULT_BASE} (normal lint checks still run)\n`,
+    );
+    return null;
+  }
+  return resultBoundaryLintCommand(candidates, measureDebt(base));
+};
+
 type ScopedCommandsOptions = {
   leg: CodeCheckLeg;
   workspaces: ReadonlySet<string>;
@@ -638,7 +669,11 @@ export const planFullCheck = ({
 const presentPaths = (paths: readonly string[]): string[] =>
   paths.filter((file) => existsSync(path.join(REPO_ROOT, file)));
 
-type ScopeCheck = { plan: CheckPlan; presentChangedPaths: string[] };
+type ScopeCheck = {
+  plan: CheckPlan;
+  presentChangedPaths: string[];
+  mergeBase: string | null;
+};
 
 const planScope = (scope: CheckScope): ScopeCheck => {
   switch (scope.type) {
@@ -650,6 +685,7 @@ const planScope = (scope: CheckScope): ScopeCheck => {
           workspacePaths: workspacePaths(),
         }),
         presentChangedPaths: files,
+        mergeBase: null,
       };
     }
     case "affected": {
@@ -663,6 +699,7 @@ const planScope = (scope: CheckScope): ScopeCheck => {
           workspacePaths: workspacePaths(),
         }),
         presentChangedPaths,
+        mergeBase: changed.mergeBase,
       };
     }
     default: {
@@ -674,20 +711,25 @@ const planScope = (scope: CheckScope): ScopeCheck => {
 
 const main = () => {
   const options = parseArgs(process.argv.slice(2));
-  const { plan, presentChangedPaths } = planScope(options.scope);
+  const { plan, presentChangedPaths, mergeBase } = planScope(options.scope);
   const leg = options.leg;
-  const baseRef =
-    options.scope.type === "affected" ? options.scope.base : DEFAULT_BASE;
-  const debtBase = run(["git", "merge-base", baseRef, "HEAD"], {
-    capture: true,
-  }).trim();
-  const debtFiles = measureResultBoundaryDebt(debtBase);
-  const resultBoundaryCommand = resultBoundaryLintCommand(
-    leg === undefined
-      ? presentChangedPaths
-      : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
-    debtFiles,
-  );
+  const resultBoundaryCommand = planResultBoundaryLint({
+    files:
+      leg === undefined
+        ? presentChangedPaths
+        : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
+    mergeBase,
+    resolveMergeBase: () => {
+      const result = Bun.spawnSync(
+        ["git", "merge-base", DEFAULT_BASE, "HEAD"],
+        { cwd: REPO_ROOT, stdout: "pipe", stderr: "pipe" },
+      );
+      const base = result.stdout.toString().trim();
+      return result.exitCode === 0 && base !== "" ? base : null;
+    },
+    measureDebt: measureResultBoundaryDebt,
+    report: (message) => process.stdout.write(message),
+  });
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");
     if (options.dryRun) {

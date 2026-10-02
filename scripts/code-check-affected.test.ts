@@ -1,11 +1,13 @@
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
+  mkdtempSync,
   readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -19,6 +21,7 @@ import {
   LINT_ONLY_CACHE_INPUTS,
   planCheck,
   planFullCheck,
+  planResultBoundaryLint,
   PLUGIN_FIXTURE_INPUTS,
   PLUGIN_REGISTRY_INPUTS,
   ROOT_SCRIPT_LINT_INPUTS,
@@ -52,6 +55,92 @@ const plan = (
   });
 
 describe("changed-file result boundary lint", () => {
+  test.each([
+    ["README.md"],
+    ["scripts/guard.ts"],
+    ["apps/api/src/lib/client.test.ts"],
+    ["apps/api/src/lib/document-processing-queue.ts"],
+  ])("does not resolve or measure debt for %s", (file) => {
+    expect(
+      planResultBoundaryLint({
+        files: [file],
+        mergeBase: null,
+        resolveMergeBase: () => {
+          throw new Error("Unrelated files must not resolve a debt base");
+        },
+        measureDebt: () => {
+          throw new Error("Unrelated files must not measure debt");
+        },
+        report: () => {
+          throw new Error("Unrelated files must not report skipped checks");
+        },
+      }),
+    ).toBeNull();
+  });
+
+  test("reuses the affected scope's merge base when measuring candidate debt", () => {
+    const measuredBases: string[] = [];
+    const file = "apps/api/src/lib/new-client.ts";
+    expect(
+      planResultBoundaryLint({
+        files: ["README.md", file],
+        mergeBase: "planned-merge-base",
+        resolveMergeBase: () => {
+          throw new Error(
+            "Affected checks must reuse their planned merge base",
+          );
+        },
+        measureDebt: (base) => {
+          measuredBases.push(base);
+          return new Set();
+        },
+        report: () => {
+          throw new Error("An available base must not skip checks");
+        },
+      }),
+    ).toEqual(resultBoundaryLintCommand([file], new Set()));
+    expect(measuredBases).toEqual(["planned-merge-base"]);
+  });
+
+  test("the full scope resolves a base and excludes its measured debt", () => {
+    const debtFile = "apps/api/src/lib/old-client.ts";
+    const cleanFile = "apps/api/src/lib/new-client.ts";
+    const measuredBases: string[] = [];
+    expect(
+      planResultBoundaryLint({
+        files: [debtFile, cleanFile],
+        mergeBase: null,
+        resolveMergeBase: () => "full-merge-base",
+        measureDebt: (base) => {
+          measuredBases.push(base);
+          return new Set([debtFile]);
+        },
+        report: () => {
+          throw new Error("An available base must not skip checks");
+        },
+      }),
+    ).toEqual(resultBoundaryLintCommand([cleanFile], new Set()));
+    expect(measuredBases).toEqual(["full-merge-base"]);
+  });
+
+  test("the full scope clearly skips the extra pass without a comparison base", () => {
+    const messages: string[] = [];
+    expect(
+      planResultBoundaryLint({
+        files: ["apps/api/src/lib/new-client.ts"],
+        mergeBase: null,
+        resolveMergeBase: () => null,
+        measureDebt: () => {
+          throw new Error("A missing base must not measure debt");
+        },
+        report: (message) => messages.push(message),
+      }),
+    ).toBeNull();
+    expect(messages).toEqual([
+      "code-check: skipping exact result boundary lint; no merge base for origin/main (normal lint checks still run)\n",
+    ]);
+  });
+
   test("enforces the exact Oxlint rules for files without baseline debt", () => {
     expect(
       resultBoundaryLintCommand(
@@ -526,6 +615,39 @@ describe("Turbo cache input contract", () => {
 });
 
 describe("full and affected code-check parity", () => {
+  test("the full command still plans normal checks without origin/main", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
+    const git = Bun.which("git");
+    expect(git).not.toBeNull();
+    writeFileSync(
+      path.join(directory, "git"),
+      `#!/usr/bin/env bun
+if (process.argv[2] === "merge-base") process.exit(128);
+const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const result = Bun.spawnSync(
+        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        { env: { ...process.env, PATH: `${directory}:${process.env.PATH}` } },
+      );
+      expect(result.exitCode).toBe(0);
+      const output = result.stdout.toString();
+      expect(output).toContain(
+        "skipping exact result boundary lint; no merge base for origin/main",
+      );
+      expect(output).toContain("code-check: lint all; typecheck all");
+      expect(output).toContain("turbo run lint typecheck");
+      expect(output).not.toContain(
+        "oxlint -c oxlint.result-boundary.config.ts",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   test("the full check lints untracked root source files", () => {
     const file = `.claude/mcp/code-check-untracked-${process.pid}.ts`;
     expect(existsSync(file)).toBe(false);
@@ -542,7 +664,7 @@ describe("full and affected code-check parity", () => {
     } finally {
       rmSync(file);
     }
-  });
+  }, 30_000);
 
   // The full check and every affected run reach workspaces through the same
   // `lint` and `typecheck` tasks, so the workspace scripts are the pass list.

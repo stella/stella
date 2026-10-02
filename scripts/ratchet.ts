@@ -1,6 +1,6 @@
 // Convention ratchet guard.
 //
-// Compare the working tree to a measured Git merge-base export. Every metric
+// Compare the tracked working tree to a measured Git merge-base export. Every metric
 // tightens by default; increases require exact, justified PR allowances.
 // Per-file metrics fund each file separately. Both trees use the current
 // registry, so new counters measure the base rather than inheriting an
@@ -642,7 +642,7 @@ type PaintTransitionAllowance = { utility: string; reason: string };
 
 // Paint transitions kept on purpose, one reasoned entry per file. Each
 // occurrence of the allowed utility is subtracted from its file's count; an
-// entry whose utility no longer appears panics, so the record cannot go stale.
+// entry whose utility no longer appears on head panics, so the record cannot go stale.
 const LEGACY_PAINT_TRANSITION_ALLOWANCES: ReadonlyMap<
   string,
   PaintTransitionAllowance
@@ -661,7 +661,7 @@ const LEGACY_PAINT_TRANSITION_ALLOWANCES: ReadonlyMap<
 // The layout-motion lint rule rejects new layout transitions outright; this
 // counter freezes the older paint-property Tailwind utilities per file so
 // their remaining call sites can only shrink.
-const countLegacyPaintTransitions: FileCounter = (content, file) => {
+const countLegacyPaintTransitions: FileCounter = (content, { file, role }) => {
   const total = (() => {
     if (file.endsWith(".css")) {
       return countLegacyPaintCssTransitions(content);
@@ -676,7 +676,7 @@ const countLegacyPaintTransitions: FileCounter = (content, file) => {
     return total;
   }
   const allowed = content.split(allowance.utility).length - 1;
-  if (allowed === 0) {
+  if (allowed === 0 && role === "head") {
     return panic(
       `legacy-paint-transitions allowance for ${file} no longer matches ${allowance.utility}; remove the entry (it was kept because it ${allowance.reason})`,
     );
@@ -1131,7 +1131,7 @@ const countRepeatedTimestampCursorBoundaries = (content: string): number => {
  * so a regex is hidden by the very characters that make it worth checking. A
  * guard a new regex can evade by containing a quote is not a guard.
  */
-const countSuperLinearRegexes = (content: string, file: string): number => {
+const countSuperLinearRegexes: FileCounter = (content, { file }) => {
   // Pick the dialect from the extension. TSX for every file would
   // misread a generic arrow such as `<Ts>(…) =>` in a .ts file as JSX,
   // and the parser's recovery can swallow the rest of the file — which
@@ -1239,7 +1239,7 @@ const countModuleLevelMutableCollections = (content: string): number => {
 // budget and ledger can never disagree about what a suppression is.
 const countTrackedRuleSuppressions =
   (rule: string): FileCounter =>
-  (content, file) =>
+  (content, { file }) =>
     collectLintDirectives(content, file).filter((directive) =>
       suppressesRule(directive, rule),
     ).length;
@@ -1247,7 +1247,7 @@ const countTrackedRuleSuppressions =
 // The residual budget: directives naming only rules with no dedicated budget.
 // A bare directive is excluded here because it silences every tracked rule and
 // is already charged to each of their budgets.
-const countResidualLintSuppressions = (content: string, file: string): number =>
+const countResidualLintSuppressions: FileCounter = (content, { file }) =>
   collectLintDirectives(content, file).filter(isResidualDirective).length;
 
 // A compiler-suppression directive. Fidelity limit: a prose comment that
@@ -1276,7 +1276,7 @@ const countTsSuppressions = (content: string): number => {
 // counted by the check's own directive parser: next-line and trailing
 // `// db-await-in-loop: <reason>` plus each closed disable/enable block. One
 // parser means the budget counts exactly the suppressions the check honours.
-const countDbAwaitInLoopSuppressions: FileCounter = (content, file) =>
+const countDbAwaitInLoopSuppressions: FileCounter = (content, { file }) =>
   countDbAwaitInLoopDirectives(content, file);
 
 // Explicitly detached calls bypass no-floating-promises when `void` is
@@ -1467,7 +1467,7 @@ const moduleSpecifiers = (content: string): string[] => {
 
 const countCrossSliceImports =
   (crosses: CrossSliceRule): FileCounter =>
-  (content, file) =>
+  (content, { file }) =>
     moduleSpecifiers(content).filter((spec) => {
       const resolved = resolveSpecifier(file, spec);
       return resolved !== null && crosses(file, resolved);
@@ -1508,8 +1508,9 @@ const webImporterSlice = (file: string): string => {
   return SHARED_IMPORTER;
 };
 
-const countSliceOwnedWebComponents: RepoCounter = (root) => {
-  const sources = scanRepoFiles(root, [WEB_SOURCE_GLOB]);
+const countSliceOwnedWebComponents: RepoCounter = (context) => {
+  const { root } = context;
+  const sources = scanRepoFiles(context, [WEB_SOURCE_GLOB]);
   const known = new Set(sources);
   const importerSlices = new Map<string, Set<string>>();
   for (const file of sources) {
@@ -1664,12 +1665,15 @@ const countReadCapabilitiesWithWriteScope = (content: string): number => {
  * directory (`clauses/categories/create.ts` over `clauses/categories-create.ts`),
  * so this holds at 0. A missing list is a moved definition, not a clean count.
  */
-const countDomainActionVerbs = (content: string): number => {
+const countDomainActionVerbs: FileCounter = (content, { role }) => {
   const block =
     /export const DOMAIN_ACTION_VERBS = \[([\s\S]*?)\] as const;/u.exec(
       content,
     )?.[1];
   if (block === undefined) {
+    if (role === "base") {
+      return 0;
+    }
     return panic(
       "capability-domain-action-verbs: DOMAIN_ACTION_VERBS not found",
     );
@@ -2093,7 +2097,7 @@ const countDirectFailureSinksAs = (
   return count;
 };
 
-const countDirectFailureSinks: FileCounter = (content, file) =>
+const countDirectFailureSinks: FileCounter = (content, { file }) =>
   Math.max(
     countDirectFailureSinksAs(content, file, ts.ScriptKind.TS),
     countDirectFailureSinksAs(content, file, ts.ScriptKind.TSX),
@@ -2186,7 +2190,15 @@ const FAILURE_SINK_SOURCE_GLOBS = [
   "apps/legal-atlas-runner/src/**/*.ts",
 ] as const;
 
-type FileCounter = (content: string, file: string) => number;
+type MeasurementRole = "head" | "base";
+type FileMeasurement = { file: string; role: MeasurementRole };
+type FileCounter = (content: string, measurement: FileMeasurement) => number;
+
+type ScanContext = {
+  root: string;
+  role: MeasurementRole;
+  trackedFiles?: ReadonlySet<string>;
+};
 
 // A repo metric answers a question no single file can — the same helper copied
 // into two apps, one name defined in two workspaces, the size of a flat
@@ -2198,7 +2210,7 @@ type RepoMetricResult = {
   readonly files: Record<string, number>;
 };
 
-type RepoCounter = (root: string) => RepoMetricResult;
+type RepoCounter = (context: ScanContext) => RepoMetricResult;
 
 export type RatchetMetric =
   | {
@@ -2297,13 +2309,16 @@ const workspaceOf = (rel: string): string =>
   rel.split("/").slice(0, 2).join("/");
 
 const scanRepoFiles = (
-  root: string,
+  { root, trackedFiles }: ScanContext,
   globs: readonly string[],
 ): readonly string[] => {
   const seen = new Set<string>();
   for (const glob of globs) {
     for (const rel of new Bun.Glob(glob).scanSync(root)) {
-      if (!isExcludedSource(rel)) {
+      if (
+        !isExcludedSource(rel) &&
+        (trackedFiles === undefined || trackedFiles.has(rel))
+      ) {
         seen.add(rel);
       }
     }
@@ -2318,9 +2333,9 @@ const scanRepoFiles = (
 // `lib/chat/types.ts` are two domains sharing a convention name.
 const LIB_SEGMENT = "/src/lib/";
 
-const countCrossAppLibPathCopies: RepoCounter = (root) => {
+const countCrossAppLibPathCopies: RepoCounter = (context) => {
   const byLibPath = new Map<string, Map<string, string[]>>();
-  for (const rel of scanRepoFiles(root, [APP_LIB_GLOB])) {
+  for (const rel of scanRepoFiles(context, [APP_LIB_GLOB])) {
     const libPath = rel.slice(rel.indexOf(LIB_SEGMENT) + LIB_SEGMENT.length);
     const app = workspaceOf(rel);
     const byApp = byLibPath.get(libPath) ?? new Map<string, string[]>();
@@ -2357,9 +2372,10 @@ const MIN_DUPLICATE_EXPORT_NAME_LENGTH = 4;
 
 // One name defined in N workspaces costs N-1: one workspace owns it, every
 // other definition is the copy that should have imported it instead.
-const countCrossWorkspaceDuplicateExportNames: RepoCounter = (root) => {
+const countCrossWorkspaceDuplicateExportNames: RepoCounter = (context) => {
+  const { root } = context;
   const definitions = new Map<string, Map<string, string>>();
-  for (const rel of scanRepoFiles(root, WORKSPACE_OWNED_GLOBS)) {
+  for (const rel of scanRepoFiles(context, WORKSPACE_OWNED_GLOBS)) {
     // A name emitted by a code generator is the generator's to deduplicate.
     if (rel.includes("/generated/")) {
       continue;
@@ -2399,16 +2415,33 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (root) => {
 // metric, so a new file and a new directory cost the same.
 const countLibTopLevelEntries =
   (libDir: string): RepoCounter =>
-  (root) => {
+  ({ root, trackedFiles }) => {
     const dir = path.join(root, libDir);
     if (!existsSync(dir)) {
       return { count: 0, files: {} };
     }
+    const trackedEntries =
+      trackedFiles === undefined
+        ? undefined
+        : new Set(
+            [...trackedFiles]
+              .filter((file) => file.startsWith(`${libDir}/`))
+              .map((file) =>
+                file
+                  .slice(libDir.length + 1)
+                  .split("/")
+                  .at(0),
+              ),
+          );
     const files: Record<string, number> = {};
     let count = 0;
     for (const entry of readdirSync(dir, { withFileTypes: true })) {
       const rel = `${libDir}/${entry.name}`;
-      if (NON_PRODUCT_LIB_ENTRIES.has(entry.name) || isExcludedSource(rel)) {
+      if (
+        NON_PRODUCT_LIB_ENTRIES.has(entry.name) ||
+        isExcludedSource(rel) ||
+        (trackedEntries !== undefined && !trackedEntries.has(entry.name))
+      ) {
         continue;
       }
       files[rel] = 1;
@@ -2437,8 +2470,12 @@ const parseJson5Record = (
   return parsed.value;
 };
 
-const countDirectThirdPartyDeclarations: RepoCounter = (root) => {
-  const manifests = ["package.json"];
+const countDirectThirdPartyDeclarations: RepoCounter = (context) => {
+  const { root, trackedFiles } = context;
+  const manifests =
+    trackedFiles === undefined || trackedFiles.has("package.json")
+      ? ["package.json"]
+      : [];
   for (const group of ["apps", "packages"] as const) {
     const directory = path.join(root, group);
     if (!existsSync(directory)) {
@@ -2447,7 +2484,9 @@ const countDirectThirdPartyDeclarations: RepoCounter = (root) => {
     for (const entry of readdirSync(directory, { withFileTypes: true })) {
       if (
         entry.isDirectory() &&
-        existsSync(path.join(directory, entry.name, "package.json"))
+        existsSync(path.join(directory, entry.name, "package.json")) &&
+        (trackedFiles === undefined ||
+          trackedFiles.has(`${group}/${entry.name}/package.json`))
       ) {
         manifests.push(`${group}/${entry.name}/package.json`);
       }
@@ -2484,7 +2523,10 @@ const countDirectThirdPartyDeclarations: RepoCounter = (root) => {
   return { count, files };
 };
 
-const countLockfilePackageEntries: RepoCounter = (root) => {
+const countLockfilePackageEntries: RepoCounter = ({ root, trackedFiles }) => {
+  if (trackedFiles !== undefined && !trackedFiles.has("bun.lock")) {
+    return { count: 0, files: {} };
+  }
   const lockfile = parseJson5Record(root, "bun.lock");
   const packages = lockfile["packages"];
   if (!isRecord(packages)) {
@@ -2589,8 +2631,9 @@ const cloneBlockCount = (positions: number[]): number => {
   return blocks;
 };
 
-const countDuplicateTokenBlocks: RepoCounter = (root) => {
-  const scanned = scanRepoFiles(root, ALL_SOURCE_GLOBS).filter(
+const countDuplicateTokenBlocks: RepoCounter = (context) => {
+  const { root } = context;
+  const scanned = scanRepoFiles(context, ALL_SOURCE_GLOBS).filter(
     // A generated file's copies belong to its generator, not to this budget.
     (rel) => !rel.includes("/generated/"),
   );
@@ -3285,9 +3328,9 @@ const REPORT_ONLY_METRICS = [
   },
 ] as const satisfies readonly RatchetMetric[];
 
-const printReportOnlyMetrics = (root: string): void => {
+const printReportOnlyMetrics = (context: ScanContext): void => {
   for (const metric of REPORT_ONLY_METRICS) {
-    console.log(`  ${metric.id}: ${metric.count(root).count} (report only)`);
+    console.log(`  ${metric.id}: ${metric.count(context).count} (report only)`);
   }
 };
 
@@ -3477,10 +3520,14 @@ const sortedSnapshot = (result: RepoMetricResult): MetricSnapshot => {
   return { count, files };
 };
 
-const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
+const scanMetric = (
+  metric: RatchetMetric,
+  context: ScanContext,
+): MetricSnapshot => {
+  const { root, role, trackedFiles } = context;
   switch (metric.scope) {
     case "repo":
-      return sortedSnapshot(metric.count(root));
+      return sortedSnapshot(metric.count(context));
     case "file": {
       const seen = new Set<string>();
       const files: Record<string, number> = {};
@@ -3492,13 +3539,16 @@ const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
             continue;
           }
           seen.add(rel);
-          if (metric.exclude(rel)) {
+          if (
+            metric.exclude(rel) ||
+            (trackedFiles !== undefined && !trackedFiles.has(rel))
+          ) {
             continue;
           }
-          const n = metric.count(
-            readFileSync(path.join(root, rel), "utf-8"),
-            rel,
-          );
+          const n = metric.count(readFileSync(path.join(root, rel), "utf-8"), {
+            file: rel,
+            role,
+          });
           if (n > 0) {
             files[rel] = n;
             count += n;
@@ -3515,14 +3565,20 @@ const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
   }
 };
 
+type ScanOptions = {
+  metrics?: readonly RatchetMetric[];
+  role?: MeasurementRole;
+  trackedFiles?: ReadonlySet<string>;
+};
+
 export const scanAll = (
   root: string,
-  metrics: readonly RatchetMetric[] = RATCHET_METRICS,
+  { metrics = RATCHET_METRICS, role = "head", trackedFiles }: ScanOptions = {},
 ): Baseline => {
   assertMetricRegistry();
   const snapshot: Baseline = {};
   for (const metric of metrics) {
-    snapshot[metric.id] = scanMetric(metric, root);
+    snapshot[metric.id] = scanMetric(metric, { root, role, trackedFiles });
   }
   const inspection = inspectConfiguration(metrics, snapshot);
   if (inspection.status === "invalid") {
@@ -3564,7 +3620,7 @@ const scanMergeBase = (
         `ratchet base extraction failed: ${extracted.stderr.toString().trim()}`,
       );
     }
-    return scanAll(root, metrics);
+    return scanAll(root, { metrics, role: "base" });
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
@@ -3672,7 +3728,12 @@ const formatDelta = (delta: number): string => {
 
 const runReport = (): number => {
   const started = performance.now();
-  const current = scanAll(REPO_ROOT);
+  // The index includes staged additions and keeps local source edits visible,
+  // without letting untracked files enter either file or repository metrics.
+  const trackedFiles = new Set(
+    readGit(["ls-files", "-z"]).split("\0").filter(Boolean),
+  );
+  const current = scanAll(REPO_ROOT, { trackedFiles });
   const headFinished = performance.now();
   const base = comparisonBase();
   const baseline = scanMergeBase(base);
@@ -3696,7 +3757,7 @@ const runReport = (): number => {
       }
     }
   }
-  printReportOnlyMetrics(REPO_ROOT);
+  printReportOnlyMetrics({ root: REPO_ROOT, role: "head", trackedFiles });
   return 0;
 };
 
@@ -3941,9 +4002,14 @@ const checkAllowances = (
 };
 
 const runCheck = (): number => {
-  printReportOnlyMetrics(REPO_ROOT);
   const started = performance.now();
-  const current = scanAll(REPO_ROOT);
+  // The index includes staged additions and keeps local source edits visible,
+  // without letting untracked files enter either file or repository metrics.
+  const trackedFiles = new Set(
+    readGit(["ls-files", "-z"]).split("\0").filter(Boolean),
+  );
+  printReportOnlyMetrics({ root: REPO_ROOT, role: "head", trackedFiles });
+  const current = scanAll(REPO_ROOT, { trackedFiles });
   const headFinished = performance.now();
   const base = comparisonBase();
   const baseline = scanMergeBase(base);
@@ -5593,9 +5659,10 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
     path.join(dependencyFixtureRoot, "bun.lock"),
     '{ packages: { "first@1.0.0": [], "@scope/second@2.0.0": [] }, workspaces: { "": {} } }',
   );
-  const directDependencies = countDirectThirdPartyDeclarations(
-    dependencyFixtureRoot,
-  );
+  const directDependencies = countDirectThirdPartyDeclarations({
+    root: dependencyFixtureRoot,
+    role: "head",
+  });
   if (directDependencies.count !== 7) {
     failures.push(
       `direct-third-party-declarations counted ${directDependencies.count}, expected 7`,
@@ -5623,7 +5690,10 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
       "direct-third-party-declarations did not flag declaration growth",
     );
   }
-  const lockfileEntries = countLockfilePackageEntries(dependencyFixtureRoot);
+  const lockfileEntries = countLockfilePackageEntries({
+    root: dependencyFixtureRoot,
+    role: "head",
+  });
   if (lockfileEntries.count !== 2 || lockfileEntries.files["bun.lock"] !== 2) {
     failures.push(
       `lockfile-package-entries counted ${lockfileEntries.count}, expected 2 resolution entries`,
@@ -5638,7 +5708,10 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
     path.join(dependencyFixtureRoot, "bun.lock"),
     '{ packages: { "first@1.0.0": [], "second@2.0.0": [], "third@3.0.0": [] } }',
   );
-  if (countLockfilePackageEntries(dependencyFixtureRoot).count !== 3) {
+  if (
+    countLockfilePackageEntries({ root: dependencyFixtureRoot, role: "head" })
+      .count !== 3
+  ) {
     failures.push("lockfile-package-entries did not report resolution growth");
   }
   return failures;
