@@ -193,18 +193,40 @@ const withDatabaseClock = async <T>(
     return await operation(asTestRaw<Transaction>(tx));
   });
 
+type SettlementTestClient = Pick<
+  CorpusIndexClient,
+  "readDeleteSettlements" | "search"
+>;
+
 const settledProjectionClient = {
-  readDeleteSettlement: async ({ requiredOpstamp }) =>
-    Result.ok({
-      requiredOpstamp,
-      provingSplits: 1,
-      excludedSplits: 0,
-      laggingSplits: 0,
-      minAppliedOpstamp: requiredOpstamp,
-      settled: true,
-    }),
+  readDeleteSettlements: async ({ tasks }) =>
+    Result.ok(
+      tasks.map(({ requiredOpstamp }) =>
+        Result.ok({
+          requiredOpstamp,
+          provingSplits: 1,
+          excludedSplits: 0,
+          laggingSplits: 0,
+          minAppliedOpstamp: requiredOpstamp,
+          settled: true,
+        }),
+      ),
+    ),
   search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
-} satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
+} satisfies SettlementTestClient;
+
+const verifyOneSettlement = async (
+  settlementClient: SettlementTestClient,
+  lease: CorpusProjectionCleanupSettlementLease,
+) => {
+  const verdicts = await CorpusProjectionCleanupSettlementProof.verifyAll({
+    client: settlementClient,
+    indexId: lease.indexId,
+    leases: [lease],
+  });
+  expect(verdicts.map((verdict) => verdict.lease)).toEqual([lease]);
+  return verdicts.at(0)?.result ?? panic("Expected one verdict for one lease");
+};
 
 const verifySettlement = async ({
   intentIds,
@@ -234,10 +256,7 @@ const verifySettlement = async ({
   }
   expect(lease.intentIds).toEqual(intentIds);
   expect(lease.deleteOpstamp).toBe(deleteOpstamp);
-  const result = await CorpusProjectionCleanupSettlementProof.verify({
-    client: settledProjectionClient,
-    lease,
-  });
+  const result = await verifyOneSettlement(settledProjectionClient, lease);
   if (result.isErr()) {
     return panic("Projection settlement verification failed", result.error);
   }
@@ -2867,10 +2886,10 @@ test("production transitions preserve PostgreSQL clock ordering under process sk
   if (settlementLease === undefined) {
     panic("Expected settlement lease");
   }
-  const verified = await CorpusProjectionCleanupSettlementProof.verify({
-    client: settledProjectionClient,
-    lease: settlementLease,
-  });
+  const verified = await verifyOneSettlement(
+    settledProjectionClient,
+    settlementLease,
+  );
   if (verified.isErr()) {
     panic("Expected successful settlement verification");
   }
@@ -3637,32 +3656,29 @@ test("settlement proves the lease against the instant its delete task carries", 
   // `corpus-index-client.test.ts`; what this asserts is that the instant the
   // receipt carries reaches the engine at all, and that a lease can settle.
   const excludingClient = {
-    readDeleteSettlement: async ({
-      requiredOpstamp,
-      deleteCreatedAt,
-    }: {
-      requiredOpstamp: number;
-      deleteCreatedAt: Temporal.Instant | null;
-    }) => {
-      const excluded =
-        deleteCreatedAt !== null &&
-        Temporal.Instant.compare(deleteCreatedAt, DELETE_TASK_CREATED_AT) === 0;
-      return Result.ok({
-        requiredOpstamp,
-        provingSplits: excluded ? 1 : 2,
-        excludedSplits: excluded ? 1 : 0,
-        laggingSplits: excluded ? 0 : 1,
-        minAppliedOpstamp: excluded ? requiredOpstamp : requiredOpstamp - 1,
-        settled: excluded,
-      });
-    },
+    readDeleteSettlements: async ({ tasks }) =>
+      Result.ok(
+        tasks.map(({ requiredOpstamp, deleteCreatedAt }) => {
+          const excluded =
+            deleteCreatedAt !== null &&
+            Temporal.Instant.compare(
+              deleteCreatedAt,
+              DELETE_TASK_CREATED_AT,
+            ) === 0;
+          return Result.ok({
+            requiredOpstamp,
+            provingSplits: excluded ? 1 : 2,
+            excludedSplits: excluded ? 1 : 0,
+            laggingSplits: excluded ? 0 : 1,
+            minAppliedOpstamp: excluded ? requiredOpstamp : requiredOpstamp - 1,
+            settled: excluded,
+          });
+        }),
+      ),
     search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
-  } satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
+  } satisfies SettlementTestClient;
 
-  const verified = await CorpusProjectionCleanupSettlementProof.verify({
-    client: excludingClient,
-    lease,
-  });
+  const verified = await verifyOneSettlement(excludingClient, lease);
   if (verified.isErr()) {
     panic("Projection settlement verification failed", verified.error);
   }
@@ -3775,27 +3791,10 @@ test("a settlement release whose successor already released the revisions releas
 
 test("a settlement release whose successor already settled the revisions releases none", async () => {
   const { outrun, successor } = await claimOutrunAndSuccessorLeases();
-  const settlingClient = {
-    readDeleteSettlement: async ({
-      requiredOpstamp,
-    }: {
-      requiredOpstamp: number;
-      deleteCreatedAt: Temporal.Instant | null;
-    }) =>
-      Result.ok({
-        requiredOpstamp,
-        provingSplits: 1,
-        excludedSplits: 1,
-        laggingSplits: 0,
-        minAppliedOpstamp: requiredOpstamp,
-        settled: true,
-      }),
-    search: async () => Result.ok({ numHits: 0, hits: [], snippets: [] }),
-  } satisfies Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
-  const verified = await CorpusProjectionCleanupSettlementProof.verify({
-    client: settlingClient,
-    lease: successor,
-  });
+  const verified = await verifyOneSettlement(
+    settledProjectionClient,
+    successor,
+  );
   if (verified.isErr()) {
     panic("Successor settlement verification failed", verified.error);
   }
