@@ -32,6 +32,7 @@ import {
   removedCommandError,
   shouldReportRegistryDrift,
 } from "./registry-drift.js";
+import type { CurrentRegistry } from "./registry-refresh.js";
 import {
   refreshRegistryCache,
   resolveCommandTree,
@@ -131,10 +132,8 @@ const main = async (): Promise<void> => {
   // Keep an EXISTING per-origin cache current before building the tree; a
   // missing cache stays offline-instant (seeded at `auth login` below). Any
   // transport/trust failure warns and falls back to the baked-in tree (S5.5).
-  const requiresFeatureSnapshot = await requiresFeatureAccessRefresh({
-    serverOrigin: serverUrl,
-    env: cacheEnv,
-  });
+  const requiresFeatureSnapshot = requiresFeatureAccessRefresh();
+  let currentRegistry: CurrentRegistry | undefined;
   let featureAccess: CallerFeatureAccess | undefined;
   if (
     serverUrl !== undefined &&
@@ -149,6 +148,7 @@ const main = async (): Promise<void> => {
     });
     if (outcome.status === "refreshed") {
       featureAccess = outcome.featureAccess;
+      currentRegistry = outcome.registry;
     }
     if (outcome.status === "admission-refused") {
       refuseAdmission(outcome.refusal, argv);
@@ -161,13 +161,12 @@ const main = async (): Promise<void> => {
     }
   }
 
-  // Startup always resolves against the baked-in tree unless a validated cache
-  // shows a non-empty delta, in which case build from the cached listings
-  // (spec S5.3). No network here.
+  // Only this invocation's validated response can project caller commands.
+  // Disk supplies deployment metadata; resolution itself performs no network.
   const { tree, drift, disabled } = await resolveCommandTree({
     serverOrigin: serverUrl,
     env: cacheEnv,
-    ...(token === undefined ? {} : { token }),
+    ...(currentRegistry === undefined ? {} : { registry: currentRegistry }),
     ...(featureAccess === undefined ? {} : { featureAccess }),
   });
   if (drift !== undefined) {

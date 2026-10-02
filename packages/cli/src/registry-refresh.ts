@@ -1,20 +1,8 @@
 import { Result } from "better-result";
-// The runtime-fetch call site (spec 051 S5.2 runtime + S5.3 + S5.5). Startup
-// always uses the baked-in tree (instant, offline); this module keeps the
-// per-origin cache current and, when a validated fetch diverges from the
-// baked-in tree, lets the next command build from the cached listings.
-//
-// Two entry points:
-//   - `resolveCommandTree`: read-only, no network. Picks the baked-in tree, or
-//     the cached-listings tree when the cache shows a non-empty delta, and
-//     hands that delta back for `registry-drift.ts` to report.
-//   - `refreshRegistryCache`: fetch `tools/list`, validate through the S5.5
-//     trust boundary, diff vs baked-in, and write the cache. Fails closed: any
-//     transport/validation failure leaves the trusted baked-in tree in place.
-//
-// Both share the ONE pure `generateRouteMap` and the ONE baked-in Annotation
-// Table, so unknown fetched tools get the same S1 heuristic defaults as the
-// build-time path.
+// Runtime registry fetches validate caller listings for this invocation only.
+// resolveCommandTree consumes a current response or the baked-in baseline;
+// refreshRegistryCache persists deployment omissions and version metadata.
+// Both paths share the build-time route generator and annotation table.
 import { access, readFile } from "node:fs/promises";
 import { Temporal } from "temporal-polyfill/full";
 
@@ -40,7 +28,6 @@ import {
 import {
   CACHE_SCHEMA_VERSION,
   cachePathFor,
-  credentialFingerprint,
   computeDelta,
   DEFAULT_TTL_SECONDS,
   isCacheStale,
@@ -161,28 +148,20 @@ const retainAttestedOmittedListings = ({
   return retained.length === 0 ? fetched : [...fetched, ...retained];
 };
 
-type RequiresFeatureAccessRefreshArgs = {
-  serverOrigin: string | undefined;
-  env: CacheEnv;
-  tree?: RouteNode;
-};
+export const requiresFeatureAccessRefresh = (
+  tree: RouteNode = generatedRouteMap,
+): boolean => hasFeatureCommands(tree);
 
-export const requiresFeatureAccessRefresh = async ({
-  serverOrigin,
-  env,
-  tree = generatedRouteMap,
-}: RequiresFeatureAccessRefreshArgs): Promise<boolean> => {
-  if (hasFeatureCommands(tree)) {
-    return true;
-  }
-  if (serverOrigin === undefined) {
-    return false;
-  }
-  const file = await readCacheFile(cachePathFor(serverOrigin, env));
-  return (
-    file?.serverOrigin === serverOrigin &&
-    file.listings.some((listing) => listing.featureId !== undefined)
-  );
+/** Validated caller projection held only during its authenticated invocation. */
+export type CurrentRegistry = {
+  serverOrigin: string;
+  listings: readonly RegistryToolListing[];
+  delta: RegistryDelta;
+  toolsListHash: string;
+  grantedScopes?: readonly string[];
+  scopeOmittedTools?: readonly string[];
+  featureOmittedTools?: readonly string[];
+  featureOmittedCapabilities?: readonly string[];
 };
 
 export type ResolvedCommandTree = {
@@ -198,20 +177,15 @@ export type ResolvedCommandTree = {
 };
 
 /**
- * Pick the command tree for this invocation without any network (spec S5.3).
- * The baked-in tree is the default; a valid same-origin cache with a non-empty
- * delta builds from the cached listings and reports that delta as `drift`. A
- * cache whose only divergence is a single-scope omission also builds from the
- * listings, so a command this token cannot use is not exposed; it reports no
- * drift, because the registry itself did not diverge. Provenance is pinned: a
- * cache whose
- * `serverOrigin` differs is ignored (rule 5), and a cached tree that fails to
- * build falls back to baked-in (rule 6).
+ * Resolve this invocation without network. A current same-origin response can
+ * rebuild and prune the tree by caller scope; disk supplies deployment metadata
+ * only. Missing or invalid live data uses the baked-in baseline with feature
+ * commands hidden.
  */
 export const resolveCommandTree = async ({
   serverOrigin,
   env,
-  token,
+  registry,
   featureAccess,
   bakedTree = generatedRouteMap,
   loadCatalog = loadBakedCapabilityCatalog,
@@ -219,25 +193,32 @@ export const resolveCommandTree = async ({
 }: {
   serverOrigin: string | undefined;
   env: CacheEnv;
-  token?: string;
+  registry?: CurrentRegistry;
   featureAccess?: CallerFeatureAccess;
   bakedTree?: RouteNode;
   loadCatalog?: () => Promise<readonly CapabilityCatalogEntry[] | null>;
   annotations?: Readonly<Record<string, ToolAnnotation>>;
 }): Promise<ResolvedCommandTree> => {
+  const file =
+    serverOrigin !== undefined && registry?.serverOrigin === serverOrigin
+      ? registry
+      : undefined;
+  const currentAccess = file === undefined ? undefined : featureAccess;
   const project = (tree: RouteNode) =>
-    projectFeatureCommands({ tree, featureAccess });
+    projectFeatureCommands({ tree, featureAccess: currentAccess });
   if (serverOrigin === undefined) {
     return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
   }
-  const file = await readCacheFile(cachePathFor(serverOrigin, env));
-  if (
-    file === undefined ||
-    file.serverOrigin !== serverOrigin ||
-    (token !== undefined &&
-      file.credentialFingerprint !== credentialFingerprint(token))
-  ) {
-    return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
+  const cached = await readCacheFile(cachePathFor(serverOrigin, env));
+  const deployment = cached?.serverOrigin === serverOrigin ? cached : undefined;
+  if (file === undefined) {
+    return {
+      tree: project(bakedTree),
+      disabled: {
+        tools: deployment?.featureOmittedTools ?? [],
+        capabilities: deployment?.featureOmittedCapabilities ?? [],
+      },
+    };
   }
   // Tools and capabilities the server attested it omits because a deployment
   // feature is off. They stay in the tree (the server answers a call with its
@@ -252,7 +233,7 @@ export const resolveCommandTree = async ({
   const featureListings = file.listings.some(
     (listing) => listing.featureId !== undefined,
   );
-  const enabledTools = new Set(featureAccess?.tools);
+  const enabledTools = new Set(currentAccess?.tools);
   const hiddenTools = new Set(
     Object.entries(annotations).flatMap(([name, annotation]) =>
       annotation.featureId !== undefined && !enabledTools.has(name)
@@ -274,7 +255,7 @@ export const resolveCommandTree = async ({
     return { tree: project(bakedTree), disabled };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
-  // the cached listings + the baked capability merge), so a diverged registry
+  // the current listings + the baked capability merge), so a diverged registry
   // never drops the generated capability leaves. A missing/corrupt catalog or
   // a tree that fails to build falls back to the baked-in tree (rule 6).
   const entries = await loadCatalog();
@@ -313,6 +294,7 @@ export type RefreshOutcome =
       deltaEmpty: boolean;
       nudge?: string;
       featureAccess?: CallerFeatureAccess;
+      registry: CurrentRegistry;
     };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
@@ -360,10 +342,7 @@ export const refreshRegistryCache = async ({
       if (!(await cacheFileExists(filePath))) {
         return { status: "skipped", reason: "no-cache" };
       }
-    } else if (
-      existing.credentialFingerprint === credentialFingerprint(token) &&
-      !isCacheStale(existing, now)
-    ) {
+    } else if (!isCacheStale(existing, now)) {
       return { status: "skipped", reason: "fresh" };
     }
   }
@@ -419,14 +398,8 @@ export const refreshRegistryCache = async ({
   });
   const lastNudgedVersion = nudge.nudgeVersion ?? existing?.lastNudgedVersion;
 
-  const file: RegistryCacheFile = {
-    version: CACHE_SCHEMA_VERSION,
+  const registry: CurrentRegistry = {
     serverOrigin,
-    credentialFingerprint: credentialFingerprint(token),
-    fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({
-      fractionalSecondDigits: 3,
-    }),
-    ttlSeconds,
     toolsListHash: trust.toolsListHash,
     listings: trust.listings,
     delta,
@@ -442,11 +415,26 @@ export const refreshRegistryCache = async ({
     ...(raw.value.featureOmittedCapabilities === undefined
       ? {}
       : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
+  };
+  const file: RegistryCacheFile = {
+    version: CACHE_SCHEMA_VERSION,
+    serverOrigin,
+    fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({
+      fractionalSecondDigits: 3,
+    }),
+    ttlSeconds,
+    ...(raw.value.featureOmittedTools === undefined
+      ? {}
+      : { featureOmittedTools: raw.value.featureOmittedTools }),
+    ...(raw.value.featureOmittedCapabilities === undefined
+      ? {}
+      : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
   };
   await writeCacheFile(filePath, file);
   return {
     status: "refreshed",
+    registry,
     deltaEmpty: isDeltaEmpty(delta),
     ...(trust.featureAccess === undefined
       ? {}
