@@ -362,10 +362,11 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
                 path === "chat"
                   ? adapter.chatStream(options)
                   : adapter.structuredOutputStream?.(structured);
-              if (stream === undefined)
-                {panic(
+              if (stream === undefined) {
+                panic(
                   "Provider adapter did not expose structured output streaming.",
-                );}
+                );
+              }
               for await (const chunk of stream) {
                 chunks.push(chunk);
               }
