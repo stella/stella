@@ -13,7 +13,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Beta", runs: [{ text: "Beta", italic: true }] },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "Alpha", bold: true }] },
         { runs: [{ text: "Beta", italic: true }] },
@@ -24,19 +29,29 @@ describe("clauseBodyToRichPatch", () => {
   test("falls back to a single text run when a paragraph has no runs", () => {
     const body: ClauseBody = [{ text: "Plain" }];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [{ runs: [{ text: "Plain" }] }],
     });
   });
 
-  test("drops block-directive paragraphs from the fill value", () => {
+  test("resolves a selected branch without leaking directive markers", () => {
     const body: ClauseBody = [
       { text: "{% if x %}", isDirective: true, directiveKind: "if" },
       { text: "Conditional" },
       { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [{ runs: [{ text: "Conditional" }] }],
     });
   });
@@ -46,7 +61,12 @@ describe("clauseBodyToRichPatch", () => {
     // the paragraph (it has a w:r) rather than dropping it as a stray fragment.
     const body: ClauseBody = [{ text: "" }];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [{ runs: [{ text: "" }] }],
     });
   });
@@ -57,7 +77,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Second", listKind: "bullet", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "• First" }] },
         { runs: [{ text: "• Second" }] },
@@ -76,7 +101,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Second", listKind: "ordered", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "1. First", bold: true }] },
         { runs: [{ text: "2. Second" }] },
@@ -92,7 +122,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Top2", listKind: "ordered", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "1. Top" }] },
         { runs: [{ text: "    a. Sub" }] },
@@ -109,7 +144,12 @@ describe("clauseBodyToRichPatch", () => {
       { text: "Fresh one", listKind: "ordered", listLevel: 0 },
     ];
 
-    expect(clauseBodyToRichPatch(body)).toEqual({
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { x: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
       paragraphs: [
         { runs: [{ text: "1. One" }] },
         { runs: [{ text: "Break" }] },
@@ -128,5 +168,47 @@ describe("clauseBodyToPlainText", () => {
     ];
 
     expect(clauseBodyToPlainText(body)).toBe("{% if x %}\nBody\n{% endif %}");
+  });
+});
+
+test("loop placeholders spanning formatted runs resolve in the shared engine", () => {
+  const body: ClauseBody = [
+    { text: "{% for row in rows %}", isDirective: true },
+    {
+      text: "Name: {{ row.name }}",
+      runs: [
+        { text: "Name: ", italic: true },
+        { text: "{{ row.", bold: true },
+        { text: "name }}", bold: true },
+      ],
+    },
+    { text: "{% endfor %}", isDirective: true },
+  ];
+  const patch = clauseBodyToRichPatch(body, {
+    values: { rows: [{ name: "Alpha" }, { name: "Beta" }] },
+    slotKey: "@clause:Terms",
+  }).unwrap();
+  if (typeof patch === "string") {
+    throw new TypeError("expected a rich clause patch");
+  }
+  expect({
+    paragraphs: patch.paragraphs.map(({ runs }) => ({
+      runs: runs.filter(({ text }) => text !== ""),
+    })),
+  }).toEqual({
+    paragraphs: [
+      {
+        runs: [
+          { text: "Name: ", italic: true },
+          { text: "Alpha", bold: true },
+        ],
+      },
+      {
+        runs: [
+          { text: "Name: ", italic: true },
+          { text: "Beta", bold: true },
+        ],
+      },
+    ],
   });
 });

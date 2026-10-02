@@ -237,7 +237,8 @@ const fillTemplateToWorkspace = createSafeHandler(
 
     if ("error" in filled) {
       return Result.err(
-        new HandlerError({ status: 400, message: filled.error }),
+        filled.storedTemplateError ??
+          new HandlerError({ status: 400, message: filled.error }),
       );
     }
 

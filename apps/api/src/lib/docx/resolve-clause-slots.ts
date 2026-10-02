@@ -11,16 +11,12 @@ import { and, eq, inArray, or } from "drizzle-orm";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { clauseVersions } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
-import {
-  clauseBodyToPlainText,
-  clauseBodyToRichPatch,
-} from "@/api/lib/clauses/clause-to-patch";
+import { clauseBodyToPlainText } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { LIMITS } from "@/api/lib/limits";
 import { isVariantDeleted } from "@/api/lib/template-clause-links";
 
 import type { ClauseSlot } from "./discover-clause-slots";
-import type { RichPatchValue } from "./types";
 
 // ── Version parsing ──────────────────────────────────
 
@@ -29,44 +25,8 @@ const VERSION_NUM_RE = /^v(?<num>\d+)$/u;
 // ── Public API ───────────────────────────────────────
 
 /**
- * For each clause slot, look up the linked clause and
- * resolve its body to a `RichPatchValue`. Returns a map
- * keyed by the full patch key (e.g., `@clause:NonCompete`)
- * that can be merged into `fillTemplate` values.
- *
- * Slots without a linked clause are silently skipped;
- * their marker will appear as an unmatched placeholder
- * in fill diagnostics.
- */
-export const resolveClauseSlots = async (
-  templateId: SafeId<"template">,
-  slots: ClauseSlot[],
-  scopedDb: ScopedDb,
-  organizationId: SafeId<"organization">,
-): Promise<Record<string, RichPatchValue>> => {
-  const bodies = await resolveSlotBodies(
-    templateId,
-    slots,
-    scopedDb,
-    organizationId,
-  );
-
-  const patches: Record<string, RichPatchValue> = {};
-
-  for (const slot of slots) {
-    const body = bodies.get(slot.patchKey);
-    if (body) {
-      patches[slot.patchKey] = clauseBodyToRichPatch(body);
-    }
-  }
-
-  return patches;
-};
-
-/**
- * Like {@link resolveClauseSlots}, but returns each slot's raw `ClauseBody`
- * (keyed by patch key) instead of the converted rich patch. Lets the fill UI
- * show the clause and offer a per-fill AI adjustment before it is inserted.
+ * Resolve raw linked bodies keyed by patch key. The fill service resolves
+ * directives after values are final; the fill UI can show and adjust the body.
  */
 export const resolveClauseSlotBodies = async (
   templateId: SafeId<"template">,

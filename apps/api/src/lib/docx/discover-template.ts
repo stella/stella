@@ -1057,6 +1057,7 @@ const analyzeHeadersAndFooters = async (
 
 export const discoverTemplate = async (
   file: ScannedFile,
+  additionalContent: readonly slimdom.Element[] = [],
 ): Promise<DiscoveredTemplate> => {
   const zip = await loadDocx(file.bytes);
   const emptyResult: DiscoveredTemplate = {
@@ -1083,6 +1084,9 @@ export const discoverTemplate = async (
   }
 
   const primary = analyzeContainer(body);
+  for (const container of additionalContent) {
+    mergeAnalysis(primary, analyzeContainer(container));
+  }
 
   // Tag body errors with their source
   for (const err of primary.errors) {

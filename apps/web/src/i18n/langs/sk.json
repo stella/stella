@@ -2240,6 +2240,7 @@
       "aiConfigModelInvalid": "Konfigurácia modelu AI je neplatná. Skontrolujte vybrané modely.",
       "aiConfigProviderInvalid": "Konfigurácia poskytovateľa AI je neplatná. Skontrolujte nastavenia poskytovateľa.",
       "aiConfigProviderValidationFailed": "Poskytovateľ AI konfiguráciu odmietol. Skontrolujte kľúč API a model.",
+      "clauseDirectivesInvalid": "Prepojené ustanovenie obsahuje neplatné direktívy. Pred vyplnením vzoru ustanovenie opravte.",
       "deeplKeyRejected": "Uložený kľúč DeepL bol odmietnutý. Nahraďte ho v nastaveniach organizácie.",
       "deeplQuotaExceeded": "Limit znakov DeepL pre túto organizáciu bol vyčerpaný.",
       "disposableEmailNotAllowed": "Dočasné e-mailové adresy nie sú povolené. Použite trvalú e-mailovú adresu.",

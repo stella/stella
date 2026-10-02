@@ -211,11 +211,16 @@ const preProcessTemplateDirectives = async (
   };
 };
 
+type FillTemplateOptions = {
+  namedConditions: NamedCondition[];
+};
+
 /** Fills a scanned template; the filled document comes back as a derived
  *  `ScannedFile`, so it can be read again without a second scan. */
 export const fillTemplate = async (
   template: ScannedFile,
   values: PatchValues | TemplateData,
+  options?: FillTemplateOptions,
 ): Promise<FillTemplateResult> => {
   let data: Buffer = Buffer.from(template.bytes);
 
@@ -226,9 +231,9 @@ export const fillTemplate = async (
   // synthesize both shapes into one list the evaluator resolves bare names
   // against; `{% if field_path %}` then resolves the field's rule. The
   // conditions come from the markers, like every other field configuration.
-  const synthesized = manifestNamedConditions(
-    deriveManifest(await discoverTemplate(template)),
-  );
+  const synthesized =
+    options?.namedConditions ??
+    manifestNamedConditions(deriveManifest(await discoverTemplate(template)));
   const namedConditions = synthesized.length > 0 ? synthesized : undefined;
 
   let effectiveValues: PatchValues;

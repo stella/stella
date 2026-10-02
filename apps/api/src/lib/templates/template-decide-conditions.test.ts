@@ -388,7 +388,10 @@ describe("templateDecideConditionsLogic access", () => {
       query: {
         templates: {
           findFirst: async () =>
-            await Promise.resolve({ manifest: { fields } }),
+            await Promise.resolve({
+              manifest: { fields },
+              templateClauses: [],
+            }),
         },
       },
     });

@@ -1,13 +1,20 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
 import JSZip from "jszip";
 
+import { assertProperty } from "@stll/property-testing";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { toSafeId } from "@/api/lib/branded-types";
+import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
+import type { ClauseBody } from "@/api/lib/clauses/types";
+import { CONDITION_RAW_VALUES } from "@/api/lib/docx/block-directives";
+import { fillTemplate } from "@/api/lib/docx/patch-template";
 import type { AiConditionDecider } from "@/api/lib/docx/resolve-ai-conditions";
-import type { FieldMeta } from "@/api/lib/docx/types";
+import { partParagraphTexts } from "@/api/lib/docx/rich-patch";
+import type { TemplateData, FieldMeta } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
@@ -18,6 +25,8 @@ import {
   describeStoredTemplate,
   fillStoredTemplateDocx,
   fillTemplateDocx,
+  fillTemplateDocxStrict,
+  discoverTemplateSource,
 } from "./template-fill-service";
 
 // ── DOCX fixture helpers (mirrors patch-template.test.ts / templates.test.ts:
@@ -63,12 +72,56 @@ const extractTexts = async (file: ScannedFile): Promise<string[]> => {
 
 const organizationId = toSafeId<"organization">("org_1");
 
-const stubScopedDb = (): ScopedDb => {
+const stubScopedDb = (
+  clauseBody?: ClauseBody,
+  storedS3Key?: string,
+): ScopedDb => {
   const fakeTx = {
-    query: { businessRegistryCredentials: { findMany: async () => [] } },
+    query: {
+      businessRegistryCredentials: { findMany: async () => [] },
+      templates: {
+        findFirst: async () => ({
+          name: "Terms",
+          fileName: "terms.docx",
+          s3Key: storedS3Key,
+          scanState: "scanned",
+          languages: [],
+          manifest: { version: 1, fields: [] },
+          templateClauses: [{ id: "link_1" }],
+        }),
+      },
+      templateClauses: {
+        findMany: async () =>
+          clauseBody === undefined
+            ? []
+            : [
+                {
+                  slotName: "Terms",
+                  clauseId: toSafeId<"clause">("cls_1"),
+                  clauseVariantId: null,
+                  clauseVariantLabel: null,
+                  clauseVersionId: toSafeId<"clauseVersion">("clsv_1"),
+                },
+              ],
+      },
+    },
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => [
+            {
+              id: toSafeId<"clauseVersion">("clsv_1"),
+              clauseId: toSafeId<"clause">("cls_1"),
+              version: 1,
+              body: clauseBody,
+            },
+          ],
+        }),
+      }),
+    }),
   };
-  // SAFETY: test stub; the required-fields path under test never reaches
-  // clause-slot or template-row queries (no templateId is passed).
+  // SAFETY: the fill service reads registry credentials and, for a stored
+  // source, the pinned clause links and version rows modeled above.
   return (async (fn: (tx: unknown) => Promise<unknown>) =>
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- test double; see SAFETY above
     fn(fakeTx)) as unknown as ScopedDb;
@@ -862,4 +915,629 @@ describe("describeStoredTemplate array shape", () => {
       fakeS3.stop();
     }
   });
+});
+
+describe("linked clause directive filling", () => {
+  test.each([true, false])(
+    "selects exactly the linked clause branch for x=%s",
+    async (x) => {
+      const body: ClauseBody = [
+        {
+          text: "{% if x %}",
+          isDirective: true,
+          directiveKind: "if",
+          directiveExpression: "x",
+        },
+        { text: "Included" },
+        { text: "{% else %}", isDirective: true, directiveKind: "else" },
+        { text: "Alternative" },
+        { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
+      ];
+      const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+      const result = await fillTemplateDocx({
+        source: {
+          name: "Terms",
+          fileName: "terms.docx",
+          file,
+          templateId: toSafeId<"template">("tmpl_1"),
+        },
+        values: { x },
+        scopedDb: stubScopedDb(body),
+        organizationId,
+        requiredFields: "enforce",
+        useRecording: "caller",
+      });
+      if (!("file" in result)) {
+        panic(`linked clause fill rejected: ${JSON.stringify(result)}`);
+      }
+      expect(await extractTexts(result.file)).toEqual([
+        x ? "Included" : "Alternative",
+      ]);
+      expect(result.structureErrors).toEqual([]);
+    },
+  );
+});
+
+const clauseDirective = (text: string) => ({ text, isDirective: true });
+
+const fillLinkedClause = async (
+  body: ClauseBody,
+  values: TemplateData,
+  options: { templateBody?: string; override?: ClauseBody } = {},
+) => {
+  const file = await makeDocx(
+    WRAP(options.templateBody ?? P('{{ clause("Terms") }}')),
+  );
+  return fillTemplateDocx({
+    source: {
+      name: "Terms",
+      fileName: "terms.docx",
+      file,
+      templateId: toSafeId<"template">("tmpl_1"),
+    },
+    scopedDb: stubScopedDb(body),
+    organizationId,
+    requiredFields: "enforce",
+    values,
+    useRecording: "caller",
+    ...(options.override === undefined
+      ? {}
+      : { clauseOverrides: { "@clause:Terms": options.override } }),
+  });
+};
+
+const filledTexts = async (
+  result: Awaited<ReturnType<typeof fillLinkedClause>>,
+) => {
+  if (!("file" in result)) {
+    return panic(`clause fill rejected: ${JSON.stringify(result)}`);
+  }
+  const zip = await JSZip.loadAsync(result.file.bytes);
+  const xml =
+    (await zip.file("word/document.xml")?.async("string")) ??
+    panic("filled document has no body");
+  return partParagraphTexts(xml).filter((text) => text !== "");
+};
+
+describe("clause and template directive parity", () => {
+  const branches = [
+    clauseDirective("{% if x %}"),
+    { text: "Yes" },
+    clauseDirective("{% else %}"),
+    { text: "No" },
+    clauseDirective("{% endif %}"),
+  ];
+  test.each([
+    {},
+    { x: "" },
+    { x: false },
+    { x: true },
+    { x: 0 },
+    { x: 1 },
+    { x: "false" },
+    { x: "true" },
+    { x: "value" },
+    { x: [] },
+    { x: ["value"] },
+    { x: {} },
+    { x: { value: "present" } },
+  ] satisfies TemplateData[])(
+    "resolves identical template and clause conditions for %j",
+    async (values) => {
+      const result = await fillLinkedClause(branches, values, {
+        templateBody:
+          branches.map(({ text }) => P(text)).join("") +
+          P('{{ clause("Terms") }}'),
+      });
+      const texts = await filledTexts(result);
+      expect(texts).toHaveLength(2);
+      expect(texts.at(0)).toBe(texts.at(1));
+      expect(texts.join("")).not.toContain("{%");
+    },
+  );
+
+  test.each([
+    { values: { x: true, y: false }, expected: ["Outer", "Inner no"] },
+    { values: { x: true, y: true }, expected: ["Outer", "Inner yes"] },
+    { values: { x: false, y: true }, expected: ["Elif"] },
+    { values: { x: false, y: false }, expected: ["Else"] },
+  ])(
+    "resolves nested branches and elif chains for %j",
+    async ({ values, expected }) => {
+      const body = [
+        clauseDirective("{% if x %}"),
+        { text: "Outer" },
+        clauseDirective("{% if y %}"),
+        { text: "Inner yes" },
+        clauseDirective("{% else %}"),
+        { text: "Inner no" },
+        clauseDirective("{% endif %}"),
+        clauseDirective("{% elif y %}"),
+        { text: "Elif" },
+        clauseDirective("{% else %}"),
+        { text: "Else" },
+        clauseDirective("{% endif %}"),
+      ];
+      expect(await filledTexts(await fillLinkedClause(body, values))).toEqual(
+        expected,
+      );
+      expect(
+        await filledTexts(
+          await fillLinkedClause([{ text: "Stored" }], values, {
+            override: body,
+          }),
+        ),
+      ).toEqual(expected);
+    },
+  );
+
+  test("expands nested loops with per-item conditions, counters, formatting and list labels", async () => {
+    const body: ClauseBody = [
+      clauseDirective("{% for party in parties %}"),
+      clauseDirective("{% if party.include %}"),
+      {
+        text: "{{ party.name }}",
+        runs: [{ text: "{{ party.name }}", bold: true }],
+        listKind: "ordered",
+      },
+      clauseDirective("{% for term in party.terms %}"),
+      {
+        text: "{{ loop.index }}: {{ term.value }}",
+        runs: [{ text: "{{ loop.index }}: {{ term.value }}", italic: true }],
+        listKind: "ordered",
+        listLevel: 1,
+      },
+      clauseDirective("{% endfor %}"),
+      clauseDirective("{% endif %}"),
+      clauseDirective("{% endfor %}"),
+    ];
+    const result = await fillLinkedClause(body, {
+      parties: [
+        { name: "Alpha", include: true, terms: ["A", "B"] },
+        { name: "Excluded", include: false, terms: ["Hidden"] },
+        { name: "Beta", include: true, terms: ["C"] },
+      ],
+    });
+    expect(await filledTexts(result)).toEqual([
+      "1. Alpha",
+      "    a. 1: A",
+      "    b. 2: B",
+      "2. Beta",
+      "    a. 1: C",
+    ]);
+    if (!("file" in result)) {
+      return panic("expected filled clause");
+    }
+    const zip = await JSZip.loadAsync(result.file.bytes);
+    const xml = await zip.file("word/document.xml")?.async("string");
+    expect(xml).toContain("<w:b");
+    expect(xml).toContain("<w:i");
+    expect(xml).not.toContain("__each_");
+  });
+
+  test("keeps an empty loop empty and clause-local expansion keys isolated", async () => {
+    const body = [
+      clauseDirective("{% for row in rows %}"),
+      { text: "{{ row.value }}" },
+      clauseDirective("{% endfor %}"),
+    ];
+    expect(
+      await filledTexts(await fillLinkedClause(body, { rows: [] })),
+    ).toEqual([]);
+    expect(
+      await filledTexts(
+        await fillLinkedClause(
+          body,
+          { rows: ["one", "two"] },
+          {
+            templateBody:
+              P("{% for row in rows %}") +
+              P("Template {{ row.value }}") +
+              P("{% endfor %}") +
+              P('{{ clause("Terms") }}'),
+          },
+        ),
+      ),
+    ).toEqual(["Template one", "Template two", "one", "two"]);
+  });
+
+  test("preserves the existing byte output for a clause without directives", async () => {
+    const body: ClauseBody = [
+      { text: "First", runs: [{ text: "First", bold: true }] },
+      { text: "Second", listKind: "ordered" },
+    ];
+    const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+    const legacy = await fillTemplate(file, {
+      "@clause:Terms": {
+        paragraphs: [
+          { runs: [{ text: "First", bold: true }] },
+          { runs: [{ text: "1. Second" }] },
+        ],
+      },
+    });
+    const result = await fillTemplateDocx({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file,
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      values: {},
+      scopedDb: stubScopedDb(body),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+    });
+    if (!("file" in result)) {
+      return panic("expected filled clause");
+    }
+    expect(result.file.bytes).toEqual(legacy.file.bytes);
+  });
+
+  test.each([
+    { body: [clauseDirective("{% if x %}"), { text: "Unclosed" }] },
+    { body: [clauseDirective("{% else %}"), { text: "Orphan" }] },
+    { body: [clauseDirective("{% endif %}")] },
+    {
+      body: [
+        clauseDirective("{% for row in rows %}"),
+        { text: "Unclosed loop" },
+      ],
+    },
+    { body: [clauseDirective("{% if x %}"), clauseDirective("{% endfor %}")] },
+    { body: [clauseDirective("invalid")] },
+  ])(
+    "rejects malformed stored and adjusted clauses without producing a file: %j",
+    async ({ body }) => {
+      for (const result of [
+        await fillLinkedClause(body, {}),
+        await fillLinkedClause([{ text: "Stored" }], {}, { override: body }),
+      ]) {
+        expect(result).not.toHaveProperty("file");
+        if (!("error" in result)) {
+          return panic("expected clause rejection");
+        }
+        expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
+        expect(result.storedTemplateError?.status).toBe(422);
+        expect(result.storedTemplateError?.code).toBe(
+          "clause_directives_invalid",
+        );
+        expect(result.storedTemplateError?.retryable).toBe(false);
+        expect(result.error).toContain("@clause:Terms");
+      }
+    },
+  );
+});
+
+type DirectiveTree =
+  | { kind: "text"; text: string }
+  | {
+      kind: "condition";
+      yes: DirectiveTree[];
+      elif: DirectiveTree[];
+      no: DirectiveTree[];
+    }
+  | {
+      kind: "loop";
+      path: "rows1" | "rows2" | "rows3";
+      children: DirectiveTree[];
+    };
+
+const directiveTreeArbitrary = (depth: number): fc.Arbitrary<DirectiveTree> => {
+  const leaf = fc
+    .constantFrom("Alpha", "Beta", "Gamma")
+    .map((text) => ({ kind: "text", text }) as const);
+  if (depth === 0) {
+    return leaf;
+  }
+  const children = fc.array(directiveTreeArbitrary(depth - 1), {
+    minLength: 1,
+    maxLength: 2,
+  });
+  const paths = ["rows1", "rows2", "rows3"] as const;
+  const path = paths.at(depth - 1) ?? panic("Unexpected generated loop depth");
+  return fc.oneof(
+    leaf,
+    fc.record({
+      kind: fc.constant("condition"),
+      yes: children,
+      elif: children,
+      no: children,
+    }),
+    fc.record({
+      kind: fc.constant("loop"),
+      path: fc.constant(path),
+      children,
+    }),
+  );
+};
+
+const treeClauseBody = (nodes: DirectiveTree[]): ClauseBody =>
+  nodes.flatMap((node) => {
+    switch (node.kind) {
+      case "text":
+        return [{ text: node.text }];
+      case "condition":
+        return [
+          clauseDirective("{% if x %}"),
+          ...treeClauseBody(node.yes),
+          clauseDirective("{% elif y %}"),
+          ...treeClauseBody(node.elif),
+          clauseDirective("{% else %}"),
+          ...treeClauseBody(node.no),
+          clauseDirective("{% endif %}"),
+        ];
+      case "loop":
+        return [
+          clauseDirective(`{% for item in ${node.path} %}`),
+          { text: "{{ item.name }} #{{ loop.index }}" },
+          ...treeClauseBody(node.children),
+          clauseDirective("{% endfor %}"),
+        ];
+      default:
+        node satisfies never;
+        return panic("Unhandled generated directive tree");
+    }
+  });
+
+type TreeValues = {
+  x: boolean;
+  y: boolean;
+  rows1: { name: string; x: boolean; y: boolean }[];
+  rows2: { name: string; x: boolean; y: boolean }[];
+  rows3: { name: string; x: boolean; y: boolean }[];
+};
+const referenceTreeText = (
+  nodes: DirectiveTree[],
+  values: TreeValues,
+): string[] =>
+  nodes.flatMap((node) => {
+    switch (node.kind) {
+      case "text":
+        return [node.text];
+      case "condition": {
+        if (values.x) {return referenceTreeText(node.yes, values);}
+        if (values.y) {return referenceTreeText(node.elif, values);}
+        return referenceTreeText(node.no, values);
+      }
+      case "loop":
+        return values[node.path].flatMap((row, index) => [
+          `${row.name} #${index + 1}`,
+          ...referenceTreeText(node.children, { ...values, ...row }),
+        ]);
+      default:
+        node satisfies never;
+        return panic("Unhandled reference directive tree");
+    }
+  });
+
+test("filled clause directive trees match reference evaluation", async () => {
+  await assertProperty(
+    "filled clause directive trees match reference evaluation",
+    fc.asyncProperty(
+      fc.array(directiveTreeArbitrary(3), { minLength: 1, maxLength: 3 }),
+      fc.record({
+        x: fc.boolean(),
+        y: fc.boolean(),
+        rows1: fc.array(
+          fc.record({
+            name: fc.constantFrom("A", "B"),
+            x: fc.boolean(),
+            y: fc.boolean(),
+          }),
+          { maxLength: 3 },
+        ),
+        rows2: fc.array(
+          fc.record({
+            name: fc.constantFrom("C", "D"),
+            x: fc.boolean(),
+            y: fc.boolean(),
+          }),
+          { maxLength: 3 },
+        ),
+        rows3: fc.array(
+          fc.record({
+            name: fc.constantFrom("E", "F"),
+            x: fc.boolean(),
+            y: fc.boolean(),
+          }),
+          { maxLength: 3 },
+        ),
+      }),
+      async (tree, values) => {
+        const result = await fillLinkedClause(treeClauseBody(tree), values);
+        const texts = await filledTexts(result);
+        expect(texts).toEqual(referenceTreeText(tree, values));
+        expect(texts.join("")).not.toContain("{%");
+      },
+    ),
+  );
+});
+
+test("strict fills discover condition and loop inputs in linked and adjusted clauses", async () => {
+  const body = [
+    clauseDirective("{% if x %}"),
+    clauseDirective("{% for row in rows %}"),
+    { text: "{{ row.value }}" },
+    clauseDirective("{% endfor %}"),
+    clauseDirective("{% endif %}"),
+  ];
+  const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+  for (const override of [undefined, body]) {
+    const result = await fillTemplateDocxStrict({
+      source: {
+        name: "Terms",
+        fileName: "terms.docx",
+        file,
+        templateId: toSafeId<"template">("tmpl_1"),
+      },
+      values: { x: true, rows: ["Alpha", "Beta"] },
+      scopedDb: stubScopedDb(
+        override === undefined ? body : [{ text: "Stored" }],
+      ),
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+      ...(override === undefined
+        ? {}
+        : { clauseOverrides: { "@clause:Terms": override } }),
+    });
+    if (!("file" in result)) {
+      return panic(`strict clause fill rejected: ${JSON.stringify(result)}`);
+    }
+    expect(await extractTexts(result.file)).toEqual(["Alpha", "Beta"]);
+  }
+});
+
+test("clause resolution uses formula outputs and rule-backed named conditions", async () => {
+  const body = [
+    clauseDirective("{% if eligible %}"),
+    { text: "Eligible" },
+    clauseDirective("{% else %}"),
+    { text: "Other" },
+    clauseDirective("{% endif %}"),
+  ];
+  const file = await authorFieldMarkers(
+    await makeDocx(
+      WRAP(
+        P("{{total}}") +
+          P("{% if eligible %}") +
+          P("Template eligible") +
+          P("{% endif %}") +
+          P('{{ clause("Terms") }}'),
+      ),
+    ),
+    [{ path: "total", inputType: "number", formula: "base * 2" }],
+  );
+  const result = await fillTemplateDocx({
+    source: {
+      name: "Terms",
+      fileName: "terms.docx",
+      file,
+      templateId: toSafeId<"template">("tmpl_1"),
+    },
+    values: { base: 10 },
+    scopedDb: stubScopedDb(body),
+    organizationId,
+    requiredFields: "enforce",
+    useRecording: "caller",
+  });
+  // The condition comes from the clause's own authored declaration.
+  const namedBody = [
+    clauseDirective('{% if eligible | checkbox | condition("total > 15") %}'),
+    ...body.slice(1),
+  ];
+  const namedResult = await fillTemplateDocx({
+    source: {
+      name: "Terms",
+      fileName: "terms.docx",
+      file,
+      templateId: toSafeId<"template">("tmpl_1"),
+    },
+    values: { base: 10 },
+    scopedDb: stubScopedDb(namedBody),
+    organizationId,
+    requiredFields: "enforce",
+    useRecording: "caller",
+  });
+  expect(await filledTexts(result)).toEqual(["20", "Other"]);
+  expect(await filledTexts(namedResult)).toEqual([
+    "20",
+    "Template eligible",
+    "Eligible",
+  ]);
+});
+
+test("clauses compare raw dates while rendering formatted dates including loop rows", () => {
+  const body = [
+    clauseDirective('{% if date > "2028-01-01" %}'),
+    { text: "After" },
+    clauseDirective("{% endif %}"),
+    clauseDirective("{% for row in rows %}"),
+    clauseDirective('{% if row.date > "2028-01-01" %}'),
+    { text: "{{ row.date }}" },
+    clauseDirective("{% endif %}"),
+    clauseDirective("{% endfor %}"),
+  ];
+  const values = {
+    date: "13. června 2028",
+    rows: [{ date: "14. června 2028" }, { date: "1. ledna 2020" }],
+    [CONDITION_RAW_VALUES]: {
+      date: "2028-06-13",
+      "rows.0.date": "2028-06-14",
+      "rows.1.date": "2020-01-01",
+    },
+  };
+  const patch = clauseBodyToRichPatch(body, {
+    values,
+    slotKey: "@clause:Terms",
+  }).unwrap();
+  if (typeof patch === "string") {
+    return panic("expected rich clause patch");
+  }
+  expect(
+    patch.paragraphs.map(({ runs }) => runs.map(({ text }) => text).join("")),
+  ).toEqual(["After", "14. června 2028"]);
+});
+
+test("template discovery and condition preview include clause-only declarations", async () => {
+  const body = [
+    clauseDirective(
+      '{% if included | checkbox | ai("Include this provision?") %}',
+    ),
+    { text: "Included" },
+    clauseDirective("{% else %}"),
+    { text: "Excluded" },
+    clauseDirective("{% endif %}"),
+  ];
+  const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+  const source = {
+    name: "Terms",
+    fileName: "terms.docx",
+    file,
+    templateId: toSafeId<"template">("tmpl_1"),
+  };
+  const { manifest, discovered } = await discoverTemplateSource({
+    source,
+    scopedDb: stubScopedDb(body),
+    organizationId,
+  });
+  expect(discovered.conditionPaths).toContain("included");
+  expect(manifest.fields).toContainEqual(
+    expect.objectContaining({
+      path: "included",
+      aiPrompt: "Include this provision?",
+    }),
+  );
+  const { templateDecideConditionsLogic } =
+    await import("./template-decide-conditions");
+  const fakeS3 = startFakeS3();
+  try {
+    fakeS3.put(
+      "stella",
+      "clause-condition-preview",
+      new Uint8Array(file.bytes),
+    );
+    const preview = await templateDecideConditionsLogic({
+      scopedDb: stubScopedDb(body, "clause-condition-preview"),
+      organizationId,
+      templateId: source.templateId,
+      body: { values: { included: false } },
+      orgAIConfig: null,
+      client: null,
+      abortSignal: new AbortController().signal,
+    });
+    expect(preview.unwrap().conditions).toEqual([
+      {
+        path: "included",
+        label: "included",
+        decision: { state: "decided", decidedBy: "user", value: false },
+      },
+    ]);
+    expect(
+      await filledTexts(await fillLinkedClause(body, { included: false })),
+    ).toEqual(["Excluded"]);
+  } finally {
+    fakeS3.stop();
+  }
 });

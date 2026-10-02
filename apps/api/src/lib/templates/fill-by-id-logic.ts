@@ -109,7 +109,10 @@ export const fillByIdLogic = async function* ({
     return Result.err(result.usageRejection);
   }
   if ("error" in result) {
-    return Result.err(new HandlerError({ status: 400, message: result.error }));
+    return Result.err(
+      result.storedTemplateError ??
+        new HandlerError({ status: 400, message: result.error }),
+    );
   }
 
   const { unusedValues } = result;

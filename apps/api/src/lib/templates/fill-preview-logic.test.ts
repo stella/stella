@@ -5,12 +5,17 @@ import JSZip from "jszip";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import type { ClauseBody } from "@/api/lib/clauses/types";
 import type { FieldMeta, TemplateManifest } from "@/api/lib/docx/types";
 import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createSelectQueryMock,
+  createScopedDbMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { fillPreviewLogic } from "./fill-preview-logic";
 
@@ -86,7 +91,7 @@ const requiredFieldManifest: TemplateManifest = {
   fields: [{ path: "governing_law", label: "Governing law", required: true }],
 };
 
-const stubDb = () =>
+const stubDb = (clauseBody: ClauseBody = []) =>
   createScopedDbMock({
     query: {
       templates: {
@@ -99,7 +104,30 @@ const stubDb = () =>
         }),
       },
       businessRegistryCredentials: { findMany: async () => [] },
+      templateClauses: {
+        findMany: async () =>
+          clauseBody.length === 0
+            ? []
+            : [
+                {
+                  slotName: "Terms",
+                  clauseId: toSafeId<"clause">("cls_1"),
+                  clauseVersionId: toSafeId<"clauseVersion">("clsv_1"),
+                  clauseVariantId: null,
+                  clauseVariantLabel: null,
+                },
+              ],
+      },
     },
+    select: () =>
+      createSelectQueryMock([
+        {
+          id: toSafeId<"clauseVersion">("clsv_1"),
+          clauseId: toSafeId<"clause">("cls_1"),
+          version: 1,
+          body: clauseBody,
+        },
+      ]),
   });
 
 describe("fillPreviewLogic required fields (allow-partial)", () => {
@@ -158,4 +186,34 @@ describe("fillPreviewLogic required fields (allow-partial)", () => {
       fakeS3.stop();
     }
   });
+});
+
+test("live preview preserves the typed clause refusal", async () => {
+  const docx = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+  const fakeS3 = startFakeS3();
+  try {
+    fakeS3.put("stella", s3Key, new Uint8Array(docx.bytes));
+    const { safeDb, scopedDb } = stubDb([
+      { text: "{% else %}", isDirective: true },
+    ]);
+    const result = await fillPreviewLogic({
+      safeDb,
+      scopedDb,
+      organizationId,
+      userId,
+      templateId,
+      body: { values: {} },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) {
+      throw new TypeError("expected typed clause refusal");
+    }
+    expect(result.error).toBeInstanceOf(HandlerError);
+    expect(result.error.status).toBe(422);
+    expect(result.error.code).toBe("clause_directives_invalid");
+    expect(result.error.retryable).toBe(false);
+    expect(result.error.message).toContain("@clause:Terms");
+  } finally {
+    fakeS3.stop();
+  }
 });

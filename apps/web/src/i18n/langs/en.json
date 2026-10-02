@@ -2240,6 +2240,7 @@
       "aiConfigModelInvalid": "The AI model configuration is invalid. Check the selected models.",
       "aiConfigProviderInvalid": "The AI provider configuration is invalid. Check the provider settings.",
       "aiConfigProviderValidationFailed": "The AI provider rejected the configuration. Check the API key and model.",
+      "clauseDirectivesInvalid": "A linked clause has invalid directives. Correct the clause before filling the template.",
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.",
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.",
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.",

@@ -2240,6 +2240,7 @@
       "aiConfigModelInvalid": "DI modelio konfigūracija netinkama. Patikrinkite pasirinktus modelius.",
       "aiConfigProviderInvalid": "DI teikėjo konfigūracija netinkama. Patikrinkite teikėjo nustatymus.",
       "aiConfigProviderValidationFailed": "DI teikėjas atmetė konfigūraciją. Patikrinkite API raktą ir modelį.",
+      "clauseDirectivesInvalid": "Susietoje sąlygoje yra netinkamų direktyvų. Prieš pildydami šabloną, pataisykite sąlygą.",
       "deeplKeyRejected": "Išsaugotas „DeepL“ raktas buvo atmestas. Pakeiskite jį organizacijos nustatymuose.",
       "deeplQuotaExceeded": "Šios organizacijos „DeepL“ simbolių kvota išnaudota.",
       "disposableEmailNotAllowed": "Laikini el. pašto adresai neleidžiami. Naudokite nuolatinį el. pašto adresą.",

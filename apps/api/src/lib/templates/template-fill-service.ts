@@ -3,10 +3,10 @@ import { panic, Result } from "better-result";
  * The single template fill pipeline. Every fill boundary — the REST routes
  * (raw upload, by-id download, live preview, fill-to-workspace), the chat and
  * MCP tools, and the report exporter — resolves its source through here and
- * runs exactly one sequence: required-fields gate → clause slots → AI usage
+ * runs exactly one sequence: required-fields gate → AI usage
  * preflight → manifest fill steps (lookups, composites, formulas, dependent
- * selects) → AI drafting/adaptation → substitution. Route-specific concerns
- * (request parsing, usage metering wiring, response shaping, audit rows, S3
+ * selects) → AI drafting/adaptation → clause slots → substitution.
+ * Route-specific concerns (request parsing, usage metering wiring, response shaping, audit rows, S3
  * writes) stay with the caller; only genuinely different fill semantics are
  * options here (see `requiredFields`).
  */
@@ -20,18 +20,17 @@ import {
   getOrganizationRegistryAvailability,
   getOrganizationRegistryDispatch,
 } from "@/api/lib/business-registries/credentials";
-import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
+import {
+  discoverTemplateWithClauses,
+  clauseBodyToRichPatch,
+} from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
   adaptAiFields,
   type AiOccurrenceAdapter,
 } from "@/api/lib/docx/adapt-ai-fields";
-import {
-  deriveManifest,
-  deriveManifestFromDocx,
-} from "@/api/lib/docx/derived-manifest";
+import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverClauseSlots } from "@/api/lib/docx/discover-clause-slots";
-import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import {
   documentTextForAiFields,
   extractDocxDocument,
@@ -51,7 +50,7 @@ import {
   type AiFieldGenerator,
   resolveAiFields,
 } from "@/api/lib/docx/resolve-ai-fields";
-import { resolveClauseSlots } from "@/api/lib/docx/resolve-clause-slots";
+import { resolveClauseSlotBodies } from "@/api/lib/docx/resolve-clause-slots";
 import {
   boundTemplateWarnings,
   fieldOverlayWarnings,
@@ -114,7 +113,7 @@ type TemplateInputRejection = {
 };
 
 type FillRejection<TUsageRejection> =
-  | { error: string }
+  | TemplateServiceError
   | { inputRejection: TemplateInputRejection }
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TUsageRejection };
@@ -436,8 +435,11 @@ export const describeStoredTemplate = async ({
   }
   const loaded = load.value;
 
-  const discovered = await discoverTemplate(loaded.file);
-  const manifest = deriveManifest(discovered);
+  const { discovered, manifest } = await discoverTemplateSource({
+    source: loaded,
+    scopedDb,
+    organizationId,
+  });
   const arrays = collectDescribedArrayGroups(discovered.fields);
   // Formula fields are derived at fill time, never user-submitted, so they
   // are reported as computed values rather than fillable fields. A boolean
@@ -554,6 +556,51 @@ type FillServiceOptions<TRejection = never> = {
   workspaceId?: SafeId<"workspace"> | undefined;
 };
 
+type DiscoverTemplateSourceOptions = {
+  source: FillTemplateSource;
+  scopedDb: ScopedDb;
+  organizationId: SafeId<"organization">;
+  clauseOverrides?: Record<string, ClauseBody> | undefined;
+};
+
+/** Discover exactly the content a fill consumes, including versioned links
+ * and per-fill edits. Description, strict input validation and condition
+ * preview share this owner rather than treating slots as opaque values. */
+export const discoverTemplateSource = async ({
+  source,
+  scopedDb,
+  organizationId,
+  clauseOverrides,
+}: DiscoverTemplateSourceOptions) => {
+  const slots =
+    source.templateId === undefined
+      ? []
+      : await discoverClauseSlots(source.file);
+  const bodies: Record<string, ClauseBody> = {};
+  if (source.templateId !== undefined && slots.length > 0) {
+    Object.assign(
+      bodies,
+      await resolveClauseSlotBodies(
+        source.templateId,
+        slots,
+        scopedDb,
+        organizationId,
+      ),
+    );
+  }
+  for (const slot of slots) {
+    const override = clauseOverrides?.[slot.patchKey];
+    if (override !== undefined) {
+      bodies[slot.patchKey] = override;
+    }
+  }
+  const discovered = await discoverTemplateWithClauses(
+    source.file,
+    Object.values(bodies),
+  );
+  return { slots, bodies, discovered, manifest: deriveManifest(discovered) };
+};
+
 type FilledDocx = {
   templateName: string;
   fileName: string;
@@ -586,10 +633,10 @@ type FillDocxWithPolicyOptions<TRejection = never> =
   };
 
 /**
- * Shared fill recipe over an already-loaded DOCX: gate required fields,
- * resolve clause slots (stored templates only), run the manifest fill steps
- * (lookups, composites, formulas, dependent selects), draft/adapt AI fields,
- * then substitute. Records the template use when a `templateId` is present.
+ * Shared fill recipe over an already-loaded DOCX: discover linked content,
+ * gate required fields, run manifest fill steps (lookups, composites, formulas,
+ * dependent selects), draft/adapt AI fields, resolve clause directives, then
+ * substitute. Records the template use when a `templateId` is present.
  * Backs every fill boundary, so a template fills identically at each of them.
  */
 const fillTemplateDocxWithPolicy = async <TRejection = never>({
@@ -613,11 +660,15 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   );
   const loaded = source;
   const { templateId } = source;
-  const manifest = await deriveManifestFromDocx(loaded.file);
+  const { manifest, discovered, slots, bodies } = await discoverTemplateSource({
+    source: loaded,
+    scopedDb,
+    organizationId,
+    clauseOverrides,
+  });
   let strictInputPlaceholders: string[] | null = null;
 
   if (unusedValuePolicy === "reject") {
-    const discovered = await discoverTemplate(loaded.file);
     strictInputPlaceholders = discovered.placeholders.map(
       (placeholder) => placeholder.name,
     );
@@ -658,7 +709,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   let record: FillValues = { ...values };
 
-  // Reject before any clause/AI/lookup work runs: a required, user-entered
+  // Reject before any AI/lookup work runs: a required, user-entered
   // field (not AI-fillable, not formula/condition/source-derived) that is
   // absent or empty must never be silently invented or left as a raw
   // `{{marker}}` in the output. Ask the caller for exactly these fields
@@ -671,31 +722,6 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   });
   if (missingRequiredFields.length > 0) {
     return { requiredFieldsRejection: missingRequiredFields };
-  }
-
-  const slots =
-    templateId !== undefined ? await discoverClauseSlots(loaded.file) : [];
-  if (templateId !== undefined && slots.length > 0) {
-    const patches = await resolveClauseSlots(
-      templateId,
-      slots,
-      scopedDb,
-      organizationId,
-    );
-    // Per-fill overrides take precedence over the linked clause body for any
-    // slot whose patch key matches a discovered slot (mirrors fill-by-id's
-    // resolveClausePatches).
-    if (clauseOverrides) {
-      const slotKeys = new Set(slots.map((slot) => slot.patchKey));
-      for (const [key, overrideBody] of Object.entries(clauseOverrides)) {
-        if (slotKeys.has(key)) {
-          patches[key] = clauseBodyToRichPatch(overrideBody);
-        }
-      }
-    }
-    for (const [key, value] of Object.entries(patches)) {
-      record[key] = value;
-    }
   }
 
   // Draft AI-fillable fields (manifest fields with an aiPrompt) before fill.
@@ -798,7 +824,26 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     };
   }
 
-  const result = await fillTemplate(fillSource, record);
+  const namedConditions = manifestNamedConditions(manifest);
+  if (slots.length > 0) {
+    for (const slot of slots) {
+      const body = bodies[slot.patchKey];
+      if (body === undefined) {
+        continue;
+      }
+      const patch = clauseBodyToRichPatch(body, {
+        values: record,
+        slotKey: slot.patchKey,
+        namedConditions,
+      });
+      if (Result.isError(patch)) {
+        return { error: patch.error.message, storedTemplateError: patch.error };
+      }
+      record[slot.patchKey] = patch.value;
+    }
+  }
+
+  const result = await fillTemplate(fillSource, record, { namedConditions });
 
   if (templateId !== undefined && useRecording === "after-fill") {
     await scopedDb(async (tx) => {
@@ -828,7 +873,7 @@ export const fillTemplateDocx = async <TRejection = never>(
   options: FillDocxOptions<TRejection>,
 ): Promise<
   | FilledDocx
-  | { error: string }
+  | TemplateServiceError
   | { requiredFieldsRejection: MissingRequiredField[] }
   | { usageRejection: TRejection }
 > => {

@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
+
 import {
   APIError,
   internalToolErrorMessage,
@@ -535,4 +537,20 @@ describe("error predicates", () => {
     expect(isUnauthorizedError(authError)).toBe(true);
     expect(isUnauthorizedError(forbidden)).toBe(false);
   });
+});
+
+test("clause directive refusal is localized and never retried", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Clause slot @clause:Terms has invalid directives.",
+    },
+  });
+  expect(error.code).toBe(CLAUSE_DIRECTIVES_INVALID_CODE);
+  expect(error.message).toBe(
+    "A linked clause has invalid directives. Correct the clause before filling the template.",
+  );
+  expect(error.rawMessage).toContain("@clause:Terms");
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
 });

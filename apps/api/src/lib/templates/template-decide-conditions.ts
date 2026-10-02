@@ -29,11 +29,13 @@ import {
   conditionsState,
 } from "@/api/lib/docx/ai-condition-question";
 import { omitSourceBoundValues } from "@/api/lib/docx/ai-visible-values";
-import { deriveManifestFromDocx } from "@/api/lib/docx/derived-manifest";
 import { isAiConditionField } from "@/api/lib/docx/resolve-ai-conditions";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { loadStoredTemplateSource } from "@/api/lib/templates/template-fill-service";
+import {
+  discoverTemplateSource,
+  loadStoredTemplateSource,
+} from "@/api/lib/templates/template-fill-service";
 import { decideMany } from "@/api/lib/workflow/decisions/decide";
 import type {
   Decision,
@@ -242,7 +244,12 @@ const derivedManifestFields = async ({
   if (Result.isError(source)) {
     return Result.err(source.error);
   }
-  return Result.ok((await deriveManifestFromDocx(source.value.file)).fields);
+  const { manifest } = await discoverTemplateSource({
+    source: source.value,
+    scopedDb,
+    organizationId,
+  });
+  return Result.ok(manifest.fields);
 };
 
 /**
@@ -252,8 +259,9 @@ const derivedManifestFields = async ({
  *
  * The manifest column is the cache of reading the document that exists for
  * exactly this kind of read (see `derived-manifest.ts`), and the form asks on
- * every typing pause, so the fields come from it rather than from a DOCX
- * pulled out of object storage per call.
+ * every typing pause. Unlinked templates use that cache; linked templates
+ * rediscover the document and current clause versions together so the preview
+ * sees the same condition declarations as a fill.
  */
 export const templateDecideConditionsLogic = async ({
   scopedDb,
@@ -277,6 +285,13 @@ export const templateDecideConditionsLogic = async ({
         organizationId: { eq: organizationId },
       },
       columns: { manifest: true },
+      with: {
+        templateClauses: {
+          columns: { id: true },
+          where: { organizationId: { eq: organizationId } },
+          limit: 1,
+        },
+      },
     }),
   );
   if (!template) {
@@ -286,7 +301,7 @@ export const templateDecideConditionsLogic = async ({
   }
 
   let fields = template.manifest?.fields;
-  if (fields === undefined) {
+  if (fields === undefined || template.templateClauses.length > 0) {
     const derived = await derivedManifestFields({
       templateId,
       organizationId,

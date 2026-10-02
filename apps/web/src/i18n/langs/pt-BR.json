@@ -2240,6 +2240,7 @@
       "aiConfigModelInvalid": "A configuração do modelo de IA é inválida. Verifique os modelos selecionados.",
       "aiConfigProviderInvalid": "A configuração do provedor de IA é inválida. Verifique as configurações do provedor.",
       "aiConfigProviderValidationFailed": "O provedor de IA rejeitou a configuração. Verifique a chave de API e o modelo.",
+      "clauseDirectivesInvalid": "Uma cláusula vinculada contém diretivas inválidas. Corrija a cláusula antes de preencher o modelo.",
       "deeplKeyRejected": "A chave do DeepL salva foi rejeitada. Substitua-a nas configurações da organização.",
       "deeplQuotaExceeded": "A cota de caracteres do DeepL desta organização foi esgotada.",
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",

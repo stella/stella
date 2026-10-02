@@ -2,6 +2,7 @@ import { TaggedError } from "better-result";
 
 import {
   API_VERSION_CONFLICT_ERROR_CODE,
+  CLAUSE_DIRECTIVES_INVALID_CODE,
   normalizeApiError,
   parseApiErrorValue,
 } from "@stll/api-contract";
@@ -97,6 +98,7 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
 } as const;
 
 const CODE_ERROR_KEYS = {
+  [CLAUSE_DIRECTIVES_INVALID_CODE]: "errors.apiCodes.clauseDirectivesInvalid",
   [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
