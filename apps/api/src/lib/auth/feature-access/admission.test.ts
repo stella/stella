@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { Elysia } from "elysia";
+import { Elysia, t } from "elysia";
 
 import {
   createSafeRootHandler,
@@ -12,6 +12,7 @@ import {
 } from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { isRecord } from "@/api/lib/type-guards";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
@@ -256,3 +257,84 @@ describe("feature access safe-handler admission", () => {
     }
   });
 });
+
+const conditionalQuerySchema = t.Object({
+  mode: t.Union([t.Literal("ordinary"), t.Literal("feature")]),
+});
+
+test.each([
+  ["default-deny", "user_1", false],
+  ["granted", "user_1", true],
+  ["colleague", "user_2", false],
+] as const)(
+  "REST conditional query admission for %s",
+  async (_kind, userId, granted) => {
+    let resourceOperations = 0;
+    const checkedQueries: unknown[] = [];
+    const database = createScopedDbMock({});
+    const endpoint = createSafeRootHandler(
+      asTestRaw<HandlerConfig>({
+        query: conditionalQuerySchema,
+        permissions: { workspace: ["read"] },
+        mcp: { type: "internal", reason: "health_infra" },
+        featureAccess: {
+          type: "conditional",
+          featureId,
+          usesFeature: async ({ query }: { query: unknown }) => {
+            checkedQueries.push(query);
+            return isRecord(query) && query["mode"] === "feature";
+          },
+          projectInputSchema: (schemas: unknown) => schemas,
+        },
+      }),
+      async function* ({ safeDb, query }) {
+        const output = yield* Result.await(
+          safeDb(async () => {
+            resourceOperations += 1;
+            return { query };
+          }),
+        );
+        return Result.ok(output);
+      },
+    );
+    const app = new Elysia().get(
+      "/query-fixture",
+      async ({ query, request, set }) =>
+        endpoint.handler(
+          createTestHandlerContext<Parameters<typeof endpoint.handler>[0]>({
+            query,
+            request,
+            set,
+            user: { id: toSafeId<"user">(userId) },
+            session: {
+              activeOrganizationId: toSafeId<"organization">("org_1"),
+            },
+            featureAccessSnapshot: snapshot(userId, "org_1", granted),
+            safeDb: database.safeDb,
+            scopedDb: database.scopedDb,
+          }),
+        ),
+      { query: conditionalQuerySchema },
+    );
+    const selected = await app.handle(
+      new Request("http://localhost/query-fixture?mode=feature"),
+    );
+    expect(selected.status).toBe(granted ? 200 : 404);
+    expect(resourceOperations).toBe(granted ? 1 : 0);
+    expect(database.getCallCount()).toBe(granted ? 1 : 0);
+    expect(checkedQueries).toEqual(granted ? [] : [{ mode: "feature" }]);
+    if (!granted)
+      {expect(await selected.json()).toEqual({ message: "Not found" });}
+    const ordinary = await app.handle(
+      new Request("http://localhost/query-fixture?mode=ordinary"),
+    );
+    expect(ordinary.status).toBe(200);
+    expect(await ordinary.json()).toEqual({ query: { mode: "ordinary" } });
+    expect(resourceOperations).toBe(granted ? 2 : 1);
+    const invalid = await app.handle(
+      new Request("http://localhost/query-fixture?mode=invalid"),
+    );
+    expect(invalid.status).toBe(422);
+    expect(resourceOperations).toBe(granted ? 2 : 1);
+  },
+);

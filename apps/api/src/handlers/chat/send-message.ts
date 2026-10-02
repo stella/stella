@@ -1541,6 +1541,7 @@ type PrepareValidatedIncomingMessageOptions = {
     workspaceId: SafeId<"workspace"> | null;
   };
   tools: {
+    featureAccessSnapshot: FeatureAccessSnapshot;
     disabledNativeToolSlugs: ChatToolsInput["disabledNativeToolSlugs"];
     registryDispatch: ChatToolsInput["registryDispatch"];
     docxEditRepresentation: NonNullable<
@@ -1584,6 +1585,7 @@ const prepareValidatedIncomingMessage = async ({
     workspaceId,
   },
   tools: {
+    featureAccessSnapshot,
     disabledNativeToolSlugs,
     registryDispatch,
     docxEditRepresentation,
@@ -1654,6 +1656,7 @@ const prepareValidatedIncomingMessage = async ({
     // still honor thread/org gates for tools whose presence is an
     // explicit user or administrator opt-in.
     const validationTools = getChatValidationTools({
+      featureAccessSnapshot,
       organizationId,
       memberRole: memberRole.role,
       orgAIConfig,
@@ -2354,6 +2357,13 @@ export const createSendMessage = (
       // generator via `.return()`, which unwinds this `finally` like a normal
       // early `return` would.
       try {
+        const featureAccessSnapshot = yield* Result.await(
+          loadFeatureAccessSnapshot({
+            safeDb,
+            organizationId: session.activeOrganizationId,
+            userId: user.id,
+          }),
+        );
         const preparedIncomingMessageResult =
           await prepareValidatedIncomingMessage({
             dependencies: {
@@ -2384,6 +2394,7 @@ export const createSendMessage = (
               workspaceId,
             },
             tools: {
+              featureAccessSnapshot,
               disabledNativeToolSlugs,
               registryDispatch,
               docxEditRepresentation,
@@ -2627,13 +2638,6 @@ export const createSendMessage = (
         // catalog and connector tools, which are known only later. Skill
         // availability is decided over the same inputs before the catalog
         // reaches the prompt, so an offered skill always has its tools.
-        const featureAccessSnapshot = yield* Result.await(
-          loadFeatureAccessSnapshot({
-            safeDb,
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-          }),
-        );
         const chatToolContext = {
           featureAccessSnapshot,
           createAIAbortSignal: createMeteredAIAbortSignal,

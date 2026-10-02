@@ -1035,6 +1035,7 @@ const createSafeScopedHandler = <
                   await featureAccess.usesFeature({
                     body: ctx.body,
                     params: ctx.params,
+                    query: ctx.query,
                     organizationId: ctx.session.activeOrganizationId,
                     scopedDb: ctx.scopedDb,
                     safeDb: ctx.safeDb,

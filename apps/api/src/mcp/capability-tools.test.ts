@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import type { Transaction } from "@/api/db/root";
+import exportTimeEntriesCsv from "@/api/handlers/time-entries/csv/export";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import {
   createFeatureAccessSnapshot,
@@ -11,6 +12,7 @@ import {
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { isRecord } from "@/api/lib/type-guards";
+import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 import { MCP_OAUTH_SCOPES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { TOOL_CONFIRMATION } from "@/api/mcp/tool-confirmation";
@@ -2520,3 +2522,143 @@ describe("feature access discovery guard: real capability catalog", () => {
     );
   });
 });
+
+test.each(["default-deny", "granted", "colleague"] as const)(
+  "MCP conditional query admission for %s",
+  async (kind) => {
+    const featureId = "fixture-query-access";
+    const organizationId = toSafeId<"organization">("org_1");
+    const userId = toSafeId<"user">(kind === "colleague" ? "user_2" : "user_1");
+    const workspaceId = "11111111-1111-4111-8111-111111111111";
+    const checkedQueries: unknown[] = [];
+    const select = mock(() => ({
+      from: () => ({
+        where: () => ({ orderBy: () => ({ limit: async () => [] }) }),
+      }),
+    }));
+    const insert = mock(() => undefined);
+    const database = createScopedDbMock({ select, insert });
+    const context = createContext({
+      workspaceIds: [workspaceId],
+      safeDb: database.safeDb,
+      scopedDb: database.scopedDb,
+    });
+    context.userId = userId;
+    context.featureAccessSnapshot = createFeatureAccessSnapshot({
+      organizationId,
+      userId,
+      decisions: new Map([
+        [
+          featureId,
+          decideFeatureAccess({
+            registry: { [featureId]: { enrolment: "invitation" } },
+            featureId,
+            organizationId,
+            userId,
+            user: {
+              email:
+                kind === "colleague"
+                  ? "colleague@example.test"
+                  : "member@example.test",
+              emailVerified: true,
+            },
+            membership: true,
+            grants:
+              kind === "default-deny"
+                ? {}
+                : {
+                    [featureId]: [
+                      {
+                        type: "member",
+                        organizationId,
+                        email: "member@example.test",
+                      },
+                    ],
+                  },
+          }),
+        ],
+      ]),
+    });
+    const previous = Object.getOwnPropertyDescriptor(
+      exportTimeEntriesCsv.config,
+      "featureAccess",
+    );
+    Object.defineProperty(exportTimeEntriesCsv.config, "featureAccess", {
+      configurable: true,
+      value: {
+        type: "conditional",
+        featureId,
+        usesFeature: async ({ query }: { query: unknown }) => {
+          checkedQueries.push(query);
+          return isRecord(query) && query["dateFrom"] === "2026-10-02";
+        },
+        projectInputSchema: (schemas: AdvertisedSchemas) => schemas,
+      },
+    });
+    try {
+      for (const validate_only of [true, false]) {
+        const result = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          context,
+          args: {
+            capability: "time-entries.csv.export",
+            validate_only,
+            input: {
+              params: { matterId: workspaceId },
+              query: { dateFrom: "2026-10-02", status: "approved" },
+            },
+          },
+        });
+        if (kind === "granted") {
+          expect(result.isError).not.toBe(true);
+          if (validate_only)
+            {expect(parseToolPayload(result)).toEqual({
+              valid: true,
+              capability: "time-entries.csv.export",
+            });}
+        } else {
+          expect(errorEnvelope(result)).toMatchObject({
+            code: "not_found",
+            message: "Not found",
+          });
+          expect(select).not.toHaveBeenCalled();
+          expect(insert).not.toHaveBeenCalled();
+          expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+          expect(consumeRateLimitMock).not.toHaveBeenCalled();
+        }
+      }
+      expect(checkedQueries).toEqual(
+        kind === "granted"
+          ? []
+          : [
+              { dateFrom: "2026-10-02", status: "approved" },
+              { dateFrom: "2026-10-02", status: "approved" },
+            ],
+      );
+      const ordinary = await handleMcpToolCall({
+        toolName: "invoke_capability",
+        context,
+        args: {
+          capability: "time-entries.csv.export",
+          validate_only: false,
+          input: {
+            params: { matterId: workspaceId },
+            query: { dateFrom: "2026-10-01", status: "approved" },
+          },
+        },
+      });
+      expect(ordinary.isError).not.toBe(true);
+      expect(select).toHaveBeenCalledTimes(kind === "granted" ? 2 : 1);
+      expect(insert).not.toHaveBeenCalled();
+    } finally {
+      if (previous === undefined)
+        {Reflect.deleteProperty(exportTimeEntriesCsv.config, "featureAccess");}
+      else
+        {Object.defineProperty(
+          exportTimeEntriesCsv.config,
+          "featureAccess",
+          previous,
+        );}
+    }
+  },
+);

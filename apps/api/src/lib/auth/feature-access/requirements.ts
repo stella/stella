@@ -6,6 +6,7 @@ import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 type FeatureResourceContext = {
   body: unknown;
   params: unknown;
+  query: unknown;
   workspaceId?: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   safeDb: SafeDb;

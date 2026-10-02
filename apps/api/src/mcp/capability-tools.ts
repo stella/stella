@@ -2009,6 +2009,7 @@ const executeInvoke = async ({
     const usesFeature = await requirement.usesFeature({
       body: validatedBody,
       params: handlerParams,
+      query: validatedQuery,
       organizationId: context.organizationId,
       safeDb: scope.safeDb,
       scopedDb: scope.scopedDb,

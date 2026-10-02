@@ -1185,19 +1185,23 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
 
 type GetChatValidationToolsProps = Omit<
   GetChatToolsProps,
+  | "featureAccessSnapshot"
   | "docxSuggestionSurface"
   | "hasActiveDocxEditClient"
   | "hasActiveDocxFileClient"
   | "purpose"
   | "skillMetadata"
   | "thirdPartyBoundary"
->;
+> & {
+  featureAccessSnapshot: GetChatToolsProps["featureAccessSnapshot"];
+};
 
 /**
  * The tool set an incoming message's tool calls are validated against. It
  * never executes, so every surface- and catalog-dependent group is registered
  * at its widest: for any request, this set must contain every tool a run on
- * the same thread could have exposed.
+ * the same thread could have exposed under the current caller access. The
+ * snapshot property is explicit so request wiring cannot omit its decision.
  */
 export const getChatValidationTools = (
   props: GetChatValidationToolsProps,
