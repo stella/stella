@@ -3,10 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { runEuEcjRefetch } from "@/api/scripts/eu-ecj-refetch";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
-import { runCli } from "../../../legal-atlas-runner/src/index";
-
 describe("EU refresh command boundaries", () => {
-  test("CLI dispatch returns exit 1 for a resumable publisher refusal", async () => {
+  // The image runner forwards this exit code unchanged; that forwarding is
+  // covered in apps/legal-atlas-runner's own tests.
+  test("returns exit 1 for a resumable publisher refusal", async () => {
     const argv = [
       "--formex-only",
       "--ids-file",
@@ -17,20 +17,17 @@ describe("EU refresh command boundaries", () => {
     ];
     const calls: unknown[] = [];
     for (const resumeAfter of [null, "last-completed-row"]) {
-      const exitCode = await runCli(["run", "eu-ecj-refetch", ...argv], {
-        refetch: async (args) =>
-          await runEuEcjRefetch(args, {
-            formexRefresh: async (options) => {
-              calls.push(options);
-              return {
-                type: "rate-limited",
-                blockedId: "blocked-row",
-                resumeAfter,
-                cooldownUntilEpochMs: 123_456,
-                results: [],
-              };
-            },
-          }),
+      const exitCode = await runEuEcjRefetch(argv, {
+        formexRefresh: async (options) => {
+          calls.push(options);
+          return {
+            type: "rate-limited",
+            blockedId: "blocked-row",
+            resumeAfter,
+            cooldownUntilEpochMs: 123_456,
+            results: [],
+          };
+        },
       });
       expect(exitCode).toBe(1);
     }
@@ -53,15 +50,10 @@ describe("EU refresh command boundaries", () => {
     expect(rootPoolConnectionCount()).toBe(0);
   });
 
-  test("CLI dispatch returns exit 0 after a completed Formex refresh", async () => {
-    const exitCode = await runCli(
-      ["run", "eu-ecj-refetch", "--formex-only", "--ids-file", "ids.txt"],
-      {
-        refetch: async (args) =>
-          await runEuEcjRefetch(args, {
-            formexRefresh: async () => ({ type: "complete", results: [] }),
-          }),
-      },
+  test("returns exit 0 after a completed Formex refresh", async () => {
+    const exitCode = await runEuEcjRefetch(
+      ["--formex-only", "--ids-file", "ids.txt"],
+      { formexRefresh: async () => ({ type: "complete", results: [] }) },
     );
     expect(exitCode).toBe(0);
     expect(rootPoolConnectionCount()).toBe(0);

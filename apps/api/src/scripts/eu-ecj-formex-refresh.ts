@@ -760,7 +760,7 @@ export const runEcjFormexRefresh = async ({
   validateRunOptions({
     resultsOut,
     apply,
-    acquireBatch,
+    ...(acquireBatch === undefined ? {} : { acquireBatch }),
     batchSize,
     limit,
     after,

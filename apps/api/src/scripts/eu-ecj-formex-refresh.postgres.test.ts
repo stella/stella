@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -622,8 +622,8 @@ if (!databaseUrl || !runPostgresTests) {
         results: [
           expect.objectContaining({ id: ids.at(0), outcome: "notice-missing" }),
         ],
-        blockedId: ids.at(1),
-        resumeAfter: ids.at(0),
+        blockedId: ids.at(1) ?? panic("fixture has a second row"),
+        resumeAfter: ids.at(0) ?? panic("fixture has a first row"),
         cooldownUntilEpochMs: 200_750,
       });
       expect(visits).toEqual(["62020CJ0001:cs", "62020CJ0002:cs"]);
@@ -677,7 +677,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(summary).toEqual({
           type: "rate-limited",
           results: [],
-          blockedId: ids.at(0),
+          blockedId: ids.at(0) ?? panic("fixture has a first row"),
           resumeAfter: null,
           cooldownUntilEpochMs: 1,
         });
@@ -707,7 +707,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(summary).toEqual({
         type: "rate-limited",
         results: [],
-        blockedId: ids.at(0),
+        blockedId: ids.at(0) ?? panic("fixture has a first row"),
         resumeAfter: null,
         cooldownUntilEpochMs: 1,
       });
