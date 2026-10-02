@@ -731,7 +731,11 @@ const runTask = async ({
   task: EvalTask;
 }): Promise<EvalRun> => {
   // The contract tier has no matters, so no document a position could cite.
-  const store = createPlaybookStore(task.seed, []);
+  const store = createPlaybookStore({
+    seed: task.seed,
+    documents: [],
+    accessibleMatterIds: [],
+  });
   const trace: ToolTrace[] = [];
   const saveCalls: SaveCallRecord[] = [];
   const turn = await runModelTurn({
@@ -1352,7 +1356,11 @@ const runScenario = async ({
   scenario: BuilderScenario;
   surface: BuilderSurface;
 }): Promise<BehaviorRun> => {
-  const store = createPlaybookStore([], READABLE_DOCUMENTS);
+  const store = createPlaybookStore({
+    seed: [],
+    documents: READABLE_DOCUMENTS,
+    accessibleMatterIds: ACCESSIBLE_MATTER_IDS,
+  });
   const events: BuilderEvent[] = [];
   const skill = await resolveBehaviorSkill(store);
   const system = behaviorSystemPrompt({ skill, surface });
