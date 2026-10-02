@@ -45,7 +45,9 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
+import { env } from "@/api/env";
 import { envBase } from "@/api/env-base";
+import updateKanbanPlacement from "@/api/handlers/fields/kanban-placement/update";
 import readTaskById from "@/api/handlers/tasks/get";
 import transitionWorkObligation from "@/api/handlers/work-obligations/transition";
 import updateWorkObligation from "@/api/handlers/work-obligations/update";
@@ -69,6 +71,8 @@ import { decideGateForTask } from "@/api/lib/flows/review-gate-task";
 import { startFlowRun } from "@/api/lib/flows/start-flow-run";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
+import type { McpRequestContext } from "@/api/mcp/context";
+import { handleMcpToolCall } from "@/api/mcp/tools";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -515,6 +519,178 @@ describe("flow run worker pipeline (ai -> review-gate -> create-document)", () =
       await expectRejectedGate(runId);
     },
   );
+
+  test.each([
+    [true, "done", "Kanban"],
+    [true, "cancelled", "Kanban"],
+    [false, "done", "Kanban"],
+    [false, "cancelled", "Kanban"],
+    [true, "done", "save_task"],
+    [true, "cancelled", "save_task"],
+    [false, "done", "save_task"],
+    [false, "cancelled", "save_task"],
+  ] as const)(
+    "settled review status replay applies other edits with governed=%s, status=%s, path=%s",
+    async (governedWorkflow, status, path) => {
+      const { runId, taskEntityId, safeDb, context } =
+        await createWaitingGate(governedWorkflow);
+      const rejected = await resolveFlowReviewGate({
+        safeDb,
+        workspaceId,
+        organizationId,
+        runId,
+        userId,
+        decision: "rejected",
+        note: null,
+        recordAuditEvent: async () => undefined,
+      });
+      if (Result.isError(rejected)) {
+        throw rejected.error;
+      }
+      // Persisted settled tasks may carry either closing status. The run
+      // decision remains authoritative when such a task is edited again.
+      await testDb
+        .update(entities)
+        .set({ status })
+        .where(eq(entities.id, taskEntityId));
+      await testDb
+        .update(workObligations)
+        .set({
+          status:
+            status === "done"
+              ? WORK_OBLIGATION_STATUS.COMPLETED
+              : WORK_OBLIGATION_STATUS.CANCELLED,
+        })
+        .where(eq(workObligations.entityId, taskEntityId));
+      const before = await testDb.query.flowRunSteps.findMany({
+        where: { runId: { eq: runId } },
+        orderBy: { index: "asc" },
+      });
+      const previousGovernedWorkflow = env.FEATURE_GOVERNED_WORKFLOW;
+      env.FEATURE_GOVERNED_WORKFLOW = governedWorkflow;
+      try {
+        if (path === "Kanban") {
+          const lanePropertyId = createSafeId<"property">();
+          await testDb.insert(properties).values({
+            id: lanePropertyId,
+            workspaceId,
+            name: "Lane",
+            content: { type: "text", version: 1 },
+            tool: { type: "manual-input", version: 1 },
+          });
+          expect(
+            await updateKanbanPlacement.handler(
+              asTestRaw<Parameters<typeof updateKanbanPlacement.handler>[0]>({
+                ...context,
+                body: {
+                  entityId: taskEntityId,
+                  status,
+                  fields: [
+                    {
+                      propertyId: lanePropertyId,
+                      content: { type: "text", version: 1, value: "Reviewed" },
+                    },
+                  ],
+                },
+              }),
+            ),
+          ).toEqual({});
+          const lane = await testDb.query.fields.findFirst({
+            where: { propertyId: { eq: lanePropertyId } },
+            columns: { content: true },
+          });
+          expect(lane?.content).toEqual({
+            type: "text",
+            version: 1,
+            value: "Reviewed",
+          });
+        } else {
+          const mcpContext = {
+            accessibleWorkspaceIds: [workspaceId],
+            accessibleWorkspaceIdSet: new Set([workspaceId]),
+            accessibleWorkspaceStatusById: new Map([
+              [workspaceId, "active" as const],
+            ]),
+            accessibleWorkspaces: [],
+            grantedScopes: [],
+            memberRole: "owner",
+            organizationId,
+            recordAuditEvent: context.recordAuditEvent,
+            safeDb,
+            scopedDb: asTestRaw<McpRequestContext["scopedDb"]>(
+              context.scopedDb,
+            ),
+            userId,
+            userEmail: `${userId}@example.com`,
+          } satisfies McpRequestContext;
+          const result = await handleMcpToolCall({
+            toolName: "save_task",
+            args: { task_id: taskEntityId, status, name: "Reviewed task" },
+            context: mcpContext,
+          });
+          expect(result.isError).not.toBe(true);
+          expect(result.structuredContent).toEqual({
+            taskId: taskEntityId,
+            updated: true,
+          });
+          const task = await testDb.query.entities.findFirst({
+            where: { id: { eq: taskEntityId } },
+            columns: { name: true },
+          });
+          expect(task?.name).toBe("Reviewed task");
+        }
+      } finally {
+        env.FEATURE_GOVERNED_WORKFLOW = previousGovernedWorkflow;
+      }
+      const after = await testDb.query.flowRunSteps.findMany({
+        where: { runId: { eq: runId } },
+        orderBy: { index: "asc" },
+      });
+      expect(after).toEqual(before);
+      expect(
+        await testDb.query.entities.findFirst({
+          where: { id: { eq: taskEntityId } },
+          columns: { status: true },
+        }),
+      ).toEqual({ status });
+      expect(enqueuedSteps.filter((step) => step.runId === runId)).toEqual([]);
+    },
+  );
+
+  test("deleting a review task leaves its waiting gate decidable from the run panel", async () => {
+    const { runId, taskEntityId, safeDb } = await createWaitingGate(true);
+    await testDb.delete(entities).where(eq(entities.id, taskEntityId));
+    expect(
+      await testDb.query.flowRunSteps.findFirst({
+        where: { runId: { eq: runId }, index: { eq: 0 } },
+        columns: { status: true, reviewTaskEntityId: true },
+      }),
+    ).toEqual({ status: "awaiting_review", reviewTaskEntityId: null });
+    const resolved = await resolveFlowReviewGate({
+      safeDb,
+      workspaceId,
+      organizationId,
+      runId,
+      userId,
+      decision: "approved",
+      note: null,
+      recordAuditEvent: async () => undefined,
+    });
+    if (Result.isError(resolved)) {
+      throw resolved.error;
+    }
+    expect(resolved.value.status).toBe("running");
+    expect(
+      await testDb.query.flowRunSteps.findFirst({
+        where: { runId: { eq: runId }, index: { eq: 0 } },
+        columns: { status: true, output: true },
+      }),
+    ).toEqual({
+      status: "completed",
+      output: { kind: "review-gate", decision: "approved", userId, note: null },
+    });
+    expect(enqueuedSteps.pop()).toEqual({ runId, stepIndex: 1 });
+  });
 
   test("a settled review task without an obligation cannot be reopened", async () => {
     const { runId, taskEntityId, safeDb } = await createWaitingGate(false);

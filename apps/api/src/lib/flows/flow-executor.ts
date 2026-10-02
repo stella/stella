@@ -32,6 +32,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { markdownToStellaDocx } from "@/api/lib/docx-authoring/from-markdown";
 import { createEntityFromBuffer } from "@/api/lib/entities/create-from-buffer";
+import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { TASK_STATUS } from "@/api/lib/entity-constants";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -219,6 +220,7 @@ export const executeFlowStep = async (
       runId,
     });
     if (
+      current === undefined ||
       isTerminalFlowRunStatus(current.run.status) ||
       current.run.currentStepIndex !== stepIndex ||
       current.step?.status === "completed" ||
@@ -855,6 +857,7 @@ const completeStepAndAdvance = async ({
   const completed = await scopedDb(async (tx) => {
     const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
     if (
+      current === undefined ||
       isTerminalFlowRunStatus(current.run.status) ||
       current.run.currentStepIndex !== stepIndex ||
       current.step?.status !== "running"
@@ -1016,8 +1019,10 @@ const pauseAtReviewGate = async ({
   });
   const features = taskFeatures;
   const paused = await scopedDb(async (tx) => {
+    await lockWorkspacesForEntityCap(tx, [workspaceId]);
     const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
     if (
+      current === undefined ||
       isTerminalFlowRunStatus(current.run.status) ||
       current.run.currentStepIndex !== stepIndex ||
       current.step?.status !== "running"
@@ -1149,16 +1154,22 @@ export const failFlowRunFromWorker = async (
 
   const writeFailure = async (
     tx: Transaction,
-  ): Promise<{ payload: FlowRunUpdatePayload; pings: NotificationPing[] }> => {
+  ): Promise<{
+    payload: FlowRunUpdatePayload;
+    pings: NotificationPing[];
+  } | null> => {
     const current = await lockRunAndCurrentStep(tx, {
       workspaceId: run.workspaceId,
       runId,
     });
     if (
+      current === undefined ||
       isTerminalFlowRunStatus(current.run.status) ||
-      current.run.currentStepIndex !== stepIndex
+      current.run.currentStepIndex !== stepIndex ||
+      current.run.status === "awaiting_review" ||
+      current.step?.status === "awaiting_review"
     ) {
-      return { payload: await readRunProgress(tx, runId), pings: [] };
+      return null;
     }
     await tx
       .update(flowRunSteps)
@@ -1195,7 +1206,7 @@ export const failFlowRunFromWorker = async (
   // A null actor (automated run whose author was deleted) has no RLS-scoped
   // handle to write through; write on the worker's own connection so the run
   // still finalizes instead of being stranded non-terminal.
-  const { payload, pings } =
+  const failed =
     scope.actorUserId === null
       ? await database.transaction(writeFailure)
       : await makeScopedDb({
@@ -1203,6 +1214,10 @@ export const failFlowRunFromWorker = async (
           userId: scope.actorUserId,
           workspaceIds: [run.workspaceId],
         })(writeFailure);
+  if (failed === null) {
+    return;
+  }
+  const { payload, pings } = failed;
   broadcastUpdate(run.workspaceId, payload);
   pingNotificationRecipients(pings);
 };
@@ -1258,7 +1273,7 @@ const lockRunAndCurrentStep = async (
     .for("update");
   const run = runs.at(0);
   if (!run) {
-    throw new HandlerError({ status: 404, message: "Flow run not found" });
+    return undefined;
   }
   const steps = await tx
     .select()
@@ -1309,10 +1324,14 @@ export const resolveFlowReviewGate = async (
   await Result.gen(async function* () {
     const result = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        const { run, step } = await lockRunAndCurrentStep(tx, {
-          workspaceId,
-          runId,
-        });
+        const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+        if (current === undefined) {
+          throw new HandlerError({
+            status: 404,
+            message: "Flow run not found",
+          });
+        }
+        const { run, step } = current;
         if (!canReviewFlowRun(run.status)) {
           throw new HandlerError({
             status: 409,
@@ -1524,13 +1543,18 @@ export const cancelFlowRun = async ({
     const payload = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
-        // A cancellation applies to the state its caller observed. A later
-        // request may cancel an advanced run; an overlapping request cannot
-        // replace the gate decision that committed while it waited.
+        if (current === undefined) {
+          throw new HandlerError({
+            status: 404,
+            message: "Flow run not found",
+          });
+        }
+        // Progressing work remains cancellable. A request that observed an
+        // open gate cannot replace a decision committed while it waited.
         if (
           isTerminalFlowRunStatus(current.run.status) ||
-          current.run.status !== run.status ||
-          current.run.currentStepIndex !== run.currentStepIndex
+          (run.status === "awaiting_review" &&
+            current.run.status !== "awaiting_review")
         ) {
           throw new HandlerError({
             status: 409,

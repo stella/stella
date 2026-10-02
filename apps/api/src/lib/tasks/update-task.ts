@@ -548,6 +548,19 @@ const applyTaskUpdate = async function* ({
 
   const txResult = yield* Result.await(
     abortableTx(safeDb, async (tx) => {
+      // A closing status on the task a workflow review gate raised is the
+      // gate's decision, whichever surface asks for it. Nothing is written
+      // here and no task or obligation lock is taken before the run's locks,
+      // including when this is part of an outer Kanban transaction.
+      const decision = await gateDecisionForTaskStatus(tx, {
+        workspaceId,
+        taskEntityId: body.taskId,
+        requestedStatus: body.status,
+      });
+      if (decision !== null) {
+        return { type: "gate" as const, decision };
+      }
+
       const workflowRelevant =
         body.status !== undefined ||
         body.dueDate !== undefined ||
@@ -586,19 +599,6 @@ const applyTaskUpdate = async function* ({
           status: 409,
           message: "Task workflow is not initialized",
         });
-      }
-
-      // A closing status on the task a workflow review gate raised is the
-      // gate's decision, whichever surface asks for it. Nothing is written
-      // here: the decision is taken once this transaction has released the
-      // row, and the run then settles the task itself.
-      const decision = await gateDecisionForTaskStatus(tx, {
-        workspaceId,
-        taskEntityId: body.taskId,
-        requestedStatus: body.status,
-      });
-      if (decision !== null) {
-        return { type: "gate" as const, decision };
       }
 
       const eligibility = await listItemTypeTransition({

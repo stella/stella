@@ -1,148 +1,19 @@
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
 
-import { organization, user } from "@/api/db/auth-schema";
 import { databaseRelations } from "@/api/db/database-relations";
 import type { SafeDb } from "@/api/db/safe-db";
-import { entities, flowRuns, flowRunSteps, workspaces } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
-import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
-import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import {
-  cancelFlowRun,
-  resolveFlowReviewGate,
-} from "@/api/lib/flows/flow-executor";
-import type { FlowStep } from "@/api/lib/flows/flow-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import type { GatedTestDb } from "@/api/tests/gated-test-database";
-import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
+import { flowReviewGateFixture } from "@/api/tests/helpers/flow-review-gate";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const ACTIONS = ["approved", "rejected", "cancel"] as const;
-type Action = (typeof ACTIONS)[number];
-
-const fixture = async (db: GatedTestDb, intermediate: boolean) => {
-  const organizationId = mintAuthProviderId<"organization">();
-  const userId = mintAuthProviderId<"user">();
-  const workspaceId = createSafeId<"workspace">();
-  const runId = createSafeId<"flowRun">();
-  const taskEntityId = createSafeId<"entity">();
-  const steps = [{ kind: "review-gate", name: "Review" }] satisfies FlowStep[];
-  if (intermediate) {
-    steps.push({ kind: "review-gate", name: "Next review" });
-  }
-  const cleanup = async () => {
-    await db.delete(organization).where(eq(organization.id, organizationId));
-    await db.delete(user).where(eq(user.id, userId));
-  };
-  try {
-    await db.insert(organization).values({
-      id: organizationId,
-      name: "Review fixture",
-      slug: organizationId,
-      createdAt: new Date(),
-    });
-    await db.insert(user).values({
-      id: userId,
-      name: "Reviewer",
-      email: `${userId}@example.test`,
-    });
-    await db.insert(workspaces).values({
-      id: workspaceId,
-      organizationId,
-      name: "Review matter",
-      reference: workspaceId,
-    });
-    await db.insert(entities).values({
-      id: taskEntityId,
-      workspaceId,
-      kind: "task",
-      name: "Review task",
-      status: "open",
-    });
-    await db.insert(flowRuns).values({
-      id: runId,
-      workspaceId,
-      status: "awaiting_review",
-      definitionSnapshot: { name: "Review flow", steps },
-      triggerSource: { type: "manual", userId },
-    });
-    await db.insert(flowRunSteps).values(
-      steps.map((step, index) => ({
-        id: createSafeId<"flowRunStep">(),
-        workspaceId,
-        runId,
-        index,
-        kind: step.kind,
-        reviewTaskEntityId: index === 0 ? taskEntityId : null,
-        status:
-          index === 0 ? ("awaiting_review" as const) : ("pending" as const),
-      })),
-    );
-  } catch (error) {
-    await cleanup();
-    throw error;
-  }
-  const recordAuditEvent = createBackgroundAuditRecorder({
-    organizationId,
-    workspaceId,
-    userId,
-    execution: {
-      performer: { type: "user", id: userId },
-      trigger: { type: "system", source: "review_gate_test" },
-    },
-  });
-  const enqueued: number[] = [];
-  let actionIndex = 0;
-  const act = async (safeDb: SafeDb, action: Action) => {
-    const note = `${action}:${actionIndex}`;
-    actionIndex += 1;
-    return action === "cancel"
-      ? await cancelFlowRun({
-          safeDb,
-          workspaceId,
-          runId,
-          userId,
-          recordAuditEvent,
-        })
-      : await resolveFlowReviewGate(
-          {
-            safeDb,
-            workspaceId,
-            organizationId,
-            runId,
-            userId,
-            recordAuditEvent,
-            decision: action,
-            note,
-          },
-          {
-            broadcastUpdate: () => undefined,
-            enqueueStep: async ({ stepIndex }) => {
-              enqueued.push(stepIndex);
-            },
-            notifyRunCompleted: async () => undefined,
-          },
-        );
-  };
-  const read = async () => ({
-    task: await db.query.entities.findFirst({
-      where: { id: { eq: taskEntityId } },
-    }),
-    run: await db.query.flowRuns.findFirst({ where: { id: { eq: runId } } }),
-    steps: await db.query.flowRunSteps.findMany({
-      where: { runId: { eq: runId } },
-      orderBy: { index: "asc" },
-    }),
-  });
-  return { organizationId, userId, workspaceId, enqueued, act, read, cleanup };
-};
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("review gate state (postgres)", () => {
@@ -157,7 +28,10 @@ if (!databaseUrl || !runPostgresTests) {
             await withGatedTestClients(databaseUrl, async ({ openClient }) => {
               const { db } = openClient();
               const { sql: otherClient } = openClient();
-              const f = await fixture(db, intermediate);
+              const f = await flowReviewGateFixture(db, {
+                intermediate,
+                governed: true,
+              });
               const firstDb = createSafeDb(
                 markRlsDatabase(db),
                 [f.workspaceId],
@@ -238,6 +112,9 @@ if (!databaseUrl || !runPostgresTests) {
                 expect(state.task?.status).toBe(
                   winner === "cancel" ? "cancelled" : "done",
                 );
+                expect(state.obligation?.status).toBe(
+                  winner === "cancel" ? "cancelled" : "completed",
+                );
                 expect(gate?.status).toBe(
                   winner === "cancel" ? "skipped" : "completed",
                 );
@@ -285,7 +162,10 @@ if (!databaseUrl || !runPostgresTests) {
               maxLength: 12,
             }),
             async (actions) => {
-              const f = await fixture(db, false);
+              const f = await flowReviewGateFixture(db, {
+                intermediate: false,
+                governed: true,
+              });
               const safeDb = createSafeDb(
                 markRlsDatabase(db),
                 [f.workspaceId],

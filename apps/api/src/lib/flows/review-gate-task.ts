@@ -78,6 +78,18 @@ export const gateDecisionForTaskStatus = async (
   if (!gate) {
     return null;
   }
+  if (gate.status !== "awaiting_review") {
+    const currentTask = await tx.query.entities.findFirst({
+      where: {
+        id: { eq: task.taskEntityId },
+        workspaceId: { eq: task.workspaceId },
+      },
+      columns: { status: true },
+    });
+    if (currentTask?.status === requestedStatus) {
+      return null;
+    }
+  }
   if (requestedStatus === TASK_STATUS.CANCELLED) {
     return gateDecisionForTransition(WORK_OBLIGATION_TRANSITION_ACTION.CANCEL);
   }
