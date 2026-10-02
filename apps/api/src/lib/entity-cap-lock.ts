@@ -5,7 +5,7 @@ import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
- * Canonical lock order for every entity-creating path (issue #1139,
+ * Canonical lock order for entity creation and hierarchy mutations (issue #1139,
  * follow-up to #1126).
  *
  * All paths that insert rows counted against `LIMITS.entitiesCount`
@@ -41,6 +41,9 @@ import type { SafeId } from "@/api/lib/branded-types";
  *   - `checkEntityCreateCapacityForInsert` (`entity-create.ts`) —
  *     used by `entities/create.ts`, presigned `entity-create.ts`
  *     finalize, `entity-create-tree.ts`, `presign.ts`.
+ *   - `moveEntityHandler` (`entities/move.ts`) — locks the workspace
+ *     before source/target entity rows and ancestry validation, so two
+ *     moves cannot jointly create a cycle from disjoint locked rows.
  *   - `copyEntities` (`copy-utils.ts`) — used by `duplicate.ts`
  *     (same-workspace: locks target only) and `entities/copy.ts`
  *     (cross-workspace: locks {source, target} ascending whenever

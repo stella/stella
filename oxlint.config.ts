@@ -138,6 +138,7 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("drizzle.fixture.ts", [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
+    "drizzle/no-direct-entity-reparent",
   ]),
   ...[
     "no-swallowed-item-error.fixture.ts",
@@ -3764,6 +3765,10 @@ export default defineConfig({
         "security-guards/no-raw-filename-write": "error",
         "no-direct-pdf-save/no-direct-pdf-save": "error",
       },
+    },
+    {
+      files: ["apps/api/src/**/*.{ts,tsx}"],
+      rules: { "drizzle/no-direct-entity-reparent": "error" },
     },
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
