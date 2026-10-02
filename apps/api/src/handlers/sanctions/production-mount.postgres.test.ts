@@ -177,8 +177,9 @@ describe.skipIf(!runPostgresTests || databaseUrl === undefined)(
               }),
             );
             const expiredTenant = tenants.at(0);
-            if (expiredTenant === undefined)
-              {throw new TypeError("Missing session tenant");}
+            if (expiredTenant === undefined) {
+              throw new TypeError("Missing session tenant");
+            }
             const expiredToken = Bun.randomUUIDv7();
             await owner`INSERT INTO session (id, token, user_id, active_organization_id, expires_at, created_at, updated_at) VALUES (${Bun.randomUUIDv7()}, ${expiredToken}, ${expiredTenant.user}, ${expiredTenant.id}, ${new Date(now.getTime() - 86_400_000)}, now(), now())`;
             const expiredCookie = `${authContext.authCookies.sessionToken.name}=${encodeURIComponent(`${expiredToken}.${await makeSignature(expiredToken, authContext.secret)}`)}`;

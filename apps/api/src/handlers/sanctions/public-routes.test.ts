@@ -569,11 +569,12 @@ test.each([
     expect(await response.text()).not.toContain("PrivateParseQzxv");
     expect(validateRole.mock.calls).toHaveLength(0);
     expect(screen.mock.calls).toHaveLength(0);
-    for (let count = 1; count < 20; count += 1)
-      {expect(
+    for (let count = 1; count < 20; count += 1) {
+      expect(
         (await app.handle(request({ type: "organization", name: "Example" })))
           .status,
-      ).toBe(200);}
+      ).toBe(200);
+    }
     const refused = await app.handle(
       request({ type: "organization", name: "Example" }),
     );

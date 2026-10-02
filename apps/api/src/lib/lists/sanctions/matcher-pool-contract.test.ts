@@ -339,7 +339,9 @@ test("close waits for actual worker retirement", async () => {
 
 test("real worker honors cutoff and limit on cold and cached requests", async () => {
   const template = personList("Alex Novak").entries.at(0);
-  if (template === undefined) {throw new TypeError("Missing protocol fixture");}
+  if (template === undefined) {
+    throw new TypeError("Missing protocol fixture");
+  }
   const list = {
     version: personList("Alex Novak").version,
     entries: [
