@@ -14,7 +14,6 @@ import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   bareCitationKey,
-  decisionCitationKeyOf,
   decisionIdentifiersFromMetadata,
   extractDecisionCitations,
   isSelfCitation,
@@ -43,6 +42,7 @@ import type {
   CorpusWritePayload,
   CorpusWritePlan,
 } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
+import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipeline/decision-docket-columns";
 import type { ExistingDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision-identity";
 import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestion/pipeline/dependencies";
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
@@ -638,10 +638,12 @@ export const planDecisionWrite = async ({
     pendingMirrorPayload,
   });
 
-  const incomingCitationKey = decisionCitationKeyOf({
+  const docketColumns = decisionDocketColumns({
     caseNumber: result.caseNumber,
     caseNumberType,
+    country: result.country,
   });
+  const incomingCitationKey = docketColumns.citationKey;
   return Result.ok({
     // Built here, outside the write transaction: classifying a citation
     // reads the polarity rules, and the write path must not hold a row
@@ -660,6 +662,7 @@ export const planDecisionWrite = async ({
           sections,
         }),
     caseNumberType,
+    docketColumns,
     preparedMetadata,
     preparedResult,
     reusedCitationScopeEnvelope,

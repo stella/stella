@@ -116,6 +116,7 @@ return 1
 const RESERVE_PERIOD_SCRIPT = `
 local clock = redis.call("TIME")
 local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+${ACTION_SERVICE_DEADLINE_SCRIPT}
 local orgExpiry = redis.call("ZSCORE", KEYS[1], ARGV[4])
 local userExpiry = redis.call("ZSCORE", KEYS[2], ARGV[4])
 if orgExpiry == false or userExpiry == false or tonumber(orgExpiry) <= now or tonumber(userExpiry) <= now then
@@ -298,7 +299,9 @@ const createAdmissionExecutor = ({
               String(scriptKeys.length),
               ...scriptKeys,
               ...commandArgs,
-              ...(script === ACQUIRE_SCRIPT && serviceDeadlineMs !== null
+              ...((script === ACQUIRE_SCRIPT ||
+                script === RESERVE_PERIOD_SCRIPT) &&
+              serviceDeadlineMs !== null
                 ? [String(serviceDeadlineMs)]
                 : []),
             ]),
