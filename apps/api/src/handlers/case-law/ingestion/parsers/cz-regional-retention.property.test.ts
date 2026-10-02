@@ -65,8 +65,9 @@ test(
           const fixture = cheerio.load("<html><body></body></html>");
           for (const para of ordered) {
             const element = fixture("<p></p>");
-            for (const span of para.spans)
-              {element.append(fixture("<span></span>").text(span.text));}
+            for (const span of para.spans) {
+              element.append(fixture("<span></span>").text(span.text));
+            }
             fixture("body").append(element);
           }
           const marked = injectMarkupMarkers({
