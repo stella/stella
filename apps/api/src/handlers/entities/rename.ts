@@ -35,114 +35,142 @@ export type RenameEntityHandlerProps = {
   body: RenameEntityBodySchema;
 };
 
-export const renameEntityHandler = async function* ({
-  safeDb,
-  workspaceId,
-  recordAuditEvent,
-  body,
-}: RenameEntityHandlerProps) {
-  const txResult = yield* Result.await(
-    safeDb(async (tx) => {
-      const entityRows = await tx
-        .select({
-          id: entities.id,
-          kind: entities.kind,
-          name: entities.name,
-          readOnly: entities.readOnly,
-        })
-        .from(entities)
-        .where(
-          and(
-            eq(entities.id, body.entityId),
-            eq(entities.workspaceId, workspaceId),
-          ),
-        )
-        .for("update");
-      const entity = entityRows.at(0);
+type RenameEntityDependencies = {
+  enqueueEntitySearchRepairs: typeof enqueueEntitySearchRepairs;
+  flushEntitySearchRepairs: typeof flushEntitySearchRepairs;
+};
 
-      if (!entity) {
-        return {
-          ok: false as const,
-          status: 404 as const,
-          message: "Entity not found",
-        };
-      }
-      if (entity.readOnly) {
-        return {
-          ok: false as const,
-          status: 409 as const,
-          message: "Entity is read-only",
-        };
-      }
+export const createRenameEntityHandler = ({
+  enqueueEntitySearchRepairs: enqueueRepairs,
+  flushEntitySearchRepairs: flushRepairs,
+}: RenameEntityDependencies) =>
+  async function* ({
+    safeDb,
+    workspaceId,
+    recordAuditEvent,
+    body,
+  }: RenameEntityHandlerProps) {
+    const txResult = yield* Result.await(
+      safeDb(async (tx) => {
+        const entityRows = await tx
+          .select({
+            id: entities.id,
+            kind: entities.kind,
+            name: entities.name,
+            readOnly: entities.readOnly,
+          })
+          .from(entities)
+          .where(
+            and(
+              eq(entities.id, body.entityId),
+              eq(entities.workspaceId, workspaceId),
+            ),
+          )
+          .for("update");
+        const entity = entityRows.at(0);
 
-      await tx
-        .update(entities)
-        .set({ name: body.name, updatedAt: new Date() })
-        .where(eq(entities.id, body.entityId));
+        if (!entity) {
+          return {
+            ok: false as const,
+            status: 404 as const,
+            message: "Entity not found",
+          };
+        }
+        if (entity.readOnly) {
+          return {
+            ok: false as const,
+            status: 409 as const,
+            message: "Entity is read-only",
+          };
+        }
 
-      // Also update the file field's fileName so the table
-      // column (which reads content.fileName) stays in sync.
-      const fileField = await tx.query.entities
-        .findFirst({
-          where: { id: { eq: body.entityId } },
-          columns: { id: true },
-          with: {
-            currentVersion: {
-              columns: { id: true },
-              with: {
-                fields: {
-                  columns: { id: true, content: true },
+        await tx
+          .update(entities)
+          .set({ name: body.name, updatedAt: new Date() })
+          .where(eq(entities.id, body.entityId));
+
+        // Also update the file field's fileName so the table
+        // column (which reads content.fileName) stays in sync.
+        const fileField = await tx.query.entities
+          .findFirst({
+            where: { id: { eq: body.entityId } },
+            columns: { id: true },
+            with: {
+              currentVersion: {
+                columns: { id: true },
+                with: {
+                  fields: {
+                    columns: { id: true, content: true },
+                  },
                 },
               },
             },
+          })
+          .then((e) => {
+            const cv =
+              e?.currentVersion ?? panic("Entity has no currentVersion");
+            return cv.fields.find((f) => f.content.type === "file");
+          });
+
+        const renamedFileName = sanitizeFilename(body.name);
+        const file =
+          fileField?.content.type === "file"
+            ? { fieldId: fileField.id, fileName: renamedFileName }
+            : null;
+
+        if (fileField?.content.type === "file" && file) {
+          await tx
+            .update(fields)
+            .set({
+              content: {
+                ...fileField.content,
+                fileName: renamedFileName,
+              },
+            })
+            .where(eq(fields.id, fileField.id));
+        }
+
+        await recordAuditEvent(tx, {
+          action: AUDIT_ACTION.UPDATE,
+          resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
+          resourceId: body.entityId,
+          metadata: { kind: entity.kind },
+          changes: {
+            name: {
+              old: entity.name,
+              new: body.name,
+            },
           },
-        })
-        .then((e) => {
-          const cv = e?.currentVersion ?? panic("Entity has no currentVersion");
-          return cv.fields.find((f) => f.content.type === "file");
         });
 
-      if (fileField?.content.type === "file") {
-        await tx
-          .update(fields)
-          .set({
-            content: {
-              ...fileField.content,
-              fileName: sanitizeFilename(body.name),
-            },
-          })
-          .where(eq(fields.id, fileField.id));
-      }
+        await enqueueRepairs(tx, [body.entityId]);
 
-      await recordAuditEvent(tx, {
-        action: AUDIT_ACTION.UPDATE,
-        resourceType: AUDIT_RESOURCE_TYPE.ENTITY,
-        resourceId: body.entityId,
-        metadata: { kind: entity.kind },
-        changes: {
-          name: {
-            old: entity.name,
-            new: body.name,
-          },
-        },
-      });
-
-      await enqueueEntitySearchRepairs(tx, [body.entityId]);
-
-      return { ok: true as const };
-    }),
-  );
-
-  if (!txResult.ok) {
-    return Result.err(
-      new HandlerError({ status: txResult.status, message: txResult.message }),
+        return { ok: true as const, name: body.name, file };
+      }),
     );
-  }
 
-  flushEntitySearchRepairs([body.entityId]).catch(captureError);
+    if (!txResult.ok) {
+      return Result.err(
+        new HandlerError({
+          status: txResult.status,
+          message: txResult.message,
+        }),
+      );
+    }
 
-  return Result.ok({ entityId: body.entityId });
-};
+    flushRepairs([body.entityId]).catch(captureError);
+
+    return Result.ok({
+      entityId: body.entityId,
+      name: txResult.name,
+      file: txResult.file,
+    });
+  };
+
+export const renameEntityHandler = createRenameEntityHandler({
+  enqueueEntitySearchRepairs,
+  flushEntitySearchRepairs,
+});
 
 const config = {
   description:
