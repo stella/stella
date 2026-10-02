@@ -1,3 +1,5 @@
+import { getSessionCookie } from "better-auth/cookies";
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -32,11 +34,11 @@ import {
  */
 const WITH_SESSION_SNAPSHOT = 12;
 /**
- * Without the snapshot cookie auth checks the live session row, then reads the
- * session and its user (3). The first such call also records the session's
- * activity; later calls inside the write interval skip that write.
+ * Without the snapshot cookie auth checks the live session row and reads its
+ * user (2). The first such call also records the session's activity; later
+ * calls inside the write interval skip that write.
  */
-const WITHOUT_SESSION_SNAPSHOT = WITH_SESSION_SNAPSHOT + 3;
+const WITHOUT_SESSION_SNAPSHOT = WITH_SESSION_SNAPSHOT + 2;
 const SESSION_ACTIVITY_WRITE = 1;
 const CONCURRENT_CALLS = 4;
 
@@ -50,11 +52,11 @@ afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
 
-const countQueries = async (cookie: string) =>
+const countQueries = async (headers: HeadersInit) =>
   await runWithQueryCounter(async (counter) => {
     const response = await chatRoute.handle(
       new Request("http://localhost/chat/skill-availability", {
-        headers: { cookie },
+        headers,
       }),
     );
     expect(response.status).toBe(200);
@@ -72,7 +74,7 @@ describe("skill availability runs a fixed query plan", () => {
 
     const sequential = [];
     for (const _call of [1, 2, 3]) {
-      sequential.push(await countQueries(cookieHeader));
+      sequential.push(await countQueries({ cookie: cookieHeader }));
     }
     expect(sequential).toEqual([
       WITH_SESSION_SNAPSHOT,
@@ -83,7 +85,7 @@ describe("skill availability runs a fixed query plan", () => {
     const concurrent = await Promise.all(
       Array.from(
         { length: CONCURRENT_CALLS },
-        async () => await countQueries(cookieHeader),
+        async () => await countQueries({ cookie: cookieHeader }),
       ),
     );
     expect(concurrent).toEqual(
@@ -103,10 +105,31 @@ describe("skill availability runs a fixed query plan", () => {
       .join("; ");
     expect(withoutSnapshot).not.toBe(cookieHeader);
 
-    expect(await countQueries(withoutSnapshot)).toBe(
+    expect(await countQueries({ cookie: withoutSnapshot })).toBe(
       WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
     );
-    expect(await countQueries(withoutSnapshot)).toBe(WITHOUT_SESSION_SNAPSHOT);
-    expect(await countQueries(withoutSnapshot)).toBe(WITHOUT_SESSION_SNAPSHOT);
+    expect(await countQueries({ cookie: withoutSnapshot })).toBe(
+      WITHOUT_SESSION_SNAPSHOT,
+    );
+    expect(await countQueries({ cookie: withoutSnapshot })).toBe(
+      WITHOUT_SESSION_SNAPSHOT,
+    );
+  });
+
+  test("bearer calls add only the session reads and one activity write", async () => {
+    const { cookieHeader } = await createHumanSession({
+      email: `skill-queries-${Bun.randomUUIDv7()}@stella.dev`,
+      orgName: "Skill queries",
+      orgSlugPrefix: "skill-queries",
+    });
+    const credential =
+      getSessionCookie(new Headers({ cookie: cookieHeader })) ??
+      panic("Session fixture missing");
+    const headers = { authorization: `Bearer ${credential}` };
+    expect(await countQueries(headers)).toBe(
+      WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
+    );
+    expect(await countQueries(headers)).toBe(WITHOUT_SESSION_SNAPSHOT);
+    expect(await countQueries(headers)).toBe(WITHOUT_SESSION_SNAPSHOT);
   });
 });

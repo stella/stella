@@ -1452,7 +1452,7 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
-        sessionLifetime.prepare(ctx.context.internalAdapter);
+        sessionLifetime.prepare(ctx.context);
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
         const loopbackRegistration =
