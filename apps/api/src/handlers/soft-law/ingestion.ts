@@ -251,6 +251,14 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       })
     : [];
   const observations: SoftLawObservation[] = [];
+  const collisions = fetched.length
+    ? await store.loadCollisions({
+        entries: fetched.map(({ entry, identityKey }) => ({
+          url: entry.url,
+          identityKey,
+        })),
+      })
+    : [];
   const identities = new Map<string, SoftLawObservation>();
   for (const item of fetched) {
     const { entry, input, identityKey, contentHash, count } = item;
@@ -279,7 +287,12 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       (row) =>
         row.document.listingState === "listed" &&
         row.locator &&
-        (unnumbered || row.locator.lastSeenRun === runId) &&
+        (unnumbered ||
+          row.locator.lastSeenRun === runId ||
+          collisions.some(
+            (receipt) =>
+              receipt.url === entry.url && receipt.identityKey === identityKey,
+          )) &&
         row.locator.url !== entry.url &&
         row.version?.contentHash !== contentHash,
     );
@@ -289,6 +302,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
         count,
         status: "rejected",
         tag: "identity_collision",
+        identityKey,
       });
       continue;
     }

@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import fc from "fast-check";
 
 import type { fetchWithTimeout } from "@stll/fetch";
@@ -1387,7 +1387,8 @@ if (!databaseUrl || !enabled) {
               "Guidance",
               "01/2024",
             );
-            const listed = reverse ? [second, first] : [first, second];
+            const initialOrder = reverse ? [second, first] : [first, second];
+            let listed = initialOrder;
             const bodies = new Map([
               [first.url, "first original"],
               [second.url, "second original"],
@@ -1414,6 +1415,7 @@ if (!databaseUrl || !enabled) {
                 ),
             } as const satisfies SoftLawSourceAdapter;
             for (let replay = 0; replay < 3; replay++) {
+              listed = replay === 1 ? initialOrder.toReversed() : initialOrder;
               expect(await run(sourceAdapter)).toEqual({ status: "complete" });
               const documents = await db
                 .select()
@@ -1456,6 +1458,7 @@ if (!databaseUrl || !enabled) {
                   .every(
                     (receipt) =>
                       receipt.url !== winner.url &&
+                      receipt.identityKey === accepted.identityKey &&
                       receipt.status === "rejected",
                   ),
               ).toBe(true);
@@ -1463,6 +1466,118 @@ if (!databaseUrl || !enabled) {
           }));
       }
     }
+
+    test("a previous collision can become a numbered move after the winner disappears", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const winner = entry(
+          "https://uoou.gov.cz/winner",
+          "Guidance",
+          "01/2024",
+        );
+        const loser = entry("https://uoou.gov.cz/loser", "Guidance", "01/2024");
+        const padding = ["03/2024", "04/2024", "05/2024"].map((reference) =>
+          entry(
+            `https://uoou.gov.cz/${reference}`,
+            "Other guidance",
+            reference,
+          ),
+        );
+        let listed = [winner, loser, ...padding];
+        const sourceAdapter = {
+          ...adapter(listed),
+          discover: async () => ({ entries: listed, nextCursor: null }),
+          fetchDocument: async (item) => Result.ok(document(item, item.url)),
+        } as const satisfies SoftLawSourceAdapter;
+        expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+        const original =
+          (
+            await db
+              .select()
+              .from(softLawDocuments)
+              .where(
+                and(
+                  eq(softLawDocuments.sourceId, sourceId),
+                  eq(softLawDocuments.title, winner.metadata.title),
+                ),
+              )
+          ).at(0) ?? panic("Collision winner absent");
+        listed = [loser, ...padding];
+        expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+        const swept = (
+          await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.id, original.id))
+        ).at(0);
+        expect(swept?.listingState).toBe("no_longer_listed");
+        expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+        const moved = (
+          await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.id, original.id))
+        ).at(0);
+        expect(moved?.listingState).toBe("listed");
+        const versions = await db
+          .select()
+          .from(softLawDocumentVersions)
+          .where(eq(softLawDocumentVersions.documentId, original.id))
+          .orderBy(softLawDocumentVersions.sequence);
+        expect(versions.map((version) => version.text)).toEqual([
+          winner.url,
+          loser.url,
+        ]);
+        const locators = await db
+          .select()
+          .from(softLawDocumentLocators)
+          .where(eq(softLawDocumentLocators.documentId, original.id));
+        expect(
+          locators
+            .filter((locator) => locator.state === "current")
+            .map((locator) => locator.url),
+        ).toEqual([loser.url]);
+        const receipts = await db
+          .select()
+          .from(softLawIngestionAttempts)
+          .where(eq(softLawIngestionAttempts.sourceId, sourceId));
+        expect(
+          receipts.filter((receipt) => receipt.tag === "identity_collision"),
+        ).toHaveLength(2);
+      }));
+
+    test("collision receipts do not reject a different numbered identity at the same URL", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const winner = entry(
+          "https://uoou.gov.cz/winner",
+          "Guidance",
+          "01/2024",
+        );
+        const loser = entry("https://uoou.gov.cz/loser", "Guidance", "01/2024");
+        let listed = [winner, loser];
+        const sourceAdapter = {
+          ...adapter(listed),
+          discover: async () => ({ entries: listed, nextCursor: null }),
+          fetchDocument: async (item) => Result.ok(document(item, item.url)),
+        } as const satisfies SoftLawSourceAdapter;
+        expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+        listed = [entry(loser.url, "New guidance", "02/2024"), winner];
+        expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+        const documents = await db
+          .select()
+          .from(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        expect(documents).toHaveLength(2);
+        expect(documents.every((item) => item.listingState === "listed")).toBe(
+          true,
+        );
+        const receipts = await db
+          .select()
+          .from(softLawIngestionAttempts)
+          .where(eq(softLawIngestionAttempts.sourceId, sourceId));
+        expect(
+          receipts.filter((receipt) => receipt.tag === "identity_collision"),
+        ).toHaveLength(1);
+      }));
 
     test("a numbered URL move between runs can change content without a collision", async () =>
       await withSource(databaseUrl, async ({ db, sourceId, run }) => {

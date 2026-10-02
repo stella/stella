@@ -230,18 +230,27 @@ export const softLawIngestionAttempts = p.pgTable.withRLS(
     entry: jsonb().$type<SoftLawEntry>().notNull(),
     status: p.text({ enum: SOFT_LAW_ATTEMPT_STATES }).notNull(),
     tag: p.text({ enum: SOFT_LAW_ITEM_TAGS }),
+    identityKey: p.text("identity_key"),
     count: p.integer().notNull(),
     observedAt: timestamptz("observed_at").notNull(),
   },
   (t) => [
     ...caseLawIngestionOnlyPolicies(),
     p.unique("soft_law_attempts_item_unique").on(t.sourceId, t.runId, t.url),
+    p
+      .index("soft_law_attempts_collision_idx")
+      .on(t.sourceId, t.url, t.identityKey)
+      .where(sql`${t.tag} = 'identity_collision'`),
     p.foreignKey({
       name: "soft_law_attempts_source_fk",
       columns: [t.sourceId],
       foreignColumns: [softLawSources.id],
     }),
     p.check("soft_law_attempts_count_check", sql`${t.count} BETWEEN 1 AND 3`),
+    p.check(
+      "soft_law_attempts_identity_check",
+      sql`(${t.tag} IS NOT DISTINCT FROM 'identity_collision') = (${t.identityKey} IS NOT NULL)`,
+    ),
     p.check(
       "soft_law_attempts_status_check",
       sql`${t.status} IN (${values(SOFT_LAW_ATTEMPT_STATES)})`,

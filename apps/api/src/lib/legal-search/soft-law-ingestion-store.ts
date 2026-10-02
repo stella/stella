@@ -167,19 +167,47 @@ export type SoftLawAttempt = {
   count: number;
 } & (
   | { status: "applied" | "unchanged" | "retryable"; tag: null }
+  | { status: "rejected"; tag: "identity_collision"; identityKey: string }
   | {
       status: "rejected";
-      tag:
-        | "identity_collision"
-        | "ambiguous_locator"
-        | "invalid_document"
-        | "retry_exhausted";
+      tag: "ambiguous_locator" | "invalid_document" | "retry_exhausted";
     }
 );
 type LoadSoftLawMatchesOptions = {
   entries: readonly SoftLawEntry[];
   identityKeys: readonly string[];
 };
+type LoadSoftLawCollisionsOptions = {
+  entries: readonly { url: string; identityKey: string }[];
+};
+const loadSoftLawCollisions = async (
+  { sourceId, scopedDb }: SoftLawStoreContext,
+  { entries }: LoadSoftLawCollisionsOptions,
+) =>
+  await scopedDb(
+    async (tx) =>
+      await tx
+        .selectDistinct({
+          url: softLawIngestionAttempts.url,
+          identityKey: softLawIngestionAttempts.identityKey,
+        })
+        .from(softLawIngestionAttempts)
+        .where(
+          and(
+            eq(softLawIngestionAttempts.sourceId, sourceId),
+            sql`${softLawIngestionAttempts.tag} = 'identity_collision'`,
+            or(
+              ...entries.map(({ url, identityKey }) =>
+                and(
+                  eq(softLawIngestionAttempts.url, url),
+                  eq(softLawIngestionAttempts.identityKey, identityKey),
+                ),
+              ),
+            ),
+          ),
+        )
+        .limit(SOFT_LAW_BATCH_LIMIT),
+  );
 const loadSoftLawAttempts = async (
   { sourceId, scopedDb }: SoftLawStoreContext,
   { runId, entries }: { runId: string; entries: readonly SoftLawEntry[] },
@@ -561,6 +589,10 @@ const persistSoftLawPage = async (
               entry: attempt.entry,
               status: attempt.status,
               tag: attempt.tag,
+              identityKey:
+                attempt.tag === "identity_collision"
+                  ? attempt.identityKey
+                  : null,
               count: attempt.count,
               observedAt,
             })),
@@ -575,6 +607,7 @@ const persistSoftLawPage = async (
               status: sql`excluded.status`,
               entry: sql`excluded.entry`,
               tag: sql`excluded.tag`,
+              identityKey: sql`excluded.identity_key`,
               count: sql`excluded.count`,
               observedAt: sql`excluded.observed_at`,
             },
@@ -759,6 +792,8 @@ export const createSoftLawIngestionStore = (
     }) => await loadSoftLawAttempts(context, query),
     loadMatches: async (query: LoadSoftLawMatchesOptions) =>
       await loadSoftLawMatches(context, query),
+    loadCollisions: async (query: LoadSoftLawCollisionsOptions) =>
+      await loadSoftLawCollisions(context, query),
     persistPage: async (page: PersistSoftLawPageOptions) =>
       await storeResult(async () => await persistSoftLawPage(context, page)),
     settle: async (state: SoftLawSettlement) =>

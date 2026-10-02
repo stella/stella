@@ -137,11 +137,15 @@ CREATE TABLE soft_law_ingestion_attempts (
  entry jsonb NOT NULL,
  status text NOT NULL CONSTRAINT soft_law_attempts_status_check CHECK (status IN ('applied','unchanged','rejected','retryable')),
  tag text,
+ identity_key text,
  count integer NOT NULL CONSTRAINT soft_law_attempts_count_check CHECK (count BETWEEN 1 AND 3),
  observed_at timestamptz NOT NULL,
  CONSTRAINT soft_law_attempts_item_unique UNIQUE(source_id,run_id,url),
+ CONSTRAINT soft_law_attempts_identity_check CHECK ((tag IS NOT DISTINCT FROM 'identity_collision') = (identity_key IS NOT NULL)),
  CONSTRAINT soft_law_attempts_tag_check CHECK ((status = 'rejected' AND tag IS NOT NULL AND tag IN ('identity_collision','ambiguous_locator','invalid_document','retry_exhausted')) OR (status <> 'rejected' AND tag IS NULL))
 );
+--> statement-breakpoint
+CREATE INDEX soft_law_attempts_collision_idx ON soft_law_ingestion_attempts(source_id,url,identity_key) WHERE tag = 'identity_collision';
 --> statement-breakpoint
 ALTER TABLE soft_law_ingestion_attempts ENABLE ROW LEVEL SECURITY;
 --> statement-breakpoint
