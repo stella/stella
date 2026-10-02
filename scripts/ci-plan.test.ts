@@ -358,76 +358,126 @@ const resultJob = v.parse(
   ciJobs["ci-result"],
 );
 
-const cancelStep = {
-  name: "Cancel failed merge group",
-  if: "failure() && github.event_name == 'merge_group'",
-  shell: "bash",
-  env: { GH_TOKEN: `\${{ github.token }}` },
-  run: 'gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"',
-};
+const FAIL_FAST_JOB = "merge-group-fail-fast";
 
-test("only gated jobs cancel failed merge groups, after every other step", () => {
-  const gatedJobs = new Set(resultJob.needs);
+test("only the merge-group fail-fast job may cancel runs, and it runs no repository code", () => {
   const jobSchema = v.object({
-    uses: v.optional(v.string()),
-    steps: v.optional(v.array(v.unknown())),
-    permissions: v.record(v.string(), v.string()),
     if: v.optional(v.string()),
+    permissions: v.optional(v.record(v.string(), v.string())),
+    steps: v.optional(
+      v.array(
+        v.looseObject({
+          uses: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    ),
   });
   for (const [id, value] of Object.entries(ciJobs)) {
     const job = v.parse(jobSchema, value);
-    const gated = gatedJobs.has(id);
-    if (job.uses !== undefined) {
-      // Reusable jobs cannot declare steps. Bind their gated implementation
-      // to the called workflow instead of exempting it from cancellation.
-      expect(id).toBe("marketing-screenshots");
-      expect(job.uses).toBe("./.github/workflows/marketing-screenshots.yml");
-      expect(gated).toBe(true);
-    } else {
-      const steps = job.steps ?? [];
-      const cancellationSteps = steps.filter((step) =>
-        v.is(v.object({ run: v.literal(cancelStep.run) }), step),
-      );
-      // The partition guard requires unique check names across its legs.
-      const expectedStep = {
-        ...cancelStep,
-        name: id.startsWith("ci-checks-")
-          ? `${cancelStep.name} (${id})`
-          : cancelStep.name,
-      };
-      expect(cancellationSteps, id).toEqual(gated ? [expectedStep] : []);
-      if (gated) {
-        expect(steps.at(-1), id).toEqual(expectedStep);
-      }
-    }
-    expect(job.permissions["actions"] === "write", id).toBe(gated);
-    if (gated && job.if?.includes("always()")) {
-      expect(job.if, id).toContain(
-        "(github.event_name != 'merge_group' || !cancelled())",
-      );
-    }
-  }
-  const marketingJobs = workflowJobs(
-    readFileSync(
-      new URL(
-        "../.github/workflows/marketing-screenshots.yml",
-        import.meta.url,
-      ),
-      "utf-8",
-    ),
-  );
-  for (const [id, value] of Object.entries(marketingJobs)) {
-    const job = v.parse(jobSchema, value);
-    const steps = job.steps ?? [];
-    const cancellationSteps = steps.filter((step) =>
-      v.is(v.object({ run: v.literal(cancelStep.run) }), step),
+    expect(job.permissions?.["actions"] === "write", id).toBe(
+      id === FAIL_FAST_JOB,
     );
-    expect(cancellationSteps, id).toEqual(id === "check" ? [cancelStep] : []);
-    expect(job.permissions["actions"] === "write", id).toBe(id === "check");
-    if (id === "check") {
-      expect(steps.at(-1)).toEqual(cancelStep);
-    }
   }
+  const watcher = v.parse(jobSchema, ciJobs[FAIL_FAST_JOB]);
+  expect(watcher.if).toBe("github.event_name == 'merge_group'");
+  expect(watcher.permissions).toEqual({ actions: "write" });
+  // No checkout, action or install: only the inline gh calls run here.
+  expect(watcher.steps?.map(({ uses }) => uses)).toEqual([undefined]);
+  // A failed lookup must never block the required result.
+  expect(resultJob.needs).not.toContain(FAIL_FAST_JOB);
+  // Jobs that start under always() must not start after the cancellation.
+  for (const id of ["e2e-production-shard", "marketing-screenshots"]) {
+    expect(jobIf(ciJobs[id]), id).toContain(
+      "(github.event_name != 'merge_group' || !cancelled())",
+    );
+  }
+});
+
+test("the merge-group fail-fast job cancels only after a job failed", () => {
+  const command = v.parse(
+    v.string(),
+    jobSteps(ciJobs[FAIL_FAST_JOB]).at(0)?.run,
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-fail-fast-"));
+  const bin = nodePath.join(directory, "bin");
+  mkdirSync(bin);
+  // Each `gh api` call prints the next recorded poll; `ERROR` fails the call.
+  writeFileSync(
+    nodePath.join(bin, "gh"),
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      'if [[ "$1" == run && "$2" == cancel ]]; then',
+      '  printf "%s\\n" "$*" >> "$FAKE_DIR/cancelled"',
+      "  exit 0",
+      "fi",
+      'count=$(cat "$FAKE_DIR/count" 2>/dev/null || echo 0)',
+      'echo $((count + 1)) > "$FAKE_DIR/count"',
+      'poll="$FAKE_DIR/poll-$count"',
+      '[[ -f "$poll" ]] || poll="$FAKE_DIR/poll-last"',
+      'if [[ "$(cat "$poll")" == ERROR ]]; then exit 1; fi',
+      'cat "$poll"',
+    ].join("\n"),
+  );
+  chmodSync(nodePath.join(bin, "gh"), 0o755);
+  const row = (status: string, conclusion = "") => `${status}\t${conclusion}`;
+  const scenario = (polls: readonly string[][]) => {
+    rmSync(nodePath.join(directory, "cancelled"), { force: true });
+    rmSync(nodePath.join(directory, "count"), { force: true });
+    for (const [index, rows] of polls.entries()) {
+      const text = rows.join("\n");
+      writeFileSync(nodePath.join(directory, `poll-${index}`), text);
+      writeFileSync(nodePath.join(directory, "poll-last"), text);
+    }
+    const run = Bun.spawnSync(["bash", "-c", command], {
+      env: {
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        FAKE_DIR: directory,
+        POLL_SECONDS: "0",
+        GITHUB_REPOSITORY: "stella/stella",
+        GITHUB_RUN_ID: "42",
+        GITHUB_RUN_ATTEMPT: "1",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 20_000,
+    });
+    expect(run.exitCode, run.stderr.toString()).toBe(0);
+    return Bun.file(nodePath.join(directory, "cancelled"))
+      .text()
+      .catch(() => "");
+  };
+  return (async () => {
+    try {
+      // A failure while others still run cancels the run, once.
+      expect(
+        await scenario([
+          [row("in_progress"), row("queued")],
+          [row("completed", "failure"), row("in_progress")],
+        ]),
+      ).toBe("run cancel 42 --repo stella/stella\n");
+      // A timeout counts as a failure.
+      expect(
+        await scenario([[row("completed", "timed_out"), row("in_progress")]]),
+      ).toBe("run cancel 42 --repo stella/stella\n");
+      // Success, skips and cancellations by others never cancel the run.
+      expect(
+        await scenario([
+          [row("in_progress"), row("completed", "skipped")],
+          [
+            row("completed", "success"),
+            row("completed", "skipped"),
+            row("completed", "cancelled"),
+          ],
+        ]),
+      ).toBe("");
+      // A failed lookup leaves the run to finish normally.
+      expect(await scenario([["ERROR"]])).toBe("");
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  })();
 });
 
 const evaluationSteps = resultJob.steps.filter((step) =>
@@ -724,6 +774,9 @@ test("the result gate evaluates every job in the workflow", () => {
       Object.keys(ciJobs).filter(
         (job) =>
           job !== "ci-result" &&
+          // It only shortens a failing run; gating on it would let a failed
+          // lookup block the result (bound in its own tests above).
+          job !== FAIL_FAST_JOB &&
           !reportOnlyJobs.includes(job) &&
           !diagnosticJobs.includes(job),
       ),
