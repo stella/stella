@@ -301,7 +301,8 @@ const updateInvoice = createSafeHandler(
             existing.finalizedAt !== null &&
             (documentType !== existing.documentType ||
               originalInvoiceId !== existing.originalInvoiceId ||
-              changedFields.invoiceNumber === null)
+              (changedFields.invoiceNumber !== undefined &&
+                changedFields.invoiceNumber !== existing.invoiceNumber))
           ) {
             return Result.err(
               new HandlerError({
@@ -406,19 +407,17 @@ const updateInvoice = createSafeHandler(
             }
           }
           const row = updated.at(0);
-          if (row) {
-            await recordAuditEvent(tx, {
-              action: AUDIT_ACTION.UPDATE,
-              resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
-              resourceId: row.id,
-              changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
-              // Buyer details are personal data: record which changed, not values.
-              metadata: { changedBuyerFields: Object.keys(changedBuyerFields) },
-            });
-          }
           if (!row) {
             return Result.ok({ status: "not-updated" });
           }
+          await recordAuditEvent(tx, {
+            action: AUDIT_ACTION.UPDATE,
+            resourceType: AUDIT_RESOURCE_TYPE.INVOICE,
+            resourceId: row.id,
+            changes: buildInvoiceUpdateAuditChanges(existing, changedFields),
+            // Buyer details are personal data: record which changed, not values.
+            metadata: { changedBuyerFields: Object.keys(changedBuyerFields) },
+          });
           return Result.ok({ status: "updated", id: row.id });
         },
       ),
