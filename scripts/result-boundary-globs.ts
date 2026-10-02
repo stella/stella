@@ -130,6 +130,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
+  "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
   "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
@@ -210,6 +211,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // assertion failures to test runners.
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  "packages/property-testing/src/index.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

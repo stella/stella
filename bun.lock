@@ -537,7 +537,7 @@
     },
     "packages/anonymize-chat": {
       "name": "@stll/anonymize-chat",
-      "version": "0.1.4",
+      "version": "0.1.5",
       "dependencies": {
         "@stll/anonymize-wasm": "catalog:",
         "better-result": "catalog:",
@@ -606,7 +606,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.11.1",
+      "version": "0.12.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -680,7 +680,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.3.1",
+      "version": "3.3.2",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -855,6 +855,19 @@
         "bun-types": "catalog:",
       },
     },
+    "packages/mcp-kit": {
+      "name": "@stll/mcp-kit",
+      "version": "0.0.0",
+      "dependencies": {
+        "@stll/agent-input": "workspace:^",
+        "better-result": "catalog:",
+      },
+      "devDependencies": {
+        "@stll/typescript-config": "workspace:*",
+        "bun-types": "catalog:",
+        "tsdown": "catalog:",
+      },
+    },
     "packages/mojibake": {
       "name": "@stll/mojibake",
       "version": "0.0.0",
@@ -897,6 +910,7 @@
       "name": "@stll/property-testing",
       "version": "0.0.0",
       "dependencies": {
+        "better-result": "catalog:",
         "fast-check": "catalog:",
       },
       "devDependencies": {
@@ -2834,6 +2848,8 @@
     "@stll/legal-atlas-runner": ["@stll/legal-atlas-runner@workspace:apps/legal-atlas-runner"],
 
     "@stll/locales": ["@stll/locales@workspace:packages/locales"],
+
+    "@stll/mcp-kit": ["@stll/mcp-kit@workspace:packages/mcp-kit"],
 
     "@stll/mobile": ["@stll/mobile@workspace:apps/mobile"],
 

@@ -1,4 +1,5 @@
 import { ClientOperationError } from "@/lib/errors/client";
+import { ssrCacheClassHeaders } from "@/route-response-policy";
 
 const SITEMAP_CACHE_CONTROL =
   "public, max-age=3600, s-maxage=21600, stale-while-revalidate=86400";
@@ -7,6 +8,7 @@ const SITEMAP_XML_MAX_BYTES = 50 * 1024 * 1024;
 export const TOOLS_SITEMAP_PATH = "/sitemaps/tools.xml";
 
 export const SITEMAP_XML_RESPONSE_HEADERS = {
+  ...ssrCacheClassHeaders("public-anonymous"),
   "Cache-Control": SITEMAP_CACHE_CONTROL,
   "Content-Type": "application/xml; charset=utf-8",
 } as const;

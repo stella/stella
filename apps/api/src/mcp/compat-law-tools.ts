@@ -88,6 +88,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Search the public legal corpus (case-law decisions and statutes) using " +
@@ -108,6 +109,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Fetch one public-corpus document by id using the OpenAI-compatible fetch " +
