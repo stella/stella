@@ -11,6 +11,7 @@ import {
 import {
   type DecisionQueryIntent,
   parseDecisionQuery,
+  resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import {
   countedSearchTotal,
@@ -33,7 +34,15 @@ import {
   courtWeightSql,
   polarityWeightSql,
 } from "@/api/handlers/case-law/citation-score";
-import { decisionIdsNamedBy } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import {
+  decisionIdentityLocatorOf,
+  decisionIdsNamedBy,
+  readDecisionIdentityHits,
+} from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import {
+  searchIdentityRole,
+  withPinnedDecisions,
+} from "@/api/handlers/case-law/decisions/search-identity-role";
 import {
   interpretDecisionQuery,
   searchAnswer,
@@ -196,6 +205,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
 /** A scoped search reached an index group that is not attested yet. */
@@ -242,7 +252,10 @@ const facetBuckets = (
     count: Number(row["count"]),
   }));
 
-type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema>;
+type SearchDecisionsBody = Static<typeof searchDecisionsBodySchema> & {
+  /** Internal MCP excerpt policy; HTTP callers retain their chosen length. */
+  sentenceAlignedExcerpt?: boolean;
+};
 
 type PostgresSearchBody = Omit<
   SearchDecisionsBody,
@@ -679,9 +692,13 @@ const searchPostgresDecisions = async (
   body: PostgresSearchBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
-  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
+  const excerpt = body.sentenceAlignedExcerpt
+    ? "long"
+    : (body.excerpt ?? DEFAULT_SEARCH_EXCERPT);
 
   // Validate cursor early so a tampered value fails visibly, and refuse one
   // that bounds a different order: its key is a position in that order.
@@ -1478,8 +1495,9 @@ type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
  * loosely (a plenary docket ranks every plenary decision sharing a number
  * with it), so an identifier is answered from identity instead: the typed
  * identifier rows, plus the canonical citation key the citator resolves by
- * and the ECLI as published, the same id set the lookup reads. Bounded by the
- * page size: past that the entry names a list, not a decision.
+ * and the ECLI as published, the same id set the lookup reads. A docket reads
+ * its whole case file. Bounded by the page size: past that the entry names a
+ * list, not a decision.
  */
 type DecisionIdsByIdentityQueryOptions = {
   country: string | undefined;
@@ -1502,7 +1520,7 @@ export const decisionIdsByIdentityQuery = ({
           caseLawDecisions.id,
           decisionIdsNamedBy({
             country,
-            locator: { kind: identity.kind, value: identity.value },
+            locator: decisionIdentityLocatorOf(identity),
             tx,
           }),
         ),
@@ -1520,19 +1538,47 @@ type FindDecisionIdsByIdentityOptions = {
   timeDbRead?: TimeDbRead | undefined;
 };
 
+/**
+ * The decisions the entry names, resolved: the one decision it singles out,
+ * or every candidate it cannot tell apart (a file's siblings, one number at
+ * several courts, a sheet no decision is known to carry). Never one sibling
+ * chosen for the reader: the page shows what the reference leaves open.
+ */
 export const findDecisionIdsByIdentity = async ({
   caseLawDb,
   country,
   identity,
   timeDbRead = untimedDbRead,
 }: FindDecisionIdsByIdentityOptions): Promise<SafeId<"caseLawDecision">[]> => {
-  const rows = await timeDbRead(
+  const hits = await timeDbRead(
     async () =>
-      await caseLawDb((tx) =>
-        decisionIdsByIdentityQuery({ country, identity, tx }),
-      ),
+      await caseLawDb(async (tx) => {
+        const rows = await decisionIdsByIdentityQuery({
+          country,
+          identity,
+          tx,
+        });
+        return await readDecisionIdentityHits(
+          tx,
+          rows.map((row) => row.id),
+        );
+      }),
   );
-  return rows.map((row) => row.id);
+  const resolution = resolveDecisionIdentity(identity, hits, {
+    reporters: decisionReporterGrammarForJurisdiction(country),
+  });
+  switch (resolution.status) {
+    case "none":
+      return [];
+    case "unique":
+      return [resolution.decision.id];
+    case "ambiguous":
+      return resolution.candidates.map((hit) => hit.id);
+    default: {
+      resolution satisfies never;
+      return panic(`Unhandled identity resolution: ${String(resolution)}`);
+    }
+  }
 };
 
 /** The language groups a page spans, for the alternates read. */
@@ -1782,7 +1828,9 @@ export const searchCorpusIndexDecisions = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const startedAt = performance.now();
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
 
   let parsedCursor: CorpusSearchCursor | null = null;
@@ -1879,10 +1927,18 @@ export const searchCorpusIndexDecisions = async (
     return rows;
   };
 
-  // An entry that names a decision is answered by identity, and only falls
-  // through to the text index when nothing answers to it. A cursor means the
-  // reader is already paging a text search, which identity never returns.
-  if (intent.type === "identifier" && parsedCursor === null) {
+  // An entry that is a reference and nothing else is answered by identity,
+  // and only falls through to the text index when nothing answers to it. A
+  // cursor means the reader is already paging a text search, which identity
+  // never returns. A reference among other words leaves those words a text
+  // search; the decisions it names are pinned above that search's results,
+  // never in place of them (`searchIdentityRole`).
+  const identityRole = searchIdentityRole(intent, {
+    paging: parsedCursor !== null,
+  });
+  let pinned: readonly RankedHit[] = [];
+  let pinnedIds: ReadonlySet<string> = new Set();
+  if (intent.type === "identifier" && identityRole !== "none") {
     const ids = await findDecisionIdsByIdentity({
       caseLawDb,
       country: body.country,
@@ -1890,7 +1946,15 @@ export const searchCorpusIndexDecisions = async (
       timeDbRead: async (run) =>
         await dbTimer.time(CASE_LAW_SEARCH_DB_READ.identity, run),
     });
-    if (ids.length > 0) {
+    if (identityRole === "pin") {
+      // Every page drops them from the text ranking, so a pinned decision
+      // never shows twice.
+      pinnedIds = new Set(ids.map(String));
+    }
+    if (
+      ids.length > 0 &&
+      (identityRole === "answer" || parsedCursor === null)
+    ) {
       const identityRanking = await rehydrateCaseLawCandidates({
         // Always the blended order here, whatever the request asked for: the
         // identity read has no order of its own to preserve, so the unblended
@@ -1907,7 +1971,9 @@ export const searchCorpusIndexDecisions = async (
       // A docket can name decisions at several courts; the page still honours
       // the requested size, and identity never pages past it.
       const identityPage = identityRanking.ranked.slice(0, limit);
-      if (identityPage.length > 0) {
+      if (identityRole === "pin") {
+        pinned = identityPage;
+      } else if (identityPage.length > 0) {
         const byId = await readPageRows(identityPage);
         // Timed around the call rather than through the timer's thunk: the
         // alternates read must stay a direct call in this function, which a
@@ -2012,7 +2078,9 @@ export const searchCorpusIndexDecisions = async (
   // What a wider excerpt is cut with. Both are pure derivations of the request
   // the query was already built from, so reading them again here cannot
   // disagree with the query the engine answered.
-  const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
+  const excerpt = body.sentenceAlignedExcerpt
+    ? "long"
+    : (body.excerpt ?? DEFAULT_SEARCH_EXCERPT);
   const excerptFields = caseLawCorpusQueryFields({
     generation,
     jurisdiction: body.country,
@@ -2038,6 +2106,7 @@ export const searchCorpusIndexDecisions = async (
       corpusExcerpt({
         engineSnippet: extractCorpusSnippet(snippet),
         excerpt,
+        sentenceAligned: body.sentenceAlignedExcerpt,
         language: excerptFields.stemming?.language ?? null,
         passage: hit["text"],
         tokens: excerptTokens,
@@ -2077,8 +2146,12 @@ export const searchCorpusIndexDecisions = async (
   const [searchPage, facetsAndTotal] = await Promise.all([pageRead, facetRead]);
   scanAndFacetsMs = performance.now() - concurrentStartedAt;
 
-  const { anchorIdById, pageRanked, passageCountById, scan, snippetById } =
-    searchPage;
+  const { anchorIdById, passageCountById, scan, snippetById } = searchPage;
+  const pageRanked = withPinnedDecisions({
+    pinned,
+    pinnedIds,
+    ranked: searchPage.pageRanked,
+  });
 
   const nextCursor =
     searchPage.nextCursor === null

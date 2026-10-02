@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import { docxSuggestionCursor } from "./cursor";
 import { DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT } from "./schemas";
@@ -73,7 +74,9 @@ const listDocxSuggestions = createSafeHandler(
     }),
   },
   async function* ({ workspaceId, params, query, safeDb }) {
-    const limit = query.limit ?? DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? DOCX_SUGGESTIONS_PAGE_SIZE_DEFAULT,
+    );
 
     const conditions = [
       eq(docxSuggestions.workspaceId, workspaceId),

@@ -22,6 +22,7 @@ import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-sc
 import type { ChatMessage } from "@/api/handlers/chat/types";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import {
   getTanStackTextModelInfoForRole,
@@ -343,6 +344,7 @@ type CreateSpawnSubagentsToolProps = {
   buildSubagentToolset: (proposalSink: SubagentProposalSink) => ChatToolMap;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   safeDb: SafeDb;
   userId: SafeId<"user">;
   /** The request's scope workspace, for subagent metering — may be null (global chat). */
@@ -397,7 +399,7 @@ export const createSpawnSubagentsTool = (
         const fastModelInfo = getTanStackTextModelInfoForRole(
           "fast",
           props.orgAIConfig,
-          { organizationId: props.organizationId },
+          { organizationId: props.organizationId, dataClass: "customer" },
         );
 
         // Whole-batch pre-flight: dispatches nothing (no provider calls, no
@@ -428,6 +430,7 @@ export const createSpawnSubagentsTool = (
             const run = await dependencies.runSubagent({
               organizationId: props.organizationId,
               orgAIConfig: props.orgAIConfig,
+              managedAIResidency: props.managedAIResidency,
               role: "fast",
               modelId: resolveValidatedSubagentModelId({
                 subModel: sub.model,

@@ -52,6 +52,7 @@ export const translateTaggedSegments = async ({
   context,
 }: TranslateTaggedSegmentsOptions): Promise<Map<string, string>> => {
   const analytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "document_translation.translate",
     modelRole: TRANSLATION_ROLE,
     orgAIConfig: context.orgAIConfig,
@@ -63,8 +64,10 @@ export const translateTaggedSegments = async ({
     usageMetering: context.usageMetering,
   });
   const output = await generateTanStackObjectForRole({
+    dataClass: "customer",
     role: TRANSLATION_ROLE,
     orgAIConfig: context.orgAIConfig,
+    managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
     analytics,
     caching: resolveCaching({

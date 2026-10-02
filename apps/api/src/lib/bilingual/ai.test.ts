@@ -85,6 +85,7 @@ const context = {
   organizationId,
   workspaceId,
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   usageMetering,
   abortSignal: AbortSignal.timeout(10_000),

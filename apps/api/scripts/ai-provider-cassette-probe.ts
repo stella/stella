@@ -53,6 +53,7 @@ const run = async () => {
     provider: "openrouter",
   } as const;
   const output = await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     abortSignal: AbortSignal.timeout(30_000),
     caching: { enabled: false, reason: "org-disabled" },
     finishPolicy: "require-complete",

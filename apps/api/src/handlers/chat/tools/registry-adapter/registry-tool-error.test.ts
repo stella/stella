@@ -47,6 +47,26 @@ describe("registry tool error projection", () => {
       });
     }
   });
+  test("keeps oversized read results recoverable through a smaller request", () => {
+    const error = {
+      type: "structured",
+      code: "result_too_large",
+      message: "The result is too large.",
+      hint: "Request a smaller page.",
+    } as const satisfies InternalToolError;
+
+    expect(toRegistryChatToolError(error)).toMatchObject({
+      kind: "invalid-input",
+      message: JSON.stringify({
+        error: {
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+        },
+      }),
+    });
+  });
+
   test("preserves every structured recovery field at the chat boundary", () => {
     const error = {
       type: "structured",
