@@ -20,6 +20,7 @@ const buildDeps = (
   return {
     organizationId: toSafeId<"organization">("org_1"),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
     memberRole: "owner",
     safeDb,
     scopedDb,
@@ -55,6 +56,7 @@ describe("buildMcpContextFromChat", () => {
     expect(context.memberRole).toBe(deps.memberRole);
     expect(context.organizationId).toBe(deps.organizationId);
     expect(context.userId).toBe(deps.userId);
+    expect(context.userEmail).toBe(deps.userEmail);
     expect(context.safeDb).toBe(deps.safeDb);
     expect(context.scopedDb).toBe(deps.scopedDb);
   });

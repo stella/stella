@@ -296,6 +296,7 @@ const buildFullCoverageChatTools = (
     pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
     workspaceId: null,
     userId,
+    userEmail: "standard@example.test",
     toolWorkspaceIds: resolveToolWorkspaceIds({
       pinnedIds: [],
       accessibleWorkspaceIds: [workspaceId],
@@ -356,6 +357,7 @@ const autoApplyBaseArgs = {
   threadId,
   pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
   userId,
+  userEmail: "standard@example.test",
   webSearchEnabled: false,
   webSearchProviders: { webSearchProvider: null, urlFetcher: null },
   hasActiveDocxEditClient: false,
@@ -832,6 +834,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -902,6 +905,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -941,6 +945,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -1102,6 +1107,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -1161,6 +1167,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -1206,6 +1213,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -2207,6 +2215,7 @@ describe("chat tool schemas", () => {
       threadId,
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       userId,
+      userEmail: "standard@example.test",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
@@ -2455,6 +2464,7 @@ describe("registry write tool approval policy", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -2543,6 +2553,7 @@ describe("registry write tool approval policy", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [],

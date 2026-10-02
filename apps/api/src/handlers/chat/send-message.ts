@@ -1454,6 +1454,7 @@ type PrepareValidatedIncomingMessageOptions = {
     organizationId: SafeId<"organization">;
     resume: Parameters<typeof validateMessage>[0]["resume"];
     userId: SafeId<"user">;
+    userEmail: string;
     workspaceId: SafeId<"workspace"> | null;
   };
   tools: {
@@ -1496,6 +1497,7 @@ const prepareValidatedIncomingMessage = async ({
     organizationId,
     resume,
     userId,
+    userEmail,
     workspaceId,
   },
   tools: {
@@ -1582,6 +1584,7 @@ const prepareValidatedIncomingMessage = async ({
       threadId: body.threadId,
       workspaceId,
       userId,
+      userEmail,
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       // Schema validation runs against the user's full accessible
       // set; per-tool scope checks happen at execute time below.
@@ -2294,6 +2297,7 @@ export const createSendMessage = (
               organizationId: session.activeOrganizationId,
               resume,
               userId: user.id,
+              userEmail: user.email,
               workspaceId,
             },
             tools: {
@@ -2563,6 +2567,7 @@ export const createSendMessage = (
             contextMatterIds: effectiveContextMatterIds,
           }),
           userId: user.id,
+          userEmail: user.email,
           toolWorkspaceIds,
           activeFile: activeFileForTools,
           hasActiveDocxEditClient,
