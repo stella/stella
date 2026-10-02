@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
+
+import {
   consumeDocumentDeletionToolCalls,
   getChatAssistantTurnError,
   getChatToolTitleKey,
@@ -33,8 +38,39 @@ import type {
   DocumentDeletionMessage,
   PersistedChatMessage,
 } from "@/components/chat/chat-ui-tools";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 
 describe("assistant turn outcomes", () => {
+  test("reloads every stored refusal with its canonical recovery actions", () => {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const metadata = ACTION_ADMISSION_REFUSALS[code];
+      const message = {
+        id: "assistant-refused",
+        role: "assistant",
+        parts: [],
+        metadata: {
+          turnOutcome: {
+            type: "failed",
+            error: "unknown",
+            refusal: {
+              code,
+              ...metadata,
+              contactUrl: "https://example.test/contact",
+            },
+          },
+        },
+      } satisfies ChatMessage;
+      expect(
+        actionAdmissionOutcome(getChatAssistantTurnError(message)),
+      ).toMatchObject({
+        code,
+        retryable: metadata.retryable,
+        contactUrl:
+          metadata.status === 403 ? "https://example.test/contact" : undefined,
+      });
+    }
+  });
+
   test("resolves server-owned failures for reload error rendering", () => {
     const failed = {
       id: "assistant-failed",

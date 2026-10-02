@@ -39,3 +39,6 @@ if [ "$errors" -gt 0 ]; then
   echo "Found $errors orphaned skill file(s). Run the fix commands above, then stage the new files." >&2
   exit 1
 fi
+
+# Local overrides of shared skills must be reconciled when the shared skill changes.
+bash "$script_dir/check-local-skill-overrides.sh" .

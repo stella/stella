@@ -17,7 +17,11 @@ import type { OrganizationActionState } from "@/api/lib/usage/organization-actio
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 
 import { withActionAdmission } from "./action-admission";
-import { ACTION_KINDS, type AdmittedActionIdentity } from "./action-kinds";
+import {
+  ACTION_KINDS,
+  type AdmittedActionIdentity,
+  type PeriodActionKind,
+} from "./action-kinds";
 import {
   ACTION_SERVICE_DEADLINE_EXPIRED,
   ACTION_SERVICE_DEADLINE_SCRIPT,
@@ -65,6 +69,88 @@ const recordingRedis = () => {
 };
 
 describe("organization budgets at action admission", () => {
+  test("queued reservations resolve organization budgets at acceptance on fresh and inherited leases", async () => {
+    for (const ownership of ["fresh", "inherited"] as const) {
+      for (const acceptance of ["capped", "accepted", "expired"] as const) {
+        const redis = recordingRedis();
+        let reads = 0;
+        let now = nowMs;
+        const identity = {
+          actionKind: "flow.start",
+          logicalPhaseId: "queued-phase",
+        } as const satisfies AdmittedActionIdentity;
+        const queued = async () =>
+          await withActionAdmission({
+            organizationId,
+            userId,
+            enabled: true,
+            policy,
+            execution: "queued-kickoff",
+            periodReservation: "on-acceptance",
+            periodIdentity: identity,
+            serviceBudgetsEnabled: true,
+            serviceBudgetConfig,
+            budgetNow: () => now,
+            readOrganizationState: async () => {
+              reads += 1;
+              return {
+                state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+                evaluationEndsAt: new Date(nowMs + 1000),
+              };
+            },
+            redis: redis.client,
+            run: async (_signal, control) => {
+              expect(
+                redis.commands.filter((args) => args.at(1) === "3"),
+              ).toHaveLength(0);
+              if (acceptance === "capped") {
+                return "capped";
+              }
+              if (acceptance === "expired") {
+                now += 2000;
+              }
+              const reserved = await control.reservePeriod(identity);
+              if (Result.isError(reserved)) {
+                throw reserved.error;
+              }
+              expect(await control.reservePeriod(identity)).toEqual(
+                Result.ok(undefined),
+              );
+              return "accepted";
+            },
+          });
+        const result =
+          ownership === "fresh"
+            ? await queued()
+            : (
+                await withActionAdmission({
+                  organizationId,
+                  userId,
+                  enabled: true,
+                  policy,
+                  mode: "concurrency-only",
+                  redis: redis.client,
+                  run: queued,
+                })
+              ).unwrap();
+        if (acceptance === "expired") {
+          expectRefusal(result, ACTION_ADMISSION_CODES.notEnabled);
+        } else {
+          expect(result).toEqual(Result.ok(acceptance));
+        }
+        expect(reads).toBe(acceptance === "capped" ? 1 : 2);
+        expect(
+          redis.commands.filter((args) => args.at(1) === "3"),
+        ).toHaveLength(acceptance === "accepted" ? 1 : 0);
+        expect(
+          redis.commands.filter((args) =>
+            args.at(0)?.includes("ZREMRANGEBYSCORE"),
+          ),
+        ).toHaveLength(1);
+      }
+    }
+  });
+
   test("validated raw DOCX and PDF reports remain exportable after evaluation ends", async () => {
     for (const format of ["docx", "pdf"] as const) {
       for (const aiNarrative of [false, true, undefined]) {
@@ -288,10 +374,12 @@ describe("organization budgets at action admission", () => {
       (kind): kind is keyof typeof ACTION_KINDS =>
         Object.hasOwn(ACTION_KINDS, kind),
     );
-    for (const actionKind of actionKinds) {
-      if (!ACTION_KINDS[actionKind].consumesServices) {
-        continue;
-      }
+    const periodKinds = actionKinds.filter(
+      (kind): kind is PeriodActionKind =>
+        ACTION_KINDS[kind].admission === "period" &&
+        ACTION_KINDS[kind].consumesServices,
+    );
+    for (const actionKind of periodKinds) {
       for (const { state, limit } of stateCases) {
         const redis = recordingRedis();
         const reads: unknown[] = [];

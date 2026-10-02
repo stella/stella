@@ -85,6 +85,14 @@ import {
 } from "@/api/lib/auth/social-identity-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  createDesktopLinkGrant,
+  consumeDesktopLinkGrant,
+} from "@/api/lib/business-registries/desktop/link-grant-store";
+import type {
+  CreateDesktopLinkGrantOptions,
+  ConsumeDesktopLinkGrantOptions,
+} from "@/api/lib/business-registries/desktop/link-grant-store";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
 import { verifyConfirmationOtp } from "@/api/lib/confirmation-otp";
 import { tUuid } from "@/api/lib/custom-schema";
@@ -2479,3 +2487,11 @@ export const workspaceAccessMacro = new Elysia({
       };
     },
   });
+
+export const issueDesktopAccountGrant = async (
+  options: Omit<CreateDesktopLinkGrantOptions, "db">,
+) => await createDesktopLinkGrant({ ...options, db: rootDb });
+
+export const claimDesktopAccountGrant = async (
+  options: Omit<ConsumeDesktopLinkGrantOptions, "db">,
+) => await consumeDesktopLinkGrant({ ...options, db: rootDb });

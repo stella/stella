@@ -28,6 +28,7 @@ import {
 } from "./dev-runner-config";
 import {
   devStatePath,
+  readOrCreateDevContentEncryptionKey,
   removeDevRuntime,
   SEAL_FILE,
   writeDevRuntime,
@@ -1807,7 +1808,7 @@ const buildApiEnv = ({
   rootDir,
 }: BuildApiEnvOptions) => {
   const envFilePath = path.resolve(rootDir, "apps/api/.env");
-  return {
+  const env: NodeJS.ProcessEnv = {
     ...expandEnvMap(loadEnvFile(envFilePath)),
     ...createApiEnv({
       baseEnv: stripAppEnvKeys({ baseEnv: process.env, envFilePath }),
@@ -1815,6 +1816,15 @@ const buildApiEnv = ({
       infraPorts,
       ports,
     }),
+  };
+  return {
+    ...env,
+    CONTENT_ENCRYPTION_KEY:
+      env["CONTENT_ENCRYPTION_KEY"] ||
+      readOrCreateDevContentEncryptionKey(rootDir).match({
+        ok: (key) => key,
+        err: (error) => panic(error.message),
+      }),
   };
 };
 

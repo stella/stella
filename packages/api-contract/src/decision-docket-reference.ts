@@ -2,6 +2,7 @@ import { stripCitationPrefix } from "@stll/legal-ast/citation-prefix";
 
 import {
   DECISION_DOCKET_GRAMMARS,
+  decisionDocketGrammarForJurisdiction,
   foldDecisionIdentifierInput,
   parseDecisionDocket,
   storedDecisionDocketOf,
@@ -16,11 +17,11 @@ import type {
  * Reading a docket reference as a reader or a citing court writes it, apart
  * from the grammars themselves.
  *
- * Read-side only: search, the lookup tool and the web box read references
- * through it, and nothing ingestion runs imports it. What it needs of the
- * grammars it reads through their exported surface (`parseDecisionDocket`,
- * `storedDecisionDocketOf`), so a reference and a stored docket are cut and
- * keyed by the same code.
+ * Search, the lookup tool and the web box read references through it, and a
+ * stored decision's case file is keyed by it (`docketFamilyKeyOf`); no parser
+ * imports it. What it needs of the grammars it reads through their exported
+ * surface (`parseDecisionDocket`, `storedDecisionDocketOf`), so a reference
+ * and a stored docket are cut and keyed by the same code.
  */
 
 type ParseDecisionDocketOptions = {
@@ -318,6 +319,30 @@ export const readDecisionDocketReference = (
     }
   }
   return null;
+};
+
+/**
+ * The case file a docket belongs to, keyed as its jurisdiction's grammar keys
+ * it: the family a reader's reference resolves to, with any sheet or part
+ * numeral printed after it cut away. Every spelling of one file's members
+ * (`4 As 50/2012`, `4 As 50/2012 - 33`, `4 As 50/2012–34`) shares it, so a
+ * stored decision is found by its file however its own docket is spelled.
+ * The writer of the stored key and the reader of a reference both call this,
+ * so the two cannot drift apart. Null when the jurisdiction has no docket
+ * grammar or the docket does not parse under it.
+ */
+export const docketFamilyKeyOf = (
+  caseNumber: string,
+  jurisdiction: string,
+): string | null => {
+  const grammar = decisionDocketGrammarForJurisdiction(jurisdiction);
+  if (grammar === null) {
+    return null;
+  }
+  return (
+    readDecisionDocketReference(caseNumber, { grammar })?.family.canonical ??
+    null
+  );
 };
 
 /**

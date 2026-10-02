@@ -43,10 +43,15 @@ test("web sources generate once across compiler tasks and restore until source i
     mkdirSync(path.dirname(filenamePath), { recursive: true });
     writeFileSync(filenamePath, content);
   };
+  // The fixture owns its cache behaviour, so settings from an enclosing Turbo
+  // run (such as TURBO_FORCE) must not reach the nested invocations.
+  const env = Object.fromEntries(
+    Object.entries(process.env).filter(([key]) => !key.startsWith("TURBO_")),
+  );
   const run = (command: string[]) => {
     const child = Bun.spawnSync(command, {
       cwd: directory,
-      env: { ...process.env, TURBO_TELEMETRY_DISABLED: "1" },
+      env: { ...env, TURBO_TELEMETRY_DISABLED: "1" },
       stdout: "pipe",
       stderr: "pipe",
     });
