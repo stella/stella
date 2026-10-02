@@ -9,6 +9,7 @@ import { Result } from "better-result";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
+  assertManagedOpenRouterModel,
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
@@ -148,11 +149,6 @@ const withManagedRoutingErrors = async function* (
   }
 };
 
-const withoutModelVariant = (model: string): string => {
-  const variantStart = model.indexOf(":", model.lastIndexOf("/") + 1);
-  return variantStart === -1 ? model : model.slice(0, variantStart);
-};
-
 class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   override chatStream(options: OpenRouterTextOptions) {
     return withManagedRoutingErrors(super.chatStream(options));
@@ -177,6 +173,10 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    assertManagedOpenRouterModel(options.model);
+    for (const model of options.modelOptions?.models ?? []) {
+      assertManagedOpenRouterModel(model);
+    }
     const {
       plugins: _plugins,
       variant: _variant,
@@ -184,16 +184,10 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
     } = options.modelOptions ?? {};
     const request = super.mapOptionsToRequest({
       ...options,
-      model: withoutModelVariant(options.model),
       modelOptions,
     });
     return {
       ...request,
-      ...(request.models === undefined
-        ? {}
-        : {
-            models: request.models.map((model) => withoutModelVariant(model)),
-          }),
       provider: {
         ...request.provider,
         ...PROVIDER_DATA_POLICY.customer.openrouter.provider,
@@ -212,8 +206,9 @@ export const createManagedOpenRouterText = ({
   model,
   apiKey,
   managedAIResidency,
-}: ManagedOpenRouterTextOptions): StellaOpenRouterTextAdapter =>
-  new ManagedOpenRouterTextAdapter(
+}: ManagedOpenRouterTextOptions): StellaOpenRouterTextAdapter => {
+  assertManagedOpenRouterModel(model);
+  return new ManagedOpenRouterTextAdapter(
     {
       apiKey,
       retryConfig: OPENROUTER_RETRY,
@@ -222,6 +217,7 @@ export const createManagedOpenRouterText = ({
     },
     model,
   );
+};
 
 export const createStellaOpenRouterText = (
   model: OpenRouterModel,

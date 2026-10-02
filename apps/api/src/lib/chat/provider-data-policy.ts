@@ -4,6 +4,7 @@ import type {
 } from "@tanstack/ai-openrouter";
 import { Result } from "better-result";
 
+import { BYOK_MODEL_OPTIONS, getModelRate } from "@stll/ai-catalog";
 import type { AIProvider } from "@stll/ai-catalog";
 import { classifyFailure } from "@stll/errors";
 
@@ -27,19 +28,24 @@ type ProviderDataPolicy =
       provider: NonNullable<OpenRouterTextModelOptions["provider"]>;
     };
 
+const MANAGED_OPENROUTER_POLICY = {
+  status: "supported",
+  serverURLs: {
+    eu: "https://eu.openrouter.ai/api/v1",
+    us: "https://us.openrouter.ai/api/v1",
+  },
+  provider: { dataCollection: "deny", zdr: true },
+} as const satisfies ProviderDataPolicy;
+
 export const PROVIDER_DATA_POLICY = {
   byok: { status: "unchanged" },
-  public_corpus: { status: "unchanged" },
+  public_corpus: {
+    ...MANAGED_OPENROUTER_POLICY,
+    managedAIResidency: "eu",
+  },
   customer: {
     google: { status: "unsupported" },
-    openrouter: {
-      status: "supported",
-      serverURLs: {
-        eu: "https://eu.openrouter.ai/api/v1",
-        us: "https://us.openrouter.ai/api/v1",
-      },
-      provider: { dataCollection: "deny", zdr: true },
-    },
+    openrouter: MANAGED_OPENROUTER_POLICY,
     openai: { status: "unsupported" },
     azure_foundry: { status: "unsupported" },
     anthropic: { status: "unsupported" },
@@ -52,7 +58,9 @@ export const PROVIDER_DATA_POLICY = {
   },
 } as const satisfies {
   byok: { status: "unchanged" };
-  public_corpus: { status: "unchanged" };
+  public_corpus: Extract<ProviderDataPolicy, { status: "supported" }> & {
+    managedAIResidency: "eu";
+  };
   customer: Record<ManagedProvider, ProviderDataPolicy>;
 };
 
@@ -84,3 +92,19 @@ export const checkManagedProviderAvailable = (
   isManagedProviderAvailable(provider, dataClass)
     ? Result.ok(undefined)
     : Result.err(managedProviderUnavailable(provider));
+
+const OPENROUTER_AUTO_MODEL_ID = "openrouter/auto";
+const GLOBAL_ONLY_OPENROUTER_VARIANT = /:(?:batch|online)(?=:|$)/u;
+
+/** Validate every managed selection, including fallback models on the wire. */
+export const assertManagedOpenRouterModel = (modelId: string): void => {
+  const catalog: readonly string[] = BYOK_MODEL_OPTIONS.openrouter;
+  if (
+    modelId === OPENROUTER_AUTO_MODEL_ID ||
+    GLOBAL_ONLY_OPENROUTER_VARIANT.test(modelId) ||
+    !catalog.includes(modelId) ||
+    getModelRate(modelId) === undefined
+  ) {
+    throw managedProviderUnavailable("openrouter");
+  }
+};
