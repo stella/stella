@@ -65,9 +65,9 @@ if (!databaseUrl || !runPostgresTests) {
                 (
                   await readAgentClientCredential({
                     storedCredential,
-                    upgrade: () => {
+                    upgrade: async () => {
                       upgrades += 1;
-                      return Promise.resolve(Result.ok());
+                      return Result.ok();
                     },
                   })
                 ).unwrap(),
@@ -143,9 +143,9 @@ if (!databaseUrl || !runPostgresTests) {
                 (
                   await readAgentClientCredential({
                     storedCredential: upgraded,
-                    upgrade: () => {
+                    upgrade: async () => {
                       upgrades += 1;
-                      return Promise.resolve(Result.ok());
+                      return Result.ok();
                     },
                   })
                 ).unwrap(),
