@@ -46,8 +46,9 @@ test(
           const fixture = cheerio.load(
             `<html><body><p class="fixture-title"><span style="font-size: 18px">UZNESENIE</span></p><main><p><span style="font-size: 12px">Ústavný súd rozhodol: Návrh sa zamieta.</span></p><p>Odôvodnenie: Posúdenie návrhu.</p>${fragments.join("")}<span class="fixture-hidden" style="color: #000000; background-color: #000000">hiddenqzexcluded</span><script>scriptqzexcluded</script><style>styleqzexcluded</style></main><p class="fixture-footer">42</p></body></html>`,
           );
-          for (const tag of ancestors)
-            {fixture("main").wrapInner(`<${tag}></${tag}>`);}
+          for (const tag of ancestors) {
+            fixture("main").wrapInner(`<${tag}></${tag}>`);
+          }
           const injected = injectMarkupMarkers({
             source: fixture.html(),
             selector: "main",
