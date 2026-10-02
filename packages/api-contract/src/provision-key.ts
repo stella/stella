@@ -14,7 +14,7 @@ export type ProvisionKey = {
 };
 
 export type ProvisionRef = ProvisionKey & {
-  work: { identifier: string; eli: string | null };
+  workEli: string | null;
   reference: ProvisionReference;
 };
 

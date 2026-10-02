@@ -477,7 +477,7 @@ const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
 
 const czechProvisionAnchor = (reference: ProvisionReference): string =>
   [
-    `${reference.unit === "article" ? "cl" : "par"}_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
+    `par_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
     ...(reference.subsection === null ? [] : [`odst_${reference.subsection}`]),
     ...(reference.letter === null ? [] : [`pism_${reference.letter}`]),
     ...(reference.point === null ? [] : [`bod_${reference.point}`]),

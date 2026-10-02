@@ -59,7 +59,7 @@ describe("provision identity construction", () => {
           const provision = {
             jurisdiction: grammar.jurisdiction,
             workIdentifier: work.identifier,
-            work,
+            workEli: work.eli,
             reference: ref,
             anchor: grammar.anchor(ref),
           } satisfies ProvisionRef;
@@ -132,7 +132,7 @@ describe("provision identity construction", () => {
     }
   });
 
-  test("article and section units retain distinct publisher anchors", () => {
+  test("sentence and open-ended scope preserve the section anchor", () => {
     const ref = {
       unit: "section",
       section: 1,
@@ -144,9 +144,6 @@ describe("provision identity construction", () => {
       openEnded: false,
     } as const;
     expect(grammar.anchor(ref)).toBe("par_1-odst_2-pism_a-bod_3");
-    expect(grammar.anchor({ ...ref, unit: "article" })).toBe(
-      "cl_1-odst_2-pism_a-bod_3",
-    );
     expect(grammar.anchor({ ...ref, sentence: "2", openEnded: true })).toBe(
       grammar.anchor(ref),
     );

@@ -54,7 +54,7 @@ describe("provision keys", () => {
     } as const;
     const ref = {
       ...key,
-      work: { identifier: key.workIdentifier, eli: null },
+      workEli: null,
       reference,
     } satisfies ProvisionRef;
     expect(formatProvisionKey(ref)).toBe(
@@ -62,10 +62,7 @@ describe("provision keys", () => {
     );
     const withMetadata = {
       ...ref,
-      work: {
-        identifier: key.workIdentifier,
-        eli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
-      },
+      workEli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
       reference: { ...reference, sentence: "3", openEnded: true },
     } satisfies ProvisionRef;
     expect(formatProvisionKey(withMetadata)).toBe(formatProvisionKey(ref));
