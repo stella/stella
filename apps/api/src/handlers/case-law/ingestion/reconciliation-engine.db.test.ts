@@ -786,6 +786,7 @@ const seedItem = async (
     status: (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
     attempts: number;
     nextAttemptAt: Date | null;
+    payload?: unknown;
   },
 ): Promise<void> => {
   await db.insert(caseLawReconciliationItems).values({
@@ -793,12 +794,12 @@ const seedItem = async (
     sourceId,
     slice: OWED_SLICE,
     identityKey,
-    payload: {},
     ...row,
+    payload: row.payload ?? {},
   });
 };
 
-test("a walk leaves already-tracked identities to the retry path", async () => {
+test("a walk leaves unchanged tracked payloads to the retry path", async () => {
   // The widening backoff is the whole reason a park exists. A tip slice is
   // re-walked daily, so a walk that re-fetched everything it found missing
   // would serve none of that schedule — and would drag terminal items back
@@ -820,11 +821,13 @@ test("a walk leaves already-tracked identities to the retry path", async () => {
   await seedItem(sourceId, parkedKey, {
     status: RECONCILIATION_ITEM_STATUS.PARKED,
     attempts: 2,
+    payload: LISTING_ITEMS[0],
     nextAttemptAt: new Date(NOW.getTime() + 60 * 60 * 1000),
   });
   await seedItem(sourceId, terminalKey, {
     status: RECONCILIATION_ITEM_STATUS.TERMINAL,
     attempts: 6,
+    payload: LISTING_ITEMS[1],
     nextAttemptAt: null,
   });
 

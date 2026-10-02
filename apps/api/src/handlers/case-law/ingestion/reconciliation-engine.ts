@@ -113,10 +113,9 @@ import {
   parkReconciliationItem,
   pruneUnlistedTerminalItems,
   resolveReconciliationItem,
-  resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
-  selectTrackedIdentityKeys,
+  refreshTrackedReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -1239,14 +1238,20 @@ const ingestListedItem = async ({
       summary.failed += 1;
       return;
     }
+    await lease.beforeDatabaseMark();
     const parked = await parkReconciliationItem(scopedDb, {
       sourceId,
+      leaseToken: lease.leaseToken,
       slice,
       identityKey: item.identityKey,
       payload: item.payload,
       errorTag: tag,
       now,
     });
+    if (parked.outcome === "superseded") {
+      summary.deferred += 1;
+      return;
+    }
     if (parked.status === RECONCILIATION_ITEM_STATUS.TERMINAL) {
       summary.terminal += 1;
     } else {
@@ -1268,15 +1273,21 @@ const ingestListedItem = async ({
         // The identity rule keyed this item and the build cannot: the two
         // disagree, and no retry resolves that, so it is retired straight
         // away rather than spending the whole schedule proving it.
-        await retireReconciliationItem(scopedDb, {
+        await lease.beforeDatabaseMark();
+        const retired = await retireReconciliationItem(scopedDb, {
           sourceId,
+          leaseToken: lease.leaseToken,
           slice,
           identityKey: item.identityKey,
           payload: item.payload,
           errorTag: "unkeyable",
           now,
         });
-        summary.terminal += 1;
+        if (retired.outcome === "recorded") {
+          summary.terminal += 1;
+        } else {
+          summary.deferred += 1;
+        }
         return;
       }
       case "detail-unavailable": {
@@ -1316,8 +1327,11 @@ const ingestListedItem = async ({
           return;
         }
         summary.written += 1;
+        await lease.beforeDatabaseMark();
         await resolveReconciliationItem(scopedDb, {
           sourceId,
+          leaseToken: lease.leaseToken,
+          payload: item.payload,
           identityKey: item.identityKey,
         });
         return;
@@ -1366,8 +1380,11 @@ const ingestListedItem = async ({
           return;
         }
         summary.written += 1;
+        await lease.beforeDatabaseMark();
         await resolveReconciliationItem(scopedDb, {
           sourceId,
+          leaseToken: lease.leaseToken,
+          payload: item.payload,
           identityKey: item.identityKey,
         });
         return;
@@ -1480,6 +1497,18 @@ const walkSlice = async ({
   }));
   summary.keyable = items.length;
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
+  await lease.beforeDatabaseMark();
+  const refresh = await refreshTrackedReconciliationItems(scopedDb, {
+    sourceId,
+    leaseToken: lease.leaseToken,
+    items,
+    now: now(),
+  });
+  if (refresh.outcome === "superseded") {
+    summary.deferred = items.length;
+    return summary;
+  }
+  const tracked = refresh.trackedIdentityKeys;
   const held = await selectHeldIdentityKeys(scopedDb, {
     sourceId,
     identities: items.map(({ identity }) => identity),
@@ -1493,16 +1522,9 @@ const walkSlice = async ({
   const missing = items.filter(({ identityKey }) => !held.has(identityKey));
   summary.heldBefore = items.length - missing.length;
 
-  // A missing identity the store already tracks belongs to the due-retry path,
-  // not to this walk. Re-fetching it here would serve none of its backoff —
-  // a tip slice is re-walked daily, so every parked item would be asked for
-  // daily whatever its schedule said — and a terminal item would be pulled
-  // back into the hunt it has already left. They would also spend the unit's
-  // budget ahead of misses nothing is tracking yet.
-  const tracked = await selectTrackedIdentityKeys(scopedDb, {
-    sourceId,
-    identityKeys: missing.map(({ identityKey }) => identityKey),
-  });
+  // A tracked revision keeps its backoff; a changed revision was reopened
+  // above and belongs to the bounded due-retry path, even when this walk's
+  // ingest budget is exhausted.
   const untracked = missing.filter(
     ({ identityKey }) => !tracked.has(identityKey),
   );
@@ -1547,12 +1569,18 @@ const walkSlice = async ({
   // against `reported`/`collected`, and those two describe the listing as it is
   // now. Only reachable on a complete walk — a listing that failed part way
   // through throws above and never gets here.
-  summary.pruned = await pruneUnlistedTerminalItems(scopedDb, {
+  await lease.beforeDatabaseMark();
+  const prune = await pruneUnlistedTerminalItems(scopedDb, {
     sourceId,
+    leaseToken: lease.leaseToken,
     slice,
     listedIdentityKeys: items.map(({ identityKey }) => identityKey),
     limit: PRUNE_ROW_LIMIT,
   });
+  if (prune.outcome === "superseded") {
+    return summary;
+  }
+  summary.pruned = prune.removed;
 
   await recordSliceCoverage(scopedDb, {
     sourceId,
@@ -1730,11 +1758,9 @@ type RetryParkedOptions = {
 /**
  * Re-attempt the parked items that have come due.
  *
- * The batch is checked against what is held first: the crawl keeps running,
- * and an item it stored since parking needs no publisher fetch at all — only
- * the row forgetting. A key no current rule produces reads as
- * `unidentifiable`, which no held row can match, so such an item is
- * re-attempted rather than assumed held.
+ * Each retry processes the payload revision recorded by the latest complete
+ * listing walk. An identity already held by a crawl may describe an older
+ * revision and cannot acknowledge this pending input.
  */
 const retryParkedItems = async ({
   adapterKey,
@@ -1766,36 +1792,15 @@ const retryParkedItems = async ({
     }),
   );
 
-  const held = await selectHeldIdentityKeys(scopedDb, {
-    sourceId,
-    identities: outstanding.map(({ identity }) => identity),
-    requireDetail: reconciliation.heldRequiresDetail === true,
-    heldWithoutDetail: reconciliation.heldWithoutDetail,
-    rowRules: {
-      withoutDocument: reconciliation.heldWithoutDocument,
-      recheck: reconciliation.recheckHeld,
-    },
-  });
-  const settled = outstanding.filter(({ identityKey }) =>
-    held.has(identityKey),
-  );
-  summary.heldBefore = settled.length;
-  summary.resolved = settled.length;
-  await resolveReconciliationItems(scopedDb, {
-    sourceId,
-    identityKeys: settled.map(({ identityKey }) => identityKey),
-  });
-
-  const unheld = outstanding.filter(
-    ({ identityKey }) => !held.has(identityKey),
-  );
+  // A crawl may already hold this identity from an older listing revision.
+  // Only processing the queued payload can acknowledge that revision.
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   const sliceBuilders = new Map<
     string,
     SourceReconciliation["buildDecision"]
   >();
   let fetched = 0;
-  for (const [index, item] of unheld.entries()) {
+  for (const [index, item] of outstanding.entries()) {
     if (fetched > 0) {
       await sleep(fetchDelayMs);
     }
@@ -1803,7 +1808,7 @@ const retryParkedItems = async ({
     // already decides when each is asked again, so the ones this unit did not
     // reach simply stay due for the next.
     if (now().getTime() >= ingestEndsAtMs) {
-      summary.deferred += unheld.length - index;
+      summary.deferred += outstanding.length - index;
       break;
     }
     let buildDecision = sliceBuilders.get(item.slice);

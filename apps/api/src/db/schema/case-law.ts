@@ -1642,6 +1642,8 @@ export const caseLawReconciliationItems = p.pgTable(
     identityKey: p.varchar("identity_key", { length: 320 }).notNull(),
     /** The listing item verbatim, so a retry needs no second listing walk. */
     payload: jsonb().$type<unknown>().notNull(),
+    /** Lazy listing revision fingerprint; null is a row written before revision tracking. */
+    payloadHash: p.varchar("payload_hash", { length: 64 }),
     status: p
       .varchar({ length: 16, enum: RECONCILIATION_ITEM_STATUSES })
       .default(RECONCILIATION_ITEM_STATUS.PARKED)

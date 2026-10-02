@@ -21,11 +21,14 @@ import {
   countTerminalReconciliationItemsBySlice,
   listReconciliationItems,
   parkReconciliationItem,
+  pruneUnlistedTerminalItems,
+  refreshTrackedReconciliationItems,
   resetTerminalReconciliationItems,
   resolveReconciliationItem,
   retireReconciliationItem,
   selectDueReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // What is asserted here is the store's own arithmetic against real columns:
 // that repeated parks advance one row rather than accumulating rows, that the
@@ -43,9 +46,10 @@ let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof connect>;
 
 const scopedDb: ScopedDb = async (callback) =>
-  // SAFETY: pglite stands in for the transaction the store expects.
-  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the pglite handle is the test's transaction
-  await callback(db as unknown as Transaction);
+  await db.transaction(
+    async (tx) => await callback(asTestRaw<Transaction>(tx)),
+  );
+const LEASE_TOKEN = createSafeId<"caseLawSourceIngestionLease">();
 
 beforeAll(async () => {
   client = await createTestPglite();
@@ -60,7 +64,13 @@ const seedSource = async (): Promise<SafeId<"caseLawSource">> => {
   const id = createSafeId<"caseLawSource">();
   await db
     .insert(caseLawSources)
-    .values({ id, adapterKey: `reconciliation-${id}`, name: "store fixture" });
+    .values({
+      id,
+      adapterKey: `reconciliation-${id}`,
+      name: "store fixture",
+      ingestionLeaseToken: LEASE_TOKEN,
+      ingestionLeaseExpiresAt: new Date("2100-01-01T00:00:00Z"),
+    });
   return id;
 };
 
@@ -84,6 +94,87 @@ const PAYLOAD = {
   odkaz:
     "https://rozhodnuti.justice.cz/api/finaldoc/2f0a1d6c-9c7f-4a58-bd4a-6c1e0f7a1b23",
 };
+
+test("lost source ownership supersedes every reconciliation mutation without changing tracked input", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-10-02T12:00:00Z");
+  await retireReconciliationItem(scopedDb, {
+    sourceId,
+    leaseToken: LEASE_TOKEN,
+    identityKey: DOCUMENT_KEY,
+    slice: SLICE,
+    payload: PAYLOAD,
+    errorTag: "unkeyable",
+    now,
+  });
+  const before = await db
+    .select()
+    .from(caseLawReconciliationItems)
+    .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+  await db
+    .update(caseLawSources)
+    .set({ ingestionLeaseToken: createSafeId<"caseLawSourceIngestionLease">() })
+    .where(eq(caseLawSources.id, sourceId));
+  expect(
+    await parkReconciliationItem(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      identityKey: DOCUMENT_KEY,
+      slice: SLICE,
+      payload: PAYLOAD,
+      errorTag: "publisher-miss",
+      now,
+    }),
+  ).toEqual({ outcome: "superseded" });
+  expect(
+    await retireReconciliationItem(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      identityKey: DOCUMENT_KEY,
+      slice: SLICE,
+      payload: PAYLOAD,
+      errorTag: "publisher-miss",
+      now,
+    }),
+  ).toEqual({ outcome: "superseded" });
+  expect(
+    await resolveReconciliationItem(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      identityKey: DOCUMENT_KEY,
+      payload: PAYLOAD,
+    }),
+  ).toEqual({ outcome: "superseded" });
+  expect(
+    await refreshTrackedReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      items: [
+        {
+          identityKey: DOCUMENT_KEY,
+          slice: SLICE,
+          payload: { corrected: true },
+        },
+      ],
+      now,
+    }),
+  ).toEqual({ outcome: "superseded" });
+  expect(
+    await pruneUnlistedTerminalItems(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      slice: SLICE,
+      listedIdentityKeys: [],
+      limit: 10,
+    }),
+  ).toEqual({ outcome: "superseded" });
+  expect(
+    await db
+      .select()
+      .from(caseLawReconciliationItems)
+      .where(eq(caseLawReconciliationItems.sourceId, sourceId)),
+  ).toEqual(before);
+});
 
 const SLICE = "2026-08-04";
 
@@ -110,6 +201,7 @@ test("repeated parks advance one row along the widening schedule", async () => {
 
   for (const [index, delayMs] of RECONCILIATION_RETRY_DELAYS_MS.entries()) {
     const parked = await parkReconciliationItem(scopedDb, {
+      leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
       identityKey: DOCUMENT_KEY,
@@ -118,7 +210,8 @@ test("repeated parks advance one row along the widening schedule", async () => {
       now,
     });
 
-    expect(parked).toEqual({
+    expect(parked).toMatchObject({
+      outcome: "recorded",
       status: RECONCILIATION_ITEM_STATUS.PARKED,
       attempts: index + 1,
     });
@@ -141,6 +234,7 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
   let attempts = 0;
   while (attempts < RECONCILIATION_TERMINAL_ATTEMPTS) {
     const parked = await parkReconciliationItem(scopedDb, {
+      leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
       identityKey: DOCUMENT_KEY,
@@ -148,7 +242,8 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
       errorTag: "detail-unavailable",
       now,
     });
-    attempts = parked.attempts;
+    expect(parked.outcome).toBe("recorded");
+    if (parked.outcome === "recorded") {attempts = parked.attempts;}
   }
 
   const row = await readRow(sourceId, DOCUMENT_KEY);
@@ -178,6 +273,7 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
 test("an item a retry can never key is retired without serving the schedule", async () => {
   const sourceId = await seedSource();
   await retireReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCKET_KEY,
@@ -196,6 +292,7 @@ test("the due read hands out only what has come due, oldest first", async () => 
   const now = new Date("2026-08-11T09:00:00.000Z");
 
   await parkReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCUMENT_KEY,
@@ -207,6 +304,7 @@ test("the due read hands out only what has come due, oldest first", async () => 
   for (const attempt of [1, 2]) {
     expect(attempt).toBeGreaterThan(0);
     await parkReconciliationItem(scopedDb, {
+      leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
       identityKey: DOCKET_KEY,
@@ -245,6 +343,7 @@ test("the due read hands out only what has come due, oldest first", async () => 
 test("the item is forgotten once its decision is stored", async () => {
   const sourceId = await seedSource();
   await parkReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCUMENT_KEY,
@@ -254,6 +353,8 @@ test("the item is forgotten once its decision is stored", async () => {
   });
 
   await resolveReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
+    payload: PAYLOAD,
     sourceId,
     identityKey: DOCUMENT_KEY,
   });
@@ -269,6 +370,7 @@ test("a reset puts retired items back into the hunt, due immediately", async () 
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
   await retireReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCUMENT_KEY,
@@ -304,6 +406,7 @@ test("a sliced reset leaves the other slices retired", async () => {
   const now = new Date("2026-08-11T09:00:00.000Z");
   const otherSlice = "2026-08-05";
   await retireReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCUMENT_KEY,
@@ -312,6 +415,7 @@ test("a sliced reset leaves the other slices retired", async () => {
     now,
   });
   await retireReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: otherSlice,
     identityKey: DOCKET_KEY,
@@ -343,6 +447,7 @@ test("the listing names what a source carries, in both states", async () => {
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
   await parkReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCUMENT_KEY,
@@ -351,6 +456,7 @@ test("the listing names what a source carries, in both states", async () => {
     now,
   });
   await retireReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCKET_KEY,
@@ -394,6 +500,7 @@ test("paging the listing reaches every item exactly once", async () => {
   const now = new Date("2026-08-11T09:00:00.000Z");
   for (const identityKey of [DOCKET_KEY, DOCUMENT_KEY]) {
     await parkReconciliationItem(scopedDb, {
+      leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
       identityKey,
@@ -438,6 +545,7 @@ test("the listing narrows to one slice", async () => {
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
   await parkReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
     identityKey: DOCUMENT_KEY,
@@ -446,6 +554,7 @@ test("the listing narrows to one slice", async () => {
     now,
   });
   await parkReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId,
     slice: "2026-08-05",
     identityKey: DOCKET_KEY,
@@ -468,6 +577,7 @@ test("the listing narrows to one slice", async () => {
 test("one source's items are invisible to another", async () => {
   const [first, second] = await Promise.all([seedSource(), seedSource()]);
   await parkReconciliationItem(scopedDb, {
+    leaseToken: LEASE_TOKEN,
     sourceId: first,
     slice: SLICE,
     identityKey: DOCUMENT_KEY,
