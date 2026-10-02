@@ -43,7 +43,8 @@ const FACETS_CACHE_MAX_ENTRIES = 32;
 const EMPTY_FACETS: LegalBrowseFacets = { country: [], court: [], year: [] };
 
 const browseFacets = createBrowseFacetsCache({
-  load: async (query) => await getLegalSearchProvider().browseFacets(query),
+  load: async (query) =>
+    await getLegalSearchProvider().browseFacets(query, "unobserved"),
   ttlMs: FACETS_CACHE_TTL_MS,
   maxEntries: FACETS_CACHE_MAX_ENTRIES,
 });

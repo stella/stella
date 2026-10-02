@@ -5,11 +5,14 @@ import { pgFtsLegalProvider } from "@/api/lib/legal-search/pg-fts-legal-provider
 import { InvalidLegalSearchCursorError } from "@/api/lib/legal-search/search-error";
 
 test("an undecodable cursor fails before Postgres search work", async () => {
-  const result = await pgFtsLegalProvider.search({
-    cursor: "not a cursor",
-    limit: 10,
-    query: "nájemné",
-  });
+  const result = await pgFtsLegalProvider.search(
+    {
+      cursor: "not a cursor",
+      limit: 10,
+      query: "nájemné",
+    },
+    "unobserved",
+  );
 
   expect(Result.isError(result)).toBe(true);
   if (Result.isOk(result)) {

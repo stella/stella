@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { isRecord } from "../shared/guards.js";
+import type { RegistryRequestObservation } from "../shared/request-observer.js";
 import {
   malformed,
   optionalText,
@@ -259,6 +260,7 @@ const parseIsirAnswer = (
   });
 
 type IsirQuery = {
+  observer: RegistryRequestObservation;
   subject: CheckedEntityCheckSubject;
   pendingOnly: boolean;
   signal: AbortSignal | undefined;
@@ -297,6 +299,7 @@ const queryIsir = async ({
   subject,
   pendingOnly,
   signal,
+  observer,
 }: IsirQuery): Promise<Result<IsirAnswer, EntityCheckSourceError>> => {
   // The service rejects empty elements, so optional ones are omitted.
   const criteria = [
@@ -306,6 +309,7 @@ const queryIsir = async ({
   ].join("");
   const body = await soapRequest({
     url: ENDPOINT,
+    observer,
     soapAction: "",
     namespaces: { typ: TYPES_NAMESPACE },
     body: `<typ:getIsirWsCuzkDataRequest>${criteria}</typ:getIsirWsCuzkDataRequest>`,
@@ -345,12 +349,13 @@ const phaseOf = (
 export const checkCzInsolvency = async (
   subject: CheckedEntityCheckSubject,
   signal: AbortSignal | undefined,
+  observer: RegistryRequestObservation,
 ): Promise<
   Result<SourceAnswer<CzInsolvencyFinding, null>, EntityCheckSourceError>
 > =>
   await Result.gen(async function* () {
     const all = yield* Result.await(
-      queryIsir({ subject, pendingOnly: false, signal }),
+      queryIsir({ subject, pendingOnly: false, signal, observer }),
     );
     if (all.type === "empty") {
       return Result.ok({
@@ -370,6 +375,7 @@ export const checkCzInsolvency = async (
     const pendingQuery = await queryIsir({
       subject,
       pendingOnly: true,
+      observer,
       signal,
     });
     const pending = yield* settlePending(pendingQuery);

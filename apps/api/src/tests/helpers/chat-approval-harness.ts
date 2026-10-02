@@ -28,6 +28,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
+import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
@@ -43,6 +44,7 @@ import {
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import {
   findLiveViewViolations,
   findUnservedSnapshotMessages,
@@ -88,6 +90,7 @@ import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-t
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
 // A real chat round trip: the production `send-message` handler and
 // `streamChat` pipeline, with a scripted model behind the adapter seam, one
@@ -228,6 +231,8 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  beforeTurnSettles,
+  boundaryAnonymizer,
   ids,
   model,
   organizationAIConfig = orgAIConfig,
@@ -238,6 +243,22 @@ export const createApprovalHarness = ({
   testDb,
   withDirectRefTool = false,
 }: {
+  /**
+   * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
+   * test can make it fail. The real pipeline by default.
+   */
+  boundaryAnonymizer?: typeof anonymizeTextFields | undefined;
+  /**
+   * Runs once a turn's stream has ended and before the send stores its
+   * outcome, with the outcome the run proposes: what a stop or another owner
+   * does there races the turn's own settlement.
+   */
+  beforeTurnSettles?:
+    | ((props: {
+        outcome: StreamChatFinishEvent["outcome"];
+        threadId: SafeId<"chatThread">;
+      }) => Promise<void>)
+    | undefined;
   ids: TestIds;
   /**
    * What a turn can draw on beyond Stella's own tools: the matters in its
@@ -266,6 +287,9 @@ export const createApprovalHarness = ({
   scopedDb: ScopedDb;
   testDb: TestDatabase;
 }) => {
+  // Every database access of a turn goes to the test database; one that
+  // reaches the shared pools escaped it, and fails the test at `close`.
+  const rootPoolConnectionsAtStart = rootPoolConnectionCount();
   const provider = model ?? installScriptedProvider();
   const executions: string[] = [];
   const approvalTool = toolDefinition({
@@ -330,7 +354,32 @@ export const createApprovalHarness = ({
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     compactMessagesForContext,
-    streamResponse: streamChat,
+    streamResponse:
+      boundaryAnonymizer === undefined && beforeTurnSettles === undefined
+        ? streamChat
+        : async (props) =>
+            await streamChat({
+              ...props,
+              ...(beforeTurnSettles === undefined
+                ? {}
+                : {
+                    onFinish: async (event) => {
+                      await beforeTurnSettles({
+                        outcome: event.outcome,
+                        threadId: props.threadId,
+                      });
+                      return await props.onFinish(event);
+                    },
+                  }),
+              thirdPartyBoundary:
+                boundaryAnonymizer !== undefined &&
+                props.thirdPartyBoundary.type === "anonymized"
+                  ? {
+                      ...props.thirdPartyBoundary,
+                      anonymizeFields: boundaryAnonymizer,
+                    }
+                  : props.thirdPartyBoundary,
+            }),
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
   /** Per thread: the send handler, recording each request's ref registry. */
@@ -391,6 +440,7 @@ export const createApprovalHarness = ({
       memberRole: { role: "owner" },
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu",
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
@@ -1394,6 +1444,12 @@ export const createApprovalHarness = ({
       } finally {
         globalThis.fetch = originalFetch;
         provider.restore();
+      }
+      const rootPoolConnections = rootPoolConnectionCount();
+      if (rootPoolConnections !== rootPoolConnectionsAtStart) {
+        panic(
+          "A chat turn connected to the shared database pools instead of the test database; inject that side path (as `indexThread` is) so it uses the test's database",
+        );
       }
     },
     /** Drops the connection of `threadId`'s response still streaming. */

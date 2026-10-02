@@ -39,7 +39,15 @@ const config = {
  */
 const clauseVersionSummarize = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params, safeDb, user, orgAIConfig }) {
+  async function* ({
+    scopedDb,
+    session,
+    params,
+    safeDb,
+    user,
+    orgAIConfig,
+    managedAIResidency,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     const sources = yield* Result.await(
@@ -72,6 +80,7 @@ const clauseVersionSummarize = createSafeRootHandler(
         currentText: sources.currentText,
         feature: "clauses.version_summary",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         safeDb,
         userId: user.id,

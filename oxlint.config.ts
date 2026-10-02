@@ -194,6 +194,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-offset-pagination.fixture.ts", [
     "no-offset-pagination/no-offset-pagination",
   ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.ts", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
     "no-optional-mutation-command/no-optional-mutation-command",
   ]),
@@ -883,6 +889,7 @@ export default defineConfig({
     "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
     "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
       "error",
+    "require-tenant-page-limit/require-tenant-page-limit": "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
@@ -946,6 +953,7 @@ export default defineConfig({
       },
     ],
     "no-nanoid/no-nanoid": "error",
+    "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
     "no-direct-lucide-import/no-direct-lucide-import": "error",
@@ -1225,6 +1233,7 @@ export default defineConfig({
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
+    "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
@@ -1271,6 +1280,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
     "./.oxlint-plugins/legislation-window.ts",
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
+    "./.oxlint-plugins/require-tenant-page-limit.ts",
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
@@ -1806,7 +1816,11 @@ export default defineConfig({
       // Repository and workspace tooling: CLIs that print reports, plus the
       // on-demand eval runs. Anchored so `apps/api/src/scripts`, which ships
       // as runtime workers and backfills, keeps the product rules.
-      files: [...toolingScriptFiles, "apps/*/evals/**"],
+      files: [
+        ...toolingScriptFiles,
+        "apps/*/evals/**",
+        "packages/property-testing/src/index.ts",
+      ],
       rules: {
         "no-console": "off",
         // `noPropertyAccessFromIndexSignature` requires bracket access on the
@@ -4601,6 +4615,28 @@ export default defineConfig({
             name: "Bun",
             message:
               "@stll/cli is published to npm and must run under plain Node; use node:* APIs (node:fs/promises, node:crypto, node:http, node:child_process) instead of the Bun global.",
+          },
+        ],
+      },
+    },
+    {
+      files: ["packages/business-registries/src/**/*.ts"],
+      excludeFiles: [
+        "packages/business-registries/src/**/*.test.ts",
+        "packages/business-registries/src/shared/encode-registry-component.ts",
+      ],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          {
+            globals: [
+              {
+                name: "encodeURIComponent",
+                message:
+                  "Use encodeRegistryComponent from shared/encode-registry-component.js for registry URL components.",
+              },
+            ],
+            checkGlobalObject: true,
           },
         ],
       },

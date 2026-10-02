@@ -9,6 +9,7 @@ import { PDF, StandardFonts } from "@libpdf/core";
 import { describe, expect, test } from "bun:test";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   buildSkDecisionPdfBlocks,
   isUnreadablePdfError,
@@ -178,6 +179,25 @@ describe("PDF byte fixture text retention", () => {
     for (const texts of [["1234", "Body"], ["Body", "1234"], ["1"]]) {
       const { fulltext } = await parseLines(texts);
       expect(fulltext).toBe(texts.join(" "));
+    }
+  });
+
+  test("keeps an unknown publisher literal as ordinary text", async () => {
+    const { fulltext } = await parseLines(["fe&ion;"]);
+
+    expect(fulltext).toBe("fe&ion;");
+    expect(markupResidueIn(fulltext)).toBeUndefined();
+  });
+
+  test("still reports recognized references left in PDF text", async () => {
+    for (const reference of ["&amp;amp;", "&eacute;"]) {
+      const { fulltext } = await parseLines([reference]);
+
+      expect(fulltext).toContain(reference);
+      expect(markupResidueIn(fulltext)).toMatchObject({
+        rule: "entity",
+        excerpt: reference,
+      });
     }
   });
 });

@@ -300,23 +300,11 @@ const selectedCombinations: readonly ChatCombination[] = (() => {
 /**
  * What a combination's turn breaks today, by the rule it breaks. Each such
  * combination runs as a test marked failing under the finding's name, so it
- * fails loudly once the turn stops breaking the rule.
+ * fails loudly once the turn stops breaking the rule. None today: a new
+ * finding is a condition on the combination that returns the rule it breaks.
  */
-const knownFindingOf = (combination: ChatCombination): string | undefined => {
-  // OpenAI's reasoning is stored as a thinking part whose signature packs
-  // its encrypted content, and the Anthropic adapter sends every signed
-  // thinking part back as a thinking block: Anthropic is handed a signature
-  // it did not issue. Minimal repro: an OpenAI turn that reasoned before a
-  // tool call, continued on an Anthropic model.
-  if (
-    combination.history === "reasoning" &&
-    combination.origin.provider === "openai" &&
-    combination.target.provider === "anthropic"
-  ) {
-    return "an Anthropic turn is sent the signed reasoning an OpenAI model wrote";
-  }
-  return undefined;
-};
+const knownFindingOf = (_combination: ChatCombination): string | undefined =>
+  undefined;
 
 // --- Conversations ------------------------------------------------------------
 
@@ -593,6 +581,7 @@ const converse = async (
           abortSignal: AbortSignal.timeout(CONVERSATION_TIMEOUT_MS),
           dataWorkspaceIds: [],
           orgAIConfig: orgConfigOf(origin),
+          managedAIResidency: "eu",
           organizationId: ids.orgA,
           preserveTokens: 1,
           safeDb,

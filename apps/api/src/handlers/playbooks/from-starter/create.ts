@@ -41,6 +41,7 @@ const createPlaybookFromStarter = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     recordAuditEvent,
@@ -58,6 +59,7 @@ const createPlaybookFromStarter = createSafeRootHandler(
       safeDb,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       recordAuditEvent,

@@ -279,6 +279,7 @@ type Applied =
   | { type: "held"; detail: string };
 
 type ApplyOptions = {
+  batchRecordLimit?: number;
   sourceId: SafeId<"caseLawSource">;
   decisions: readonly IngestionResult[];
   corpus: CaseLawCorpusDependencies;
@@ -303,7 +304,7 @@ const leaseFor = async (sourceId: SafeId<"caseLawSource">) =>
 const crawlCaller: Caller = {
   name: "a crawl page",
   source: crawlSource,
-  apply: async ({ sourceId, decisions, corpus }) => {
+  apply: async ({ sourceId, decisions, corpus, batchRecordLimit }) => {
     const sourceLease = await leaseFor(sourceId);
     const nextCursor = `${sourceLease.source.syncCursor ?? "page"}+`;
     czNsAdapter.fetchPage = async () =>
@@ -317,6 +318,7 @@ const crawlCaller: Caller = {
           sourceLease,
           scopedDb,
           maxPages: 1,
+          ...(batchRecordLimit === undefined ? {} : { batchRecordLimit }),
           corpus,
         }),
       catch: (cause) => cause,
@@ -859,15 +861,43 @@ describe("the batch bounds", () => {
       CASE_LAW_BATCH_BOUNDS_REASON.RECORD_TOO_LARGE,
     );
   });
+  test("a smaller record bound admits exactly the bound and splits the next record", () => {
+    const recordLimit = 2;
+    const admitted = prepareCaseLawIngestionBatch({
+      decisions: records(recordLimit),
+      recordLimit,
+    });
+    expect(Result.isOk(admitted) ? admitted.value.decisions : null).toEqual(
+      records(recordLimit),
+    );
+    const refused = prepareCaseLawIngestionBatch({
+      decisions: records(recordLimit + 1),
+      recordLimit,
+    });
+    expect(Result.isError(refused) ? refused.error.reason : null).toBe(
+      CASE_LAW_BATCH_BOUNDS_REASON.TOO_MANY_RECORDS,
+    );
+    expect(
+      admitPageDecisions(records(recordLimit + 1), recordLimit).map(
+        ({ decisions }) => decisions.map(({ caseNumber }) => caseNumber),
+      ),
+    ).toEqual([
+      records(recordLimit).map(({ caseNumber }) => caseNumber),
+      [record(recordLimit + 1).caseNumber],
+    ]);
+  });
+
   test(
     "a crawl page over the record bound is applied in bounded batches",
     async () => {
       const sourceId = await crawlSource();
       const { corpus, landed } = landingTransfer();
-      const count = CASE_LAW_INGESTION_BATCH_LIMITS.records + 1;
+      const batchRecordLimit = 2;
+      const count = batchRecordLimit + 1;
 
       const applied = await crawlCaller.apply({
         sourceId,
+        batchRecordLimit,
         decisions: records(count),
         corpus,
       });

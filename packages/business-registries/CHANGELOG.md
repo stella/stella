@@ -1,5 +1,23 @@
 # @stll/business-registries
 
+## 0.11.1
+
+### Patch Changes
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry input handling.
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry record handling.
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry response handling.
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry submission handling.
+
+## 0.11.0
+
+### Minor Changes
+
+- [#4326](https://github.com/stella/stella/pull/4326) [`ff31a57`](https://github.com/stella/stella/commit/ff31a57adcce31d3b8c46e95218348bb3f31bc70) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add an opt-in request observation hook.
+
 ## 0.10.2
 
 ### Patch Changes

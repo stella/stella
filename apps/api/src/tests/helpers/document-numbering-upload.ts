@@ -65,6 +65,7 @@ export const runNumberingUpload = async ({
     memberRole: { role: "owner" as const },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu",
     promptCachingEnabled: false,
     request,
     route: "/test/uploads",

@@ -11,11 +11,12 @@
 
 import { EventType, maxIterations, toolDefinition } from "@tanstack/ai";
 import type { AnyServerTool, TokenUsage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import * as v from "valibot";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { resolveCaching } from "@/api/lib/ai-config";
+import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   mergeGenerationOptions,
@@ -298,19 +299,27 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
     getTanStackTextModelById,
     getTanStackTextModelForRole,
     getTanStackTextModelInfoForRole,
-    hasTanStackInstanceProvider,
+    requireTanStackAIAvailableForRole,
   } = await import("@/api/lib/tanstack-ai-models");
 
-  if (!hasTanStackInstanceProvider()) {
+  const available = requireTanStackAIAvailableForRole({
+    configStatus: ORG_AI_CONFIG_STATUS.ok,
+    orgConfig: null,
+    role: "fast",
+    dataClass: "public_corpus",
+  });
+  if (Result.isError(available)) {
     return null;
   }
 
   const overrideModel = process.env["AI_BENCH_MODEL"];
   if (overrideModel) {
     const info = getTanStackTextModelInfoForRole("fast", null, {
+      dataClass: "public_corpus",
       organizationId: null,
     });
     const model = getTanStackTextModelById(overrideModel, null, {
+      dataClass: "public_corpus",
       role: "fast",
       organizationId: null,
     });
@@ -322,9 +331,11 @@ const getBenchModel = async (): Promise<BenchModel | null> => {
   }
 
   const info = getTanStackTextModelInfoForRole("fast", null, {
+    dataClass: "public_corpus",
     organizationId: null,
   });
   const model = getTanStackTextModelForRole("fast", null, {
+    dataClass: "public_corpus",
     organizationId: null,
   });
   return {

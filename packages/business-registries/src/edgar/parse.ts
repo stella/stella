@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { Temporal } from "temporal-polyfill/full";
 
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
   EdgarAddress,
@@ -173,6 +174,6 @@ export const parseSubmission = (
     status,
     // Browse-EDGAR accepts the zero-padded or unpadded CIK; using the
     // padded form keeps the URL stable and matches the JSON field.
-    registryUrl: `${EDGAR_BROWSE_URL}${cik}`,
+    registryUrl: `${EDGAR_BROWSE_URL}${encodeRegistryComponent(cik)}`,
   };
 };

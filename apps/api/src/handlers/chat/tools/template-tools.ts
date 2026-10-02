@@ -16,6 +16,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   buildAiConditionDecider,
   buildAiFieldGenerator,
@@ -91,6 +92,7 @@ type CreateTemplateToolsArgs = {
    * deployments. Callers must pass it (use `null` when there is genuinely none).
    */
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   /** Records the EXECUTE audit event for a fill when present. */
   recordAuditEvent?: AuditRecorder | undefined;
   /** The chat turn's boundary, which prepares the nested AI-field requests. */
@@ -116,6 +118,7 @@ const buildTemplateAiAnalytics = ({
   feature,
 }: TemplateAiAnalyticsArgs) =>
   createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -145,6 +148,7 @@ export const createTemplateTools = ({
   organizationId,
   userId,
   orgAIConfig,
+  managedAIResidency,
   recordAuditEvent,
   thirdPartyBoundary,
 }: CreateTemplateToolsArgs) => {
@@ -159,6 +163,7 @@ export const createTemplateTools = ({
   const aiCollaborators = (unrestoredFields: Set<string>) => {
     const shared = {
       orgAIConfig: orgAIConfig ?? null,
+      managedAIResidency,
       organizationId,
       aiAnalytics: buildTemplateAiAnalytics({
         safeDb,
@@ -301,6 +306,7 @@ type CreateTemplateAuthoringToolsArgs = {
   userId: SafeId<"user">;
   /** Org AI config from the chat turn; see `createTemplateTools`. */
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   /** The chat turn's boundary, which prepares the nested suggestion request. */
   thirdPartyBoundary: ChatThirdPartyBoundary;
   dependencies?: TemplateAuthoringToolDependencies | undefined;
@@ -354,6 +360,7 @@ export const createTemplateAuthoringTools = ({
   organizationId,
   userId,
   orgAIConfig,
+  managedAIResidency,
   thirdPartyBoundary,
   dependencies = defaultTemplateAuthoringToolDependencies,
 }: CreateTemplateAuthoringToolsArgs) => {
@@ -430,6 +437,7 @@ export const createTemplateAuthoringTools = ({
           instructions:
             instructions === null ? undefined : preparedInstructions.value,
           orgAIConfig: orgAIConfig ?? null,
+          managedAIResidency,
           organizationId,
           aiAnalytics,
         });

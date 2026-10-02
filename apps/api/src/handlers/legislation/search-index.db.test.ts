@@ -48,7 +48,7 @@ const searchDependencies = {
       languages: [],
     },
   ],
-} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[2]>;
+} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
@@ -364,6 +364,7 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
     await searchLegislationHandler(
       { query: "retry pending sentinel" },
       searchReadDb,
+      "unobserved",
       searchDependencies,
     ),
   ).toMatchObject({ items: [], total: SEARCH_TOTAL_NOT_COUNTED });
@@ -397,6 +398,7 @@ test("an unreadable corpus row does not block the bounded missing scan", async (
     await searchLegislationHandler(
       { query: "repaired corpus sentinel" },
       searchReadDb,
+      "unobserved",
       searchDependencies,
     ),
   ).toMatchObject({

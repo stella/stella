@@ -7,12 +7,17 @@ import {
 } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import type { SafeId } from "@/api/lib/branded-types";
 import {
   executeRegistryLookup,
   type RegistryHandler,
   LOOKUP_DETAIL_DESCRIPTION,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 const BUSINESS_REGISTRY_LOOKUP_TOOL_NAME = "business_registry_lookup" as const;
 
@@ -37,6 +42,7 @@ const QUERY_DESCRIPTION_BASE =
   "name search where the selected registry supports name search.";
 
 type CreateBusinessRegistryToolsArgs = {
+  organizationId: SafeId<"organization">;
   /**
    * Organization-bound registry handlers permitted on this chat turn.
    * Discovery and execution consume these exact handlers.
@@ -60,6 +66,7 @@ type CreateBusinessRegistryToolsArgs = {
  */
 export const createBusinessRegistryTools = ({
   enabledHandlers,
+  organizationId,
 }: CreateBusinessRegistryToolsArgs) => {
   const enabledJurisdictions = [
     ...new Set(enabledHandlers.map(({ country }) => country)),
@@ -142,6 +149,10 @@ export const createBusinessRegistryTools = ({
       description: TOOL_DESCRIPTION_BASE + canonicalOnlySuffix,
       inputSchema: toTanStackToolSchema(inputSchema),
     }).server(async ({ detail, jurisdiction, limit, query, registry }) => {
+      const observer = actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      );
       const handler = resolveHandler({
         enabledHandlers,
         jurisdiction,
@@ -156,6 +167,7 @@ export const createBusinessRegistryTools = ({
         };
       }
       const result = await executeRegistryLookup({
+        observer,
         handler,
         query,
         detail,

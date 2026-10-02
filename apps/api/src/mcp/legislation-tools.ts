@@ -31,7 +31,12 @@ import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-v
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import {
   isLegislationSearchSuccess,
   isStatuteDocument,
@@ -529,7 +534,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     query,
     status,
   } = parsed.output;
-  const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
+  );
 
   const jurisdiction = publicLegislationCountry(country);
   if (jurisdiction === null) {
@@ -539,6 +546,10 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     );
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.corpusRequest,
+  );
   const result = await (
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler
@@ -555,6 +566,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(dateTo === undefined ? {} : { dateTo }),
     },
     legislationPublicReadDb,
+    observer,
   );
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
@@ -668,7 +680,11 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     defaultListStatuteVersionsHandler
   )({
     documentId: resolved.id,
-    query: { limit: LIMITS.legislationVersionsPageSizeDefault },
+    query: {
+      limit: normalizeTenantPageLimit(
+        LIMITS.legislationVersionsPageSizeDefault,
+      ),
+    },
     legislationDb: legislationPublicReadDb,
   });
   if (!isStatuteVersionsPage(versionsPage)) {
@@ -1002,8 +1018,9 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { anchor, cursor, eli, language } = parsed.output;
-  const limit =
-    parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
+  );
 
   // The history walks the whole Work, so it resolves the Work rather than a
   // consolidation applicable today: a repealed, expired or not-yet-effective

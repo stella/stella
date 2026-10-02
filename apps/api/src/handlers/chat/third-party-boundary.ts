@@ -3,13 +3,11 @@ import { panic, Result } from "better-result";
 
 import { createPipelineContext, deanonymise } from "@stll/anonymize";
 import type { PipelineContext } from "@stll/anonymize";
-import {
-  CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
-} from "@stll/anonymize-chat";
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
@@ -40,8 +38,9 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
+import { protectValuesForAnonymization } from "@/api/mcp/field-markers";
 
 export type ChatThirdPartyBoundary =
   | { type: "raw" }
@@ -395,32 +394,11 @@ const rewritePlaceholders = (
 const protectBoundaryPlaceholders = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
   fields: string[],
-): {
-  fields: string[];
-  restore: (protectedFields: string[]) => string[];
-} => {
-  if (boundary.redactionMap.size === 0) {
-    return { fields, restore: (protectedFields) => protectedFields };
-  }
-
-  const replacements = new Map<string, string>();
-  const restoreReplacements = new Map<string, string>();
-  let index = 0;
-  for (const placeholder of boundary.redactionMap.keys()) {
-    const sentinel = `\uE000BOUNDARY_PLACEHOLDER_${index}\uE001`;
-    replacements.set(placeholder, sentinel);
-    restoreReplacements.set(sentinel, placeholder);
-    index += 1;
-  }
-
-  return {
-    fields: fields.map((field) => rewritePlaceholders(field, replacements)),
-    restore: (protectedFields) =>
-      protectedFields.map((field) =>
-        rewritePlaceholders(field, restoreReplacements),
-      ),
-  };
-};
+) =>
+  protectValuesForAnonymization({
+    fields,
+    values: [...boundary.redactionMap.keys()],
+  });
 
 const rewriteBoundaryPlaceholders = (
   boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>,
@@ -710,6 +688,24 @@ const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
 
 type BoundaryRefusal = HandlerError<422 | 500>;
 
+/**
+ * Nothing reaches the provider when anonymization did not complete: the
+ * anonymizer failed (`pipeline_error`), or the field structure it was given
+ * did not survive it (`field_boundary`).
+ */
+const anonymizationFailure = (
+  reason: "field_boundary" | "pipeline_error",
+  cause: unknown,
+): BoundaryRefusal =>
+  refuseAnonymizedCrossing({
+    cause,
+    message: "Failed to anonymize content before sending it to the AI.",
+    offerRawRetry: false,
+    reason,
+    site: "text_batch",
+    status: 500,
+  });
+
 type TextReplacement =
   | {
       type: "replace";
@@ -721,6 +717,67 @@ type TextReplacement =
       text: string;
       message: string;
     };
+
+/**
+ * Anonymize already-encoded fields in one call with the boundary's issued
+ * placeholders protected, then renumber and restore them. The caller merges
+ * the returned `redactionMap` once it accepts the fields. Any failure, a
+ * damaged field structure included, is a refusal: nothing is forwarded.
+ */
+const anonymizeBoundaryFields = async ({
+  boundary,
+  encodedFields,
+  sourceFields,
+}: {
+  boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }>;
+  encodedFields: string[];
+  sourceFields: string[];
+}): Promise<Result<AnonymizedTextFieldsResult, BoundaryRefusal>> => {
+  const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
+  const protectedInput = protectBoundaryPlaceholders(boundary, encodedFields);
+  if (Result.isError(protectedInput)) {
+    return Result.err(
+      anonymizationFailure("field_boundary", protectedInput.error),
+    );
+  }
+  const anonymized = await Result.tryPromise({
+    try: async () =>
+      await anonymizeFields({
+        context: boundary.pipelineContext,
+        fields: protectedInput.value.fields,
+        forcedSensitiveValues: forcedSensitiveValuesForFields(
+          boundary,
+          sourceFields,
+        ),
+        catalogs: {
+          type: "preloaded",
+          excludedCanonicals: await boundary.excludedCanonicals,
+          gazetteerEntries: await boundary.gazetteerEntries,
+        },
+        organizationId: boundary.organizationId,
+        workspaceId: boundary.anonymizationScopeId,
+      }),
+    catch: (cause) => anonymizationFailure("pipeline_error", cause),
+  });
+  if (Result.isError(anonymized)) {
+    return Result.err(anonymized.error);
+  }
+  if (Result.isError(anonymized.value)) {
+    return Result.err(
+      anonymizationFailure("field_boundary", anonymized.value.error),
+    );
+  }
+
+  const rewritten = rewriteBoundaryPlaceholders(
+    boundary,
+    anonymized.value.value,
+  );
+  const restored = protectedInput.value.restore(rewritten.fields);
+  if (Result.isError(restored)) {
+    return Result.err(anonymizationFailure("field_boundary", restored.error));
+  }
+  return Result.ok({ ...rewritten, fields: restored.value });
+};
 
 export const prepareTextForThirdParty = async ({
   boundary,
@@ -850,44 +907,21 @@ const prepareTextBatchForThirdParty = async ({
     return Result.ok(undefined);
   }
 
-  const anonymizeFields = boundary.anonymizeFields ?? anonymizeTextFields;
   reserveSourcePlaceholders(boundary, fields);
-  const protectedInput = protectBoundaryPlaceholders(
+  const anonymized = await anonymizeBoundaryFields({
     boundary,
-    sourceAlreadyEncoded
+    encodedFields: sourceAlreadyEncoded
       ? fields
       : fields.map((field) => encodeLateLiteralPlaceholders(boundary, field)),
-  );
-  const anonymized = await Result.tryPromise({
-    try: async () =>
-      await anonymizeFields({
-        context: boundary.pipelineContext,
-        fields: protectedInput.fields,
-        forcedSensitiveValues: forcedSensitiveValuesForFields(boundary, fields),
-        catalogs: {
-          type: "preloaded",
-          excludedCanonicals: await boundary.excludedCanonicals,
-          gazetteerEntries: await boundary.gazetteerEntries,
-        },
-        organizationId: boundary.organizationId,
-        workspaceId: boundary.anonymizationScopeId,
-      }),
-    catch: (cause) =>
-      new HandlerError({
-        status: 500,
-        message: "Failed to anonymize content before sending it to the AI.",
-        cause,
-      }),
+    sourceFields: fields,
   });
-
   if (Result.isError(anonymized)) {
     return Result.err(anonymized.error);
   }
-
-  const rewritten = rewriteBoundaryPlaceholders(boundary, anonymized.value);
+  const rewritten = anonymized.value;
   const forced = applyEarlierMappings(boundary, {
     batchRedactionMap: rewritten.redactionMap,
-    fields: protectedInput.restore(rewritten.fields),
+    fields: rewritten.fields,
   });
   const restoredFields = forced.fields;
 
@@ -901,10 +935,12 @@ const prepareTextBatchForThirdParty = async ({
       ) !== replacement.text
     ) {
       return Result.err(
-        new HandlerError({
-          code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-          status: 422,
+        refuseAnonymizedCrossing({
           message: replacement.message,
+          offerRawRetry: true,
+          reason: "field_boundary",
+          site: "text_batch",
+          status: 422,
         }),
       );
     }
@@ -975,11 +1011,13 @@ const anonymizePlainTextFile = ({
 }): Result<ChatMessage["parts"][number], BoundaryRefusal> => {
   if (getChatAttachmentMimeType(part) !== TEXT_PLAIN_MIME_TYPE) {
     return Result.err(
-      new HandlerError({
-        code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-        status: 422,
+      refuseAnonymizedCrossing({
         message:
           "Cannot send this attachment to the AI in anonymized mode because stella cannot extract and anonymize it safely.",
+        offerRawRetry: true,
+        reason: "unsupported_content",
+        site: "attachment",
+        status: 422,
       }),
     );
   }
@@ -992,12 +1030,14 @@ const anonymizePlainTextFile = ({
 
   if (Result.isError(parsed)) {
     return Result.err(
-      new HandlerError({
-        code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-        status: 422,
+      refuseAnonymizedCrossing({
+        cause: parsed.error,
         message:
           "Cannot send this attachment to the AI in anonymized mode because stella cannot read it as text.",
-        cause: parsed.error,
+        offerRawRetry: true,
+        reason: "unsupported_content",
+        site: "attachment",
+        status: 422,
       }),
     );
   }
@@ -1087,10 +1127,12 @@ const refuseUnpreparedPart = (
   partType: string,
 ): Result<never, BoundaryRefusal> =>
   Result.err(
-    new HandlerError({
-      code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-      status: 422,
+    refuseAnonymizedCrossing({
       message: `Cannot send a stored ${partType} part to the AI in anonymized mode.`,
+      offerRawRetry: true,
+      reason: "unsupported_content",
+      site: "stored_part",
+      status: 422,
     }),
   );
 
@@ -1634,10 +1676,13 @@ const anonymizeToolResultContent = ({
     content.some((part) => part.type !== "text" && part.source.type === "data")
   ) {
     return Result.err(
-      new HandlerError({
-        status: 422,
+      refuseAnonymizedCrossing({
         message:
           "Inline rich-media data cannot cross an anonymized third-party boundary.",
+        offerRawRetry: false,
+        reason: "unsupported_content",
+        site: "rich_media",
+        status: 422,
       }),
     );
   }
@@ -1819,10 +1864,13 @@ export const prepareToolsForThirdParty = ({
           if (policy.requiresAnonymization) {
             // The tool runtime reports a failed call by the error its execute
             // function throws.
-            throw new HandlerError({
-              status: 422,
+            throw refuseAnonymizedCrossing({
               message:
                 "External chat tools require anonymized mode before stella can call them.",
+              offerRawRetry: false,
+              reason: "mode_policy",
+              site: "external_tool",
+              status: 422,
             });
           }
           const outputValue: unknown = await execute(input, context);

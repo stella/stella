@@ -17,6 +17,7 @@ import {
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 /** Bounded reference-document picker page size. */
@@ -46,7 +47,9 @@ const listSourcesHandler = async function* ({
   workspaceId,
   query,
 }: ListSourcesArgs) {
-  const limit = query.limit ?? SOURCES_PAGE_SIZE_DEFAULT;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? SOURCES_PAGE_SIZE_DEFAULT,
+  );
   const search = query.q?.trim() ?? "";
   const cursor = decodeEntityFileListCursor(query.cursor);
   const cursorCondition = entityFileListCursorCondition(cursor);

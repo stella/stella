@@ -50,6 +50,7 @@ test("versioned writes and future sidecars read the same text states", () => {
           publisher: "fixture",
           _stellaDecisionTextAbsenceVersion: 2,
         };
+
         const explicit = [];
         for (const field of DECISION_TEXT_FIELD_KEYS) {
           const value = textFields[field];
