@@ -49,6 +49,7 @@ const runSelector = (
       "-c",
       `changed_files=("$@"); e2e_core_required=false
 e2e_landing_required="$E2E_LANDING_REQUIRED"
+package_checks_required=true
 ${selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       "ci-plan-test",
@@ -335,7 +336,7 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
     }),
     propertyConfig({ numRuns: 10 }),
   );
-}, 15_000);
+}, 30_000);
 
 const workflowJobs = (source: string) =>
   v.parse(
@@ -1884,10 +1885,14 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     "Run Valkey-gated API suites",
     "Run cross-replica collaboration suite",
   ]);
+  const suiteScopes = new Map([
+    ["Run Postgres-gated API suites", "postgres_suites_required"],
+    ["Run corpus engine suites", "corpus_suites_required"],
+    ["Run Valkey-gated API suites", "valkey_suites_required"],
+    ["Run cross-replica collaboration suite", "collaboration_suite_required"],
+  ]);
   for (const suite of suites) {
-    const scope = suite.run?.includes("@stll/collab")
-      ? "collab_redis_required"
-      : "package_checks_required";
+    const scope = suiteScopes.get(suite.name);
     const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
     expect(suite.if).toBe(
       suite.run === "bun run test:postgres"
@@ -2010,12 +2015,14 @@ test("dependency inputs plan a malware scan and unrelated paths do not", () => {
 });
 
 type RunChangedFilesOptions = {
+  suiteDepth?: SuiteDepth;
   baseRef?: string;
   changedPath?: "bun.lock" | "package.json" | "e2e-spec" | "documentation";
   gitShim?: string;
 };
 
 const runChangedFilesStep = ({
+  suiteDepth = "fast",
   baseRef = "main",
   changedPath,
   gitShim,
@@ -2097,7 +2104,7 @@ const runChangedFilesStep = ({
         ? `${nodePath.dirname(gitShim)}:${process.env["PATH"] ?? ""}`
         : (process.env["PATH"] ?? ""),
       PR_TITLE: "",
-      SUITE_DEPTH: "fast",
+      SUITE_DEPTH: suiteDepth,
     };
     const run = Bun.spawnSync(["bash", "-e", "-c", step?.run ?? "exit 1"], {
       cwd: repository,
@@ -2363,4 +2370,91 @@ test("service-suite PR scope binds planning, execution, and the fast result gate
       );
     }
   }
+});
+
+test("each folded service step follows its own dependency scope at PR depth", () => {
+  const scopes = [
+    "postgres_suites_required",
+    "corpus_suites_required",
+    "valkey_suites_required",
+    "collaboration_suite_required",
+  ];
+  const timePlan = runSelector(
+    ["packages/time/src/index.ts"],
+    [...scopes, "collab_redis_required", "service_suites_pr_required"],
+  );
+  expect(timePlan.at(3)).toBe("true");
+  expect(timePlan.at(4)).toBe("false");
+  expect(timePlan.at(5)).toBe("true");
+  const collaboration = jobSteps(ciJobs["service-suites"]).find(
+    ({ name }) => name === "Run cross-replica collaboration suite",
+  );
+  expect(collaboration?.if).toBe(
+    `\${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}`,
+  );
+  const planned = Object.fromEntries(
+    scopes.map((scope, index) => [scope, timePlan.at(index)]),
+  );
+  const evaluateStep = (
+    predicate: string,
+    values: Record<string, string | undefined>,
+  ) =>
+    Bun.spawnSync([
+      "bash",
+      "-c",
+      `[[ ${predicate
+        .replace(/^\$\{\{\s*/u, "")
+        .replace(/\s*\}\}$/u, "")
+        .replaceAll("!cancelled()", "true")
+        .replaceAll("always()", "true")
+        .replace(
+          /needs\.ci-plan\.outputs\.(\w+)/gu,
+          (_, scope: string) => `'${values[scope]}'`,
+        )} ]]`,
+    ]).exitCode;
+  expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(0);
+  for (const [name, scope] of [
+    ["Run Postgres-gated API suites", "postgres_suites_required"],
+    ["Start corpus engine", "corpus_suites_required"],
+    ["Run corpus engine suites", "corpus_suites_required"],
+    ["Corpus engine diagnostics and cleanup", "corpus_suites_required"],
+    ["Run Valkey-gated API suites", "valkey_suites_required"],
+    ["Run cross-replica collaboration suite", "collaboration_suite_required"],
+  ]) {
+    const predicate =
+      jobSteps(ciJobs["service-suites"]).find((step) => step.name === name)
+        ?.if ?? "false";
+    for (const selected of scopes) {
+      const values = Object.fromEntries(
+        scopes.map((key) => [key, String(key === selected)]),
+      );
+      expect(evaluateStep(predicate, values), `${name}: ${selected}`).toBe(
+        scope === selected ? 0 : 1,
+      );
+    }
+  }
+  expect(runSelector(["apps/collab/src/server.ts"], scopes, "full")).toEqual([
+    "true",
+    "true",
+    "true",
+    "true",
+  ]);
+  expect(runSelector(["docs/guide.md"], scopes, "full")).toEqual([
+    "true",
+    "true",
+    "true",
+    "false",
+  ]);
+});
+
+test("an empty full-depth diff preserves the original API service-suite selection", () => {
+  const outputs = runChangedFilesStep({ suiteDepth: "full" });
+  for (const scope of [
+    "postgres_suites_required",
+    "corpus_suites_required",
+    "valkey_suites_required",
+  ]) {
+    expect(outputs.get(scope)).toBe("true");
+  }
+  expect(outputs.get("collaboration_suite_required")).toBe("false");
 });

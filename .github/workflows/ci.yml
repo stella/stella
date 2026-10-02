@@ -74,6 +74,10 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
+      corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
+      valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
+      collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
       service_suites_pr_required: ${{ steps.changed-files.outputs.service_suites_pr_required }}
       service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
@@ -268,6 +272,10 @@ jobs:
               echo "docker_checks_required=true"
               echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
+              echo "postgres_suites_required=true"
+              echo "corpus_suites_required=true"
+              echo "valkey_suites_required=true"
+              echo "collaboration_suite_required=true"
               echo "service_suites_pr_required=true"
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
@@ -295,12 +303,20 @@ jobs:
           fi
 
           if (( ${#changed_files[@]} == 0 )); then
+            empty_api_suites=false
+            if [[ "$SUITE_DEPTH" == full ]]; then
+              empty_api_suites=true
+            fi
             {
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
               echo "docker_checks_required=false"
               echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
+              echo "postgres_suites_required=$empty_api_suites"
+              echo "corpus_suites_required=$empty_api_suites"
+              echo "valkey_suites_required=$empty_api_suites"
+              echo "collaboration_suite_required=false"
               echo "service_suites_pr_required=false"
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
@@ -347,7 +363,11 @@ jobs:
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
-          service_suites_pr_required=$(bun scripts/detect-service-suite-changes.ts "${changed_files[@]}")
+          read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}")"
+          service_suites_pr_required=false
+          if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
+            service_suites_pr_required=true
+          fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
           api_image_deps_required=false
@@ -532,6 +552,14 @@ jobs:
             docker_checks_required=true
           fi
 
+          # Full depth preserves the original broad folded-suite selection.
+          if [[ "$SUITE_DEPTH" == full ]]; then
+            postgres_suites_required=$package_checks_required
+            corpus_suites_required=$package_checks_required
+            valkey_suites_required=$package_checks_required
+            collaboration_suite_required=$collab_redis_required
+          fi
+
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
           if [[ "$e2e_core_required" == "true" ]]; then
@@ -546,6 +574,10 @@ jobs:
             echo "docker_checks_required=$docker_checks_required"
             echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
+            echo "postgres_suites_required=$postgres_suites_required"
+            echo "corpus_suites_required=$corpus_suites_required"
+            echo "valkey_suites_required=$valkey_suites_required"
+            echo "collaboration_suite_required=$collaboration_suite_required"
             echo "service_suites_pr_required=$service_suites_pr_required"
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
@@ -2533,21 +2565,21 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Apply migrations to service Postgres
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.postgres_suites_required == 'true' || needs.ci-plan.outputs.corpus_suites_required == 'true'
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
 
       - name: Run Postgres-gated API suites
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.postgres_suites_required == 'true'
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
       - name: Start corpus engine
-        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         run: |
           docker run -d --name corpus-engine \
             -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
@@ -2557,7 +2589,7 @@ jobs:
             http://127.0.0.1:7290/health/readyz
 
       - name: Run corpus engine suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -2569,7 +2601,7 @@ jobs:
           python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
 
       - name: Corpus engine diagnostics and cleanup
-        if: always()
+        if: ${{ always() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         run: |
           docker logs corpus-engine || true
           docker rm -f corpus-engine || true
@@ -2577,14 +2609,14 @@ jobs:
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
 
       - name: Run cross-replica collaboration suite
-        if: ${{ !cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}
         env:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380

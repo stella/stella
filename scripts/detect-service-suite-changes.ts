@@ -17,28 +17,62 @@ const infrastructurePaths = new Set([
   "docker/postgres/init.sql",
 ]);
 
-const directlyRequired = (file: string) =>
-  infrastructurePaths.has(file) ||
-  file.startsWith("patches/") ||
-  file.startsWith("apps/api/scripts/") ||
-  file.startsWith("apps/api/src/scripts/") ||
-  // Runtime assets may be read through fs/Glob rather than imported.
-  (file.startsWith("apps/api/src/") && !/\.[cm]?[jt]sx?$/u.test(file)) ||
-  (file.startsWith("apps/api/src/") && file.includes("/__fixtures__/")) ||
-  file.startsWith("apps/api/src/tests/") ||
-  file.startsWith("apps/collab/src/") ||
-  file === "apps/api/package.json" ||
-  file === "apps/api/tsconfig.json" ||
-  file === "apps/api/bunfig.toml" ||
-  file === "apps/collab/package.json" ||
-  file === "apps/collab/tsconfig.json" ||
-  file === "apps/collab/bunfig.toml" ||
-  (file.startsWith("apps/api/src/") && /\.test\.[jt]sx?$/u.test(file)) ||
-  file.startsWith("apps/api/drizzle/") ||
-  file.startsWith("apps/api/src/db/") ||
-  file.startsWith("apps/api/src/lib/db/") ||
-  file.startsWith("apps/api/src/lib/scheduler/") ||
-  (file.startsWith("apps/api/src/") && file.includes("backfill"));
+const SUITES = {
+  postgres: {
+    app: "api",
+    gate: apiPackage.ciGateTestRunners["test:postgres"].gate,
+    runner: apiPackage.ciGateTestRunners["test:postgres"].runner,
+  },
+  valkey: {
+    app: "api",
+    gate: apiPackage.ciGateTestRunners["test:valkey"].gate,
+    runner: apiPackage.ciGateTestRunners["test:valkey"].runner,
+  },
+  corpus: { app: "api", gate: "STELLA_RUN_CORPUS_ENGINE_TESTS", runner: "" },
+  collab: { app: "collab", gate: "", runner: "" },
+} as const;
+type ServiceSuite = keyof typeof SUITES;
+
+const directlyRequired = (file: string, suite: ServiceSuite) => {
+  if (infrastructurePaths.has(file) || file.startsWith("patches/")) {
+    return true;
+  }
+  const { app } = SUITES[suite];
+  if (
+    [
+      `apps/${app}/package.json`,
+      `apps/${app}/tsconfig.json`,
+      `apps/${app}/bunfig.toml`,
+    ].includes(file) ||
+    file.startsWith(`apps/${app}/scripts/`) ||
+    file.startsWith(`apps/${app}/src/tests/`)
+  ) {
+    return true;
+  }
+  if (app === "collab") {
+    return file.startsWith("apps/collab/src/");
+  }
+  // Preserve deletion and runtime-asset coverage where the current checkout
+  // cannot recover a removed gate or an fs/Glob dependency.
+  if (
+    file.startsWith("apps/api/src/") &&
+    (!/\.[cm]?[jt]sx?$/u.test(file) || file.includes("/__fixtures__/"))
+  ) {
+    return true;
+  }
+  if (suite === "valkey") {
+    return file.startsWith("apps/api/src/") && /\.test\.[jt]sx?$/u.test(file);
+  }
+  return (
+    file.startsWith("apps/api/src/scripts/") ||
+    file.startsWith("apps/api/drizzle/") ||
+    file.startsWith("apps/api/src/db/") ||
+    file.startsWith("apps/api/src/lib/db/") ||
+    file.startsWith("apps/api/src/lib/scheduler/") ||
+    (file.startsWith("apps/api/src/") &&
+      (file.includes("backfill") || /\.test\.[jt]sx?$/u.test(file)))
+  );
+};
 
 const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
   // Referenced packages are units; follow their declared workspace dependencies
@@ -83,37 +117,53 @@ const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
  * Local API/collaboration imports are followed file by file. No install is needed
  * in ci-plan: package discovery uses the checkout, not node_modules.
  */
-export const serviceSuiteDependencies = (root = repositoryRoot) => {
+export const serviceSuiteDependencies = (
+  root = repositoryRoot,
+  suite?: ServiceSuite,
+) => {
   const dependencies = new Set<string>();
-  const pending = [
-    "apps/api/src/tests/setup-env.ts",
-    ...Object.values(apiPackage.ciGateTestRunners).map(
-      ({ runner }) => `apps/api/${runner}`,
-    ),
-    "apps/api/src/db/migrate.ts",
-    "apps/collab/src/server.test.ts",
-  ];
-  const packageScopes = new Set<string>();
-  const gates = [
-    ...Object.values(apiPackage.ciGateTestRunners).map(({ gate }) => gate),
-    "STELLA_RUN_CORPUS_ENGINE_TESTS",
-  ];
-  const testGlobs = new Set([
-    ...Object.values(apiPackage.ciGateTestRunners).map(
-      ({ testFileGlob }) => `apps/api/${testFileGlob}`,
-    ),
-    "apps/api/src/**/*.test.ts",
-  ]);
-  const testFiles = new Set<string>();
-  for (const glob of testGlobs) {
-    for (const file of new Bun.Glob(glob).scanSync({ cwd: root })) {
-      testFiles.add(file);
+  const selected =
+    suite === undefined ? Object.values(SUITES) : [SUITES[suite]];
+  const apps = new Set(selected.map(({ app }) => app));
+  const pending: string[] = [];
+  if (apps.has("collab")) {
+    pending.push("apps/collab/src/server.test.ts");
+  }
+  if (apps.has("api")) {
+    pending.push("apps/api/src/tests/setup-env.ts");
+  }
+  if (
+    selected.some(
+      ({ gate }) =>
+        gate === SUITES.postgres.gate || gate === SUITES.corpus.gate,
+    )
+  ) {
+    pending.push("apps/api/src/db/migrate.ts");
+  }
+  for (const { app, runner } of selected) {
+    if (runner !== "") {
+      pending.push(`apps/${app}/${runner}`);
     }
   }
-  for (const file of testFiles) {
-    const source = readFileSync(path.join(root, file), "utf-8");
-    if (gates.some((gate) => source.includes(gate))) {
-      pending.push(file);
+  const packageScopes = new Set<string>();
+  if (apps.has("api")) {
+    const testGlobs = new Set([
+      ...Object.values(apiPackage.ciGateTestRunners).map(
+        ({ testFileGlob }) => `apps/api/${testFileGlob}`,
+      ),
+      "apps/api/src/**/*.test.ts",
+    ]);
+    const testFiles = new Set<string>();
+    for (const glob of testGlobs) {
+      for (const file of new Bun.Glob(glob).scanSync({ cwd: root })) {
+        testFiles.add(file);
+      }
+    }
+    for (const file of testFiles) {
+      const source = readFileSync(path.join(root, file), "utf-8");
+      if (selected.some(({ gate }) => gate !== "" && source.includes(gate))) {
+        pending.push(file);
+      }
     }
   }
   const tsTranspiler = new Bun.Transpiler({ loader: "ts" });
@@ -182,11 +232,14 @@ export const serviceSuiteDependencies = (root = repositoryRoot) => {
     }
   }
   const packageError = expandWorkspaceScopes(packageScopes, root);
-  if (packageError !== undefined)
-    {return { status: "unresolved" as const, message: packageError };}
-  for (const scope of packageScopes) {dependencies.add(`${scope}package.json`);}
+  if (packageError !== undefined) {
+    return { status: "unresolved" as const, message: packageError };
+  }
+  for (const scope of packageScopes) {
+    dependencies.add(`${scope}package.json`);
+  }
   // Configuration and runner harnesses can change execution without an import.
-  for (const app of ["api", "collab"]) {
+  for (const app of apps) {
     for (const file of new Bun.Glob(
       `apps/${app}/{package.json,bunfig.toml,tsconfig.json,scripts/**,src/tests/**}`,
     ).scanSync({ cwd: root })) {
@@ -196,47 +249,73 @@ export const serviceSuiteDependencies = (root = repositoryRoot) => {
   return { status: "complete" as const, dependencies, packageScopes };
 };
 
-let defaultGraph: ReturnType<typeof serviceSuiteDependencies> | undefined;
+const defaultGraphs = new Map<
+  ServiceSuite,
+  ReturnType<typeof serviceSuiteDependencies>
+>();
+
+export const planServiceSuites = (
+  files: readonly string[],
+  root = repositoryRoot,
+) => {
+  const required = (suite: ServiceSuite): boolean => {
+    if (files.some((file) => directlyRequired(file, suite))) {
+      return true;
+    }
+    if (
+      !files.some(
+        (file) =>
+          file.startsWith(`apps/${SUITES[suite].app}/`) ||
+          file.startsWith("packages/"),
+      )
+    ) {
+      return false;
+    }
+    let graph = root === repositoryRoot ? defaultGraphs.get(suite) : undefined;
+    if (graph === undefined) {
+      graph = serviceSuiteDependencies(root, suite);
+      if (root === repositoryRoot) {
+        defaultGraphs.set(suite, graph);
+      }
+    }
+    switch (graph.status) {
+      case "unresolved":
+        console.error(graph.message);
+        return true;
+      case "complete":
+        return files.some(
+          (file) =>
+            graph.dependencies.has(file) ||
+            [...graph.packageScopes].some((scope) => file.startsWith(scope)),
+        );
+    }
+  };
+  return {
+    postgres: required("postgres"),
+    corpus: required("corpus"),
+    valkey: required("valkey"),
+    collab: required("collab"),
+  } as const satisfies Record<ServiceSuite, boolean>;
+};
 
 export const requiresServiceSuites = (
   files: readonly string[],
   root = repositoryRoot,
-): boolean => {
-  if (files.some(directlyRequired)) {
-    return true;
-  }
-  if (files.length === 0) {
-    return false;
-  }
-  if (!files.some((file) => /^(apps\/(api|collab)\/|packages\/)/u.test(file))) {
-    return false;
-  }
-  if (root === repositoryRoot) {
-    defaultGraph ??= serviceSuiteDependencies(root);
-  }
-  const graph =
-    root === repositoryRoot && defaultGraph !== undefined
-      ? defaultGraph
-      : serviceSuiteDependencies(root);
-  switch (graph.status) {
-    case "unresolved":
-      console.error(graph.message);
-      return true;
-    case "complete":
-      return files.some(
-        (file) =>
-          graph.dependencies.has(file) ||
-          [...graph.packageScopes].some((scope) => file.startsWith(scope)),
-      );
-  }
-};
+) => Object.values(planServiceSuites(files, root)).some(Boolean);
 
 if (import.meta.main) {
+  const scopes = process.argv.at(2) === "--scopes";
+  const files = process.argv.slice(scopes ? 3 : 2);
   // A missing/deleted dependency or an unreadable graph must widen the scope.
   try {
-    console.log(requiresServiceSuites(process.argv.slice(2)));
+    const plan = planServiceSuites(files);
+    console.log(
+      scopes
+        ? [plan.postgres, plan.corpus, plan.valkey, plan.collab].join(" ")
+        : Object.values(plan).some(Boolean),
+    );
   } catch (error) {
     console.error(error);
-    console.log(true);
+    console.log(scopes ? "true true true true" : true);
   }
 }
