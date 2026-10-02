@@ -407,6 +407,9 @@ export const CAPABILITY_DISPATCH = {
   "invoices.list": {
     load: async () => await import("@/api/handlers/invoices/list"),
   },
+  "invoices.pdf.export": {
+    load: async () => await import("@/api/handlers/invoices/pdf/export"),
+  },
   "invoices.transition": {
     load: async () => await import("@/api/handlers/invoices/transition"),
   },
