@@ -476,10 +476,10 @@ test("the merge-group fail-fast job cancels only after a job failed", async () =
         { name: FAIL_FAST_JOB, status: "in_progress", conclusion: null },
       ],
     })}`;
-  const read = (file: string) =>
-    Bun.file(nodePath.join(directory, file))
-      .text()
-      .catch(() => "");
+  const read = async (file: string): Promise<string> => {
+    const target = Bun.file(nodePath.join(directory, file));
+    return (await target.exists()) ? await target.text() : "";
+  };
   const scenario = async (polls: readonly string[]) => {
     for (const file of ["cancelled", "count", "conditional"]) {
       rmSync(nodePath.join(directory, file), { force: true });
