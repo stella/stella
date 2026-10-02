@@ -360,7 +360,10 @@ export const conditionOperands = (condition: unknown): string[] => {
   if (condition === undefined || condition === null) {
     return [];
   }
-  const expression = unwrap(String(condition));
+  // A YAML `if:` may also be a bare boolean or number.
+  const expression = unwrap(
+    typeof condition === "string" ? condition : JSON.stringify(condition),
+  );
   if (splitTopLevel(expression, "||").length > 1) {
     return [expression];
   }
@@ -1048,6 +1051,17 @@ const readYaml = ({ file, root }: RepoFile): unknown =>
 const stepCwd = (value: unknown): string =>
   typeof value === "string" ? changeDirectory({ from: "", to: value }) : "";
 
+/** A step's name, else its action, else its one-based position. */
+const stepTitle = (step: Record<string, unknown>, position: number): string => {
+  if (typeof step["name"] === "string") {
+    return step["name"];
+  }
+  if (typeof step["uses"] === "string") {
+    return step["uses"];
+  }
+  return `step ${position + 1}`;
+};
+
 type WalkStepsOptions = {
   readonly context: ClassifyContext;
   readonly defaults: StepDefaults;
@@ -1076,7 +1090,9 @@ const walkSteps = ({
     if (!isRecord(step)) {
       continue;
     }
-    const label = `${prefix}${String(step["name"] ?? step["uses"] ?? `step ${position + 1}`)}`;
+    const run = step["run"];
+    const uses = step["uses"];
+    const label = `${prefix}${stepTitle(step, position)}`;
     const condition = conditionOperands(step["if"]);
     const covered = new Set(
       installs
@@ -1085,14 +1101,14 @@ const walkSteps = ({
         )
         .map((install) => install.dir),
     );
-    const run = step["run"];
-    const uses = step["uses"];
     if (typeof run === "string") {
       const shell = step["shell"] ?? defaults.shell ?? "bash";
       if (typeof shell !== "string" || !POSIX_SHELL.test(shell)) {
         if (!covered.has("") && /\b(?:bunx?|npx)\b/u.test(run)) {
           invocations.push({
-            classification: unclassified(`runs Bun under ${String(shell)}`),
+            classification: unclassified(
+              `runs Bun under ${typeof shell === "string" ? shell : JSON.stringify(shell)}`,
+            ),
             command: run.trim(),
             job,
             step: label,

@@ -463,7 +463,7 @@ describe("Bun under the repository's bunfig.toml files", () => {
       hostname: "127.0.0.1",
       port: 0,
     });
-    const registryUrl = `http://127.0.0.1:${registry.port}/`;
+    const registryUrl = registry.url.href;
     const child = Bun.spawn(
       [
         process.execPath,
