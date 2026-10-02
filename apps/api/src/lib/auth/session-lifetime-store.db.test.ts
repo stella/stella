@@ -684,7 +684,7 @@ const createHttpSession = async (cacheEnabled: boolean) => {
         await Promise.resolve();
       }),
       before: createAuthMiddleware(async (ctx) => {
-        lifetime.prepare(ctx.context.internalAdapter);
+        lifetime.prepare(ctx.context);
         if (ctx.headers?.get("x-stella-test-authoritative") === "1") {
           const resolved = await getAuthoritativeSessionFromCtx(ctx);
           authoritativeToken = resolved?.session.token ?? null;
