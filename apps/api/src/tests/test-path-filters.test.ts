@@ -29,6 +29,17 @@ describe("absolute test selectors", () => {
     }
   });
 
+  test("keeps a directory selector's trailing separator", () => {
+    const paths = ["src/lib/a.test.ts", "src/library/b.test.ts"] as const;
+    const absoluteDirectory = `${path.join(apiRoot, "src/lib")}${path.sep}`;
+    expect(
+      selectTestPaths(
+        paths,
+        normalizeAbsoluteTestPatterns([absoluteDirectory], apiRoot),
+      ),
+    ).toEqual(new Set(["src/lib/a.test.ts"]));
+  });
+
   test("preserves relative substring patterns and selects no outside file", () => {
     const relativePatterns = ["redis-outage", "./src/lib/", "src/handlers"];
     expect(normalizeAbsoluteTestPatterns(relativePatterns, apiRoot)).toEqual(

@@ -108,9 +108,17 @@ export const normalizeAbsoluteTestPatterns = (
   patterns: readonly string[],
   root: string,
 ): string[] =>
-  patterns.map((pattern) =>
-    path.isAbsolute(pattern) ? path.relative(root, pattern) : pattern,
-  );
+  patterns.map((pattern) => {
+    if (!path.isAbsolute(pattern)) {
+      return pattern;
+    }
+    const relative = path.relative(root, pattern);
+    // path.relative drops a trailing separator; keep it, so a directory
+    // selector (`/…/src/lib/`) doesn't also match `src/library/`.
+    return pattern.endsWith(path.sep) && relative !== ""
+      ? `${relative}${path.sep}`
+      : relative;
+  });
 
 /**
  * The discovered paths a pattern set selects, matched as a substring of the
