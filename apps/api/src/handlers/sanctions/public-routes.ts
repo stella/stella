@@ -7,6 +7,7 @@ import type { PublicSanctionsSearchOptions } from "@/api/handlers/sanctions/sear
 import { createPublicSanctionsRateLimitOptions } from "@/api/lib/rate-limit/public-sanctions";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import type { RateLimitOptions } from "@/api/lib/rate-limit/rate-limit";
+import { applyResponseCachePolicy } from "@/api/lib/security-headers";
 
 type PublicSanctionsRouteOptions = PublicSanctionsSearchOptions & {
   rateLimitOptions?: RateLimitOptions;
@@ -21,7 +22,11 @@ export const createPublicSanctionsRoute = (
       : createPublicSanctionsSearchHandler(options);
   return new Elysia({ prefix: "/sanctions" })
     .onRequest(({ set }) => {
-      set.headers["cache-control"] = "no-store";
+      applyResponseCachePolicy({
+        cache: search.config.cache,
+        response: undefined,
+        set,
+      });
     })
     .use(
       rateLimit(

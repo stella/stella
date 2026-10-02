@@ -14,6 +14,10 @@ import type { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening
 import { answerRequestError } from "@/api/lib/observability/request-lifecycle";
 import { InMemoryRateLimitContext } from "@/api/lib/rate-limit/rate-limit";
 import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/security-headers";
+import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
@@ -220,7 +224,9 @@ describe("anonymous sanctions search", () => {
         request({ type: "organization", name: "Private Admission Sentinel" }),
       );
       expect(rejected.status).toBe(503);
-      expect(rejected.headers.get("cache-control")).toBe("no-store");
+      expect(rejected.headers.get(CACHE_CONTROL_HEADER)).toBe(
+        PRIVATE_CACHE_CONTROL,
+      );
       expect(analytics.exceptions()).toHaveLength(0);
       expect(
         logger.records.some(
@@ -411,7 +417,9 @@ test("public identity responses are never cached, including validation and serve
     { type: "organization" },
   ]) {
     const response = await app.handle(request(subject));
-    expect(response.headers.get("cache-control")).toBe("no-store");
+    expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
+      PRIVATE_CACHE_CONTROL,
+    );
     expect([200, 400, 422]).toContain(response.status);
   }
   for (let index = 0; index < 20; index += 1) {
@@ -421,7 +429,7 @@ test("public identity responses are never cached, including validation and serve
     request({ type: "organization", name: "Example" }),
   );
   expect(limited.status).toBe(429);
-  expect(limited.headers.get("cache-control")).toBe("no-store");
+  expect(limited.headers.get(CACHE_CONTROL_HEADER)).toBe(PRIVATE_CACHE_CONTROL);
   const failed = appWith(async () => {
     throw new TypeError("Matcher unavailable");
   }).app;
@@ -429,5 +437,5 @@ test("public identity responses are never cached, including validation and serve
     request({ type: "organization", name: "Example" }),
   );
   expect(error.status).toBe(500);
-  expect(error.headers.get("cache-control")).toBe("no-store");
+  expect(error.headers.get(CACHE_CONTROL_HEADER)).toBe(PRIVATE_CACHE_CONTROL);
 });
