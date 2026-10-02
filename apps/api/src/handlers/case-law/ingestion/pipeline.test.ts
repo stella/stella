@@ -2,7 +2,13 @@ import { Result } from "better-result";
 import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
-import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_TEXT_ABSENCE_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY,
+  DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+  DECISION_TEXT_FIELD,
+  TEXT_ABSENCE_REASONS,
+} from "@stll/api-contract/case-law-text-field";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
@@ -40,6 +46,7 @@ import {
   absentTextField,
   presentTextField,
   readDecisionTextMetadata,
+  splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
@@ -351,6 +358,7 @@ describe("sanitizeResult — shared partial-observation quality", () => {
 
     const recovered = sanitizeResult({
       ...partial,
+      ...splitStoredDecisionTextMetadata(partial.metadata),
       caseNumberIsPlaceholder: undefined,
       isListingOnly: undefined,
     });
@@ -1487,7 +1495,25 @@ describe("processDecision — fields on an existing row", () => {
       },
     });
 
-    expect(updated?.["metadata"]).toEqual({ abstract: "Stored abstract" });
+    expect(updated?.["metadata"]).toEqual({
+      abstract: "Stored abstract",
+      [DECISION_TEXT_ABSENCE_VERSION_METADATA_KEY]:
+        DECISION_TEXT_ABSENCE_SCHEMA_VERSION,
+      [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+        {
+          field: DECISION_TEXT_FIELD.HEADNOTE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.LEGAL_SENTENCE,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+        {
+          field: DECISION_TEXT_FIELD.SUMMARY,
+          reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+        },
+      ],
+    });
   });
 });
 

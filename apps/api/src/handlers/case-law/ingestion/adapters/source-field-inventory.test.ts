@@ -26,7 +26,6 @@
 import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -41,80 +40,13 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
-import {
-  atFindokFixture,
-  atRisFixture,
-  czNsFixture,
-  czNssFixture,
-  czRegionalFixture,
-  czUsFixture,
-  euEcjFixture,
-  huBhgyFixture,
-  plCourtsFixture,
-  plKioFixture,
-  plKisFixture,
-  plNsaFixture,
-  plNcourtFixture,
-  plSnFixture,
-  plTkFixture,
-  plUodoFixture,
-  plUokikFixture,
-  skCourtsFixture,
-  skUsFixture,
-  type EnrolledAdapterFixture,
-} from "@/api/tests/helpers/case-law-enrolled-fixtures";
-
-import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
-import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
+import { CASE_LAW_CONFORMANCE_FIXTURES } from "@/api/tests/helpers/case-law-enrolled-fixtures";
 
 const originalFetch = globalThis.fetch;
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
-
-// ── Coverage declaration ─────────────────────────────────
-
-/**
- * What this suite drives each adapter with. Total over the registry, so a
- * source registered without a fixture to read its own envelope back through
- * does not compile.
- */
-const ADAPTER_INVENTORY_COVERAGE = {
-  [COURTLISTENER_IMPORT_KEY]: courtListenerConformanceFixture,
-  [ADAPTER_KEYS.CZ_NS]: czNsFixture,
-  [ADAPTER_KEYS.CZ_NSS]: czNssFixture,
-  [ADAPTER_KEYS.CZ_US]: czUsFixture,
-  [ADAPTER_KEYS.CZ_REGIONAL]: czRegionalFixture,
-  [ADAPTER_KEYS.SK_COURTS]: skCourtsFixture,
-  [ADAPTER_KEYS.SK_US]: skUsFixture,
-  [ADAPTER_KEYS.PL_COURTS]: plCourtsFixture,
-  [ADAPTER_KEYS.PL_SN]: plSnFixture,
-  [ADAPTER_KEYS.PL_KIO]: plKioFixture,
-  [ADAPTER_KEYS.PL_TK]: plTkFixture,
-  [ADAPTER_KEYS.PL_NSA]: plNsaFixture,
-  [ADAPTER_KEYS.PL_NCOURT]: plNcourtFixture,
-  [ADAPTER_KEYS.AT_COURTS]: () => atRisFixture(ADAPTER_KEYS.AT_COURTS),
-  [ADAPTER_KEYS.AT_VFGH]: () => atRisFixture(ADAPTER_KEYS.AT_VFGH),
-  [ADAPTER_KEYS.AT_VWGH]: () => atRisFixture(ADAPTER_KEYS.AT_VWGH),
-  [ADAPTER_KEYS.AT_BVWG]: () => atRisFixture(ADAPTER_KEYS.AT_BVWG),
-  [ADAPTER_KEYS.AT_LVWG]: () => atRisFixture(ADAPTER_KEYS.AT_LVWG),
-  [ADAPTER_KEYS.AT_ASYLGH]: () => atRisFixture(ADAPTER_KEYS.AT_ASYLGH),
-  [ADAPTER_KEYS.AT_UBAS]: () => atRisFixture(ADAPTER_KEYS.AT_UBAS),
-  [ADAPTER_KEYS.AT_UVS]: () => atRisFixture(ADAPTER_KEYS.AT_UVS),
-  [ADAPTER_KEYS.AT_VERG]: () => atRisFixture(ADAPTER_KEYS.AT_VERG),
-  [ADAPTER_KEYS.AT_UMSE]: () => atRisFixture(ADAPTER_KEYS.AT_UMSE),
-  [ADAPTER_KEYS.AT_BKS]: () => atRisFixture(ADAPTER_KEYS.AT_BKS),
-  [ADAPTER_KEYS.AT_FINDOK]: atFindokFixture,
-  [ADAPTER_KEYS.EU_ECJ]: euEcjFixture,
-  [ADAPTER_KEYS.HU_BHGY]: huBhgyFixture,
-  [ADAPTER_KEYS.PL_KIS]: plKisFixture,
-  [ADAPTER_KEYS.PL_UODO]: plUodoFixture,
-  [ADAPTER_KEYS.PL_UOKIK]: plUokikFixture,
-} as const satisfies Record<
-  SourceRegistrationKey,
-  () => EnrolledAdapterFixture
->;
 
 const DECLARED_ADAPTER_KEYS = listSourceRegistrations().map(
   ({ source }) => source.key,
@@ -206,7 +138,7 @@ const storedPartsOf = (
 
 describe("every adapter accounts for the fields its source states", () => {
   for (const key of DECLARED_ADAPTER_KEYS) {
-    const fixture = ADAPTER_INVENTORY_COVERAGE[key];
+    const fixture = CASE_LAW_CONFORMANCE_FIXTURES[key];
 
     test(`${key}: every field its source states is stored or excluded`, async () => {
       const { sourceFields } = adapterFor(key);
