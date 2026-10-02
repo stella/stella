@@ -100,6 +100,7 @@ if (!databaseUrl || !enabled) {
       const selection = {
         type: "background",
         currentParserVersion: 2,
+        mode: "enrolled",
       } as const;
       const scope = CASE_LAW_REPLAY_SCOPE.SOURCE;
       const until = await selectScopeEnd({
@@ -148,7 +149,11 @@ if (!databaseUrl || !enabled) {
         scopedDb,
         sourceId,
         scope,
-        selection: { type: "background", currentParserVersion: 3 },
+        selection: {
+          type: "background",
+          currentParserVersion: 3,
+          mode: "enrolled",
+        },
       });
       expect(nextGeneration).not.toBeNull();
       if (nextGeneration === null) {
@@ -158,7 +163,11 @@ if (!databaseUrl || !enabled) {
         scopedDb,
         sourceId,
         scope,
-        selection: { type: "background", currentParserVersion: 3 },
+        selection: {
+          type: "background",
+          currentParserVersion: 3,
+          mode: "enrolled",
+        },
         after: null,
         until: nextGeneration,
         limit: cases.length,

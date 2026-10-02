@@ -4,6 +4,7 @@ import type { ReplayRowOutcome } from "@/api/handlers/case-law/ingestion/replay"
 import {
   REPLAY_FAILURE_CODES,
   type ReplayFailure,
+  type ReplayPreviewFailure,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
@@ -43,7 +44,7 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     parserVersionTo: p.integer("parser_version_to").notNull(),
     budgetDay: p.date("budget_day").notNull(),
     status: p.text({ enum: REPLAY_BATCH_STATUSES }).notNull(),
-    outcome: p.text().$type<ReplayRowOutcome>(),
+    outcome: p.text().$type<ReplayRowOutcome | ReplayPreviewFailure>(),
     attempted: p.integer().notNull(),
     applied: p.integer().default(0).notNull(),
     blocked: p.integer().default(0).notNull(),

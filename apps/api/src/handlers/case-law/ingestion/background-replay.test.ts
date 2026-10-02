@@ -686,6 +686,38 @@ test("dry-run failures preserve the cursor and retry the same charged row on the
   }
 });
 
+test("terminal dry-run failures count as reviewed failures and allow later previews", async () => {
+  const state = fixture(10);
+  state.source.mode = "dry-run";
+  const seen: string[] = [];
+  const advance = state.dependencies.advancePreview;
+  state.dependencies.recordFailure = async (batch) => {
+    // The store atomically persists the terminal receipt and preview cursor.
+    await advance(batch);
+    return "failed";
+  };
+  state.dependencies.replay = async (batch) => {
+    seen.push(batch.decisionId);
+    const report = state.success(batch);
+    report.outcomes.applied = 0;
+    if (seen.length === 1) {
+      report.outcomes.retryable = 1;
+      report.failure = replayFailure("adapter-exception");
+    } else {
+      report.outcomes["would-apply"] = 1;
+    }
+    return report;
+  };
+  expect(await state.run(2)).toMatchObject({
+    status: "row-limit",
+    attempted: 2,
+    failed: 1,
+    errors: 1,
+    applied: 0,
+  });
+  expect(new Set(seen).size).toBe(2);
+});
+
 test("dry-run retryable or halted reports without failure metadata never advance the cursor", async () => {
   for (const outcome of [
     "retryable",

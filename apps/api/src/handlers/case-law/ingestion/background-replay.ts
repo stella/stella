@@ -316,11 +316,14 @@ const runReplayBatch = async ({
     } else {
       stop = "failed";
     }
-    stop ??= replayFailureStop({
-      mode: source.mode,
-      code: failure.code,
-      scope: settledScope,
-    });
+    stop ??=
+      settlement.isOk() && settlement.value === "failed"
+        ? null
+        : replayFailureStop({
+            mode: source.mode,
+            code: failure.code,
+            scope: settledScope,
+          });
   }
   if (source.mode === "dry-run" && failure === null) {
     await dependencies.advancePreview(batch);
