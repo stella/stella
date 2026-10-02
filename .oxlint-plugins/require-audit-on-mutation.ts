@@ -35,10 +35,18 @@
 //   - The function carries a `// audit: skip - <reason>` directive in its own
 //     body, with a reason of at least three words. The `audit-skip-directives`
 //     ratchet metric counts these directives so they can only shrink.
+//   - Every mutation target resolves to a declared public-corpus bookkeeping
+//     table. Schema and migrated-catalog tests verify its strict admission;
+//     unresolved targets and mixed functions retain the audit requirement.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged, Variable } from "@oxlint/plugins";
 
+import {
+  PUBLIC_CORPUS_BOOKKEEPING_TABLES,
+  type PublicCorpusBookkeepingTable,
+} from "./public-corpus-bookkeeping.ts";
+import { isPublicCorpusMutation } from "./public-corpus-mutations.ts";
 import {
   type ImportedFromOptions,
   getCalleeName,
@@ -370,125 +378,137 @@ const asRange = (value: unknown): Range | null => {
   return [start, end];
 };
 
-export default eslintCompatPlugin({
-  meta: { name: "require-audit-on-mutation" },
-  rules: {
-    "require-audit-on-mutation": {
-      meta: {
-        type: "problem",
-        messages: {
-          missingAudit:
-            "This function writes to the database (insert / update / " +
-            "delete, or a raw write through execute) but does not call an " +
-            "audit recorder. Add an audit emission in the same transaction, " +
-            "or annotate the function with `// audit: skip - <reason>` (at " +
-            "least three words) if the write legitimately needs no audit " +
-            "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
+export const createAuditOnMutationPlugin = (
+  tables: readonly PublicCorpusBookkeepingTable[],
+) =>
+  eslintCompatPlugin({
+    meta: { name: "require-audit-on-mutation" },
+    rules: {
+      "require-audit-on-mutation": {
+        meta: {
+          type: "problem",
+          messages: {
+            missingAudit:
+              "This function writes to the database (insert / update / " +
+              "delete, or a raw write through execute) but does not call an " +
+              "audit recorder. Add an audit emission in the same transaction, " +
+              "or annotate the function with `// audit: skip - <reason>` (at " +
+              "least three words) if the write legitimately needs no audit " +
+              "row (presigned URL bookkeeping, scheduler runs, ephemeral state).",
+          },
+        },
+        createOnce(context) {
+          const scopes: FunctionScope[] = [];
+          // Justified `audit: skip - <reason>` comments, collected once per
+          // file; each marks only the innermost function whose own body holds
+          // it.
+          const skipDirectiveRanges: Range[] = [];
+
+          const currentScope = (): FunctionScope | null =>
+            scopes.at(-1) ?? null;
+
+          const pushScope = (node: unknown) => {
+            const body =
+              isAstNode(node) && isAstNode(node.body) ? node.body : null;
+            // An expression-bodied arrow owns a directive written between `=>`
+            // and its expression, so its whole span is the body.
+            const owner = body?.type === "BlockStatement" ? body : node;
+            const range = isAstNode(owner) ? asRange(owner.range) : null;
+            const parentScope = currentScope();
+            if (parentScope && range !== null) {
+              parentScope.childBodyRanges.push(range);
+            }
+            scopes.push({
+              mutationNodes: [],
+              hasAuditCall: false,
+              hasSkipDirective: false,
+              bodyRange: range,
+              childBodyRanges: [],
+            });
+          };
+
+          const applySkipDirectives = () => {
+            const scope = currentScope();
+            if (!scope || !scope.bodyRange) {
+              return;
+            }
+            const [start, end] = scope.bodyRange;
+            scope.hasSkipDirective = skipDirectiveRanges.some(
+              ([commentStart]) =>
+                commentStart >= start &&
+                commentStart <= end &&
+                !scope.childBodyRanges.some(
+                  ([childStart, childEnd]) =>
+                    commentStart >= childStart && commentStart <= childEnd,
+                ),
+            );
+          };
+
+          const popAndReport = () => {
+            applySkipDirectives();
+            const scope = scopes.pop();
+            if (
+              !scope ||
+              scope.mutationNodes.length === 0 ||
+              scope.hasAuditCall ||
+              scope.hasSkipDirective
+            ) {
+              return;
+            }
+            for (const mutation of scope.mutationNodes) {
+              context.report({ node: mutation, messageId: "missingAudit" });
+            }
+          };
+
+          return {
+            before() {
+              scopes.length = 0;
+              skipDirectiveRanges.length = 0;
+            },
+            Program(node) {
+              const comments: unknown =
+                "comments" in node ? node.comments : null;
+              if (!Array.isArray(comments)) {
+                return;
+              }
+              for (const comment of comments) {
+                const range = isAstNode(comment)
+                  ? asRange(comment.range)
+                  : null;
+                if (
+                  range !== null &&
+                  isAstNode(comment) &&
+                  typeof comment.value === "string" &&
+                  isJustifiedSkipDirective(comment.value)
+                ) {
+                  skipDirectiveRanges.push(range);
+                }
+              }
+            },
+            FunctionDeclaration: pushScope,
+            "FunctionDeclaration:exit": popAndReport,
+            FunctionExpression: pushScope,
+            "FunctionExpression:exit": popAndReport,
+            ArrowFunctionExpression: pushScope,
+            "ArrowFunctionExpression:exit": popAndReport,
+            CallExpression(node) {
+              const scope = currentScope();
+              if (!scope) {
+                return;
+              }
+              if (isAuditCall(context, node)) {
+                scope.hasAuditCall = true;
+              } else if (
+                isMutationCall(context, node) &&
+                !isPublicCorpusMutation({ context, node, tables })
+              ) {
+                scope.mutationNodes.push(node);
+              }
+            },
+          };
         },
       },
-      createOnce(context) {
-        const scopes: FunctionScope[] = [];
-        // Justified `audit: skip - <reason>` comments, collected once per
-        // file; each marks only the innermost function whose own body holds
-        // it.
-        const skipDirectiveRanges: Range[] = [];
-
-        const currentScope = (): FunctionScope | null => scopes.at(-1) ?? null;
-
-        const pushScope = (node: unknown) => {
-          const body =
-            isAstNode(node) && isAstNode(node.body) ? node.body : null;
-          // An expression-bodied arrow owns a directive written between `=>`
-          // and its expression, so its whole span is the body.
-          const owner = body?.type === "BlockStatement" ? body : node;
-          const range = isAstNode(owner) ? asRange(owner.range) : null;
-          const parentScope = currentScope();
-          if (parentScope && range !== null) {
-            parentScope.childBodyRanges.push(range);
-          }
-          scopes.push({
-            mutationNodes: [],
-            hasAuditCall: false,
-            hasSkipDirective: false,
-            bodyRange: range,
-            childBodyRanges: [],
-          });
-        };
-
-        const applySkipDirectives = () => {
-          const scope = currentScope();
-          if (!scope || !scope.bodyRange) {
-            return;
-          }
-          const [start, end] = scope.bodyRange;
-          scope.hasSkipDirective = skipDirectiveRanges.some(
-            ([commentStart]) =>
-              commentStart >= start &&
-              commentStart <= end &&
-              !scope.childBodyRanges.some(
-                ([childStart, childEnd]) =>
-                  commentStart >= childStart && commentStart <= childEnd,
-              ),
-          );
-        };
-
-        const popAndReport = () => {
-          applySkipDirectives();
-          const scope = scopes.pop();
-          if (
-            !scope ||
-            scope.mutationNodes.length === 0 ||
-            scope.hasAuditCall ||
-            scope.hasSkipDirective
-          ) {
-            return;
-          }
-          for (const mutation of scope.mutationNodes) {
-            context.report({ node: mutation, messageId: "missingAudit" });
-          }
-        };
-
-        return {
-          before() {
-            scopes.length = 0;
-            skipDirectiveRanges.length = 0;
-          },
-          Program(node) {
-            const comments: unknown = "comments" in node ? node.comments : null;
-            if (!Array.isArray(comments)) {
-              return;
-            }
-            for (const comment of comments) {
-              const range = isAstNode(comment) ? asRange(comment.range) : null;
-              if (
-                range !== null &&
-                isAstNode(comment) &&
-                typeof comment.value === "string" &&
-                isJustifiedSkipDirective(comment.value)
-              ) {
-                skipDirectiveRanges.push(range);
-              }
-            }
-          },
-          FunctionDeclaration: pushScope,
-          "FunctionDeclaration:exit": popAndReport,
-          FunctionExpression: pushScope,
-          "FunctionExpression:exit": popAndReport,
-          ArrowFunctionExpression: pushScope,
-          "ArrowFunctionExpression:exit": popAndReport,
-          CallExpression(node) {
-            const scope = currentScope();
-            if (!scope) {
-              return;
-            }
-            if (isAuditCall(context, node)) {
-              scope.hasAuditCall = true;
-            } else if (isMutationCall(context, node)) {
-              scope.mutationNodes.push(node);
-            }
-          },
-        };
-      },
     },
-  },
-});
+  });
+
+export default createAuditOnMutationPlugin(PUBLIC_CORPUS_BOOKKEEPING_TABLES);

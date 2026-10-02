@@ -28,6 +28,8 @@ const reportedLine = (diagnostic: unknown, code: string): number | null => {
 };
 
 type LintSingleRuleOptions = {
+  /** Test-only wrapper for a plugin factory; production config is unchanged. */
+  pluginPath?: string;
   /** The plugin that carries the rule, when it is not named after it. */
   plugin?: string;
   /** The rule's options object, for a rule configured by data. */
@@ -46,6 +48,7 @@ export const lintSingleRule = async (
   source: string,
   {
     plugin = ruleName,
+    pluginPath,
     ruleOptions,
     sourcePath = "source.ts",
   }: LintSingleRuleOptions = {},
@@ -58,7 +61,8 @@ export const lintSingleRule = async (
       `export default ${JSON.stringify({
         categories: { correctness: "off" },
         jsPlugins: [
-          path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
+          pluginPath ??
+            path.join(REPOSITORY_ROOT, ".oxlint-plugins", `${plugin}.ts`),
         ],
         rules: {
           [`${plugin}/${ruleName}`]:
