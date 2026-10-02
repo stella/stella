@@ -96,7 +96,10 @@ run_probe() {
   docker run --rm --name "$probe" --label "$owner_label=$run_id" --network "$network" "$@"
 }
 migrate() {
+  # Non-RDS database: online index builds must not wait on EBS metrics or a
+  # wall-clock busy window.
   run_probe --env DATABASE_URL=postgres://postgres:smoke-only@smoke-postgres:5432/stella \
+    --env DB_LOAD_GATE_EBS_SIGNAL=disabled --env 'DB_LOAD_GATE_BUSY_WINDOWS=[]' \
     "$image_id" bun /app/apps/api/src/db/migrate.js
 }
 
