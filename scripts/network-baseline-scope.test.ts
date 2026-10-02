@@ -293,17 +293,7 @@ describe("network baseline workflows", () => {
   });
 
   test("both comparison jobs load the merge-base budget before measuring", () => {
-    const parsed: unknown = Bun.YAML.parse(workflowSource("ci.yml"));
-    if (!isRecord(parsed) || !isRecord(parsed["jobs"])) {
-      expect.unreachable("CI jobs");
-    }
-    const jobs = {
-      "route-smoke": parsed["jobs"]["route-smoke"],
-      "e2e-production-shard": parsed["jobs"]["e2e-production-shard"],
-    };
-    if (!isWorkflowJobs(jobs)) {
-      expect.unreachable("comparison jobs");
-    }
+    const jobs = readWorkflowJobs("ci.yml");
     for (const name of ["route-smoke", "e2e-production-shard"]) {
       const job = jobs[name] ?? expect.unreachable(name);
       expect(job.permissions).toMatchObject({
@@ -455,6 +445,10 @@ describe("merge-base preparation integration", () => {
       path.join(os.tmpdir(), "network-merge-base-"),
     );
     const root = path.join(import.meta.dirname, "..");
+    const runnerPath = process.env["PATH"];
+    if (typeof runnerPath !== "string") {
+      expect.unreachable("integration fixture requires PATH");
+    }
     const run = (args: string[], env: Record<string, string> = {}) =>
       Bun.spawnSync(args, {
         cwd: directory,
@@ -512,6 +506,10 @@ esac
 `,
       );
       chmodSync(gh, 0o755);
+      // The action does not provision ripgrep; exercise inheritance without it.
+      const unavailableRipgrep = path.join(directory, "bin/rg");
+      writeFileSync(unavailableRipgrep, "#!/usr/bin/env bash\nexit 127\n");
+      chmodSync(unavailableRipgrep, 0o755);
       const summary = path.join(directory, "summary");
       writeFileSync(summary, "");
       const prepare = (
@@ -527,7 +525,7 @@ esac
             ),
           ],
           {
-            PATH: `${path.join(directory, "bin")}:${process.env["PATH"]}`,
+            PATH: `${path.join(directory, "bin")}:${runnerPath}`,
             BASE_SHA: base,
             REPOSITORY: "fixture/fixture",
             RUNNER_TEMP: directory,
@@ -720,7 +718,7 @@ esac
           ),
         ],
         {
-          PATH: `${path.join(directory, "bin")}:${process.env["PATH"]}`,
+          PATH: `${path.join(directory, "bin")}:${runnerPath}`,
           BASE_SHA: nextBase,
           REPOSITORY: "fixture/fixture",
           RUNNER_TEMP: directory,

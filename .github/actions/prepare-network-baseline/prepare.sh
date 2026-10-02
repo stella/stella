@@ -47,9 +47,13 @@ if [[ "$recorded" == false ]]; then
   runs=$(gh api --method GET "repos/$REPOSITORY/actions/workflows/network-baseline-record.yml/runs" -f branch=main -f status=success -f per_page=100)
   candidates=$(jq -r '.workflow_runs[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch") | .head_sha' <<< "$runs")
   while read -r source; do
-    if [[ "$source" == "$base" ]] || ! rg -Fxq "$source" <<< "$candidates"; then
+    if [[ "$source" == "$base" ]]; then
       continue
     fi
+    case $'\n'"$candidates"$'\n' in
+      *$'\n'"$source"$'\n'*) ;;
+      *) continue ;;
+    esac
     load_recording "$source"
     if [[ "$recorded" == true ]]; then break; fi
   done < <(git rev-list --topo-order "$base")
