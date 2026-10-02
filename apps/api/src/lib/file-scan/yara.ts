@@ -34,29 +34,103 @@ const YARA_SEVERITY_MAP: Record<string, Match["severity"]> = {
   suspicious: "suspicious",
 };
 
+const toMatch = (m: RuleMatch): Match => {
+  const { meta } = m;
+  const verdict =
+    "verdict" in meta && typeof meta.verdict === "string"
+      ? meta.verdict
+      : undefined;
+
+  const severity =
+    (verdict ? YARA_SEVERITY_MAP[verdict] : undefined) ?? "suspicious";
+  const match: Match = {
+    rule: m.ruleIdentifier,
+    severity,
+  };
+  if (isRecord(meta)) {
+    match.meta = meta;
+  }
+  return match;
+};
+
 export const yaraScanner: Scanner = {
   async scan(bytes) {
-    const matches = compiled.scan(Buffer.from(bytes));
-
     return await Promise.resolve(
-      matches.map((m: RuleMatch): Match => {
-        const { meta } = m;
-        const verdict =
-          "verdict" in meta && typeof meta.verdict === "string"
-            ? meta.verdict
-            : undefined;
-
-        const severity =
-          (verdict ? YARA_SEVERITY_MAP[verdict] : undefined) ?? "suspicious";
-        const match: Match = {
-          rule: m.ruleIdentifier,
-          severity,
-        };
-        if (isRecord(meta)) {
-          match.meta = meta;
-        }
-        return match;
-      }),
+      compiled.scan(Buffer.from(bytes)).map(toMatch),
     );
   },
 };
+
+/** One occurrence of one rule pattern within a scanned window. */
+export type PatternOccurrence = {
+  rule: string;
+  pattern: string;
+  offset: number;
+  length: number;
+};
+
+/**
+ * The rule set split for content that is too large to scan in one buffer.
+ * `occurrences` finds every pattern of every rule in a window regardless of
+ * the rule's condition; `evaluate` then runs one rule's real condition over
+ * the occurrences collected for it.
+ */
+export type WindowedRuleSet = {
+  /** Longest match the engine reports; a longer one is never found at all. */
+  maxMatchBytes: number;
+  /** Rules whose condition counts occurrences, so every one must be kept. */
+  countingRules: ReadonlySet<string>;
+  occurrences: (window: Uint8Array) => PatternOccurrence[];
+  evaluate: (rule: string, evidence: Uint8Array) => Match | null;
+};
+
+// YARA-X stops extending a match at 4096 bytes: a longer occurrence of an
+// unbounded or wide pattern is not reported even in a single-buffer scan.
+// yara.test.ts pins this against the engine.
+export const YARA_MAX_MATCH_BYTES = 4096;
+
+const RULE_BLOCK = /^rule\s+(\w+)[\s\S]*?^\}/gmu;
+const CONDITION = /condition:([\s\S]*?)(?=^\})/mu;
+
+const ruleBlocks = [...ruleSource.matchAll(RULE_BLOCK)].map((m) => ({
+  name: m[1] ?? "",
+  block: m[0],
+}));
+
+// Every rule keeps its strings and reports each occurrence of any of them.
+const occurrenceRules = compile(
+  ruleBlocks
+    .map(({ block }) =>
+      block.replace(CONDITION, "condition:\n        any of them\n"),
+    )
+    .join("\n"),
+);
+
+export const yaraWindowedRules: WindowedRuleSet = {
+  maxMatchBytes: YARA_MAX_MATCH_BYTES,
+  countingRules: new Set(
+    ruleBlocks.flatMap(({ name, block }) =>
+      /#\w/u.test(CONDITION.exec(block)?.[1] ?? "") ? [name] : [],
+    ),
+  ),
+  occurrences: (window) =>
+    occurrenceRules.scan(Buffer.from(window)).flatMap((m) =>
+      m.matches.map(({ identifier, offset, length }) => ({
+        rule: m.ruleIdentifier,
+        pattern: identifier,
+        offset,
+        length,
+      })),
+    ),
+  evaluate: (rule, evidence) => {
+    const match = compiled
+      .scan(Buffer.from(evidence))
+      .find((m) => m.ruleIdentifier === rule);
+    return match === undefined ? null : toMatch(match);
+  },
+};
+
+/** Rule names the windowed split was derived from, for its contract test. */
+export const yaraWindowedRuleNames: readonly string[] = ruleBlocks.map(
+  ({ name }) => name,
+);

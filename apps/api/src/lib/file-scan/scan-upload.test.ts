@@ -1,14 +1,27 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
 
+import { scanFile } from "@/api/lib/file-scan/scan";
 import {
   FileScanFailedError,
+  FileScanRejectedError,
+  scanUpload,
   scanUploadForHandler,
 } from "@/api/lib/file-scan/scan-upload";
-import { DOCX_MIME_TYPE } from "@/api/mime-types";
+import {
+  DOCX_MIME_TYPE,
+  PPTX_MIME_TYPE,
+  XLSX_MIME_TYPE,
+} from "@/api/mime-types";
+import {
+  largeDocx,
+  largeXlsx,
+  mediaHeavyDocx,
+  mediaHeavyPptx,
+} from "@/api/tests/helpers/large-ooxml";
 
 const attachedTemplateDocx = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
@@ -29,6 +42,9 @@ const attachedTemplateDocx = async (): Promise<Uint8Array> => {
   );
   return await zip.generateAsync({ type: "uint8array" });
 };
+
+// The large fixtures are generated and inflated in full.
+setDefaultTimeout(120_000);
 
 describe("scanUploadForHandler", () => {
   test("answers a rejected file with the structured 422", async () => {
@@ -64,5 +80,47 @@ describe("scanUploadForHandler", () => {
     expect(result.error.status).toBe(503);
     expect(result.error.code).not.toBe(API_FILE_SECURITY_REJECTED_ERROR_CODE);
     expect(result.error.hint).toContain("Retry");
+  });
+
+  test.each([
+    ["an XLSX whose sheet inflates past 34 MiB", largeXlsx, XLSX_MIME_TYPE],
+    ["a DOCX with 34 MiB of text", largeDocx, DOCX_MIME_TYPE],
+    ["a DOCX carrying a 34 MiB image", mediaHeavyDocx, DOCX_MIME_TYPE],
+    ["a PPTX carrying a 34 MiB video", mediaHeavyPptx, PPTX_MIME_TYPE],
+  ])(
+    "accepts %s after inspecting all of it",
+    async (_name, build, mimeType) => {
+      const scanned = Result.unwrap(
+        await scanFile({
+          buffer: await build(),
+          declaredMimeType: mimeType,
+          fileName: "large",
+        }),
+      );
+
+      expect(scanned).toEqual({ verdict: "pass", findings: [] });
+    },
+  );
+
+  test("rejects a rule match deep inside a large document", async () => {
+    const bytes = await largeDocx({
+      trailer:
+        "<w:p><w:r><w:instrText>DDEAUTO marker</w:instrText></w:r></w:p>",
+    });
+
+    const scanned = await scanUpload({
+      bytes,
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName: "large.docx",
+    });
+    if (!Result.isError(scanned)) {
+      throw new TypeError("expected the scan to reject the file");
+    }
+    if (!FileScanRejectedError.is(scanned.error)) {
+      throw new TypeError("expected a security rejection, not a scan failure");
+    }
+    expect(scanned.error.rejection.issues.map(({ code }) => code)).toEqual([
+      "ooxml_dde",
+    ]);
   });
 });
