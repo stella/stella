@@ -1373,6 +1373,138 @@ if (!databaseUrl || !enabled) {
         expect(Result.isError(unknownFailure)).toBe(true);
       }));
 
+    for (const reverse of [false, true]) {
+      for (const separatePages of [false, true]) {
+        test(`numbered collision preserves the first observation across pages and replay (reverse=${String(reverse)}, separate=${String(separatePages)})`, async () =>
+          await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+            const first = entry(
+              "https://uoou.gov.cz/numbered-first",
+              "Guidance",
+              "01/2024",
+            );
+            const second = entry(
+              "https://uoou.gov.cz/numbered-second",
+              "Guidance",
+              "01/2024",
+            );
+            const listed = reverse ? [second, first] : [first, second];
+            const bodies = new Map([
+              [first.url, "first original"],
+              [second.url, "second original"],
+            ]);
+            const winner =
+              listed.at(0) ?? panic("Numbered collision fixture is empty");
+            const sourceAdapter = {
+              ...adapter(listed),
+              discover: async ({ cursor }) =>
+                separatePages
+                  ? {
+                      entries:
+                        cursor === null ? listed.slice(0, 1) : listed.slice(1),
+                      nextCursor: cursor === null ? "second" : null,
+                    }
+                  : { entries: listed, nextCursor: null },
+              fetchDocument: async (item) =>
+                Result.ok(
+                  document(
+                    item,
+                    bodies.get(item.url) ??
+                      panic("Unexpected collision locator"),
+                  ),
+                ),
+            } as const satisfies SoftLawSourceAdapter;
+            for (let replay = 0; replay < 3; replay++) {
+              expect(await run(sourceAdapter)).toEqual({ status: "complete" });
+              const documents = await db
+                .select()
+                .from(softLawDocuments)
+                .where(eq(softLawDocuments.sourceId, sourceId));
+              expect(documents).toHaveLength(1);
+              const accepted =
+                documents.at(0) ?? panic("No accepted numbered document");
+              const versions = await db
+                .select()
+                .from(softLawDocumentVersions)
+                .where(eq(softLawDocumentVersions.documentId, accepted.id));
+              expect(versions).toHaveLength(1);
+              expect(versions.at(0)).toMatchObject({
+                sequence: 1,
+                text: bodies.get(winner.url),
+                observedTo: null,
+              });
+              const locators = await db
+                .select()
+                .from(softLawDocumentLocators)
+                .where(eq(softLawDocumentLocators.documentId, accepted.id));
+              expect(locators).toHaveLength(1);
+              expect(locators.at(0)).toMatchObject({
+                url: winner.url,
+                state: "current",
+              });
+              const receipts = await db
+                .select()
+                .from(softLawIngestionAttempts)
+                .where(eq(softLawIngestionAttempts.sourceId, sourceId));
+              expect(
+                receipts.filter(
+                  (receipt) => receipt.tag === "identity_collision",
+                ),
+              ).toHaveLength(replay + 1);
+              expect(
+                receipts
+                  .filter((receipt) => receipt.tag === "identity_collision")
+                  .every(
+                    (receipt) =>
+                      receipt.url !== winner.url &&
+                      receipt.status === "rejected",
+                  ),
+              ).toBe(true);
+            }
+          }));
+      }
+    }
+
+    test("a numbered URL move between runs can change content without a collision", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const original = entry();
+        const moved = entry("https://uoou.gov.cz/moved-numbered");
+        expect(await run(adapter([original], "original"))).toEqual({
+          status: "complete",
+        });
+        const before =
+          (
+            await db
+              .select()
+              .from(softLawDocuments)
+              .where(eq(softLawDocuments.sourceId, sourceId))
+          ).at(0) ?? panic("Original document absent");
+        expect(await run(adapter([moved], "revised"))).toEqual({
+          status: "complete",
+        });
+        const documents = await db
+          .select()
+          .from(softLawDocuments)
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        expect(documents).toHaveLength(1);
+        expect(documents.at(0)?.id).toBe(before.id);
+        const versions = await db
+          .select()
+          .from(softLawDocumentVersions)
+          .where(eq(softLawDocumentVersions.documentId, before.id))
+          .orderBy(softLawDocumentVersions.sequence);
+        expect(versions.map((version) => version.text)).toEqual([
+          "original",
+          "revised",
+        ]);
+        const receipts = await db
+          .select()
+          .from(softLawIngestionAttempts)
+          .where(eq(softLawIngestionAttempts.sourceId, sourceId));
+        expect(
+          receipts.some((receipt) => receipt.tag === "identity_collision"),
+        ).toBe(false);
+      }));
+
     test("undated unnumbered title collisions are rejected and replay cannot churn versions", async () =>
       await assertProperty(
         "undated unnumbered title collisions are rejected and replay cannot churn versions",

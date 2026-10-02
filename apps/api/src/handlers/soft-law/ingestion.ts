@@ -238,7 +238,7 @@ const fetchSoftLawPage = async ({
   return Result.ok({ attempts, fetched });
 };
 const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
-  const { store, sourceId, writeRaw } = options;
+  const { store, sourceId, writeRaw, runId } = options;
   const page = await fetchSoftLawPage(options);
   if (page.status === "error") {
     return page;
@@ -275,15 +275,14 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
     const unnumbered =
       input.metadata.statedReference.state === "not_stated" &&
       input.metadata.issuedOn.state === "not_stated";
-    const collisionStored =
-      unnumbered &&
-      matches.some(
-        (row) =>
-          row.document.listingState === "listed" &&
-          row.locator &&
-          row.locator.url !== entry.url &&
-          row.version?.contentHash !== contentHash,
-      );
+    const collisionStored = matches.some(
+      (row) =>
+        row.document.listingState === "listed" &&
+        row.locator &&
+        (unnumbered || row.locator.lastSeenRun === runId) &&
+        row.locator.url !== entry.url &&
+        row.version?.contentHash !== contentHash,
+    );
     if (collisionInPage || collisionStored) {
       attempts.push({
         entry,
