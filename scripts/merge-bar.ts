@@ -193,6 +193,7 @@ const MERGE_BAR_REASONS = {
   requiredCheckIncomplete: "REQUIRED_CHECK_INCOMPLETE",
   requiredCheckNotSuccessful: "REQUIRED_CHECK_NOT_SUCCESSFUL",
   ciPlanSkipped: "CI_PLAN_SKIPPED",
+  claUnsigned: "CLA_UNSIGNED",
   unresolvedReviewThreads: "UNRESOLVED_REVIEW_THREADS",
   migrationIdentity: "MIGRATION_IDENTITY_VIOLATION",
   headMoved: "HEAD_MOVED_DURING_CHECKS",
@@ -221,6 +222,7 @@ type CheckRunSnapshot = {
   name: string;
   status: string;
   conclusion: string | null;
+  outputTitle?: string;
 };
 
 type ReviewThreadSnapshot = { id: string; isResolved: boolean };
@@ -363,6 +365,19 @@ const evaluateRequiredCheck = ({
   }
 
   const latestByName = latestRunByName(checkRuns);
+  const cla = latestByName.get("cla");
+  if (
+    cla?.outputTitle === "CLA_UNSIGNED" &&
+    !(cla.status === "completed" && cla.conclusion === "success")
+  ) {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.claUnsigned,
+      detail:
+        "Read https://github.com/stella/cla/blob/main/CLA.md and post exactly: I have read the CLA Document and I hereby sign the CLA",
+    };
+  }
   const required = requiredCheckRuns.flatMap((name) => {
     const run = latestByName.get(name);
     return run === undefined ? [] : [run];
@@ -1214,14 +1229,15 @@ const createGhGateway = ({
         "--paginate",
         `repos/${repo}/commits/${headSha}/check-runs`,
         "--jq",
-        '.check_runs[] | [.id, .name, .status, (.conclusion // "")] | @tsv',
+        '.check_runs[] | [.id, .name, .status, (.conclusion // ""), (.output.title // "")] | @tsv',
       ])
         .split("\n")
         .filter(Boolean);
 
       const runs: CheckRunSnapshot[] = [];
       for (const line of lines) {
-        const [rawId, runName, status, conclusion] = line.split("\t");
+        const [rawId, runName, status, conclusion, outputTitle] =
+          line.split("\t");
         const id = Number(rawId);
         if (
           !Number.isSafeInteger(id) ||
@@ -1236,6 +1252,7 @@ const createGhGateway = ({
           status,
           conclusion:
             conclusion === undefined || conclusion === "" ? null : conclusion,
+          outputTitle: outputTitle ?? "",
         });
       }
       return runs;

@@ -194,16 +194,23 @@ can observe needs a real bump.
 - [ ] Changes are tested
 - [ ] A changeset is included when a published package changed (empty if the
       public surface did not)
-- [ ] CLA is signed
+- [ ] CLA is signed, or the author is exempt
 - [ ] Issue is linked
 
 ## Contributor License Agreement
 
-All contributors must sign the
-[Contributor License Agreement](https://github.com/stella/cla/blob/main/CLA.md) before their pull request
-can be merged. You will be prompted automatically when you open a
-PR. Signing is a one-time process: post the required comment on
-your first PR and all future contributions are covered.
+Outside contributors must sign the
+[Contributor License Agreement](https://github.com/stella/cla/blob/main/CLA.md)
+before their pull request can be merged. Active organization members and owners,
+bot accounts, and explicitly allowlisted automation accounts are exempt.
+
+The `cla` check prompts unsigned authors automatically. From the account that
+opened the pull request, post this exact sentence as a comment:
+
+> I have read the CLA Document and I hereby sign the CLA
+
+Signing is a one-time process; existing signatures cover future contributions.
+A comment from another account cannot sign for the pull request author.
 
 The CLA grants stella labs, s.r.o. a perpetual license to use your
 contributions across all distributions of stella. While the project
