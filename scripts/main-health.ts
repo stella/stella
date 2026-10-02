@@ -1174,7 +1174,9 @@ export const reconcileMainHealth = async (options: MainHealthOptions) => {
     if (wake["path"] === MAIN_HEAVY.path) {
       const commit = tools.testedSha(wake);
       const link = `https://github.com/${tools.repository}/actions/runs/${number(wake["id"])}`;
-      if (wake["html_url"] !== link) {return fail("INVALID_HEAVY_RUN_LINK");}
+      if (wake["html_url"] !== link) {
+        return fail("INVALID_HEAVY_RUN_LINK");
+      }
       const statuses = (
         await tools.list("GET /repos/{owner}/{repo}/commits/{ref}/statuses", {
           ref: commit,
@@ -1187,8 +1189,9 @@ export const reconcileMainHealth = async (options: MainHealthOptions) => {
             status["target_url"] === link &&
             object(status["creator"])["login"] === MAIN_HEAVY.publisher,
         )
-      )
-        {return { title: "IGNORED", reason: "NO_HEAVY_KNOWLEDGE" };}
+      ) {
+        return { title: "IGNORED", reason: "NO_HEAVY_KNOWLEDGE" };
+      }
     }
   }
   const head = await tools.main();
