@@ -43,9 +43,9 @@ describe("stored agent credential reads", () => {
           (
             await readAgentClientCredential({
               storedCredential: value,
-              upgrade: async (replacement) => {
+              upgrade: (replacement) => {
                 updates.push(replacement);
-                return Result.ok();
+                return Promise.resolve(Result.ok());
               },
             })
           ).unwrap(),
@@ -66,9 +66,9 @@ describe("stored agent credential reads", () => {
         (
           await readAgentClientCredential({
             storedCredential: credential,
-            upgrade: async (encrypted) => {
+            upgrade: (encrypted) => {
               upgrades.push(encrypted);
-              return Result.ok();
+              return Promise.resolve(Result.ok());
             },
           })
         ).unwrap(),
@@ -199,7 +199,7 @@ describe("stored agent credential reads", () => {
     });
     try {
       for (const upgrade of [
-        async () => Result.err(failure),
+        () => Promise.resolve(Result.err(failure)),
         async () => {
           throw failure;
         },
@@ -233,7 +233,7 @@ describe("stored agent credential reads", () => {
     expect(
       await readAgentClientCredential({
         storedCredential: credential,
-        upgrade: async () => Result.err(failure),
+        upgrade: () => Promise.resolve(Result.err(failure)),
       }),
     ).toEqual(Result.err(failure));
   });
@@ -243,9 +243,9 @@ describe("stored agent credential reads", () => {
       let upgrades = 0;
       const result = await readAgentClientCredential({
         storedCredential,
-        upgrade: async () => {
+        upgrade: () => {
           upgrades += 1;
-          return Result.ok();
+          return Promise.resolve(Result.ok());
         },
       });
       expect(Result.isError(result)).toBe(true);
