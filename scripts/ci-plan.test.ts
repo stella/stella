@@ -3338,7 +3338,11 @@ test("parity treats absent or false heavy-only input as ordinary event execution
     EVENT.workflowDispatch,
   ]) {
     for (const heavyOnly of [undefined, false, true]) {
-      const context = { event, depth: SUITE_DEPTH.full, heavyOnly };
+      const context = {
+        event,
+        depth: SUITE_DEPTH.full,
+        ...(heavyOnly === undefined ? {} : { heavyOnly }),
+      };
       expect(runsAtDepth("inputs.heavy_only == true", context)).toBe(
         heavyOnly === true,
       );
