@@ -1244,6 +1244,7 @@ const CONTRACT_CORPUS = {
                   narrative: "Drafted the NDA",
                   narrativeLanguage: null,
                   invoiceNarrative: null,
+                  noCharge: false,
                   status: "invoiced",
                   workItem: { id: uid(48), name: "NDA draft" },
                 },

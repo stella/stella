@@ -10,7 +10,7 @@ import { createFileRoute, Link, useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
-import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
+import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 import { Temporal } from "@stll/time";
 import {
   AlertDialog,
@@ -441,10 +441,7 @@ const InvoiceDetail = ({
                     </td>
                     <td className="px-4 py-2 text-end tabular-nums">
                       {formatCurrencyAmount(
-                        prorateHourlyCents({
-                          billedMinutes: entry.billedMinutes,
-                          hourlyRateCents: entry.rateAtEntry,
-                        }),
+                        timeEntryAmount(entry),
                         entry.currency,
                       )}
                     </td>

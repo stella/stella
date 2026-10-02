@@ -265,6 +265,7 @@ const createInvoice = createSafeHandler(
             rateAtEntry: timeEntries.rateAtEntry,
             narrative: timeEntries.narrative,
             invoiceNarrative: timeEntries.invoiceNarrative,
+            noCharge: timeEntries.noCharge,
           });
 
         const linkedCount = updated.length;
