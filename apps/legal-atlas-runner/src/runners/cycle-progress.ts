@@ -10,6 +10,11 @@ import { panic } from "better-result";
 
 import { DAY_IN_MS } from "@stll/time";
 
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@/api/lib/legal-search/ingestion-stop-kind";
+
 export const CYCLE_OUTCOME = {
   COMPLETED: "completed",
   FAILED: "failed",
@@ -20,6 +25,7 @@ export type CycleOutcome = (typeof CYCLE_OUTCOME)[keyof typeof CYCLE_OUTCOME];
 
 export type CycleResult = {
   outcome: CycleOutcome;
+  stopKind?: IngestionStopKind;
   /** Decisions written: inserts and updates both. */
   inserted: number;
   /** Decisions the dedup short-circuit dropped as already stored, unchanged. */
@@ -342,3 +348,30 @@ export const stepStallAlert = (
     capture: !state.captured,
   };
 };
+
+/** The latest cycle owns the cause, including during an already captured episode. */
+type UpdateStalledAdapterOptions = {
+  adapterKey: string;
+  stallAlert: StallAlertState;
+  stopKind: IngestionStopKind;
+};
+
+export const updateStalledAdapter = (
+  stalledAdapters: Map<string, IngestionStopKind>,
+  { adapterKey, stallAlert, stopKind }: UpdateStalledAdapterOptions,
+): void => {
+  if (!stallAlert.captured) {
+    stalledAdapters.delete(adapterKey);
+    return;
+  }
+  stalledAdapters.set(adapterKey, stopKind);
+};
+
+export const cycleStopKind = ({
+  outcome,
+  stopKind,
+}: CycleResult): IngestionStopKind =>
+  stopKind ??
+  (outcome === CYCLE_OUTCOME.TIMEOUT
+    ? INGESTION_STOP_KIND.DEADLINE
+    : INGESTION_STOP_KIND.ADAPTER_ERROR);

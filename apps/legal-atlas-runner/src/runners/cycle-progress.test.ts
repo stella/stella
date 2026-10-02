@@ -1,6 +1,11 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@/api/lib/legal-search/ingestion-stop-kind";
+
+import {
   CYCLE_CADENCE,
   CYCLE_OUTCOME,
   CYCLE_PRODUCTIVITY,
@@ -16,9 +21,12 @@ import {
   UNPRODUCTIVE_THRESHOLD,
   classifyCycleProductivity,
   cycleMadeProgress,
+  cycleStopKind,
   stepCadence,
   stepStallAlert,
+  updateStalledAdapter,
 } from "./cycle-progress";
+import { ingestionHealthRecord } from "./ingestion-health";
 
 const OUTCOMES = Object.values(CYCLE_OUTCOME) satisfies readonly CycleOutcome[];
 
@@ -491,5 +499,108 @@ describe("stepStallAlert", () => {
 
     expect(steps.every((step) => step.sustained === null)).toBe(true);
     expect(steps.every((step) => !step.capture)).toBe(true);
+  });
+});
+
+describe("stalled-source causes", () => {
+  const THRESHOLD = 5;
+  const stoppedCycle = (stopKind: IngestionStopKind): CycleResult => ({
+    outcome: CYCLE_OUTCOME.FAILED,
+    stopKind,
+    inserted: 0,
+    skipped: 0,
+    pagesProcessed: 0,
+    cursorAdvanced: false,
+  });
+
+  const runHealthCycles = (cycles: readonly CycleResult[]) => {
+    let stallAlert: StallAlertState = INITIAL_STALL_ALERT;
+    const stalledAdapters = new Map<string, IngestionStopKind>();
+    return cycles.map((cycle) => {
+      const stall = stepStallAlert(
+        stallAlert,
+        cycleMadeProgress(cycle),
+        THRESHOLD,
+      );
+      stallAlert = stall.state;
+      updateStalledAdapter(stalledAdapters, {
+        adapterKey: "test-source",
+        stallAlert,
+        stopKind: cycleStopKind(cycle),
+      });
+      return {
+        stall,
+        health: ingestionHealthRecord({
+          uptimeSec: 1,
+          pagesSinceStart: 0,
+          activeCycles: 0,
+          stalledAdapters,
+        }),
+      };
+    });
+  };
+
+  test("every typed cause reaches only its heartbeat count", () => {
+    const expectedCounts = {
+      source_unreachable: [1, 0, 0, 0],
+      publisher_refusal: [0, 1, 0, 0],
+      adapter_error: [0, 0, 1, 0],
+      deadline: [0, 0, 0, 1],
+    } as const satisfies Record<IngestionStopKind, readonly number[]>;
+    for (const stopKind of Object.values(INGESTION_STOP_KIND)) {
+      const steps = runHealthCycles(repeat(stoppedCycle(stopKind), THRESHOLD));
+      expect(steps.at(THRESHOLD - 2)?.health.stalledAdapterCount).toBe(0);
+      const health = steps.at(-1)?.health;
+      expect(health?.stalledAdapterCount).toBe(1);
+      expect([
+        health?.sourceUnreachableCount,
+        health?.publisherRefusalCount,
+        health?.adapterStuckCount,
+        health?.deadlineCount,
+      ]).toEqual(expectedCounts[stopKind]);
+    }
+  });
+
+  test("the latest cycle updates the cause before another threshold crossing", () => {
+    const steps = runHealthCycles([
+      ...repeat(
+        stoppedCycle(INGESTION_STOP_KIND.SOURCE_UNREACHABLE),
+        THRESHOLD,
+      ),
+      stoppedCycle(INGESTION_STOP_KIND.ADAPTER_ERROR),
+    ]);
+    expect(steps.at(-2)?.health.sourceUnreachableCount).toBe(1);
+    expect(steps.at(-1)?.health).toMatchObject({
+      stalledAdapterCount: 1,
+      sourceUnreachableCount: 0,
+      adapterStuckCount: 1,
+      stalledAdapterStopKinds: {
+        "test-source": INGESTION_STOP_KIND.ADAPTER_ERROR,
+      },
+    });
+    expect(steps.at(-1)?.stall.sustained).toBeNull();
+    expect(steps.filter(({ stall }) => stall.capture)).toHaveLength(1);
+  });
+
+  test("durable progress clears the gauge even when the cycle stops", () => {
+    const stopped = stoppedCycle(INGESTION_STOP_KIND.PUBLISHER_REFUSAL);
+    const steps = runHealthCycles([
+      ...repeat(stopped, THRESHOLD),
+      { ...stopped, pagesProcessed: 1, cursorAdvanced: true },
+    ]);
+    expect(steps.at(-1)?.health).toMatchObject({
+      stalledAdapterCount: 0,
+      publisherRefusalCount: 0,
+      stalledAdapterStopKinds: {},
+    });
+  });
+
+  test("a runner deadline is classified without a pipeline result", () => {
+    expect(cycleStopKind(INCONCLUSIVE_CYCLE)).toBe(
+      INGESTION_STOP_KIND.DEADLINE,
+    );
+    expect(
+      cycleStopKind({ ...INCONCLUSIVE_CYCLE, outcome: CYCLE_OUTCOME.FAILED }),
+    ).toBe(INGESTION_STOP_KIND.ADAPTER_ERROR);
   });
 });

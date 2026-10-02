@@ -54,6 +54,10 @@ import {
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@/api/lib/legal-search/ingestion-stop-kind";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -105,6 +109,7 @@ type PipelineResult = {
   nextCursor: string | null;
   /** Non-null if the adapter was halted early due to repeated failures. */
   haltReason: string | null;
+  stopKind?: IngestionStopKind;
 };
 
 /**
@@ -235,6 +240,7 @@ export const runIngestionPipeline = async ({
    */
   let consecutiveFailures = 0;
   let haltReason: string | null = null;
+  let stopKind: IngestionStopKind | undefined;
   let checkpointObservationOrder = source.checkpointObservationOrder;
   /**
    * Compiled polarity rules for this cycle. One read per language the cycle
@@ -290,7 +296,11 @@ export const runIngestionPipeline = async ({
       remainingMs: deadline ? Math.round(remainingCycleMs(deadline)) : 0,
       pageTimeoutMs: pageTimeout,
     });
-    return { type: "halt", reason: CYCLE_HALT_REASON.TIMEOUT } as const;
+    return {
+      type: "halt",
+      reason: CYCLE_HALT_REASON.TIMEOUT,
+      stopKind: INGESTION_STOP_KIND.DEADLINE,
+    } as const;
   };
 
   const fetchNextObservedPage = async () => {
@@ -312,6 +322,7 @@ export const runIngestionPipeline = async ({
         return {
           type: "halt",
           reason: databaseTimeoutHaltReason(observedPageResult.error),
+          stopKind: INGESTION_STOP_KIND.ADAPTER_ERROR,
         } as const;
       }
       if (observedPageResult.error instanceof Error) {
@@ -328,15 +339,19 @@ export const runIngestionPipeline = async ({
       // Expected operational failure: record one halt in the event/log path;
       // the runner, rather than every attempt, captures sustained stalls.
       const reason = `Page fetch failed: ${observedPageResult.value.error.message}`;
+      const pageStopKind = deadline?.signal.aborted
+        ? INGESTION_STOP_KIND.DEADLINE
+        : observedPageResult.value.error.stopKind;
       logger.error("case_law.ingestion.adapter_halted", {
         adapterKey: adapter.key,
         cursor: cursor ?? "",
         httpStatus: String(observedPageResult.value.error.httpStatus ?? ""),
         reason,
+        stopKind: pageStopKind,
         inserted,
         skipped,
       });
-      return { type: "halt", reason } as const;
+      return { type: "halt", reason, stopKind: pageStopKind } as const;
     }
     return observedPageResult.value;
   };
@@ -561,6 +576,7 @@ export const runIngestionPipeline = async ({
     const observedPage = await fetchNextObservedPage();
     if (observedPage.type === "halt") {
       haltReason = observedPage.reason;
+      stopKind = observedPage.stopKind;
       break;
     }
 
@@ -577,6 +593,7 @@ export const runIngestionPipeline = async ({
     const pageSlot = await acquirePageSlot(page);
     if (pageSlot === PAGE_SLOT.CYCLE_ENDED) {
       haltReason = CYCLE_HALT_REASON.TIMEOUT;
+      stopKind = INGESTION_STOP_KIND.DEADLINE;
       break;
     }
     const pageT0 = performance.now();
@@ -614,10 +631,12 @@ export const runIngestionPipeline = async ({
       });
 
       if (haltReason) {
+        stopKind = INGESTION_STOP_KIND.ADAPTER_ERROR;
         logger.error("case_law.ingestion.adapter_halted", {
           adapterKey: adapter.key,
           cursor: cursor ?? "",
           reason: haltReason,
+          stopKind,
           inserted,
           skipped,
         });
@@ -686,5 +705,6 @@ export const runIngestionPipeline = async ({
     pagesProcessed,
     nextCursor: cursor,
     haltReason,
+    stopKind,
   };
 };

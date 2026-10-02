@@ -48,6 +48,7 @@ import {
 import { canonicalDecisionDate } from "@/api/lib/dates";
 import { errorTag } from "@/api/lib/errors/error-tag";
 import {
+  AdapterFetchError,
   TimeoutError,
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
@@ -1071,6 +1072,38 @@ describe("runIngestionPipeline — cycle deadline", () => {
       return await callback(tx as unknown as Transaction);
     };
 
+  for (const stopKind of [
+    "source_unreachable",
+    "publisher_refusal",
+    "adapter_error",
+  ] as const) {
+    test(`propagates ${stopKind} and holds the last cursor`, async () => {
+      const source = caseLawSourceRow({ name: "Stopped source" });
+      czNsAdapter.fetchPage = async () =>
+        Result.err(
+          new AdapterFetchError({
+            message: "Page unavailable",
+            adapterKey: "cz-ns",
+            cursor: source.syncCursor,
+            stopKind,
+          }),
+        );
+      let persistedCursor: string | null | undefined;
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb: cursorOnlyDb((cursor) => {
+          persistedCursor = cursor;
+        }),
+        maxPages: 1,
+      });
+      expect(result.stopKind).toBe(stopKind);
+      expect(result.pagesProcessed).toBe(0);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(persistedCursor).toBe(source.syncCursor);
+    });
+  }
+
   test("stops before a page the remaining budget cannot cover", async () => {
     const source = caseLawSourceRow({ name: "Short-budget source" });
 
@@ -1096,6 +1129,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     expect(fetches).toBe(0);
     expect(result.pagesProcessed).toBe(0);
     expect(result.haltReason).toBe(CYCLE_HALT_REASON.TIMEOUT);
+    expect(result.stopKind).toBe("deadline");
     expect(result.nextCursor).toBe("cursor-1");
     expect(persistedCursor).toBe("cursor-1");
   });

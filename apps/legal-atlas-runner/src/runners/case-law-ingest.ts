@@ -64,6 +64,10 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@/api/lib/legal-search/ingestion-stop-kind";
+import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
   scopedPendingDocumentTierLoaders,
@@ -108,8 +112,10 @@ import {
   INITIAL_STALL_ALERT,
   type StallAlertState,
   cycleMadeProgress,
+  cycleStopKind,
   stepCadence,
   stepStallAlert,
+  updateStalledAdapter,
 } from "./cycle-progress";
 import { ingestionHealthRecord } from "./ingestion-health";
 import { formatLogDetail } from "./log-detail";
@@ -413,7 +419,7 @@ const inFlightCycles = new Set<string>();
 const cyclesSinceWatchdogTick = new Set<string>();
 
 /** Sources whose current no-progress episode reached the alert threshold. */
-const stalledAdapters = new Set<AdapterKey>();
+const stalledAdapters = new Map<AdapterKey, IngestionStopKind>();
 
 const writeHeartbeat = () => {
   void Bun.write(
@@ -759,6 +765,13 @@ const runOneCycle = async (
   return {
     cycle: {
       outcome,
+      ...(outcome !== CYCLE_OUTCOME.COMPLETED && {
+        stopKind:
+          result?.stopKind ??
+          (outcome === CYCLE_OUTCOME.TIMEOUT
+            ? INGESTION_STOP_KIND.DEADLINE
+            : INGESTION_STOP_KIND.ADAPTER_ERROR),
+      }),
       inserted: result?.inserted ?? 0,
       skipped: result?.skipped ?? 0,
       pagesProcessed: result?.pagesProcessed ?? 0,
@@ -789,6 +802,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
     let leaseBusy = false;
     /** Null when the cycle never ran (lease busy), so it folds no evidence. */
     let progressVerdict: boolean | null = null;
+    let stopKind: IngestionStopKind = INGESTION_STOP_KIND.ADAPTER_ERROR;
     try {
       // Bound concurrent cycles: the fetch/enrich/parse phase runs outside
       // the DB-write slot, so without this every source crawls its backlog
@@ -836,6 +850,7 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         // or a timeout that still walked pages moved the cursor.
         const madeProgress = cycleMadeProgress(cycle);
         progressVerdict = madeProgress;
+        stopKind = cycleStopKind(cycle);
 
         if (outcome === CYCLE_OUTCOME.FAILED && !madeProgress) {
           backoffFailures++;
@@ -884,15 +899,16 @@ const runAdapterLoop = async ({ adapterKey, name }: SourceDef) => {
         SUSTAINED_FAILURE_THRESHOLD,
       );
       stallAlert = stall.state;
-      if (stallAlert.captured) {
-        stalledAdapters.add(adapterKey);
-      } else {
-        stalledAdapters.delete(adapterKey);
-      }
+      updateStalledAdapter(stalledAdapters, {
+        adapterKey,
+        stallAlert,
+        stopKind,
+      });
       if (stall.sustained !== null) {
         logger.error("case_law.ingestion.sustained_failure", {
           adapterKey,
           noProgressStreak: stall.sustained,
+          stopKind,
         });
         if (stall.capture) {
           captureError(
