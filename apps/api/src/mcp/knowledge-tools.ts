@@ -1379,10 +1379,13 @@ const readPlaybookDetail = async ({
   // Sources are narrowed to the caller's own before anything else sees the
   // payload: chat mints a ref per source, and a ref puts the source's matter
   // in the thread's observed scope.
-  const readableSources = await readablePositionSources(
-    context.safeDb,
-    positionSourceEntityIds(positionSources(result.value.positions.items)),
-  );
+  const readableSources = await readablePositionSources({
+    safeDb: context.safeDb,
+    entityIds: positionSourceEntityIds(
+      positionSources(result.value.positions.items),
+    ),
+    accessibleWorkspaceIds: context.accessibleWorkspaceIds,
+  });
   if (Result.isError(readableSources)) {
     return internalFailureResult(readableSources.error);
   }
@@ -1733,9 +1736,11 @@ const readSavePlaybookSources = async ({
       entityIds.add(brandPersistedEntityId(entityId));
     }
   }
-  const readable = await readablePositionSources(context.safeDb, [
-    ...entityIds,
-  ]);
+  const readable = await readablePositionSources({
+    safeDb: context.safeDb,
+    entityIds: [...entityIds],
+    accessibleWorkspaceIds: context.accessibleWorkspaceIds,
+  });
   return readable.map(
     (sources) =>
       new Map<string, PositionSource>(
@@ -1810,6 +1815,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       createPlaybookDefinitionHandler({
         safeDb: context.safeDb,
         organizationId,
+        accessibleWorkspaceIds: context.accessibleWorkspaceIds,
         orgAIConfig,
         orgAIConfigStatus,
         promptCachingEnabled,
@@ -1928,6 +1934,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     updatePlaybookDefinitionHandler({
       safeDb: context.safeDb,
       organizationId,
+      accessibleWorkspaceIds: context.accessibleWorkspaceIds,
       playbookId,
       orgAIConfig,
       orgAIConfigStatus,

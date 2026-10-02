@@ -111,6 +111,8 @@ export const hasDuplicatePositionSource = (position: Position): boolean => {
 type AssertPositionsValidArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  /** The matters the saver may use now; a new source must sit in one. */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   positions: PlaybookPositions;
   /** The playbook's positions as stored before this save; null on create. */
   storedPositions: PlaybookPositions | null;
@@ -127,6 +129,7 @@ type AssertPositionsValidArgs = {
 export const assertPositionsValid = async ({
   safeDb,
   organizationId,
+  accessibleWorkspaceIds,
   positions,
   storedPositions,
 }: AssertPositionsValidArgs): Promise<
@@ -244,10 +247,11 @@ export const assertPositionsValid = async ({
   const introduced = positionSources(positions.items).filter(
     (source) => !storedKeys.has(positionSourceKey(source)),
   );
-  const readableSourcesResult = await readablePositionSources(
+  const readableSourcesResult = await readablePositionSources({
     safeDb,
-    positionSourceEntityIds(introduced),
-  );
+    entityIds: positionSourceEntityIds(introduced),
+    accessibleWorkspaceIds,
+  });
   if (Result.isError(readableSourcesResult)) {
     return Result.err(readableSourcesResult.error);
   }

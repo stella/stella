@@ -37,6 +37,8 @@ type UpdatePlaybookDefinitionBody = {
 type UpdatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
+  /** The matters the saver may use now; a new source must sit in one. */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
   playbookId: SafeId<"playbookDefinition">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;
@@ -49,6 +51,7 @@ type UpdatePlaybookDefinitionArgs = {
 export const updatePlaybookDefinitionHandler = async function* ({
   safeDb,
   organizationId,
+  accessibleWorkspaceIds,
   playbookId,
   orgAIConfig,
   managedAIResidency,
@@ -83,6 +86,7 @@ export const updatePlaybookDefinitionHandler = async function* ({
     assertPositionsValid({
       safeDb,
       organizationId,
+      accessibleWorkspaceIds,
       positions: body.positions,
       storedPositions: stored.positions,
     }),

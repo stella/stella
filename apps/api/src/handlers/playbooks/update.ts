@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import {
   playbookDefinitionParamsSchema,
   updatePlaybookDefinitionBodySchema,
@@ -34,10 +36,15 @@ const updatePlaybookDefinition = createSafeRootHandler(
     managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
+    getActiveWorkspaceIds,
   }) {
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     return yield* updatePlaybookDefinitionHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
+      accessibleWorkspaceIds,
       playbookId: params.playbookId,
       orgAIConfig,
       managedAIResidency,

@@ -136,6 +136,7 @@ const noopAuditRecorder: AuditRecorder = async () => undefined;
 
 const orgContext = () => ({
   createAuditRecorder: () => noopAuditRecorder,
+  getActiveWorkspaceIds: async () => [ids.wsA1],
   getWorkspaceAccess: async (
     workspaceId: SafeId<"workspace">,
   ): Promise<AccessibleWorkspace | null> =>

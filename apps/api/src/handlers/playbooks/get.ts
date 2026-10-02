@@ -28,7 +28,7 @@ const config = {
 
 const getPlaybookDefinition = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params }) {
+  async function* ({ safeDb, session, params, getActiveWorkspaceIds }) {
     const organizationId = session.activeOrganizationId;
     // The shared read returns a Result of its own; unwrap it so a 404 short-
     // circuits before the overlay query.
@@ -62,13 +62,23 @@ const getPlaybookDefinition = createSafeRootHandler(
     // the names the stored positions deliberately omit. The positions keep
     // every source pair, so the editor's full-replace save round-trips the
     // ones this reader cannot resolve; the shared read stays unfiltered
-    // because `save_playbook` merges against the stored truth.
-    const readableSources = yield* Result.await(
-      readablePositionSources(
-        safeDb,
-        positionSourceEntityIds(positionSources(playbook.positions.items)),
-      ),
+    // because `save_playbook` merges against the stored truth. The usable
+    // matters are resolved only for a playbook that cites a source.
+    const sourceEntityIds = positionSourceEntityIds(
+      positionSources(playbook.positions.items),
     );
+    const readableSources =
+      sourceEntityIds.length === 0
+        ? []
+        : yield* Result.await(
+            readablePositionSources({
+              safeDb,
+              entityIds: sourceEntityIds,
+              accessibleWorkspaceIds: yield* Result.await(
+                Result.tryPromise(async () => await getActiveWorkspaceIds()),
+              ),
+            }),
+          );
 
     return Result.ok({
       ...playbook,

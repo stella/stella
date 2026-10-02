@@ -49,6 +49,8 @@ type Actor = "a1" | "a2";
 
 const contextFor = (actor: Actor) => ({
   createAuditRecorder: () => noopAuditRecorder,
+  getActiveWorkspaceIds: async () =>
+    actor === "a1" ? [ids.wsA1, ids.wsA2] : [ids.wsA2],
   getWorkspaceAccess: async () => null,
   memberRole: { role: "owner" as const },
   orgAIConfig: null,

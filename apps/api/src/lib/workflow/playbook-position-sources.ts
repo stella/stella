@@ -4,10 +4,11 @@
  *
  * A position stores `{ workspaceId, entityId }` pairs and nothing else about
  * its sources. Names are resolved here, through the caller's scoped
- * connection, so row security decides what each caller learns: a saver can
+ * connection and within the matters the caller may use, so a saver can
  * introduce only a document they can open, and a reader is answered only the
- * sources they can open. A document in a matter the caller cannot open and a
- * deleted document are both simply absent from the answer.
+ * sources they can open. A document in a matter the caller cannot open, a
+ * document in a matter outside the caller's usable set, and a deleted document
+ * are all simply absent from the answer.
  */
 
 import { Result } from "better-result";
@@ -52,17 +53,31 @@ export type ReadablePositionSource = {
   workspaceName: string;
 };
 
+type ReadablePositionSourcesArgs = {
+  safeDb: SafeDb;
+  entityIds: readonly SafeId<"entity">[];
+  /**
+   * The matters the caller may use now. Row security alone is not the scope:
+   * it still returns a matter being deleted, and a chat thread or an
+   * attenuated token is narrower than the user's membership.
+   */
+  accessibleWorkspaceIds: readonly SafeId<"workspace">[];
+};
+
 /**
  * The documents among `entityIds` the caller can read, each with the matter it
  * truly belongs to. One query for the whole list, through the caller's scoped
  * connection: this is both the readability proof a save needs and the
  * per-reader resolution a read needs.
  */
-export const readablePositionSources = async (
-  safeDb: SafeDb,
-  entityIds: readonly SafeId<"entity">[],
-): Promise<Result<ReadablePositionSource[], SafeDbError>> => {
-  if (entityIds.length === 0) {
+export const readablePositionSources = async ({
+  safeDb,
+  entityIds,
+  accessibleWorkspaceIds,
+}: ReadablePositionSourcesArgs): Promise<
+  Result<ReadablePositionSource[], SafeDbError>
+> => {
+  if (entityIds.length === 0 || accessibleWorkspaceIds.length === 0) {
     return Result.ok([]);
   }
   return await safeDb((tx) =>
@@ -78,6 +93,7 @@ export const readablePositionSources = async (
       .where(
         and(
           inArray(entities.id, [...entityIds]),
+          inArray(entities.workspaceId, [...accessibleWorkspaceIds]),
           eq(entities.kind, "document"),
         ),
       )

@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { createPlaybookDefinitionHandler } from "@/api/handlers/playbooks/create-shared";
 import { playbookDefinitionBodySchema } from "@/api/handlers/playbooks/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -26,10 +28,15 @@ const createPlaybookDefinition = createSafeRootHandler(
     managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
+    getActiveWorkspaceIds,
   }) {
+    const accessibleWorkspaceIds = yield* Result.await(
+      Result.tryPromise(async () => await getActiveWorkspaceIds()),
+    );
     return yield* createPlaybookDefinitionHandler({
       safeDb,
       organizationId: session.activeOrganizationId,
+      accessibleWorkspaceIds,
       orgAIConfig,
       managedAIResidency,
       orgAIConfigStatus,

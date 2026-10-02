@@ -64,6 +64,7 @@ const validate = async (tx: Transaction, positions: PlaybookPositions) =>
   await assertPositionsValid({
     safeDb: createScopedDbMock(tx).safeDb,
     organizationId: ORGANIZATION_ID,
+    accessibleWorkspaceIds: [],
     positions,
     storedPositions: null,
   });
@@ -234,6 +235,7 @@ describe("assertPositionsValid", () => {
     const result = await assertPositionsValid({
       safeDb: createScopedDbMock(noDbTx).safeDb,
       organizationId: ORGANIZATION_ID,
+      accessibleWorkspaceIds: [],
       positions,
       storedPositions: positions,
     });

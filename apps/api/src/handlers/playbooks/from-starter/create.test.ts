@@ -68,6 +68,7 @@ const createOrgContext = (
 
   return {
     createAuditRecorder: () => noopAuditRecorder,
+    getActiveWorkspaceIds: async () => [],
     memberRole: { role: "owner" as const },
     orgAIConfig: null,
     promptCachingEnabled: false,
@@ -200,6 +201,7 @@ describe("starter playbook content", () => {
       const result = await assertPositionsValid({
         safeDb: createScopedDbMock(noDbTx).safeDb,
         organizationId: ids.orgA,
+        accessibleWorkspaceIds: [],
         positions: starter.positions,
         storedPositions: null,
       });
