@@ -1,13 +1,17 @@
 import { TaggedError } from "better-result";
 
 import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import type { SoftLawFetch } from "@/api/handlers/soft-law/publisher-access";
 import type {
   SourceFieldInventory,
   SourceSurfaceCensus,
   SourceTotalCount,
   SourceSliceWalk,
 } from "@/api/lib/legal-search/ingestion-types";
+
+import {
+  SOFT_LAW_BLOCK_REASONS,
+  type SoftLawFetch,
+} from "./soft-law-access-types";
 
 export const SOFT_LAW_KINDS = [
   "methodology",
@@ -21,6 +25,8 @@ export const SOFT_LAW_KINDS = [
   "other",
 ] as const;
 export const SOFT_LAW_LISTING_STATES = ["listed", "no_longer_listed"] as const;
+export const SOFT_LAW_LOCATOR_STATES = ["current", "historical"] as const;
+export const SOFT_LAW_BATCH_LIMIT = 100;
 export const SOFT_LAW_VALIDITY_STATES = [
   "not_stated",
   "withdrawn",
@@ -44,6 +50,24 @@ export const SOFT_LAW_RUN_STATES = [
   "running",
   "blocked",
   "failed",
+] as const;
+export const SOFT_LAW_FAILURE_TAGS = [
+  ...SOFT_LAW_BLOCK_REASONS,
+  "ingestion_failed",
+  "listing_incomplete",
+  "deferred_window",
+] as const;
+export const SOFT_LAW_ITEM_TAGS = [
+  "identity_collision",
+  "ambiguous_locator",
+  "invalid_document",
+  "retry_exhausted",
+] as const;
+export const SOFT_LAW_ATTEMPT_STATES = [
+  "applied",
+  "unchanged",
+  "rejected",
+  "retryable",
 ] as const;
 export const SOFT_LAW_AUTHORITIES = {
   "cz-uoou": { jurisdiction: "CZE", name: "Úřad pro ochranu osobních údajů" },
@@ -113,4 +137,11 @@ export type SoftLawSourceAdapter = {
 
 export class SoftLawIngestionError extends TaggedError(
   "SoftLawIngestionError",
+)<{ message: string }> {}
+export class SoftLawItemError extends TaggedError("SoftLawItemError")<{
+  message: string;
+  tag: (typeof SOFT_LAW_ITEM_TAGS)[number];
+}> {}
+export class SoftLawListingIncompleteError extends TaggedError(
+  "SoftLawListingIncompleteError",
 )<{ message: string }> {}

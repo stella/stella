@@ -50,10 +50,13 @@
 // Other runtime-configured services and explicitly trusted URL
 // producers take a narrow suppression at the call, naming the trust boundary;
 // this rule does not attempt whole-program taint analysis.
+// Soft-law adapters must use their supplied fetch capability, which owns the
+// publisher block latch; even a statically trusted destination cannot bypass it.
 
 import { eslintCompatPlugin, type Variable } from "@oxlint/plugins";
 
 import {
+  filenameForContext,
   getPropertyName,
   isAstNode,
   isIdentifier,
@@ -78,6 +81,15 @@ const FETCH_SOURCES: ReadonlyMap<string, ReadonlySet<string>> = new Map([
     new Set(["fetchPublisher", "fetchWithRetry"]),
   ],
   ["undici", new Set(["fetch", "request", "stream"])],
+]);
+const SOFT_LAW_ADAPTER_PATH =
+  /(?:^|\/)apps\/api\/src\/handlers\/soft-law\/adapters\//u;
+const SAFE_OUTBOUND_MODULE = "apps/api/src/lib/safe-outbound-fetch";
+const SAFE_OUTBOUND_FETCHES: ReadonlySet<string> = new Set([
+  "safeOutboundFetchBytes",
+  "safeOutboundFetchStream",
+  "fetchWithResolvedAddress",
+  "fetchStreamWithResolvedAddress",
 ]);
 const NODE_HTTP_MODULES: ReadonlySet<string> = new Set([
   "http",
@@ -220,6 +232,9 @@ export default eslintCompatPlugin({
       meta: {
         type: "problem",
         messages: {
+          adapterMustUseProvidedFetch:
+            "Soft-law adapters must use the supplied fetch capability so " +
+            "publisher blocks stop every later request.",
           uncheckedRedirect:
             "A provider-restricted outbound target must set redirect: " +
             '"error" so a cross-origin redirect cannot escape the validated ' +
@@ -233,6 +248,8 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const isSoftLawAdapter = () =>
+          SOFT_LAW_ADAPTER_PATH.test(filenameForContext(context));
         const constInitializer = (variable: Variable): AstNode | null =>
           unwrapExpression(stableInitializer(variable));
 
@@ -414,6 +431,13 @@ export default eslintCompatPlugin({
           }
           const resolved = resolveImport(context, expression);
           if (resolved !== null) {
+            if (
+              isSoftLawAdapter() &&
+              resolved.moduleId === SAFE_OUTBOUND_MODULE &&
+              SAFE_OUTBOUND_FETCHES.has(resolved.imported)
+            ) {
+              return "fetch";
+            }
             if (FETCH_SOURCES.get(resolved.moduleId)?.has(resolved.imported)) {
               return "fetch";
             }
@@ -1222,6 +1246,13 @@ export default eslintCompatPlugin({
           requestOptions: unknown;
           kind: SinkKind;
         }): void => {
+          if (isSoftLawAdapter()) {
+            context.report({
+              node: call,
+              messageId: "adapterMustUseProvidedFetch",
+            });
+            return;
+          }
           const pattern =
             kind === "node-http"
               ? nodeRequestPattern(target)

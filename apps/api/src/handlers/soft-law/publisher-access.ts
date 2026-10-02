@@ -6,25 +6,22 @@ import {
   PUBLISHER_GATES,
   reservePublisherGateSlot,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import type {
+  SoftLawFetch,
+  SoftLawBlockReason,
+} from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 export const SOFT_LAW_RESPONSE_MAX_BYTES = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
-export const SOFT_LAW_BLOCK_REASONS = [
-  "forbidden",
-  "rate_limited",
-  "challenge",
-] as const;
 export class SoftLawBlockedError extends TaggedError("SoftLawBlockedError")<{
   message: string;
-  reason: (typeof SOFT_LAW_BLOCK_REASONS)[number];
+  reason: SoftLawBlockReason;
 }> {}
 export class SoftLawAccessError extends TaggedError("SoftLawAccessError")<{
   message: string;
 }> {}
-export type SoftLawResponse = { bytes: Uint8Array; contentType: string };
-export type SoftLawFetch = (url: string) => Promise<SoftLawResponse>;
 
 export const detectSoftLawBlock = (status: number, body: string) => {
   if (status === 403) {
@@ -35,7 +32,7 @@ export const detectSoftLawBlock = (status: number, body: string) => {
   }
   // Match challenge markup, not prose discussing captchas in guidance.
   if (
-    /<title[^>]*>\s*(?:just a moment|attention required|access denied)|cf-chl-|id=["']challenge-form|class=["'][^"']*g-recaptcha|hcaptcha\.com\/1\/api|awswaf\.com|verify you are human/iu.test(
+    /<title[^>]*>\s*(?:just a moment|attention required|access denied)|cf-chl-|id=["']challenge-form|hcaptcha\.com\/1\/api|awswaf\.com|verify you are human/iu.test(
       body,
     )
   ) {
@@ -77,23 +74,32 @@ export const softLawAccessWindowOpen = (
 type CreateSoftLawFetchOptions = {
   policy: SoftLawAccessPolicy;
   signal: AbortSignal;
-  beforeRequest: () => Promise<void>;
   now?: () => Date;
   request?: typeof fetchWithTimeout;
   reserve?: typeof reservePublisherGateSlot;
 };
 
 /** Every response is inspected before the adapter receives it; no retries. */
-export const createSoftLawFetch =
-  ({
-    policy,
-    signal,
-    beforeRequest,
-    now = () => new Date(),
-    request = fetchWithTimeout,
-    reserve = reservePublisherGateSlot,
-  }: CreateSoftLawFetchOptions): SoftLawFetch =>
-  async (rawUrl) => {
+export const createSoftLawFetch = ({
+  policy,
+  signal,
+  now = () => new Date(),
+  request = fetchWithTimeout,
+  reserve = reservePublisherGateSlot,
+}: CreateSoftLawFetchOptions): SoftLawFetch => {
+  let blocked: SoftLawBlockReason | null = null;
+  let windowState: "open" | "deferred_window" = "open";
+  const stop = (reason: SoftLawBlockReason): never => {
+    blocked = reason;
+    throw new SoftLawBlockedError({
+      message: "Publisher blocked this source",
+      reason,
+    });
+  };
+  const fetch = async (rawUrl: string) => {
+    if (blocked) {
+      return stop(blocked);
+    }
     const gate = PUBLISHER_GATES[policy.publisherGate];
     if (
       gate.intervalMs < 1000 ||
@@ -115,15 +121,17 @@ export const createSoftLawFetch =
         message: "URL is outside the publisher policy",
       });
     }
-    await beforeRequest();
     await reserve(policy.publisherGate, signal);
     if (!softLawAccessWindowOpen(policy, now())) {
+      windowState = "deferred_window";
       throw new SoftLawAccessError({
         message: "Publisher access window is closed",
       });
     }
     signal.throwIfAborted();
-    await beforeRequest();
+    if (blocked) {
+      return stop(blocked);
+    }
     const response = await request(url, {
       signal,
       timeoutMs: REQUEST_TIMEOUT_MS,
@@ -133,10 +141,17 @@ export const createSoftLawFetch =
     const statusBlock = detectSoftLawBlock(response.status, "");
     if (statusBlock) {
       await response.body?.cancel();
-      throw new SoftLawBlockedError({
-        message: "Publisher blocked this source",
-        reason: statusBlock,
-      });
+      return stop(statusBlock);
+    }
+    const location = response.headers.get("location");
+    if (
+      response.status >= 300 &&
+      response.status < 400 &&
+      location &&
+      /challenge|captcha|cdn-cgi|access-denied/iu.test(location)
+    ) {
+      await response.body?.cancel();
+      return stop("challenge");
     }
     const reader = response.body?.getReader();
     if (!reader) {
@@ -168,15 +183,23 @@ export const createSoftLawFetch =
         bytes.set(chunk, offset);
         offset += chunk.byteLength;
       }
+      const contentType =
+        response.headers.get("content-type") ?? "application/octet-stream";
+      const surface = new URL(url).pathname;
+      const inspectText =
+        /^(?:text\/|application\/(?:xhtml\+xml|xml|json))/iu.test(
+          contentType,
+        ) &&
+        !surface.startsWith("/media/") &&
+        !/\.(?:pdf|docx)$/iu.test(surface);
       const block = detectSoftLawBlock(
         response.status,
-        new TextDecoder().decode(bytes.subarray(0, 64 * 1024)),
+        inspectText
+          ? new TextDecoder().decode(bytes.subarray(0, 64 * 1024))
+          : "",
       );
       if (block) {
-        throw new SoftLawBlockedError({
-          message: "Publisher returned a challenge",
-          reason: block,
-        });
+        return stop(block);
       }
       if (!response.ok) {
         throw new SoftLawAccessError({
@@ -185,8 +208,7 @@ export const createSoftLawFetch =
       }
       return {
         bytes,
-        contentType:
-          response.headers.get("content-type") ?? "application/octet-stream",
+        contentType,
       };
     };
     // Keep a deadline on streamed bodies as well as response headers.
@@ -212,3 +234,10 @@ export const createSoftLawFetch =
       await reader.cancel();
     }
   };
+  return Object.freeze(
+    Object.assign(fetch, {
+      getBlockReason: () => blocked,
+      getWindowState: () => windowState,
+    }),
+  );
+};

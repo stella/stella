@@ -1,9 +1,17 @@
+import { caseLawIngestionOnlyPolicies } from "@/api/db/rls";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
-import type { SoftLawMetadata } from "@/api/lib/legal-search/soft-law-types";
+import type {
+  SoftLawMetadata,
+  SoftLawEntry,
+} from "@/api/lib/legal-search/soft-law-types";
 import {
+  SOFT_LAW_ATTEMPT_STATES,
+  SOFT_LAW_ITEM_TAGS,
+  SOFT_LAW_FAILURE_TAGS,
   SOFT_LAW_EXTRACTION_QUALITIES,
   SOFT_LAW_KINDS,
   SOFT_LAW_LISTING_STATES,
+  SOFT_LAW_LOCATOR_STATES,
   SOFT_LAW_RUN_STATES,
   SOFT_LAW_STATED_STATES,
   SOFT_LAW_VALIDITY_BASES,
@@ -17,17 +25,6 @@ const values = (items: readonly string[]) =>
     items.map((item) => sql.raw(`'${item}'`)),
     sql.raw(","),
   );
-const ownerPolicy = (table: string) =>
-  p.pgPolicy("soft_law_owner_access", {
-    for: "all",
-    to: "public",
-    using: sql.raw(
-      `current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${table}'::regclass)`,
-    ),
-    withCheck: sql.raw(
-      `current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.${table}'::regclass)`,
-    ),
-  });
 
 /** Global ingestion state; ordinary application roles have no access. */
 export const softLawSources = p.pgTable.withRLS(
@@ -37,6 +34,7 @@ export const softLawSources = p.pgTable.withRLS(
     adapterKey: p.text("adapter_key").notNull().unique(),
     descriptor: jsonb().$type<CorpusSourceDescriptor>().notNull(),
     syncCursor: p.text("sync_cursor"),
+    listingBaseline: p.integer("listing_baseline").default(0).notNull(),
     lastSyncAt: timestamptz("last_sync_at"),
     runState: p
       .text("run_state", { enum: SOFT_LAW_RUN_STATES })
@@ -46,10 +44,14 @@ export const softLawSources = p.pgTable.withRLS(
     runStartedAt: timestamptz("run_started_at"),
     leaseToken: safeUuid<"softLawIngestionLease">("lease_token"),
     leaseExpiresAt: timestamptz("lease_expires_at"),
-    failureTag: p.text("failure_tag"),
+    failureTag: p.text("failure_tag", { enum: SOFT_LAW_FAILURE_TAGS }),
   },
   (t) => [
-    ownerPolicy("soft_law_sources"),
+    ...caseLawIngestionOnlyPolicies(),
+    p.check(
+      "soft_law_sources_failure_check",
+      sql`${t.failureTag} IS NULL OR ${t.failureTag} IN (${values(SOFT_LAW_FAILURE_TAGS)})`,
+    ),
     p.check(
       "soft_law_sources_state_check",
       sql`${t.runState} IN (${values(SOFT_LAW_RUN_STATES)})`,
@@ -94,22 +96,16 @@ export const softLawDocuments = p.pgTable.withRLS(
     validityBasis: p
       .text("validity_basis", { enum: SOFT_LAW_VALIDITY_BASES })
       .notNull(),
-    supersededBy: safeUuid<"softLawDocument">("superseded_by"),
     firstSeenAt: timestamptz("first_seen_at").notNull(),
     lastSeenAt: timestamptz("last_seen_at").notNull(),
     lastSeenRun: p.uuid("last_seen_run").notNull(),
   },
   (t) => [
-    ownerPolicy("soft_law_documents"),
+    ...caseLawIngestionOnlyPolicies(),
     p
       .unique("soft_law_documents_identity_unique")
       .on(t.sourceId, t.identityKey),
     p.index("soft_law_documents_run_idx").on(t.sourceId, t.lastSeenRun),
-    p.foreignKey({
-      columns: [t.supersededBy],
-      foreignColumns: [t.id],
-      name: "soft_law_documents_superseded_by_fk",
-    }),
     p.check(
       "soft_law_documents_kind_check",
       sql`${t.kind} IN (${values(SOFT_LAW_KINDS)})`,
@@ -120,7 +116,7 @@ export const softLawDocuments = p.pgTable.withRLS(
     ),
     p.check(
       "soft_law_documents_validity_check",
-      sql`${t.validityState} IN (${values(SOFT_LAW_VALIDITY_STATES)}) AND ${t.validityBasis} IN (${values(SOFT_LAW_VALIDITY_BASES)}) AND (${t.supersededBy} IS NULL OR ${t.validityState} = 'superseded')`,
+      sql`${t.validityState} IN (${values(SOFT_LAW_VALIDITY_STATES)}) AND ${t.validityBasis} IN (${values(SOFT_LAW_VALIDITY_BASES)})`,
     ),
     p.check(
       "soft_law_documents_reference_check",
@@ -157,7 +153,7 @@ export const softLawDocumentVersions = p.pgTable.withRLS(
     observedTo: timestamptz("observed_to"),
   },
   (t) => [
-    ownerPolicy("soft_law_document_versions"),
+    ...caseLawIngestionOnlyPolicies(),
     p.unique("soft_law_versions_sequence_unique").on(t.documentId, t.sequence),
     p
       .uniqueIndex("soft_law_versions_open_unique")
@@ -179,16 +175,59 @@ export const softLawDocumentLocators = p.pgTable.withRLS(
   "soft_law_document_locators",
   {
     id: pUuid<"softLawDocumentLocator">().primaryKey(),
+    sourceId: safeUuid<"softLawSource">("source_id")
+      .notNull()
+      .references(() => softLawSources.id),
     documentId: safeUuid<"softLawDocument">("document_id")
       .notNull()
       .references(() => softLawDocuments.id),
     url: p.text().notNull(),
     firstSeenAt: timestamptz("first_seen_at").notNull(),
     lastSeenAt: timestamptz("last_seen_at").notNull(),
+    lastSeenRun: p.uuid("last_seen_run").notNull(),
+    state: p.text({ enum: SOFT_LAW_LOCATOR_STATES }).notNull(),
   },
   (t) => [
-    ownerPolicy("soft_law_document_locators"),
+    ...caseLawIngestionOnlyPolicies(),
+    p.check(
+      "soft_law_locators_state_check",
+      sql`${t.state} IN (${values(SOFT_LAW_LOCATOR_STATES)})`,
+    ),
+    p
+      .uniqueIndex("soft_law_locators_current_url_unique")
+      .on(t.sourceId, t.url)
+      .where(sql`${t.state} = 'current'`),
     p.unique("soft_law_locators_url_unique").on(t.documentId, t.url),
     p.index("soft_law_locators_url_idx").on(t.url),
+  ],
+);
+
+export const softLawIngestionAttempts = p.pgTable.withRLS(
+  "soft_law_ingestion_attempts",
+  {
+    id: pUuid<"softLawIngestionAttempt">().primaryKey(),
+    sourceId: safeUuid<"softLawSource">("source_id")
+      .notNull()
+      .references(() => softLawSources.id),
+    runId: p.uuid("run_id").notNull(),
+    url: p.text().notNull(),
+    entry: jsonb().$type<SoftLawEntry>().notNull(),
+    status: p.text({ enum: SOFT_LAW_ATTEMPT_STATES }).notNull(),
+    tag: p.text({ enum: SOFT_LAW_ITEM_TAGS }),
+    count: p.integer().notNull(),
+    observedAt: timestamptz("observed_at").notNull(),
+  },
+  (t) => [
+    ...caseLawIngestionOnlyPolicies(),
+    p.unique("soft_law_attempts_item_unique").on(t.sourceId, t.runId, t.url),
+    p.check("soft_law_attempts_count_check", sql`${t.count} BETWEEN 1 AND 3`),
+    p.check(
+      "soft_law_attempts_status_check",
+      sql`${t.status} IN (${values(SOFT_LAW_ATTEMPT_STATES)})`,
+    ),
+    p.check(
+      "soft_law_attempts_tag_check",
+      sql`(${t.status} = 'rejected' AND ${t.tag} IS NOT NULL AND ${t.tag} IN (${values(SOFT_LAW_ITEM_TAGS)})) OR (${t.status} <> 'rejected' AND ${t.tag} IS NULL)`,
+    ),
   ],
 );

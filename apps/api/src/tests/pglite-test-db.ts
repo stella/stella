@@ -459,6 +459,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_decision_supplements",
       "case_law_citation_reviews",
       "soft_law_sources",
+      "soft_law_ingestion_attempts",
       "soft_law_documents",
       "soft_law_document_versions",
       "soft_law_document_locators"

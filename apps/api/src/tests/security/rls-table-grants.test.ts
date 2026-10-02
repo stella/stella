@@ -170,6 +170,7 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Guidance ingestion is owner-only until a read capability is introduced.
   "soft_law_sources",
+  "soft_law_ingestion_attempts",
   "soft_law_documents",
   "soft_law_document_versions",
   "soft_law_document_locators",

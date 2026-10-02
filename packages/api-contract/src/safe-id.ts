@@ -115,6 +115,7 @@ export type SafeIdType =
   | "softLawDocumentVersion"
   | "softLawDocumentLocator"
   | "softLawIngestionLease"
+  | "softLawIngestionAttempt"
   | "legislationWorkName"
   | "legalList"
   | "legalListColumn"

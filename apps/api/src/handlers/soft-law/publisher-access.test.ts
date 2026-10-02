@@ -22,9 +22,10 @@ test("status and challenge markup stop access while ordinary guidance remains re
   for (const body of [
     "<title>Just a moment...</title>",
     '<form id="challenge-form">',
-    '<div class="g-recaptcha">',
     "https://example.awswaf.com/challenge",
     "Verify you are human",
+    "cf-chl-platform",
+    '<script src="https://hcaptcha.com/1/api.js"></script>',
   ]) {
     expect(detectSoftLawBlock(200, body)).toBe("challenge");
   }
@@ -44,7 +45,6 @@ test("blocked responses are never retried or exposed to parsers", async () => {
     const fetch = createSoftLawFetch({
       policy,
       signal: new AbortController().signal,
-      beforeRequest: async () => {},
       reserve: async () => {},
       request: async () => {
         calls++;
@@ -63,7 +63,6 @@ test("publisher fetch applies the contact user agent, rejects redirects and fore
   const fetch = createSoftLawFetch({
     policy,
     signal: new AbortController().signal,
-    beforeRequest: async () => {},
     reserve: async () => {},
     request: async (_url, init) => {
       seen.push(new Headers(init.headers).get("user-agent") ?? "");
@@ -84,7 +83,6 @@ test("publisher fetch applies the contact user agent, rejects redirects and fore
   const redirect = createSoftLawFetch({
     policy,
     signal: new AbortController().signal,
-    beforeRequest: async () => {},
     reserve: async () => {},
     request: async () =>
       new Response(null, {
@@ -134,7 +132,6 @@ test("closed access windows refuse the request after reservation", async () => {
       },
     },
     signal: new AbortController().signal,
-    beforeRequest: async () => {},
     reserve: async () => {},
     now: () => new Date("2026-10-02T12:00:00Z"),
     request: async () => {
@@ -146,4 +143,69 @@ test("closed access windows refuse the request after reservation", async () => {
     SoftLawAccessError,
   );
   expect(calls).toBe(0);
+  expect(fetch.getWindowState()).toBe("deferred_window");
+});
+
+test("the recorded CMS newsletter CAPTCHA is not a challenge shell", async () => {
+  const bytes = Bun.gunzipSync(
+    new Uint8Array(
+      await Bun.file(
+        new URL("__fixtures__/uoou-listing.html.gz", import.meta.url),
+      ).arrayBuffer(),
+    ),
+  );
+  const html = new TextDecoder().decode(bytes);
+  expect(html).toContain("g-recaptcha u-newsletter__captcha-box");
+  expect(detectSoftLawBlock(200, html)).toBeNull();
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {},
+    request: async () =>
+      new Response(html, { headers: { "content-type": "text/html" } }),
+  });
+  expect((await fetch("https://uoou.gov.cz/listing")).bytes).toEqual(bytes);
+});
+
+test("attachment bytes cannot trigger a text challenge, but status blocks still latch", async () => {
+  for (const [url, contentType] of [
+    ["https://uoou.gov.cz/media/document.pdf", "application/pdf"],
+    ["https://uoou.gov.cz/media/document.docx", "text/html"],
+    ["https://uoou.gov.cz/page", "application/pdf"],
+  ]) {
+    const fetch = createSoftLawFetch({
+      policy,
+      signal: new AbortController().signal,
+      reserve: async () => {},
+      request: async () =>
+        new Response("Verify you are human", {
+          headers: { "content-type": contentType },
+        }),
+    });
+    expect((await fetch(url)).bytes.byteLength).toBeGreaterThan(0);
+    expect(fetch.getBlockReason()).toBeNull();
+  }
+});
+
+test("a challenge redirect latches and all later requests are refused", async () => {
+  let calls = 0;
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {},
+    request: async () => {
+      calls++;
+      return new Response(null, {
+        status: 302,
+        headers: { location: "/cdn-cgi/challenge-platform/" },
+      });
+    },
+  });
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await expect(fetch("https://uoou.gov.cz/page")).rejects.toBeInstanceOf(
+      SoftLawBlockedError,
+    );
+  }
+  expect(fetch.getBlockReason()).toBe("challenge");
+  expect(calls).toBe(1);
 });
