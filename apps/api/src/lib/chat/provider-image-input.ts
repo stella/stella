@@ -1,13 +1,12 @@
 import type { AnyTextAdapter, ContentPart, ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 
-import type { TanStackAIProvider } from "@stll/ai-catalog";
+import {
+  getModelImageInputCapability,
+  type TanStackAIProvider,
+} from "@stll/ai-catalog";
 
 import { runError } from "@/api/lib/chat/provider-stream-contract";
-import {
-  getModelImageCapability,
-  getModelImageCapabilityUnknownReason,
-} from "@/api/lib/chat/sdk-image-capability";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -189,18 +188,19 @@ export const prepareProviderImageMessages = async ({
   if (!hasImages) {
     return Result.ok(messages);
   }
-  const capability = getModelImageCapability({ provider, modelId });
+  const capability = getModelImageInputCapability({ provider, modelId });
   switch (capability) {
     case "unsupported":
       return Result.err(imageInputUnsupportedError());
     case "unknown":
+    case undefined:
       logger.info("ai.image_capability_unknown", {
         provider,
         image_capability_unknown: true,
-        reason: getModelImageCapabilityUnknownReason({ provider, modelId }),
+        reason: capability === undefined ? "unlisted_model" : "catalog_unknown",
       });
       break;
-    case "accepts":
+    case "supported":
       break;
     default:
       capability satisfies never;

@@ -16,7 +16,11 @@ import {
   resolveStellaSandboxRun,
   type StellaSandboxRunInput,
 } from "@stll/agent-engine";
-import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
+import {
+  getModelImageInputCapability,
+  type ModelRole,
+  type ReasoningEffort,
+} from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
   createThirdPartyBoundaryRefusalPayload,
@@ -165,7 +169,6 @@ import {
 } from "@/api/lib/chat/provider-stream-contract";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
-import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import {
   createStreamMessageCapture,
   type ChatStreamProcessor,
@@ -508,7 +511,8 @@ export const streamChat = async ({
     message.parts.some((part) => part.type === "image"),
   );
   const modelRejectsImages = (model: ResolvedTanStackTextModel): boolean =>
-    hasImageAttachments && getModelImageCapability(model) === "unsupported";
+    hasImageAttachments &&
+    getModelImageInputCapability(model) === "unsupported";
   const modelRejectsStreamingTools = (
     model: ResolvedTanStackTextModel,
   ): boolean =>
