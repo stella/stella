@@ -96,6 +96,7 @@
     "check:result-consumption": "bun run generate && bun packages/scripts/src/result-consumption.ts",
     "check:db-await-in-loop": "bun scripts/db-await-in-loop.ts",
     "check:api-timeout-mutations": "bun scripts/check-api-timeout-mutations.ts",
+    "check:time-entry-policy-locks": "bun scripts/check-time-entry-policy-locks.ts",
     "check:query-cache-types": "bun run generate && bun --filter @stll/scripts test -- src/query-cache-types.test.ts && bun packages/scripts/src/query-cache-types.ts",
     "check:docs-sources": "bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error .claude/mcp/doc-sources.ts",
     "check:instruction-references": "bun scripts/check-instruction-references.ts --check",

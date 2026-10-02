@@ -374,6 +374,11 @@ run_api_timeout_mutation_guard() {
   bun run check:api-timeout-mutations
 }
 run_step "API timeout mutation guard" run_api_timeout_mutation_guard
+run_time_entry_policy_lock_guard() {
+  bun test scripts/check-time-entry-policy-locks.test.ts || return 1
+  bun run check:time-entry-policy-locks
+}
+run_step "Time entry policy lock guard" run_time_entry_policy_lock_guard
 run_step "React Compiler bailout guard" bun scripts/rc-bailouts.ts --check
 run_design_system_backlog_guard() {
   bun test scripts/design-lint-baseline.test.ts \

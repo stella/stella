@@ -19,7 +19,7 @@ import {
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { lockTimePolicy } from "@/api/lib/billing-time";
-import type { TimePolicy } from "@/api/lib/billing-time";
+import type { LockedTimePolicy, TimePolicy } from "@/api/lib/billing-time";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   insertPreparedInternalTimeEntry,
@@ -32,6 +32,7 @@ import {
 import type { TimerOwner } from "@/api/lib/billing/time-timers";
 import {
   deleteLegacyTimerDraft,
+  lockTimerEntryMatters,
   lockTimerOwner,
   ownedTimers,
   readOwnedTimer,
@@ -328,6 +329,7 @@ const prepareTimer = async ({
 
 type InsertTimerEntryOptions = {
   tx: Transaction;
+  policy: LockedTimePolicy;
   owner: TimerOwner;
   workspaceId: typeof timeTimers.$inferSelect.workspaceId;
   legacy: typeof timeEntries.$inferSelect | undefined;
@@ -336,6 +338,7 @@ type InsertTimerEntryOptions = {
 };
 const insertTimerEntry = async ({
   tx,
+  policy,
   owner,
   workspaceId,
   legacy,
@@ -350,6 +353,7 @@ const insertTimerEntry = async ({
     return Result.ok(
       await insertPreparedInternalTimeEntry({
         tx,
+        policy,
         ...owner,
         prepared: preparedEntry.prepared,
         source: TIME_ENTRY_SOURCE.TIMER,
@@ -377,6 +381,7 @@ const insertTimerEntry = async ({
   return Result.ok(
     await insertPreparedTimeEntry({
       tx,
+      policy,
       ...owner,
       workspaceId,
       source: TIME_ENTRY_SOURCE.TIMER,
@@ -390,6 +395,7 @@ type FinishTimerConfirmationOptions = Pick<
   FinalizeTimerOptions,
   "tx" | "owner" | "recordAuditEvent" | "completion"
 > & {
+  policy: LockedTimePolicy;
   timer: typeof timeTimers.$inferSelect;
   legacy: typeof timeEntries.$inferSelect | undefined;
   workspaceId: typeof timeTimers.$inferSelect.workspaceId;
@@ -399,6 +405,7 @@ type FinishTimerConfirmationOptions = Pick<
 };
 const finishTimerConfirmation = async ({
   tx,
+  policy,
   owner,
   recordAuditEvent,
   completion,
@@ -429,6 +436,7 @@ const finishTimerConfirmation = async ({
   if (legacy) {
     await deleteLegacyTimerDraft({
       tx,
+      policy,
       owner,
       entry: legacy,
       timerId: timer.id,
@@ -514,6 +522,7 @@ const finalizeTimerInSavepoint = async ({
       }),
     );
   }
+  await lockTimerEntryMatters({ tx, owner, timer });
   if (
     workspaceId &&
     !(await hasCurrentTimerMatterAccess({ tx, ...owner, workspaceId }))
@@ -616,6 +625,7 @@ const finalizeTimerInSavepoint = async ({
   const preparedEntry = preparedResult.value;
   const entryResult = await insertTimerEntry({
     tx,
+    policy,
     owner,
     workspaceId,
     legacy,
@@ -628,6 +638,7 @@ const finalizeTimerInSavepoint = async ({
   const entry = entryResult.value;
   return await finishTimerConfirmation({
     tx,
+    policy,
     owner,
     recordAuditEvent,
     completion,

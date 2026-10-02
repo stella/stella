@@ -12,10 +12,11 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import {
   getTimePolicyViolation,
+  lockTimePolicy,
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
-import type { TimePolicy } from "@/api/lib/billing-time";
+import type { LockedTimePolicy, TimePolicy } from "@/api/lib/billing-time";
 import { resolveRate } from "@/api/lib/billing/rates";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import { lockTimerOwner } from "@/api/lib/billing/time-timers";
@@ -171,6 +172,26 @@ export const prepareTimeEntryInsert = async function* ({
   return prepared;
 };
 
+type ValidatePreparedTimeEntryOptions = {
+  policy: LockedTimePolicy;
+  prepared: PreparedTimeEntry;
+  canApprove: boolean;
+};
+export const validatePreparedTimeEntry = ({
+  policy,
+  prepared,
+  canApprove,
+}: ValidatePreparedTimeEntryOptions) =>
+  Result.gen(function* () {
+    yield* checkInsertTimePolicy({
+      policy,
+      body: prepared,
+      canApprove,
+      dateWindow: "entry",
+    });
+    return Result.ok(undefined);
+  });
+
 type TimeEntryCapacityCheck = Result<void, HandlerError<400>>;
 
 /**
@@ -209,6 +230,7 @@ export const lockTimeEntryCapacity = async ({
 
 type InsertPreparedTimeEntryOptions = {
   tx: Transaction;
+  policy: LockedTimePolicy;
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   userId: SafeId<"user">;
@@ -224,6 +246,7 @@ type InsertPreparedTimeEntryOptions = {
  */
 export const insertPreparedTimeEntry = async ({
   tx,
+  policy,
   organizationId,
   workspaceId,
   userId,
@@ -241,6 +264,10 @@ export const insertPreparedTimeEntry = async ({
   if (!matter) {
     return panic("Authorized matter disappeared before time entry creation");
   }
+  const billedMinutes = roundToBillingIncrement(
+    prepared.durationMinutes,
+    policy.timeMinimumUnitMinutes,
+  );
   const [entry] = await tx
     .insert(timeEntries)
     .values({
@@ -253,7 +280,7 @@ export const insertPreparedTimeEntry = async ({
       dateWorked: prepared.dateWorked,
       timezoneId: prepared.timezoneId,
       durationMinutes: prepared.durationMinutes,
-      billedMinutes: prepared.billedMinutes,
+      billedMinutes,
       rateAtEntry: cents(prepared.rateAtEntry),
       currency: prepared.currency,
       narrative: prepared.narrative,
@@ -281,7 +308,7 @@ export const insertPreparedTimeEntry = async ({
           workItemId: prepared.workItemId,
           dateWorked: prepared.dateWorked,
           durationMinutes: prepared.durationMinutes,
-          billedMinutes: prepared.billedMinutes,
+          billedMinutes,
           rateAtEntry: cents(prepared.rateAtEntry),
           currency: prepared.currency,
           billable: prepared.billable,
@@ -359,6 +386,7 @@ export const lockInternalTimeEntryCapacity = async ({
 };
 
 type InsertInternalTimeEntryOptions = InternalEntryOwner & {
+  policy: LockedTimePolicy;
   source: TimeEntrySource;
   prepared: InternalTimeEntryInput;
   recordAuditEvent: AuditRecorder;
@@ -459,6 +487,15 @@ export const createTimeEntryHandler = async function* ({
 
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const lockedPolicy = await lockTimePolicy(tx, organizationId);
+      const validation = validatePreparedTimeEntry({
+        policy: lockedPolicy,
+        prepared,
+        canApprove: canApproveTimeEntries(memberRole),
+      });
+      if (validation.isErr()) {
+        return validation;
+      }
       const capacity = await lockTimeEntryCapacity({ tx, workspaceId });
       if (capacity.isErr()) {
         return capacity;
@@ -466,6 +503,7 @@ export const createTimeEntryHandler = async function* ({
       return Result.ok(
         await insertPreparedTimeEntry({
           tx,
+          policy: lockedPolicy,
           organizationId,
           workspaceId,
           userId,

@@ -13,6 +13,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import {
   getTimePolicyViolation,
+  lockTimePolicy,
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
@@ -101,6 +102,7 @@ export const updateTimeEntryHandler = async function* ({
           activityCode: true,
           rateAtEntry: true,
           currency: true,
+          invoiceId: true,
         },
       }),
     ),
@@ -137,6 +139,7 @@ export const updateTimeEntryHandler = async function* ({
   }
 
   if (
+    existing.invoiceId !== null ||
     existing.status === BILLING_STATUS.BILLED ||
     existing.status === BILLING_STATUS.WRITTEN_OFF
   ) {
@@ -272,14 +275,6 @@ export const updateTimeEntryHandler = async function* ({
       "activityCode",
     ]),
     ...(changedTimezoneId !== null ? { timezoneId: changedTimezoneId } : {}),
-    ...(body.durationMinutes !== undefined
-      ? {
-          billedMinutes: roundToBillingIncrement(
-            body.durationMinutes,
-            policy.timeMinimumUnitMinutes,
-          ),
-        }
-      : {}),
     ...(resolvedRateUpdate.type === "resolved"
       ? {
           rateAtEntry: resolvedRateUpdate.rateAtEntry,
@@ -291,6 +286,7 @@ export const updateTimeEntryHandler = async function* ({
 
   const updated = yield* Result.await(
     safeDb(async (tx) => {
+      const lockedPolicy = await lockTimePolicy(tx, existing.organizationId);
       const runningError = await guardRunningTimeEntries({
         tx,
         workspaceId,
@@ -300,9 +296,96 @@ export const updateTimeEntryHandler = async function* ({
       if (runningError) {
         return runningError;
       }
+      const [current] = await tx
+        .select()
+        .from(timeEntries)
+        .where(
+          and(
+            eq(timeEntries.id, body.id),
+            eq(timeEntries.workspaceId, workspaceId),
+          ),
+        )
+        .limit(1)
+        .for("update");
+      if (
+        !current ||
+        !canManageTimeEntry({
+          memberRole: actor.memberRole,
+          currentUserId: actor.userId,
+          entryUserId: current.userId,
+        })
+      ) {
+        return new HandlerError({
+          status: 404,
+          message: "Time entry not found",
+        });
+      }
+      if (current.status !== BILLING_STATUS.DRAFT && !canApprove) {
+        return new HandlerError({
+          status: 400,
+          message: "Only draft time entries can be edited",
+        });
+      }
+      if (
+        current.invoiceId !== null ||
+        current.status === BILLING_STATUS.BILLED ||
+        current.status === BILLING_STATUS.WRITTEN_OFF
+      ) {
+        return new HandlerError({
+          status: 400,
+          message: "Cannot edit a billed or written-off entry",
+        });
+      }
+      const lockedToday = formatTodayInTimeZone({
+        timezoneId: current.timezoneId,
+      });
+      if (lockedToday.isErr()) {
+        return lockedToday.error;
+      }
+      const lockedViolation = getTimePolicyViolation({
+        policy: lockedPolicy,
+        dateWorked: current.dateWorked,
+        today: lockedToday.value,
+        canApprove,
+        narrative: body.narrative ?? current.narrative,
+      });
+      if (lockedViolation) {
+        return lockedViolation;
+      }
+      if (
+        body.dateWorked !== undefined &&
+        body.dateWorked !== current.dateWorked
+      ) {
+        if (body.timezoneId === undefined) {
+          return new HandlerError({
+            status: 400,
+            message: "Time zone is required when changing date worked",
+          });
+        }
+        const newToday = formatTodayInTimeZone({ timezoneId: body.timezoneId });
+        if (newToday.isErr()) {
+          return newToday.error;
+        }
+        const newViolation = getTimePolicyViolation({
+          policy: lockedPolicy,
+          dateWorked: body.dateWorked,
+          today: newToday.value,
+          canApprove,
+        });
+        if (newViolation) {
+          return newViolation;
+        }
+      }
+      const lockedUpdates = {
+        ...updates,
+        billedMinutes: roundToBillingIncrement(
+          body.durationMinutes ?? current.durationMinutes,
+          lockedPolicy.timeMinimumUnitMinutes,
+        ),
+      };
       const rows = await tx
         .update(timeEntries)
-        .set(updates)
+        .set(lockedUpdates)
         .where(
           and(
             eq(timeEntries.id, body.id),
@@ -332,6 +415,10 @@ export const updateTimeEntryHandler = async function* ({
               : eq(timeEntries.activityCode, existing.activityCode),
             eq(timeEntries.rateAtEntry, existing.rateAtEntry),
             eq(timeEntries.currency, existing.currency),
+            isNull(timeEntries.invoiceId),
+            existing.userId === null
+              ? isNull(timeEntries.userId)
+              : eq(timeEntries.userId, existing.userId),
             canApproveTimeEntries(actor.memberRole)
               ? undefined
               : eq(timeEntries.userId, actor.userId),
@@ -347,7 +434,7 @@ export const updateTimeEntryHandler = async function* ({
         action: AUDIT_ACTION.UPDATE,
         resourceType: AUDIT_RESOURCE_TYPE.TIME_ENTRY,
         resourceId: body.id,
-        changes: buildTimeEntryDiff(existing, updates),
+        changes: buildTimeEntryDiff(current, lockedUpdates),
       });
       return true;
     }),

@@ -9,6 +9,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import {
   getTimePolicyViolation,
+  lockTimePolicy,
   readTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
@@ -89,6 +90,7 @@ const splitEntry = createSafeHandler(
     }
 
     if (
+      original.invoiceId !== null ||
       original.status === BILLING_STATUS.BILLED ||
       original.status === BILLING_STATUS.WRITTEN_OFF
     ) {
@@ -161,15 +163,14 @@ const splitEntry = createSafeHandler(
     const now = new Date();
     const newEntryIds: SafeId<"timeEntry">[] = [];
 
-    const durations = apportionSplitDurations(
-      original.durationMinutes,
-      body.splits.map((split) => split.percentage),
-    );
-
     // Limit check + delete + inserts in one transaction with
     // advisory lock to prevent TOCTOU on the workspace limit.
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        const lockedPolicy = await lockTimePolicy(
+          tx,
+          session.activeOrganizationId,
+        );
         const runningError = await guardRunningTimeEntries({
           tx,
           workspaceId,
@@ -194,17 +195,7 @@ const splitEntry = createSafeHandler(
         }
 
         const [current] = await tx
-          .select({
-            id: timeEntries.id,
-            status: timeEntries.status,
-            updatedAt: timeEntries.updatedAt,
-            approverUserId: timeEntries.approverUserId,
-            approvedByUserId: timeEntries.approvedByUserId,
-            approvedAt: timeEntries.approvedAt,
-            returnedByUserId: timeEntries.returnedByUserId,
-            returnedAt: timeEntries.returnedAt,
-            returnComment: timeEntries.returnComment,
-          })
+          .select()
           .from(timeEntries)
           .where(
             and(
@@ -233,6 +224,50 @@ const splitEntry = createSafeHandler(
             }),
           };
         }
+        if (
+          current.invoiceId !== null ||
+          current.status === BILLING_STATUS.BILLED ||
+          current.status === BILLING_STATUS.WRITTEN_OFF
+        ) {
+          return {
+            ok: false as const,
+            error: new HandlerError({
+              status: 400,
+              message: "Cannot split a billed or written-off entry",
+            }),
+          };
+        }
+        const lockedToday = formatTodayInTimeZone({
+          timezoneId: current.timezoneId,
+        });
+        if (lockedToday.isErr()) {
+          return { ok: false as const, error: lockedToday.error };
+        }
+        const lockedViolation = getTimePolicyViolation({
+          policy: lockedPolicy,
+          dateWorked: current.dateWorked,
+          today: lockedToday.value,
+          canApprove: true,
+          narrative: current.narrative,
+        });
+        if (lockedViolation) {
+          return { ok: false as const, error: lockedViolation };
+        }
+        if (current.durationMinutes < body.splits.length) {
+          return {
+            ok: false as const,
+            error: new HandlerError({
+              status: 400,
+              message:
+                "Entry duration too short to split into " +
+                `${body.splits.length} parts`,
+            }),
+          };
+        }
+        const durations = apportionSplitDurations(
+          current.durationMinutes,
+          body.splits.map((split) => split.percentage),
+        );
         const [deleted] = await tx
           .delete(timeEntries)
           .where(
@@ -264,15 +299,15 @@ const splitEntry = createSafeHandler(
           }
           const billedMinutes = roundToBillingIncrement(
             durationMinutes,
-            policy.timeMinimumUnitMinutes,
+            lockedPolicy.timeMinimumUnitMinutes,
           );
           const entryId = createSafeId<"timeEntry">();
 
           successorRows.push({
             id: entryId,
-            organizationId: original.organizationId,
+            organizationId: current.organizationId,
             workspaceId,
-            userId: original.userId,
+            userId: current.userId,
             approverUserId: current.approverUserId,
             approvedByUserId: current.approvedByUserId,
             approvedAt: current.approvedAt,
@@ -280,21 +315,21 @@ const splitEntry = createSafeHandler(
             returnedAt: current.returnedAt,
             returnComment: current.returnComment,
             workItemId: split.workItemId,
-            dateWorked: original.dateWorked,
-            timezoneId: original.timezoneId,
+            dateWorked: current.dateWorked,
+            timezoneId: current.timezoneId,
             durationMinutes,
             billedMinutes,
-            rateAtEntry: original.rateAtEntry,
-            currency: original.currency,
-            narrative: original.narrative,
-            narrativeLanguage: original.narrativeLanguage,
-            invoiceNarrative: original.invoiceNarrative,
-            billable: original.billable,
-            noCharge: original.noCharge,
-            status: original.status,
-            source: original.source,
-            taskCode: original.taskCode,
-            activityCode: original.activityCode,
+            rateAtEntry: current.rateAtEntry,
+            currency: current.currency,
+            narrative: current.narrative,
+            narrativeLanguage: current.narrativeLanguage,
+            invoiceNarrative: current.invoiceNarrative,
+            billable: current.billable,
+            noCharge: current.noCharge,
+            status: current.status,
+            source: current.source,
+            taskCode: current.taskCode,
+            activityCode: current.activityCode,
             splitGroupId,
             createdAt: now,
             updatedAt: now,
@@ -321,9 +356,9 @@ const splitEntry = createSafeHandler(
             changes: {
               deleted: {
                 old: {
-                  workItemId: original.workItemId,
-                  durationMinutes: original.durationMinutes,
-                  billedMinutes: original.billedMinutes,
+                  workItemId: current.workItemId,
+                  durationMinutes: current.durationMinutes,
+                  billedMinutes: current.billedMinutes,
                   reason: "split",
                   splitGroupId,
                 },

@@ -17,13 +17,14 @@ import {
 } from "@/api/handlers/time-entries/suggestions/schemas";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { AuditRecorder } from "@/api/lib/audit-log";
-import { readTimePolicy } from "@/api/lib/billing-time";
+import { lockTimePolicy, readTimePolicy } from "@/api/lib/billing-time";
 import { narrativeLanguageSchema } from "@/api/lib/billing/narrative-language";
 import { canApproveTimeEntries } from "@/api/lib/billing/time-entry-authorization";
 import {
   insertPreparedTimeEntry,
   lockTimeEntryCapacity,
   prepareTimeEntryInsert,
+  validatePreparedTimeEntry,
 } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -143,6 +144,15 @@ const acceptSuggestion = async function* ({
 
   const outcome = yield* Result.await(
     safeDb(async (tx) => {
+      const lockedPolicy = await lockTimePolicy(tx, organizationId);
+      const validation = validatePreparedTimeEntry({
+        policy: lockedPolicy,
+        prepared,
+        canApprove: canApproveTimeEntries(memberRole),
+      });
+      if (validation.isErr()) {
+        return validation;
+      }
       // audit: skip — insertPreparedTimeEntry records the created entry in
       // this transaction; the decision row is the timekeeper's private state.
       const capacity = await lockTimeEntryCapacity({ tx, workspaceId });
@@ -177,6 +187,7 @@ const acceptSuggestion = async function* ({
       }
       const created = await insertPreparedTimeEntry({
         tx,
+        policy: lockedPolicy,
         organizationId,
         workspaceId,
         userId,

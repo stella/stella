@@ -66,6 +66,7 @@ const createInternalTimeEntry = createSafeRootHandler(
             );
             const entry = await insertPreparedInternalTimeEntry({
               tx,
+              policy,
               organizationId,
               userId: user.id,
               prepared,

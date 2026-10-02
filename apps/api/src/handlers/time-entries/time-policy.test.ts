@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 
 import { BILLING_STATUS } from "@/api/db/schema";
@@ -27,7 +27,10 @@ const handlerErrorCode = (error: unknown) =>
   error instanceof HandlerError ? error.code : undefined;
 
 const entry = {
+  id: entryId,
   organizationId,
+  invoiceId: null,
+  narrativeLanguage: null,
   status: BILLING_STATUS.DRAFT,
   dateWorked: "2026-08-31",
   timezoneId: "UTC",
@@ -196,6 +199,13 @@ describe("time entry policy at API write paths", () => {
   test("update rounds with a non-default unit", async () => {
     setSystemTime(new Date("2026-09-01T12:00:00.000Z"));
     let billedMinutes: number | undefined;
+    const selectRows: unknown[][] = [
+      [{ ...defaultPolicy, timeMinimumUnitMinutes: 15 }],
+      [{ id: entryId }],
+      [{ id: entryId }],
+      [],
+      [entry],
+    ];
     const { safeDb } = createScopedDbMock({
       query: {
         organizationSettings: {
@@ -206,7 +216,16 @@ describe("time entry policy at API write paths", () => {
         },
         timeEntries: { findFirst: async () => entry },
       },
-      select: () => createSelectQueryMock([]),
+      insert: () => ({
+        values: () => ({ onConflictDoNothing: async () => undefined }),
+      }),
+      select: () => {
+        const rows = selectRows.shift();
+        if (!rows) {
+          return panic("Unexpected time policy test selection");
+        }
+        return createSelectQueryMock(rows);
+      },
       update: () => ({
         set: (values: { billedMinutes?: number }) => {
           billedMinutes = values.billedMinutes;

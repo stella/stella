@@ -4,8 +4,10 @@ import { and, eq } from "drizzle-orm";
 import { timeEntries, timeTimers } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { getTimePeriodLockError, lockTimePolicy } from "@/api/lib/billing-time";
 import {
   deleteLegacyTimerDraft,
+  lockTimerEntryMatters,
   lockTimerOwner,
   ownedTimers,
   readOwnedTimer,
@@ -33,11 +35,13 @@ const discardTimer = createSafeRootHandler(
     };
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
+        const policy = await lockTimePolicy(tx, owner.organizationId);
         await lockTimerOwner(tx, owner);
         const timer = await readOwnedTimer({ tx, owner, id: params.id });
         if (!timer) {
           return Result.err(timerNotFound());
         }
+        await lockTimerEntryMatters({ tx, owner, timer });
         const legacy = timer.legacyTimeEntryId
           ? (
               await tx
@@ -63,12 +67,19 @@ const discardTimer = createSafeRootHandler(
             }),
           );
         }
+        if (legacy) {
+          const violation = getTimePeriodLockError(policy, legacy.dateWorked);
+          if (violation) {
+            return Result.err(violation);
+          }
+        }
         await tx
           .delete(timeTimers)
           .where(and(ownedTimers(owner), eq(timeTimers.id, timer.id)));
         if (legacy) {
           await deleteLegacyTimerDraft({
             tx,
+            policy,
             owner,
             entry: legacy,
             timerId: timer.id,

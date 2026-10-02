@@ -12,6 +12,7 @@ import {
 } from "@/api/db/schema";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { LockedTimePolicy } from "@/api/lib/billing-time";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -223,8 +224,36 @@ export const pauseRunningTimers = async ({
   );
 };
 
+type LockTimerEntryMattersOptions = {
+  tx: Transaction;
+  owner: TimerOwner;
+  timer: typeof timeTimers.$inferSelect;
+};
+export const lockTimerEntryMatters = async ({
+  tx,
+  owner,
+  timer,
+}: LockTimerEntryMattersOptions) => {
+  await tx.execute(sql`
+    SELECT pg_advisory_xact_lock(matters.lock_key)
+    FROM (
+      SELECT hashtext(${timer.workspaceId}::text) AS lock_key
+      WHERE ${timer.workspaceId}::text IS NOT NULL
+      UNION
+      SELECT hashtext(${timeEntries.workspaceId}::text) AS lock_key
+      FROM ${timeEntries}
+      WHERE ${timeEntries.id} = ${timer.legacyTimeEntryId}
+        AND ${timeEntries.organizationId} = ${owner.organizationId}
+        AND ${timeEntries.userId} = ${owner.userId}
+        AND ${timeEntries.workspaceId} IS NOT NULL
+    ) AS matters
+    ORDER BY matters.lock_key
+  `);
+};
+
 type DeleteLegacyTimerDraftOptions = {
   tx: Transaction;
+  policy: LockedTimePolicy;
   owner: TimerOwner;
   entry: typeof timeEntries.$inferSelect;
   timerId: SafeId<"timeTimer">;

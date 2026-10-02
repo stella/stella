@@ -29,6 +29,11 @@ export type TimePolicy = {
   timeNarrativeRequired: boolean;
 };
 
+const lockedTimePolicy = Symbol("LockedTimePolicy");
+export type LockedTimePolicy = TimePolicy & {
+  readonly [lockedTimePolicy]: true;
+};
+
 export const readTimePolicy = async ({
   safeDb,
   organizationId,
@@ -69,7 +74,10 @@ const toTimePolicy = (settings: TimePolicySettings | undefined) => ({
     DEFAULT_TIME_POLICY.timeNarrativeRequired,
 });
 
-/** Keep approval decisions serialized with concurrent month-closing updates. */
+/**
+ * Lock order: policy, sorted timer owners, sorted matter capacity/arrangement
+ * locks, then entry rows ordered by id. Timer rows follow their owner lock.
+ */
 export const lockTimePolicy = async (
   tx: Transaction,
   organizationId: SafeId<"organization">,
@@ -93,7 +101,7 @@ export const lockTimePolicy = async (
   if (!settings) {
     return panic("Time policy disappeared after initialization");
   }
-  return toTimePolicy(settings);
+  return { ...toTimePolicy(settings), [lockedTimePolicy]: true } as const;
 };
 
 export const roundToBillingIncrement = (

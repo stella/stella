@@ -42,6 +42,7 @@ describe("deleteTimeEntryById", () => {
         timeEntries: {
           findFirst: async () => ({
             organizationId: toSafeId<"organization">("org_test"),
+            invoiceId: null,
             status: BILLING_STATUS.BILLED,
             workItemId: toSafeId<"entity">("matter_test"),
             dateWorked: "2026-06-14",
@@ -82,6 +83,7 @@ describe("deleteTimeEntryById", () => {
         timeEntries: {
           findFirst: async () => ({
             organizationId: toSafeId<"organization">("org_test"),
+            invoiceId: null,
             status: BILLING_STATUS.WRITTEN_OFF,
             workItemId: toSafeId<"entity">("matter_test"),
             dateWorked: "2026-06-14",

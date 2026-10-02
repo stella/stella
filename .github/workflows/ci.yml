@@ -2547,6 +2547,11 @@ jobs:
           bun test scripts/check-api-timeout-mutations.test.ts
           bun run check:api-timeout-mutations
 
+      - name: Time entry policy lock guard
+        run: |
+          bun test scripts/check-time-entry-policy-locks.test.ts
+          bun run check:time-entry-policy-locks
+
       - name: Result consumption
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}

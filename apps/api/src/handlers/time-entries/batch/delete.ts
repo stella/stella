@@ -1,14 +1,13 @@
 import { Result } from "better-result";
-import { and, eq, inArray, ne } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, ne } from "drizzle-orm";
 import { t } from "elysia";
 
 import { BILLING_STATUS, timeEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
-import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
+import { getTimePolicyViolation, lockTimePolicy } from "@/api/lib/billing-time";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
-import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 
@@ -16,9 +15,22 @@ const batchDeleteBodySchema = t.Object({
   ids: t.Array(tSafeId("timeEntry"), { minItems: 1, maxItems: 200 }),
 });
 
+type BatchDeleteSnapshot = Pick<
+  typeof timeEntries.$inferSelect,
+  | "id"
+  | "status"
+  | "workItemId"
+  | "dateWorked"
+  | "durationMinutes"
+  | "billedMinutes"
+  | "rateAtEntry"
+  | "currency"
+  | "billable"
+>;
+
 const buildBatchDeleteEvents = (params: {
-  deleted: { id: SafeId<"timeEntry"> }[];
-  writtenOff: { id: SafeId<"timeEntry"> }[];
+  deleted: BatchDeleteSnapshot[];
+  writtenOff: BatchDeleteSnapshot[];
 }): AuditEvent[] => {
   const events: AuditEvent[] = [];
   for (const row of params.deleted) {
@@ -28,7 +40,17 @@ const buildBatchDeleteEvents = (params: {
       resourceId: row.id,
       changes: {
         deleted: {
-          old: { reason: "batch_delete_draft" },
+          old: {
+            reason: "batch_delete_draft",
+            status: row.status,
+            workItemId: row.workItemId,
+            dateWorked: row.dateWorked,
+            durationMinutes: row.durationMinutes,
+            billedMinutes: row.billedMinutes,
+            rateAtEntry: row.rateAtEntry,
+            currency: row.currency,
+            billable: row.billable,
+          },
           new: null,
         },
       },
@@ -41,7 +63,7 @@ const buildBatchDeleteEvents = (params: {
       resourceId: row.id,
       changes: {
         status: {
-          old: null,
+          old: row.status,
           new: BILLING_STATUS.WRITTEN_OFF,
         },
       },
@@ -76,17 +98,12 @@ const batchDelete = createSafeHandler(
     recordAuditEvent,
   }) {
     const { ids } = body;
-    const policy = yield* Result.await(
-      readTimePolicy({
-        safeDb,
-        organizationId: session.activeOrganizationId,
-      }),
-    );
     const now = new Date();
     // Draft entries: hard delete. Non-draft: write off.
     // Wrapped in a transaction for atomicity.
     const updated = yield* Result.await(
       safeDb(async (tx) => {
+        const policy = await lockTimePolicy(tx, session.activeOrganizationId);
         const runningError = await guardRunningTimeEntries({
           tx,
           workspaceId,
@@ -100,16 +117,26 @@ const batchDelete = createSafeHandler(
           .select({
             dateWorked: timeEntries.dateWorked,
             timezoneId: timeEntries.timezoneId,
+            id: timeEntries.id,
+            status: timeEntries.status,
+            workItemId: timeEntries.workItemId,
+            durationMinutes: timeEntries.durationMinutes,
+            billedMinutes: timeEntries.billedMinutes,
+            rateAtEntry: timeEntries.rateAtEntry,
+            currency: timeEntries.currency,
+            billable: timeEntries.billable,
           })
           .from(timeEntries)
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
               inArray(timeEntries.id, ids),
+              isNull(timeEntries.invoiceId),
               ne(timeEntries.status, BILLING_STATUS.BILLED),
               ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
             ),
           )
+          .orderBy(asc(timeEntries.id))
           .limit(ids.length)
           .for("update");
         for (const entry of candidates) {
@@ -131,12 +158,17 @@ const batchDelete = createSafeHandler(
           }
         }
 
+        if (candidates.length === 0) {
+          return { type: "updated" as const, count: 0 };
+        }
+        const lockedIds = candidates.map(({ id }) => id);
         const deleted = await tx
           .delete(timeEntries)
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
-              inArray(timeEntries.id, ids),
+              inArray(timeEntries.id, lockedIds),
+              isNull(timeEntries.invoiceId),
               eq(timeEntries.status, BILLING_STATUS.DRAFT),
             ),
           )
@@ -151,16 +183,22 @@ const batchDelete = createSafeHandler(
           .where(
             and(
               eq(timeEntries.workspaceId, workspaceId),
-              inArray(timeEntries.id, ids),
+              inArray(timeEntries.id, lockedIds),
+              isNull(timeEntries.invoiceId),
               ne(timeEntries.status, BILLING_STATUS.WRITTEN_OFF),
               ne(timeEntries.status, BILLING_STATUS.BILLED),
             ),
           )
           .returning({ id: timeEntries.id });
 
+        const deletedIds = new Set(deleted.map(({ id }) => id));
+        const writtenOffIds = new Set(writtenOff.map(({ id }) => id));
         await recordAuditEvent(
           tx,
-          buildBatchDeleteEvents({ deleted, writtenOff }),
+          buildBatchDeleteEvents({
+            deleted: candidates.filter(({ id }) => deletedIds.has(id)),
+            writtenOff: candidates.filter(({ id }) => writtenOffIds.has(id)),
+          }),
         );
 
         return {

@@ -1,9 +1,11 @@
+import { panic } from "better-result";
 import { afterEach, describe, expect, setSystemTime, test } from "bun:test";
 import type { SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 
 import { BILLING_STATUS } from "@/api/db/schema";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { toSafeId } from "@/api/lib/branded-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -46,31 +48,51 @@ const createContext = ({
 describe("updateTimeEntryById", () => {
   test("excludes narrative and invoiceNarrative from the recorded audit diff", async () => {
     const recordedEvents: AuditEvent[] = [];
+    const entry = {
+      id: toSafeId<"timeEntry">("time_entry_test"),
+      narrativeLanguage: null,
+      organizationId: toSafeId<"organization">("org_test"),
+      invoiceId: null,
+      status: BILLING_STATUS.DRAFT,
+      dateWorked: "2026-06-14",
+      timezoneId: "UTC",
+      durationMinutes: 30,
+      billedMinutes: 30,
+      narrative: "Old client-sensitive narrative",
+      invoiceNarrative: "Old invoice narrative",
+      billable: true,
+      noCharge: false,
+      workItemId: toSafeId<"entity">("matter_test"),
+      userId: toSafeId<"user">("user_test"),
+      taskCode: null,
+      activityCode: null,
+      rateAtEntry: 10_000,
+      currency: "USD",
+    };
+    const selectRows: unknown[][] = [
+      [DEFAULT_TIME_POLICY],
+      [{ id: entry.id }],
+      [{ id: entry.id }],
+      [],
+      [entry],
+    ];
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
         organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
-          findFirst: async () => ({
-            organizationId: toSafeId<"organization">("org_test"),
-            status: BILLING_STATUS.DRAFT,
-            dateWorked: "2026-06-14",
-            timezoneId: "UTC",
-            durationMinutes: 30,
-            billedMinutes: 30,
-            narrative: "Old client-sensitive narrative",
-            invoiceNarrative: "Old invoice narrative",
-            billable: true,
-            noCharge: false,
-            workItemId: toSafeId<"entity">("matter_test"),
-            userId: toSafeId<"user">("user_test"),
-            taskCode: null,
-            activityCode: null,
-            rateAtEntry: 10_000,
-            currency: "USD",
-          }),
+          findFirst: async () => entry,
         },
       },
-      select: () => createSelectQueryMock([]),
+      insert: () => ({
+        values: () => ({ onConflictDoNothing: async () => undefined }),
+      }),
+      select: () => {
+        const rows = selectRows.shift();
+        if (!rows) {
+          return panic("Unexpected time entry update test selection");
+        }
+        return createSelectQueryMock(rows);
+      },
       update: () => ({
         set: () => ({
           where: () => ({
@@ -117,31 +139,51 @@ describe("updateTimeEntryById", () => {
 
   test("preserves the snapshotted rate on an unrelated billable edit", async () => {
     let appliedUpdates: Record<string, unknown> | undefined;
+    const entry = {
+      id: toSafeId<"timeEntry">("time_entry_test"),
+      narrativeLanguage: null,
+      organizationId: toSafeId<"organization">("org_test"),
+      invoiceId: null,
+      status: BILLING_STATUS.DRAFT,
+      dateWorked: "2026-06-14",
+      timezoneId: "UTC",
+      durationMinutes: 30,
+      billedMinutes: 30,
+      narrative: "Original narrative",
+      invoiceNarrative: null,
+      billable: true,
+      noCharge: false,
+      workItemId: null,
+      userId: toSafeId<"user">("user_test"),
+      taskCode: null,
+      activityCode: null,
+      rateAtEntry: 10_000,
+      currency: "USD",
+    };
+    const selectRows: unknown[][] = [
+      [DEFAULT_TIME_POLICY],
+      [{ id: entry.id }],
+      [{ id: entry.id }],
+      [],
+      [entry],
+    ];
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
         organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
-          findFirst: async () => ({
-            organizationId: toSafeId<"organization">("org_test"),
-            status: BILLING_STATUS.DRAFT,
-            dateWorked: "2026-06-14",
-            timezoneId: "UTC",
-            durationMinutes: 30,
-            billedMinutes: 30,
-            narrative: "Original narrative",
-            invoiceNarrative: null,
-            billable: true,
-            noCharge: false,
-            workItemId: null,
-            userId: toSafeId<"user">("user_test"),
-            taskCode: null,
-            activityCode: null,
-            rateAtEntry: 10_000,
-            currency: "USD",
-          }),
+          findFirst: async () => entry,
         },
       },
-      select: () => createSelectQueryMock([]),
+      insert: () => ({
+        values: () => ({ onConflictDoNothing: async () => undefined }),
+      }),
+      select: () => {
+        const rows = selectRows.shift();
+        if (!rows) {
+          return panic("Unexpected time entry update test selection");
+        }
+        return createSelectQueryMock(rows);
+      },
       update: () => ({
         set: (updates: Record<string, unknown>) => {
           appliedUpdates = updates;
@@ -182,31 +224,51 @@ describe("updateTimeEntryById", () => {
   test("persists the timezone used to validate an edited date", async () => {
     setSystemTime(new Date("2026-08-09T12:00:00.000Z"));
     let appliedUpdates: Record<string, unknown> | undefined;
+    const entry = {
+      id: toSafeId<"timeEntry">("time_entry_test"),
+      narrativeLanguage: null,
+      organizationId: toSafeId<"organization">("org_test"),
+      invoiceId: null,
+      status: BILLING_STATUS.DRAFT,
+      dateWorked: "2026-08-07",
+      timezoneId: "UTC",
+      durationMinutes: 30,
+      billedMinutes: 30,
+      narrative: "Original narrative",
+      invoiceNarrative: null,
+      billable: false,
+      noCharge: false,
+      workItemId: null,
+      userId: toSafeId<"user">("user_test"),
+      taskCode: null,
+      activityCode: null,
+      rateAtEntry: 0,
+      currency: "XXX",
+    };
+    const selectRows: unknown[][] = [
+      [DEFAULT_TIME_POLICY],
+      [{ id: entry.id }],
+      [{ id: entry.id }],
+      [],
+      [entry],
+    ];
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
         organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
-          findFirst: async () => ({
-            organizationId: toSafeId<"organization">("org_test"),
-            status: BILLING_STATUS.DRAFT,
-            dateWorked: "2026-08-07",
-            timezoneId: "UTC",
-            durationMinutes: 30,
-            billedMinutes: 30,
-            narrative: "Original narrative",
-            invoiceNarrative: null,
-            billable: false,
-            noCharge: false,
-            workItemId: null,
-            userId: toSafeId<"user">("user_test"),
-            taskCode: null,
-            activityCode: null,
-            rateAtEntry: 0,
-            currency: "XXX",
-          }),
+          findFirst: async () => entry,
         },
       },
-      select: () => createSelectQueryMock([]),
+      insert: () => ({
+        values: () => ({ onConflictDoNothing: async () => undefined }),
+      }),
+      select: () => {
+        const rows = selectRows.shift();
+        if (!rows) {
+          return panic("Unexpected time entry update test selection");
+        }
+        return createSelectQueryMock(rows);
+      },
       update: () => ({
         set: (updates: Record<string, unknown>) => {
           appliedUpdates = updates;
@@ -246,31 +308,51 @@ describe("updateTimeEntryById", () => {
   test("compares every mutable value before replacing an entry", async () => {
     let compareAndSetParams: unknown[] = [];
     const workItemId = toSafeId<"entity">("work_item_compare_test");
+    const entry = {
+      id: toSafeId<"timeEntry">("time_entry_test"),
+      narrativeLanguage: null,
+      organizationId: toSafeId<"organization">("org_test"),
+      invoiceId: null,
+      status: BILLING_STATUS.DRAFT,
+      dateWorked: "2026-07-11",
+      timezoneId: "Europe/Vienna",
+      durationMinutes: 37,
+      billedMinutes: 42,
+      narrative: "Original concurrency narrative",
+      invoiceNarrative: "Original invoice concurrency narrative",
+      billable: true,
+      noCharge: true,
+      workItemId,
+      userId: toSafeId<"user">("user_test"),
+      taskCode: "L310",
+      activityCode: "A103",
+      rateAtEntry: 12_345,
+      currency: "CHF",
+    };
+    const selectRows: unknown[][] = [
+      [DEFAULT_TIME_POLICY],
+      [{ id: entry.id }],
+      [{ id: entry.id }],
+      [],
+      [entry],
+    ];
     const { safeDb, scopedDb } = createScopedDbMock({
       query: {
         organizationSettings: { findFirst: async () => undefined },
         timeEntries: {
-          findFirst: async () => ({
-            organizationId: toSafeId<"organization">("org_test"),
-            status: BILLING_STATUS.DRAFT,
-            dateWorked: "2026-07-11",
-            timezoneId: "Europe/Vienna",
-            durationMinutes: 37,
-            billedMinutes: 42,
-            narrative: "Original concurrency narrative",
-            invoiceNarrative: "Original invoice concurrency narrative",
-            billable: true,
-            noCharge: true,
-            workItemId,
-            userId: toSafeId<"user">("user_test"),
-            taskCode: "L310",
-            activityCode: "A103",
-            rateAtEntry: 12_345,
-            currency: "CHF",
-          }),
+          findFirst: async () => entry,
         },
       },
-      select: () => createSelectQueryMock([]),
+      insert: () => ({
+        values: () => ({ onConflictDoNothing: async () => undefined }),
+      }),
+      select: () => {
+        const rows = selectRows.shift();
+        if (!rows) {
+          return panic("Unexpected time entry update test selection");
+        }
+        return createSelectQueryMock(rows);
+      },
       update: () => ({
         set: () => ({
           where: (condition: SQL) => {
