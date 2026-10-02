@@ -1747,6 +1747,7 @@ type Messages = {
     "organization": "Organization";
     "organizationName": "Organization name";
     "page": "Page {page}";
+    "paymentRetryNotice": "Payment issue. Update your payment method by {date} to keep access.";
     "pin": "Pin";
     "playbooks": "Playbooks";
     "preparing": "Preparing…";

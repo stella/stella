@@ -1744,6 +1744,7 @@
     "organization": "Organizācija",
     "organizationName": "Organizācijas nosaukums",
     "page": "{page}. lapa",
+    "paymentRetryNotice": "Maksājuma problēma. Lai saglabātu piekļuvi, atjauniniet maksājuma veidu līdz {date}.",
     "pin": "Piespraust",
     "playbooks": "Pārbaudes ceļveži",
     "preparing": "Sagatavošana…",

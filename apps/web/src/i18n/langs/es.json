@@ -1744,6 +1744,7 @@
     "organization": "Organización",
     "organizationName": "Nombre de la organización",
     "page": "Página {page}",
+    "paymentRetryNotice": "Problema con el pago. Actualiza tu método de pago antes del {date} para mantener el acceso.",
     "pin": "Fijar",
     "playbooks": "Playbooks",
     "preparing": "Preparando…",

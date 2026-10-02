@@ -2,7 +2,7 @@ import { panic } from "better-result";
 import { describe, expect, test, setSystemTime } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
-import { organization } from "@/api/db/auth-schema";
+import { member, organization, user } from "@/api/db/auth-schema";
 import { SETTING_ORGANIZATION_ID, stella } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
@@ -11,6 +11,7 @@ import {
   organizationConfiguredAccess,
   usagePolicies,
   usageEntitlements,
+  usageSeatAssignments,
 } from "@/api/db/schema";
 import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
@@ -19,6 +20,7 @@ import {
   receiveHostedUsageWebhook,
 } from "@/api/handlers/hosted-usage-webhook/receive";
 import getAccess from "@/api/handlers/usage/get-access";
+import getLane from "@/api/handlers/usage/get-lane";
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   POLAR_ENTITLEMENT_STATUSES,
@@ -29,12 +31,17 @@ import {
   CONFIGURED_ACCESS_STATE,
   configuredPaymentRetry,
 } from "@/api/lib/usage/configured-access";
+import { decideChatUsageLane } from "@/api/lib/usage/lane-routing";
 import { readOrganizationAccessSnapshot } from "@/api/lib/usage/organization-access-snapshot";
 import {
   allowsInstanceModels,
   mayUseInstanceModels,
 } from "@/api/lib/usage/organization-access-state";
 import { resolveOrganizationActionBudget } from "@/api/lib/usage/organization-action-budget";
+import {
+  allocateUsage,
+  assertUsageAvailable,
+} from "@/api/lib/usage/usage-ledger";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import {
@@ -260,6 +267,73 @@ const seedPrior = async (
       prior satisfies never;
       panic("Unhandled fixture access state");
   }
+};
+
+const seedReader = async (
+  tx: Transaction,
+  fixture: Awaited<ReturnType<typeof seedFixture>>,
+) => {
+  const userId = toSafeId<"user">(`user_${Bun.randomUUIDv7()}`);
+  await tx
+    .insert(user)
+    .values({ id: userId, name: "Fixture", email: `${userId}@test.local` });
+  await tx.insert(member).values({
+    id: `member_${Bun.randomUUIDv7()}`,
+    organizationId: fixture.organizationId,
+    userId,
+    role: "member",
+    createdAt: START,
+  });
+  await tx
+    .insert(usageSeatAssignments)
+    .values({ organizationId: fixture.organizationId, userId });
+  await tx
+    .update(usagePolicies)
+    .set({ dailyAllowanceMicroUnits: 1000, fallbackWeeklyMicroUnits: 2000 })
+    .where(eq(usagePolicies.hostedPolicyRef, fixture.data.product_id));
+  return userId;
+};
+
+type ReadLaneBudgetsOptions = {
+  tx: Transaction;
+  organizationId: Awaited<ReturnType<typeof seedFixture>>["organizationId"];
+  userId: Awaited<ReturnType<typeof seedReader>>;
+  asOf: Date;
+};
+const readLaneBudgets = async ({
+  tx,
+  organizationId,
+  userId,
+  asOf,
+}: ReadLaneBudgetsOptions) => {
+  setSystemTime(asOf);
+  let enabled = false;
+  await tx
+    .transaction(async (nested) => {
+      const context = createTestHandlerContext<
+        Parameters<typeof getLane.handler>[0]
+      >({
+        session: { activeOrganizationId: organizationId },
+        user: { id: userId },
+        safeDb: createSafeDb(
+          markRlsDatabase(nested),
+          [],
+          organizationId,
+          userId,
+        ),
+      });
+      enabled = (await getLane.handler(context)).budgets !== null;
+      nested.rollback();
+    })
+    .then(
+      () => panic("Read fixture unexpectedly committed"),
+      (error: unknown) => {
+        if (!(error instanceof TransactionRollbackError)) {
+          throw error;
+        }
+      },
+    );
+  return enabled;
 };
 
 const expectEnabled = (
@@ -617,6 +691,174 @@ describe.skipIf(!runPostgresTests)(
           ),
         ).toEqual({ paymentRetry: { status: "none" } });
       });
+    });
+
+    for (const prior of ["ending", "payment_retry", "disabled"] as const) {
+      test(`ledger and lane readers follow ${prior} deadlines and retain disabled-feature behavior`, async () => {
+        await withFixture(async (tx, fixture) => {
+          await seedPrior(tx, fixture, prior);
+          const userId = await seedReader(tx, fixture);
+          const deadline = prior === "payment_retry" ? at(100 + RETRY_MS) : END;
+          const options = { tx, organizationId: fixture.organizationId };
+          for (const asOf of [new Date(deadline.getTime() - 1), deadline]) {
+            const enabled = prior !== "disabled" && asOf < deadline;
+            const before = await readAccess(tx, fixture.organizationId);
+            const result = await assertUsageAvailable({
+              ...options,
+              required: 1,
+              asOf,
+            });
+            expect(result.ok).toBe(enabled);
+            if (!result.ok) {
+              expect(result.error.reason).toBe("entitlement_inactive");
+            }
+            expect(
+              await decideChatUsageLane({ ...options, userId, asOf }),
+            ).toBe(enabled ? "allowance" : "pool");
+            expect(await readLaneBudgets({ ...options, userId, asOf })).toBe(
+              enabled,
+            );
+            expect(await readAccess(tx, fixture.organizationId)).toEqual(
+              before,
+            );
+          }
+          env.FEATURE_CONFIGURED_ACCESS = false;
+          const asOf = at(101);
+          expect(
+            (await assertUsageAvailable({ ...options, required: 1, asOf })).ok,
+          ).toBe(prior === "ending");
+          expect(await decideChatUsageLane({ ...options, userId, asOf })).toBe(
+            prior === "ending" ? "allowance" : "pool",
+          );
+          env.FEATURE_CONFIGURED_ACCESS = true;
+          setSystemTime(at(1000));
+          await deliver({
+            tx,
+            data: { ...fixture.data, modified_at: at(1000).toISOString() },
+            type: "subscription.active",
+          });
+          const recoveryAsOf = at(1001);
+          expect(
+            (
+              await assertUsageAvailable({
+                ...options,
+                required: 1,
+                asOf: recoveryAsOf,
+              })
+            ).ok,
+          ).toBe(true);
+          const exhausted = await assertUsageAvailable({
+            ...options,
+            required: 999,
+            asOf: recoveryAsOf,
+          });
+          expect(exhausted.ok).toBe(false);
+          if (!exhausted.ok) {
+            expect(exhausted.error.reason).toBe("usage_limit_exceeded");
+          }
+          if (prior === "payment_retry") {
+            const retryAt = new Date(END.getTime() + 100);
+            setSystemTime(retryAt);
+            await deliver({
+              tx,
+              data: {
+                ...fixture.data,
+                status: "past_due",
+                modified_at: retryAt.toISOString(),
+              },
+            });
+            expect(
+              await decideChatUsageLane({ ...options, userId, asOf: retryAt }),
+            ).toBe("allowance");
+            // Grace changes standing, never renews an expired allocation.
+            const balance = await assertUsageAvailable({
+              ...options,
+              required: 1,
+              asOf: retryAt,
+            });
+            expect(balance.ok).toBe(false);
+            if (!balance.ok) {
+              expect(balance.error.reason).toBe("usage_limit_exceeded");
+            }
+          }
+        });
+      });
+    }
+
+    test("disabled-feature ledger retains active status with an unexpired add-on after the paid period", async () => {
+      await withFixture(async (tx, fixture) => {
+        await seedPrior(tx, fixture, "configured_access");
+        const userId = await seedReader(tx, fixture);
+        await allocateUsage({
+          tx,
+          organizationId: fixture.organizationId,
+          units: 5,
+          reason: "addon",
+          sourceType: "hosted_allocation",
+          sourceRef: `addon_${Bun.randomUUIDv7()}`,
+          period: { start: START, end: at(99_000) },
+        });
+        const asOf = new Date(END.getTime() + 1);
+        const options = { tx, organizationId: fixture.organizationId, asOf };
+        for (const enabled of [false, true]) {
+          env.FEATURE_CONFIGURED_ACCESS = enabled;
+          const result = await assertUsageAvailable({
+            ...options,
+            required: 1,
+          });
+          expect(result.ok).toBe(!enabled);
+          if (!result.ok) {
+            expect(result.error.reason).toBe("entitlement_inactive");
+          }
+          expect(await decideChatUsageLane({ ...options, userId })).toBe(
+            "pool",
+          );
+          expect(await readLaneBudgets({ ...options, userId })).toBe(false);
+        }
+      });
+    });
+
+    test("all consumption readers fall back to original standing for a stale overlay", async () => {
+      for (const status of ["active", "cancelled"] as const) {
+        await withFixture(async (tx, fixture) => {
+          await seedPrior(tx, fixture, "disabled");
+          const userId = await seedReader(tx, fixture);
+          await tx
+            .update(usageEntitlements)
+            .set({
+              status,
+              cancelAtPeriodEnd: false,
+              hostedLastEventAt: at(1000),
+            })
+            .where(
+              eq(usageEntitlements.organizationId, fixture.organizationId),
+            );
+          const options = {
+            tx,
+            organizationId: fixture.organizationId,
+            asOf: at(1001),
+          };
+          const before = await readAccess(tx, fixture.organizationId);
+          for (const enabled of [false, true]) {
+            env.FEATURE_CONFIGURED_ACCESS = enabled;
+            const result = await assertUsageAvailable({
+              ...options,
+              required: 1,
+            });
+            expect(result.ok).toBe(status === "active");
+            if (!result.ok) {
+              expect(result.error.reason).toBe("entitlement_inactive");
+            }
+            expect(await decideChatUsageLane({ ...options, userId })).toBe(
+              status === "active" ? "allowance" : "pool",
+            );
+            expect(await readLaneBudgets({ ...options, userId })).toBe(
+              status === "active",
+            );
+          }
+          expect(await readAccess(tx, fixture.organizationId)).toEqual(before);
+        });
+      }
     });
 
     test("superseded generations cannot alter a newer mapping's access", async () => {

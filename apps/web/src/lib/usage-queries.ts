@@ -97,3 +97,26 @@ export const usageLaneOptions = ({
     queryFn: fetchUsageLane,
     staleTime: USAGE_LANE_STALE_TIME_MS,
   });
+
+type OrganizationAccessKey = {
+  organizationId: string;
+};
+
+const organizationAccessKeys = {
+  all: ["usage", "access"] as const,
+  byOrganization: ({ organizationId }: OrganizationAccessKey) => [
+    ...organizationAccessKeys.all,
+    organizationId,
+  ],
+};
+
+type OrganizationAccessOptionsInput = QueryOptionsInput<OrganizationAccessKey>;
+
+export const organizationAccessOptions = ({
+  organizationId,
+}: OrganizationAccessOptionsInput) =>
+  queryOptions({
+    queryKey: organizationAccessKeys.byOrganization({ organizationId }),
+    queryFn: async ({ signal }) =>
+      unwrapEden(await api.usage.access.get({ fetch: { signal } })),
+  });
