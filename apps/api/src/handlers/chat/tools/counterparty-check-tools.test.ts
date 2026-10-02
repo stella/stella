@@ -10,6 +10,7 @@ import type {
   runEntityCheck,
 } from "@stll/business-registries/entity-checks";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 
 import {
@@ -18,9 +19,10 @@ import {
 } from "./counterparty-check-tools.js";
 
 const executeWith = (runCheck: typeof runEntityCheck) => {
-  const tool = createCounterpartyCheckTools({ runCheck })[
-    COUNTERPARTY_CHECK_TOOL_NAME
-  ];
+  const tool = createCounterpartyCheckTools({
+    organizationId: toSafeId<"organization">("fixture-org"),
+    runCheck,
+  })[COUNTERPARTY_CHECK_TOOL_NAME];
   const execute = tool.execute ?? panic("Expected an executable tool");
   return async (input: Parameters<typeof execute>[0]) =>
     await execute(input, { emitCustomEvent: () => undefined });

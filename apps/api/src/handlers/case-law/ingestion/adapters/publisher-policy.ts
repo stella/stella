@@ -1,3 +1,4 @@
+// parser-output-unchanged: publisher scheduling only; response parsing is unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
@@ -289,8 +290,7 @@ export const publisherRequestsPerDay = (gateId: PublisherGateId): number =>
 export const createPublisherSlot = (
   adapterKey: AdapterKey,
   dependencies?: PublisherRequestGateDependencies,
-): ((signal?: AbortSignal) => Promise<void>) =>
-  createPublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], dependencies);
+) => createPublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], dependencies);
 
 /**
  * The gate for a publisher this slice reaches outside a crawl — a roster
@@ -300,10 +300,15 @@ export const createPublisherSlot = (
 export const createPublisherGateSlot = (
   gateId: PublisherGateId,
   dependencies?: PublisherRequestGateDependencies,
-): ((signal?: AbortSignal) => Promise<void>) => {
+) => {
   const { publisher, intervalMs } = PUBLISHER_GATES[gateId];
   return createPublisherRequestSlot(
-    { intervalMs, key: `case-law:publisher-gate:${gateId}`, publisher },
+    {
+      intervalMs,
+      key: gateId,
+      publisher,
+      ...(gateId === "cellar-eu" ? { cooldown: "shared" as const } : {}),
+    },
     dependencies,
   );
 };
@@ -317,7 +322,7 @@ export const createPublisherGateSlot = (
  */
 const slotsByGate = new Map<
   PublisherGateId,
-  (signal?: AbortSignal) => Promise<void>
+  ReturnType<typeof createPublisherGateSlot>
 >();
 
 export const reservePublisherSlot = async (
@@ -337,4 +342,31 @@ export const reservePublisherGateSlot = async (
   const reserve = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
   slotsByGate.set(gateId, reserve);
   await reserve(signal);
+};
+
+export const deferPublisherGate = async (
+  gateId: PublisherGateId,
+  durationMs: number,
+  signal?: AbortSignal,
+): Promise<number> => {
+  const reserve = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
+  slotsByGate.set(gateId, reserve);
+  return await reserve.defer(durationMs, signal);
+};
+
+/** Shared deadline in epoch milliseconds, based on Redis TIME, not the caller clock. */
+export const readPublisherCooldown = async (
+  publisherKey: PublisherGateId,
+  dependencies?: PublisherRequestGateDependencies,
+): Promise<number | null> => {
+  if (dependencies !== undefined) {
+    return await createPublisherGateSlot(
+      publisherKey,
+      dependencies,
+    ).readCooldown();
+  }
+  const reserve =
+    slotsByGate.get(publisherKey) ?? createPublisherGateSlot(publisherKey);
+  slotsByGate.set(publisherKey, reserve);
+  return await reserve.readCooldown();
 };

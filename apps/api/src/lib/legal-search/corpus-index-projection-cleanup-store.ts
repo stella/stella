@@ -640,6 +640,7 @@ export class CorpusProjectionCleanupSettlementProof {
     // it; the exact revision count below is what refuses to settle then, and
     // it is the step that makes the proof exact rather than merely bounded.
     const settlement = await client.readDeleteSettlement({
+      observer: "unobserved",
       indexId,
       requiredOpstamp: deleteOpstamp,
       deleteCreatedAt: deleteTaskCreatedAt,

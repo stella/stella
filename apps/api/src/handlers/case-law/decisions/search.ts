@@ -21,6 +21,7 @@ import {
   type SearchTotal,
 } from "@stll/api-contract/search";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -268,6 +269,7 @@ type PostgresSearchBody = Omit<
 export const searchDecisionsHandler = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
+  observer: RegistryRequestObservation,
 ) => {
   const countryRead = readPublicLawCountry(body.country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
@@ -281,7 +283,7 @@ export const searchDecisionsHandler = async (
   }
   const scopedBody = { ...body, country };
   if (envBase.LEGAL_SEARCH_PROVIDER === "corpus-index") {
-    return await searchCorpusIndexDecisions(scopedBody, caseLawDb);
+    return await searchCorpusIndexDecisions(scopedBody, caseLawDb, observer);
   }
 
   const { category, hasLegalSentence, ...postgresBody } = scopedBody;
@@ -1707,6 +1709,7 @@ const corpusSearchOrder = (sort: SearchSort): CorpusSearchOrder => {
 };
 
 type ReadCaseLawSearchFacetsOptions = {
+  observer: RegistryRequestObservation;
   body: SearchDecisionsBody;
   cluster: QuickwitCluster;
   courtWeights: CourtWeightMap;
@@ -1736,6 +1739,7 @@ type CaseLawSearchFacetsRead = {
  * to an error a reader sees instead of their results.
  */
 const readCaseLawSearchFacets = async ({
+  observer,
   body,
   cluster,
   courtWeights,
@@ -1771,7 +1775,11 @@ const readCaseLawSearchFacets = async ({
 
   const read = await readCorpusSearchFacets({
     aggregate: async (input) =>
-      await getCorpusIndexClient(cluster).aggregate({ indexId, ...input }),
+      await getCorpusIndexClient(cluster).aggregate({
+        indexId,
+        ...input,
+        observer,
+      }),
     excludedSourceIds: registry.value.excludedSourceIds,
     // The year buckets run to one year past this one, so a decision a
     // publisher dated ahead still lands in a bucket of its own.
@@ -1826,6 +1834,7 @@ const caseLawScanTransport = (sort: SearchSort): CorpusIndexScanTransport => {
 export const searchCorpusIndexDecisions = async (
   body: SearchDecisionsBody,
   caseLawDb: CaseLawPublicReadDb,
+  observer: RegistryRequestObservation,
 ) => {
   const startedAt = performance.now();
   const limit = normalizeTenantPageLimit(
@@ -2090,6 +2099,7 @@ export const searchCorpusIndexDecisions = async (
 
   const concurrentStartedAt = performance.now();
   const pageRead = readCorpusIndexSearchPage({
+    observer,
     cluster: serving.cluster,
     indexId,
     query: scopedQuery,
@@ -2129,6 +2139,7 @@ export const searchCorpusIndexDecisions = async (
   const facetRead =
     parsedCursor === null
       ? readCaseLawSearchFacets({
+          observer,
           body,
           cluster: serving.cluster,
           courtWeights,

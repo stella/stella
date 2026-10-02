@@ -43,6 +43,9 @@ dist-ssr
 .turbo
 .cache
 
+# Local source projections restored by Turbo generation tasks
+apps/web/src/generated/api-routes.gen.ts
+
 # Vercel
 .vercel
 

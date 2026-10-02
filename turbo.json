@@ -19,6 +19,102 @@
   // package, not one task's declared inputs.
   "globalDependencies": ["patches/**"],
   "tasks": {
+    // Outputs are ignored by Git, but restored by Turbo on a cache hit.
+    "@stll/web#generate:api-types": {
+      "inputs": [
+        "$TURBO_ROOT$/apps/api/**",
+        "$TURBO_ROOT$/apps/web/src/**",
+        "$TURBO_ROOT$/apps/web/package.json",
+        "$TURBO_ROOT$/apps/web/tsconfig*.json",
+        "$TURBO_ROOT$/packages/**",
+        "$TURBO_ROOT$/types/**",
+        "$TURBO_ROOT$/tsconfig*.json",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/.npmrc",
+        "!$TURBO_ROOT$/apps/**/node_modules/**",
+        "!$TURBO_ROOT$/apps/**/.cache/**",
+        "!$TURBO_ROOT$/apps/**/dist/**",
+        "!$TURBO_ROOT$/apps/**/.env*",
+        "!$TURBO_ROOT$/apps/**/.turbo/**",
+        "!$TURBO_ROOT$/apps/**/*.tsbuildinfo",
+        "!$TURBO_ROOT$/packages/**/node_modules/**",
+        "!$TURBO_ROOT$/packages/**/.cache/**",
+        "!$TURBO_ROOT$/packages/**/dist/**",
+        "!$TURBO_ROOT$/packages/**/.env*",
+        "!$TURBO_ROOT$/packages/**/.turbo/**",
+        "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
+        "!src/generated/api-routes.gen.ts"
+      ],
+      "outputs": ["src/generated/api-routes.gen.ts"]
+    },
+    // Compiler scripts prepare direct invocations, but skip that cache restore
+    // inside Turbo (TURBO_HASH): these dependencies already prepared the file.
+    "@stll/web#typecheck": {
+      "dependsOn": ["transit", "generate:api-types"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/packages/scripts/src/tsc-native.ts",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/types/**"
+      ],
+      "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
+    },
+    "@stll/web#lint": {
+      "dependsOn": ["transit", "generate:api-types"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/.npmrc",
+        "$TURBO_ROOT$/bunfig.toml",
+        "$TURBO_ROOT$/package.json",
+        "$TURBO_ROOT$/bun.lock",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
+        "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/packages/typescript-config/**",
+        "$TURBO_ROOT$/patches/**",
+        "$TURBO_ROOT$/tsconfig.tooling.json",
+        "$TURBO_ROOT$/types/**"
+      ]
+    },
+    "@stll/web#lint:fix": {
+      "dependsOn": ["transit", "generate:api-types"],
+      "inputs": [
+        "$TURBO_DEFAULT$",
+        "$TURBO_ROOT$/oxlint.config.ts",
+        "$TURBO_ROOT$/oxlint.result-boundary.config.ts",
+        "$TURBO_ROOT$/.oxlint-plugins/**",
+        "$TURBO_ROOT$/scripts/oxlint-presets/**",
+        "$TURBO_ROOT$/scripts/ownership.ts",
+        "$TURBO_ROOT$/scripts/result-boundary-globs.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-detector.ts",
+        "$TURBO_ROOT$/apps/api/src/db/high-volume-tables.ts",
+        "$TURBO_ROOT$/scripts/sql-perf-scope.ts",
+        "$TURBO_ROOT$/scripts/design-lint-policy.ts",
+        "$TURBO_ROOT$/scripts/design-lint-baseline.json",
+        "$TURBO_ROOT$/tsconfig.tooling.json"
+      ],
+      "cache": false
+    },
+    "@stll/web#test:property": {
+      "dependsOn": ["generate:api-types"],
+      "inputs": ["$TURBO_DEFAULT$"],
+      "cache": false
+    },
     "@stll/redis-config#test": {
       "inputs": [
         "$TURBO_DEFAULT$",
@@ -81,7 +177,7 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "//#typecheck:repo": {
-      "dependsOn": ["@stll/cli#codegen:runtime"],
+      "dependsOn": ["@stll/web#generate:api-types", "@stll/cli#codegen:runtime"],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
       // and compiler state between linked worktrees and CI runners.
@@ -434,7 +530,7 @@
       ]
     },
     "@stll/web#test": {
-      "dependsOn": [],
+      "dependsOn": ["generate:api-types"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.oxlint-plugins/**",
