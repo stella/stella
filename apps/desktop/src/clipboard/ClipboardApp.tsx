@@ -93,6 +93,7 @@ import {
 } from "@stll/ui/menu";
 import { StellaMark } from "@stll/ui/stella-mark";
 import { SEARCH_HIT_MARK, TextMark } from "@stll/ui/text-mark";
+import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
 import { RegistrySearch } from "../registry/RegistrySearch";
@@ -2240,12 +2241,12 @@ const ClipboardApp = () => {
     if (cardTrigger && event.key === " ") {
       return;
     }
-    // A single character reaches the search field whatever produced it, Alt
-    // and AltGr included (`€` on Option+2, `@` on Spanish AltGr+2). Only the
-    // shortcut modifier holds a keystroke back.
-    if (event.key.length === 1 && !event.isComposing && !primaryModifier) {
+    // A typed character reaches the search field whatever produced it, Alt
+    // and AltGr included (`€` on Option+2, `@` on Spanish AltGr+2).
+    const typed = typedCharacter(event);
+    if (typed !== null) {
       event.preventDefault();
-      setQuery((currentQuery) => currentQuery + event.key);
+      setQuery((currentQuery) => currentQuery + typed);
       setSelectedIndex(0);
       searchInputRef.current?.focus();
       return;
