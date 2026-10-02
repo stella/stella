@@ -10,7 +10,20 @@ const ENTRY_POINTS = [
   // Playwright loads this by configuration string, rather than an import.
   "apps/web/e2e/global-teardown.ts",
 ] as const;
-const SOURCE_EXTENSIONS = [".ts", ".tsx", ".js", ".jsx", ".mts", ".mjs"];
+// Each extension parses with its own grammar: TSX would reject valid `.ts`
+// syntax such as generic arrows (`<T = unknown>(value: T) => value`).
+const LOADERS = {
+  ".ts": "ts",
+  ".mts": "ts",
+  ".tsx": "tsx",
+  ".js": "js",
+  ".mjs": "js",
+  ".jsx": "jsx",
+} as const;
+type SourceExtension = keyof typeof LOADERS;
+const SOURCE_EXTENSIONS = Object.keys(LOADERS);
+const isSourceExtension = (extension: string): extension is SourceExtension =>
+  Object.hasOwn(LOADERS, extension);
 const RUNTIME_FILES = new Set([
   ".github/workflows/ci.yml",
   "scripts/detect-route-smoke-changes.ts",
@@ -33,6 +46,9 @@ const RUNTIME_PREFIXES = [
   "apps/web/public/",
   "apps/web/scripts/",
   "scripts/network-baseline-scope",
+  // Helpers read these from disk (e.g. the uploaded document), so the import
+  // graph cannot see them.
+  "apps/web/e2e/fixtures/",
   ".github/actions/setup-e2e-stack/",
   ".github/actions/setup-production-e2e/",
   ".github/actions/setup-playwright/",
@@ -85,21 +101,31 @@ export const routeSmokeImportClosure = (
   const pending: string[] = [...ENTRY_POINTS];
   // Bun is already installed by ci-plan; no repository install is needed to
   // parse imports, re-exports and literal dynamic imports without regex drift.
-  const parser = new Bun.Transpiler({ loader: "tsx" });
+  const parsers = new Map<SourceExtension, Bun.Transpiler>();
+  const parserFor = (extension: SourceExtension): Bun.Transpiler => {
+    const existing = parsers.get(extension);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const parser = new Bun.Transpiler({ loader: LOADERS[extension] });
+    parsers.set(extension, parser);
+    return parser;
+  };
   for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
     if (visited.has(file)) {
       continue;
     }
     visited.add(file);
     const absolute = path.join(root, file);
+    const extension = path.posix.extname(file);
     if (
       !existsSync(absolute) ||
       !statSync(absolute).isFile() ||
-      !SOURCE_EXTENSIONS.includes(path.posix.extname(file))
+      !isSourceExtension(extension)
     ) {
       continue;
     }
-    for (const imported of parser.scanImports(
+    for (const imported of parserFor(extension).scanImports(
       readFileSync(absolute, "utf-8"),
     )) {
       pending.push(...importCandidates(file, imported.path));

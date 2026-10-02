@@ -47,6 +47,7 @@ describe("route traffic changes require the route smoke", () => {
     "docker/postgres/init.sql",
     "scripts/retry.sh",
     "patches/dependency.patch",
+    "apps/web/e2e/fixtures/simple.docx",
   ])("plans a smoke for %s", (file) => {
     expect(routeSmokeAffected([file])).toBe(true);
   });
@@ -103,6 +104,34 @@ describe("route traffic changes require the route smoke", () => {
       expect(routeSmokeAffected(["tools/deep/deleted.ts"], root)).toBe(true);
       rmSync(path.join(root, newlyImported));
       expect(routeSmokeAffected([newlyImported], root)).toBe(true);
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  test("parses each helper with its own grammar", () => {
+    const root = mkdtempSync(path.join(tmpdir(), "route-smoke-grammar-"));
+    try {
+      writeFixture(
+        root,
+        "apps/web/e2e/specs/route-smoke.spec.ts",
+        'import { request } from "../helpers/api";',
+      );
+      // Valid TypeScript that the TSX grammar rejects.
+      writeFixture(
+        root,
+        "apps/web/e2e/helpers/api.ts",
+        'import "./next";\nexport const request = async <T>(value: T) => <T>value;',
+      );
+      writeFixture(
+        root,
+        "apps/web/e2e/helpers/next.tsx",
+        "export const view = <div />;",
+      );
+      expect(routeSmokeAffected(["docs/development.md"], root)).toBe(false);
+      expect(routeSmokeAffected(["apps/web/e2e/helpers/next.tsx"], root)).toBe(
+        true,
+      );
     } finally {
       rmSync(root, { recursive: true, force: true });
     }
