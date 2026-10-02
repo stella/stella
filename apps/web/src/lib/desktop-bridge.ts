@@ -1,7 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 
 import type {
-  DesktopAccountSnapshot,
+  DesktopAccountIdentity,
   LinkAccountRequest,
   LinkedAccountSnapshot,
 } from "@stll/api-contract/desktop-rpc";
@@ -11,23 +11,15 @@ import type { FetchWithTimeoutInit } from "@stll/fetch";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/env";
+import type { DesktopLinkOutcome } from "@/features/desktop/desktop-connection-store.logic";
 import { api } from "@/lib/api";
 import { getFreshLinkedAccount } from "@/lib/auth-session";
-import type { DesktopEditFileType } from "@/lib/desktop-edit-formats";
-import { buildSelfHostConnectDeepLink } from "@/lib/desktop-self-host-link.logic";
 import { unwrapEden } from "@/lib/errors/api";
 import { toSafeId } from "@/lib/safe-id";
 
 const DESKTOP_BRIDGE_PORT = env.VITE_DESKTOP_BRIDGE_PORT;
 const DESKTOP_BRIDGE_URL = `http://127.0.0.1:${String(DESKTOP_BRIDGE_PORT)}`;
 const DESKTOP_HANDOFF_POLL_INTERVAL_MS = 750;
-const DESKTOP_BRIDGE_START_POLL_INTERVAL_MS = 1000;
-const DESKTOP_BRIDGE_START_TIMEOUT_MS = 6000;
-const DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS = 750;
-const DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS = 120_000;
-const MIN_DESKTOP_BRIDGE_VERSION = 9;
-const REQUIRED_DESKTOP_BRIDGE_CAPABILITY = "office-edit.v1";
-const DESKTOP_ACCOUNT_LINK_CAPABILITY = "account-link.v2";
 const DESKTOP_ACCOUNT_LINK_HASH = "#desktop-account";
 
 export class DesktopBridgeUnavailableError extends Error {
@@ -47,23 +39,6 @@ export class DesktopBridgeIncompatibleError extends Error {
 export class DesktopAccountConflictError extends TaggedError(
   "DesktopAccountConflictError",
 )<{ message: string }> {}
-
-/** The link was rejected and revoking the minted credential also failed. */
-export class DesktopAccountLinkCleanupError extends TaggedError(
-  "DesktopAccountLinkCleanupError",
-)<{ message: string; cause: unknown; cleanupError: unknown }> {}
-
-type RemoteDesktopSession = {
-  baseVersionNumber: number;
-  downloadUrl: string;
-  fileType: DesktopEditFileType;
-  fileName: string;
-  lastCheckpointAt: string | null;
-  resumedFromCheckpoint: boolean;
-  sessionId: string;
-  sessionToken: string;
-  tookOverExistingSession: boolean;
-};
 
 type DesktopEditHandoff = {
   deepLinkUrl: string;
@@ -92,127 +67,167 @@ type BridgeResponse = {
   message?: string;
 };
 
-type BridgeHealth = {
-  capabilities?: string[];
-  bridgeVersion?: number;
+const DESKTOP_ACCOUNT_CHALLENGE_TTL_MS = 60_000;
+
+type DesktopAccountChallenge = {
+  correlationId: string;
+  verifierHash: string;
+  portSecret: string;
 };
 
-type SelfHostConnectionStatus = {
-  trusted: boolean;
-};
+let accountChallenge: (DesktopAccountChallenge & { expiresAt: number }) | null =
+  null;
 
-type DesktopRegistryGrant = {
-  account: LinkedAccountSnapshot;
-  expiresAt: string;
-  key: string;
-};
-
-type FreshLinkedAccount = NonNullable<
-  Awaited<ReturnType<typeof getFreshLinkedAccount>>
->;
-
-export const desktopAccountLinkRequest = (
-  apiBaseUrl: string,
-  grant: DesktopRegistryGrant,
-) =>
-  ({
-    apiBaseUrl,
-    credential: { expiresAt: grant.expiresAt, key: grant.key },
-  }) satisfies LinkAccountRequest;
-
-type CompleteDesktopAccountLinkOptions = {
-  apiBaseUrl: string;
-  grant: DesktopRegistryGrant;
-  postLink: (
-    body: ReturnType<typeof desktopAccountLinkRequest>,
-  ) => Promise<Result<void, AccountLinkPostError>>;
-  revoke: (key: string) => Promise<Result<void, unknown>>;
-};
-
-export type AccountLinkPostError =
-  | { type: "ambiguous"; cause: unknown }
-  | { type: "rejected"; cause: unknown };
-
-export const completeDesktopAccountLink = async ({
-  apiBaseUrl,
-  grant,
-  postLink,
-  revoke,
-}: CompleteDesktopAccountLinkOptions) => {
-  const linked = await postLink(desktopAccountLinkRequest(apiBaseUrl, grant));
-  if (linked.isOk()) {
-    return Result.ok(grant.account.email);
+export const parseDesktopAccountChallenge = (hash: string) => {
+  if (!hash.startsWith(`${DESKTOP_ACCOUNT_LINK_HASH}?`)) {
+    return null;
   }
-  if (linked.error.type === "ambiguous") {
-    return Result.err(linked.error.cause);
+  const params = new URLSearchParams(
+    hash.slice(DESKTOP_ACCOUNT_LINK_HASH.length + 1),
+  );
+  const correlationId = params.get("correlationId");
+  const verifierHash = params.get("verifierHash");
+  const portSecret = params.get("portSecret");
+  if (
+    [...params].length !== 3 ||
+    !correlationId ||
+    !/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u.test(
+      correlationId,
+    ) ||
+    !verifierHash ||
+    !/^[0-9a-f]{64}$/u.test(verifierHash) ||
+    !portSecret ||
+    !/^[0-9a-f]{64}$/u.test(portSecret)
+  ) {
+    return null;
   }
-  const cleaned = await revoke(grant.key);
-  if (cleaned.isErr()) {
-    return Result.err(
-      new DesktopAccountLinkCleanupError({
-        message: "Desktop account link failed and credential cleanup failed",
-        cause: linked.error.cause,
-        cleanupError: cleaned.error,
-      }),
-    );
-  }
-  return Result.err(linked.error.cause);
+  return { correlationId, verifierHash, portSecret };
 };
 
-export const isDesktopAccountLink = (hash: string) =>
-  hash === DESKTOP_ACCOUNT_LINK_HASH;
+export const captureDesktopAccountLink = () => {
+  const challenge = parseDesktopAccountChallenge(window.location.hash);
+  if (!challenge) {
+    return false;
+  }
+  accountChallenge = {
+    ...challenge,
+    expiresAt:
+      Temporal.Now.instant().epochMilliseconds +
+      DESKTOP_ACCOUNT_CHALLENGE_TTL_MS,
+  };
+  window.history.replaceState(
+    null,
+    "",
+    `${window.location.pathname}${window.location.search}`,
+  );
+  return true;
+};
+
+type DesktopBridgeProofOptions = {
+  portSecret: string;
+  timestamp: string;
+  path: string;
+};
+
+export const desktopBridgeProofHeaders = async ({
+  portSecret,
+  timestamp,
+  path,
+}: DesktopBridgeProofOptions) => {
+  const bytes = new TextEncoder().encode(portSecret);
+  const key = await crypto.subtle.importKey(
+    "raw",
+    bytes,
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["sign"],
+  );
+  const signature = await crypto.subtle.sign(
+    "HMAC",
+    key,
+    new TextEncoder().encode(`${timestamp}\nGET\n${path}`),
+  );
+  const proof = [...new Uint8Array(signature)]
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+  return { "x-stella-bridge-time": timestamp, "x-stella-bridge-proof": proof };
+};
 
 const isBridgeResponse = (value: unknown): value is BridgeResponse =>
   typeof value === "object" && value !== null;
 
-const isBridgeHealth = (value: unknown): value is BridgeHealth =>
-  typeof value === "object" &&
-  value !== null &&
-  (!("bridgeVersion" in value) || typeof value.bridgeVersion === "number") &&
-  (!("capabilities" in value) ||
-    (Array.isArray(value.capabilities) &&
-      value.capabilities.every(
-        (capability) => typeof capability === "string",
-      )));
-
-const isSelfHostConnectionStatus = (
-  value: unknown,
-): value is SelfHostConnectionStatus =>
-  typeof value === "object" &&
-  value !== null &&
-  "trusted" in value &&
-  typeof value.trusted === "boolean";
-
-const isDesktopAccountSnapshot = (
-  value: unknown,
-): value is DesktopAccountSnapshot => {
+const parseDesktopConnectionStatus = (value: unknown) => {
   if (typeof value !== "object" || value === null || !("status" in value)) {
-    return false;
+    return null;
   }
-  if (value.status === "disconnected") {
-    return true;
+  switch (value.status) {
+    case "pending":
+    case "connected":
+    case "failed":
+      return value.status;
+    default:
+      return null;
   }
-  return (
-    value.status === "connected" &&
-    "expiresAt" in value &&
-    typeof value.expiresAt === "string" &&
-    "identity" in value &&
-    typeof value.identity === "object" &&
-    value.identity !== null &&
-    "userId" in value.identity &&
-    typeof value.identity.userId === "string" &&
-    "organizationId" in value.identity &&
-    typeof value.identity.organizationId === "string" &&
-    "account" in value &&
-    typeof value.account === "object" &&
-    value.account !== null &&
-    "email" in value.account &&
-    typeof value.account.email === "string" &&
-    "name" in value.account &&
-    (typeof value.account.name === "string" || value.account.name === null) &&
-    "verifiedAt" in value.account &&
-    typeof value.account.verifiedAt === "string"
+};
+
+const DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS = 30;
+
+type VerifyDesktopConnectionOptions = {
+  payload: unknown;
+  correlationId: string;
+  portSecret: string;
+  nowSeconds: number;
+};
+
+export const verifyDesktopConnectionStatus = async ({
+  payload,
+  correlationId,
+  portSecret,
+  nowSeconds,
+}: VerifyDesktopConnectionOptions) => {
+  const status = parseDesktopConnectionStatus(payload);
+  if (
+    status === null ||
+    typeof payload !== "object" ||
+    payload === null ||
+    !("correlationId" in payload) ||
+    payload.correlationId !== correlationId ||
+    !("timestamp" in payload) ||
+    typeof payload.timestamp !== "string" ||
+    !/^[0-9]{1,16}$/u.test(payload.timestamp) ||
+    !("proof" in payload) ||
+    typeof payload.proof !== "string" ||
+    !/^[0-9a-f]{64}$/u.test(payload.proof)
+  ) {
+    return null;
+  }
+  const timestamp = Number(payload.timestamp);
+  if (
+    !Number.isSafeInteger(timestamp) ||
+    Math.abs(nowSeconds - timestamp) > DESKTOP_BRIDGE_RESPONSE_MAX_SKEW_SECONDS
+  ) {
+    return null;
+  }
+  const proof = payload.proof;
+  const signature = Uint8Array.from({ length: 32 }, (_, offset) =>
+    Number.parseInt(proof.slice(offset * 2, offset * 2 + 2), 16),
   );
+  const key = await crypto.subtle.importKey(
+    "raw",
+    new TextEncoder().encode(portSecret),
+    { name: "HMAC", hash: "SHA-256" },
+    false,
+    ["verify"],
+  );
+  const valid = await crypto.subtle.verify(
+    "HMAC",
+    key,
+    signature,
+    new TextEncoder().encode(
+      `${correlationId}\n${status}\n${payload.timestamp}`,
+    ),
+  );
+  return valid ? status : null;
 };
 
 /**
@@ -238,109 +253,6 @@ const parseBridgeResponse = async (response: Response) => {
   } catch {
     return null;
   }
-};
-
-const readBridgeHealth = async (
-  timeoutMs: number,
-  signal?: AbortSignal,
-): Promise<BridgeHealth | null> => {
-  try {
-    const response = await fetchWithTimeout(
-      `${DESKTOP_BRIDGE_URL}/health`,
-      loopback({
-        method: "GET",
-        ...(signal && { signal }),
-        timeoutMs,
-      }),
-    );
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload: unknown = await response.json();
-    return isBridgeHealth(payload) ? payload : {};
-  } catch {
-    return null;
-  }
-};
-
-const isCompatibleDesktopBridge = (
-  health: BridgeHealth,
-  requiredCapability: string,
-) =>
-  typeof health.bridgeVersion === "number" &&
-  health.bridgeVersion >= MIN_DESKTOP_BRIDGE_VERSION &&
-  health.capabilities?.includes(requiredCapability) === true;
-
-const signalDesktopUpdateCheck = () => {
-  window.location.href = "stella://ping";
-};
-
-const assertCompatibleDesktopBridge = (
-  health: BridgeHealth,
-  {
-    requiredCapability = REQUIRED_DESKTOP_BRIDGE_CAPABILITY,
-    signalUpdateCheck = true,
-  }: {
-    requiredCapability?: string;
-    signalUpdateCheck?: boolean;
-  } = {},
-) => {
-  if (isCompatibleDesktopBridge(health, requiredCapability)) {
-    return;
-  }
-
-  if (signalUpdateCheck) {
-    signalDesktopUpdateCheck();
-  }
-
-  throw new DesktopBridgeIncompatibleError();
-};
-
-const wakeDesktopAndReadBridgeHealth =
-  async (): Promise<BridgeHealth | null> => {
-    signalDesktopUpdateCheck();
-
-    const deadline =
-      Temporal.Now.instant().epochMilliseconds +
-      DESKTOP_BRIDGE_START_TIMEOUT_MS;
-    while (Temporal.Now.instant().epochMilliseconds < deadline) {
-      await wait(
-        Math.min(
-          DESKTOP_BRIDGE_START_POLL_INTERVAL_MS,
-          deadline - Temporal.Now.instant().epochMilliseconds,
-        ),
-      );
-
-      const health = await readBridgeHealth(1000);
-      if (health) {
-        return health;
-      }
-    }
-
-    return null;
-  };
-
-const openRemoteDesktopSession = async ({
-  entityId,
-  force,
-  propertyId,
-  workspaceId,
-}: {
-  entityId: string;
-  force?: true | undefined;
-  propertyId: string;
-  workspaceId: string;
-}) => {
-  const response = await api
-    .entities({ workspaceId: toSafeId<"workspace">(workspaceId) })
-    ["desktop-edit-sessions"].open.post({
-      entityId: toSafeId<"entity">(entityId),
-      ...(force && { force }),
-      propertyId: toSafeId<"property">(propertyId),
-    });
-
-  return unwrapEden(response) satisfies RemoteDesktopSession;
 };
 
 const createDesktopEditHandoff = async ({
@@ -381,19 +293,6 @@ const readDesktopEditHandoffStatus = async ({
 
 const launchDesktopEditHandoff = (deepLinkUrl: string) => {
   window.location.href = deepLinkUrl;
-};
-
-const launchSelfHostConnect = ({
-  apiBaseUrl,
-  webOrigin,
-}: {
-  apiBaseUrl: string;
-  webOrigin: string;
-}) => {
-  window.location.href = buildSelfHostConnectDeepLink({
-    apiBaseUrl,
-    webOrigin,
-  });
 };
 
 const wait = async (milliseconds: number) => {
@@ -449,191 +348,28 @@ const waitForDesktopEditHandoffOpened = async ({
   throw new DesktopBridgeUnavailableError();
 };
 
-/**
- * Whether a running desktop app can link an account right now. Answers false
- * rather than throwing, and also for an app too old to link: a watch then keeps
- * polling instead of ending on a bridge that would refuse the link anyway.
- */
-export const isDesktopAccountLinkReachable = async (
-  signal?: AbortSignal,
-): Promise<boolean> => {
-  const health = await readBridgeHealth(500, signal);
-  return (
-    health !== null &&
-    isCompatibleDesktopBridge(health, DESKTOP_ACCOUNT_LINK_CAPABILITY)
-  );
-};
-
-const readSelfHostedDesktopConnection = async ({
-  apiBaseUrl,
-}: {
-  apiBaseUrl: string;
-}): Promise<SelfHostConnectionStatus | null> => {
-  const params = new URLSearchParams({ apiBaseUrl });
-
-  try {
-    const response = await fetchWithTimeout(
-      `${DESKTOP_BRIDGE_URL}/v1/self-host-connection?${params.toString()}`,
-      loopback({
-        method: "GET",
-        timeoutMs: 1000,
-      }),
-    );
-    if (!response.ok) {
-      return null;
-    }
-
-    const payload: unknown = await response.json();
-    return isSelfHostConnectionStatus(payload) ? payload : null;
-  } catch {
-    return null;
-  }
-};
-
-export const connectSelfHostedDesktop = async ({
-  apiBaseUrl,
-  webOrigin,
-}: {
-  apiBaseUrl: string;
-  webOrigin: string;
-}) => {
-  launchSelfHostConnect({ apiBaseUrl, webOrigin });
-
-  const deadline =
-    Temporal.Now.instant().epochMilliseconds +
-    DESKTOP_SELF_HOST_CONNECT_TIMEOUT_MS;
-  while (Temporal.Now.instant().epochMilliseconds < deadline) {
-    const status = await readSelfHostedDesktopConnection({ apiBaseUrl });
-    if (status?.trusted) {
-      return;
-    }
-
-    await wait(
-      Math.max(
-        0,
-        Math.min(
-          DESKTOP_SELF_HOST_CONNECT_POLL_INTERVAL_MS,
-          deadline - Temporal.Now.instant().epochMilliseconds,
-        ),
-      ),
-    );
-  }
-
-  throw new DesktopBridgeUnavailableError();
-};
-
-type BridgeRequirement = {
-  requiredCapability: string;
-  signalUpdateCheck: boolean;
-  readHealth: () => Promise<BridgeHealth | null>;
-};
-
-const requireCompatibleBridge = async ({
-  requiredCapability,
-  signalUpdateCheck,
-  readHealth,
-}: BridgeRequirement) => {
-  const health = await readHealth();
-  if (!health) {
-    throw new DesktopBridgeUnavailableError();
-  }
-  assertCompatibleDesktopBridge(health, {
-    requiredCapability,
-    signalUpdateCheck,
-  });
-};
-
-type BridgeCommand = {
-  path: string;
-  body: unknown;
-};
-
-// One failure boundary for every POST that drives the desktop bridge: an
-// unreachable bridge and a rejected command surface through the same errors
-// regardless of the command.
-const postBridgeCommand = async ({ path, body }: BridgeCommand) => {
+const readDesktopConnection = async (
+  correlationId: string,
+  portSecret: string,
+) => {
+  const query = new URLSearchParams({ correlationId });
+  const path = `/v1/connection?${query.toString()}`;
   const url = `${DESKTOP_BRIDGE_URL}${path}`;
-  let response: Response;
-  try {
-    response = await fetchWithTimeout(
-      url,
-      loopback({
-        body: JSON.stringify(body),
-        headers: { "Content-Type": "application/json" },
-        method: "POST",
-        timeoutMs: 10_000,
-      }),
-    );
-  } catch {
-    throw new DesktopBridgeUnavailableError();
-  }
-
-  if (response.ok) {
-    return;
-  }
-
-  const payload = await parseBridgeResponse(response);
-  if (payload?.message) {
-    throw new FetchBoundaryError({
-      message: payload.message,
-      status: response.status,
-      statusText: response.statusText,
-      url,
-    });
-  }
-
-  throw new FetchBoundaryError({
-    message: "Desktop bridge rejected the command",
-    status: response.status,
-    statusText: response.statusText,
-    url,
-  });
-};
-
-const postAccountLinkOnce = async (
-  body: ReturnType<typeof desktopAccountLinkRequest>,
-) => {
-  const result = await Result.tryPromise({
-    try: async () => {
-      await postBridgeCommand({ path: "/v1/link-account", body });
-    },
-    catch: (cause) => cause,
-  });
-  return result.mapError((cause) =>
-    cause instanceof FetchBoundaryError && typeof cause.status === "number"
-      ? ({ type: "rejected", cause } satisfies AccountLinkPostError)
-      : ({ type: "ambiguous", cause } satisfies AccountLinkPostError),
-  );
-};
-
-export const retryAmbiguousAccountLink = async (
-  body: ReturnType<typeof desktopAccountLinkRequest>,
-  postOnce: (
-    request: ReturnType<typeof desktopAccountLinkRequest>,
-  ) => Promise<Result<void, AccountLinkPostError>>,
-) => {
-  const first = await postOnce(body);
-  if (first.isOk() || first.error.type === "rejected") {
-    return first;
-  }
-  const retry = await postOnce(body);
-  if (retry.isOk()) {
-    return retry;
-  }
-  return Result.err({
-    type: "ambiguous",
-    cause: retry.error.cause,
-  } satisfies AccountLinkPostError);
-};
-
-const readDesktopAccount = async (apiBaseUrl: string) => {
-  const query = new URLSearchParams({ apiBaseUrl });
-  const url = `${DESKTOP_BRIDGE_URL}/v1/account?${query.toString()}`;
   const fetched = await Result.tryPromise({
     try: async () =>
       await fetchWithTimeout(
         url,
-        loopback({ method: "GET", timeoutMs: 10_000 }),
+        loopback({
+          method: "GET",
+          timeoutMs: 1000,
+          headers: await desktopBridgeProofHeaders({
+            portSecret,
+            timestamp: String(
+              Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
+            ),
+            path,
+          }),
+        }),
       ),
     catch: () => new DesktopBridgeUnavailableError(),
   });
@@ -662,285 +398,143 @@ const readDesktopAccount = async (apiBaseUrl: string) => {
   if (parsed.isErr()) {
     return parsed;
   }
-  const payload = parsed.value;
-  if (!isDesktopAccountSnapshot(payload)) {
+  const verified = await Result.tryPromise({
+    try: async () =>
+      await verifyDesktopConnectionStatus({
+        payload: parsed.value,
+        correlationId,
+        portSecret,
+        nowSeconds: Math.floor(Temporal.Now.instant().epochMilliseconds / 1000),
+      }),
+    catch: () => new DesktopBridgeIncompatibleError(),
+  });
+  if (verified.isErr()) {
+    return verified;
+  }
+  const payload = verified.value;
+  if (payload === null) {
     return Result.err(new DesktopBridgeIncompatibleError());
   }
   return Result.ok(payload);
 };
 
 type ResolveDesktopAccountLinkOptions = {
-  apiBaseUrl: string;
-  browserAccount: FreshLinkedAccount;
-  desktopAccount: DesktopAccountSnapshot;
-  mintGrant: () => Promise<DesktopRegistryGrant>;
-  postLink: CompleteDesktopAccountLinkOptions["postLink"];
-  revoke: CompleteDesktopAccountLinkOptions["revoke"];
+  browserAccount: NonNullable<
+    Awaited<ReturnType<typeof getFreshLinkedAccount>>
+  >;
+  linkedIdentity: DesktopAccountIdentity;
 };
 
-export const resolveDesktopAccountLink = async ({
-  apiBaseUrl,
+export const resolveDesktopAccountLink = ({
   browserAccount,
-  desktopAccount,
-  mintGrant,
-  postLink,
-  revoke,
+  linkedIdentity,
 }: ResolveDesktopAccountLinkOptions) => {
-  switch (desktopAccount.status) {
-    case "connected":
-      if (
-        desktopAccount.identity.userId !== browserAccount.identity.userId ||
-        desktopAccount.identity.organizationId !==
-          browserAccount.identity.organizationId
-      ) {
-        return Result.err(
-          new DesktopAccountConflictError({
-            message: "desktop_account_conflict",
-          }),
-        );
-      }
-      return Result.ok(desktopAccount.account.email);
-    case "disconnected": {
-      const minted = await Result.tryPromise({
-        try: mintGrant,
-        catch: (cause) => cause,
-      });
-      if (minted.isErr()) {
-        return minted;
-      }
-      return await completeDesktopAccountLink({
-        apiBaseUrl,
-        grant: minted.value,
-        postLink,
-        revoke,
-      });
-    }
-    default:
-      desktopAccount satisfies never;
-      return panic("Unknown desktop account state");
+  if (
+    linkedIdentity.userId !== browserAccount.identity.userId ||
+    linkedIdentity.organizationId !== browserAccount.identity.organizationId
+  ) {
+    return Result.err(
+      new DesktopAccountConflictError({ message: "desktop_account_conflict" }),
+    );
   }
+  return Result.ok(browserAccount.email);
 };
 
 export const linkDesktopAccount = async ({
   apiBaseUrl,
 }: Pick<LinkAccountRequest, "apiBaseUrl">) => {
-  const compatible = await Result.tryPromise({
-    try: async () =>
-      await requireCompatibleBridge({
-        requiredCapability: DESKTOP_ACCOUNT_LINK_CAPABILITY,
-        signalUpdateCheck: true,
-        readHealth: async () =>
-          (await readBridgeHealth(500)) ??
-          (await wakeDesktopAndReadBridgeHealth()),
-      }),
-    catch: (cause) => cause,
-  });
-  if (compatible.isErr()) {
-    return compatible;
+  captureDesktopAccountLink();
+  const challenge = accountChallenge;
+  accountChallenge = null;
+  if (
+    !challenge ||
+    challenge.expiresAt <= Temporal.Now.instant().epochMilliseconds
+  ) {
+    const params = new URLSearchParams({
+      apiBaseUrl,
+      webOrigin: window.location.origin,
+    });
+    window.location.href = `stella://account/connect?${params.toString()}`;
+    return Result.ok({
+      status: "started",
+    } as const satisfies DesktopLinkOutcome);
   }
-  const [desktopAccount, browserAccountResult] = await Promise.all([
-    readDesktopAccount(apiBaseUrl),
-    Result.tryPromise({
-      try: getFreshLinkedAccount,
-      catch: (cause) => cause,
-    }),
-  ]);
-  if (desktopAccount.isErr()) {
-    return desktopAccount;
-  }
-  if (browserAccountResult.isErr()) {
-    return browserAccountResult;
-  }
-  if (!browserAccountResult.value) {
-    return Result.err(
-      new DesktopAccountConflictError({ message: "desktop_account_conflict" }),
-    );
-  }
-  return await resolveDesktopAccountLink({
-    apiBaseUrl,
-    browserAccount: browserAccountResult.value,
-    desktopAccount: desktopAccount.value,
-    // Mint only after the compatible bridge answers and confirms that no live
-    // account is linked, so retries cannot create unused credentials.
-    mintGrant: async () =>
-      unwrapEden(
-        await api["desktop-registry"].grant.post({}),
-      ) satisfies DesktopRegistryGrant,
-    postLink: async (body) =>
-      await retryAmbiguousAccountLink(body, postAccountLinkOnce),
-    revoke: async (key) => await revokeDesktopCredential({ apiBaseUrl, key }),
-  });
-};
-
-type RevokeDesktopCredentialOptions = {
-  apiBaseUrl: string;
-  key: string;
-};
-
-// Transport failures are returned, not thrown: the caller pairs them with the
-// link failure that made cleanup necessary. A 401 means the credential is
-// already unusable, which is the outcome cleanup wants.
-export const revokeDesktopCredential = async ({
-  apiBaseUrl,
-  key,
-}: RevokeDesktopCredentialOptions): Promise<Result<void, unknown>> => {
-  const fetched = await Result.tryPromise({
-    try: async () =>
-      await fetchWithTimeout(`${apiBaseUrl}/v1/desktop-registry/request`, {
-        body: JSON.stringify({ type: "revoke" }),
-        headers: {
-          Authorization: `Bearer ${key}`,
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-        timeoutMs: 10_000,
-      }),
-    catch: (cause) => cause,
-  });
-  if (fetched.isErr()) {
-    return fetched;
-  }
-  const response = fetched.value;
-  if (!response.ok && response.status !== 401) {
-    return Result.err(
-      new FetchBoundaryError({
-        message: "Desktop account credential cleanup failed",
-        status: response.status,
-        statusText: response.statusText,
-        url: response.url,
-      }),
-    );
-  }
-  return Result.ok(undefined);
-};
-
-const openFileViaBridge = async ({
-  apiBaseUrl,
-  entityId,
-  force,
-  linkedAccount,
-  propertyId,
-  workspaceId,
-}: OpenFileInDesktopInput) => {
-  const remoteSession = await openRemoteDesktopSession({
-    force,
-    entityId,
-    propertyId,
-    workspaceId,
-  });
-
-  let response: Response;
-
-  try {
-    response = await fetchWithTimeout(
-      `${DESKTOP_BRIDGE_URL}/v1/open-file`,
-      loopback({
-        body: JSON.stringify({
-          apiBaseUrl,
-          entityId,
-          linkedAccount,
-          propertyId,
-          remoteSession,
-          workspaceId,
-        }),
-        headers: {
-          "Content-Type": "application/json",
-        },
-        method: "POST",
-        timeoutMs: 10_000,
-      }),
-    );
-  } catch {
-    return await rethrowAfterBridgeCompatibilityCheck(
-      new DesktopBridgeUnavailableError(),
-    );
-  }
-
-  if (!response.ok) {
-    const payload = await parseBridgeResponse(response);
-    if (payload?.message) {
-      return await rethrowAfterBridgeCompatibilityCheck(
-        new FetchBoundaryError({
-          url: `${DESKTOP_BRIDGE_URL}/v1/open-file`,
-          status: response.status,
-          statusText: response.statusText,
-          message: payload.message,
+  return await Result.tryPromise({
+    try: async () => {
+      const browserAccount = await getFreshLinkedAccount();
+      if (!browserAccount) {
+        throw new DesktopAccountConflictError({
+          message: "desktop_account_conflict",
+        });
+      }
+      const grant = unwrapEden(
+        await api["desktop-registry"].grant.post({
+          correlationId: challenge.correlationId,
+          verifierHash: challenge.verifierHash,
         }),
       );
-    }
-
-    return await rethrowAfterBridgeCompatibilityCheck(
-      new DesktopBridgeUnavailableError(),
-    );
-  }
-
-  return { type: "opened" } satisfies OpenFileInDesktopResult;
-};
-
-const rethrowAfterBridgeCompatibilityCheck = async (
-  error: unknown,
-): Promise<never> => {
-  const health = await readBridgeHealth(500);
-  if (health) {
-    assertCompatibleDesktopBridge(health);
-  }
-
-  throw error;
-};
-
-export const openFileInDesktop = async ({
-  apiBaseUrl,
-  entityId,
-  force,
-  linkedAccount,
-  propertyId,
-  workspaceId,
-}: OpenFileInDesktopInput) => {
-  const bridgeHealth = await readBridgeHealth(500);
-  if (bridgeHealth) {
-    assertCompatibleDesktopBridge(bridgeHealth);
-
-    return await openFileViaBridge({
-      apiBaseUrl,
-      entityId,
-      linkedAccount,
-      propertyId,
-      workspaceId,
-      ...(force && { force }),
-    });
-  }
-
-  const awakenedBridgeHealth = await wakeDesktopAndReadBridgeHealth();
-  if (awakenedBridgeHealth) {
-    assertCompatibleDesktopBridge(awakenedBridgeHealth, {
-      signalUpdateCheck: false,
-    });
-
-    return await openFileViaBridge({
-      apiBaseUrl,
-      entityId,
-      linkedAccount,
-      propertyId,
-      workspaceId,
-      ...(force && { force }),
-    });
-  }
-
-  const handoff = await createDesktopEditHandoff({
-    apiBaseUrl,
-    entityId,
-    linkedAccount,
-    propertyId,
-    workspaceId,
-    ...(force && { force }),
+      const matched = resolveDesktopAccountLink({
+        browserAccount,
+        linkedIdentity: grant,
+      });
+      if (matched.isErr()) {
+        throw matched.error;
+      }
+      const params = new URLSearchParams({
+        correlationId: challenge.correlationId,
+        userId: grant.userId,
+        organizationId: grant.organizationId,
+      });
+      window.location.href = `stella://account/complete?${params.toString()}`;
+      const deadline = Math.min(
+        challenge.expiresAt,
+        new Date(grant.expiresAt).getTime(),
+      );
+      while (Temporal.Now.instant().epochMilliseconds < deadline) {
+        const connection = await readDesktopConnection(
+          challenge.correlationId,
+          challenge.portSecret,
+        );
+        if (connection.isOk()) {
+          const status = connection.value;
+          switch (status) {
+            case "connected":
+              return {
+                status: "connected",
+                email: matched.value,
+              } as const satisfies DesktopLinkOutcome;
+            case "failed":
+              throw new DesktopBridgeUnavailableError();
+            case "pending":
+              break;
+            default:
+              status satisfies never;
+              return panic("Unknown desktop connection status");
+          }
+        }
+        if (
+          connection.isErr() &&
+          !(connection.error instanceof DesktopBridgeUnavailableError)
+        ) {
+          throw connection.error;
+        }
+        await wait(DESKTOP_HANDOFF_POLL_INTERVAL_MS);
+      }
+      throw new DesktopBridgeUnavailableError();
+    },
+    catch: (cause) => cause,
   });
+};
+
+export const openFileInDesktop = async (input: OpenFileInDesktopInput) => {
+  const handoff = await createDesktopEditHandoff(input);
   launchDesktopEditHandoff(handoff.deepLinkUrl);
   return {
     type: "handoff-pending",
     waitUntilOpened: waitForDesktopEditHandoffOpened({
       expiresAt: handoff.expiresAt,
       handoffId: handoff.handoffId,
-      workspaceId,
-    }).catch(rethrowAfterBridgeCompatibilityCheck),
+      workspaceId: input.workspaceId,
+    }),
   } satisfies OpenFileInDesktopResult;
 };

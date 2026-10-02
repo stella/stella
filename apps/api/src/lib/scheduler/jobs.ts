@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/scheduler/registry";
 import { computeNextRunAt } from "@/api/lib/scheduler/schedule";
 import { SWEEP_ACTION_COSTS_TASK } from "@/api/lib/scheduler/tasks/action-cost-retention";
+import { BACKFILL_AGENT_CLIENT_STORAGE_TASK } from "@/api/lib/scheduler/tasks/agent-client-storage-backfill";
 import { RECONCILE_BILINGUAL_RUNS_TASK } from "@/api/lib/scheduler/tasks/bilingual-run-reconcile";
 import { RECONCILE_BUFFER_INTENTS_TASK } from "@/api/lib/scheduler/tasks/buffer-intent-reconciliation";
 import { REFRESH_CASE_LAW_BROWSE_FACETS_TASK } from "@/api/lib/scheduler/tasks/case-law-browse-facet-refresh";
@@ -296,6 +297,16 @@ export const DECLARED_SCHEDULER_JOBS = [
     mode: "oneShot",
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_CASE_LAW_REDACTION_TOMBSTONES_TASK,
+  },
+  {
+    description: "Move stored agent client values to the shared envelope",
+    enabled: env.AGENT_CLIENT_STORAGE_V1_ENABLED,
+    id: "agentClients.backfillStorage.minutely",
+    mode: "recurring",
+    payloadUpdate: "preserve",
+    payload: { paused: false, completed: false },
+    schedule: { type: "interval", everyMs: 60 * 1000 },
+    task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
   },
   {
     description:

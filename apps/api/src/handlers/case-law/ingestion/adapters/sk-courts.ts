@@ -46,6 +46,7 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import { createPagePaginatedFetch } from "@/api/handlers/case-law/ingestion/adapters/pagination";
+import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { createSkCollectionConnector } from "@/api/handlers/case-law/ingestion/adapters/sk-collections";
@@ -64,7 +65,6 @@ import {
   INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
-  isArrayOf,
   isNullishArrayOf,
   isNullishNumber,
   isNullishString,
@@ -269,9 +269,10 @@ type SkDetailItem = SkApiItem & {
   povodnaSpisovaZnacka?: string | null;
 };
 
+/** Validate the envelope independently so a malformed member cannot pin a page. */
 type SkApiResponse = {
-  rozhodnutieList?: SkApiItem[] | null;
-  numFound?: number | null;
+  rozhodnutieList: unknown[];
+  numFound: number;
 };
 
 const isStringArray = (value: unknown): value is string[] =>
@@ -345,8 +346,10 @@ const isSkDetailItem = (value: unknown): value is SkDetailItem => {
 
 const isSkApiResponse = (value: unknown): value is SkApiResponse =>
   isRecord(value) &&
-  isNullishArrayOf(value["rozhodnutieList"], isSkApiItem) &&
-  isNullishNumber(value["numFound"]);
+  Array.isArray(value["rozhodnutieList"]) &&
+  typeof value["numFound"] === "number" &&
+  Number.isSafeInteger(value["numFound"]) &&
+  value["numFound"] >= 0;
 
 /** Parse Slovak date "DD.MM.YYYY" to ISO "YYYY-MM-DD". */
 const parseSkDate = (raw: string | null | undefined): string | undefined => {
@@ -389,7 +392,7 @@ const fetchDetail = async (
   }
 
   const json: unknown = await response.json();
-  if (!isSkDetailItem(json)) {
+  if (!isSkDetailItem(json) || Object.keys(json).length === 0) {
     return null;
   }
   return json;
@@ -781,22 +784,32 @@ export const buildSkCourtsDecision = async (
     : { type: "built", decision };
 };
 
+type SkCourtsParsedItem =
+  | { type: "decision"; decision: IngestionResult }
+  | { type: "item_build_failed"; decision: IngestionResult | null };
+
 const parseItemWithDetail = async (
   raw: unknown,
   options: SkCourtsBuildOptions = {},
-): Promise<IngestionResult | null> => {
+): Promise<SkCourtsParsedItem> => {
   if (!isSkApiItem(raw)) {
-    return null;
+    logger.warn("case_law.ingestion.item_build_failed", {
+      adapterKey: ADAPTER_KEYS.SK_COURTS,
+      identity: JSON.stringify(skCourtsListingIdentity(raw)),
+      reason: "Invalid listing member",
+    });
+    return { type: "item_build_failed", decision: null };
   }
   const built = await buildSkCourtsDecision(raw, options);
   switch (built.type) {
     case "unkeyable":
-      return null;
+      return { type: "item_build_failed", decision: null };
     // The page has to keep moving, and the listing observation is still worth
     // storing; the reconciliation refuses the same row, see `buildDecision`.
     case "detail-unavailable":
+      return { type: "item_build_failed", decision: built.decision };
     case "built":
-      return built.decision;
+      return { type: "decision", decision: built.decision };
     default: {
       built satisfies never;
       return panic(
@@ -918,28 +931,6 @@ const skCourtsDaySlices = createCalendarDaySliceWalk({
 });
 
 /**
- * The envelope a slice walk reads.
- *
- * Both fields are required, unlike {@link isSkApiResponse}, whose optionality
- * exists so the crawl can shrug off a page: an envelope that states a count
- * but no list would otherwise read as a date holding nothing, which is the one
- * answer a ledger row must never be written from. The items themselves stay
- * unknown, because the opposite mistake is just as bad — requiring every item
- * to validate would let one malformed row make a date permanently unwalkable —
- * so they are validated one at a time by the identity rule, exactly as the
- * crawl validates them.
- */
-type SkSliceResponse = {
-  rozhodnutieList: Record<string, unknown>[];
-  numFound: number;
-};
-
-const isSkSliceResponse = (value: unknown): value is SkSliceResponse =>
-  isRecord(value) &&
-  isArrayOf(value["rozhodnutieList"], isRecord) &&
-  typeof value["numFound"] === "number";
-
-/**
  * One page of the publisher's own listing for a decision date.
  *
  * A failed request is thrown, never flattened into an empty page. The crawl
@@ -959,7 +950,7 @@ type ListDayPageOptions = {
 
 /** What one page of a day's listing states: its rows, and the day's size. */
 type ListedDayPage = {
-  listed: Record<string, unknown>[];
+  listed: unknown[];
   total: number;
 };
 
@@ -1018,7 +1009,7 @@ const listSkCourtsDayPage = async ({
   }
 
   const json: unknown = await response.json();
-  if (!isSkSliceResponse(json)) {
+  if (!isSkApiResponse(json)) {
     throw new AdapterFetchError({
       message:
         "SK courts listing API stated no count and item list for the slice",
@@ -1243,13 +1234,21 @@ const collectFrontierPage = async (
     operation: async (item) =>
       await parseItemWithDetail(item, { signal, readCourt }),
   });
-  const decisions = built.filter(
-    (decision): decision is IngestionResult => decision !== null,
-  );
+  const decisions: IngestionResult[] = [];
+  let failed = 0;
+  for (const item of built) {
+    if (item.type === "item_build_failed") {
+      failed++;
+    }
+    if (item.decision !== null) {
+      decisions.push(item.decision);
+    }
+  }
 
   const nextPage = frontier.page + 1;
   return Result.ok({
     decisions,
+    itemBuildFailures: { type: "item_build_failed", count: failed },
     nextCursor:
       nextPage * PAGE_SIZE < total
         ? encodeFrontierCursor({
@@ -1821,9 +1820,23 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
     ],
 
     parseResponse: async (response) => {
-      const json: unknown = await response.json();
+      const validatedPage = validatePublisherPage({
+        adapterKey: ADAPTER_KEYS.SK_COURTS,
+        cursor: null,
+        headers: response.headers,
+        body: await response.text(),
+        expectation: {
+          kind: "json",
+          minBytes: 2,
+          shape: isSkApiResponse,
+        },
+      });
+      if (validatedPage.isErr()) {
+        throw validatedPage.error;
+      }
+      const json = validatedPage.value;
       if (!isSkApiResponse(json)) {
-        return Result.ok({});
+        return panic("Validated Slovak court listing has an invalid envelope");
       }
       const courtIds = new Set(
         arrayOrEmpty(json.rozhodnutieList).flatMap((item) => {
@@ -1852,8 +1865,6 @@ const createBackfillPage = (readCourt: SkCourtRegistryReader) =>
       total: toOptionalValue(data.numFound),
     }),
 
-    parseItem: async (item, signal) => {
-      const decision = await parseItemWithDetail(item, { signal, readCourt });
-      return decision === null ? null : { type: "decision", decision };
-    },
+    parseItem: async (item, signal) =>
+      await parseItemWithDetail(item, { signal, readCourt }),
   });
