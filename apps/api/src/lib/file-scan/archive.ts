@@ -280,13 +280,15 @@ const scanStream = async ({
     : INSPECTED;
 };
 
-async function* sliced(data: Uint8Array): AsyncGenerator<Buffer> {
+function* sliced(data: Uint8Array): Generator<Buffer> {
   for (let at = 0; at < data.length; at += INFLATE_INPUT_BYTES) {
     yield Buffer.from(data.subarray(at, at + INFLATE_INPUT_BYTES));
   }
 }
 
-const entryContent = (entry: ZipEntry): AsyncIterable<Uint8Array> =>
+const entryContent = (
+  entry: ZipEntry,
+): AsyncIterable<Uint8Array> | Iterable<Uint8Array> =>
   entry.method === STORED
     ? sliced(entry.data)
     : Readable.from(sliced(entry.data)).pipe(createInflateRaw());
