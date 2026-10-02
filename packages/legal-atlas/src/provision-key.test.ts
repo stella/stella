@@ -68,7 +68,9 @@ describe("provision identity construction", () => {
             reference: ref,
           });
           expect(constructed.status).toBe("resolved");
-          if (constructed.status !== "resolved") {return;}
+          if (constructed.status !== "resolved") {
+            return;
+          }
           const { provision } = constructed;
           expect(provision.reference).toEqual(ref);
           expect(provision.anchor).toBe(parsed.at(0)?.anchor);
@@ -194,7 +196,9 @@ describe("provision identity construction", () => {
       }),
     ).toEqual({ status: "invalid_work_identifier" });
     for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
-      if (jurisdiction === "CZE") {continue;}
+      if (jurisdiction === "CZE") {
+        continue;
+      }
       expect(
         provisionRefOf({
           jurisdiction,
