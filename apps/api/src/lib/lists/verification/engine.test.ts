@@ -121,6 +121,42 @@ describe("locateQuote", () => {
 });
 
 describe("extractClaims", () => {
+  test("repeated statements with equivalent whitespace keep distinct anchors", async () => {
+    const text = "paid on time; paid\ton time again";
+    const raw = {
+      blockId: "b1",
+      quote: "paid on time",
+      type: "fact",
+      framing: "asserted",
+    } as const;
+    answers.push({ claims: [raw, raw] });
+    const result = await extractClaims({
+      blocks: [
+        { id: "b1", text, source: { type: "docx-block", blockId: "b1" } },
+      ],
+      deps,
+    });
+    expect(Result.isOk(result)).toBe(true);
+    expect(
+      Result.isOk(result)
+        ? result.value.map((claim) => ({
+            text: claim.text,
+            anchor: claim.anchor,
+          }))
+        : null,
+    ).toEqual([
+      {
+        text: "paid on time",
+        anchor: { type: "docx-block", blockId: "b1", start: 0, end: 12 },
+      },
+      {
+        text: "paid\ton time",
+        anchor: { type: "docx-block", blockId: "b1", start: 14, end: 26 },
+      },
+    ]);
+    expect(captured).toHaveLength(1);
+  });
+
   test("anchors claims to block offsets and repairs a misquote once", async () => {
     answers.push(
       {
