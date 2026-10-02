@@ -3763,6 +3763,96 @@ const allowanceKey = ({
 }: Pick<RatchetAllowance, "metric" | "file">) =>
   JSON.stringify([metric, file ?? null]);
 
+const ALLOWANCE_FILENAME =
+  /^scripts\/ratchet-allowances\/[a-z0-9]+(?:-[a-z0-9]+)*\.json$/u;
+const ALLOWANCE_KEYS: ReadonlySet<string> = new Set([
+  "metric",
+  "file",
+  "delta",
+  "reason",
+]);
+
+type AllowanceFields = {
+  metric: string;
+  file?: unknown;
+  delta: number;
+  reason: string;
+};
+
+const hasAllowanceFields = (value: unknown): value is AllowanceFields =>
+  isRecord(value) &&
+  Object.keys(value).every((key) => ALLOWANCE_KEYS.has(key)) &&
+  typeof value["metric"] === "string" &&
+  typeof value["delta"] === "number" &&
+  Number.isSafeInteger(value["delta"]) &&
+  value["delta"] > 0 &&
+  typeof value["reason"] === "string" &&
+  value["reason"].trim().length > 0;
+
+const isRepositoryPath = (file: unknown): file is string =>
+  typeof file === "string" &&
+  file.length > 0 &&
+  !file.includes("\\") &&
+  !file.startsWith("/") &&
+  !file.split("/").some((part) => part === ".." || part === "." || part === "");
+
+type AllowanceParse =
+  | { type: "valid"; allowance: RatchetAllowance }
+  | { type: "invalid"; message: string };
+
+/** Validates one committed allowance file at HEAD. */
+const parseAllowance = (filename: string): AllowanceParse => {
+  const parsed = Result.try((): unknown =>
+    JSON.parse(readGit(["show", `HEAD:${filename}`])),
+  );
+  if (parsed.isErr()) {
+    return {
+      type: "invalid",
+      message: `${filename}: allowance must be valid JSON`,
+    };
+  }
+  const value = parsed.value;
+  if (!ALLOWANCE_FILENAME.test(filename) || !hasAllowanceFields(value)) {
+    return {
+      type: "invalid",
+      message: `${filename}: expected a slug.json allowance with metric, positive integer delta, non-empty reason, optional file, and no unknown keys`,
+    };
+  }
+  const metric = RATCHET_METRICS.find(({ id }) => id === value.metric);
+  if (metric === undefined) {
+    const reportOnly = REPORT_ONLY_METRICS.some(
+      ({ id }) => id === value.metric,
+    );
+    return {
+      type: "invalid",
+      message: `${filename}: ${reportOnly ? "report-only metric takes no allowances" : "unknown metric"} ${value.metric}`,
+    };
+  }
+  const perFile = metricGate(metric).perFile === true;
+  const { file } = value;
+  if (perFile && !isRepositoryPath(file)) {
+    return {
+      type: "invalid",
+      message: `${filename}: ${metric.id} requires file as a repository path`,
+    };
+  }
+  if (!perFile && Object.hasOwn(value, "file")) {
+    return {
+      type: "invalid",
+      message: `${filename}: ${metric.id} forbids file (metric gates the total)`,
+    };
+  }
+  return {
+    type: "valid",
+    allowance: {
+      metric: metric.id,
+      ...(typeof file === "string" ? { file } : {}),
+      delta: value.delta,
+      reason: value.reason,
+    },
+  };
+};
+
 // Presence in the measured base makes an allowance inert, even if HEAD edits
 // its contents. Read committed HEAD files so funding has the same Git boundary.
 const checkAllowances = (
@@ -3788,68 +3878,12 @@ const checkAllowances = (
     if (inherited.has(filename)) {
       continue;
     }
-    const parsed = Result.try((): unknown =>
-      JSON.parse(readGit(["show", `HEAD:${filename}`])),
-    );
-    if (parsed.isErr()) {
-      errors.push(`${filename}: allowance must be valid JSON`);
+    const parsed = parseAllowance(filename);
+    if (parsed.type === "invalid") {
+      errors.push(parsed.message);
       continue;
     }
-    const value = parsed.value;
-    if (
-      !/^scripts\/ratchet-allowances\/[a-z0-9]+(?:-[a-z0-9]+)*\.json$/u.test(
-        filename,
-      ) ||
-      !isRecord(value) ||
-      Object.keys(value).some(
-        (key) => !["metric", "file", "delta", "reason"].includes(key),
-      ) ||
-      typeof value["metric"] !== "string" ||
-      typeof value["delta"] !== "number" ||
-      !Number.isSafeInteger(value["delta"]) ||
-      value["delta"] <= 0 ||
-      typeof value["reason"] !== "string" ||
-      value["reason"].trim().length === 0
-    ) {
-      errors.push(
-        `${filename}: expected a slug.json allowance with metric, positive integer delta, non-empty reason, optional file, and no unknown keys`,
-      );
-      continue;
-    }
-    const metric = RATCHET_METRICS.find(({ id }) => id === value["metric"]);
-    if (metric === undefined) {
-      const reportOnly = REPORT_ONLY_METRICS.some(
-        ({ id }) => id === value["metric"],
-      );
-      errors.push(
-        `${filename}: ${reportOnly ? "report-only metric takes no allowances" : "unknown metric"} ${value["metric"]}`,
-      );
-      continue;
-    }
-    const perFile = metricGate(metric).perFile === true;
-    const file = value["file"];
-    if (
-      (perFile &&
-        (typeof file !== "string" ||
-          file.length === 0 ||
-          file.includes("\\") ||
-          file.startsWith("/") ||
-          file
-            .split("/")
-            .some((part) => part === ".." || part === "." || part === ""))) ||
-      (!perFile && Object.hasOwn(value, "file"))
-    ) {
-      errors.push(
-        `${filename}: ${metric.id} ${perFile ? "requires file as a repository path" : "forbids file (metric gates the total)"}`,
-      );
-      continue;
-    }
-    const allowance = {
-      metric: metric.id,
-      ...(typeof file === "string" ? { file } : {}),
-      delta: value["delta"],
-      reason: value["reason"],
-    } satisfies RatchetAllowance;
+    const { allowance } = parsed;
     const key = allowanceKey(allowance);
     const previous = funding.get(key);
     if (previous === undefined) {
