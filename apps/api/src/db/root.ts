@@ -4,7 +4,7 @@ import { drizzle } from "drizzle-orm/bun-sql";
 import { databaseRelations } from "@/api/db/database-relations";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
-import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-timeouts";
+import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
 import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";

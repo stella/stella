@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Resumo",
+      "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",
       "citedBy": "Citado por",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
@@ -2175,6 +2176,7 @@
       "forbidden": "Você não tem permissão para fazer isso.",
       "notFound": "Não encontramos o que você solicitou.",
       "payloadTooLarge": "A solicitação é grande demais.",
+      "publicCountryUnavailable": "A legislação e a jurisprudência deste país não estão disponíveis. Escolha outro país.",
       "rateLimited": "Muitas solicitações. Tente novamente mais tarde.",
       "server": "Algo deu errado. Tente novamente.",
       "serviceUnavailable": "O serviço está temporariamente indisponível. Tente novamente.",

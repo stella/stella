@@ -26,6 +26,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
@@ -130,6 +131,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
+  "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
   "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
@@ -141,6 +143,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/concurrency/src/**/*.ts",
   "packages/conditions/src/**/*.ts",
   "packages/country-codes/src/**/*.ts",
+  "packages/db-load-gate/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -160,6 +163,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Better Auth invokes these hooks and consumes rejected APIError values.
+  "apps/api/src/lib/auth/demo-account-hooks.ts",
+
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
   "apps/api/src/handlers/**/*route.ts",

@@ -7,7 +7,7 @@ import {
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
 import { env } from "@/api/env";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
   getMcpProtectedResourceMetadataUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,

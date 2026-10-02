@@ -63,6 +63,13 @@ export type OnlineMigrationPool = {
 /** Whether a repair's postcondition already holds, and why it does not. */
 export type OnlineRepairCompletion =
   | { cause?: unknown; reason: string; type: "incomplete" }
+  | {
+      type: "pending";
+      reason: string;
+      cursor: string | null;
+      holdUntil: number | null;
+      heldSince: number | null;
+    }
   | { type: "complete" };
 
 /**
@@ -76,8 +83,9 @@ export type OnlineRepairCompletion =
  *
  * `readCompletion` never repairs. The phase reads it before the repair, and
  * runs no walk when the postcondition already holds, so the fixed point costs
- * one read rather than a pass over the table; it is also what the phase and
- * the API's startup gate refuse on, so skipping and asserting cannot drift.
+ * one read rather than a pass over the table. A durable pending backfill is
+ * resumable and may pass deploy/startup; an unattempted incomplete repair
+ * still refuses those gates.
  */
 export type OnlineRepair = {
   name: string;

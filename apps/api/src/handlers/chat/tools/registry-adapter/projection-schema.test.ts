@@ -9,6 +9,11 @@ import {
 } from "bun:test";
 import * as v from "valibot";
 
+import {
+  PUBLIC_COUNTRIES,
+  publicCountryUnavailable,
+} from "@stll/api-contract/public-country-capability";
+
 import { type SafeId, toSafeId } from "@/api/lib/branded-types";
 import type { PersistedJsonValue } from "@/api/lib/chat/persisted-message-content";
 import {
@@ -598,6 +603,23 @@ describe("projectForChat", () => {
         if (entry.chatProjectable) {
           expect(() => deriveRefMediationEntry(entry.projection)).not.toThrow();
         }
+      }
+    }
+  });
+
+  test("public law projections preserve every unavailable country response", () => {
+    const projections = [
+      READ_TOOL_REF_FIELD_MAP.search_case_law.projection,
+      READ_TOOL_REF_FIELD_MAP.lookup_case_law.projection,
+      READ_TOOL_REF_FIELD_MAP.search_legislation.projection,
+    ];
+    for (const country of PUBLIC_COUNTRIES) {
+      const payload = publicCountryUnavailable(country);
+      if (payload === null) {
+        continue;
+      }
+      for (const schema of projections) {
+        expect(project({ schema, payload }).unwrap()).toEqual(payload);
       }
     }
   });
