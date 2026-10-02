@@ -1,8 +1,12 @@
-import { panic, Result } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 
 import { loadAnonymizationAllowlistCanonicalsByWorkspace } from "@/api/lib/anonymization-allowlist";
 import { loadAnonymizationGazetteerEntriesByWorkspace } from "@/api/lib/anonymization-blacklist";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+import { emitAnonymizationRefusalMetric } from "@/api/lib/observability/request-metrics";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
+import type { AnonymizedTextFields } from "@/api/mcp/anonymization-core";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
@@ -90,7 +94,11 @@ export async function finalizeToolEgress(
     return response;
   }
 
-  const anonymizer = { anonymize, loadAllowlist, loadGazetteer };
+  const anonymizer = {
+    anonymize: countingRefusals(anonymize),
+    loadAllowlist,
+    loadGazetteer,
+  };
 
   if (response.egress === "compatSearch") {
     return await finalizeCompatSearch({
@@ -118,8 +126,64 @@ export async function finalizeToolEgress(
   });
 }
 
+const EGRESS_ANONYMIZER_FAILED_SINK = failureSink({
+  event: "mcp.egress.anonymizer_failed",
+  expected: [],
+});
+
+/** The anonymizer itself failed: nothing of the payload was anonymized. */
+class EgressAnonymizerFailedError extends TaggedError(
+  "EgressAnonymizerFailedError",
+)<{ cause: unknown; message: string }> {}
+
+/** Why a payload's anonymization did not complete. */
+type EgressAnonymizationError =
+  | AnonymizedFieldBoundaryError
+  | EgressAnonymizerFailedError;
+
+type EgressAnonymize = (
+  input: Parameters<typeof anonymizeTextFields>[0],
+) => Promise<Result<AnonymizedTextFields, EgressAnonymizationError>>;
+
+/**
+ * The anonymizer every egress variant calls, failing closed and counting each
+ * call that fails: one that throws (`pipeline_error`) and one whose field
+ * structure did not survive (`field_boundary`). Either way the caller returns
+ * the anonymization-failed envelope, so without this an anonymized tool that
+ * can no longer anonymize is indistinguishable from any other failing tool.
+ * Wrapped once at the entry, so no variant reaches the anonymizer uncounted.
+ */
+const countingRefusals =
+  (anonymize: typeof anonymizeTextFields): EgressAnonymize =>
+  async (input) => {
+    const called = await Result.tryPromise({
+      try: async () => await anonymize(input),
+      catch: (cause) =>
+        new EgressAnonymizerFailedError({
+          cause,
+          message: "The anonymizer failed",
+        }),
+    });
+    if (Result.isError(called)) {
+      // The real failure stays observable; the caller only sees the envelope.
+      observeFailure(called.error, { sink: EGRESS_ANONYMIZER_FAILED_SINK });
+      emitAnonymizationRefusalMetric({
+        reason: "pipeline_error",
+        site: "mcp_egress",
+      });
+      return Result.err(called.error);
+    }
+    if (Result.isError(called.value)) {
+      emitAnonymizationRefusalMetric({
+        reason: "field_boundary",
+        site: "mcp_egress",
+      });
+    }
+    return called.value;
+  };
+
 type EgressAnonymizer = {
-  anonymize: typeof anonymizeTextFields;
+  anonymize: EgressAnonymize;
   loadAllowlist: typeof loadAnonymizationAllowlistCanonicalsByWorkspace;
   loadGazetteer: typeof loadAnonymizationGazetteerEntriesByWorkspace;
 };
@@ -161,7 +225,7 @@ const anonymizeTextFieldsByWorkspace = async ({
   anonymizer: EgressAnonymizer;
   context: McpRequestContext;
   fields: readonly McpStructuredTextField[];
-}): Promise<Result<void, AnonymizedFieldBoundaryError>> => {
+}): Promise<Result<void, EgressAnonymizationError>> => {
   if (fields.length === 0) {
     return Result.ok(undefined);
   }
@@ -443,7 +507,7 @@ const anonymizeCompatFetchPayload = async ({
   title,
   workspaceId,
 }: {
-  anonymize: typeof anonymizeTextFields;
+  anonymize: EgressAnonymize;
   context: McpRequestContext;
   text: string;
   title: string;
