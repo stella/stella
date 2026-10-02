@@ -34,7 +34,13 @@ export const tPublicCountryUnavailable = t.Object(
   {
     code: t.Literal(unavailableFields.code.literal),
     status: t.Literal(unavailableFields.status.literal),
-    country: t.UnionEnum(unavailableFields.country.options),
+    country: t.Enum(
+      Object.fromEntries(
+        unavailableFields.country.options.map(
+          (country) => [country, country] as const,
+        ),
+      ),
+    ),
     reason: t.UnionEnum(unavailableFields.reason.options),
     message: t.String(),
     hint: t.String(),
