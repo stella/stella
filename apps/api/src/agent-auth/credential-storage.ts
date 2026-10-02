@@ -15,6 +15,7 @@ import {
 } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { logger } from "@/api/lib/observability/logger";
 import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 type CredentialDb = Pick<SchedulerDb, "select" | "update">;
@@ -106,11 +107,22 @@ export const readStoredAgentClientCredential = async (
           message: "Agent credential changed during exchange",
         });
       if (!loaded.value) {
-        return Result.err(changed());
+        return Result.err(
+          new HandlerError({
+            status: 503,
+            message: "Could not read agent credentials",
+          }),
+        );
+      }
+      if (loaded.value.clientSecretSink === registration.clientSecretSink) {
+        logger.warn("agent.credentials.upgrade_deferred", {
+          "migration.deferred_count": 1,
+        });
+        return Result.ok(undefined);
       }
       const current = await readAgentClientCredential({
         storedCredential: loaded.value.clientSecretSink,
-        upgrade: async () => Result.err(changed()),
+        upgrade: async () => Result.ok(undefined),
       });
       if (Result.isError(current)) {
         return Result.err(current.error);

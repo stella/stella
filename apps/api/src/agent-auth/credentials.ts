@@ -83,12 +83,25 @@ export const readAgentClientCredential = async ({
     logger.info("agent.credentials.legacy_read", { "migration.read_count": 1 });
     if (env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
       const envelope = await encryptAgentClientCredential(storedCredential);
-      if (Result.isError(envelope)) {
-        return Result.err(envelope.error);
-      }
-      const updated = await upgrade(envelope.value);
+      const attempt = Result.isError(envelope)
+        ? Result.err(envelope.error)
+        : await Result.tryPromise({
+            try: async () => await upgrade(envelope.value),
+            catch: () =>
+              new HandlerError({
+                status: 503,
+                message: "Could not update agent credentials",
+              }),
+          });
+      const updated = Result.isError(attempt)
+        ? Result.err(attempt.error)
+        : attempt.value;
       if (Result.isError(updated)) {
-        return Result.err(updated.error);
+        // Only a confirmed different value invalidates the current exchange.
+        if (updated.error.status === 409) {return Result.err(updated.error);}
+        logger.warn("agent.credentials.upgrade_deferred", {
+          "migration.deferred_count": 1,
+        });
       }
     }
     return Result.ok(storedCredential);

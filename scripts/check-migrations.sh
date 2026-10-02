@@ -121,6 +121,9 @@ schema_file_has_migration_relevant_diff() {
           if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) {
             return undefined;
           }
+          if (ts.isImportSpecifier(node) && node.isTypeOnly) {
+            return undefined;
+          }
           if (
             ts.isCallExpression(node) &&
             node.arguments.length === 0 &&

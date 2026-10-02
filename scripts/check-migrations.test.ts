@@ -111,4 +111,29 @@ describe("migration source comparison", () => {
       ),
     ).toEqual([1, 0]);
   });
+
+  test("ignores type-only named import changes while retaining value imports", () => {
+    const source =
+      `import { text, type Brand } from "drizzle-orm/pg-core";\n${  baseSource}`;
+    expect(
+      compareSources(
+        [
+          `import { text, type OtherBrand } from "drizzle-orm/pg-core";\n${ 
+            baseSource}`,
+          `import { text, type Brand as OtherBrand } from "drizzle-orm/pg-core";\n${ 
+            baseSource}`,
+          `import { text } from "drizzle-orm/pg-core";\n${  baseSource}`,
+          `import { type Brand, text, type OtherBrand } from "drizzle-orm/pg-core";\n${ 
+            baseSource}`,
+          `import { text, Brand } from "drizzle-orm/pg-core";\n${  baseSource}`,
+          `import { varchar, type Brand } from "drizzle-orm/pg-core";\n${ 
+            baseSource}`,
+          `import { text as otherText, type Brand } from "drizzle-orm/pg-core";\n${ 
+            baseSource}`,
+          `import { text, type Brand } from "other-module";\n${  baseSource}`,
+        ],
+        source,
+      ),
+    ).toEqual([1, 1, 1, 1, 0, 0, 0, 0]);
+  });
 });

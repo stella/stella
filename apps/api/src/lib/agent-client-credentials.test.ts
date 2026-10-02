@@ -139,7 +139,7 @@ describe("stored agent credential reads", () => {
     expect(errors).not.toContain(storedCredential);
   });
 
-  test("requires a configured key before storing or upgrading a credential", async () => {
+  test("requires a configured key for writes while preserving existing reads", async () => {
     const child = Bun.spawn({
       cmd: [
         process.execPath,
@@ -159,7 +159,7 @@ describe("stored agent credential reads", () => {
           });
           const refused = (result) => Result.isError(result) && result.error instanceof HandlerError &&
             result.error.message === "Could not secure agent credentials";
-          if (refused(write) && refused(read) && upgrades === 0) {
+          if (refused(write) && Result.isOk(read) && read.value === credential && upgrades === 0) {
             process.stdout.write("credential storage refused");
           } else {
             process.exitCode = 1;
@@ -186,10 +186,45 @@ describe("stored agent credential reads", () => {
     expect(errors).not.toContain(credential);
   });
 
-  test("requires the stored-value update to complete", async () => {
+  test("defers unavailable updates without changing the read value", async () => {
     const failure = new HandlerError({
       status: 500,
       message: "Credential update unavailable",
+    });
+    const records: LogRecord[] = [];
+    setLogSinkForTesting((record) => records.push(record));
+    try {
+      for (const upgrade of [
+        async () => Result.err(failure),
+        async () => {
+          throw failure;
+        },
+      ]) {
+        expect(
+          (
+            await readAgentClientCredential({
+              storedCredential: credential,
+              upgrade,
+            })
+          ).unwrap(),
+        ).toBe(credential);
+      }
+      expect(
+        records.filter(
+          ({ message }) => message === "agent.credentials.upgrade_deferred",
+        ),
+      ).toHaveLength(2);
+      expect(JSON.stringify(records)).not.toContain(credential);
+      expect(JSON.stringify(records)).not.toContain(failure.message);
+    } finally {
+      resetLogSinkForTesting();
+    }
+  });
+
+  test("refuses a confirmed different value during an update", async () => {
+    const failure = new HandlerError({
+      status: 409,
+      message: "Agent credential changed during exchange",
     });
     expect(
       await readAgentClientCredential({

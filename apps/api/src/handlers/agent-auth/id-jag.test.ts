@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -7,7 +8,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { exportJWK, generateKeyPair, SignJWT } from "jose";
 import type { CryptoKey, JWK } from "jose";
 import * as v from "valibot";
@@ -35,6 +36,11 @@ import {
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import {
+  resetLogSinkForTesting,
+  setLogSinkForTesting,
+  type LogRecord,
+} from "@/api/lib/observability/logger";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import { createHumanSession as createHumanSessionWithJar } from "@/api/tests/helpers/human-session";
 import {
@@ -481,6 +487,82 @@ describe("agent-auth ID-JAG existing email (step-up, no silent bind)", () => {
 });
 
 describe("agent-auth ID-JAG full exchange", () => {
+  test("completes an exchange when a stored-value update is deferred", async () => {
+    enableFeature();
+    await trustIssuer();
+    for (const mode of ["error", "no_change"] as const) {
+      env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+      const assertion = await mintIdJag({
+        email: `idjag-deferred-${Bun.randomUUIDv7()}@external.test`,
+        sub: `sub-deferred-${Bun.randomUUIDv7()}`,
+      });
+      const identity = await postIdentity(identityAssertionBody(assertion));
+      expect(identity.status).toBe(200);
+      const identityBody = await readJson(identity);
+      const registrationId = String(identityBody["registration_id"]);
+      const beforeRows = await rootDb
+        .select({
+          credential: agentRegistration.clientSecretSink,
+          code: agentRegistration.authorizationCode,
+        })
+        .from(agentRegistration)
+        .where(eq(agentRegistration.id, registrationId));
+      const before =
+        beforeRows.at(0) ?? panic("Registration fixture was not found");
+      expect(before.credential).toMatch(/^[a-f0-9]{64}$/u);
+      expect(before.code).toBeString();
+      const identifier = sql.identifier(
+        `agent_value_${Bun.randomUUIDv7().replaceAll("-", "")}`,
+      );
+      const body =
+        mode === "error"
+          ? sql`RAISE EXCEPTION 'Agent value update unavailable';`
+          : sql`RETURN NULL;`;
+      await rootDb.execute(
+        sql`CREATE FUNCTION ${identifier}() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN ${body} END $$`,
+      );
+      await rootDb.execute(
+        sql`CREATE TRIGGER ${identifier} BEFORE UPDATE OF client_secret_sink ON agent_registration FOR EACH ROW EXECUTE FUNCTION ${identifier}()`,
+      );
+      const records: LogRecord[] = [];
+      setLogSinkForTesting((record) => records.push(record));
+      try {
+        env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+        const token = await postToken({
+          grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
+          assertion: String(identityBody["identity_assertion"]),
+        });
+        expect(token.status).toBe(200);
+        const tokenBody = await readJson(token);
+        expect(tokenBody["access_token"]).toBeString();
+        expect(JSON.stringify(tokenBody)).not.toContain(before.credential);
+        const afterRows = await rootDb
+          .select({
+            credential: agentRegistration.clientSecretSink,
+            code: agentRegistration.authorizationCode,
+          })
+          .from(agentRegistration)
+          .where(eq(agentRegistration.id, registrationId));
+        const after =
+          afterRows.at(0) ?? panic("Registration fixture was not found");
+        expect(after.credential).toBe(before.credential);
+        expect(after.code).toBeNull();
+        expect(
+          records.filter(
+            ({ message }) => message === "agent.credentials.upgrade_deferred",
+          ),
+        ).toHaveLength(1);
+        expect(JSON.stringify(records)).not.toContain(before.credential);
+      } finally {
+        resetLogSinkForTesting();
+        await rootDb.execute(
+          sql`DROP TRIGGER ${identifier} ON agent_registration`,
+        );
+        await rootDb.execute(sql`DROP FUNCTION ${identifier}()`);
+      }
+    }
+  });
+
   test("a clean match exchanges the service assertion for a bound JWT", async () => {
     enableFeature();
     await trustIssuer();
