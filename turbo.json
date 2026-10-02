@@ -177,7 +177,10 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "//#typecheck:repo": {
-      "dependsOn": ["@stll/web#generate:api-types", "@stll/cli#codegen:runtime"],
+      "dependsOn": [
+        "@stll/web#generate:api-types",
+        "@stll/cli#codegen:runtime"
+      ],
       // Root projects can import workspace source. The broad workspace inputs
       // trade some misses for correctness while still sharing exact results
       // and compiler state between linked worktrees and CI runners.
