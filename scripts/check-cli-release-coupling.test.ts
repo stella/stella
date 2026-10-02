@@ -1,16 +1,6 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
-import { spawnSync } from "node:child_process";
-import {
-  copyFileSync,
-  existsSync,
-  mkdirSync,
-  mkdtempSync,
-  readFileSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
-import { tmpdir } from "node:os";
+import { readFileSync } from "node:fs";
 import path from "node:path";
 
 import { propertyConfig } from "@stll/property-testing";
@@ -23,7 +13,6 @@ import {
   compareStableVersions,
   findSurfaceDrift,
   parseGeneratedConstants,
-  readHeadSurface,
   verdictFromClassification,
   type CliContractSurface,
   type PublishedCli,
@@ -379,61 +368,4 @@ describe("release workflows run the gate", () => {
       `bun ${SCRIPT} --base "origin/$BASE_REF"`,
     );
   });
-});
-
-test("release contract reads committed data without installed dependencies or derived runtime outputs", () => {
-  const root = mkdtempSync(
-    path.join(tmpdir(), "stella-cli-release-no-install-"),
-  );
-  try {
-    const directory = path.join(root, "scripts");
-    mkdirSync(directory);
-    for (const file of [
-      "check-cli-release-coupling.ts",
-      "changeset-guard.ts",
-      "changeset-entry.ts",
-    ]) {
-      copyFileSync(
-        path.join(REPO_ROOT, "scripts", file),
-        path.join(directory, file),
-      );
-    }
-    for (const part of Object.keys(CLI_CONTRACT_SURFACE)) {
-      const relativePath = `packages/cli/${part}`;
-      const committed = spawnSync("git", ["show", `HEAD:${relativePath}`], {
-        cwd: REPO_ROOT,
-        encoding: "utf-8",
-        timeout: 10_000,
-        maxBuffer: 32 * 1024 * 1024,
-      });
-      expect(committed.error).toBeUndefined();
-      expect(committed.status, committed.stderr).toBe(0);
-      const file = path.join(root, relativePath);
-      mkdirSync(path.dirname(file), { recursive: true });
-      writeFileSync(file, committed.stdout);
-    }
-    expect(existsSync(path.join(root, "node_modules"))).toBe(false);
-    for (const file of ["route-map.ts", "tool-annotations.ts"]) {
-      expect(
-        existsSync(path.join(root, "packages/cli/src/generated", file)),
-      ).toBe(false);
-    }
-    writeFileSync(
-      path.join(root, "read-surface.ts"),
-      'import { readHeadSurface } from "./scripts/check-cli-release-coupling";\n' +
-        "process.stdout.write(JSON.stringify(readHeadSurface(import.meta.dirname)));\n",
-    );
-    const result = spawnSync(process.execPath, ["read-surface.ts"], {
-      cwd: root,
-      encoding: "utf-8",
-      timeout: 10_000,
-      maxBuffer: 32 * 1024 * 1024,
-    });
-    expect(result.error).toBeUndefined();
-    expect(result.stderr).toBe("");
-    expect(result.status).toBe(0);
-    expect(JSON.parse(result.stdout)).toEqual(readHeadSurface(root));
-  } finally {
-    rmSync(root, { recursive: true, force: true });
-  }
 });

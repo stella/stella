@@ -12,10 +12,6 @@
     "reason": "Safe Chain moved to the dedicated lockfile-change dependency-malware gate (and the nightly)"
   },
   {
-    "name": "CLI registry snapshot guard",
-    "reason": "Replaced by CLI committed registry and derived runtime guard: checks committed projections separately and verifies ignored runtime generation."
-  },
-  {
     "name": "Web API types drift guard",
     "reason": "Replaced by the determinism guard; the generated API types file is no longer committed"
   }

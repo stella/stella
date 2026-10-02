@@ -4,8 +4,8 @@ import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { generatedRouteMap } from "./generated/route-map.js";
-import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import {
   describeLimit,
   localFileLimits,

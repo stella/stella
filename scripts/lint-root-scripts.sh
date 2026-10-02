@@ -17,8 +17,6 @@
 # caught here.
 set -euo pipefail
 
-bun --cwd=packages/cli run codegen:runtime
-
 files=()
 while IFS= read -r file; do
   files+=("${file}")

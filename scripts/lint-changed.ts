@@ -47,11 +47,6 @@ for (const f of files) {
   console.log(`  ${f}`);
 }
 
-const generated = await $`bun --cwd=packages/cli run codegen:runtime`.nothrow();
-if (generated.exitCode !== 0) {
-  process.exit(generated.exitCode);
-}
-
 const result =
   await $`bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware ${files}`.nothrow();
 

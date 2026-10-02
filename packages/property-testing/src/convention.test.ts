@@ -349,10 +349,7 @@ describe("property-test convention", () => {
       ] of await collectPropertyScriptCommands()) {
         if (workspace === "apps/api") {
           if (
-            // The API generates the CLI runtime modules it imports first.
-            !/^(?:bun --cwd=\.\.\/\.\.\/packages\/cli run codegen:runtime && )?bun scripts\/run-tests\.ts\s+--property(?:\s|$)/u.test(
-              command,
-            )
+            !/^bun scripts\/run-tests\.ts\s+--property(?:\s|$)/u.test(command)
           ) {
             violations.push(
               `${workspace}: test:property does not use the property selector`,

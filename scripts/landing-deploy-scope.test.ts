@@ -9,7 +9,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { GENERATORS } from "./generated-files";
 import {
   decide,
   landingBuildRootInputs,
@@ -173,35 +172,6 @@ test("the repository declares the landing build's outside reads", () => {
   expect(lock && landingClosure(lock)?.workspaceDirectories).toContain(
     "apps/landing",
   );
-});
-
-test("CLI runtime generator inputs trigger deployment through the real build declarations", () => {
-  const rootInputs = landingBuildRootInputs(
-    Bun.JSONC.parse(
-      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
-    ),
-  );
-  const runtime = GENERATORS.find(({ id }) => id === "cli-runtime");
-  if (runtime === undefined) {
-    throw new TypeError("CLI runtime generator is missing");
-  }
-  const cliInputs = runtime.inputs.filter((input) =>
-    input.startsWith("packages/cli/"),
-  );
-  expect(cliInputs.length).toBeGreaterThan(0);
-  const base = revision(lockfile());
-  const head = revision(lockfile());
-  for (const file of cliInputs) {
-    const changedFiles = [file];
-    expect(
-      decide({ changedFiles, rootInputs: [], base, head }).affected,
-      file,
-    ).toBe(false);
-    expect(
-      decide({ changedFiles, rootInputs, base, head }).affected,
-      file,
-    ).toBe(true);
-  }
 });
 
 test("the command compares two commits and fails towards a deploy", () => {
