@@ -18,6 +18,7 @@ export default createSafeRootHandler(
       type: "capability",
       reason: "contact_directory",
       consumesServices: false,
+      readClass: "tenant",
     },
     query: t.Object({
       cursor: t.Optional(tPaginationCursor({ maxChars: 8192 })),

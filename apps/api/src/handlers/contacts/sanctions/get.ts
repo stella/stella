@@ -22,6 +22,7 @@ export default createSafeRootHandler(
       type: "capability",
       reason: "contact_directory",
       consumesServices: false,
+      readClass: "tenant",
     },
     params: t.Object({ contactId: tSafeId("contact") }),
     query: t.Object({
