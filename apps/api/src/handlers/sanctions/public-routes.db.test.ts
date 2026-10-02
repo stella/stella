@@ -115,6 +115,14 @@ const entriesFor = (source: SanctionsSource): SanctionsEntry[] => {
       base,
       entry({
         source,
+        sourceId: "czech-person",
+        overrides: {
+          entityType: "person",
+          names: [{ name: "Čeněk Říha", quality: "strong" }],
+        },
+      }),
+      entry({
+        source,
         sourceId: "person",
         overrides: {
           entityType: "person",
@@ -382,6 +390,28 @@ describe("public sanctions search parity", () => {
   );
 
   test(
+    "public worker never reports a listed diacritic person clear",
+    async () => {
+      const result = await assertParity({
+        subject: {
+          type: "person",
+          firstName: "Čeněk",
+          lastName: "Říha",
+          dateOfBirth: null,
+          nationalityCodes: [],
+        },
+      });
+      expect(result.status).toBe("possible-match");
+      expect(
+        result.lists
+          .find(({ source }) => source === "eu")
+          ?.possibleMatches.at(0)?.sourceEntryId,
+      ).toBe("czech-person");
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test(
     "runs under a read-only role with no privileges outside the sanctions corpus",
     async () => {
       const corpusTables = [
@@ -630,10 +660,10 @@ describe("public sanctions search parity", () => {
   );
 
   test.each([
-    { engine: "index", entryCount: 2 },
-    { engine: "index", entryCount: 3 },
-    { engine: "worker", entryCount: 2 },
-    { engine: "worker", entryCount: 3 },
+    { engine: "index", entryCount: entriesFor("eu").length },
+    { engine: "index", entryCount: entriesFor("eu").length + 1 },
+    { engine: "worker", entryCount: entriesFor("eu").length },
+    { engine: "worker", entryCount: entriesFor("eu").length + 1 },
   ] as const)(
     "public search reloads a newly activated edition without a refresh notification ($engine, $entryCount entries)",
     async ({ engine, entryCount }) => {
