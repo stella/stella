@@ -234,6 +234,7 @@ import {
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { registeredChatTool } from "@/api/lib/chat/chat-tool-types";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -2874,7 +2875,7 @@ export const createSendMessage = (
         yield* Result.await(lifecycle.checkAdmission());
 
         const isServerTool = (toolName: string) =>
-          streamingTools[toolName]?.execute !== undefined;
+          registeredChatTool(streamingTools, toolName)?.execute !== undefined;
 
         // A completed, non-anonymized turn marks compaction due and titles a
         // new thread; neither affects whether the turn itself settled.

@@ -57,7 +57,11 @@ import type {
   PersistedChatMessageContentV3,
 } from "@/api/handlers/chat/types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ChatTool, ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import {
+  registeredChatTool,
+  type ChatTool,
+  type ChatToolMap,
+} from "@/api/lib/chat/chat-tool-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
@@ -898,7 +902,7 @@ const validateContinuationToolCallIntegrity = ({
     const validatedCallResult = validateContinuationToolCallTransition({
       canonicalCall,
       incomingCall,
-      tool: tools[canonicalCall.name],
+      tool: registeredChatTool(tools, canonicalCall.name),
     });
     if (Result.isError(validatedCallResult)) {
       return Result.err(validatedCallResult.error);
@@ -1493,7 +1497,7 @@ const validateToolCallPart = ({
   part: ChatToolCallPart;
   tools: ChatToolMap;
 }): Result<ValidatedToolCallPart, HandlerError<400>> => {
-  const tool = tools[part.name];
+  const tool = registeredChatTool(tools, part.name);
   if (TOOL_CALL_OUTPUT_VALIDATION[part.state] === "error") {
     return validateErrorToolCallPart({ part, tool });
   }
@@ -1714,7 +1718,7 @@ const validateToolResultPart = ({
     );
   }
 
-  const tool = tools[toolCall.name];
+  const tool = registeredChatTool(tools, toolCall.name);
   if (tool === undefined) {
     return Result.err(
       new HandlerError({
