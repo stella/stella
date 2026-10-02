@@ -63,12 +63,20 @@ describe("route tree determinism", () => {
   test("rejects injected nondeterminism and removes temporary outputs", async () => {
     await withDirectory(async (directory) => {
       let generation = 0;
-      await expect(
+      const [outcome] = await Promise.allSettled([
         checkRouteTreeDeterminism(directory, async (generatedRouteTree) => {
           generation += 1;
           await writeFile(generatedRouteTree, `generated tree ${generation}`);
         }),
-      ).rejects.toThrow("Route tree generation is nondeterministic");
+      ]);
+      expect(outcome).toMatchObject({
+        status: "rejected",
+        reason: {
+          message: expect.stringContaining(
+            "Route tree generation is nondeterministic",
+          ),
+        },
+      });
       expect(generation).toBe(2);
       expect(await readdir(directory)).toEqual([]);
     });

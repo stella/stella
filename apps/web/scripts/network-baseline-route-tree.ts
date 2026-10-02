@@ -15,7 +15,7 @@ const ROUTES_PREFIX = `apps/web/${ROUTE_TREE_OPTIONS.srcDirectory}/${ROUTE_TREE_
 const MAX_ROUTE_BYTES = 20 * 1024 * 1024;
 const MAX_ROUTE_FILES = 5000;
 
-const fail = (message: string): never => {
+const fail: (message: string) => never = (message) => {
   process.stderr.write(`network-baseline-route-tree: ${message}\n`);
   process.exit(1);
 };
@@ -26,7 +26,7 @@ const git = (repository: string, args: string[]) => {
     stderr: "pipe",
   });
   if (!child.success) {
-    fail(`git ${args[0]} failed: ${child.stderr.toString()}`);
+    fail(`git ${args.join(" ")} failed: ${child.stderr.toString()}`);
   }
   return child.stdout;
 };
