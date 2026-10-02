@@ -1717,7 +1717,11 @@ jobs:
 
       - name: Test release image CI gate
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bun test scripts/ci-plan.test.ts scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts
+        run: bun test scripts/ci-plan.test.ts
+
+      - name: Test nightly rehearsal and retry guards
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts
 
       - name: Reject automatic test retries
         if: needs.ci-plan.outputs.package_checks_required == 'true'
