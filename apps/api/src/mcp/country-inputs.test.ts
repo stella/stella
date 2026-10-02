@@ -131,8 +131,9 @@ describe("MCP country inputs are read by the shared reader", () => {
     expect(misnamed).toEqual([]);
   });
 
-  test("the registry declares a country on the tools that search a corpus", () => {
+  test("the registry declares a country on the tools that take one", () => {
     expect(countryProperties.map(({ path }) => path).toSorted()).toEqual([
+      "check_counterparty.subject.country",
       "lookup_case_law.country",
       "search_case_law.country",
       "search_legislation.country",

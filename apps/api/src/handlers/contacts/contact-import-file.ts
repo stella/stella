@@ -30,7 +30,7 @@ import type {
 } from "@/api/db/schema-validators";
 import { classifyBrazilianTaxId } from "@/api/handlers/contacts/contact-import-receipt";
 import { isValidDateOfBirth } from "@/api/handlers/contacts/person-details";
-import type { DateOfBirth } from "@/api/handlers/contacts/person-details";
+import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { CSV_DELIMITERS, CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import type { CSVDelimiter } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
