@@ -56,6 +56,7 @@ export const mintDevSeedSession = async ({
   await rootDb.insert(session).values({
     id: `dev-seed-session-${token}`,
     token,
+    refreshMode: "fixed",
     userId,
     activeOrganizationId: organizationId,
     expiresAt: new Date(now.getTime() + DEV_SEED_SESSION_LIFETIME_MS),

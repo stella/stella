@@ -276,6 +276,11 @@ RUN cd apps/api && \
     bun src/scripts/materialize-runtime-worker-native-assets.ts \
       "$TARGETARCH" /app/runtime-onnx
 RUN bun --filter @stll/legal-atlas-runner build
+RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
+    S3_ENDPOINT=http://localhost \
+    S3_BUCKET=smoke \
+    S3_REGION=eu-central-1 \
+    bun apps/legal-atlas-runner/dist/index.js run eu-ecj-refetch --help
 # Runtime-asset smoke probe: initializes the compiled anonymize and QuickJS
 # runtimes, plus the external YARA rules, worker bundles, OCR model, and font.
 # Compiled like the server and run by the verification stage below.
@@ -339,6 +344,7 @@ COPY --chown=stella:stella --from=builder /app/corpus-snippet-compare.js /app/co
 COPY --chown=stella:stella --from=builder /app/apps/api/src/scripts/corpus-snippet-compare.sample.json /app/corpus-snippet-compare.sample.json
 COPY --chown=stella:stella --from=builder /app/document-processing-worker.js /app/document-processing-worker.js
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
 # Bundled migration task entrypoint:
 #   ["bun", "/app/apps/api/src/db/migrate.js"]
 COPY --chown=stella:stella --from=builder /app/apps/api/src/db/migrate.js /app/apps/api/src/db/migrate.js
