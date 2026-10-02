@@ -1,6 +1,8 @@
 /**
- * The docket-family identity scenario on a real Postgres server, read through
- * the public reader connection the search and the lookup tool use. The keys
+ * The docket-family identity scenario on a real Postgres server, read as the
+ * public reader role the search and the lookup tool use: the job connects as
+ * the owner, so each read sets the reader role, as production's reader
+ * connection is, and its column grants decide what the read may use. The keys
  * are compared by the server's own collation and planner here, which an
  * embedded engine stands in for elsewhere
  * (`docket-family-identity.db.test.ts`).
@@ -8,15 +10,19 @@
  * Runs in the Postgres job; skipped elsewhere.
  */
 import { beforeAll, describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
+import { stellaPublicLawReader } from "@/api/db/rls";
 import {
   caseLawDecisionIdentifiers,
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
-import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import type {
+  CaseLawPublicReadDb,
+  CaseLawPublicReadTransaction,
+} from "@/api/lib/case-law-public-read-db";
 import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import {
@@ -49,6 +55,19 @@ if (!databaseUrl || !runPostgresTests) {
       await db.execute(docketFamilyKeyGrantSql(mode));
     };
 
+    const readAsPublicReader = async <T>(
+      fn: (tx: CaseLawPublicReadTransaction) => Promise<T>,
+    ) =>
+      await db.transaction(async (tx) => {
+        await tx.execute(
+          sql.raw(`SET LOCAL ROLE "${stellaPublicLawReader.name}"`),
+        );
+        return await fn(tx);
+      });
+    // SAFETY: brand-only wrapper; the reads never inspect the marker.
+    // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the branded handle carries no behaviour
+    const caseLawDb = readAsPublicReader as unknown as CaseLawPublicReadDb;
+
     beforeAll(async () => {
       await setFamilyKeyGrant("grant");
       await db.insert(caseLawSources).values(
@@ -74,7 +93,7 @@ if (!databaseUrl || !runPostgresTests) {
     });
 
     describeDocketFamilyIdentity(() => ({
-      caseLawDb: caseLawPublicReadDb,
+      caseLawDb,
       scenario,
       setFamilyKeyGrant,
     }));
