@@ -40,7 +40,10 @@ const keySchema = v.pipe(
   v.object(entries),
   v.brand("ProvisionKey"),
   v.readonly(),
-) satisfies v.GenericSchema<ProvisionKey<SupportedProvisionJurisdiction>>;
+) satisfies v.GenericSchema<
+  unknown,
+  ProvisionKey<SupportedProvisionJurisdiction>
+>;
 const refSchema = v.pipe(
   v.object({
     ...entries,
@@ -50,7 +53,10 @@ const refSchema = v.pipe(
   v.brand("ProvisionKey"),
   v.brand("ProvisionRef"),
   v.readonly(),
-) satisfies v.GenericSchema<ProvisionRef<SupportedProvisionJurisdiction>>;
+) satisfies v.GenericSchema<
+  unknown,
+  ProvisionRef<SupportedProvisionJurisdiction>
+>;
 const keyTuple = v.strictTuple([
   v.picklist(supportedJurisdictions),
   v.string(),
