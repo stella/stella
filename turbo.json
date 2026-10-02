@@ -277,6 +277,7 @@
         "package.json",
         "capability-catalog.json",
         "src/codegen.ts",
+        "src/write-generated-file.ts",
         "src/capability-catalog-load.ts",
         "src/generate-capability-tree.ts",
         "src/generate-route-map.ts",

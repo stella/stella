@@ -118,6 +118,7 @@ export const GENERATORS = [
       "packages/cli/package.json",
       "packages/cli/capability-catalog.json",
       "packages/cli/src/codegen.ts",
+      "packages/cli/src/write-generated-file.ts",
       "packages/cli/src/capability-catalog-load.ts",
       "packages/cli/src/generate-capability-tree.ts",
       "packages/cli/src/generate-route-map.ts",

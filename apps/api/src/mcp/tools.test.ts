@@ -1989,6 +1989,7 @@ describe("OpenAI-compatible MCP tools", () => {
         dateFrom: "2024-01-01",
         decisionType: "judgment",
         limit: 5,
+        sentenceAlignedExcerpt: true,
         query: "shareholder dispute",
         sort: "newest",
         sourceId: "11111111-1111-4111-8111-111111111111",
@@ -4189,6 +4190,79 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
   });
 
+  test("read_case_law_decision bounds text and accepts an outline cursor", async () => {
+    const fulltext = `I. Průběh řízení\n${"Facts. ".repeat(
+      40,
+    )}\nIV. Důvodnost dovolání\nReasons.`;
+    readDecisionHandlerMock.mockResolvedValue({
+      ...createReadDecisionResult(),
+      fulltext,
+    });
+    const first = parseToolPayload(
+      await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID], max_chars: 50 },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    );
+    expect(first).toMatchObject({
+      items: [
+        {
+          decision: {
+            text: fulltext.slice(0, 50),
+            truncated: true,
+            outline: [
+              {
+                title: "I. Průběh řízení",
+                cursor: encodePaginationCursor([0, null]),
+              },
+              {
+                title: "IV. Důvodnost dovolání",
+                cursor: encodePaginationCursor([fulltext.indexOf("IV."), null]),
+              },
+            ],
+          },
+        },
+      ],
+    });
+    const resumed = parseToolPayload(
+      await handleMcpToolCall({
+        args: {
+          decision_ids: [DECISION_ID],
+          max_chars: 50,
+          cursor: encodePaginationCursor([fulltext.indexOf("IV."), null]),
+        },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    );
+    expect(resumed).toMatchObject({
+      items: [{ decision: { text: "IV. Důvodnost dovolání\nReasons." } }],
+    });
+  });
+
+  test("read_case_law_decision keeps a supplementary character whole in a one-character window", async () => {
+    readDecisionHandlerMock.mockResolvedValue({
+      ...createReadDecisionResult(),
+      fulltext: "𠮷A",
+    });
+    const payload = parseToolPayload(
+      await handleMcpToolCall({
+        args: { decision_ids: [DECISION_ID], max_chars: 1 },
+        context: createContext(),
+        toolName: "read_case_law_decision",
+      }),
+    );
+    expect(payload).toMatchObject({
+      items: [
+        {
+          nextCursor: encodePaginationCursor([2, null]),
+          decision: { text: "𠮷", truncated: true },
+        },
+      ],
+    });
+  });
+
   test("read_case_law_decision derives plain text from the AST fallback", async () => {
     readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
 
@@ -4261,6 +4335,12 @@ describe("OpenAI-compatible MCP tools", () => {
             },
             sourceUrl: "https://example.test/decision",
             sourceAttributionUrl: "https://example.test/decision",
+            outline: [
+              {
+                title: "29 Cdo 123/2024",
+                cursor: encodePaginationCursor([0, null]),
+              },
+            ],
             text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
             charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal."
               .length,
@@ -4465,6 +4545,12 @@ describe("OpenAI-compatible MCP tools", () => {
             },
             sourceUrl: "https://example.test/decision",
             sourceAttributionUrl: "https://example.test/decision",
+            outline: [
+              {
+                title: "29 Cdo 123/2024",
+                cursor: encodePaginationCursor([0, null]),
+              },
+            ],
             text: "29 Cdo 123/2024\n\nThe court dismissed the appeal.",
             charCount: "29 Cdo 123/2024\n\nThe court dismissed the appeal."
               .length,
@@ -4480,7 +4566,14 @@ describe("OpenAI-compatible MCP tools", () => {
     {
       cursor: undefined,
       include: undefined,
-      fields: ["details", "metadata", "textFields", "source", "citations"],
+      fields: [
+        "details",
+        "metadata",
+        "textFields",
+        "source",
+        "citations",
+        "outline",
+      ],
     },
     {
       cursor: encodePaginationCursor([1, null]),
@@ -4488,6 +4581,17 @@ describe("OpenAI-compatible MCP tools", () => {
       fields: [],
     },
     { cursor: undefined, include: [], fields: [] },
+    { cursor: undefined, include: ["metadata"], fields: ["metadata"] },
+    {
+      cursor: encodePaginationCursor([0, null]),
+      include: undefined,
+      fields: [],
+    },
+    {
+      cursor: encodePaginationCursor([1, null]),
+      include: ["outline"],
+      fields: ["outline"],
+    },
     {
       cursor: encodePaginationCursor([1, null]),
       include: ["metadata", "textFields"],
@@ -4506,7 +4610,12 @@ describe("OpenAI-compatible MCP tools", () => {
   ])(
     "read_case_law_decision selects static fields per window (%j)",
     async ({ cursor, include, fields }) => {
-      readDecisionHandlerMock.mockResolvedValue(createReadDecisionResult());
+      const fulltext = "I. Facts\nDecision text.";
+      readDecisionHandlerMock.mockResolvedValue({
+        ...createReadDecisionResult(),
+        documentAst: null,
+        fulltext,
+      });
       const payload = asTestRaw<{
         items: { decision: Record<string, unknown> }[];
       }>(
@@ -4514,6 +4623,7 @@ describe("OpenAI-compatible MCP tools", () => {
           await handleMcpToolCall({
             args: {
               decision_ids: [DECISION_ID],
+              max_chars: 5,
               ...(cursor === undefined ? {} : { cursor }),
               ...(include === undefined ? {} : { include }),
             },
@@ -4528,7 +4638,8 @@ describe("OpenAI-compatible MCP tools", () => {
         decisionId: DECISION_ID,
         caseNumber: "29 Cdo 123/2024",
       });
-      expect(decision).toHaveProperty("text");
+      const offset = cursor === encodePaginationCursor([1, null]) ? 1 : 0;
+      expect(decision["text"]).toBe(fulltext.slice(offset, offset + 5));
       for (const [field, key] of [
         ["details", "court"],
         ["metadata", "metadata"],
@@ -4536,6 +4647,7 @@ describe("OpenAI-compatible MCP tools", () => {
         ["source", "source"],
         ["citations", "citationsTo"],
         ["citations", "citationsFrom"],
+        ["outline", "outline"],
       ] as const) {
         expect(Object.hasOwn(decision, key)).toBe(
           fields.some((expected) => expected === field),
@@ -4574,7 +4686,7 @@ describe("OpenAI-compatible MCP tools", () => {
         const payload = asTestRaw<CitationSelectionPage>(
           parseToolPayload(
             await handleMcpToolCall({
-              args: { decision_ids: [DECISION_ID], ...args },
+              args: { decision_ids: [DECISION_ID], max_chars: 7500, ...args },
               context: createContext(),
               toolName: "read_case_law_decision",
             }),
@@ -4763,6 +4875,22 @@ describe("OpenAI-compatible MCP tools", () => {
       [DECISION_ID, "found"],
     ]);
     expect(payload.items.at(1)?.message).toContain("search_case_law");
+  });
+
+  test("read_case_law_decision omits outlines from every item in a batch", async () => {
+    const base = createReadDecisionResult();
+    readGatedDecisionMock.mockImplementation(
+      async ({ locator }: { locator: { kind: "id"; id: string } }) => ({
+        ...base,
+        id: locator.id,
+      }),
+    );
+    const payload = await readBatch([DECISION_ID, SECOND_DECISION_ID]);
+    expect(payload.items).toHaveLength(2);
+    for (const item of payload.items) {
+      expect(item.status).toBe("found");
+      expect(item.decision).not.toHaveProperty("outline");
+    }
   });
 
   test("read_case_law_decision reads a repeated id once and answers both positions", async () => {

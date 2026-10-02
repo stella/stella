@@ -25,6 +25,7 @@ import type {
   ToolAnnotation,
 } from "./route-types.js";
 import { MAX_REQUEST_TIMEOUT_MS } from "./route-types.js";
+import { writeGeneratedFile } from "./write-generated-file.js";
 
 const runtimeOnly = process.argv.includes("--runtime-only");
 
@@ -254,10 +255,10 @@ import type { ToolAnnotation } from "../route-types.js";
 
 export const generatedToolAnnotations: Readonly<Record<string, ToolAnnotation>> = `;
 
-await writeFile(
-  annotationOutputUrl,
-  `${annotationHeader}${JSON.stringify(toolAnnotations, null, 2)};\n`,
-);
+await writeGeneratedFile({
+  output: annotationOutputUrl,
+  content: `${annotationHeader}${JSON.stringify(toolAnnotations, null, 2)};\n`,
+});
 
 process.stderr.write(`Wrote ${annotationOutputUrl.pathname}\n`);
 
@@ -271,7 +272,10 @@ import type { RouteNode } from "../route-types.js";
 
 export const generatedRouteMap: RouteNode = `;
 
-await writeFile(outputUrl, `${header}${JSON.stringify(routeMap, null, 2)};\n`);
+await writeGeneratedFile({
+  output: outputUrl,
+  content: `${header}${JSON.stringify(routeMap, null, 2)};\n`,
+});
 
 process.stderr.write(`Wrote ${outputUrl.pathname}\n`);
 
