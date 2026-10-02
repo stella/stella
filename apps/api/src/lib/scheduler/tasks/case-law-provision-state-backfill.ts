@@ -11,6 +11,7 @@ import {
   withDedicatedReservedSession,
   withLongRunningConnection,
 } from "@/api/db/long-running-connection";
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
@@ -106,11 +107,15 @@ export const createCaseLawProvisionStateBackfillTask =
     readVerdict,
     clock = () => Temporal.Now.instant().epochMilliseconds,
     observeStatus = logSchedulerBackfillStatus,
+    sleep = abortableSleep,
+    reportFailure = observeFailure,
   }: {
     withConnection?: typeof withLongRunningConnection;
     readVerdict?: () => Promise<Verdict>;
     clock?: () => number;
     observeStatus?: typeof logSchedulerBackfillStatus;
+    sleep?: typeof abortableSleep;
+    reportFailure?: typeof observeFailure;
   } = {}): SchedulerTask =>
   async ({ logger, signal }) => {
     signal.throwIfAborted();
@@ -169,9 +174,7 @@ export const createCaseLawProvisionStateBackfillTask =
                           };
                         });
                         if (batch.sleepMs > 0) {
-                          await new Promise<void>((resolve) => {
-                            setTimeout(resolve, batch.sleepMs);
-                          });
+                          await sleep(batch.sleepMs, signal);
                         }
                       },
                       catch: (cause) =>
@@ -186,8 +189,8 @@ export const createCaseLawProvisionStateBackfillTask =
                 signal,
               });
               if (run.isOk() && run.value.type === "complete") {
-                // Recheck under the shared checkpoint lock: an older release
-                // cannot clear the current admission's durable hold.
+                // Confirm the actual units under the shared checkpoint lock
+                // before clearing a hold left by a concurrent worker.
                 await runtime.recordCompletion(async () => {
                   signal.throwIfAborted();
                   const confirmed = await runProvisionStateBackfill({
@@ -216,7 +219,7 @@ export const createCaseLawProvisionStateBackfillTask =
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
         return;
       }
-      observeFailure(settled.error, { sink: backfillUnitFailed });
+      reportFailure(settled.error, { sink: backfillUnitFailed });
       return;
     }
     const run = settled.value;
@@ -227,14 +230,17 @@ export const createCaseLawProvisionStateBackfillTask =
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
         return;
       }
-      if (run.error.cause instanceof BackfillHeldError) {
+      if (
+        run.error.cause instanceof BackfillHeldError &&
+        run.error.cause.holdUntil !== null
+      ) {
         logger.info("scheduler.case_law_provision_state_backfill_held", {
           holdUntil: run.error.cause.holdUntil,
           heldSince: run.error.cause.heldSince,
         });
         return;
       }
-      observeFailure(run.error, { sink: backfillUnitFailed });
+      reportFailure(run.error, { sink: backfillUnitFailed });
       return;
     }
     logger.info("scheduler.case_law_provision_state_backfill", {

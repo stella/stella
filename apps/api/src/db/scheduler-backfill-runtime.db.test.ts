@@ -251,8 +251,9 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           expect(resumed.value.at(0)).toBe(5);
           expect((await checkpoint()).cursor).toBe(resumed.cursor);
           expect((await checkpoint()).batch.heldSince).toBeNull();
+          await restarted.close();
           expect(records.map(({ BackfillYielded }) => BackfillYielded)).toEqual(
-            [0, 1, 1, 0],
+            [1, 0],
           );
         },
       );
@@ -365,6 +366,135 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           );
         },
       );
+    });
+    test("concurrent completion confirms under the checkpoint lock and both workers converge", async () => {
+      await withFixture(async ({ balance, checkpoint, openRuntime }) => {
+        const first = await openRuntime();
+        const second = await openRuntime();
+        balance(64);
+        await expect(
+          first.runtime.step(async () =>
+            panic("Held runtime must not execute work"),
+          ),
+        ).rejects.toBeInstanceOf(BackfillHeldError);
+        const held = await checkpoint();
+        const entered = Promise.withResolvers<undefined>();
+        const release = Promise.withResolvers<undefined>();
+        let confirmations = 0;
+        const completing = first.runtime.recordCompletion(async () => {
+          entered.resolve(undefined);
+          await release.promise;
+          return true;
+        });
+        await entered.promise;
+        try {
+          // The first worker pauses while holding the checkpoint row. The
+          // second must time out on that row, before it can confirm completion.
+          const concurrent = await Result.tryPromise(
+            async () =>
+              await second.runtime.recordCompletion(async () => {
+                confirmations += 1;
+                return true;
+              }),
+          );
+          expect(concurrent.isErr()).toBe(true);
+          if (concurrent.isOk()) {
+            return panic("Concurrent completion bypassed the checkpoint lock");
+          }
+          expect(String(concurrent.error)).toMatch(/lock timeout/iu);
+          expect(confirmations).toBe(0);
+          expect(await checkpoint()).toEqual(held);
+        } finally {
+          release.resolve(undefined);
+          await completing;
+        }
+        await second.runtime.recordCompletion(async () => {
+          confirmations += 1;
+          return true;
+        });
+        expect(confirmations).toBe(1);
+        expect((await checkpoint()).cursor).toBeNull();
+        expect((await checkpoint()).batch.heldSince).toBeNull();
+        expect((await checkpoint()).batch.holdUntil).toBeNull();
+      });
+    });
+
+    test("backend death after the last committed batch preserves progress for restart completion", async () => {
+      await withFixture(
+        async ({ client, schema, checkpoint, openRuntime, batch }) => {
+          const first = await openRuntime();
+          await first.runtime.step(batch);
+          await first.runtime.step(batch);
+          expect((await checkpoint()).cursor).toBe("8");
+          const backend = (
+            await first.session.unsafe<{ pid: number }[]>(
+              "SELECT pg_backend_pid() AS pid",
+            )
+          ).at(0);
+          if (backend === undefined) {
+            return panic("Missing test backend pid");
+          }
+          expect(
+            (
+              await client.unsafe<{ killed: boolean }[]>(
+                "SELECT pg_terminate_backend($1, 5000) AS killed",
+                [backend.pid],
+              )
+            ).at(0)?.killed,
+          ).toBe(true);
+          first.markKilled();
+          const completion = await Result.tryPromise(
+            async () => await first.runtime.recordCompletion(async () => true),
+          );
+          expect(completion.isErr()).toBe(true);
+          if (completion.isOk()) {
+            return panic("Killed runtime recorded completion");
+          }
+          expect(String(completion.error)).toMatch(
+            /closed|terminated|connection|socket/iu,
+          );
+          expect((await checkpoint()).cursor).toBe("8");
+          await first.close();
+          const restarted = await openRuntime();
+          await restarted.runtime.recordCompletion(async (tx) => {
+            const rows = await tx.query(
+              "SELECT id FROM rows WHERE applications = 0 LIMIT 1",
+            );
+            return rows.length === 0;
+          });
+          expect((await checkpoint()).cursor).toBeNull();
+          expect((await checkpoint()).batch.heldSince).toBeNull();
+          expect(
+            await client.unsafe<{ id: number; applications: number }[]>(
+              `SELECT id, applications FROM ${schema}.rows ORDER BY id`,
+            ),
+          ).toEqual(
+            Array.from({ length: 8 }, (_, index) => ({
+              id: index + 1,
+              applications: 1,
+            })),
+          );
+        },
+      );
+    });
+
+    test("a worker confirming completed work clears a hold left by another worker", async () => {
+      await withFixture(async ({ balance, checkpoint, openRuntime }) => {
+        const completing = await openRuntime();
+        const holding = await openRuntime();
+        balance(64);
+        await expect(
+          holding.runtime.step(async () =>
+            panic("Held runtime must not execute work"),
+          ),
+        ).rejects.toBeInstanceOf(BackfillHeldError);
+        const held = await checkpoint();
+        expect(held.batch.heldSince).not.toBeNull();
+        await completing.runtime.recordCompletion(async () => false);
+        expect(await checkpoint()).toEqual(held);
+        await completing.runtime.recordCompletion(async () => true);
+        expect((await checkpoint()).batch.heldSince).toBeNull();
+      });
     });
   },
 );

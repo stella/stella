@@ -8,7 +8,11 @@ import {
   defaultConfig,
   initialBatchState,
 } from "@stll/db-load-gate/health";
-import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
+import type {
+  BatchState,
+  HealthConfig,
+  Verdict,
+} from "@stll/db-load-gate/health";
 import {
   AUTOVACUUM_SQL,
   LONG_TRANSACTION_SQL,
@@ -174,6 +178,60 @@ const createVerdictReader = ({
     );
 };
 
+type RuntimeReportingOptions = {
+  log: NonNullable<RuntimeOptions["log"]>;
+  observeStatus: RuntimeOptions["observeStatus"];
+};
+type RuntimeDecision = {
+  status: "done" | "advanced" | "held" | "retry";
+  verdict: Verdict;
+  holdCause: BatchState["holdCause"];
+};
+
+const createRuntimeReporter = ({
+  log,
+  observeStatus,
+}: RuntimeReportingOptions) => {
+  let previousDecision: string | undefined;
+  let summary: ReturnType<typeof backfillHeartbeat> | undefined;
+  return {
+    logDecision: ({ status, verdict, holdCause }: RuntimeDecision) => {
+      const settledStatus = status === "done" ? "advanced" : status;
+      const identity = JSON.stringify({
+        status: settledStatus,
+        verdict: verdict.kind,
+        signals: verdict.signals.map(({ indicator, kind, reason }) => ({
+          indicator,
+          kind,
+          reason,
+        })),
+        holdCause,
+      });
+      if (identity === previousDecision) {
+        return;
+      }
+      log({
+        action: "batch_decision",
+        status: settledStatus,
+        verdict,
+        holdCause,
+      });
+      previousDecision = identity;
+    },
+    recordStatus: (record: ReturnType<typeof backfillHeartbeat>) => {
+      summary = record;
+    },
+    flush: () => {
+      if (summary === undefined) {
+        return;
+      }
+      const record = summary;
+      summary = undefined;
+      observeStatus?.(record);
+    },
+  };
+};
+
 const createRuntime = <BatchTransaction>({
   name,
   tableName,
@@ -270,6 +328,7 @@ const createRuntime = <BatchTransaction>({
       [name, checkpoint.cursor, JSON.stringify(checkpoint.batch)],
     );
   };
+  const reporter = createRuntimeReporter({ log, observeStatus });
   const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
     const completion: { result?: { value: Value } } = {};
     let previousHeldSince: number | null = null;
@@ -277,7 +336,11 @@ const createRuntime = <BatchTransaction>({
       runInTransaction,
       config,
       clock,
-      log,
+      // The adaptive controller reports intermediate decisions and sizing on
+      // every unit. Log the settled decision below, once when policy changes.
+      log: () => {
+        // Intermediate controller decisions are superseded by the settled log.
+      },
       readVerdict: readSettledVerdict,
       slot,
       readCheckpoint: async (tx) => {
@@ -303,7 +366,12 @@ const createRuntime = <BatchTransaction>({
       persistItems: () => undefined,
       isStatementTimeout: (cause) => isPgError(cause, PG_ERROR.QUERY_CANCELED),
     });
-    observeStatus?.(
+    reporter.logDecision({
+      status: result.status,
+      verdict: result.verdict,
+      holdCause: result.checkpoint.batch.holdCause,
+    });
+    reporter.recordStatus(
       backfillHeartbeat({
         name,
         state: result.checkpoint.batch,
@@ -320,14 +388,13 @@ const createRuntime = <BatchTransaction>({
         heldSince: result.checkpoint.batch.heldSince,
       });
     }
-    if (completion.result === undefined) {
-      return panic("Backfill batch completed without a result");
-    }
+    const completedBatch =
+      completion.result ?? panic("Backfill batch completed without a result");
     return {
       done: result.status === "done",
       cursor: result.checkpoint.cursor,
       sleepMs: result.checkpoint.batch.sleepMs,
-      value: completion.result.value,
+      value: completedBatch.value,
     };
   };
   const recordCompletion = async (
@@ -338,6 +405,14 @@ const createRuntime = <BatchTransaction>({
       if (!(await confirm(tx))) {
         return null;
       }
+      // Completion is confirmed against the actual work under this row lock,
+      // so a hold left by another worker must not survive completed work.
+      // During a rolling deploy an older replica may confirm its older unit
+      // set and clear a newer replica's hold. This can reset heldSince/backoff
+      // until the next run, but cannot admit SQL: every new unit reads load and
+      // acquires the heavy slot again. A cleared load latch uses startFloor,
+      // which is stricter than resumeFloor. Holds and their duration therefore
+      // converge once replicas agree on the unit set after the bounded rollout.
       const batch = {
         ...initialBatchState(config),
         size: checkpoint.batch.size,
@@ -349,7 +424,7 @@ const createRuntime = <BatchTransaction>({
     if (completed === null) {
       return;
     }
-    observeStatus?.(
+    reporter.recordStatus(
       backfillHeartbeat({
         name,
         state: completed.batch,
@@ -360,7 +435,17 @@ const createRuntime = <BatchTransaction>({
       }),
     );
   };
-  return { step, recordCompletion, close };
+  return {
+    step,
+    recordCompletion,
+    close: async () => {
+      try {
+        await close();
+      } finally {
+        reporter.flush();
+      }
+    },
+  };
 };
 
 const drizzleQuery =
@@ -378,14 +463,16 @@ const drizzleQuery =
 
 export const createScriptBackfillRuntime = ({
   db,
+  slot: injectedSlot,
   ...options
 }: RuntimeOptions & {
   db: {
     transaction: IngestionTransactionRunner<Transaction>;
     execute: (statement: SQL) => PromiseLike<unknown>;
   };
+  slot?: DatabaseRuntimeOptions<Transaction>["slot"];
 }) => {
-  const slot = {
+  const slot = injectedSlot ?? {
     tryAcquire: async (tx: Transaction) =>
       await tryAcquireBackfillTransactionSlot({
         query: async (statement, parameters) =>

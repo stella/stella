@@ -27,6 +27,7 @@ export const BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK =
 type BackfillBounds = {
   /** Rows one run walks, in id order, in one transaction. */
   pageRows?: number;
+  createRuntime?: typeof createScriptBackfillRuntime;
   readVerdict?: () => Promise<Verdict>;
   clock?: () => number;
   observeStatus?: typeof logSchedulerBackfillStatus;
@@ -300,13 +301,14 @@ const claimExpressionIdPageTx = async (
 export const createLegislationExpressionIdBackfill =
   ({
     pageRows = DEFAULT_PAGE_ROWS,
+    createRuntime = createScriptBackfillRuntime,
     readVerdict,
     clock = () => Temporal.Now.instant().epochMilliseconds,
     observeStatus = logSchedulerBackfillStatus,
   }: BackfillBounds = DEFAULT_BOUNDS): SchedulerTask =>
   async ({ db, job, logger, scheduleContinuation, signal }) => {
     signal.throwIfAborted();
-    const runtime = createScriptBackfillRuntime({
+    const runtime = createRuntime({
       db,
       name: SCHEDULER_BACKFILL_IDS.expressionIds,
       tableName: "legislation_documents",
@@ -341,7 +343,10 @@ export const createLegislationExpressionIdBackfill =
       }
     });
     if (settled.isErr()) {
-      if (settled.error instanceof BackfillHeldError) {
+      if (
+        settled.error instanceof BackfillHeldError &&
+        settled.error.holdUntil !== null
+      ) {
         logger.info("scheduler.legislation_expression_ids_held", {
           holdUntil: settled.error.holdUntil,
           heldSince: settled.error.heldSince,

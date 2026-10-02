@@ -351,6 +351,57 @@ test.each(["factory", "reader"] as const)(
   },
 );
 
+test.each(["factory", "reader"] as const)(
+  "a successful reading replaces a cached %s error after expiry",
+  async (failureAt) => {
+    let instant = now;
+    let attempts = 0;
+    const failure = new EbsBalanceReadError({
+      message: "provider unavailable",
+    });
+    const shared = createEbsReaderCache({
+      clock: () => instant,
+      createReader: () => {
+        if (failureAt === "factory" && attempts++ === 0) {
+          throw failure;
+        }
+        return async () => {
+          if (failureAt === "reader" && attempts++ === 0) {
+            return Result.err(failure);
+          }
+          return Result.ok({
+            byteBalancePct: 90,
+            ioBalancePct: 85,
+            observedAt:
+              Temporal.Instant.fromEpochMilliseconds(instant).toString(),
+          });
+        };
+      },
+    });
+    const read = createEbsSignalReader({
+      configuration: {
+        type: "enabled",
+        instanceIdentifier: "recovering-instance",
+      },
+      config: defaultConfig,
+      clock: () => instant,
+      createReader: shared,
+    });
+    expect((await read()).kind).toBe("unknown");
+    instant += 119_999;
+    expect((await read()).kind).toBe("unknown");
+    expect(attempts).toBe(1);
+    instant += 1;
+    expect(await read()).toMatchObject({
+      kind: "normal",
+      observedAt: Temporal.Instant.fromEpochMilliseconds(instant).toString(),
+    });
+    expect(attempts).toBe(2);
+    expect((await read()).kind).toBe("normal");
+    expect(attempts).toBe(2);
+  },
+);
+
 test("unknown startup is cached without synthesizing a datapoint and raw reader configuration separates cache keys", async () => {
   let instant = now;
   let requests = 0;

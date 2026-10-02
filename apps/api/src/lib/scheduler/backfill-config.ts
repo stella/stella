@@ -19,7 +19,7 @@ export const emitSchedulerBackfillHeartbeat = (
   process.stdout.write(`${JSON.stringify(record)}\n`);
 };
 
-/** Batch transitions are logs; only the minutely sampler emits the EMF gauge. */
+/** One summary per runtime close; only the minutely sampler emits the EMF gauge. */
 export const logSchedulerBackfillStatus = (
   record: ReturnType<typeof backfillHeartbeat>,
 ) => {

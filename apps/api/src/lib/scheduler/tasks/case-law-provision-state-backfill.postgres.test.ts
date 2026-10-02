@@ -1,0 +1,290 @@
+import { panic } from "better-result";
+import type { SQL } from "bun";
+import { describe, expect, test } from "bun:test";
+
+import {
+  PROVISION_EXTRACTION_ADMISSION,
+  PROVISION_EXTRACTION_ADMISSION_REVISION,
+} from "@stll/legal-atlas/provision-extraction-admission";
+
+import {
+  withDedicatedReservedSession,
+  type withLongRunningConnection,
+} from "@/api/db/long-running-connection";
+import { logger } from "@/api/lib/observability/logger";
+import type { observeFailure } from "@/api/lib/observability/observe-failure";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { withGatedTestClients } from "@/api/tests/gated-test-database";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import { createCaseLawProvisionStateBackfillTask } from "./case-law-provision-state-backfill";
+
+const databaseUrl = process.env["DATABASE_URL"];
+const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
+
+type FixtureOptions = {
+  statementTimeoutMs?: number;
+  beforeQuery?: (
+    statement: string,
+    session: Awaited<ReturnType<SQL["reserve"]>>,
+  ) => Promise<void>;
+};
+const withFixture = async (
+  work: (fixture: {
+    createTask: (options?: FixtureOptions) => {
+      run: () => Promise<void>;
+      events: string[];
+      failures: Parameters<typeof observeFailure>[];
+    };
+    operator: SQL;
+    schema: string;
+    checkpoint: () => Promise<{
+      batch: { stableBatches: number; heldSince: number | null };
+    }>;
+  }) => Promise<void>,
+) => {
+  if (databaseUrl === undefined) {
+    return panic("DATABASE_URL required");
+  }
+  await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    const operator = openClient().sql;
+    const schema = `provision_task_${Bun.randomUUIDv7().replaceAll("-", "")}`;
+    await operator.unsafe(`CREATE SCHEMA ${schema}`);
+    try {
+      for (const table of [
+        "database_backfill_states",
+        "case_law_decisions",
+        "case_law_provision_repair_cursors",
+        "case_law_provision_admission",
+        "case_law_provision_extraction_scopes",
+        "case_law_provision_scope_transitions",
+        "case_law_provision_citations",
+      ]) {
+        await operator.unsafe(
+          `CREATE TABLE ${schema}.${table} (LIKE public.${table} INCLUDING ALL)`,
+        );
+      }
+      const constraints = await operator.unsafe<{ name: string }[]>(
+        `SELECT conname AS name FROM pg_constraint WHERE conrelid = '${schema}.case_law_provision_citations'::regclass AND contype = 'c' AND NOT convalidated`,
+      );
+      for (const { name } of constraints) {
+        await operator.unsafe(
+          `ALTER TABLE ${schema}.case_law_provision_citations VALIDATE CONSTRAINT "${name.replaceAll('"', '""')}"`,
+        );
+      }
+      await operator.unsafe(
+        `INSERT INTO ${schema}.case_law_provision_admission (key, revision) VALUES ('global', $1)`,
+        [PROVISION_EXTRACTION_ADMISSION_REVISION],
+      );
+      for (const { jurisdiction, language } of Object.values(
+        PROVISION_EXTRACTION_ADMISSION,
+      )) {
+        await operator.unsafe(
+          `INSERT INTO ${schema}.case_law_provision_extraction_scopes (country, language, status, generation) VALUES ($1, $2, 'active', 1)`,
+          [jurisdiction, language],
+        );
+      }
+      const checkpoint = async () => {
+        const row = (
+          await operator.unsafe<
+            { batch: { stableBatches: number; heldSince: number | null } }[]
+          >(
+            `SELECT batch FROM ${schema}.database_backfill_states WHERE name = $1`,
+            [SCHEDULER_BACKFILL_IDS.provisionState],
+          )
+        ).at(0);
+        return row ?? panic("missing provision task checkpoint");
+      };
+      const createTask = ({
+        statementTimeoutMs,
+        beforeQuery = async () => {},
+      }: FixtureOptions = {}) => {
+        const events: string[] = [];
+        const failures: Parameters<typeof observeFailure>[] = [];
+        const controller = new AbortController();
+        const withConnection: typeof withLongRunningConnection = async (
+          { signal },
+          body,
+        ) =>
+          await withDedicatedReservedSession({
+            reserve: async () => {
+              const session = await openClient().sql.reserve();
+              await session.unsafe(`SET search_path TO ${schema}, public`);
+              return session;
+            },
+            cancelBackend: async (pid) =>
+              await operator.unsafe("SELECT pg_cancel_backend($1)", [pid]),
+            signal,
+            work: async (session, setTransactionBudget) =>
+              await body(
+                asTestRaw<
+                  Parameters<Parameters<typeof withLongRunningConnection>[1]>[0]
+                >({
+                  connection: {
+                    unsafe: async (
+                      statement: string,
+                      parameters: unknown[] = [],
+                    ) => {
+                      await beforeQuery(statement, session);
+                      // Production catalog reads intentionally name public; isolate
+                      // those reads alongside the real cloned constraints here.
+                      const isolated = statement
+                        .replace(
+                          "table_namespace.nspname = 'public'",
+                          () => `table_namespace.nspname = '${schema}'`,
+                        )
+                        .replace(
+                          'public."case_law_provision_citations"',
+                          () => `${schema}."case_law_provision_citations"`,
+                        );
+                      return await session.unsafe(isolated, parameters);
+                    },
+                  },
+                  setTransactionBudget: async (budget: {
+                    statementTimeout: number;
+                    lockTimeout: number;
+                  }) =>
+                    await setTransactionBudget({
+                      statementTimeout:
+                        statementTimeoutMs ?? budget.statementTimeout,
+                      lockTimeout: budget.lockTimeout,
+                    }),
+                }),
+              ),
+          });
+        let now = Date.parse("2026-10-02T12:00:00Z");
+        const task = createCaseLawProvisionStateBackfillTask({
+          withConnection,
+          clock: () => now++,
+          readVerdict: async () => ({ kind: "normal", signals: [] }),
+          observeStatus: () => {},
+          sleep: async () => {},
+          reportFailure: (...args) => {
+            failures.push(args);
+          },
+        });
+        return {
+          events,
+          failures,
+          run: async () =>
+            await task(
+              asTestRaw<SchedulerTaskContext>({
+                signal: controller.signal,
+                logger: {
+                  ...logger,
+                  info: (event: string) => {
+                    events.push(event);
+                  },
+                },
+              }),
+            ),
+        };
+      };
+      await work({ createTask, operator, schema, checkpoint });
+    } finally {
+      await operator.unsafe(`DROP SCHEMA ${schema} CASCADE`);
+    }
+  });
+};
+
+describe.skipIf(!enabled || databaseUrl === undefined)(
+  "provision task on PostgreSQL",
+  () => {
+    test("a real statement timeout fails the scheduled unit and preserves its cursor", async () => {
+      await withFixture(async ({ createTask, operator, schema }) => {
+        const task = createTask({
+          statementTimeoutMs: 30,
+          beforeQuery: async (statement, session) => {
+            if (statement.includes("ORDER BY case_law_decisions.id LIMIT")) {
+              await session.unsafe("SELECT pg_sleep(1)");
+            }
+          },
+        });
+        await task.run();
+        expect(task.events).toEqual([]);
+        expect(task.failures).toHaveLength(1);
+        expect(task.failures.at(0)?.at(1)).toMatchObject({
+          sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
+        });
+        expect(
+          await operator.unsafe(
+            `SELECT name FROM ${schema}.case_law_provision_repair_cursors`,
+          ),
+        ).toHaveLength(0);
+        const resumed = createTask();
+        await resumed.run();
+        expect(resumed.failures).toEqual([]);
+        expect(
+          await operator.unsafe(
+            `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+          ),
+        ).toHaveLength(2);
+      });
+    });
+
+    test("two workers finishing the real provision steps converge on completion", async () => {
+      await withFixture(
+        async ({ createTask, operator, schema, checkpoint }) => {
+          const first = createTask();
+          const second = createTask();
+          await Promise.all([first.run(), second.run()]);
+          // A worker refused the shared slot may leave a durable hold. A later
+          // completed run must safely settle the same checkpoint under its lock.
+          const resumed = createTask();
+          await resumed.run();
+          expect([
+            ...first.failures,
+            ...second.failures,
+            ...resumed.failures,
+          ]).toEqual([]);
+          expect(
+            await operator.unsafe(
+              `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+            ),
+          ).toHaveLength(2);
+          expect((await checkpoint()).batch.stableBatches).toBe(0);
+        },
+      );
+    });
+
+    test("a killed worker after the last page resumes completion without replaying pages", async () => {
+      await withFixture(
+        async ({ createTask, operator, schema, checkpoint }) => {
+          let reads = 0;
+          const killed = createTask({
+            beforeQuery: async (statement, session) => {
+              if (
+                !statement.includes("SELECT cursor, batch") ||
+                ++reads !== 3
+              ) {
+                return;
+              }
+              const pid = (
+                await session.unsafe<{ pid: number }[]>(
+                  "SELECT pg_backend_pid() AS pid",
+                )
+              ).at(0)?.pid;
+              if (pid === undefined) {
+                return panic("missing worker pid");
+              }
+              await operator.unsafe("SELECT pg_terminate_backend($1)", [pid]);
+            },
+          });
+          await killed.run();
+          expect(killed.failures).toHaveLength(1);
+          expect(
+            await operator.unsafe(
+              `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+            ),
+          ).toHaveLength(2);
+          expect((await checkpoint()).batch.stableBatches).toBe(2);
+          const resumed = createTask();
+          await resumed.run();
+          expect(resumed.failures).toEqual([]);
+          expect((await checkpoint()).batch.stableBatches).toBe(0);
+        },
+      );
+    });
+  },
+);

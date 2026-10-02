@@ -1,0 +1,331 @@
+import { panic } from "better-result";
+import {
+  afterAll,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
+
+import type { Verdict } from "@stll/db-load-gate/health";
+import {
+  PROVISION_EXTRACTION_ADMISSION,
+  PROVISION_EXTRACTION_ADMISSION_REVISION,
+} from "@stll/legal-atlas/provision-extraction-admission";
+
+import type { withLongRunningConnection } from "@/api/db/long-running-connection";
+import { abortableSleep } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import { logger } from "@/api/lib/observability/logger";
+import type { observeFailure } from "@/api/lib/observability/observe-failure";
+import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
+import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
+
+import { createCaseLawProvisionStateBackfillTask } from "./case-law-provision-state-backfill";
+
+let client: Awaited<ReturnType<typeof createTestPglite>>;
+
+beforeAll(async () => {
+  client = await createTestPglite();
+  const constraints = (
+    await client.query<{ name: string }>(
+      "SELECT conname AS name FROM pg_constraint WHERE conrelid = 'public.case_law_provision_citations'::regclass AND contype = 'c' AND NOT convalidated",
+    )
+  ).rows;
+  for (const { name } of constraints) {
+    await client.query(
+      `ALTER TABLE public.case_law_provision_citations VALIDATE CONSTRAINT "${name.replaceAll('"', '""')}"`,
+    );
+  }
+}, 120_000);
+afterAll(async () => await client.close());
+
+// The fixture begins after admission reconciliation; both empty keyset walks
+// still run through the real task, real steps and durable runtime transactions.
+beforeEach(async () => {
+  await client.query("DELETE FROM database_backfill_states");
+  await client.query("DELETE FROM case_law_provision_repair_cursors");
+  await client.query("DELETE FROM case_law_provision_scope_transitions");
+  await client.query("DELETE FROM case_law_provision_admission");
+  await client.query(
+    "ALTER TABLE case_law_provision_extraction_scopes DISABLE TRIGGER case_law_provision_extraction_scope_guard",
+  );
+  await client.query("DELETE FROM case_law_provision_extraction_scopes");
+  await client.query(
+    "ALTER TABLE case_law_provision_extraction_scopes ENABLE TRIGGER case_law_provision_extraction_scope_guard",
+  );
+  await client.query(
+    "INSERT INTO case_law_provision_admission (key, revision) VALUES ('global', $1)",
+    [PROVISION_EXTRACTION_ADMISSION_REVISION],
+  );
+  for (const { jurisdiction, language } of Object.values(
+    PROVISION_EXTRACTION_ADMISSION,
+  )) {
+    await client.query(
+      "INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation) VALUES ($1, $2, 'active', 1)",
+      [jurisdiction, language],
+    );
+  }
+});
+
+type FixtureOptions = {
+  verdict?: Verdict;
+  onQuery?: (statement: string) => void;
+  sleep?: typeof abortableSleep;
+};
+const fixture = ({
+  verdict = { kind: "normal", signals: [] },
+  onQuery = () => {},
+  sleep = async () => {},
+}: FixtureOptions = {}) => {
+  const events: string[] = [];
+  const failures: Parameters<typeof observeFailure>[] = [];
+  const sleeps: number[] = [];
+  const controller = new AbortController();
+  let now = Date.parse("2026-10-02T12:00:00Z");
+  const withConnection: typeof withLongRunningConnection = async (
+    _options,
+    work,
+  ) =>
+    await work(
+      asTestRaw<Parameters<Parameters<typeof withLongRunningConnection>[1]>[0]>(
+        {
+          connection: {
+            unsafe: async (statement: string, parameters: unknown[] = []) => {
+              onQuery(statement);
+              // PGlite lacks session advisory locks. This one-session fixture
+              // grants only the runtime slot; the PostgreSQL suite proves locking.
+              if (statement.includes("AS acquired")) {
+                return [{ acquired: true }];
+              }
+              return (await client.query(statement, parameters)).rows;
+            },
+          },
+          setTransactionBudget: async () => {},
+        },
+      ),
+    );
+  const task = createCaseLawProvisionStateBackfillTask({
+    withConnection,
+    readVerdict: async () => verdict,
+    clock: () => now++,
+    observeStatus: () => {},
+    sleep: async (milliseconds, signal) => {
+      sleeps.push(milliseconds);
+      await sleep(milliseconds, signal);
+    },
+    reportFailure: (...args) => {
+      failures.push(args);
+    },
+  });
+  return {
+    events,
+    failures,
+    sleeps,
+    controller,
+    advance: (milliseconds: number) => {
+      now += milliseconds;
+    },
+    run: async () =>
+      await task(
+        asTestRaw<SchedulerTaskContext>({
+          signal: controller.signal,
+          logger: {
+            ...logger,
+            info: (event: string) => {
+              events.push(event);
+            },
+          },
+        }),
+      ),
+  };
+};
+
+const checkpoint = async () => {
+  const row = (
+    await client.query<{
+      batch: { heldSince: number | null; holdUntil: number | null };
+    }>("SELECT batch FROM database_backfill_states WHERE name = $1", [
+      SCHEDULER_BACKFILL_IDS.provisionState,
+    ])
+  ).rows.at(0);
+  return row ?? panic("missing task checkpoint");
+};
+
+const cursorRows = async () =>
+  (
+    await client.query(
+      "SELECT name, completed_at IS NOT NULL AS complete FROM case_law_provision_repair_cursors ORDER BY name",
+    )
+  ).rows;
+
+describe("provision scheduler wiring through the real backfill steps", () => {
+  test("a load hold starts no provision unit and records no failure", async () => {
+    const task = fixture({ verdict: { kind: "stop", signals: [] } });
+    await task.run();
+    expect(task.events).toEqual([
+      "scheduler.case_law_provision_state_backfill_held",
+    ]);
+    expect(task.failures).toEqual([]);
+    expect(task.sleeps).toEqual([]);
+    expect(await cursorRows()).toEqual([]);
+    expect((await checkpoint()).batch.heldSince).not.toBeNull();
+    expect((await checkpoint()).batch.holdUntil).not.toBeNull();
+  });
+
+  test("a statement timeout rolls back the real page and emits the existing failure event", async () => {
+    const task = fixture({
+      onQuery: (statement) => {
+        if (statement.includes("ORDER BY case_law_decisions.id LIMIT")) {
+          throw Object.assign(
+            new Error("canceling statement due to statement timeout"),
+            { code: "57014" },
+          );
+        }
+      },
+    });
+    await task.run();
+    expect(task.events).toEqual([]);
+    expect(task.failures).toHaveLength(1);
+    expect(task.failures.at(0)?.at(1)).toMatchObject({
+      sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
+    });
+    expect(task.sleeps).toEqual([]);
+    expect(await cursorRows()).toEqual([]);
+    expect((await checkpoint()).batch).toMatchObject({
+      heldSince: null,
+      holdUntil: null,
+    });
+  });
+
+  test("a timed-out CHECK scan remains pending and emits a failure", async () => {
+    await fixture().run();
+    await client.query(
+      "ALTER TABLE case_law_provision_citations DROP CONSTRAINT provision_citations_selection_values",
+    );
+    await client.query(
+      "ALTER TABLE case_law_provision_citations ADD CONSTRAINT provision_citations_selection_values CHECK (selection IS NULL OR selection IN ('text', 'date-window')) NOT VALID",
+    );
+    try {
+      const task = fixture({
+        onQuery: (statement) => {
+          if (statement.includes("VALIDATE CONSTRAINT")) {
+            throw Object.assign(
+              new Error("canceling statement due to statement timeout"),
+              { code: "57014" },
+            );
+          }
+        },
+      });
+      await task.run();
+      expect(task.events).toEqual([]);
+      expect(task.failures).toHaveLength(1);
+      expect(task.failures.at(0)?.at(1)).toMatchObject({
+        sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
+      });
+      expect(
+        (
+          await client.query(
+            "SELECT convalidated FROM pg_constraint WHERE conname = 'provision_citations_selection_values'",
+          )
+        ).rows,
+      ).toEqual([{ convalidated: false }]);
+      expect((await checkpoint()).batch).toMatchObject({
+        heldSince: null,
+        holdUntil: null,
+      });
+    } finally {
+      await client.query(
+        "ALTER TABLE case_law_provision_citations VALIDATE CONSTRAINT provision_citations_selection_values",
+      );
+    }
+  });
+
+  test("a completed task commits both real cursors, paces each unit and settles completion", async () => {
+    const task = fixture();
+    await task.run();
+    expect(task.failures).toEqual([]);
+    expect(await cursorRows()).toEqual([
+      { name: "scope-bootstrap", complete: true },
+      { name: "state-seed", complete: true },
+    ]);
+    expect(task.sleeps).toEqual([100, 100]);
+    expect((await checkpoint()).batch).toMatchObject({
+      heldSince: null,
+      holdUntil: null,
+      stableBatches: 0,
+    });
+    await task.run();
+    expect(task.sleeps).toEqual([100, 100]);
+    expect(task.events).toEqual([
+      "scheduler.case_law_provision_state_backfill",
+      "scheduler.case_law_provision_state_backfill",
+    ]);
+  });
+
+  test("pacing consumes the run budget and leaves the next real unit for another run", async () => {
+    const task = fixture({
+      sleep: async () => {
+        task.advance(5 * 60_000);
+      },
+    });
+    await task.run();
+    expect(task.sleeps).toEqual([100]);
+    expect(await cursorRows()).toEqual([
+      { name: "scope-bootstrap", complete: true },
+    ]);
+    await task.run();
+    expect(await cursorRows()).toEqual([
+      { name: "scope-bootstrap", complete: true },
+      { name: "state-seed", complete: true },
+    ]);
+    expect(task.failures).toEqual([]);
+  });
+
+  test("abort interrupts a thirty-second pacing delay after the page commits", async () => {
+    const sleeping = Promise.withResolvers<undefined>();
+    const task = fixture({
+      verdict: { kind: "degraded", signals: [] },
+      sleep: async (milliseconds, signal) => {
+        const pending = abortableSleep(milliseconds, signal);
+        sleeping.resolve(undefined);
+        await pending;
+      },
+    });
+    // A degraded verdict retains the seeded maximum pacing delay.
+    await client.query(
+      "INSERT INTO database_backfill_states (name, batch) VALUES ($1, $2::text::jsonb)",
+      [
+        SCHEDULER_BACKFILL_IDS.provisionState,
+        JSON.stringify({
+          size: 1,
+          sleepMs: 30_000,
+          stableBatches: 0,
+          smoothedDurationMs: null,
+          heldSince: null,
+          holdUntil: null,
+          holdCount: 0,
+          holdCause: null,
+        }),
+      ],
+    );
+    const run = task.run();
+    await sleeping.promise;
+    expect(task.sleeps).toEqual([30_000]);
+    task.controller.abort(new Error("scheduler shutdown"));
+    const outcome = await Promise.race([
+      run.then(() => "aborted"),
+      Bun.sleep(500).then(() => "still sleeping"),
+    ]);
+    expect(outcome).toBe("aborted");
+    expect(task.events).toEqual([
+      "scheduler.case_law_provision_state_backfill_aborted",
+    ]);
+    expect(task.failures).toEqual([]);
+    expect(await cursorRows()).toEqual([
+      { name: "scope-bootstrap", complete: true },
+    ]);
+  });
+});
