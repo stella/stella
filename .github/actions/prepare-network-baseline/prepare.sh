@@ -1,14 +1,21 @@
 #!/usr/bin/env bash
 set -euo pipefail
+purpose=${NETWORK_BASELINE_PURPOSE:-comparison}
+case "$purpose" in comparison|recording) ;; *) exit 1 ;; esac
 [[ "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]]
 git fetch --no-tags origin "$BASE_SHA"
 # Checkout is the tested merge commit. Compute the actual common ancestor,
 # rather than reading the mutable tip of main during a long-lived PR.
 base=$(git merge-base HEAD "$BASE_SHA")
+if [[ "$purpose" == recording && "$base" != "$(git rev-parse HEAD)" ]]; then
+  echo 'Recording must seed the checked-out main commit' >&2
+  exit 1
+fi
 git show "$base:apps/web/e2e/network-baseline.json" > apps/web/e2e/.network-baseline-base.json
 git show "$base:apps/web/src/routeTree.gen.ts" > apps/web/e2e/.network-baseline-base-tree.ts
 git diff --name-only --no-renames "$base" HEAD > apps/web/e2e/.network-baseline-changed
 recorded=false
+recorded_source=''
 load_recording() {
   local source=$1 name artifacts id run_id run
   name="network-baseline-main-$source"
@@ -29,6 +36,7 @@ load_recording() {
     rm -r "$artifact_dir"
     echo "Network baseline: validated main recording at $source (merge base $base)" >> "$GITHUB_STEP_SUMMARY"
     recorded=true
+    recorded_source=$source
     return
   done < <(jq -r --arg name "$name" '.artifacts | sort_by(.id) | reverse | .[] | select(.name == $name and .expired == false) | [.id, .workflow_run.id] | @tsv' <<< "$artifacts")
 }
@@ -37,18 +45,34 @@ if [[ "$recorded" == false ]]; then
   # A docs-only main commit has no new recording. Inherit the newest published
   # ancestor, exactly as a committed baseline would be inherited on main.
   runs=$(gh api --method GET "repos/$REPOSITORY/actions/workflows/network-baseline-record.yml/runs" -f branch=main -f status=success -f per_page=100)
+  candidates=$(jq -r '.workflow_runs[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch") | .head_sha' <<< "$runs")
   while read -r source; do
-    [[ "$source" =~ ^[a-f0-9]{40}$ ]] || continue
-    if [[ "$source" == "$base" ]] || ! git merge-base --is-ancestor "$source" "$base"; then
+    if [[ "$source" == "$base" ]] || ! rg -Fxq "$source" <<< "$candidates"; then
       continue
     fi
     load_recording "$source"
     if [[ "$recorded" == true ]]; then break; fi
-  done < <(jq -r '.workflow_runs[] | select(.event == "push" or .event == "schedule" or .event == "workflow_dispatch") | .head_sha' <<< "$runs")
+  done < <(git rev-list --topo-order "$base")
 fi
 # Bootstrap/retention fallback is pinned to the same merge base, never PR JSON.
 if [[ "$recorded" == false ]]; then
   echo "Network baseline: committed bootstrap at merge base $base (recording unavailable)" >> "$GITHUB_STEP_SUMMARY"
+fi
+if [[ "$purpose" == recording ]]; then
+  # Each reviewed main commit can replace a route's declaration. Replay only
+  # commits after the seed, in order, so inherited files cannot reset later peaks.
+  declaration_base=${recorded_source:-$(git log -1 --format=%H "$base" -- apps/web/e2e/network-baseline.json)}
+  while read -r commit; do
+    git diff-tree --no-commit-id --name-only -r "$commit" -- apps/web/e2e/network-budgets > apps/web/e2e/.network-baseline-declarations
+    bun scripts/network-baseline-scope.ts prepare \
+      --base apps/web/e2e/.network-baseline-base.json \
+      --changed apps/web/e2e/.network-baseline-declarations \
+      --base-route-tree apps/web/e2e/.network-baseline-base-tree.ts \
+      --route-tree apps/web/src/routeTree.gen.ts \
+      --output apps/web/e2e/network-baseline.json \
+      --context apps/web/e2e/.network-baseline-context.json >> "$GITHUB_STEP_SUMMARY"
+    cp apps/web/e2e/network-baseline.json apps/web/e2e/.network-baseline-base.json
+  done < <(git log --reverse --format=%H "$declaration_base..HEAD" -- apps/web/e2e/network-budgets)
 fi
 bun scripts/network-baseline-scope.ts prepare \
   --base apps/web/e2e/.network-baseline-base.json \

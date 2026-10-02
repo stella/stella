@@ -70,6 +70,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: read
+      actions: read
     steps:
       - name: Checkout main
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -99,6 +100,14 @@ jobs:
         run: |
           echo "::error::Network baseline recording needs a ready E2E stack"
           exit 1
+
+      - name: Seed write mode from the latest published recording
+        if: (inputs.mode || 'write') == 'write'
+        uses: ./.github/actions/prepare-network-baseline
+        with:
+          base-sha: ${{ github.sha }}
+          token: ${{ github.token }}
+          purpose: recording
 
       - name: Record network baseline
         env:

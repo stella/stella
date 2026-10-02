@@ -9,13 +9,74 @@ import {
 import os from "node:os";
 import path from "node:path";
 
-import { diffNetworkBaseline } from "../apps/web/e2e/helpers/network";
+import {
+  diffNetworkBaseline,
+  mergeNetworkBaseline,
+} from "../apps/web/e2e/helpers/network";
 import { prepareComparisonBaseline } from "./network-baseline-scope";
 
 const routeTree = readFileSync(
   new URL("../apps/web/src/routeTree.gen.ts", import.meta.url),
   "utf-8",
 );
+
+test("successive write recordings retain declarations and timing-conditional peaks", () => {
+  const requests = ["GET /conditional", "GET /observed"];
+  const declared = prepareComparisonBaseline({
+    base: {},
+    changedPaths: [],
+    baseRouteTree: routeTree,
+    routeTree,
+    declarations: [
+      {
+        route: "/chat",
+        reason: "Additional endpoint",
+        budget: {
+          depth: 4,
+          requests,
+          requestCounts: { "GET /conditional": 3, "GET /observed": 2 },
+          dbQueries: { "GET /conditional": 8, "GET /observed": 4 },
+          responseSizes: { "GET /conditional": 8192, "GET /observed": 4096 },
+        },
+      },
+    ],
+  }).baseline;
+  let published = declared;
+  for (const observedRequests of [requests, ["GET /observed"], []]) {
+    const seed = prepareComparisonBaseline({
+      base: published,
+      changedPaths: [],
+      baseRouteTree: routeTree,
+      routeTree,
+      declarations: [],
+    }).baseline;
+    published = mergeNetworkBaseline(
+      seed,
+      new Map([
+        [
+          "/chat",
+          {
+            depth: 1,
+            requests: observedRequests,
+            requestCounts: Object.fromEntries(
+              observedRequests.map((key) => [key, 1]),
+            ),
+            depthChain: [],
+            dbQueries: Object.fromEntries(
+              observedRequests.map((key) => [key, 1]),
+            ),
+            missingDbQueryCounts: {},
+            responseSizes: Object.fromEntries(
+              observedRequests.map((key) => [key, 1024]),
+            ),
+            missingResponseSizeCounts: {},
+          },
+        ],
+      ]),
+    );
+    expect(published).toEqual(declared);
+  }
+});
 
 test("only a validated declaration permits measured growth", () => {
   const old = {

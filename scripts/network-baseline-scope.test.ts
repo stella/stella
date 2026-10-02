@@ -83,8 +83,10 @@ describe("network baseline scope", () => {
     ).toEqual(["/chat", "/chat target"]);
   });
 
-  test("pathless layout changes scope descendants", () => {
+  test("pathless layout changes scope its route and descendants", () => {
     expect(scopedRoutes(["apps/web/src/routes/_protected.tsx"])).toEqual([
+      "/",
+      "/ target",
       "/chat",
       "/chat target",
       "/settings",
@@ -225,6 +227,27 @@ describe("network baseline workflows", () => {
     const jobs = readWorkflowJobs("network-baseline-record.yml");
     expect(jobs["build"]?.if).toContain("github.ref == 'refs/heads/main'");
     expect(jobs["record"]?.needs).toBe("build");
+    expect(jobs["build"]?.permissions).toEqual({ contents: "read" });
+    expect(jobs["record"]?.permissions).toEqual({
+      contents: "read",
+      actions: "read",
+    });
+    const record = jobs["record"] ?? expect.unreachable("record job");
+    const seed = record.steps.findIndex(
+      (step) => step.uses === "./.github/actions/prepare-network-baseline",
+    );
+    expect(seed).toBeGreaterThan(-1);
+    expect(record.steps.at(seed)).toMatchObject({
+      if: "(inputs.mode || 'write') == 'write'",
+      with: {
+        "base-sha": githubExpression("github.sha"),
+        token: githubExpression("github.token"),
+        purpose: "recording",
+      },
+    });
+    expect(
+      record.steps.findIndex((step) => step.env?.["E2E_NETWORK_BASELINE"]),
+    ).toBeGreaterThan(seed);
     expect(source).toContain(
       `network-baseline-record-${githubExpression("github.sha")}`,
     );
@@ -233,7 +256,6 @@ describe("network baseline workflows", () => {
     );
     expect(source).not.toMatch(/\bsecrets\.\w/u);
     for (const job of Object.values(jobs)) {
-      expect(job.permissions).toEqual({ contents: "read" });
       for (const step of job.steps) {
         if (step.uses?.startsWith("actions/checkout@")) {
           expect(step.with?.["persist-credentials"]).toBe(false);
@@ -480,6 +502,7 @@ describe("merge-base preparation integration", () => {
 set -euo pipefail
 if [[ "$TEST_ARTIFACTS" == fail ]]; then exit 42; fi
 case "$*" in
+  *actions/artifacts/3/zip*) cat "$TEST_ZIP_NEW" ;;
   *actions/artifacts/*/zip*) cat "$TEST_ZIP" ;;
   *actions/artifacts*) printf '%s\\n' "$TEST_ARTIFACTS" ;;
   *actions/workflows/*) printf '%s\\n' "$TEST_RUNS" ;;
@@ -618,6 +641,76 @@ esac
         "/chat": entry(1),
         "/settings": entry(2),
       });
+      // Main must seed declarations even when no request observes them yet.
+      const declared = { "/chat": entry(9), "/settings": entry(2) };
+      expect(
+        prepare(inheritedBase, { NETWORK_BASELINE_PURPOSE: "recording" }),
+      ).toEqual(declared);
+      expect(
+        prepare(inheritedBase, {
+          ...artifactEnv,
+          NETWORK_BASELINE_PURPOSE: "recording",
+        }),
+      ).toEqual(declared);
+      // The next publication contains the declaration plus a measured peak.
+      const newerPublication = { "/chat": entry(10), "/settings": entry(2) };
+      writeFileSync(
+        path.join(directory, "published/network-baseline.json"),
+        JSON.stringify(newerPublication),
+      );
+      checked([
+        "zip",
+        "-jq",
+        path.join(directory, "newer-baseline.zip"),
+        path.join(directory, "published/network-baseline.json"),
+      ]);
+      checked(["git", "restore", "apps/web/e2e/network-baseline.json"]);
+      writeFileSync(path.join(directory, "docs.txt"), "main advances again");
+      checked(["git", "add", "docs.txt"]);
+      checked(["git", "commit", "-m", "docs advance"]);
+      const latestBase = checked(["git", "rev-parse", "HEAD"]);
+      const shuffledArtifacts = {
+        ...artifactEnv,
+        TEST_ARTIFACTS: JSON.stringify({
+          artifacts: [
+            {
+              id: 1,
+              name: `network-baseline-main-${firstBase}`,
+              expired: false,
+              workflow_run: { id: 2 },
+            },
+            {
+              id: 3,
+              name: `network-baseline-main-${inheritedBase}`,
+              expired: false,
+              workflow_run: { id: 4 },
+            },
+          ],
+        }),
+        TEST_ZIP_NEW: path.join(directory, "newer-baseline.zip"),
+      };
+      for (const sources of [
+        [firstBase, inheritedBase, nextBase],
+        [nextBase, inheritedBase, firstBase],
+        [inheritedBase, firstBase, nextBase],
+      ]) {
+        const inherited = {
+          ...shuffledArtifacts,
+          TEST_RUNS: JSON.stringify({
+            workflow_runs: sources.map((head_sha) => ({
+              event: "push",
+              head_sha,
+            })),
+          }),
+        };
+        expect(prepare(latestBase, inherited)).toEqual(newerPublication);
+        expect(
+          prepare(latestBase, {
+            ...inherited,
+            NETWORK_BASELINE_PURPOSE: "recording",
+          }),
+        ).toEqual(newerPublication);
+      }
       const unavailable = run(
         [
           "bash",
