@@ -1,3 +1,4 @@
+// parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";

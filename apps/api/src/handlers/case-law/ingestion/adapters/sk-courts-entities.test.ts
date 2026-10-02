@@ -53,6 +53,9 @@ const fixture = () =>
     },
   }) satisfies Parameters<typeof assembleSkCourtsDecision>[0];
 
+const codePointOf = (character: string): number =>
+  character.codePointAt(0) ?? panic("a spread character has a code point");
+
 const decisionFor = (judge: string) =>
   assembleSkCourtsDecision({
     item: {
@@ -340,15 +343,13 @@ describe("Slovak court display text decodes publisher entities once", () => {
       fc.property(judicialText, (text) => {
         const encodings = [
           encodeHTML(text),
+          [...text].map((character) => `&#${codePointOf(character)};`).join(""),
           [...text]
-            .map((character) => `&#${character.codePointAt(0)};`)
-            .join(""),
-          [...text]
-            .map((character) => `&#x${character.codePointAt(0)?.toString(16)};`)
+            .map((character) => `&#x${codePointOf(character).toString(16)};`)
             .join(""),
         ];
         for (const encoded of encodings) {
-          const decoded = decisionFor(encoded).metadata?.["judge"];
+          const decoded = decisionFor(encoded).metadata["judge"];
           expect(decoded).toBe(text);
           expect(
             entityResidueIn(typeof decoded === "string" ? decoded : ""),
