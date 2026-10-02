@@ -525,7 +525,9 @@ describe("agent-auth ID-JAG full exchange", () => {
         sql`CREATE TRIGGER ${identifier} BEFORE UPDATE OF client_secret_sink ON agent_registration FOR EACH ROW EXECUTE FUNCTION ${identifier}()`,
       );
       const records: LogRecord[] = [];
-      setLogSinkForTesting((record) => records.push(record));
+      setLogSinkForTesting((record) => {
+        records.push(record);
+      });
       try {
         env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
         const token = await postToken({

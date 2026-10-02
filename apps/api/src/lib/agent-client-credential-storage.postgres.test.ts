@@ -133,7 +133,9 @@ if (!databaseUrl || !enabled) {
           throw new Error("scheduler fixture missing");
         }
         const records: LogRecord[] = [];
-        setLogSinkForTesting((record) => records.push(record));
+        setLogSinkForTesting((record) => {
+          records.push(record);
+        });
         try {
           await backfillAgentClientStorage({
             db,

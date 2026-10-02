@@ -58,7 +58,9 @@ describe("stored agent credential reads", () => {
   test("records the count of upgraded credential reads", async () => {
     const records: LogRecord[] = [];
     const upgrades: string[] = [];
-    setLogSinkForTesting((record) => records.push(record));
+    setLogSinkForTesting((record) => {
+      records.push(record);
+    });
     try {
       expect(
         (
@@ -192,7 +194,9 @@ describe("stored agent credential reads", () => {
       message: "Credential update unavailable",
     });
     const records: LogRecord[] = [];
-    setLogSinkForTesting((record) => records.push(record));
+    setLogSinkForTesting((record) => {
+      records.push(record);
+    });
     try {
       for (const upgrade of [
         async () => Result.err(failure),
