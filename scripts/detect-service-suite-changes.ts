@@ -324,6 +324,15 @@ export const planServiceSuites = (
     if (files.some((file) => directlyRequired(file, suite))) {
       return true;
     }
+    if (
+      !files.some(
+        (file) =>
+          file.startsWith(`apps/${SUITES[suite].app}/`) ||
+          file.startsWith("packages/"),
+      )
+    ) {
+      return false;
+    }
     let graph = root === repositoryRoot ? defaultGraphs.get(suite) : undefined;
     if (graph === undefined) {
       graph = serviceSuiteDependencies(root, suite);

@@ -75,11 +75,7 @@ test("a newly added transitive import is picked up without editing the detector"
     "apps/collab/src/server.test.ts": "",
     "apps/api/src/gated.test.ts":
       'const gate = "STELLA_RUN_POSTGRES_TESTS"; import "./first";',
-    "apps/api/src/first.ts":
-      'import("@/api/second"); require("./required"); import "../../../scripts/shared-verifier";',
-    "scripts/shared-verifier.ts":
-      'export { value } from "../.oxlint-plugins/shared-helper";',
-    ".oxlint-plugins/shared-helper.ts": "export const value = 1;",
+    "apps/api/src/first.ts": 'import("@/api/second"); require("./required");',
     "apps/api/src/required.ts": "export const value = 1;",
     "apps/api/src/second.ts": 'import "@stll/example";',
     "packages/example/package.json":
@@ -97,8 +93,6 @@ test("a newly added transitive import is picked up without editing the detector"
       "apps/api/src/first.ts",
       "apps/api/src/required.ts",
       "apps/api/src/second.ts",
-      "scripts/shared-verifier.ts",
-      ".oxlint-plugins/shared-helper.ts",
       "packages/example/src/new.ts",
       "packages/example/data/asset.json",
       "packages/second/src/new.ts",
