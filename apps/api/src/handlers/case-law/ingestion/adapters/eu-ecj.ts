@@ -1,3 +1,4 @@
+// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -491,6 +492,7 @@ const queryDecisions = async ({
 
   const response = await fetchPublisher(SPARQL_URL, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     method: "POST",
     signal,
     timeoutMs,
@@ -797,6 +799,7 @@ const readDocumentResponse = async ({
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -934,12 +937,14 @@ const fetchManifestation = async ({
         signal,
       }),
     catch: (cause) =>
-      new AdapterFetchError({
-        message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        cursor: null,
-        cause,
-      }),
+      cause instanceof AdapterFetchError
+        ? cause
+        : new AdapterFetchError({
+            message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor: null,
+            cause,
+          }),
   });
   if (Result.isError(fetched)) {
     return fetched;
@@ -1671,6 +1676,7 @@ const fetchNotice = async (
   }
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -1724,6 +1730,7 @@ const fetchFormex = async (
   }
   const response = await fetchPublisher(contentUrl.value, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -2748,6 +2755,7 @@ export const euEcjAdapter = defineSourceAdapter({
     try {
       const response = await fetchPublisher(SPARQL_URL, {
         adapterKey: ADAPTER_KEYS.EU_ECJ,
+        retryPolicy: "publisher-backoff",
         method: "POST",
         signal,
         timeoutMs: 60_000,

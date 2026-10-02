@@ -14,6 +14,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { tipWindowSlices } from "@/api/handlers/case-law/ingestion/reconciliation-plan";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   decodeSourceRawEnvelope,
   listingIdentityKey,
@@ -965,7 +966,8 @@ describe("euEcjAdapter.reconciliation.listSlicePage", () => {
       reconciliation.listSlicePage({ slice: "2024", page: 0 }),
     );
 
-    expect(rejection).toBeInstanceOf(DOMException);
+    expect(rejection).toBeInstanceOf(AdapterFetchError);
+    expect(rejection).toMatchObject({ cause: expect.any(DOMException) });
   });
 
   test("keys the documents that settle one docket as separate rows", async () => {
@@ -1312,9 +1314,11 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
       );
 
       expect(rejectionMessage(rejection)).toContain(
-        `CJEU document request failed: ${status}`,
+        status === 500
+          ? `CJEU document request failed: ${status}`
+          : `Publisher retry budget exhausted: ${status}`,
       );
-      expect(fetches).toHaveLength(ordinal + 1);
+      expect(fetches).toHaveLength(ordinal + (status === 500 ? 1 : 6));
       expect(fetches.at(-1)?.url).toBe(failedUrl);
     },
   );
