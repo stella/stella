@@ -52,3 +52,6 @@ export type HostedUsageProviderKind = "neutral" | "polar";
  */
 export const getHostedUsageProviderKind = (): HostedUsageProviderKind =>
   env.HOSTED_USAGE_PROVIDER;
+
+export const getHostedUsageProviderApiVersion = () =>
+  env.HOSTED_USAGE_PROVIDER_API_VERSION;

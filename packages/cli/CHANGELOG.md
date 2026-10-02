@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.3.3
+
+### Patch Changes
+
+- [#4426](https://github.com/stella/stella/pull/4426) [`802b552`](https://github.com/stella/stella/commit/802b5523fe77710018bce9e8385801257bbae1c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the generated command catalog.
+
 ## 3.3.2
 
 ### Patch Changes
