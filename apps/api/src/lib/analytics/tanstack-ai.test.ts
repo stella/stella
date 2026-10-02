@@ -1234,6 +1234,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
             flush: async () => undefined,
             identifyOrganizationGroup: () => undefined,
           },
+          dataClass: "customer",
           feature: "chat.stream",
           orgAIConfig: createAnthropicOrgAIConfig(),
           promptCacheSurface,
