@@ -1,4 +1,5 @@
 import { expect, test } from "bun:test";
+import { MessageChannel, Worker } from "node:worker_threads";
 
 import {
   buildScreeningIndex,
@@ -7,6 +8,8 @@ import {
   screen,
 } from "@stll/sanctions";
 import type { ParsedList, ScreeningQuery } from "@stll/sanctions";
+
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import { createSanctionsMatcherPool } from "./matcher-pool";
 import type { SanctionsMatcherRequest } from "./matcher-protocol";
@@ -218,3 +221,118 @@ test.each([1, 2])(
   },
   15_000,
 );
+
+test("close cancels active and queued leases and prevents respawn", async () => {
+  const { port1, port2 } = new MessageChannel();
+  const entered = Promise.withResolvers<undefined>();
+  const exited = Promise.withResolvers<undefined>();
+  port1.once("message", () => entered.resolve(undefined));
+  let spawned = 0;
+  let invoked = 0;
+  const pool = createSanctionsMatcherPool({
+    size: 1,
+    deadlineMs: 8000,
+    createWorker: () => {
+      spawned += 1;
+      const worker = new Worker(
+        new URL("test-fixtures/matcher-close-worker.ts", import.meta.url),
+        {
+          workerData: { acknowledgement: port2 },
+          transferList: [port2],
+        },
+      );
+      worker.once("exit", () => exited.resolve(undefined));
+      return worker;
+    },
+  });
+  const active = pool.run(async (session) => {
+    invoked += 1;
+    return await session.match({
+      source: "eu",
+      editionId: "close",
+      list: personList("Čeněk Říha"),
+      query: { name: "Čeněk Říha", entityType: "person" },
+      cutoff: DEFAULT_CUTOFF,
+      limit: 10,
+    });
+  });
+  try {
+    await entered.promise;
+    const queued = pool.run(async () => {
+      invoked += 1;
+      return "queued";
+    });
+    const began = performance.now();
+    await pool.close();
+    expect(await active).toBeNull();
+    expect(await queued).toBeNull();
+    expect(performance.now() - began).toBeLessThan(1000);
+    await exited.promise;
+    expect(invoked).toBe(1);
+    expect(
+      await pool.run(async () => {
+        invoked += 1;
+        return "after-close";
+      }),
+    ).toBeNull();
+    expect(invoked).toBe(1);
+    expect(spawned).toBe(1);
+    await pool.close();
+  } finally {
+    await pool.close();
+    await active;
+    port1.close();
+    port2.close();
+  }
+}, 15_000);
+
+test("close waits for actual worker retirement", async () => {
+  const retirement = Promise.withResolvers<number>();
+  const entered = Promise.withResolvers<undefined>();
+  let retired = 0;
+  let closed = false;
+  const pool = createSanctionsMatcherPool({
+    deadlineMs: 8000,
+    createWorker: () => {
+      const events = { on: () => undefined };
+      return asTestRaw<Worker>(
+        Object.assign(events, {
+          unref: () => events,
+          terminate: async () => {
+            retired += 1;
+            return await retirement.promise;
+          },
+        }),
+      );
+    },
+  });
+  const active = pool.run(async (session) => {
+    entered.resolve(undefined);
+    await new Promise<void>((resolve) => {
+      session.signal.addEventListener("abort", () => resolve(), { once: true });
+    });
+    return "cancelled";
+  });
+  try {
+    await entered.promise;
+    const closing = pool.close().then(() => {
+      closed = true;
+      return undefined;
+    });
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    expect(retired).toBe(1);
+    expect(closed).toBe(false);
+    retirement.resolve(0);
+    await closing;
+    expect(closed).toBe(true);
+    expect(await active).toBeNull();
+    await pool.close();
+    expect(retired).toBe(1);
+  } finally {
+    retirement.resolve(0);
+    await pool.close();
+    await active;
+  }
+});
