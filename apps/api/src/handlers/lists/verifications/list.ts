@@ -42,6 +42,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedListVerificationRunId } from "@/api/lib/safe-id-boundaries";
 
 const runCursor = createTimestampIdCursorCodec({
@@ -79,8 +80,9 @@ const config = {
 const readVerifications = createSafeHandler(
   config,
   async function* ({ query, safeDb, workspaceId }) {
-    const limit =
-      query.limit ?? LIMITS.legalListVerificationRunsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListVerificationRunsPageSizeDefault,
+    );
     const cursor =
       query.cursor === undefined ? null : runCursor.decode(query.cursor);
     if (query.cursor !== undefined && cursor === null) {

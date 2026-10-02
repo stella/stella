@@ -13,7 +13,7 @@
  */
 import { panic, Result } from "better-result";
 
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
@@ -210,7 +210,7 @@ const compactThread = async ({
   signal,
   thread,
 }: CompactThreadOptions): ReturnType<typeof runChatThreadCompaction> => {
-  // `loadOrgAIConfig` throws on a corrupt encrypted configuration, which is a
+  // `loadOrgAISettings` throws on a corrupt encrypted configuration, which is a
   // property of one organization. Outside the per-thread boundary that
   // rejection would escape before this thread is settled, leaving the rest of
   // the claimed batch leased until expiry and letting the same poison thread
@@ -225,7 +225,7 @@ const compactThread = async ({
     await Result.tryPromise({
       try: async () =>
         (
-          await loadOrgAIConfig(db, {
+          await loadOrgAISettings(db, {
             organizationId: thread.organizationId,
             userId: thread.userId,
           })
@@ -236,7 +236,7 @@ const compactThread = async ({
   if (Result.isError(configResult)) {
     return configResult;
   }
-  const orgAIConfig = configResult.value;
+  const { orgAIConfig, managedAIResidency } = configResult.value;
 
   const { preserveTokens, triggerTokens } = resolveChatCompactionBudget({
     chatModelOverride: thread.chatModel ?? undefined,
@@ -256,6 +256,7 @@ const compactThread = async ({
       signal,
     ]),
     analytics: createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       feature: "chat.thread_compaction",
       modelRole: "chat",
       orgAIConfig,
@@ -274,6 +275,7 @@ const compactThread = async ({
     dataWorkspaceIds: thread.dataWorkspaceIds,
     modelId: thread.chatModel ?? undefined,
     orgAIConfig,
+    managedAIResidency,
     organizationId: thread.organizationId,
     preserveTokens,
     safeDb,

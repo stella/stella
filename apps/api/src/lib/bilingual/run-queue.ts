@@ -463,6 +463,7 @@ const executeRun = async (
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig: config.value.orgAIConfig,
+    managedAIResidency: config.value.managedAIResidency,
     promptCachingEnabled: config.value.promptCachingEnabled,
     abortSignal: AbortSignal.timeout(RUN_TIMEOUT_MS),
     scopeKey: run.entityVersionId,

@@ -1,4 +1,10 @@
-import { isRecord } from "../shared/guards.js";
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
+import {
+  hasOptionalNullableString,
+  hasOptionalString,
+  isOptionalArrayOf,
+  isRecord,
+} from "../shared/guards.js";
 import {
   performRegistryRequest,
   readRegistryJson,
@@ -38,15 +44,112 @@ const MAX_SEARCH_LIMIT = 100;
 // Internal fetch helpers
 // ---------------------------------------------------------------------------
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
-
 const isOptionalStringArray = (value: unknown): boolean =>
   value === undefined ||
   (Array.isArray(value) && value.every((item) => typeof item === "string"));
 
 const isOptionalRecordArray = (value: unknown): boolean =>
   value === undefined || (Array.isArray(value) && value.every(isRecord));
+
+const isAresAddress = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    [
+      "nazevUlice",
+      "cisloOrientacniPismeno",
+      "nazevCastiObce",
+      "nazevMestskehoObvodu",
+      "nazevObce",
+      "pscTxt",
+      "nazevOkresu",
+      "nazevStatu",
+      "textovaAdresa",
+    ].every((key) => hasOptionalNullableString(value, key)) &&
+    ["cisloDomovni", "cisloOrientacni", "psc"].every(
+      (key) =>
+        value[key] === undefined ||
+        value[key] === null ||
+        typeof value[key] === "number",
+    ));
+
+const isAresValueEntry = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "hodnota") &&
+  hasOptionalString(value, "datumVymazu");
+
+const isAresNameEntry = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["hodnota"] === "string" &&
+  hasOptionalString(value, "datumVymazu");
+
+const isAresAddressEntry = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "datumVymazu") &&
+  isAresAddress(value["adresa"]);
+
+const isAresPhysicalPerson = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    ["titulPredJmenem", "jmeno", "prijmeni", "titulZaJmenem"].every((key) =>
+      hasOptionalString(value, key),
+    ));
+
+const isAresLegalPerson = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "obchodniJmeno") &&
+    isAresAddress(value["adresa"]));
+
+const isAresPerson = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isAresPhysicalPerson(value["fyzickaOsoba"]) &&
+    isAresLegalPerson(value["pravnickaOsoba"]) &&
+    hasOptionalString(value, "nazevAngazma"));
+
+const isAresMembership = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    (value["clenstvi"] === undefined ||
+      (isRecord(value["clenstvi"]) &&
+        hasOptionalString(value["clenstvi"], "vznikClenstvi"))) &&
+    (value["funkce"] === undefined ||
+      (isRecord(value["funkce"]) &&
+        hasOptionalString(value["funkce"], "nazev"))));
+
+const isAresMember = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "datumVymazu") &&
+  hasOptionalString(value, "nazevAngazma") &&
+  isAresPhysicalPerson(value["fyzickaOsoba"]) &&
+  isAresLegalPerson(value["pravnickaOsoba"]) &&
+  isAresPerson(value["osoba"]) &&
+  isAresMembership(value["clenstvi"]) &&
+  isAresAddress(value["adresa"]);
+
+const isAresBody = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "datumVymazu") &&
+  hasOptionalString(value, "nazevOrganu") &&
+  isOptionalArrayOf(value["clenoveOrganu"], isAresMember) &&
+  isOptionalArrayOf(value["zpusobJednani"], isAresValueEntry);
+
+const isAresCourtFile = (value: unknown): boolean =>
+  isRecord(value) &&
+  ["soud", "oddil", "datumVymazu"].every((key) =>
+    hasOptionalString(value, key),
+  ) &&
+  (value["vlozka"] === undefined ||
+    typeof value["vlozka"] === "string" ||
+    typeof value["vlozka"] === "number");
+
+const isAresCapital = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "datumVymazu") &&
+  (value["vklad"] === undefined ||
+    (isRecord(value["vklad"]) &&
+      hasOptionalString(value["vklad"], "hodnota") &&
+      hasOptionalString(value["vklad"], "typObnos")));
 
 const isAresResRecord = (
   value: unknown,
@@ -55,7 +158,10 @@ const isAresResRecord = (
   typeof value["ico"] === "string" &&
   typeof value["obchodniJmeno"] === "string" &&
   typeof value["primarniZaznam"] === "boolean" &&
-  isOptionalRecord(value["sidlo"]) &&
+  isAresAddress(value["sidlo"]) &&
+  ["pravniForma", "datumVzniku", "datumZapisu"].every((key) =>
+    hasOptionalString(value, key),
+  ) &&
   isOptionalStringArray(value["czNace"]);
 
 const isAresResResponse = (value: unknown): value is AresResResponse =>
@@ -69,23 +175,25 @@ const isAresVrRecord = (
 ): value is AresVrResponse["zaznamy"][number] =>
   isRecord(value) &&
   typeof value["primarniZaznam"] === "boolean" &&
-  isOptionalRecordArray(value["obchodniJmeno"]) &&
+  isOptionalArrayOf(value["obchodniJmeno"], isAresNameEntry) &&
   isOptionalRecordArray(value["ico"]) &&
-  isOptionalRecordArray(value["adresy"]) &&
+  isOptionalArrayOf(value["adresy"], isAresAddressEntry) &&
   (value["pravniForma"] === undefined ||
     typeof value["pravniForma"] === "string" ||
     isOptionalRecordArray(value["pravniForma"])) &&
-  isOptionalRecordArray(value["spisovaZnacka"]) &&
-  isOptionalRecordArray(value["zakladniKapital"]) &&
-  isOptionalRecordArray(value["statutarniOrgany"]) &&
-  isOptionalRecordArray(value["ostatniOrgany"]) &&
-  isOptionalRecordArray(value["datumVzniku"]);
+  isOptionalArrayOf(value["spisovaZnacka"], isAresCourtFile) &&
+  isOptionalArrayOf(value["zakladniKapital"], isAresCapital) &&
+  isOptionalArrayOf(value["statutarniOrgany"], isAresBody) &&
+  isOptionalArrayOf(value["ostatniOrgany"], isAresBody) &&
+  isOptionalArrayOf(value["datumVzniku"], isAresValueEntry) &&
+  hasOptionalString(value, "datumZapisu");
 
 const isAresVrResponse = (value: unknown): value is AresVrResponse =>
   isRecord(value) &&
   typeof value["icoId"] === "string" &&
   Array.isArray(value["zaznamy"]) &&
-  value["zaznamy"].every(isAresVrRecord);
+  value["zaznamy"].every(isAresVrRecord) &&
+  hasOptionalString(value, "stavSubjektu");
 
 const isAresSearchEntry = (
   value: unknown,
@@ -93,7 +201,7 @@ const isAresSearchEntry = (
   isRecord(value) &&
   (value["ico"] === undefined || typeof value["ico"] === "string") &&
   typeof value["obchodniJmeno"] === "string" &&
-  isOptionalRecord(value["sidlo"]);
+  isAresAddress(value["sidlo"]);
 
 const isAresSearchResponse = (value: unknown): value is AresSearchResponse =>
   isRecord(value) &&
@@ -288,13 +396,13 @@ export const lookupByIco = async (
 
   // Fetch RES (always) and VR (optionally, in parallel)
   const resPromise = aresGet({
-    url: `${RES_URL}/${normalized}`,
+    url: `${RES_URL}/${encodeRegistryComponent(normalized)}`,
     isExpectedShape: isAresResResponse,
     signal: options?.signal,
   });
   const vrPromise = includeVr
     ? aresGet({
-        url: `${VR_URL}/${normalized}`,
+        url: `${VR_URL}/${encodeRegistryComponent(normalized)}`,
         isExpectedShape: isAresVrResponse,
         signal: optionalVrSignal,
       })

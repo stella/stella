@@ -17,7 +17,7 @@ import {
   workspaces,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
@@ -29,6 +29,7 @@ import {
   DEADLINE_TEXT_MIN_CHARS,
   deadlineDedupeKey,
   deadlineExtractionSchema,
+  deadlineScoutFailureStatus,
   deadlineSeverity,
   filterDeadlines,
 } from "@/api/lib/scouts/document-deadlines.logic";
@@ -40,7 +41,6 @@ const DEADLINE_GENERATION_TIMEOUT_MS = 60_000;
 // Ten bounded excerpts plus reasoning share the provider's output ceiling.
 // A 2,000-token allowance truncated valid extractions before JSON could close.
 const DEADLINE_MAX_OUTPUT_TOKENS = 8192;
-const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
 const DEADLINE_SCOUT_ERROR_CODE = {
   NO_ACTOR: "no_actor",
   OBSERVATION_FAILED: "observation_failed",
@@ -202,6 +202,30 @@ const settleRun = async ({
     );
 };
 
+type RejectDeadlineObservationOptions = {
+  db: DeadlineScoutDb;
+  run: ClaimedRun;
+  error: unknown;
+};
+
+const rejectDeadlineObservation = async ({
+  db,
+  run,
+  error,
+}: RejectDeadlineObservationOptions): Promise<never> => {
+  await settleRun({
+    db,
+    errorCode: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
+    run,
+    status: deadlineScoutFailureStatus(run.deadlineScoutAttemptCount, error),
+  });
+  throw new DocumentDeadlineScoutError({
+    code: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
+    message: "Document deadline observation failed",
+    cause: error,
+  });
+};
+
 /**
  * Read one immutable processing result and surface explicit dated obligations.
  * PostgreSQL owns claiming and retry state; a BullMQ job is only a wake-up.
@@ -241,14 +265,14 @@ export const runDocumentDeadlineScout = async ({
   // from the instance provider without a key of its own cannot observe.
   const observed = Result.flatten(
     await Result.tryPromise(async () => {
-      const orgAIConfigResult = await loadOrgAIConfig(db, {
+      const orgAIConfigResult = await loadOrgAISettings(db, {
         organizationId: run.organizationId,
         userId: actorUserId,
       });
       if (Result.isError(orgAIConfigResult)) {
         return Result.err(orgAIConfigResult.error);
       }
-      const orgAIConfig = orgAIConfigResult.value;
+      const { orgAIConfig, managedAIResidency } = orgAIConfigResult.value;
       return Result.ok(
         await runScout({
           db: scopedDb,
@@ -271,6 +295,7 @@ export const runDocumentDeadlineScout = async ({
             }
 
             const analytics = createTanStackAIAnalyticsCallbacks({
+              dataClass: "customer",
               feature: "inbox.deadline-scout",
               modelRole: "chat",
               orgAIConfig,
@@ -289,10 +314,12 @@ export const runDocumentDeadlineScout = async ({
               },
             });
             const extraction = await generateTanStackObjectForRole({
+              dataClass: "customer",
               role: "chat",
               organizationId: run.organizationId,
               tenantWorkspaceIds: [run.workspaceId],
               orgAIConfig,
+              managedAIResidency,
               analytics,
               system: DEADLINE_SYSTEM_PROMPT,
               prompt: `Document "${source.entityName}":\n\n${text}`,
@@ -389,20 +416,7 @@ export const runDocumentDeadlineScout = async ({
   );
 
   if (Result.isError(observed)) {
-    await settleRun({
-      db,
-      errorCode: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
-      run,
-      status:
-        run.deadlineScoutAttemptCount >= DEADLINE_SCOUT_MAX_ATTEMPTS
-          ? "failed"
-          : "pending",
-    });
-    throw new DocumentDeadlineScoutError({
-      code: DEADLINE_SCOUT_ERROR_CODE.OBSERVATION_FAILED,
-      message: "Document deadline observation failed",
-      cause: observed.error,
-    });
+    return await rejectDeadlineObservation({ db, run, error: observed.error });
   }
 
   await settleRun({

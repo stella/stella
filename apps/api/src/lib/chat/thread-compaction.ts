@@ -44,6 +44,7 @@ import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   CHAT_COMPACTION_PROMPT_VERSION,
   CHAT_INCREMENTAL_COMPACTION_SYSTEM_PROMPT,
@@ -157,6 +158,7 @@ type RunChatThreadCompactionOptions = {
   extractionFeatureEnabled?: boolean | undefined;
   modelId?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   preserveTokens: number;
   reasoningEffort?: ReasoningEffort | undefined;
@@ -680,6 +682,7 @@ const createModelSummarizer =
   (options: RunChatThreadCompactionOptions): ChatCompactionSummarize =>
   async (prompt) =>
     await generateTanStackTextForRole({
+      dataClass: "customer",
       abortSignal: options.abortSignal,
       analytics: options.analytics,
       caching: resolveCaching({
@@ -691,6 +694,7 @@ const createModelSummarizer =
       modelId: options.modelId,
       organizationId: options.organizationId,
       orgAIConfig: options.orgAIConfig,
+      managedAIResidency: options.managedAIResidency,
       reasoningEffort: options.reasoningEffort,
       prompt: renderIncrementalCompactionPrompt(prompt),
       role: "chat",

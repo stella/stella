@@ -774,7 +774,7 @@ export const generatedRouteMap: RouteNode = {
             commandPath: ["case-law", "read"],
             toolName: "read_case_law_decision",
             description:
-              "Read decisions by `decision_ids[]`, answered in input order: `found` carries a decision, `not_found` and `pending` carry a message.",
+              "Read decisions by `decision_ids[]`, answered in input order.",
             flags: [
               {
                 flag: "--decision-ids",
@@ -786,6 +786,18 @@ export const generatedRouteMap: RouteNode = {
                 required: true,
               },
               {
+                flag: "--max-chars",
+                prop: "max_chars",
+                kind: "int",
+                min: 1,
+                max: 8000,
+                range: "clamp",
+                repeatable: false,
+                description:
+                  "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+                required: false,
+              },
+              {
                 flag: "--include",
                 prop: "include",
                 kind: "enum-array",
@@ -795,10 +807,11 @@ export const generatedRouteMap: RouteNode = {
                   "textFields",
                   "source",
                   "citations",
+                  "outline",
                 ],
                 repeatable: true,
                 description:
-                  "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+                  "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
                 required: false,
               },
             ],
@@ -826,6 +839,17 @@ export const generatedRouteMap: RouteNode = {
                   description:
                     "The decisions to read, at most 20 per call. Each id is answered on its own, so one unknown id does not sink the rest.",
                 },
+                max_chars: {
+                  type: "integer",
+                  minimum: 1,
+                  maximum: 8000,
+                  description:
+                    "Text window size, 1–8000 characters. Accepted only alongside a single decision id. Use a JSON number; a value outside the range is clamped to it.",
+                  "x-stella-agent-input": {
+                    kind: "number",
+                    range: "clamp",
+                  },
+                },
                 cursor: {
                   type: "string",
                   minLength: 1,
@@ -842,11 +866,12 @@ export const generatedRouteMap: RouteNode = {
                       "textFields",
                       "source",
                       "citations",
+                      "outline",
                     ],
                     type: "string",
                   },
                   description:
-                    "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
+                    "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window. Use a JSON array of strings; a single string is read as a one-item list.",
                   "x-stella-agent-input": {
                     kind: "string-list",
                   },
@@ -9643,7 +9668,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "chat", "threads-list"],
                 capabilityId: "chat.threads.list",
                 description:
-                  "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. search matches the thread title or the matter name; paginate with limit and cursor.",
+                  "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. Each thread carries a bounded preview of its context: the matters and files it drew on, with their total counts. search matches the thread title, the matter it lives in, or a matter pinned to it; paginate with limit and cursor.",
                 access: "read",
                 flags: [
                   {
@@ -33644,7 +33669,10 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeNarrativeRequired",
                   },
                 ],
-                inputOnly: ["body.documentProcessingMode"],
+                inputOnly: [
+                  "body.documentProcessingMode",
+                  "body.managedAIResidency",
+                ],
                 paginated: false,
                 destructive: false,
                 scope: "admin_write",
@@ -33679,6 +33707,18 @@ export const generatedRouteMap: RouteNode = {
                         },
                         promptCachingEnabled: {
                           type: "boolean",
+                        },
+                        managedAIResidency: {
+                          anyOf: [
+                            {
+                              const: "eu",
+                              type: "string",
+                            },
+                            {
+                              const: "us",
+                              type: "string",
+                            },
+                          ],
                         },
                         memoryExtractionEnabled: {
                           type: "boolean",

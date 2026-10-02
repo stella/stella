@@ -1,0 +1,27 @@
+name: Install OSV-Scanner
+description: Install the free Apache-2.0 OSV-Scanner CLI with verified upstream and mirror downloads (Linux X64 only).
+inputs:
+  version:
+    description: OSV-Scanner release version (publish its verified mirror first)
+    required: false
+    default: "2.6.0"
+  sha256:
+    description: SHA-256 of osv-scanner_linux_amd64; update together with version
+    required: false
+    default: ca69b3d3cd08f889a49dc0a383122f71cc528b83803671df5fd874d97485b108
+runs:
+  using: composite
+  steps:
+    - name: Restore OSV-Scanner binary
+      uses: actions/cache@55cc8345863c7cc4c66a329aec7e433d2d1c52a9 # v6.1.0
+      with:
+        path: ~/.osv-scanner/bin
+        key: osv-scanner-${{ inputs.version }}-${{ inputs.sha256 }}-${{ runner.os }}-${{ runner.arch }}
+    - name: Install OSV-Scanner
+      shell: bash
+      env:
+        OSV_SCANNER_RELEASE_VERSION: ${{ inputs.version }}
+        OSV_SCANNER_SHA256: ${{ inputs.sha256 }}
+        OSV_SCANNER_PRIMARY_RELEASE_URL: https://github.com/google/osv-scanner/releases/download/v${{ inputs.version }}
+        OSV_SCANNER_MIRROR_RELEASE_URL: https://github.com/stella/.github/releases/download/mirror-osv-scanner-v${{ inputs.version }}
+      run: bash "$GITHUB_ACTION_PATH/install.sh"

@@ -29,6 +29,7 @@ import {
   PROVISION_LINK_STATUS_COLUMN_GRANTS_BY_RELATION,
   publicLawColumnPairs,
 } from "@/api/lib/public-law-relations";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 export const listDecisionProvisionsQuerySchema = t.Object({
@@ -247,7 +248,9 @@ export const listDecisionProvisionsHandler = async ({
   query,
 }: ListDecisionProvisionsOptions) => {
   const { id: decisionId, tx } = subject;
-  const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const cursor = query.cursor ? decodeProvisionCursor(query.cursor) : null;
   if (query.cursor && cursor === null) {
     return status(400, { message: "Invalid cursor" });

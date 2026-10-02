@@ -1,5 +1,19 @@
 # @stll/ui
 
+## 0.40.0
+
+### Minor Changes
+
+- [#4359](https://github.com/stella/stella/pull/4359) [`96a31ab`](https://github.com/stella/stella/commit/96a31abbb7f6ddae0aa4c1ea857559b714190ff1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `CopyButton`, which confirms a copy in place; semantic `NewChatIcon` and `AddCommentIcon`; and a centered slot in `ComposerStatusRow`.
+
+## 0.39.0
+
+### Minor Changes
+
+- [#4339](https://github.com/stella/stella/pull/4339) [`8c81796`](https://github.com/stella/stella/commit/8c81796e512762094793acc16eb13f3e49c7cc61) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Remove the unused sortable Kanban layer: `KanbanSortableBoard`, `useKanbanSortable`, `KanbanDragHandle` and the `sortable` prop of `KanbanVirtualCell` are no longer exported.
+
+- [#4358](https://github.com/stella/stella/pull/4358) [`deb3ce4`](https://github.com/stella/stella/commit/deb3ce49c36f89c6371731d6706e777ad8fbed3b) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `CopyButton`, which confirms a copy in place; semantic `NewChatIcon` and `AddCommentIcon`; and a centered slot in `ComposerStatusRow`.
+
 ## 0.38.0
 
 ### Minor Changes

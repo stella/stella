@@ -144,6 +144,7 @@ const generateAtOutputCeiling = async ({
   terminalEvents: string[];
 }) =>
   await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     analytics: {
       captureError: () => undefined,
       middleware: {
@@ -181,6 +182,7 @@ const generateWithCancellation = async (cancelAt: CancellationPoint) => {
   } as ResolvedTanStackTextModel;
 
   return await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     abortSignal: controller.signal,
     caching: noCaching,
     finishPolicy: "allow-incomplete",
@@ -230,6 +232,7 @@ describe("TanStack completed-run canary", () => {
 
     expect(
       await generateTanStackTextForRole({
+        dataClass: "public_corpus",
         caching: noCaching,
         finishPolicy: "require-complete",
         organizationId: null,
@@ -304,6 +307,7 @@ describe("TanStack output-ceiling canary", () => {
   test("keeps a truncated structured-output run as an error", async () => {
     const drain = async () => {
       for await (const _event of streamTanStackObjectForRole({
+        dataClass: "public_corpus",
         caching: noCaching,
         maxOutputTokens: TEST_OUTPUT_CEILING_TOKENS,
         organizationId: null,

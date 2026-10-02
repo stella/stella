@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -21,6 +21,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -30,12 +31,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const streamChatMock = mock(
-  async () =>
-    new Response("stream started", {
-      headers: { "Content-Type": "text/event-stream" },
-    }),
-);
+const streamChatMock = createChatStreamMock();
 const loadExternalMcpToolsForTest = async () => {
   const close = async () => undefined;
   return {
@@ -171,6 +167,7 @@ const createContext = ({
     memberRole: { role: "owner" },
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},

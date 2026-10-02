@@ -245,7 +245,7 @@ export const readReferencePassageTexts = async (
 /**
  * The passage ids among `ids` whose rows the caller's transaction can read.
  * What a pin must check before a position list is persisted: the grader later
- * reads these rows with service access on the pinner's behalf.
+ * reads these rows as the requester's current membership.
  */
 export const readableReferencePassageIds = async (
   db: Pick<Transaction, "select">,
