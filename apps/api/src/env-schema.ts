@@ -11,7 +11,12 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
+import {
+  DEFAULT_POLAR_API_VERSION,
+  polarApiVersionSchema,
+} from "@/api/lib/hosted-usage-provider/polar/contract";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
+import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
@@ -286,6 +291,9 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
   ),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
+  DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
+    v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  ),
 
   /**
    * Plain-text token served at `/.well-known/openai-apps-challenge` so an
@@ -347,6 +355,7 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_CLIENT_ID: v.optional(v.string()),
   MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
+  MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
   FEATURE_CHAT: featureFlagSchema,
@@ -623,6 +632,10 @@ export const envApiServerSchema = {
    */
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: v.optional(
     v.pipe(v.string(), v.minLength(16)),
+  ),
+  HOSTED_USAGE_PROVIDER_API_VERSION: v.optional(
+    polarApiVersionSchema,
+    DEFAULT_POLAR_API_VERSION,
   ),
   HOSTED_USAGE_PROVIDER_API_KEY: v.optional(v.pipe(v.string(), v.minLength(8))),
   HOSTED_USAGE_PROVIDER_BASE_URL: v.optional(v.pipe(v.string(), v.url())),

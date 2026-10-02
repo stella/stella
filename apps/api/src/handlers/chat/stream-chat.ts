@@ -45,10 +45,15 @@ import {
   isChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { chatSafePromptText } from "@/api/handlers/chat/chat-prompt";
 import type {
-  ChatSafePrompt,
+  ChatSafePromptLayers,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import {
+  chatAttemptRequestOptions,
+  chatSystemPrompts,
+} from "@/api/handlers/chat/chat-request";
 import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   CHAT_RUN_MODE,
@@ -121,8 +126,8 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
+import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
+import { resolveCaching } from "@/api/lib/ai-config";
 import {
   classifyAIError,
   isAnticipatedAIFailure,
@@ -153,13 +158,14 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
+import { imageInputUnsupportedError } from "@/api/lib/chat/provider-image-input";
 import {
   withProviderStreamContract,
   withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
-import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
+import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import {
   createStreamMessageCapture,
   type ChatStreamProcessor,
@@ -183,14 +189,10 @@ import type {
 } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
-import {
-  chatTurnOutputTokens,
-  mergeGenerationOptions,
-  resolveTanStackTextModel,
-  systemPromptsPatch,
-} from "@/api/lib/tanstack-ai-generate";
+import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
@@ -279,7 +281,8 @@ type StreamChatProps = {
   /** The turn's run: it owns the abort, the stop and the settlement. */
   run: ChatTurnRun;
   safeDb: SafeDb;
-  systemSafe: ChatSafePrompt;
+  /** The prompt's cacheable layers, sent verbatim. */
+  systemSafe: ChatSafePromptLayers;
   systemUntrusted: ChatUntrustedPromptSuffix;
   /**
    * The org's accessible workspace ids, for the model-ingress guard: the
@@ -417,9 +420,10 @@ export const streamChat = async ({
   if (agentBoundaryError !== null) {
     return thirdPartyBoundaryRefusalResponse(agentBoundaryError);
   }
+  const systemSafeText = chatSafePromptText(systemSafe);
   reserveThirdPartyBoundarySourcePlaceholders({
     boundary: thirdPartyBoundary,
-    value: [systemSafe, systemUntrusted, messages, resume, tools],
+    value: [systemSafeText, systemUntrusted, messages, resume, tools],
   });
   const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,
@@ -430,8 +434,8 @@ export const streamChat = async ({
   }
   const system =
     preparedUntrusted.value.length > 0
-      ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
-      : systemSafe;
+      ? `${systemSafeText}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
+      : systemSafeText;
   // The system prompt is entirely server-built; a tenant workspace id in it
   // is a Stella bug (matter scope, active-file, and connected-matter
   // sections must all speak in chat refs), so this fails closed.
@@ -500,10 +504,23 @@ export const streamChat = async ({
     documentAttachmentMimeTypes.some(
       (mimeType) => !modelAcceptsDocumentAttachment({ model, mimeType }),
     );
+  const hasImageAttachments = preparedMessageList.some((message) =>
+    message.parts.some((part) => part.type === "image"),
+  );
+  const modelRejectsImages = (model: ResolvedTanStackTextModel): boolean =>
+    hasImageAttachments && getModelImageCapability(model) === "unsupported";
   const modelRejectsStreamingTools = (
     model: ResolvedTanStackTextModel,
   ): boolean =>
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
+
+  if (modelRejectsImages(primaryModel)) {
+    const error = imageInputUnsupportedError();
+    return new Response(
+      JSON.stringify({ code: error.code, message: error.message }),
+      { status: error.status, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
   if (modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
@@ -544,6 +561,7 @@ export const streamChat = async ({
   const fallbackModel =
     resolvedFallbackModel !== null &&
     (modelRejectsAnyDocument(resolvedFallbackModel) ||
+      modelRejectsImages(resolvedFallbackModel) ||
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
@@ -579,6 +597,7 @@ export const streamChat = async ({
         workspaceIds: tenantWorkspaceIds,
       }),
       system: guardedSystem,
+      systemLayers: systemSafe,
       tenantWorkspaceIds,
       tools: modelTools,
     },
@@ -940,6 +959,7 @@ type CreateChatAttemptAnalyticsProps = {
   modelRole: ModelRole;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  promptCacheSurface?: PromptCacheMetricSurface | undefined;
   safeDb: SafeDb;
   /** Explicit per-turn model selection; undefined = role default. */
   selectedModelId: string | undefined;
@@ -955,6 +975,7 @@ const createChatAttemptAnalytics = ({
   modelRole,
   organizationId,
   orgAIConfig,
+  promptCacheSurface,
   safeDb,
   selectedModelId,
   usageLane,
@@ -964,6 +985,7 @@ const createChatAttemptAnalytics = ({
 }: CreateChatAttemptAnalyticsProps): TanStackAIAnalyticsCallbacks =>
   createTanStackAIAnalyticsCallbacks({
     dataClass: "customer",
+    promptCacheSurface,
     usageMetering: {
       actionType: "chat",
       lane: usageLane,
@@ -998,6 +1020,9 @@ export type GuardedChatSurfaces = {
    *  right after its step. */
   messages: GuardedProviderHistory;
   system: GuardedSystemPrompt;
+  /** The cacheable layers `system` begins with, where its cache markers go
+   *  (`chat-request.ts`). */
+  systemLayers: ChatSafePromptLayers;
   /**
    * The guard's own input, carried alongside its output because the surfaces
    * are not final: the runtime middleware rewrites messages and system prompt
@@ -1151,47 +1176,6 @@ const runChatAttempts = async function* ({
   }
 };
 
-/**
- * What a chat attempt hands the engine that shapes the provider request: the
- * adapter bound to the run's tool call ids, the tools as the provider reads
- * them, the system prompt, and the generation options. The provider wire
- * test builds its requests here too, so what it sends is what a chat turn
- * sends. `maxOutputTokens` defaults to the chat turn's ceiling.
- */
-export const chatAttemptRequestOptions = ({
-  caching,
-  maxOutputTokens,
-  model,
-  modelTools,
-  role,
-  system,
-  toolCallIds,
-}: {
-  caching: ReturnType<typeof resolveCaching>;
-  maxOutputTokens?: number | undefined;
-  model: ResolvedTanStackTextModel;
-  modelTools: Parameters<
-    typeof projectChatToolSchemasForProvider
-  >[0]["modelTools"];
-  role: ChatAttemptRole;
-  system: string | undefined;
-  toolCallIds: ToolCallIdLedger;
-}) => ({
-  adapter: withRunToolCallIds(model.adapter, toolCallIds),
-  tools: projectChatToolSchemasForProvider({
-    modelTools,
-    provider: model.provider,
-  }),
-  ...systemPromptsPatch({ caching, model, system }),
-  modelOptions: mergeGenerationOptions({
-    caching,
-    model,
-    maxOutputTokens: maxOutputTokens ?? chatTurnOutputTokens(model),
-    serviceTier: "standard",
-    temperature: getTemperatureForRole(role),
-  }),
-});
-
 type RunChatAttemptProps = {
   abortController: AbortController;
   abortSignal: AbortSignal;
@@ -1262,6 +1246,7 @@ const runChatAttempt = async function* ({
   const {
     messages: preparedMessages,
     system: baseSystem,
+    systemLayers,
     tenantWorkspaceIds,
     tools: modelTools,
   } = surfaces;
@@ -1282,6 +1267,8 @@ const runChatAttempt = async function* ({
     modelRole: role,
     organizationId,
     orgAIConfig,
+    // The turn's own model calls; compaction below builds another prompt.
+    promptCacheSurface: sandboxRun ? undefined : "chat",
     safeDb,
     selectedModelId: servedModelId,
     usageLane: servedLane,
@@ -1337,6 +1324,7 @@ const runChatAttempt = async function* ({
         createChatRuntimeMiddleware({
           abortSignal,
           baseSystem,
+          caching,
           compactionAnalytics,
           compactionFeature,
           model,
@@ -1346,6 +1334,7 @@ const runChatAttempt = async function* ({
           managedAIResidency,
           role,
           state,
+          systemLayers,
           tenantWorkspaceIds,
           threadId,
         }),
@@ -1362,6 +1351,7 @@ const runChatAttempt = async function* ({
       modelTools,
       role,
       system: baseSystem,
+      systemLayers,
       toolCallIds,
     }),
     messages: preparedMessages,
@@ -1390,6 +1380,7 @@ const runChatAttempt = async function* ({
       createChatRuntimeMiddleware({
         abortSignal,
         baseSystem,
+        caching,
         compactionAnalytics,
         compactionFeature,
         model,
@@ -1399,6 +1390,7 @@ const runChatAttempt = async function* ({
         managedAIResidency,
         role,
         state,
+        systemLayers,
         tenantWorkspaceIds,
         threadId,
       }),
@@ -1457,6 +1449,7 @@ export const guardedCompactedMessages = ({
 type ChatRuntimeMiddlewareProps = {
   abortSignal: AbortSignal;
   baseSystem: GuardedSystemPrompt;
+  caching: CachingDecision;
   compactionAnalytics: TanStackAIAnalyticsCallbacks;
   compactionFeature: string;
   model: ResolvedTanStackTextModel;
@@ -1466,6 +1459,7 @@ type ChatRuntimeMiddlewareProps = {
   managedAIResidency: ManagedAIResidency;
   role: ChatAttemptRole;
   state: ChatAttemptState;
+  systemLayers: ChatSafePromptLayers;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   threadId: SafeId<"chatThread">;
 };
@@ -1473,6 +1467,7 @@ type ChatRuntimeMiddlewareProps = {
 const createChatRuntimeMiddleware = ({
   abortSignal,
   baseSystem,
+  caching,
   compactionAnalytics,
   compactionFeature,
   model,
@@ -1482,6 +1477,7 @@ const createChatRuntimeMiddleware = ({
   managedAIResidency,
   role,
   state,
+  systemLayers,
   tenantWorkspaceIds,
   threadId,
 }: ChatRuntimeMiddlewareProps): ChatMiddleware => {
@@ -1528,10 +1524,18 @@ const createChatRuntimeMiddleware = ({
         const recoveryKey = getLoopRecoveryKey(loopDetection);
         if (recoveryKey !== lastLoopRecoveryKey) {
           lastLoopRecoveryKey = recoveryKey;
-          patch.systemPrompts = guardedLoopRecoveryPrompts({
+          const [recoverySystem] = guardedLoopRecoveryPrompts({
             baseSystem,
             detection: loopDetection,
             tenantWorkspaceIds,
+          });
+          // The recovery section joins the turn layer, so the cached layers
+          // before it keep their markers.
+          patch.systemPrompts = chatSystemPrompts({
+            caching,
+            model,
+            system: recoverySystem ?? baseSystem,
+            systemLayers,
           });
         }
       }

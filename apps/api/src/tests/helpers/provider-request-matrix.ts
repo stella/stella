@@ -15,6 +15,7 @@ import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-m
 import { TEXT_CSV_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import { canHydrateFilePartAsPlainText } from "@/api/handlers/chat/upload-files";
 import { isChatModelReasoningEffortAvailable } from "@/api/lib/chat-model-selection";
+import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { REASONING_ANSWERS } from "@/api/tests/helpers/provider-reasoning-answers";
@@ -95,7 +96,7 @@ export type EffortChoice = "default" | ReasoningEffort;
  * sources, or with every source the send path can add (web search and URL
  * fetching, an organization's external tools listed lazily).
  */
-const TOOL_SURFACES = ["default", "extended"] as const;
+export const TOOL_SURFACES = ["default", "extended"] as const;
 export type ToolSurface = (typeof TOOL_SURFACES)[number];
 
 /**
@@ -214,9 +215,14 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
   },
   ...endpointPredicates("origin"),
   ...endpointPredicates("target"),
+  "attachment: getModelImageCapability": (combination, cassettes) =>
+    combination.attachment !== "image" ||
+    getModelImageCapability({
+      modelId: modelOf(cassettes, combination.target),
+      provider: combination.target.provider,
+    }) !== "unsupported",
   /** The send path refuses a document attachment the model cannot read
-   *  (`modelAcceptsDocumentAttachment`); an image and an extracted office
-   *  file reach every model. */
+   *  (`modelAcceptsDocumentAttachment`). */
   "attachment: modelAcceptsDocumentAttachment": (combination, cassettes) => {
     const attachment = ATTACHMENTS[combination.attachment];
     if (
@@ -244,6 +250,16 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
     const model = modelOf(cassettes, combination.target);
     return reasoningModelOf(combination.target.provider, model) !== model;
   },
+  "attempt: the fallback model accepts image input": (combination, cassettes) =>
+    combination.attempt === "primary" ||
+    combination.attachment !== "image" ||
+    getModelImageCapability({
+      modelId: reasoningModelOf(
+        combination.target.provider,
+        modelOf(cassettes, combination.target),
+      ),
+      provider: combination.target.provider,
+    }) !== "unsupported",
   /** The chat attempt drops a fallback model that cannot read the turn's
    *  document (`modelRejectsAnyDocument` in `streamChat`). */
   "attempt: the fallback model accepts the attachment": (

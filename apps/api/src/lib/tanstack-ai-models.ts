@@ -60,6 +60,7 @@ import {
   isManagedProviderAvailable,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
+import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -81,6 +82,11 @@ type StellaOpenRouterTextModelOptions = Omit<
   // Supported by OpenRouter Chat Completions and its SDK, but currently
   // omitted from @tanstack/ai-openrouter's public model-options type.
   serviceTier?: "default" | "flex" | undefined;
+  // The request-level prompt-cache marker OpenRouter forwards to Anthropic
+  // models; the adapter spreads it into the SDK request, whose type has it.
+  cacheControl?:
+    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
+    | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.
@@ -839,15 +845,19 @@ export const createTanStackTextAdapterFactory = (
       throw availability.error;
     }
   }
-  const factory = createProviderTextAdapterFactory(options);
-  return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
+  const provider = resolveTanStackTextProvider(options);
+  const factory = createProviderTextAdapterFactory({ ...options, provider });
+  return (modelId) =>
+    withProviderStreamContract(
+      withProviderImageInput(factory(modelId), provider),
+      stopReasons,
+    );
 };
 
 const createProviderTextAdapterFactory = (
-  options: TanStackModelFactoryOptions,
+  options: TanStackModelFactoryOptions & { provider: TanStackTextProvider },
 ): TanStackTextAdapterFactory => {
-  const { provider, apiKey, region } = options;
-  const supportedProvider = resolveTanStackTextProvider({ provider, region });
+  const { provider: supportedProvider, apiKey } = options;
 
   switch (supportedProvider) {
     case "google": {

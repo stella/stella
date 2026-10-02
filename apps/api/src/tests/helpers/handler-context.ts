@@ -42,7 +42,7 @@ export type BaseTestHandlerContext = {
   workspaceId: SafeId<"workspace">;
   memberRole: { role: keyof typeof roles };
   session: { activeOrganizationId: SafeId<"organization"> };
-  user: { id: SafeId<"user"> };
+  user: { id: SafeId<"user">; email: string };
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   recordAuditEvent: AuditRecorder;
@@ -68,8 +68,12 @@ export type BaseTestHandlerContext = {
  * fields are partially overridable and any extra per-handler fields (`body`,
  * `query`, `params`, ...) pass straight through onto the returned context.
  */
-export type TestHandlerContextOverrides = Partial<BaseTestHandlerContext> &
-  Record<string, unknown>;
+export type TestHandlerContextOverrides = Partial<
+  Omit<BaseTestHandlerContext, "user">
+> & { user?: Partial<BaseTestHandlerContext["user"]> } & Record<
+    string,
+    unknown
+  >;
 
 const DEFAULT_WORKSPACE_ID = toSafeId<"workspace">("workspace_test");
 const DEFAULT_ORGANIZATION_ID = toSafeId<"organization">("org_test");
@@ -89,7 +93,7 @@ const createBaseContext = (): BaseTestHandlerContext => ({
   workspaceId: DEFAULT_WORKSPACE_ID,
   memberRole: { role: "owner" },
   session: { activeOrganizationId: DEFAULT_ORGANIZATION_ID },
-  user: { id: DEFAULT_USER_ID },
+  user: { id: DEFAULT_USER_ID, email: "standard@example.test" },
   safeDb: unconfiguredDb,
   scopedDb: unconfiguredDb,
   recordAuditEvent: noopAuditRecorder,
