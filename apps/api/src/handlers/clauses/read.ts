@@ -238,8 +238,9 @@ export const getClauseHandler = async function* ({
   }
 
   for (const variant of clause.variants) {
-    if (isClauseBody(variant.body))
-      {variant.body = normalizeClauseBody(variant.body);}
+    if (isClauseBody(variant.body)) {
+      variant.body = normalizeClauseBody(variant.body);
+    }
   }
 
   return Result.ok({

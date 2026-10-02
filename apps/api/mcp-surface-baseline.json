@@ -198,7 +198,7 @@
       "default": {"title": 12, "description": 272, "inputSchema": 281, "outputSchema": 130, "annotations": 114, "payloadUtf8Bytes": 906}
     },
     "save_clause": {
-      "default": {"title": 11, "description": 516, "inputSchema": 3960, "outputSchema": 114, "annotations": 113, "payloadUtf8Bytes": 4810}
+      "default": {"title": 11, "description": 516, "inputSchema": 2881, "outputSchema": 114, "annotations": 113, "payloadUtf8Bytes": 3731}
     },
     "save_contact": {
       "default": {"title": 12, "description": 303, "inputSchema": 2245, "outputSchema": 116, "annotations": 114, "payloadUtf8Bytes": 2887}

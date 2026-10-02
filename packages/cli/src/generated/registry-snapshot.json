@@ -3699,10 +3699,12 @@
             "type": "object",
             "properties": {
               "text": {
-                "type": "string"
+                "type": "string",
+                "description": "Paragraph text from the read body"
               }
             },
-            "required": ["text"]
+            "required": ["text"],
+            "additionalProperties": {}
           },
           "minItems": 1,
           "description": "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving."
