@@ -17,6 +17,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import { createFileKey } from "@/api/lib/file-key";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -224,7 +225,7 @@ const createContext = ({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     body,
     request: recorderBindings.request,
     route: "/v1/entities/:workspaceId/duplicate",

@@ -12,6 +12,7 @@ import { readBilingualDocx } from "@stll/folio-core/server";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { validateDocxBuffer } from "@/api/lib/entity-versions/validate-docx-buffer";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -139,7 +140,7 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
     workspaceId,
     user: { id: userId },
     recordAuditEvent: async () => {},
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     getActiveWorkspaceIds: async () => [workspaceId],
     getAccessibleWorkspaces: async () => [],
     getWorkspaceAccess: async () => null,

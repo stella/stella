@@ -9,7 +9,10 @@ import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import updateOrganizationSettings, {
@@ -35,7 +38,7 @@ describe("updateOrganizationSettingsHandler", () => {
     for (const role of ["owner", "admin"] as const) {
       expect(
         hasMemberPermission(
-          { role },
+          sessionMemberRole(role),
           updateOrganizationSettings.config.permissions,
         ),
       ).toBe(true);
@@ -43,7 +46,7 @@ describe("updateOrganizationSettingsHandler", () => {
     for (const role of ["member", "intern", "external"] as const) {
       expect(
         hasMemberPermission(
-          { role },
+          sessionMemberRole(role),
           updateOrganizationSettings.config.permissions,
         ),
       ).toBe(false);

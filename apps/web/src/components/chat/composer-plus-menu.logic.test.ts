@@ -5,9 +5,12 @@ import { typedCharacter } from "@stll/ui/typed-character";
 
 import {
   charBeforeCaret,
+  chooseShortcutPopupSide,
   COMPOSER_MENU_SHORTCUT,
   contextMentionSearchKey,
   resolveComposerMenuShortcut,
+  SHORTCUT_POPUP_COMFORT_HEIGHT,
+  SHORTCUT_POPUP_SIDE,
   shouldDrainSkillPages,
 } from "@/components/chat/composer-plus-menu.logic";
 
@@ -227,5 +230,47 @@ describe("contextMentionSearchKey", () => {
     expect(contextMentionSearchKey({ ...scope })).toEqual(
       contextMentionSearchKey(scope),
     );
+  });
+});
+
+describe("chooseShortcutPopupSide", () => {
+  test("opens above a caret low in the viewport, below one near the top", () => {
+    // A thread's composer docked at the bottom.
+    expect(
+      chooseShortcutPopupSide({
+        caretBottom: 850,
+        caretTop: 830,
+        viewportHeight: 900,
+      }),
+    ).toBe(SHORTCUT_POPUP_SIDE.above);
+    // The new-chat composer high on the page: the list has room only below.
+    expect(
+      chooseShortcutPopupSide({
+        caretBottom: 247,
+        caretTop: 227,
+        viewportHeight: 900,
+      }),
+    ).toBe(SHORTCUT_POPUP_SIDE.below);
+  });
+
+  test("never trades a comfortable side for a cramped one", () => {
+    for (const viewportHeight of [400, 600, 900, 1400]) {
+      for (let caretTop = 0; caretTop < viewportHeight; caretTop += 10) {
+        const caretBottom = caretTop + 20;
+        const side = chooseShortcutPopupSide({
+          caretBottom,
+          caretTop,
+          viewportHeight,
+        });
+        const roomAbove = caretTop;
+        const roomBelow = viewportHeight - caretBottom;
+        if (roomAbove >= SHORTCUT_POPUP_COMFORT_HEIGHT) {
+          expect(side).toBe(SHORTCUT_POPUP_SIDE.above);
+        }
+        if (side === SHORTCUT_POPUP_SIDE.below) {
+          expect(roomBelow).toBeGreaterThan(roomAbove);
+        }
+      }
+    }
   });
 });
