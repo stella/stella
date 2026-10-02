@@ -70,7 +70,7 @@ import {
   SYNTHETIC_SCALE_PROFILE,
 } from "@/api/tests/query-plans/scale-profile";
 
-import { replayFailure } from "./replay-failure";
+import { REPLAY_PREVIEW_FAILURE, replayFailure } from "./replay-failure";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -1100,7 +1100,11 @@ if (!databaseUrl || !enabled) {
           scopedDb,
           sourceId: source.id,
           scope,
-          selection: { type: "background", currentParserVersion: 2 },
+          selection: {
+            type: "background",
+            currentParserVersion: 2,
+            mode: "enrolled",
+          },
         }),
       ).toBeNull();
       expect(
@@ -1108,7 +1112,11 @@ if (!databaseUrl || !enabled) {
           scopedDb,
           sourceId: source.id,
           scope,
-          selection: { type: "background", currentParserVersion: 3 },
+          selection: {
+            type: "background",
+            currentParserVersion: 3,
+            mode: "enrolled",
+          },
         }),
       ).toBe(reserved.batch.decisionId);
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
@@ -1685,11 +1693,12 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("failed previews retain the cursor, retry within one charge and re-admit after seven days", async () => {
-      const { source: enrolled, ids } = await fixture(1);
+    test("exhausted previews advance durably without resetting attempts or excluding apply", async () => {
+      const { source: enrolled, ids } = await fixture(10);
       const source = { ...enrolled, mode: "dry-run" } as const;
       let clock = Date.UTC(2026, 9, 1);
-      const store = createBackgroundReplayStore({ db, now: () => clock });
+      const restart = () =>
+        createBackgroundReplayStore({ db, now: () => clock });
       const failure = {
         ...replayFailure("adapter-exception"),
         healthyEvidence: "none",
@@ -1697,84 +1706,23 @@ if (!databaseUrl || !enabled) {
         verdict: verdict(),
       } as const;
       let receiptId = "";
-      const restart = () =>
-        createBackgroundReplayStore({ db, now: () => clock });
       for (
         let attempt = 1;
         attempt <= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
         attempt++
       ) {
-        const restarted = restart();
-        const preview = await restarted.previewBatch(source, null);
+        const store = restart();
+        const preview = await store.previewBatch(source, null);
         if (preview.type !== "reserved") {
           throw new TypeError("Expected due failed preview");
         }
         receiptId = preview.batch.id;
         expect(preview.batch.decisionId).toBe(ids.at(0));
-        expect(await restarted.recordFailure(preview.batch, failure)).toBe(
-          attempt === BACKGROUND_REPLAY_LIMITS.maxRowAttempts
-            ? "failed"
-            : "retryable",
+        const exhausted = attempt === BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+        expect(await store.recordFailure(preview.batch, failure)).toBe(
+          exhausted ? "failed" : "retryable",
         );
-        expect(await restarted.previewBatch(source, null)).toEqual({
-          type: "waiting",
-        });
-        expect(
-          await db
-            .select()
-            .from(databaseBackfillStates)
-            .where(
-              eq(
-                databaseBackfillStates.name,
-                `case-law-replay:${source.id}:2:dry-run`,
-              ),
-            ),
-        ).toHaveLength(0);
-        if (attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts) {
-          clock += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
-        }
-      }
-      const receipt = (
-        await db
-          .select()
-          .from(caseLawReplayBatches)
-          .where(eq(caseLawReplayBatches.id, receiptId))
-      ).at(0);
-      expect(receipt).toMatchObject({
-        failed: 1,
-        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
-        failureCode: "adapter-exception",
-        failureMessageClass: "adapter",
-        status: "completed",
-      });
-      expect(
-        await db
-          .select()
-          .from(caseLawReplayDailyRows)
-          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
-      ).toHaveLength(1);
-      clock += 7 * DAY_IN_MS - 1;
-      expect(await store.previewBatch(source, null)).toEqual({
-        type: "waiting",
-      });
-      clock += 1;
-      const readmitted = await store.previewBatch(source, null);
-      if (readmitted.type !== "reserved") {
-        throw new TypeError("Expected preview after seven-day quarantine");
-      }
-      expect(readmitted.batch.id).toBe(receiptId);
-      expect(readmitted.batch.decisionId).toBe(ids.at(0));
-      expect(
-        (
-          await db
-            .select()
-            .from(caseLawReplayBatches)
-            .where(eq(caseLawReplayBatches.id, receiptId))
-        ).at(0)?.attempts,
-      ).toBe(1);
-      await store.advancePreview(readmitted.batch);
-      expect(
-        (
+        const checkpoint = (
           await db
             .select()
             .from(databaseBackfillStates)
@@ -1784,8 +1732,117 @@ if (!databaseUrl || !enabled) {
                 `case-law-replay:${source.id}:2:dry-run`,
               ),
             )
-        ).at(0)?.cursor,
-      ).toBe(ids.at(0));
+        ).at(0);
+        expect(checkpoint?.cursor ?? null).toBe(exhausted ? ids.at(0) : null);
+        if (!exhausted) {
+          expect(await restart().previewBatch(source, null)).toEqual({
+            type: "waiting",
+          });
+          clock += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        }
+      }
+      const terminal = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, receiptId))
+      ).at(0);
+      expect(terminal).toMatchObject({
+        failed: 1,
+        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
+        failureCode: "adapter-exception",
+        failureMessageClass: "adapter",
+        outcome: REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
+        status: "completed",
+        retryAt: null,
+      });
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+      ).toHaveLength(1);
+      const next = await restart().previewBatch(source, null);
+      if (next.type !== "reserved") {
+        throw new TypeError("Expected later preview after poison row");
+      }
+      expect(next.batch.decisionId).toBe(ids.at(1));
+      await restart().advancePreview(next.batch);
+      clock += 8 * DAY_IN_MS;
+      await restart().resetDryRunCursor(source);
+      const reset = await restart().previewBatch(source, null);
+      if (reset.type !== "reserved") {
+        throw new TypeError("Expected later preview after reset");
+      }
+      expect(reset.batch.decisionId).toBe(ids.at(1));
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, receiptId))
+        ).at(0),
+      ).toEqual(terminal);
+      const apply = await restart().reserveBatch(
+        enrolled,
+        new Date(clock).toISOString().slice(0, 10),
+        verdict(),
+      );
+      if (apply.type !== "reserved") {
+        throw new TypeError(
+          "Expected apply admission unaffected by preview failure",
+        );
+      }
+      expect(apply.batch.decisionId).toBe(ids.at(0));
+    });
+
+    test("transient previews keep their cursor until success at every attempt below the bound", async () => {
+      for (
+        let succeedsAt = 2;
+        succeedsAt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+        succeedsAt++
+      ) {
+        const { source: enrolled, ids } = await fixture(10);
+        const source = { ...enrolled, mode: "dry-run" } as const;
+        let clock = Date.UTC(2026, 9, 1);
+        const restart = () =>
+          createBackgroundReplayStore({ db, now: () => clock });
+        for (let attempt = 1; attempt <= succeedsAt; attempt++) {
+          const preview = await restart().previewBatch(source, null);
+          if (preview.type !== "reserved") {
+            throw new TypeError("Expected due transient preview");
+          }
+          expect(preview.batch.decisionId).toBe(ids.at(0));
+          if (attempt === succeedsAt) {
+            await restart().advancePreview(preview.batch);
+            continue;
+          }
+          expect(
+            await restart().recordFailure(preview.batch, {
+              ...replayFailure("adapter-exception"),
+              healthyEvidence: "none",
+              durationMs: 1,
+              verdict: verdict(),
+            }),
+          ).toBe("retryable");
+          expect(await restart().previewBatch(source, null)).toEqual({
+            type: "waiting",
+          });
+          clock += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        }
+        const next = await restart().previewBatch(source, null);
+        if (next.type !== "reserved") {
+          throw new TypeError("Expected preview after transient recovery");
+        }
+        expect(next.batch.decisionId).toBe(ids.at(1));
+        const receipts = await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.sourceId, source.id));
+        expect(
+          receipts.find((row) => row.firstDecisionId === ids.at(0)),
+        ).toMatchObject({ failed: 0, attempts: succeedsAt, retryAt: null });
+      }
     });
 
     test("compaction generation retires never-reserved-again receipts while preserving the latest generation", async () => {
@@ -2135,16 +2192,25 @@ if (!databaseUrl || !enabled) {
                 buildReplayScopeEndQuery(tx, {
                   sourceId: source.id,
                   scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
-                  selection: { type: "background", currentParserVersion: 2 },
+                  selection: {
+                    type: "background",
+                    currentParserVersion: 2,
+                    mode: "enrolled",
+                  },
                 }),
                 buildBackgroundReplayProbe(tx, {
+                  mode: "enrolled",
                   sourceId: source.id,
                   currentParserVersion: 2,
                 }),
                 buildReplayPageQuery(tx, {
                   sourceId: source.id,
                   scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
-                  selection: { type: "background", currentParserVersion: 2 },
+                  selection: {
+                    type: "background",
+                    currentParserVersion: 2,
+                    mode: "enrolled",
+                  },
                   after: null,
                   until: end,
                   limit: 1,

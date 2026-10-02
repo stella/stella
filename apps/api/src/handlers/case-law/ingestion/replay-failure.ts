@@ -3,6 +3,13 @@ import { TaggedError } from "better-result";
 import { getPgDriverErrorCode, getPgErrorCode } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
+export const REPLAY_PREVIEW_FAILURE = {
+  RETRY_EXHAUSTED: "preview-retry-exhausted",
+} as const;
+
+export type ReplayPreviewFailure =
+  (typeof REPLAY_PREVIEW_FAILURE)[keyof typeof REPLAY_PREVIEW_FAILURE];
+
 export const REPLAY_FAILURE_CODES = [
   "stored-raw-timeout",
   "stored-raw-too-large",

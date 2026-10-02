@@ -61,6 +61,7 @@ import {
 import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 import {
+  REPLAY_PREVIEW_FAILURE,
   classifyReplayFailure,
   replayFailure,
   ReplayStageError,
@@ -235,7 +236,11 @@ export const BACKGROUND_REPLAY_PREVIEW_SUFFIX = ":dry-run";
 
 export type ReplaySelection =
   | { type: "operator" }
-  | { type: "background"; currentParserVersion: number };
+  | {
+      type: "background";
+      currentParserVersion: number;
+      mode: "enrolled" | "dry-run";
+    };
 
 const OPERATOR_REPLAY_SELECTION = { type: "operator" } as const;
 
@@ -295,8 +300,16 @@ const replaySelectionPredicate = (
           .where(
             and(
               eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
-              // Preview bookkeeping never excludes a row from apply or retry.
-              sql`right(${caseLawReplayBatches.id}, length(${BACKGROUND_REPLAY_PREVIEW_SUFFIX})) <> ${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`,
+              // Exhausted previews exclude only this dry-run parser generation.
+              or(
+                sql`right(${caseLawReplayBatches.id}, length(${BACKGROUND_REPLAY_PREVIEW_SUFFIX})) <> ${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`,
+                selection.mode === "dry-run"
+                  ? eq(
+                      caseLawReplayBatches.outcome,
+                      REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
+                    )
+                  : undefined,
+              ),
               eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
               eq(
                 caseLawReplayBatches.parserVersionTo,
@@ -467,9 +480,11 @@ export const buildBackgroundReplayProbe = (
   {
     sourceId,
     currentParserVersion,
+    mode,
   }: {
     sourceId: SafeId<"caseLawSource">;
     currentParserVersion: number;
+    mode: "enrolled" | "dry-run";
   },
 ) =>
   tx
@@ -479,7 +494,7 @@ export const buildBackgroundReplayProbe = (
       and(
         replayableRows(sourceId, CASE_LAW_REPLAY_SCOPE.SOURCE),
         replaySelectionPredicate(
-          { type: "background", currentParserVersion },
+          { type: "background", currentParserVersion, mode },
           tx,
         ),
       ),

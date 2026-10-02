@@ -7,6 +7,7 @@ import {
   isNotNull,
   isNull,
   lt,
+  ne,
   lte,
   or,
   sql,
@@ -68,7 +69,11 @@ import {
   validateReplayEnrolment,
   type ReplayEnrolment,
 } from "./replay-enrolment";
-import { replayFailure, type ReplayFailure } from "./replay-failure";
+import {
+  REPLAY_PREVIEW_FAILURE,
+  replayFailure,
+  type ReplayFailure,
+} from "./replay-failure";
 
 const withReplayTransaction = async <T>(
   db: CaseLawRootHandle,
@@ -166,6 +171,13 @@ const hasDailyAllowance = async ({
             ? and(
                 eq(caseLawReplayBatches.status, "completed"),
                 eq(caseLawReplayBatches.failed, 1),
+                or(
+                  isNull(caseLawReplayBatches.outcome),
+                  ne(
+                    caseLawReplayBatches.outcome,
+                    REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
+                  ),
+                ),
                 sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
               )
             : inArray(caseLawReplayBatches.status, ["reserved", "failed"]),
@@ -288,6 +300,7 @@ const chooseSource = async (
                 await buildBackgroundReplayProbe(tx, {
                   sourceId: candidate.id,
                   currentParserVersion: candidate.currentParserVersion,
+                  mode: candidate.mode,
                 })
               ).length > 0,
           );
@@ -356,6 +369,7 @@ const selectNext = async (
   const selection = {
     type: "background",
     currentParserVersion: source.currentParserVersion,
+    mode: source.mode,
   } as const;
   const until = await selectScopeEnd({
     scopedDb,
@@ -437,18 +451,11 @@ const previewBatch = async (
       // on an already charged row during the same UTC day.
       return { type: "empty" };
     }
-    const attempts =
-      receipt?.failed === 1 &&
-      receipt.attempts < BACKGROUND_REPLAY_LIMITS.maxRowAttempts
-        ? receipt.attempts + 1
-        : 1;
-    const retryDelay =
-      attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts
-        ? REPLAY_FAILED_READMISSION_DAYS * DAY_IN_MS
-        : Math.min(
-            BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-            BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** (attempts - 1),
-          );
+    const attempts = receipt?.failed === 1 ? receipt.attempts + 1 : 1;
+    const retryDelay = Math.min(
+      BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** (attempts - 1),
+    );
     const usage =
       (
         await tx
@@ -1088,22 +1095,22 @@ const recordPreviewFailure = async (
       ).at(0) ?? panic("Preview failure has no reservation");
     const exhausted =
       receipt.attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
-    const delay = exhausted
-      ? REPLAY_FAILED_READMISSION_DAYS * DAY_IN_MS
-      : Math.min(
-          BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-          BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs *
-            2 ** Math.max(0, receipt.attempts - 1),
-        );
+    const delay = Math.min(
+      BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs *
+        2 ** Math.max(0, receipt.attempts - 1),
+    );
     await tx
       // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
         failed: 1,
-        retryAt: new Date(now() + delay),
+        retryAt: exhausted ? null : new Date(now() + delay),
         failureCode: failure.code,
         failureMessageClass: failure.messageClass,
-        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+        outcome: exhausted
+          ? REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED
+          : REPLAY_ROW_OUTCOME.RETRYABLE,
         durationMs: Math.ceil(failure.durationMs),
         gateVerdict: failure.verdict,
         completedAt: new Date(now()),
@@ -1120,6 +1127,13 @@ const recordPreviewFailure = async (
       },
       createdAt: new Date(now()),
     });
+    if (exhausted) {
+      await advancePreviewCursor(tx, {
+        batch,
+        completedAt: new Date(now()),
+        kind: "retry-exhausted",
+      });
+    }
     return exhausted ? "failed" : "retryable";
   });
 
@@ -1485,6 +1499,38 @@ const completeBatch = async (
   return disposition;
 };
 
+type AdvancePreviewCursorOptions = {
+  batch: BackgroundReplayBatch;
+  completedAt: Date;
+  kind: "reviewed" | "retry-exhausted";
+};
+
+const advancePreviewCursor = async (
+  tx: Transaction,
+  { batch, completedAt, kind }: AdvancePreviewCursorOptions,
+) => {
+  // dry-run cursor is separate from apply and never mutates decisions
+  await tx
+    // audit: skip — public case-law corpus bookkeeping, no workspace data
+    .insert(databaseBackfillStates)
+    .values({
+      name: previewCheckpointName(batch.source),
+      cursor: batch.decisionId,
+      batch: initialBatchState(),
+    })
+    .onConflictDoUpdate({
+      target: databaseBackfillStates.name,
+      set: { cursor: batch.decisionId, updatedAt: completedAt },
+    });
+  await recordReplayMaintenanceAuditEvent(tx, {
+    sourceId: batch.source.id,
+    action: "dry-run-advanced",
+    resourceId: previewCheckpointName(batch.source),
+    details: { kind },
+    createdAt: completedAt,
+  });
+};
+
 const advancePreview = async (
   { db, now }: ReplayStoreContext,
   batch: BackgroundReplayBatch,
@@ -1503,25 +1549,10 @@ const advancePreview = async (
         completedAt: new Date(now()),
       })
       .where(eq(caseLawReplayBatches.id, batch.id));
-    // dry-run cursor is separate from apply and never mutates decisions
-    await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      .insert(databaseBackfillStates)
-      .values({
-        name: previewCheckpointName(batch.source),
-        cursor: batch.decisionId,
-        batch: initialBatchState(),
-      })
-      .onConflictDoUpdate({
-        target: databaseBackfillStates.name,
-        set: { cursor: batch.decisionId, updatedAt: new Date(now()) },
-      });
-    await recordReplayMaintenanceAuditEvent(tx, {
-      sourceId: batch.source.id,
-      action: "dry-run-advanced",
-      resourceId: previewCheckpointName(batch.source),
-      details: {},
-      createdAt: new Date(now()),
+    await advancePreviewCursor(tx, {
+      batch,
+      completedAt: new Date(now()),
+      kind: "reviewed",
     });
   });
 
