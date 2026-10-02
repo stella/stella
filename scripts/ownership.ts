@@ -554,6 +554,11 @@ export const OWNERSHIP = [
             "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
         },
         {
+          path: "apps/api/src/lib/rate-limit/mcp-read-fence.ts",
+          reason:
+            "TTL'd shared emitted-byte windows; authenticated reads fail closed when Valkey is unreachable.",
+        },
+        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",
@@ -1063,6 +1068,20 @@ export const OWNERSHIP = [
     summary:
       "One parser feeds session listings on the api and the device labels in " +
       "the web client, so a new browser family is recognised in both at once.",
+    enforcement: { kind: "none" },
+  },
+  {
+    id: "database-load-gate",
+    capability: "Gating and sizing heavy database maintenance",
+    owner: [
+      "packages/db-load-gate/",
+      "apps/api/src/lib/db/ebs-balance-reader.ts",
+    ],
+    summary:
+      "One transport-free package combines health signals, records decisions, " +
+      "sizes batches and arbitrates a database-wide priority slot. The API " +
+      "adapter alone reads both RDS EBS balances through CloudWatch; index " +
+      "runners and backfills use the same source and freshness rules.",
     enforcement: { kind: "none" },
   },
   {

@@ -42,6 +42,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "anonymization_admin",
     consumesServices: false,
   },

@@ -34,7 +34,7 @@ if (!databaseUrl || !runPostgresTests) {
           const decisionId = createSafeId<"caseLawDecision">();
           const firstFinished = Promise.withResolvers<undefined>();
           const releaseFirst = Promise.withResolvers<undefined>();
-          const secondStarted = Promise.withResolvers<number>();
+          const secondStarted = Promise.withResolvers<boolean>();
           const listingOnly = {
             _stellaPartialObservation: { isListingOnly: true },
           };
@@ -94,34 +94,31 @@ if (!databaseUrl || !runPostgresTests) {
             await Promise.race([firstFinished.promise, first]);
             const second = secondClient.begin(async (client) => {
               await client`SET LOCAL statement_timeout = '5s'`;
-              const rows = await client`SELECT pg_backend_pid() AS pid`;
-              const pid: unknown = rows.at(0)?.pid;
-              if (typeof pid !== "number") {
-                return secondStarted.reject(
-                  new TypeError("Expected PostgreSQL backend PID"),
-                );
-              }
-              secondStarted.resolve(pid);
+              // Probe the exact decision lock without a deadline or scheduler-dependent sleep.
+              await client`SELECT set_config('stella_test.blocked', 'false', true)`;
+              await client`SELECT set_config('stella_test.decision_id', ${decisionId}, true)`;
+              await client`DO $probe$
+                BEGIN
+                  PERFORM 1 FROM case_law_decisions
+                  WHERE id = current_setting('stella_test.decision_id')::uuid FOR NO KEY UPDATE NOWAIT;
+                EXCEPTION WHEN lock_not_available THEN
+                  PERFORM set_config('stella_test.blocked', 'true', true);
+                END
+              $probe$`;
+              const rows =
+                await client`SELECT current_setting('stella_test.blocked') = 'true' AS blocked`;
+              secondStarted.resolve(rows.at(0)?.blocked === true);
               await (firstOperation === "writer"
                 ? applyTransition(client)
                 : writeCitation(client));
             });
             operations.push(second);
-            const secondPid = await secondStarted.promise;
-            // Observe a real PostgreSQL lock wait, so scheduler timing cannot make this vacuous.
-            const deadline = Date.now() + 3000;
-            let blocked = false;
-            while (!blocked && Date.now() < deadline) {
-              const rows = await observer`SELECT EXISTS (
-              SELECT 1 FROM pg_stat_activity WHERE pid = ${secondPid}
-                AND cardinality(pg_blocking_pids(pid)) > 0
-            ) AS blocked`;
-              blocked = rows.at(0)?.blocked === true;
-              if (!blocked) {
-                await Bun.sleep(10);
-              }
-            }
-            expect(blocked).toBe(true);
+            expect(
+              await Promise.race([
+                secondStarted.promise,
+                second.then(() => false),
+              ]),
+            ).toBe(true);
             releaseFirst.resolve(undefined);
             await Promise.all(operations);
             const counts = await observer`SELECT target_type, decision_count

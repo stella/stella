@@ -44,6 +44,7 @@ import {
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
 } from "@/api/lib/legal-search/ingestion-types";
+import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
 import {
@@ -68,6 +69,11 @@ import {
   skUsFixture,
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import {
+  isClassifiedMetadataKey,
+  METADATA_TEXT_DISPOSITIONS,
+  metadataDisplayTextOf,
+} from "@/api/tests/helpers/case-law-metadata-text-census";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
@@ -225,6 +231,23 @@ const storedPartsOf = (
   return parts;
 };
 
+/**
+ * Every metadata key a decision carries, read through the census's total
+ * disposition map: the display strings of the classified keys, and the keys
+ * nothing classified yet.
+ */
+const metadataDisplayTextCensus = (metadata: Record<string, unknown>) => {
+  const unclassified: string[] = [];
+  const texts = Object.entries(metadata).flatMap(([key, value]) => {
+    if (!isClassifiedMetadataKey(key)) {
+      unclassified.push(key);
+      return [];
+    }
+    return metadataDisplayTextOf(key, value);
+  });
+  return { texts, unclassified };
+};
+
 // ── Invariants ───────────────────────────────────────────
 
 describe("every adapter accounts for the fields its source states", () => {
@@ -243,6 +266,62 @@ describe("every adapter accounts for the fields its source states", () => {
         );
       }
       const parts = storedPartsOf(key, decision);
+
+      const metadataCensus = metadataDisplayTextCensus(decision.metadata);
+      expect(
+        metadataCensus.unclassified,
+        `${key}: metadata keys the display-text census does not classify: ${metadataCensus.unclassified.join(", ")}. Add each to METADATA_TEXT_DISPOSITIONS as inspected, or excluded with the reason.`,
+      ).toEqual([]);
+      const textOutputs = [
+        { field: "caseNumber", value: decision.caseNumber },
+        { field: "court", value: decision.court },
+        ...(decision.decisionType === undefined
+          ? []
+          : [{ field: "decisionType", value: decision.decisionType }]),
+        ...(decision.judges ?? []).map(({ nameAsPrinted }, index) => ({
+          field: `judges.${index}.nameAsPrinted`,
+          value: nameAsPrinted,
+        })),
+        ...(decision.fulltext === undefined
+          ? []
+          : [{ field: "fulltext", value: decision.fulltext }]),
+        ...Object.entries(decision.textFields).flatMap(([field, value]) =>
+          value.type === "present"
+            ? [{ field: `textFields.${field}`, value: value.text }]
+            : [],
+        ),
+        ...("blocks" in decision.documentAst
+          ? decision.documentAst.blocks.map((block) => ({
+              field: `documentAst.${block.type}.${block.id}`,
+              value: block.plainText,
+            }))
+          : []),
+        ...(decision.sections ?? []).flatMap((section) => [
+          {
+            field: `sections.${section.index}.title`,
+            value: section.title ?? "",
+          },
+          { field: `sections.${section.index}.text`, value: section.text },
+        ]),
+        ...metadataCensus.texts,
+        ...("blocks" in decision.documentAst
+          ? [
+              ...decision.documentAst.metadata.keywords.map((value, index) => ({
+                field: `documentAst.metadata.keywords.${index}`,
+                value,
+              })),
+              ...decision.documentAst.metadata.statutes.map((value, index) => ({
+                field: `documentAst.metadata.statutes.${index}`,
+                value,
+              })),
+            ]
+          : []),
+      ];
+      const entityResidues = entityResiduesInStoredText(textOutputs);
+      expect(
+        entityResidues,
+        `${key}: normalized case-law text retains character references`,
+      ).toEqual([]);
 
       const stated = await sourceFields.listSourceFields(parts);
       expect(
@@ -313,4 +392,49 @@ describe("every adapter accounts for the fields its source states", () => {
       ).toEqual([]);
     });
   }
+});
+
+describe("the display-text census classifies exactly the metadata adapters emit", () => {
+  test("every classified key is emitted by some fixture, and every emitted key is classified", async () => {
+    const emitted = new Set<string>();
+    for (const key of DECLARED_ADAPTER_KEYS) {
+      // Fixtures stub the global fetch, so they build one at a time.
+      const decision = await ADAPTER_INVENTORY_COVERAGE[key]().buildDecision();
+      globalThis.fetch = originalFetch;
+      for (const metadataKey of Object.keys(decision.metadata)) {
+        emitted.add(metadataKey);
+      }
+    }
+    const unclassified = [...emitted].filter(
+      (metadataKey) => !isClassifiedMetadataKey(metadataKey),
+    );
+    expect(
+      unclassified,
+      `metadata keys no disposition covers: ${unclassified.join(", ")}`,
+    ).toEqual([]);
+    const neverEmitted = Object.keys(METADATA_TEXT_DISPOSITIONS).filter(
+      (metadataKey) => !emitted.has(metadataKey),
+    );
+    expect(
+      neverEmitted,
+      `dispositions no fixture exercises: ${neverEmitted.join(", ")}. Drop them, or add the field to the fixture that states it.`,
+    ).toEqual([]);
+  });
+
+  test("an inspected value is read at every depth, past only its excluded properties", () => {
+    const texts = metadataDisplayTextOf("referencedLegislation", [
+      { nazov: "Z&#225;kon", url: "https://example.org/?a=1&amp;b=2" },
+    ]);
+    expect(texts).toEqual([
+      { field: "metadata.referencedLegislation.0.nazov", value: "Z&#225;kon" },
+    ]);
+    expect(entityResiduesInStoredText(texts)).toEqual([
+      {
+        field: "metadata.referencedLegislation.0.nazov",
+        entity: "&#225;",
+        index: 1,
+      },
+    ]);
+    expect(metadataDisplayTextOf("guid", "source&amp;key")).toEqual([]);
+  });
 });

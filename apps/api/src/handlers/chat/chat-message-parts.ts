@@ -1288,7 +1288,13 @@ export const toPersistableChatMessage = (
   const normalized = {
     id: message.id,
     role: message.role,
-    parts: normalizeChatPartsForPersistence(message.parts),
+    parts: normalizeChatPartsForPersistence(
+      message.role === "assistant"
+        ? message.parts.filter(
+            (part) => part.type !== "text" || part.content.trim().length > 0,
+          )
+        : message.parts,
+    ),
     ...(message.createdAt === undefined
       ? {}
       : { createdAt: message.createdAt }),

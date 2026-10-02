@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";
+import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
 import {
   DECISION_IDENTIFIER_MAX_COUNT,
   isDecisionIdentifier,
@@ -306,11 +307,16 @@ export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
   const metadata = storeDecisionIdentifiersInMetadata(
     Object.fromEntries(
       Object.entries(sanitizeMetadata(storedMetadata)).filter(
-        ([key]) => key !== PARTIAL_OBSERVATION_KEY,
+        ([key]) =>
+          key !== PARTIAL_OBSERVATION_KEY &&
+          key !== DECISION_DOCUMENT_ROLE_METADATA_KEY,
       ),
     ),
     identifiers,
   );
+  if (result.documentRole !== undefined) {
+    metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY] = result.documentRole;
+  }
   // Adapter metadata describes the publisher. Keep ingestion quality in a
   // reserved pipeline-owned marker so every court gets the same partial-row
   // upgrade/downgrade semantics without relying on court-specific keys.

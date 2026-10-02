@@ -12,7 +12,10 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatTurns } from "@/api/db/schema";
 import { chatMessageFromPersisted } from "@/api/handlers/chat/chat-message-parts";
 import { agUiSendMessageBodySchema } from "@/api/handlers/chat/chat-schema";
-import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
+import type {
+  ChatSendRequest,
+  IncomingUserContext,
+} from "@/api/handlers/chat/chat-schema";
 import { reapOwnerlessChatTurnOnTx } from "@/api/handlers/chat/chat-turn-persistence";
 import { relinquishChatTurnRuns } from "@/api/handlers/chat/chat-turn-run";
 import {
@@ -241,6 +244,7 @@ export const createApprovalHarness = ({
   scopedDb,
   sources = {},
   testDb,
+  user,
   withDirectRefTool = false,
 }: {
   /**
@@ -260,6 +264,14 @@ export const createApprovalHarness = ({
       }) => Promise<void>)
     | undefined;
   ids: TestIds;
+  /**
+   * Who sends, and the profile their page sends with each message
+   * (`userContext`); the organization's first member, with none, by default.
+   * `safeDb` and `scopedDb` must be scoped to the same user.
+   */
+  user?:
+    | { context?: IncomingUserContext | undefined; id: SafeId<"user"> }
+    | undefined;
   /**
    * What a turn can draw on beyond Stella's own tools: the matters in its
    * context, the organization's web search and URL fetcher, and the
@@ -287,6 +299,7 @@ export const createApprovalHarness = ({
   scopedDb: ScopedDb;
   testDb: TestDatabase;
 }) => {
+  const userId = user?.id ?? ids.userA1;
   // Every database access of a turn goes to the test database; one that
   // reaches the shared pools escaped it, and fails the test at `close`.
   const rootPoolConnectionsAtStart = rootPoolConnectionCount();
@@ -422,6 +435,14 @@ export const createApprovalHarness = ({
       Object.assign(body.forwardedProps, { contextMatterIds });
       Object.assign(body.data, { contextMatterIds });
     }
+    if (user?.context !== undefined) {
+      // The profile the page sends with every message.
+      const userContext = { ...user.context };
+      Object.assign(body.forwardedProps, { userContext });
+      if (typeof body.data === "object") {
+        Object.assign(body.data, { userContext });
+      }
+    }
     const ctx = asTestRaw<SendMessageCtx>({
       body,
       // A recorder reads the request it is built for.
@@ -449,7 +470,7 @@ export const createApprovalHarness = ({
       safeDb,
       scopedDb,
       session: { activeOrganizationId: ids.orgA },
-      user: { id: ids.userA1 },
+      user: { id: userId },
     });
     bodyByContext.set(ctx, body);
     requestByContext.set(ctx, request);
@@ -594,9 +615,9 @@ export const createApprovalHarness = ({
   };
 
   const reloadView = async (threadId: SafeId<"chatThread">) =>
-    await loadReloadView({ safeDb, threadId, userId: ids.userA1 });
+    await loadReloadView({ safeDb, threadId, userId });
   const reloadPage = async (threadId: SafeId<"chatThread">) =>
-    await loadReloadPage({ safeDb, threadId, userId: ids.userA1 });
+    await loadReloadPage({ safeDb, threadId, userId });
 
   type CancelTurnCtx = Parameters<typeof cancelTurn.handler>[0];
 
@@ -625,7 +646,7 @@ export const createApprovalHarness = ({
         safeDb,
         session: { activeOrganizationId: ids.orgA },
         set,
-        user: { id: ids.userA1 },
+        user: { id: userId },
       }),
     );
     // A refusal is a status response; an answer is the body, with the status
@@ -912,7 +933,7 @@ export const createApprovalHarness = ({
     const page = await loadChatMessagePage({
       safeDb,
       threadId,
-      userId: ids.userA1,
+      userId,
       before,
     });
     if (Result.isError(page)) {
