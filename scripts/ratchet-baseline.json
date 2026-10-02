@@ -152,7 +152,7 @@
       "apps/api/src/lib/folio-collab-rooms.ts": 1,
       "apps/api/src/lib/folio-collab-service-room.ts": 1,
       "apps/api/src/lib/public-law-read-db.ts": 1,
-      "apps/api/src/lib/root-scoped-db.ts": 2,
+      "apps/api/src/lib/root-scoped-db.ts": 3,
       "apps/api/src/lib/scheduler/runner.ts": 1,
       "apps/api/src/lib/search/index-chat.ts": 2,
       "apps/api/src/lib/search/index-entity.ts": 1,
