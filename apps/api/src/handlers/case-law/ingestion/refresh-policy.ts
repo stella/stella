@@ -1,3 +1,5 @@
+import { DECISION_DOCUMENT_ROLE_METADATA_KEY } from "@stll/api-contract/decision-document-role";
+
 import { getCaseLawIngestionMetadata } from "@/api/handlers/case-law/metadata";
 
 type RefreshPolicyInput = {
@@ -89,6 +91,15 @@ export const shouldSkipRefresh = ({
 
   if (shouldSkipDetailDowngrade({ existingMetadata, incomingMetadata })) {
     return true;
+  }
+
+  // A parser can recover a publisher enum from unchanged raw. Its typed
+  // projection must refresh even when the source fingerprint is identical.
+  if (
+    existingMetadata?.[DECISION_DOCUMENT_ROLE_METADATA_KEY] !==
+    incomingMetadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]
+  ) {
+    return false;
   }
 
   if (shouldRefreshChangedDetail({ existingMetadata, incomingMetadata })) {

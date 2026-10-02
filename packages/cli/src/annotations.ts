@@ -1,6 +1,4 @@
-// Shared generated-route guardrails plus the generated CLI annotation record.
-// The annotation source of truth is API-owned (`apps/api/src/mcp/static-cli-metadata.ts`);
-// `bun run codegen` projects it into `generated/tool-annotations.ts`.
+// Shared pure guardrails used while generating command trees.
 
 /** Reserved top-level command names a generated domain may never take (spec S1). */
 export const RESERVED_TOP_LEVEL_NAMES: ReadonlySet<string> = new Set([
@@ -37,5 +35,3 @@ export const RESERVED_FLAGS: ReadonlySet<string> = new Set([
   "-h",
   "--version",
 ]);
-
-export { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";

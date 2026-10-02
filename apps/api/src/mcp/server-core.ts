@@ -924,6 +924,7 @@ export const createMcpHttpRequestHandler = ({
       const admitted = await admitAction({
         organizationId: context.organizationId,
         userId: context.userId,
+        organizationStateDb: context.scopedDb,
         periodIdentity: mcpActionPeriodIdentity(consumesServices),
         run,
       });

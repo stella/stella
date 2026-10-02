@@ -3,6 +3,8 @@ import type { ActionPeriodIdentity } from "@/api/lib/rate-limit/action-period-bu
 export type ActionKindDefinition = { consumesServices: boolean };
 
 export const ACTION_KINDS = {
+  "chat.send": { consumesServices: true },
+  "chat.generate-thread-title": { consumesServices: true },
   "chat.improve-prompt": { consumesServices: true },
   "chat.suggest-thread-title": { consumesServices: true },
   "mcp.services/call": { consumesServices: true },
