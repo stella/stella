@@ -43,7 +43,7 @@ test("explicit observations report callback failures and leave outbound attempts
     expect(observed).toBe(3);
     const controller = new AbortController();
     controller.abort(new TypeError("fixture abort"));
-    await expect(
+    expect(
       performRegistryRequest({
         observer,
         signal: controller.signal,

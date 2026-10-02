@@ -1299,7 +1299,7 @@ const RPO_HANDLER: RegistryHandler = {
   lookup: async (input, options) => {
     const entity = await lookupRpoByIco(input, {
       observer: options.observer,
-      view: options?.detail === "full" ? "historical" : "current",
+      view: options.detail === "full" ? "historical" : "current",
     });
     if (entity.isErr()) {
       throw entity.error;
