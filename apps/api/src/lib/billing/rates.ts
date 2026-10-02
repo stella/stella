@@ -2,13 +2,14 @@ import type { Err } from "better-result";
 import { panic, Result } from "better-result";
 import { and, desc, eq, gte, inArray, isNull, lte, or } from "drizzle-orm";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
+
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
-import { isMemberRole } from "@/api/lib/member-roles";
 
 type RateLookup = {
   dateWorked: string;
@@ -72,12 +73,19 @@ export const resolveRatesInTransaction = async ({
         inArray(member.userId, [...uniqueUsers]),
       ),
     );
+  // A membership can name several roles in one comma-separated value. The
+  // roles it holds are kept in canonical order, which is their precedence for
+  // a role rate; a name outside the model selects no role rate, and the
+  // member still resolves through person and table-default rates.
   const rolesByUser = new Map(
     memberships.map((membership) => {
-      if (!isMemberRole(membership.role)) {
-        panic("Unknown organization member role while resolving rates");
-      }
-      return [membership.userId, membership.role] as const;
+      const held = new Set(
+        membership.role.split(",").map((role) => role.trim()),
+      );
+      return [
+        membership.userId,
+        ORGANIZATION_ROLE_NAMES.filter((role) => held.has(role)),
+      ] as const;
     }),
   );
   const entries = await tx
@@ -128,8 +136,8 @@ export const resolveRatesInTransaction = async ({
   }
 
   for (const lookup of lookups) {
-    const role = rolesByUser.get(lookup.userId);
-    if (role === undefined) {
+    const roles = rolesByUser.get(lookup.userId);
+    if (roles === undefined) {
       continue;
     }
     const userEntry = entriesByUser
@@ -140,14 +148,18 @@ export const resolveRatesInTransaction = async ({
           (entry.effectiveTo === null ||
             entry.effectiveTo >= lookup.dateWorked),
       );
-    const roleEntry = entriesByRole
-      .get(role)
-      ?.find(
-        (entry) =>
-          entry.effectiveFrom <= lookup.dateWorked &&
-          (entry.effectiveTo === null ||
-            entry.effectiveTo >= lookup.dateWorked),
-      );
+    const roleEntry = roles
+      .map((role) =>
+        entriesByRole
+          .get(role)
+          ?.find(
+            (entry) =>
+              entry.effectiveFrom <= lookup.dateWorked &&
+              (entry.effectiveTo === null ||
+                entry.effectiveTo >= lookup.dateWorked),
+          ),
+      )
+      .find((entry) => entry !== undefined);
     const defaultEntry = defaultEntries.find(
       (entry) =>
         entry.effectiveFrom <= lookup.dateWorked &&

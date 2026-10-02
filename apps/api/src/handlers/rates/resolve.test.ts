@@ -1,23 +1,29 @@
 import { Result } from "better-result";
 import {
   afterAll,
+  afterEach,
   beforeAll,
   describe,
   expect,
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import fc from "fast-check";
 
 import type { OrganizationRoleName } from "@stll/auth-model";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 
+import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
-import { resolveRate } from "@/api/lib/billing/rates";
+import {
+  rateLookupKey,
+  resolveRate,
+  resolveRatesInTransaction,
+} from "@/api/lib/billing/rates";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
@@ -388,5 +394,190 @@ describe("resolveRate HTTP handler", () => {
       }),
     );
     expect(result).toMatchObject({ code: 404 });
+  });
+});
+
+describe("rate resolution across stored membership role values", () => {
+  const ADMIN_RATE = 30_000;
+  const MEMBER_RATE = 20_000;
+  const INTERN_RATE = 12_000;
+  const DEFAULT_RATE = 15_000;
+  const USER_RATE = 25_000;
+  const IN_ADMIN_WINDOW = "2025-06-01";
+  const AFTER_ADMIN_WINDOW = "2026-06-01";
+
+  const roleRate = (
+    role: OrganizationRoleName,
+    hourlyRate: number,
+    effectiveTo: string | null = null,
+  ) => ({
+    id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
+    workspaceId: ids.wsA1,
+    rateTableId: defaultTableId,
+    userId: null,
+    role,
+    hourlyRate: cents(hourlyRate),
+    effectiveFrom: "2025-01-01",
+    effectiveTo,
+  });
+
+  beforeAll(async () => {
+    await testDb
+      .delete(rateEntries)
+      .where(eq(rateEntries.rateTableId, defaultTableId));
+    await testDb.insert(rateEntries).values([
+      roleRate("admin", ADMIN_RATE, "2025-12-31"),
+      roleRate("member", MEMBER_RATE),
+      roleRate("intern", INTERN_RATE),
+      {
+        id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
+        workspaceId: ids.wsA1,
+        rateTableId: defaultTableId,
+        userId: null,
+        hourlyRate: cents(DEFAULT_RATE),
+        effectiveFrom: "2025-01-01",
+      },
+    ]);
+  });
+
+  const storeRole = async (role: string) => {
+    await testDb
+      .update(member)
+      .set({ role })
+      .where(
+        and(eq(member.organizationId, ids.orgA), eq(member.userId, ids.userA2)),
+      );
+  };
+
+  afterEach(async () => {
+    await storeRole("member");
+    await testDb
+      .delete(rateEntries)
+      .where(
+        and(
+          eq(rateEntries.rateTableId, defaultTableId),
+          eq(rateEntries.userId, ids.userA2),
+        ),
+      );
+  });
+
+  const resolveFor = async (
+    userId: SafeId<"user">,
+    dateWorked: string,
+  ): Promise<{ hourlyRate: number; currency: string } | null> => {
+    const result = await Result.gen(async function* () {
+      return Result.ok(
+        yield* resolveRate({
+          safeDb: scopedSafeDb(),
+          workspaceId: ids.wsA1,
+          userId,
+          dateWorked,
+        }),
+      );
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
+  };
+  const priced = (hourlyRate: number) => ({
+    hourlyRate,
+    currency: DEFAULT_CURRENCY,
+  });
+
+  test("a membership holding several roles resolves, in canonical role order whatever order is stored", async () => {
+    for (const stored of ["admin,member", "member,admin", "member, admin"]) {
+      await storeRole(stored);
+      expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
+        priced(ADMIN_RATE),
+      );
+    }
+  });
+
+  test("a held role without an effective rate yields to the next held role, not to the table default", async () => {
+    await storeRole("intern,admin");
+    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
+      priced(ADMIN_RATE),
+    );
+    expect(await resolveFor(ids.userA2, AFTER_ADMIN_WINDOW)).toEqual(
+      priced(INTERN_RATE),
+    );
+    // No owner rate exists at all, so the other held role decides.
+    await storeRole("owner,member");
+    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
+      priced(MEMBER_RATE),
+    );
+  });
+
+  test("a role name outside the model selects no role rate and never fails the lookup", async () => {
+    await storeRole("partner");
+    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
+      priced(DEFAULT_RATE),
+    );
+    // Not a prefix or substring match on a known role.
+    await storeRole("administrator,members");
+    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
+      priced(DEFAULT_RATE),
+    );
+    await storeRole("partner,member");
+    expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
+      priced(MEMBER_RATE),
+    );
+  });
+
+  test("a person-specific rate still wins for a membership holding several or unknown roles", async () => {
+    await testDb.insert(rateEntries).values({
+      id: toSafeId<"rateEntry">(Bun.randomUUIDv7()),
+      workspaceId: ids.wsA1,
+      rateTableId: defaultTableId,
+      userId: ids.userA2,
+      hourlyRate: cents(USER_RATE),
+      effectiveFrom: "2025-01-01",
+    });
+    for (const stored of ["admin,member", "partner"]) {
+      await storeRole(stored);
+      expect(await resolveFor(ids.userA2, IN_ADMIN_WINDOW)).toEqual(
+        priced(USER_RATE),
+      );
+    }
+  });
+
+  test("one membership holding several roles does not stop a batch from resolving every entry", async () => {
+    await storeRole("admin,member");
+    const severalInWindow = {
+      userId: ids.userA2,
+      dateWorked: IN_ADMIN_WINDOW,
+    };
+    const severalAfterWindow = {
+      userId: ids.userA2,
+      dateWorked: AFTER_ADMIN_WINDOW,
+    };
+    const single = { userId: ids.userA1, dateWorked: IN_ADMIN_WINDOW };
+    // The fixture's owner has no role rate.
+    const owner = { userId: ids.userAdmin, dateWorked: IN_ADMIN_WINDOW };
+    const lookups = [severalInWindow, severalAfterWindow, single, owner];
+    const result = await Result.gen(async function* () {
+      return Result.ok(
+        yield* Result.await(
+          scopedSafeDb()(
+            async (tx) =>
+              await resolveRatesInTransaction({
+                tx,
+                workspaceId: ids.wsA1,
+                lookups,
+              }),
+          ),
+        ),
+      );
+    });
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    expect(Object.fromEntries(result.value)).toEqual({
+      [rateLookupKey(severalInWindow)]: priced(ADMIN_RATE),
+      [rateLookupKey(severalAfterWindow)]: priced(MEMBER_RATE),
+      [rateLookupKey(single)]: priced(MEMBER_RATE),
+      [rateLookupKey(owner)]: priced(DEFAULT_RATE),
+    });
   });
 });
