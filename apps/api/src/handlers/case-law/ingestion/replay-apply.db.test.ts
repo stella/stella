@@ -10,6 +10,8 @@ import {
 import { eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+
 import { authRelationsPart } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -777,6 +779,75 @@ const replayConvergenceFixture = async (text: string) => {
     });
   return { sourceId, id, result, sanitized, payload, replay };
 };
+
+test("replay persists a newly derived reasons role and converges without changing the stated type", async () => {
+  const fixture = await replayConvergenceFixture("Unchanged reasons text.");
+  const statedType = "uzasadnienie";
+  await db
+    .update(caseLawDecisions)
+    .set({ decisionType: statedType })
+    .where(eq(caseLawDecisions.id, fixture.id));
+  const result = {
+    ...fixture.result,
+    decisionType: statedType,
+    documentRole: DECISION_DOCUMENT_ROLE.REASONS,
+  };
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId: fixture.sourceId,
+  });
+  if (sourceLease === null) {
+    throw new TypeError("Expected the source ingestion lease to be free");
+  }
+  const replay = async () =>
+    await replayCaseLawSource({
+      adapter: stubAdapter(() => ({ type: "parsed", result })),
+      scopedDb,
+      sourceId: fixture.sourceId,
+      sourceLease,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+    });
+  const snapshot = async () =>
+    (
+      await db
+        .select({
+          metadata: caseLawDecisions.metadata,
+          decisionType: caseLawDecisions.decisionType,
+          sourceHash: caseLawDecisions.sourceHash,
+          fulltext: caseLawDecisions.fulltext,
+          updatedAt: caseLawDecisions.updatedAt,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, fixture.id))
+    ).at(0);
+  const before = await snapshot();
+  expect(before?.metadata?.["documentRole"]).toBeUndefined();
+  const first = await replay();
+  if (first.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+  expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+  const applied = await snapshot();
+  expect(applied?.metadata).toMatchObject({
+    celex: "62026CJ0010",
+    documentRole: DECISION_DOCUMENT_ROLE.REASONS,
+  });
+  expect(applied?.decisionType).toBe(statedType);
+  expect(applied?.sourceHash).toBe(before?.sourceHash);
+  expect(applied?.fulltext).toBe(before?.fulltext);
+
+  const second = await replay();
+  if (second.type !== "ran") {
+    throw new TypeError("Expected the capable adapter to run");
+  }
+  expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  expect(second.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+  expect(await snapshot()).toEqual(applied);
+  await sourceLease.release();
+});
 
 test.each(["r o z h o d o l :", "Body text.\u0000"])(
   "sanitized replay reaches a fixed point for %p",

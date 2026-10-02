@@ -2338,6 +2338,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "people or organizations.",
     inputSchema: listContactsArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "excluded",
       reason: "dynamic_tenant_payload",
@@ -2414,6 +2415,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
     scope: "stella:read",
@@ -2445,6 +2447,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "subject.birth_date": { kind: AGENT_INPUT_NORMALIZATION_KIND.date },
     },
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
     scope: "stella:read",
@@ -2466,6 +2469,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [

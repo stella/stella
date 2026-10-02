@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
 import { propertyConfig } from "@stll/property-testing";
 
 import type {
@@ -279,6 +280,7 @@ const judgment: IngestionResult = {
   sourceDocumentId: "339002",
   fulltext: "WYROK\n\nSąd utrzymuje w mocy zaskarżony wyrok.",
   metadata: { saosId: 339_002 },
+  documentRole: DECISION_DOCUMENT_ROLE.RULING,
   textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
   rawHash: "judgment-hash",
   documentAst: astOf([
@@ -322,6 +324,8 @@ describe("a judgment composed with its reasons", () => {
 
   test("reads the ruling, then the reasons, and keeps every anchor distinct", () => {
     const composed = composeDecisionWithSupplements(judgment, [reasons]);
+    expect(composed.documentRole).toBe(DECISION_DOCUMENT_ROLE.RULING);
+    expect(composed.decisionType).toBe(judgment.decisionType);
     expect(composed.fulltext).toBe(
       `${judgment.fulltext ?? ""}\n\n${reasons.fulltext ?? ""}`,
     );

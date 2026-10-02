@@ -2,6 +2,8 @@
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
+import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
+import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import { classifyFailure } from "@stll/errors";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifier } from "@stll/legal-ast/decision-identifier";
@@ -75,6 +77,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -370,13 +373,45 @@ const COURT_TYPE_MAP: Record<string, string> = {
 };
 
 /** SAOS's `judgmentType` enum, and the local term each is stored under. */
-const SAOS_JUDGMENT_TYPE = {
+export const SAOS_JUDGMENT_TYPE = {
   SENTENCE: "wyrok",
   DECISION: "postanowienie",
   RESOLUTION: "uchwała",
   REASONS: "uzasadnienie",
   REGULATION: "zarządzenie",
 } as const;
+
+const SAOS_DOCUMENT_ROLE = {
+  SENTENCE: DECISION_DOCUMENT_ROLE.RULING,
+  DECISION: DECISION_DOCUMENT_ROLE.RULING,
+  RESOLUTION: DECISION_DOCUMENT_ROLE.RULING,
+  REASONS: DECISION_DOCUMENT_ROLE.REASONS,
+  REGULATION: DECISION_DOCUMENT_ROLE.RULING,
+} as const satisfies Record<
+  keyof typeof SAOS_JUDGMENT_TYPE,
+  DecisionDocumentRole
+>;
+
+const isSaosJudgmentType = (
+  value: string,
+): value is keyof typeof SAOS_JUDGMENT_TYPE =>
+  Object.hasOwn(SAOS_JUDGMENT_TYPE, value);
+
+const documentRoleOf = (
+  value: string | null | undefined,
+): DecisionDocumentRole | undefined => {
+  if (value === undefined || value === null) {
+    return undefined;
+  }
+  if (isSaosJudgmentType(value)) {
+    return SAOS_DOCUMENT_ROLE[value];
+  }
+  logger.warn(DOCUMENT_ROLE_UNMAPPED, {
+    adapterKey: ADAPTER_KEYS.PL_COURTS,
+    judgmentType: value,
+  });
+  return undefined;
+};
 
 const JUDGMENT_TYPE_MAP: Record<string, string> = SAOS_JUDGMENT_TYPE;
 
@@ -1389,6 +1424,7 @@ export const buildPlDecision = ({
   const judgmentType = item.judgmentType ?? dumpItem.judgmentType;
   // What the document is, which is what its parser titles it by.
   const decisionType = normalizeDecisionType(judgmentType, content);
+  const documentRole = documentRoleOf(judgmentType);
   // What a row holding this document alone is: a reasons document is one
   // only while no ruling holds it, and is typed as such.
   const storedDecisionType =
@@ -1517,6 +1553,7 @@ export const buildPlDecision = ({
     language: "pl",
     decisionDate,
     decisionType: storedDecisionType,
+    documentRole,
     fulltext,
     sourceDocumentId: plCourtsSourceDocumentId(saosId),
     sourceUrl: publicSourceUrl(saosId),

@@ -1,4 +1,5 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+import { Result, panic } from "better-result";
 /**
  * Polish common courts from the Ministry of Justice's judgments API.
  *
@@ -46,11 +47,13 @@
  * their own rows; {@link plCommonCourtRulingKeys} is the relationship between
  * them, and nothing here merges or deletes either side.
  */
-
-import { Result, panic } from "better-result";
 import * as cheerio from "cheerio";
 import { type AnyNode, type Element, isTag, isText } from "domhandler";
 
+import {
+  DECISION_DOCUMENT_ROLE,
+  type DecisionDocumentRole,
+} from "@stll/api-contract/decision-document-role";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { parsePlainDate, Temporal } from "@stll/time";
@@ -125,6 +128,7 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -676,15 +680,49 @@ const REASONS_DECISION_TYPE = "uzasadnienie";
 /** Components that name no ruling: the hearing record and anything else. */
 const OTHER_COMPONENTS = ["RECORD", "OTHER"] as const;
 
-const isRulingComponent = (
-  value: string,
-): value is keyof typeof RULING_COMPONENTS =>
-  Object.hasOwn(RULING_COMPONENTS, value);
+export type PlNcourtComponent =
+  | keyof typeof RULING_COMPONENTS
+  | typeof REASONS_COMPONENT
+  | (typeof OTHER_COMPONENTS)[number];
 
-const isKnownComponent = (value: string): boolean =>
-  isRulingComponent(value) ||
-  value === REASONS_COMPONENT ||
-  OTHER_COMPONENTS.some((component) => component === value);
+const COMPONENT_DOCUMENT_ROLES = {
+  SENTENCE: DECISION_DOCUMENT_ROLE.RULING,
+  DECISION: DECISION_DOCUMENT_ROLE.RULING,
+  RESOLUTION: DECISION_DOCUMENT_ROLE.RULING,
+  REGULATION: DECISION_DOCUMENT_ROLE.RULING,
+  REASON: DECISION_DOCUMENT_ROLE.REASONS,
+  RECORD: undefined,
+  OTHER: undefined,
+} as const satisfies Record<
+  PlNcourtComponent,
+  DecisionDocumentRole | undefined
+>;
+
+const isKnownComponent = (value: string): value is PlNcourtComponent =>
+  Object.hasOwn(COMPONENT_DOCUMENT_ROLES, value);
+
+/** A known ruling component wins in a mixed document; unknown enums stay unknown. */
+const documentRoleOf = (
+  components: readonly string[],
+): DecisionDocumentRole | undefined => {
+  const roles: (DecisionDocumentRole | undefined)[] = [];
+  for (const component of components) {
+    if (!isKnownComponent(component)) {
+      logger.warn(DOCUMENT_ROLE_UNMAPPED, {
+        adapterKey: ADAPTER_KEYS.PL_NCOURT,
+        publisherValue: component,
+      });
+      return undefined;
+    }
+    roles.push(COMPONENT_DOCUMENT_ROLES[component]);
+  }
+  if (roles.includes(DECISION_DOCUMENT_ROLE.RULING)) {
+    return DECISION_DOCUMENT_ROLE.RULING;
+  }
+  return roles.includes(DECISION_DOCUMENT_ROLE.REASONS)
+    ? DECISION_DOCUMENT_ROLE.REASONS
+    : undefined;
+};
 
 /** The rulings, in the order one names a document holding several. */
 const RULING_PRECEDENCE = [
@@ -871,7 +909,11 @@ const orUndefined = <T>(items: readonly T[]): readonly T[] | undefined =>
 /** The components a type lists and the decision type they name, reported when unknown. */
 const typeOf = (
   rawType: string | undefined,
-): { components: string[]; decisionType: string | undefined } => {
+): {
+  components: string[];
+  decisionType: string | undefined;
+  documentRole: DecisionDocumentRole | undefined;
+} => {
   const components = plNcourtComponents(rawType);
   const decisionType = plNcourtDecisionType(components);
   if (
@@ -883,7 +925,7 @@ const typeOf = (
       decisionForm: rawType ?? "",
     });
   }
-  return { components, decisionType };
+  return { components, decisionType, documentRole: documentRoleOf(components) };
 };
 
 /**
@@ -1056,7 +1098,7 @@ export const assemblePlNcourtDecision = ({
     return unkeyed();
   }
 
-  const { components, decisionType } = typeOf(
+  const { components, decisionType, documentRole } = typeOf(
     fieldOf(detail, "type") ?? presentText(row.type),
   );
   // Written reasons listed on their own are the reasons of a ruling, joined
@@ -1117,6 +1159,7 @@ export const assemblePlNcourtDecision = ({
 
   const decision: IngestionResult = {
     ...keyed,
+    ...(documentRole === undefined ? {} : { documentRole }),
     sourceDocumentId: id,
     ...(repairAliases.length === 0
       ? {}
@@ -1372,12 +1415,17 @@ const buildUnkeyedRow = ({
   const signature = presentText(row.signature);
   const court = courtNameOf(presentText(row.courtId))?.name;
   const label = UNSERVED_ROW_LABEL;
+  const detail = detailXml === undefined ? null : readPlNcourtDetail(detailXml);
+  const { components, documentRole } = typeOf(
+    fieldOf(detail, "type") ?? presentText(row.type),
+  );
   const sourceRaw = encodeSourceRawEnvelope({
     [RAW_PART.LISTING]: listingXml,
     ...(detailXml === undefined ? {} : { [RAW_PART.DETAIL]: detailXml }),
   });
   return {
     sourceDocumentId,
+    ...(documentRole === undefined ? {} : { documentRole }),
     caseNumber: signature ?? sourceDocumentId,
     ...(signature === undefined ? { caseNumberIsPlaceholder: true } : {}),
     isListingOnly: true,
@@ -1394,6 +1442,7 @@ const buildUnkeyedRow = ({
         ? DETAIL_STATUS.LISTING_INCOMPLETE
         : DETAIL_STATUS.ID_UNAVAILABLE,
       listed: row,
+      documentTypes: orUndefined(components),
     }),
     rawHash: hashContent(sourceRaw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_NCOURT],
