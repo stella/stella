@@ -1,8 +1,9 @@
 # Scheduler operator pauses
 
-Job definitions are refreshed at API boot. Existing `enabled`, `paused_by`,
-`paused_until`, and `pause_reason` values belong to the operator and survive
-that refresh. New jobs are enabled by default.
+Job definitions are refreshed at API boot. `enabled` follows the deployment's
+configuration feature gates on every boot. Operator control uses only
+`paused_by`, `paused_until`, and `pause_reason`, which survive that refresh.
+New jobs are enabled by default unless their configuration gate disables them.
 
 A job can run when `enabled` is true and `paused_until` is either `NULL` or in
 the past. `NULL` means unpaused; `'infinity'::timestamptz` pauses indefinitely.
@@ -12,7 +13,9 @@ An elapsed finite pause resumes automatically. The runner clears expired
 Use an authorized database operator connection; the application role cannot
 access scheduler tables. Record an operator identifier and a reason in the
 same update as each pause or resume. Keep reasons free of sensitive data:
-pause transitions are emitted in database logs.
+pause transitions are emitted in database logs. Every non-null pause deadline
+requires a nonblank operator identifier and a reason of at least eight
+characters after trimming spaces; the database enforces this requirement.
 
 ```sql
 -- Pause indefinitely. Replace the identifier, reason, and job ID.
@@ -33,7 +36,7 @@ SET paused_by = 'operator-id',
 WHERE id = 'job-id'
 RETURNING id, enabled, paused_by, paused_until, pause_reason;
 
--- Resume. This preserves a separately disabled job's enabled state.
+-- Resume. The deployment's configuration gate still controls eligibility.
 UPDATE scheduler_jobs
 SET paused_by = 'operator-id',
     pause_reason = 'Maintenance complete',

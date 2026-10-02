@@ -1,3 +1,5 @@
+import path from "node:path";
+
 /**
  * Positional arguments select which discovered test files to run.
  *
@@ -100,6 +102,15 @@ export const partitionRunnerArguments = (
 };
 
 const LEADING_RELATIVE_PREFIX = /^\.?\//u;
+
+/** Absolute file and directory selectors must share discovery's relative root. */
+export const normalizeAbsoluteTestPatterns = (
+  patterns: readonly string[],
+  root: string,
+): string[] =>
+  patterns.map((pattern) =>
+    path.isAbsolute(pattern) ? path.relative(root, pattern) : pattern,
+  );
 
 /**
  * The discovered paths a pattern set selects, matched as a substring of the

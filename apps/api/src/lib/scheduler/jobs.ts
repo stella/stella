@@ -105,6 +105,7 @@ export const ensureSchedulerJob = async ({
       target: schedulerJobs.id,
       set: {
         description,
+        enabled,
         ...(shouldRefreshNextRunAt && { nextRunAt }),
         ...(payloadUpdate === "replace" && { payload }),
         schedule,

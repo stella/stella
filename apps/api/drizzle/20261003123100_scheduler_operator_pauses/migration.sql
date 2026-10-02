@@ -4,7 +4,13 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "scheduler_jobs"
   ADD COLUMN "paused_by" text,
   ADD COLUMN "paused_until" timestamp with time zone,
-  ADD COLUMN "pause_reason" text;
+  ADD COLUMN "pause_reason" text,
+  ADD CONSTRAINT "scheduler_jobs_pause_attribution_check" CHECK (
+    paused_until IS NULL OR (
+      paused_by IS NOT NULL AND length(btrim(paused_by)) > 0
+      AND pause_reason IS NOT NULL AND length(btrim(pause_reason)) >= 8
+    )
+  );
 --> statement-breakpoint
 
 CREATE FUNCTION public.scheduler_job_pause_log() RETURNS trigger

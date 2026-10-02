@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
@@ -18,14 +19,19 @@ const CLOCK_MS = Date.parse("2040-01-01T00:00:00.000Z");
 const PAUSED_BY = "test-operator";
 const PAUSE_REASON = "Scheduler maintenance";
 
-type Fixture = { db: GatedTestDb; jobId: string; taskName: string };
+type Fixture = {
+  db: GatedTestDb;
+  client: SQL;
+  jobId: string;
+  taskName: string;
+};
 
 const withJob = async (exercise: (fixture: Fixture) => Promise<void>) => {
   if (!databaseUrl) {
     return panic("Scheduler pause tests require DATABASE_URL");
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-    const { db } = openClient();
+    const { db, sql: client } = openClient();
     const jobId = `test.pause.${Bun.randomUUIDv7()}`;
     const taskName = `${jobId}.task`;
     const definition = DECLARED_SCHEDULER_JOBS.at(0);
@@ -51,7 +57,7 @@ const withJob = async (exercise: (fixture: Fixture) => Promise<void>) => {
           task: taskName,
         })
         .where(eq(schedulerJobs.id, jobId));
-      await exercise({ db, jobId, taskName });
+      await exercise({ db, client, jobId, taskName });
     } finally {
       await db.delete(schedulerJobs).where(eq(schedulerJobs.id, jobId));
     }
@@ -77,16 +83,15 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("every declared job preserves operator state across a boot while new jobs start enabled", async () => {
+    test("every declared job follows configuration gates across boots while preserving operator pauses", async () => {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const prefix = `pause.${Bun.randomUUIDv7()}.`;
-        const definitions = DECLARED_SCHEDULER_JOBS.map((definition) => ({
-          ...definition,
-          db,
-          enabled: "enabled" in definition ? definition.enabled : true,
-          id: `${prefix}${definition.id}`,
-        }));
+        const definitions = DECLARED_SCHEDULER_JOBS.map((definition) =>
+          ({ ...definition, db,
+            enabled: "enabled" in definition ? definition.enabled : true,
+            id: `${prefix}${definition.id}`,}),
+        );
         const ids = definitions.map(({ id }) => id);
         expect(ids.length).toBeGreaterThan(0);
         try {
@@ -116,35 +121,143 @@ if (!databaseUrl || !runPostgresTests) {
               pauseReason: PAUSE_REASON,
             })
             .where(inArray(schedulerJobs.id, ids));
-          const disabledId = ids.at(0);
-          if (!disabledId) {
-            return panic("Scheduler declarations must not be empty");
-          }
-          await db
-            .update(schedulerJobs)
-            .set({ enabled: false })
-            .where(eq(schedulerJobs.id, disabledId));
-          for (const definition of definitions) {
-            await ensureSchedulerJob({ ...definition, enabled: true });
-          }
-          const rebooted = await db
-            .select()
-            .from(schedulerJobs)
-            .where(inArray(schedulerJobs.id, ids));
-          expect(rebooted.length).toBe(ids.length);
-          for (const definition of definitions) {
-            expect(
-              rebooted.find((job) => job.id === definition.id),
-            ).toMatchObject({
-              enabled:
-                definition.id === disabledId ? false : definition.enabled,
-              pausedBy: PAUSED_BY,
-              pausedUntil,
-              pauseReason: PAUSE_REASON,
-            });
+          for (const enabled of [false, true, false]) {
+            for (const definition of definitions) {
+              await ensureSchedulerJob({ ...definition, enabled });
+            }
+            const rebooted = await db
+              .select()
+              .from(schedulerJobs)
+              .where(inArray(schedulerJobs.id, ids));
+            expect(rebooted.length).toBe(ids.length);
+            for (const definition of definitions) {
+              expect(
+                rebooted.find((job) => job.id === definition.id),
+              ).toMatchObject({
+                enabled,
+                pausedBy: PAUSED_BY,
+                pausedUntil,
+                pauseReason: PAUSE_REASON,
+              });
+            }
           }
         } finally {
           await db.delete(schedulerJobs).where(inArray(schedulerJobs.id, ids));
+        }
+      });
+    });
+
+    test("pause deadlines require nonblank attribution and a reason of at least eight trimmed characters", async () => {
+      await withJob(async ({ db, client, jobId }) => {
+        for (const pausedUntil of [
+          new Date(CLOCK_MS - 1),
+          new Date(CLOCK_MS + 60_000),
+        ]) {
+          for (const attribution of [
+            { pausedBy: null, pauseReason: PAUSE_REASON },
+            { pausedBy: "", pauseReason: PAUSE_REASON },
+            { pausedBy: "   ", pauseReason: PAUSE_REASON },
+            { pausedBy: PAUSED_BY, pauseReason: null },
+            { pausedBy: PAUSED_BY, pauseReason: "" },
+            { pausedBy: PAUSED_BY, pauseReason: "   " },
+            { pausedBy: PAUSED_BY, pauseReason: " 1234567 " },
+          ]) {
+            await expect(
+              client`UPDATE scheduler_jobs
+              SET paused_until = ${pausedUntil}, paused_by = ${attribution.pausedBy}, pause_reason = ${attribution.pauseReason}
+              WHERE id = ${jobId}`.execute(),
+            ).rejects.toThrow("scheduler_jobs_pause_attribution_check");
+          }
+          await db
+            .update(schedulerJobs)
+            .set({
+              pausedUntil,
+              pausedBy: " operator ",
+              pauseReason: " 12345678 ",
+            })
+            .where(eq(schedulerJobs.id, jobId));
+          const [paused] = await db
+            .select()
+            .from(schedulerJobs)
+            .where(eq(schedulerJobs.id, jobId));
+          expect(paused?.pausedUntil).toEqual(pausedUntil);
+        }
+        await db
+          .update(schedulerJobs)
+          .set({ pausedUntil: null, pausedBy: null, pauseReason: null })
+          .where(eq(schedulerJobs.id, jobId));
+        const [resumed] = await db
+          .select()
+          .from(schedulerJobs)
+          .where(eq(schedulerJobs.id, jobId));
+        expect(resumed).toMatchObject({
+          pausedUntil: null,
+          pausedBy: null,
+          pauseReason: null,
+        });
+      });
+    });
+
+    test("a configuration gate disabled after acquisition records a disabled skip without a pause event", async () => {
+      await withJob(async ({ db, jobId, taskName }) => {
+        const invoked: string[] = [];
+        const task: SchedulerTask = ({ job }) => {
+          invoked.push(job.id);
+        };
+        const registry = new Map([[taskName, task]]);
+        const job = await acquireNextDueJob({
+          db,
+          leaseMs: LEASE_MS,
+          now: () => CLOCK_MS,
+          registry,
+          runnerId: jobId,
+        });
+        if (!job) {
+          return panic("Enabled job must permit acquisition");
+        }
+        await db
+          .update(schedulerJobs)
+          .set({ enabled: false })
+          .where(eq(schedulerJobs.id, jobId));
+        const logs = installRecordingLogger();
+        try {
+          expect(
+            await runJob({
+              db,
+              heartbeatIntervalMs: 1000,
+              job,
+              leaseMs: LEASE_MS,
+              maxRuntimeMs: 60_000,
+              now: () => CLOCK_MS,
+              registry,
+              runnerId: jobId,
+              signal: undefined,
+            }),
+          ).toBe("skipped");
+          expect(invoked).toEqual([]);
+          expect(
+            logs
+              .at("ERROR")
+              .filter(
+                ({ message }) => message === "scheduler.job.paused_job_ran",
+              ),
+          ).toEqual([]);
+          const runs = await db
+            .select()
+            .from(schedulerJobRuns)
+            .where(eq(schedulerJobRuns.jobId, jobId));
+          expect(runs).toHaveLength(1);
+          expect(runs.at(0)).toMatchObject({
+            status: "skipped",
+            error: "SchedulerJobDisabled",
+          });
+          const [persisted] = await db
+            .select()
+            .from(schedulerJobs)
+            .where(eq(schedulerJobs.id, jobId));
+          expect(persisted?.lockedBy).toBeNull();
+        } finally {
+          logs.restore();
         }
       });
     });
@@ -153,7 +266,12 @@ if (!databaseUrl || !runPostgresTests) {
       await withJob(async ({ db, jobId, taskName }) => {
         await db
           .update(schedulerJobs)
-          .set({ enabled: false, pausedUntil: new Date(CLOCK_MS - 1) })
+          .set({
+            enabled: false,
+            pausedUntil: new Date(CLOCK_MS - 1),
+            pausedBy: PAUSED_BY,
+            pauseReason: PAUSE_REASON,
+          })
           .where(eq(schedulerJobs.id, jobId));
         const task: SchedulerTask = () => panic("Disabled job must not run");
         const job = await acquireNextDueJob({
@@ -276,78 +394,82 @@ if (!databaseUrl || !runPostgresTests) {
       });
     });
 
-    test("a pause committed after acquisition blocks the handler and records an error with attribution", async () => {
-      await withJob(async ({ db, jobId, taskName }) => {
-        const invoked: string[] = [];
-        const task: SchedulerTask = ({ job }) => {
-          invoked.push(job.id);
-        };
-        const registry = new Map([[taskName, task]]);
-        const job = await acquireNextDueJob({
-          db,
-          leaseMs: LEASE_MS,
-          now: () => CLOCK_MS,
-          registry,
-          runnerId: jobId,
-        });
-        if (!job) {
-          return panic("Unpaused job must permit acquisition");
-        }
-        expect(job.pausedUntil).toBeNull();
-        await db
-          .update(schedulerJobs)
-          .set({
-            pausedBy: PAUSED_BY,
-            pausedUntil: new Date(CLOCK_MS + 60_000),
-            pauseReason: PAUSE_REASON,
-          })
-          .where(eq(schedulerJobs.id, jobId));
-        const logs = installRecordingLogger();
-        try {
-          expect(
-            await runJob({
-              db,
-              heartbeatIntervalMs: 1000,
-              job,
-              leaseMs: LEASE_MS,
-              maxRuntimeMs: 60_000,
-              now: () => CLOCK_MS,
-              registry,
-              runnerId: jobId,
-              signal: undefined,
-            }),
-          ).toBe("skipped");
-          expect(invoked).toEqual([]);
-          expect(logs.at("ERROR")).toContainEqual(
-            expect.objectContaining({
-              message: "scheduler.job.paused_job_ran",
-              attributes: expect.objectContaining({
-                jobId,
-                pausedBy: PAUSED_BY,
-                pauseReason: PAUSE_REASON,
-              }),
-            }),
-          );
-          const [persisted] = await db
-            .select()
-            .from(schedulerJobs)
-            .where(eq(schedulerJobs.id, jobId));
-          expect(persisted?.pausedUntil).toEqual(new Date(CLOCK_MS + 60_000));
-          expect(persisted?.lockedBy).toBeNull();
-          const runs = await db
-            .select()
-            .from(schedulerJobRuns)
-            .where(eq(schedulerJobRuns.jobId, jobId));
-          expect(runs).toHaveLength(1);
-          expect(runs.at(0)).toMatchObject({
-            status: "skipped",
-            error: "SchedulerOperatorPaused",
+    test.each([true, false])(
+      "a pause committed after acquisition blocks the handler and records attribution (enabled=%s)",
+      async (enabled) => {
+        await withJob(async ({ db, jobId, taskName }) => {
+          const invoked: string[] = [];
+          const task: SchedulerTask = ({ job }) => {
+            invoked.push(job.id);
+          };
+          const registry = new Map([[taskName, task]]);
+          const job = await acquireNextDueJob({
+            db,
+            leaseMs: LEASE_MS,
+            now: () => CLOCK_MS,
+            registry,
+            runnerId: jobId,
           });
-        } finally {
-          logs.restore();
-        }
-      });
-    });
+          if (!job) {
+            return panic("Unpaused job must permit acquisition");
+          }
+          expect(job.pausedUntil).toBeNull();
+          await db
+            .update(schedulerJobs)
+            .set({
+              enabled,
+              pausedBy: PAUSED_BY,
+              pausedUntil: new Date(CLOCK_MS + 60_000),
+              pauseReason: PAUSE_REASON,
+            })
+            .where(eq(schedulerJobs.id, jobId));
+          const logs = installRecordingLogger();
+          try {
+            expect(
+              await runJob({
+                db,
+                heartbeatIntervalMs: 1000,
+                job,
+                leaseMs: LEASE_MS,
+                maxRuntimeMs: 60_000,
+                now: () => CLOCK_MS,
+                registry,
+                runnerId: jobId,
+                signal: undefined,
+              }),
+            ).toBe("skipped");
+            expect(invoked).toEqual([]);
+            expect(logs.at("ERROR")).toContainEqual(
+              expect.objectContaining({
+                message: "scheduler.job.paused_job_ran",
+                attributes: expect.objectContaining({
+                  jobId,
+                  pausedBy: PAUSED_BY,
+                  pauseReason: PAUSE_REASON,
+                }),
+              }),
+            );
+            const [persisted] = await db
+              .select()
+              .from(schedulerJobs)
+              .where(eq(schedulerJobs.id, jobId));
+            expect(persisted?.pausedUntil).toEqual(new Date(CLOCK_MS + 60_000));
+            expect(persisted?.lockedBy).toBeNull();
+            const runs = await db
+              .select()
+              .from(schedulerJobRuns)
+              .where(eq(schedulerJobRuns.jobId, jobId));
+            expect(runs).toHaveLength(1);
+            expect(runs.at(0)).toMatchObject({
+              status: "skipped",
+              error: "SchedulerOperatorPaused",
+            });
+          } finally {
+            logs.restore();
+          }
+        });
+      },
+    );
 
     test("a handler completing before its heartbeat records a concurrent pause without replaying completed work", async () => {
       await withJob(async ({ db, jobId, taskName }) => {

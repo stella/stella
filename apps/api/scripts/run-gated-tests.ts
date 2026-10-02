@@ -2,7 +2,11 @@ import path from "node:path";
 
 import packageJson from "../package.json" with { type: "json" };
 import { buildApiTestCommand } from "./api-test-command";
-import { partitionRunnerArguments, selectTestPaths } from "./test-path-filters";
+import {
+  normalizeAbsoluteTestPatterns,
+  partitionRunnerArguments,
+  selectTestPaths,
+} from "./test-path-filters";
 
 type GatedTestScript = keyof typeof packageJson.ciGateTestRunners;
 
@@ -54,7 +58,10 @@ export const runGatedTests = async ({
   const { bunArguments, patterns } = partitionRunnerArguments(
     Bun.argv.slice(2),
   );
-  const selectedPaths = selectTestPaths(discoveredGatedFiles, patterns);
+  const selectedPaths = selectTestPaths(
+    discoveredGatedFiles,
+    normalizeAbsoluteTestPatterns(patterns, apiRoot),
+  );
   const testFiles = discoveredGatedFiles.filter(
     (testFile) => selectedPaths === null || selectedPaths.has(testFile),
   );

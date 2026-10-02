@@ -1,6 +1,8 @@
 import { describe, expect, test } from "bun:test";
+import path from "node:path";
 
 import {
+  normalizeAbsoluteTestPatterns,
   partitionRunnerArguments,
   selectTestPaths,
 } from "../../scripts/test-path-filters";
@@ -10,6 +12,39 @@ const TEST_PATHS = [
   "src/lib/sse-publish-timeout.test.ts",
   "src/handlers/workspaces/get.test.ts",
 ] as const;
+
+describe("absolute test selectors", () => {
+  const apiRoot = path.resolve(import.meta.dir, "../..");
+
+  test("selects the same discovered files for absolute and relative paths", () => {
+    for (const selector of [...TEST_PATHS, "src/lib/"]) {
+      const absoluteSelector = path.resolve(apiRoot, selector);
+      expect(absoluteSelector).not.toBe(selector);
+      expect(
+        selectTestPaths(
+          TEST_PATHS,
+          normalizeAbsoluteTestPatterns([absoluteSelector], apiRoot),
+        ),
+      ).toEqual(selectTestPaths(TEST_PATHS, [selector]));
+    }
+  });
+
+  test("preserves relative substring patterns and selects no outside file", () => {
+    const relativePatterns = ["redis-outage", "./src/lib/", "src/handlers"];
+    expect(normalizeAbsoluteTestPatterns(relativePatterns, apiRoot)).toEqual(
+      relativePatterns,
+    );
+    expect(
+      selectTestPaths(
+        TEST_PATHS,
+        normalizeAbsoluteTestPatterns(
+          [path.resolve(apiRoot, "../other/src/lib/redis-outage.test.ts")],
+          apiRoot,
+        ),
+      )?.size,
+    ).toBe(0);
+  });
+});
 
 describe("partitionRunnerArguments", () => {
   test("keeps a value-taking flag's value with the flag, however it looks", () => {

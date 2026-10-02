@@ -551,7 +551,9 @@ export const runJob = async ({
       db,
       job,
       leaseToken,
-      reason: "SchedulerOperatorPaused",
+      reason: current.paused
+        ? "SchedulerOperatorPaused"
+        : "SchedulerJobDisabled",
       runId,
       startedAt,
     });
@@ -966,6 +968,7 @@ export const finishRunSuccess = async ({
 
 type SchedulerSkipReason =
   | "SchedulerOperatorPaused"
+  | "SchedulerJobDisabled"
   | "SchedulerAborted"
   | "SchedulerLeaseLost";
 
