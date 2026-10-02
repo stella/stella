@@ -73,7 +73,7 @@ describe("managed request catalog checks", () => {
     let requests = 0;
     let holding = false;
     let heldRequests = 0;
-    const held = Promise.withResolvers<Response>();
+    const held = Promise.withResolvers<() => Response>();
     const heldStarted = Promise.withResolvers<undefined>();
     Object.assign(env, {
       FEATURE_MANAGED_PROVIDER_CHECKS: true,
@@ -89,7 +89,7 @@ describe("managed request catalog checks", () => {
           if (heldRequests === 2) {
             heldStarted.resolve(undefined);
           }
-          return (await held.promise).clone();
+          return (await held.promise)();
         }
         return Response.json({ data: missing ? [] : [{ id: MODEL }] });
       },
@@ -135,7 +135,7 @@ describe("managed request catalog checks", () => {
       for (const residency of MANAGED_AI_RESIDENCIES) {
         expect(checkManagedOpenRouterModel(MODEL, residency).isOk()).toBe(true);
       }
-      held.resolve(Response.json({ data: [] }));
+      held.resolve(() => Response.json({ data: [] }));
       await refreshing;
       for (const residency of MANAGED_AI_RESIDENCIES) {
         expect(checkManagedOpenRouterModel(MODEL, residency).isErr()).toBe(

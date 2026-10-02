@@ -160,7 +160,7 @@ describe("completed regional observations", () => {
     "keeps completed %s availability during a refresh",
     async (residency) => {
       jest.useFakeTimers();
-      const pending = Promise.withResolvers<Response>();
+      const pending = Promise.withResolvers<() => Response>();
       const started = Promise.withResolvers<undefined>();
       let waiting = false;
       let requests = 0;
@@ -172,7 +172,7 @@ describe("completed regional observations", () => {
         if (requests === MANAGED_AI_RESIDENCIES.length) {
           started.resolve(undefined);
         }
-        return (await pending.promise).clone();
+        return (await pending.promise)();
       });
       let refreshing: ReturnType<typeof monitor.refresh> | undefined;
       try {
@@ -183,14 +183,14 @@ describe("completed regional observations", () => {
         monitor.advance(10);
         jest.advanceTimersByTime(10);
         expect(monitor.check(MODEL, residency).isOk()).toBe(true);
-        pending.resolve(catalog([MODEL]));
+        pending.resolve(() => catalog([MODEL]));
         await refreshing;
         expect(monitor.check(MODEL, residency).isOk()).toBe(true);
         monitor.advance(116);
         jest.advanceTimersByTime(116);
         expect(monitor.check(MODEL, residency).isOk()).toBe(true);
       } finally {
-        pending.resolve(catalog([MODEL]));
+        pending.resolve(() => catalog([MODEL]));
         await refreshing;
         jest.useRealTimers();
       }
@@ -201,7 +201,7 @@ describe("completed regional observations", () => {
     "a completed %s refresh replaces prior availability",
     async (outcome) => {
       jest.useFakeTimers();
-      const pending = Promise.withResolvers<Response>();
+      const pending = Promise.withResolvers<() => Response>();
       const started = Promise.withResolvers<undefined>();
       let failing = false;
       const monitor = fixture(async () => {
@@ -209,7 +209,7 @@ describe("completed regional observations", () => {
           return catalog([MODEL]);
         }
         started.resolve(undefined);
-        return (await pending.promise).clone();
+        return (await pending.promise)();
       });
       let refreshing: ReturnType<typeof monitor.refresh> | undefined;
       try {
@@ -222,10 +222,10 @@ describe("completed regional observations", () => {
         }
         switch (outcome) {
           case "failure":
-            pending.resolve(new Response(null, { status: 503 }));
+            pending.resolve(() => new Response(null, { status: 503 }));
             break;
           case "missing":
-            pending.resolve(catalog([]));
+            pending.resolve(() => catalog([]));
             break;
           case "timeout":
             monitor.advance(11);
@@ -240,7 +240,7 @@ describe("completed regional observations", () => {
           expect(monitor.check(MODEL, residency).isErr()).toBe(true);
         }
       } finally {
-        pending.resolve(catalog([]));
+        pending.resolve(() => catalog([]));
         await refreshing;
         jest.useRealTimers();
       }
@@ -249,11 +249,11 @@ describe("completed regional observations", () => {
 
   test("no completed boot observation refuses requests", async () => {
     jest.useFakeTimers();
-    const pending = Promise.withResolvers<Response>();
+    const pending = Promise.withResolvers<() => Response>();
     const started = Promise.withResolvers<undefined>();
     const monitor = fixture(async () => {
       started.resolve(undefined);
-      return (await pending.promise).clone();
+      return (await pending.promise)();
     });
     let refreshing: ReturnType<typeof monitor.refresh> | undefined;
     try {
@@ -265,13 +265,13 @@ describe("completed regional observations", () => {
       for (const residency of MANAGED_AI_RESIDENCIES) {
         expect(monitor.check(MODEL, residency).isErr()).toBe(true);
       }
-      pending.resolve(catalog([MODEL]));
+      pending.resolve(() => catalog([MODEL]));
       await refreshing;
       for (const residency of MANAGED_AI_RESIDENCIES) {
         expect(monitor.check(MODEL, residency).isOk()).toBe(true);
       }
     } finally {
-      pending.resolve(catalog([MODEL]));
+      pending.resolve(() => catalog([MODEL]));
       await refreshing;
       jest.useRealTimers();
     }
