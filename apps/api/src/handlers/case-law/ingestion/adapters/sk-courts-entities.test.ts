@@ -143,7 +143,7 @@ describe("Slovak court display text decodes publisher entities to stable text", 
       const decision = assembleSkCourtsDecision({ ...parts, item });
       expect(decision).not.toBeNull();
       if (decision === null) {
-        return panic("stated labels must reach quarantine");
+        panic("stated labels must reach quarantine");
       }
       expect(decision.plainTextOutcome.type).toBe("item_build_failed");
       expect(decision.sourceDocumentId).toBe(item.guid);

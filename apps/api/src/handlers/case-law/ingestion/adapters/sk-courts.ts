@@ -505,8 +505,8 @@ export const skCourtsListingIdentity = (item: unknown): ListingIdentity => {
   if (
     caseNumber.isErr() ||
     court.isErr() ||
-    !caseNumber.value ||
-    !court.value
+    caseNumber.value.length === 0 ||
+    court.value.length === 0
   ) {
     return { type: "unidentifiable" };
   }
