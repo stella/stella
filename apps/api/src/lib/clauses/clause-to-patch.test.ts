@@ -39,7 +39,7 @@ describe("clauseBodyToRichPatch", () => {
     });
   });
 
-  test("resolves a selected branch without leaking directive markers", () => {
+  test("resolves a selected branch without directive markers", () => {
     const body: ClauseBody = [
       { text: "{% if x %}", isDirective: true, directiveKind: "if" },
       { text: "Conditional" },
@@ -191,11 +191,7 @@ test("loop placeholders spanning formatted runs resolve in the shared engine", (
   if (typeof patch === "string") {
     throw new TypeError("expected a rich clause patch");
   }
-  expect({
-    paragraphs: patch.paragraphs.map(({ runs }) => ({
-      runs: runs.filter(({ text }) => text !== ""),
-    })),
-  }).toEqual({
+  expect(patch).toEqual({
     paragraphs: [
       {
         runs: [
@@ -211,4 +207,36 @@ test("loop placeholders spanning formatted runs resolve in the shared engine", (
       },
     ],
   });
+});
+
+test.each([false, true])(
+  "substitutes a clause placeholder with block presence %j",
+  (withBlock) => {
+    const body: ClauseBody = [{ text: "Buyer: {{ buyer }}" }];
+    if (withBlock) {
+      body.unshift({ text: "{% if include %}", isDirective: true });
+      body.push({ text: "{% endif %}", isDirective: true });
+    }
+    expect(
+      clauseBodyToRichPatch(body, {
+        values: { buyer: "ACME", include: true },
+        slotKey: "@clause:Terms",
+      }).unwrap(),
+    ).toEqual({
+      paragraphs: [{ runs: [{ text: "Buyer: " }, { text: "ACME" }] }],
+    });
+  },
+);
+
+test("placeholder-only clauses substitute markers split between opening braces", () => {
+  const patch = clauseBodyToRichPatch(
+    [
+      {
+        text: "{{ buyer }}",
+        runs: [{ text: "{" }, { text: "{ buyer }}", bold: true }],
+      },
+    ],
+    { values: { buyer: "ACME" }, slotKey: "@clause:Terms" },
+  ).unwrap();
+  expect(patch).toEqual({ paragraphs: [{ runs: [{ text: "ACME" }] }] });
 });

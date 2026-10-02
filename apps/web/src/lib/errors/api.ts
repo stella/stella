@@ -12,6 +12,7 @@ import {
 } from "@stll/api-contract/action-admission";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
+import { getTranslator } from "@/i18n/i18n-store";
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
 import {
@@ -169,6 +170,26 @@ type LocalizeAPIErrorInput = {
 };
 
 const localizeAPIError = ({ code, details, status }: LocalizeAPIErrorInput) => {
+  if (
+    code === CLAUSE_DIRECTIVES_INVALID_CODE &&
+    typeof details?.["clause"] === "object" &&
+    details["clause"] !== null
+  ) {
+    const clause = details["clause"];
+    if ("slotKey" in clause && typeof clause.slotKey === "string") {
+      const clauseName =
+        "name" in clause && typeof clause.name === "string"
+          ? clause.name
+          : clause.slotKey;
+      const clauseId =
+        "id" in clause && typeof clause.id === "string" ? clause.id : "";
+      return getTranslator()("errors.apiCodes.clauseDirectivesInvalidDetails", {
+        slotName: clause.slotKey,
+        clauseName,
+        clauseId,
+      });
+    }
+  }
   if (isActionAdmissionCode(code)) {
     return translateError(ACTION_ADMISSION_ERROR_KEYS[code]);
   }

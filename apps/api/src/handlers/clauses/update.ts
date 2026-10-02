@@ -13,6 +13,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -76,6 +77,10 @@ export const updateClauseHandler = async function* ({
   body,
   recordAuditEvent,
 }: UpdateClauseProps) {
+  if (body.body !== undefined) {
+    yield* validateClauseBodyDirectives(body.body);
+  }
+
   const existing = yield* Result.await(
     safeDb((tx) =>
       tx.query.clauses.findFirst({

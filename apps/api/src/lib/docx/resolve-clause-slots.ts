@@ -17,6 +17,7 @@ import { LIMITS } from "@/api/lib/limits";
 import { isVariantDeleted } from "@/api/lib/template-clause-links";
 
 import type { ClauseSlot } from "./discover-clause-slots";
+import type { ClauseProvenance } from "./types";
 
 // ── Version parsing ──────────────────────────────────
 
@@ -34,7 +35,7 @@ export const resolveClauseSlotBodies = async (
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
 ): Promise<Record<string, ClauseBody>> => {
-  const resolved = await resolveSlotBodies(
+  const resolved = await resolveClauseSlotSources(
     templateId,
     slots,
     scopedDb,
@@ -44,7 +45,7 @@ export const resolveClauseSlotBodies = async (
   const bodies: Record<string, ClauseBody> = {};
 
   for (const slot of slots) {
-    const body = resolved.get(slot.patchKey);
+    const body = resolved.get(slot.patchKey)?.body;
     if (body) {
       bodies[slot.patchKey] = body;
     }
@@ -58,11 +59,11 @@ export const resolveClauseSlotBodies = async (
  * slot NAME (not the patch key) so the live fill preview can match the
  * folio clause-slot directive (`scanDirectives` exposes the slot name as
  * a clause range's `expr`). Uses the same version/variant resolution as
- * {@link resolveClauseSlots} so the preview matches what fill produces.
+ * {@link resolveClauseSlotBodies} so the preview matches what fill produces.
  *
  * The preview is a single inline indicator of what the slot fills with:
  * the clause text is flattened to one line and truncated. The actual fill
- * inserts the full rich clause via {@link resolveClauseSlots}; faithful
+ * inserts the full rich clause via {@link resolveClauseSlotBodies}; faithful
  * multi-paragraph layout in the live preview is a future item.
  */
 export const resolveClauseSlotTexts = async (
@@ -71,7 +72,7 @@ export const resolveClauseSlotTexts = async (
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
 ): Promise<Record<string, string>> => {
-  const bodies = await resolveSlotBodies(
+  const bodies = await resolveClauseSlotSources(
     templateId,
     slots,
     scopedDb,
@@ -81,7 +82,7 @@ export const resolveClauseSlotTexts = async (
   const texts: Record<string, string> = {};
 
   for (const slot of slots) {
-    const body = bodies.get(slot.patchKey);
+    const body = bodies.get(slot.patchKey)?.body;
     if (body) {
       // Flatten paragraph breaks so the clause flows as one inline run in the
       // preview (wraps within the column); the actual fill inserts the full
@@ -217,12 +218,12 @@ const targetBody = (
  * different version modifiers (`{{ clause("X") }}` and `{{ clause("X", "v2") }}`) and
  * resolve to different bodies.
  */
-const resolveSlotBodies = async (
+export const resolveClauseSlotSources = async (
   templateId: SafeId<"template">,
   slots: ClauseSlot[],
   scopedDb: ScopedDb,
   organizationId: SafeId<"organization">,
-): Promise<Map<string, ClauseBody>> => {
+): Promise<Map<string, { body: ClauseBody; clause: ClauseProvenance }>> => {
   if (slots.length === 0) {
     return new Map();
   }
@@ -242,6 +243,12 @@ const resolveSlotBodies = async (
         clauseVariantId: true,
         clauseVariantLabel: true,
         clauseVersionId: true,
+      },
+      with: {
+        clause: {
+          columns: { id: true, title: true },
+          where: { organizationId: { eq: organizationId } },
+        },
       },
       // A template holds at most this many links, so the bound never truncates
       // a slot set the markers could legitimately match.
@@ -368,7 +375,10 @@ const resolveSlotBodies = async (
       }
     }
 
-    const bodies = new Map<string, ClauseBody>();
+    const bodies = new Map<
+      string,
+      { body: ClauseBody; clause: ClauseProvenance }
+    >();
     for (const slot of slots) {
       const target = targets.get(slot.patchKey);
       if (!target) {
@@ -381,7 +391,15 @@ const resolveSlotBodies = async (
         bodyByVariantId,
       });
       if (body) {
-        bodies.set(slot.patchKey, body);
+        const link = linkBySlotName.get(slot.name);
+        bodies.set(slot.patchKey, {
+          body,
+          clause: {
+            slotKey: slot.patchKey,
+            id: link?.clause?.id,
+            name: link?.clause?.title,
+          },
+        });
       }
     }
 

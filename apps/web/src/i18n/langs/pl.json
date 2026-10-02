@@ -2241,6 +2241,7 @@
       "aiConfigProviderInvalid": "Konfiguracja dostawcy AI jest nieprawidłowa. Sprawdź ustawienia dostawcy.",
       "aiConfigProviderValidationFailed": "Dostawca AI odrzucił konfigurację. Sprawdź klucz API i model.",
       "clauseDirectivesInvalid": "Powiązana klauzula zawiera nieprawidłowe dyrektywy. Popraw klauzulę przed wypełnieniem szablonu.",
+      "clauseDirectivesInvalidDetails": "Klauzula {clauseName} ({clauseId}) w polu {slotName} zawiera nieprawidłowe dyrektywy. Otwórz edytor klauzul, popraw wskazane akapity i ponownie wypełnij szablon.",
       "deeplKeyRejected": "Zapisany klucz DeepL został odrzucony. Zastąp go w ustawieniach organizacji.",
       "deeplQuotaExceeded": "Limit znaków DeepL dla tej organizacji został wyczerpany.",
       "disposableEmailNotAllowed": "Tymczasowe adresy e-mail są niedozwolone. Użyj stałego adresu e-mail.",

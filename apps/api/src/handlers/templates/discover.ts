@@ -1,9 +1,11 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { t } from "elysia";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { tSafeId } from "@/api/lib/custom-schema";
 import { deriveManifest } from "@/api/lib/docx/derived-manifest";
 import { discoverTemplate } from "@/api/lib/docx/discover-template";
 import { manifestNamedConditions } from "@/api/lib/docx/manifest-conditions";
@@ -14,18 +16,54 @@ import {
   scanTemplateUpload,
   templateUploadRejectionResponse,
 } from "@/api/lib/templates/scan-template-upload";
+import {
+  discoverTemplateSource,
+  loadStoredTemplateSource,
+} from "@/api/lib/templates/template-fill-service";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
 
 const discoverBodySchema = t.Object({
   file: t.File({ maxSize: FILE_SIZE_LIMITS.document }),
+  templateId: t.Optional(tSafeId("template")),
 });
 
 type DiscoverProps = {
   organizationId: SafeId<"organization">;
-  body: { file: File };
+  body: { file: File; templateId?: SafeId<"template"> | undefined };
+  scopedDb?: ScopedDb | undefined;
 };
 
-export const discoverHandler = async ({ body: { file } }: DiscoverProps) => {
+export const discoverHandler = async ({
+  organizationId,
+  scopedDb,
+  body: { file, templateId },
+}: DiscoverProps) => {
+  if (templateId !== undefined) {
+    if (scopedDb === undefined) {
+      panic("Stored template discovery requires scopedDb");
+    }
+    const loaded = await loadStoredTemplateSource({
+      templateId,
+      organizationId,
+      scopedDb,
+    });
+    if (Result.isError(loaded)) {
+      return new Response(JSON.stringify({ error: loaded.error.message }), {
+        status: loaded.error.status,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+    const { discovered, manifest } = await discoverTemplateSource({
+      source: loaded.value,
+      organizationId,
+      scopedDb,
+    });
+    return {
+      fields: mergeManifestWithDiscovery(manifest, discovered),
+      conditions: manifestNamedConditions(manifest),
+      structureErrors: discovered.structureErrors,
+    };
+  }
   if (file.type !== DOCX_MIME_TYPE) {
     return new Response(
       JSON.stringify({
@@ -55,8 +93,8 @@ const config = {
     "Inspect an uploaded DOCX and report the fillable fields it carries: the " +
     "markers found in the document, each configured by the filters written " +
     "in it, the named conditions from that manifest, and any structural " +
-    "marker errors. Reads the supplied bytes and stores nothing; use " +
-    "templates.get for a template that is already in the library.",
+    "marker errors. With templateId, inspects the stored template and linked " +
+    "clauses using the fill discovery owner; otherwise reads the supplied bytes. Stores nothing.",
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
@@ -80,13 +118,14 @@ const config = {
 
 const discoverTemplateHandler = createSafeRootHandler(
   config,
-  async function* ({ session, body }) {
+  async function* ({ session, scopedDb, body }) {
     const result = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           await discoverHandler({
             organizationId: session.activeOrganizationId,
             body,
+            scopedDb,
           }),
         catch: (cause) =>
           new HandlerError({

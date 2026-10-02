@@ -298,6 +298,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-direct-pdf-save.fixture.ts", [
     "no-direct-pdf-save/no-direct-pdf-save",
   ]),
+  fixtureRuleOverride("no-unvalidated-clause-write.fixture.ts", [
+    "no-unvalidated-clause-write/no-unvalidated-clause-write",
+  ]),
+  fixtureRuleOverride("no-unvalidated-clause-write.fixture.unowned.ts", [
+    "no-unvalidated-clause-write/no-unvalidated-clause-write",
+  ]),
   fixtureRuleOverride("no-direct-template-version-write.fixture.ts", [
     "no-direct-template-version-write/no-direct-template-version-write",
   ]),
@@ -911,6 +917,7 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
     "no-condition-combinator-outside-conditions/no-condition-combinator-outside-conditions":
@@ -1279,6 +1286,7 @@ export default defineConfig({
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
+    "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
     "./.oxlint-plugins/no-condition-combinator-outside-conditions.ts",

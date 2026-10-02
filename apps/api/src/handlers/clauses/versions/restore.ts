@@ -8,6 +8,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -108,6 +109,7 @@ const restoreClauseVersion = createSafeRootHandler(
     }
 
     const restoredBody = version.body;
+    yield* validateClauseBodyDirectives(restoredBody);
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {

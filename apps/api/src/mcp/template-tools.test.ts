@@ -1668,6 +1668,39 @@ describe("MCP template tools", () => {
     ]);
   });
 
+  test("fill_template names the linked clause and corrective call in a directive refusal", async () => {
+    const message =
+      'Clause "Terms" (00000000-0000-4000-8000-000000000002) in slot @clause:Terms has invalid directives.';
+    const hint =
+      "Read clause 00000000-0000-4000-8000-000000000002 with list_clauses, then correct slot @clause:Terms in the clause editor or call save_clause.";
+    fillStoredTemplateWithTextStrictMock.mockResolvedValue({
+      error: message,
+      storedTemplateError: new HandlerError({
+        status: 422,
+        code: "clause_directives_invalid",
+        retryable: false,
+        message,
+        hint,
+        issues: [
+          { path: "@clause:Terms.1", message: "Unclosed {% if %} block" },
+        ],
+      }),
+    });
+    const result = await handleMcpToolCall({
+      args: { template_id: TEMPLATE_ID, values: {} },
+      context: createContext(),
+      toolName: "fill_template",
+    });
+    expect(result.isError).toBe(true);
+    expect(validationEnvelope(result)).toMatchObject({
+      code: "validation_error",
+      message,
+      hint,
+      retryable: false,
+      issues: [{ path: "@clause:Terms.1", message: "Unclosed {% if %} block" }],
+    });
+  });
+
   test("fill_template keeps a stored-file scanner outage retryable", async () => {
     fillStoredTemplateWithTextStrictMock.mockResolvedValue({
       error: "Scanner unavailable.",

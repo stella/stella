@@ -2241,6 +2241,7 @@
       "aiConfigProviderInvalid": "Die Konfiguration des KI-Anbieters ist ungültig. Prüfen Sie die Anbietereinstellungen.",
       "aiConfigProviderValidationFailed": "Der KI-Anbieter hat die Konfiguration abgelehnt. Prüfen Sie API-Schlüssel und Modell.",
       "clauseDirectivesInvalid": "Eine verknüpfte Klausel enthält ungültige Anweisungen. Korrigieren Sie die Klausel, bevor Sie die Vorlage ausfüllen.",
+      "clauseDirectivesInvalidDetails": "Die Klausel {clauseName} ({clauseId}) im Platzhalter {slotName} enthält ungültige Direktiven. Öffnen Sie den Klauseleditor, korrigieren Sie die angegebenen Absätze und füllen Sie die Vorlage erneut aus.",
       "deeplKeyRejected": "Der gespeicherte DeepL-Schlüssel wurde abgelehnt. Ersetzen Sie ihn in den Organisationseinstellungen.",
       "deeplQuotaExceeded": "Das DeepL-Zeichenkontingent dieser Organisation ist aufgebraucht.",
       "disposableEmailNotAllowed": "Temporäre E-Mail-Adressen sind nicht zulässig. Verwenden Sie eine dauerhafte E-Mail-Adresse.",

@@ -1563,17 +1563,20 @@ describe("processBlockDirectives — iteration tokens", () => {
 test("loop output markers spanning Word runs resolve for each row", () => {
   const body = parseBody(
     WRAP(
-      `${P("{% for party in parties %}") 
-        }<w:p><w:r><w:t>Name: </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>{{ party.</w:t></w:r><w:r><w:t>name }}</w:t></w:r></w:p>${ 
-        P("{% endfor %}")}`,
+      `${P(
+        "{% for party in parties %}",
+      )}<w:p><w:r><w:t>Name: </w:t></w:r><w:r><w:rPr><w:b/></w:rPr><w:t>{{ party.</w:t></w:r><w:r><w:t>name }}</w:t></w:r></w:p>${P(
+        "{% endfor %}",
+      )}`,
     ),
   );
   const { patchValues, errors } = processBlockDirectives(body, {
     parties: [{ name: "Alpha" }, { name: "Beta" }],
   });
   expect(errors).toEqual([]);
-  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p"))
-    {patchParagraphPlaceholders(paragraph, patchValues);}
+  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p")) {
+    patchParagraphPlaceholders(paragraph, patchValues);
+  }
   expect(bodyTexts(body)).toEqual(["Name: Alpha", "Name: Beta"]);
 });
 
@@ -1592,13 +1595,23 @@ test("a nested loop alias shadows its parent only until the nested loop closes",
     ),
   );
   const { patchValues, errors } = processBlockDirectives(body, {
-    parents: [{ name: "Parent" }],
-    children: [{ name: "Child" }],
+    parents: [{ name: "Parent A" }, { name: "Parent B" }],
+    children: [{ name: "Child A" }, { name: "Child B" }],
   });
   expect(errors).toEqual([]);
-  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p"))
-    {patchParagraphPlaceholders(paragraph, patchValues);}
-  expect(bodyTexts(body)).toEqual(["Parent", "Child", "Parent"]);
+  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p")) {
+    patchParagraphPlaceholders(paragraph, patchValues);
+  }
+  expect(bodyTexts(body)).toEqual([
+    "Parent A",
+    "Child A",
+    "Child B",
+    "Parent A",
+    "Parent B",
+    "Child A",
+    "Child B",
+    "Parent B",
+  ]);
 });
 
 test("nested loop sources resolve before their declared alias shadows the parent", () => {
@@ -1619,7 +1632,8 @@ test("nested loop sources resolve before their declared alias shadows the parent
     roots: [{ children: [{ name: "Child", children: [{ name: "Leaf" }] }] }],
   });
   expect(errors).toEqual([]);
-  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p"))
-    {patchParagraphPlaceholders(paragraph, patchValues);}
+  for (const paragraph of body.getElementsByTagNameNS(W_NS, "p")) {
+    patchParagraphPlaceholders(paragraph, patchValues);
+  }
   expect(bodyTexts(body)).toEqual(["Leaf"]);
 });

@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import Elysia from "elysia";
 import fc from "fast-check";
 import JSZip from "jszip";
 
@@ -7,6 +8,8 @@ import { assertProperty } from "@stll/property-testing";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { discoverHandler } from "@/api/handlers/templates/discover";
+import discoverEndpoint from "@/api/handlers/templates/discover";
 import { toSafeId } from "@/api/lib/branded-types";
 import { clauseBodyToRichPatch } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
@@ -19,7 +22,9 @@ import { writeFieldFilters } from "@/api/lib/docx/write-field-filters";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
+import { readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 import {
   describeStoredTemplate,
@@ -87,7 +92,9 @@ const stubScopedDb = (
           scanState: "scanned",
           languages: [],
           manifest: { version: 1, fields: [] },
-          templateClauses: [{ id: "link_1" }],
+          templateClauses: [
+            { id: "link_1", clause: { body: clauseBody, versions: [] } },
+          ],
         }),
       },
       templateClauses: {
@@ -96,6 +103,7 @@ const stubScopedDb = (
             ? []
             : [
                 {
+                  clause: { id: toSafeId<"clause">("cls_1"), title: "Terms" },
                   slotName: "Terms",
                   clauseId: toSafeId<"clause">("cls_1"),
                   clauseVariantId: null,
@@ -990,13 +998,13 @@ const filledTexts = async (
   result: Awaited<ReturnType<typeof fillLinkedClause>>,
 ) => {
   if (!("file" in result)) {
-    return panic(`clause fill rejected: ${JSON.stringify(result)}`);
+    panic(`clause fill rejected: ${JSON.stringify(result)}`);
   }
   const zip = await JSZip.loadAsync(result.file.bytes);
   const xml =
     (await zip.file("word/document.xml")?.async("string")) ??
     panic("filled document has no body");
-  return partParagraphTexts(xml).filter((text) => text !== "");
+  return partParagraphTexts(xml);
 };
 
 describe("clause and template directive parity", () => {
@@ -1058,16 +1066,16 @@ describe("clause and template directive parity", () => {
         { text: "Else" },
         clauseDirective("{% endif %}"),
       ];
-      expect(await filledTexts(await fillLinkedClause(body, values))).toEqual(
-        expected,
-      );
+      expect(await filledTexts(await fillLinkedClause(body, values))).toEqual([
+        ...expected,
+      ]);
       expect(
         await filledTexts(
           await fillLinkedClause([{ text: "Stored" }], values, {
             override: body,
           }),
         ),
-      ).toEqual(expected);
+      ).toEqual([...expected]);
     },
   );
 
@@ -1106,7 +1114,7 @@ describe("clause and template directive parity", () => {
       "    a. 1: C",
     ]);
     if (!("file" in result)) {
-      return panic("expected filled clause");
+      panic("expected filled clause");
     }
     const zip = await JSZip.loadAsync(result.file.bytes);
     const xml = await zip.file("word/document.xml")?.async("string");
@@ -1141,13 +1149,13 @@ describe("clause and template directive parity", () => {
     ).toEqual(["Template one", "Template two", "one", "two"]);
   });
 
-  test("preserves the existing byte output for a clause without directives", async () => {
+  test("preserves XML output for a clause without markers", async () => {
     const body: ClauseBody = [
       { text: "First", runs: [{ text: "First", bold: true }] },
       { text: "Second", listKind: "ordered" },
     ];
     const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
-    const legacy = await fillTemplate(file, {
+    const direct = await fillTemplate(file, {
       "@clause:Terms": {
         paragraphs: [
           { runs: [{ text: "First", bold: true }] },
@@ -1169,9 +1177,17 @@ describe("clause and template directive parity", () => {
       useRecording: "caller",
     });
     if (!("file" in result)) {
-      return panic("expected filled clause");
+      panic("expected filled clause");
     }
-    expect(result.file.bytes).toEqual(legacy.file.bytes);
+    const actualZip = await JSZip.loadAsync(result.file.bytes);
+    const expectedZip = await JSZip.loadAsync(direct.file.bytes);
+    for (const path of Object.keys(expectedZip.files).filter((partName) =>
+      partName.endsWith(".xml"),
+    )) {
+      expect(await actualZip.file(path)?.async("string")).toBe(
+        await expectedZip.file(path)?.async("string"),
+      );
+    }
   });
 
   test.each([
@@ -1190,12 +1206,16 @@ describe("clause and template directive parity", () => {
     "rejects malformed stored and adjusted clauses without producing a file: %j",
     async ({ body }) => {
       for (const result of [
-        await fillLinkedClause(body, {}),
-        await fillLinkedClause([{ text: "Stored" }], {}, { override: body }),
+        await fillLinkedClause([...body], {}),
+        await fillLinkedClause(
+          [{ text: "Stored" }],
+          {},
+          { override: [...body] },
+        ),
       ]) {
         expect(result).not.toHaveProperty("file");
         if (!("error" in result)) {
-          return panic("expected clause rejection");
+          panic("expected clause rejection");
         }
         expect(result.storedTemplateError).toBeInstanceOf(HandlerError);
         expect(result.storedTemplateError?.status).toBe(422);
@@ -1204,6 +1224,14 @@ describe("clause and template directive parity", () => {
         );
         expect(result.storedTemplateError?.retryable).toBe(false);
         expect(result.error).toContain("@clause:Terms");
+        expect(result.error).toContain("cls_1");
+        expect(result.storedTemplateError?.clause).toEqual({
+          slotKey: "@clause:Terms",
+          id: "cls_1",
+          name: "Terms",
+        });
+        expect(result.storedTemplateError?.hint).toContain("save_clause");
+        expect(result.storedTemplateError?.hint).toContain("cls_1");
       }
     },
   );
@@ -1276,44 +1304,13 @@ const treeClauseBody = (nodes: DirectiveTree[]): ClauseBody =>
         ];
       default:
         node satisfies never;
-        return panic("Unhandled generated directive tree");
+        throw new TypeError("Unhandled generated directive tree");
     }
   });
 
-type TreeValues = {
-  x: boolean;
-  y: boolean;
-  rows1: { name: string; x: boolean; y: boolean }[];
-  rows2: { name: string; x: boolean; y: boolean }[];
-  rows3: { name: string; x: boolean; y: boolean }[];
-};
-const referenceTreeText = (
-  nodes: DirectiveTree[],
-  values: TreeValues,
-): string[] =>
-  nodes.flatMap((node) => {
-    switch (node.kind) {
-      case "text":
-        return [node.text];
-      case "condition": {
-        if (values.x) {return referenceTreeText(node.yes, values);}
-        if (values.y) {return referenceTreeText(node.elif, values);}
-        return referenceTreeText(node.no, values);
-      }
-      case "loop":
-        return values[node.path].flatMap((row, index) => [
-          `${row.name} #${index + 1}`,
-          ...referenceTreeText(node.children, { ...values, ...row }),
-        ]);
-      default:
-        node satisfies never;
-        return panic("Unhandled reference directive tree");
-    }
-  });
-
-test("filled clause directive trees match reference evaluation", async () => {
+test("filled clause directive trees match template body rendering", async () => {
   await assertProperty(
-    "filled clause directive trees match reference evaluation",
+    "filled clause directive trees match template body rendering",
     fc.asyncProperty(
       fc.array(directiveTreeArbitrary(3), { minLength: 1, maxLength: 3 }),
       fc.record({
@@ -1347,7 +1344,20 @@ test("filled clause directive trees match reference evaluation", async () => {
       async (tree, values) => {
         const result = await fillLinkedClause(treeClauseBody(tree), values);
         const texts = await filledTexts(result);
-        expect(texts).toEqual(referenceTreeText(tree, values));
+        const templateFile = await makeDocx(
+          WRAP(
+            treeClauseBody(tree)
+              .map(({ text }) => P(text))
+              .join(""),
+          ),
+        );
+        const bodyResult = await fillTemplate(templateFile, values);
+        expect(bodyResult.structureErrors).toEqual([]);
+        const bodyZip = await JSZip.loadAsync(bodyResult.file.bytes);
+        const bodyXml =
+          (await bodyZip.file("word/document.xml")?.async("string")) ??
+          panic("missing body XML");
+        expect(texts).toEqual(partParagraphTexts(bodyXml));
         expect(texts.join("")).not.toContain("{%");
       },
     ),
@@ -1383,7 +1393,7 @@ test("strict fills discover condition and loop inputs in linked and adjusted cla
         : { clauseOverrides: { "@clause:Terms": override } }),
     });
     if (!("file" in result)) {
-      return panic(`strict clause fill rejected: ${JSON.stringify(result)}`);
+      panic(`strict clause fill rejected: ${JSON.stringify(result)}`);
     }
     expect(await extractTexts(result.file)).toEqual(["Alpha", "Beta"]);
   }
@@ -1473,7 +1483,7 @@ test("clauses compare raw dates while rendering formatted dates including loop r
     slotKey: "@clause:Terms",
   }).unwrap();
   if (typeof patch === "string") {
-    return panic("expected rich clause patch");
+    panic("expected rich clause patch");
   }
   expect(
     patch.paragraphs.map(({ runs }) => runs.map(({ text }) => text).join("")),
@@ -1509,6 +1519,21 @@ test("template discovery and condition preview include clause-only declarations"
       aiPrompt: "Include this provision?",
     }),
   );
+  const overrideDiscovery = await discoverTemplateSource({
+    source,
+    scopedDb: stubScopedDb(body),
+    organizationId,
+    clauseOverrides: {
+      "@clause:Terms": [
+        clauseDirective(
+          '{% if replacement | checkbox | ai("Include the replacement?") %}',
+        ),
+        { text: "Replacement" },
+        clauseDirective("{% endif %}"),
+      ],
+    },
+  });
+  expect(overrideDiscovery.discovered.conditionPaths).toEqual(["replacement"]);
   const { templateDecideConditionsLogic } =
     await import("./template-decide-conditions");
   const fakeS3 = startFakeS3();
@@ -1540,4 +1565,238 @@ test("template discovery and condition preview include clause-only declarations"
   } finally {
     fakeS3.stop();
   }
+});
+
+test("placeholder-only clauses use finalized fill values", async () => {
+  expect(
+    await filledTexts(
+      await fillLinkedClause([{ text: "Buyer: {{ buyer }}" }], {
+        buyer: "ACME",
+      }),
+    ),
+  ).toEqual(["Buyer: ACME"]);
+});
+
+test("empty clause results remove only the numbered slot paragraph", async () => {
+  const numbered = (text: string) =>
+    `<w:p><w:pPr><w:numPr><w:ilvl w:val="0"/><w:numId w:val="1"/></w:numPr></w:pPr><w:r><w:t>${text}</w:t></w:r></w:p>`;
+  const result = await fillLinkedClause(
+    [
+      clauseDirective("{% if included %}"),
+      { text: "Optional" },
+      clauseDirective("{% endif %}"),
+    ],
+    { included: false },
+    {
+      templateBody:
+        numbered("Before") +
+        numbered('{{ clause("Terms") }}') +
+        numbered("After"),
+    },
+  );
+  expect(await filledTexts(result)).toEqual(["Before", "After"]);
+  if (!("file" in result)) {
+    panic("expected a filled file");
+  }
+  const zip = await JSZip.loadAsync(result.file.bytes);
+  const xml = await zip.file("word/document.xml")?.async("string");
+  expect(xml?.match(/<w:numPr>/gu)).toHaveLength(2);
+});
+
+test("clause date declarations format body occurrences and preserve raw condition values through fill", async () => {
+  const result = await fillLinkedClause(
+    [
+      clauseDirective('{% if signed_on > "2028-01-01" %}'),
+      { text: '{{ signed_on | date("cs-long") }}' },
+      clauseDirective("{% else %}"),
+      { text: "Earlier" },
+      clauseDirective("{% endif %}"),
+    ],
+    { signed_on: "2028-06-13" },
+    { templateBody: P("{{ signed_on }}") + P('{{ clause("Terms") }}') },
+  );
+  expect(await filledTexts(result)).toEqual([
+    "13. června 2028",
+    "13. června 2028",
+  ]);
+});
+
+test.each([false, true])(
+  "inline clause conditions agree with body for %j",
+  async (included) => {
+    const text = "Prefix {% if included %}Yes{% else %}No{% endif %} suffix";
+    const result = await fillLinkedClause(
+      [{ text }],
+      { included },
+      { templateBody: P(text) + P('{{ clause("Terms") }}') },
+    );
+    expect(await filledTexts(result)).toEqual([
+      included ? "Prefix Yes suffix" : "Prefix No suffix",
+      included ? "Prefix Yes suffix" : "Prefix No suffix",
+    ]);
+  },
+);
+
+test("stored web discovery, description and effective fill declarations agree for clause-only inputs", async () => {
+  const clauseBody = [
+    { text: '{{ party | label("Clause party") | required }}' },
+  ];
+  const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+  const templateId = toSafeId<"template">(
+    "00000000-0000-4000-8000-000000000001",
+  );
+  const fakeS3 = startFakeS3();
+  try {
+    fakeS3.put("stella", "clause-web-discovery", new Uint8Array(file.bytes));
+    const scopedDb = stubScopedDb(clauseBody, "clause-web-discovery");
+    const app = new Elysia().post(
+      "/templates/discover",
+      async ({ body, request }) =>
+        await discoverEndpoint.handler(
+          createTestHandlerContext<
+            Parameters<typeof discoverEndpoint.handler>[0]
+          >({
+            scopedDb,
+            session: { activeOrganizationId: organizationId },
+            body,
+            request,
+            route: "/templates/discover",
+          }),
+        ),
+      { body: discoverEndpoint.config.body },
+    );
+    const form = new FormData();
+    form.set(
+      "file",
+      new File([file.bytes], "terms.docx", {
+        type: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+      }),
+    );
+    form.set("templateId", templateId);
+    const response = await app.handle(
+      new Request("http://localhost/templates/discover", {
+        method: "POST",
+        body: form,
+      }),
+    );
+    expect(response.status).toBe(200);
+    const web =
+      await readTestJson<
+        Exclude<Awaited<ReturnType<typeof discoverHandler>>, Response>
+      >(response);
+    const description = await describeStoredTemplate({
+      templateId,
+      scopedDb,
+      organizationId,
+    });
+    const effective = await discoverTemplateSource({
+      source: { name: "Terms", fileName: "terms.docx", file, templateId },
+      scopedDb,
+      organizationId,
+    });
+    expect(web.fields).toContainEqual(
+      expect.objectContaining({
+        path: "party",
+        label: "Clause party",
+        required: true,
+      }),
+    );
+    if (!("fields" in description)) {
+      panic("Expected template description");
+    }
+    expect(web.fields.map(({ path }) => path)).toEqual(
+      description.fields.map(({ path }) => path),
+    );
+    expect(web.fields.map(({ path }) => path)).toEqual(
+      effective.manifest.fields.map(({ path }) => path),
+    );
+    const filled = await fillStoredTemplateDocx({
+      templateId,
+      values: { party: "Acme" },
+      scopedDb,
+      organizationId,
+      requiredFields: "enforce",
+      useRecording: "caller",
+    });
+    if (!("file" in filled)) {
+      panic("Expected deterministic fill");
+    }
+    expect(filled.unusedValues).toEqual([]);
+    expect(await extractTexts(filled.file)).toEqual(["Acme"]);
+  } finally {
+    fakeS3.stop();
+  }
+});
+
+test("clause structure and filter errors identify their slot and clause-relative paragraph", async () => {
+  const clauseBody = [
+    clauseDirective("{% endif %}"),
+    { text: "{{ party | date() }}" },
+  ];
+  const file = await makeDocx(
+    WRAP(P("Template paragraph") + P('{{ clause("Terms") }}')),
+  );
+  const result = await discoverTemplateSource({
+    source: {
+      name: "Terms",
+      fileName: "terms.docx",
+      file,
+      templateId: toSafeId<"template">("tmpl_1"),
+    },
+    scopedDb: stubScopedDb(clauseBody),
+    organizationId,
+  });
+  expect(result.discovered.structureErrors.length).toBeGreaterThanOrEqual(2);
+  for (const error of result.discovered.structureErrors) {
+    expect(error.source).toBe("clause");
+    expect(error.clause).toEqual({
+      slotKey: "@clause:Terms",
+      id: "cls_1",
+      name: "Terms",
+    });
+    expect([0, 1]).toContain(error.paragraphIndex);
+  }
+});
+
+test("clause AI declarations run usage admission and include linked content in grounding", async () => {
+  const body = [
+    { text: "Payment is due within thirty days." },
+    { text: '{{ summary | ai("Summarize", sees_document=true) }}' },
+  ];
+  const file = await makeDocx(WRAP(P('{{ clause("Terms") }}')));
+  let admissions = 0;
+  const result = await fillTemplateDocx({
+    source: {
+      name: "Terms",
+      fileName: "terms.docx",
+      file,
+      templateId: toSafeId<"template">("tmpl_1"),
+    },
+    values: {},
+    organizationId,
+    scopedDb: stubScopedDb(body),
+    requiredFields: "enforce",
+    useRecording: "caller",
+    assertUsageAvailable: async () => {
+      admissions++;
+      return null;
+    },
+    aiCollaborators: async () => ({
+      generateAiValue: async ({ documentText, values }) => {
+        expect(documentText).toContain("Payment is due within thirty days.");
+        expect(values["@clause:Terms"]).toContain(
+          "Payment is due within thirty days.",
+        );
+        return { type: "drafted", value: "Thirty days" };
+      },
+    }),
+  });
+  expect(admissions).toBe(1);
+  if ("usageRejection" in result) {
+    throw new TypeError("Expected admitted fill");
+  }
+  expect(await filledTexts(result)).toEqual([
+    "Payment is due within thirty days.",
+    "Thirty days",
+  ]);
 });

@@ -2241,6 +2241,7 @@
       "aiConfigProviderInvalid": "AI pakalpojuma sniedzēja konfigurācija nav derīga. Pārbaudiet pakalpojuma sniedzēja iestatījumus.",
       "aiConfigProviderValidationFailed": "AI pakalpojuma sniedzējs noraidīja konfigurāciju. Pārbaudiet API atslēgu un modeli.",
       "clauseDirectivesInvalid": "Saistītā klauzulā ir nederīgas direktīvas. Pirms veidnes aizpildīšanas izlabojiet klauzulu.",
+      "clauseDirectivesInvalidDetails": "Klauzulā {clauseName} ({clauseId}) laukā {slotName} ir nederīgas direktīvas. Atveriet klauzulu redaktoru, izlabojiet norādītās rindkopas un vēlreiz aizpildiet veidni.",
       "deeplKeyRejected": "Saglabātā DeepL atslēga tika noraidīta. Aizstājiet to organizācijas iestatījumos.",
       "deeplQuotaExceeded": "Šīs organizācijas DeepL rakstzīmju kvota ir iztērēta.",
       "disposableEmailNotAllowed": "Pagaidu e-pasta adreses nav atļautas. Izmantojiet pastāvīgu e-pasta adresi.",

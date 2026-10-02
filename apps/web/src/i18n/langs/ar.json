@@ -2241,6 +2241,7 @@
       "aiConfigProviderInvalid": "إعداد مزود الذكاء الاصطناعي غير صالح. تحقق من إعدادات المزود.",
       "aiConfigProviderValidationFailed": "رفض مزود الذكاء الاصطناعي الإعداد. تحقق من مفتاح API والنموذج.",
       "clauseDirectivesInvalid": "يحتوي بند مرتبط على توجيهات غير صالحة. صحّح البند قبل تعبئة القالب.",
+      "clauseDirectivesInvalidDetails": "يحتوي البند {clauseName} ({clauseId}) في الحقل {slotName} على توجيهات غير صالحة. افتح محرر البنود، وصحح الفقرات المحددة، ثم املأ القالب مرة أخرى.",
       "deeplKeyRejected": "تم رفض مفتاح DeepL المحفوظ. استبدله في إعدادات المؤسسة.",
       "deeplQuotaExceeded": "تم استنفاد حصة أحرف DeepL لهذه المؤسسة.",
       "disposableEmailNotAllowed": "عناوين البريد الإلكتروني المؤقتة غير مسموح بها. استخدم عنوان بريد إلكتروني دائم.",

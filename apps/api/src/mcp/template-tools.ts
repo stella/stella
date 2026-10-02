@@ -2842,6 +2842,7 @@ const storedTemplateFailureResult = (
         message: error.message,
         hint: error.hint,
         issues: error.issues,
+        retryable: error.retryable,
       });
     case 503:
       return structuredErrorResult({

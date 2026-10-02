@@ -1,12 +1,7 @@
 import { panic, Result } from "better-result";
-import * as slimdom from "slimdom";
 
 import { CLAUSE_DIRECTIVES_INVALID_CODE } from "@stll/api-contract";
 import type { NamedCondition } from "@stll/template-conditions";
-import {
-  blockDirectiveLinePattern,
-  hasBlockDirectivePattern,
-} from "@stll/template-conditions";
 
 import {
   createDirectiveProcessingContext,
@@ -18,6 +13,7 @@ import { processInlineConditions } from "@/api/lib/docx/inline-conditions";
 import { paragraphText, W_NS } from "@/api/lib/docx/ooxml";
 import { patchParagraphPlaceholders } from "@/api/lib/docx/rich-patch";
 import type {
+  ClauseProvenance,
   TemplateData,
   RichRun,
   RichPatchValue,
@@ -25,6 +21,10 @@ import type {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 
+import {
+  clauseDirectiveContainer,
+  validateClauseBodyDirectives,
+} from "./clause-directives";
 import type { ClauseListKind, ClauseParagraph, ClauseBody } from "./types";
 
 const NESTED_INDENT = "    ";
@@ -132,47 +132,25 @@ const resolvedBodyToRichPatch = (body: ClauseBody): RichPatchValue => {
   return { paragraphs };
 };
 
-const clauseDirectiveContainer = (body: ClauseBody): slimdom.Element => {
-  const doc = new slimdom.Document();
-  const container = doc.createElementNS(W_NS, "w:body");
-  doc.append(container);
-  for (const [index, paragraph] of body.entries()) {
-    const element = doc.createElementNS(W_NS, "w:p");
-    const paragraphProperties = doc.createElementNS(W_NS, "w:pPr");
-    paragraphProperties.setAttribute("clause-origin", String(index));
-    element.append(paragraphProperties);
-    const sourceRuns = paragraph.isDirective
-      ? [{ text: paragraph.text }]
-      : paragraphRuns(paragraph);
-    for (const run of sourceRuns) {
-      const r = doc.createElementNS(W_NS, "w:r");
-      const properties = doc.createElementNS(W_NS, "w:rPr");
-      if (run.bold !== undefined) {
-        const bold = doc.createElementNS(W_NS, "w:b");
-        bold.setAttributeNS(W_NS, "w:val", run.bold ? "1" : "0");
-        properties.append(bold);
-      }
-      if (run.italic !== undefined) {
-        const italic = doc.createElementNS(W_NS, "w:i");
-        italic.setAttributeNS(W_NS, "w:val", run.italic ? "1" : "0");
-        properties.append(italic);
-      }
-      r.append(properties);
-      const t = doc.createElementNS(W_NS, "w:t");
-      t.textContent = run.text;
-      r.append(t);
-      element.append(r);
-    }
-    container.append(element);
-  }
-
-  return container;
+type DiscoverTemplateWithClausesOptions = {
+  file: ScannedFile;
+  bodies: Record<string, ClauseBody>;
+  clauses: Record<string, ClauseProvenance>;
 };
 
-export const discoverTemplateWithClauses = async (
-  file: ScannedFile,
-  bodies: Iterable<ClauseBody>,
-) => discoverTemplate(file, Array.from(bodies, clauseDirectiveContainer));
+export const discoverTemplateWithClauses = async ({
+  file,
+  bodies,
+  clauses,
+}: DiscoverTemplateWithClausesOptions) =>
+  discoverTemplate(
+    file,
+    Object.entries(bodies).map(([slotKey, body]) => ({
+      container: clauseDirectiveContainer(body),
+      clause:
+        clauses[slotKey] ?? panic(`Missing clause provenance for ${slotKey}`),
+    })),
+  );
 
 export type ClauseFillContext = {
   values: TemplateData;
@@ -202,30 +180,19 @@ export const clauseBodyToRichPatch = (
       }),
     );
 
-  const malformed = body.flatMap((paragraph, paragraphIndex) =>
-    paragraph.isDirective && !blockDirectiveLinePattern().test(paragraph.text)
-      ? [
-          {
-            message: "Invalid block directive",
-            paragraphIndex,
-            directive: paragraph.text,
-          },
-        ]
-      : [],
-  );
-  if (malformed.length > 0) {
-    return structureError(malformed);
+  const validation = validateClauseBodyDirectives(body);
+  if (Result.isError(validation)) {
+    return Result.err(validation.error);
   }
   if (
-    !body.some((paragraph) =>
-      hasBlockDirectivePattern().test(
-        paragraph.isDirective
-          ? paragraph.text
-          : paragraphRuns(paragraph)
-              .map(({ text }) => text)
-              .join(""),
-      ),
-    )
+    !body.some((paragraph) => {
+      const text = paragraph.isDirective
+        ? paragraph.text
+        : paragraphRuns(paragraph)
+            .map(({ text: runText }) => runText)
+            .join("");
+      return text.includes("{{") || text.includes("{%");
+    })
   ) {
     return Result.ok(resolvedBodyToRichPatch(body));
   }
@@ -267,20 +234,24 @@ export const clauseBodyToRichPatch = (
     if (!origin) {
       panic("Clause paragraph lost its origin during directive resolution");
     }
-    const runs = [...paragraph.getElementsByTagNameNS(W_NS, "r")].map((run) => {
-      const bold = run.getElementsByTagNameNS(W_NS, "b").at(0);
-      const italic = run.getElementsByTagNameNS(W_NS, "i").at(0);
-      const result: RichRun = {
-        text: [...run.getElementsByTagNameNS(W_NS, "t")]
-          .map((text) => text.textContent)
-          .join(""),
-      };
-      if (bold !== undefined)
-        {result.bold = bold.getAttributeNS(W_NS, "val") !== "0";}
-      if (italic !== undefined)
-        {result.italic = italic.getAttributeNS(W_NS, "val") !== "0";}
-      return result;
-    });
+    const runs = [...paragraph.getElementsByTagNameNS(W_NS, "r")].flatMap(
+      (run) => {
+        const bold = run.getElementsByTagNameNS(W_NS, "b").at(0);
+        const italic = run.getElementsByTagNameNS(W_NS, "i").at(0);
+        const result: RichRun = {
+          text: [...run.getElementsByTagNameNS(W_NS, "t")]
+            .map((text) => text.textContent)
+            .join(""),
+        };
+        if (bold !== undefined) {
+          result.bold = bold.getAttributeNS(W_NS, "val") !== "0";
+        }
+        if (italic !== undefined) {
+          result.italic = italic.getAttributeNS(W_NS, "val") !== "0";
+        }
+        return result.text === "" ? [] : [result];
+      },
+    );
     resolved.push({
       text: paragraphText(paragraph),
       runs,

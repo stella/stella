@@ -16,6 +16,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { validateClauseBodyDirectives } from "@/api/lib/clauses/clause-directives";
 import type { ClauseParagraph } from "@/api/lib/clauses/types";
 import { CSV_PARSE_STATUS, parseCSV } from "@/api/lib/csv";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -73,6 +74,16 @@ export const importHandler = async function* ({
 
     if (parsed.clauses.length === 0) {
       return Result.ok({ created: 0, skipped: 0, errors: [] });
+    }
+
+    for (const item of parsed.clauses) {
+      yield* validateClauseBodyDirectives(item.body);
+      if (item.variants === undefined) {
+        continue;
+      }
+      for (const variant of item.variants) {
+        yield* validateClauseBodyDirectives(variant.body);
+      }
     }
 
     // Check org limit
@@ -338,6 +349,10 @@ export const importHandler = async function* ({
         }),
       );
     }
+
+    yield* validateClauseBodyDirectives(
+      bodyVal.split(/\r?\n/u).map((line) => ({ text: line })),
+    );
 
     if (slugVal.length > CLAUSE_CSV_TEXT_LIMIT) {
       return Result.err(

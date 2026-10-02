@@ -554,3 +554,20 @@ test("clause directive refusal is localized and never retried", () => {
   expect(error.rawMessage).toContain("@clause:Terms");
   expect(shouldRetryAPIRequest(0, error)).toBe(false);
 });
+
+test("clause directive refusal names the slot and linked clause", () => {
+  const error = toAPIError({
+    status: 422,
+    value: {
+      code: CLAUSE_DIRECTIVES_INVALID_CODE,
+      message: "Invalid clause directives",
+      clause: { slotKey: "@clause:Terms", id: "cl_1", name: "Payment terms" },
+      hint: "Open the clause editor and correct paragraph 2.",
+      retryable: false,
+    },
+  });
+  expect(error.message).toBe(
+    "Clause Payment terms (cl_1) in slot @clause:Terms has invalid directives. Open the clause editor, correct the named paragraphs, and fill the template again.",
+  );
+  expect(shouldRetryAPIRequest(0, error)).toBe(false);
+});

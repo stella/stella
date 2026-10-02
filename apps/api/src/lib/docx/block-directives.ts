@@ -78,7 +78,13 @@ import {
 import type { LoopProperty, NamedCondition } from "@stll/template-conditions";
 import { escapeRegExp } from "@stll/text-normalize";
 
-import { ancestorByLocalName, isElement, paragraphText, W_NS } from "./ooxml";
+import {
+  ancestorByLocalName,
+  isElement,
+  paragraphText,
+  removeBlockUnit,
+  W_NS,
+} from "./ooxml";
 import { paragraphSpanText, replaceParagraphTextRanges } from "./rich-patch";
 import {
   authoredParagraphIndices,
@@ -563,44 +569,6 @@ const paragraphsInUnit = (unit: slimdom.Element): slimdom.Element[] =>
 const paragraphsInUnits = (
   units: readonly slimdom.Element[],
 ): slimdom.Element[] => units.flatMap(paragraphsInUnit);
-
-/**
- * Remove one block-level unit (a paragraph, a row, or a whole table) and repair
- * the containers the removal would leave invalid: a `w:tc` must keep at least
- * one `w:p`, and a `w:tbl` at least one `w:tr` — Word reports a document
- * violating either as corrupt. Every directive removal path routes through
- * here (marker stripping, branch pruning, row removal, and the paragraph-index
- * fallback), so no path can invent a new way to empty a cell.
- */
-const removeBlockUnit = (unit: slimdom.Node): void => {
-  const parent = unit.parentNode;
-  if (!parent) {
-    return;
-  }
-  // Resolve the containers to repair from the PARENT, not the direct
-  // parent-child relation: a row-level content control wraps its `w:tr` in
-  // `w:sdt`/`w:sdtContent`, so the enclosing table is an ancestor rather than
-  // the row's parent, and a table-shell check on `parent` alone would miss it.
-  const cell = ancestorByLocalName(parent, TAG.cell);
-  const table = ancestorByLocalName(parent, TAG.table);
-  parent.removeChild(unit);
-
-  // The last row left the table: drop the shell, then repair whatever cell the
-  // table itself lived in.
-  if (table?.getElementsByTagNameNS(W_NS, TAG.row).length === 0) {
-    removeBlockUnit(table);
-    return;
-  }
-
-  const doc = cell?.ownerDocument;
-  if (
-    cell &&
-    doc &&
-    cell.getElementsByTagNameNS(W_NS, TAG.paragraph).length === 0
-  ) {
-    cell.append(doc.createElementNS(W_NS, "w:p"));
-  }
-};
 
 /**
  * Prune an `{% if %}` block by block-level UNIT (paragraphs AND whole tables),
@@ -1659,7 +1627,9 @@ const eachPlaceholderRanges = (
   const visibleHeads = [...new Set([alias, arrayPath])].filter(
     (head) => !shadowedAliases?.has(head),
   );
-  if (visibleHeads.length === 0) {return [];}
+  if (visibleHeads.length === 0) {
+    return [];
+  }
   const heads = visibleHeads.map(escapeRegExp).join("|");
   const re = new RegExp(
     `\\{\\{\\s*(?:${heads})\\.(?<field>[.\\p{L}\\p{N}_-]+)\\s*(?:\\|${MARKER_OUTPUT_BODY})?\\}\\}`,
@@ -1667,8 +1637,9 @@ const eachPlaceholderRanges = (
   );
   return [...text.matchAll(re)].map((match) => {
     const field = match.groups?.["field"];
-    if (field === undefined)
-      {return panic("Loop placeholder matched without a field");}
+    if (field === undefined) {
+      return panic("Loop placeholder matched without a field");
+    }
     return {
       start: match.index,
       end: match.index + match[0].length,
@@ -1709,8 +1680,12 @@ const visitNestedLoopScopes = (
         : classifyMarker(`${tag} ${expression}`, "statement");
     // A loop's source belongs to its enclosing scope, before its alias binds.
     visit(paragraph, new Set(nestedAliases));
-    if (marker?.kind === "for") {nestedAliases.push(marker.alias);}
-    if (marker?.kind === "endfor") {nestedAliases.pop();}
+    if (marker?.kind === "for") {
+      nestedAliases.push(marker.alias);
+    }
+    if (marker?.kind === "endfor") {
+      nestedAliases.pop();
+    }
   }
 };
 
@@ -1730,7 +1705,7 @@ const rewriteEachPlaceholders = (
     const spans = [...paragraph.getElementsByTagNameNS(W_NS, "t")].map(
       (node) => {
         const start = offset;
-        offset += node.textContent.length;
+        offset += (node.textContent ?? "").length;
         return { start, end: offset };
       },
     );
@@ -1768,7 +1743,9 @@ const rewriteNestedEachExpr = (
     const visibleHeads = [...new Set([alias, arrayPath])].filter(
       (head) => !nestedAliases.has(head),
     );
-    if (visibleHeads.length === 0) {return;}
+    if (visibleHeads.length === 0) {
+      return;
+    }
     const heads = visibleHeads.map(escapeRegExp).join("|");
     const re = new RegExp(
       `(\\{%(?:tr|p)?\\s*for\\s+[\\p{L}_][\\p{L}\\p{N}_-]*\\s+in\\s+)(?:${heads})\\.([.\\p{L}\\p{N}_-]+)((?:\\s*\\|${MARKER_STATEMENT_BODY})?\\s*%\\})`,
@@ -1778,10 +1755,37 @@ const rewriteNestedEachExpr = (
       (match) => ({
         start: match.index,
         end: match.index + match[0].length,
-        value: `${match[1]}${eachKey(loopIdentity, index, match[2] ?? panic("Nested loop source matched without a path"))}${match[3]}`,
+        value: `${match[1] ?? panic("Nested loop source matched without an opener")}${eachKey(loopIdentity, index, match[2] ?? panic("Nested loop source matched without a path"))}${match[3] ?? panic("Nested loop source matched without a closer")}`,
       }),
     );
-    if (ranges.length > 0) {replaceParagraphTextRanges(paragraph, ranges);}
+    if (ranges.length === 0) {
+      return;
+    }
+    let offset = 0;
+    const spans = [...paragraph.getElementsByTagNameNS(W_NS, "t")].map(
+      (node) => {
+        const start = offset;
+        offset += (node.textContent ?? "").length;
+        return { start, end: offset };
+      },
+    );
+    if (
+      ranges.every((range) =>
+        spans.some(
+          (span) => range.start >= span.start && range.end <= span.end,
+        ),
+      )
+    ) {
+      rewriteTextNodes(paragraph, (text) =>
+        text.replace(
+          re,
+          (_match, prefix: string, field: string, suffix: string) =>
+            `${prefix}${eachKey(loopIdentity, index, field)}${suffix}`,
+        ),
+      );
+      return;
+    }
+    replaceParagraphTextRanges(paragraph, ranges);
   });
 };
 

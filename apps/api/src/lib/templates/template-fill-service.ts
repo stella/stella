@@ -23,6 +23,7 @@ import {
 import {
   discoverTemplateWithClauses,
   clauseBodyToRichPatch,
+  clauseBodyToPlainText,
 } from "@/api/lib/clauses/clause-to-patch";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import {
@@ -50,13 +51,14 @@ import {
   type AiFieldGenerator,
   resolveAiFields,
 } from "@/api/lib/docx/resolve-ai-fields";
-import { resolveClauseSlotBodies } from "@/api/lib/docx/resolve-clause-slots";
+import { resolveClauseSlotSources } from "@/api/lib/docx/resolve-clause-slots";
 import {
   boundTemplateWarnings,
   fieldOverlayWarnings,
   type TemplateWarning,
 } from "@/api/lib/docx/template-warnings";
 import type {
+  ClauseProvenance,
   DiscoveredField,
   DiscoveredTemplate,
   FieldDateFormat,
@@ -66,6 +68,7 @@ import type {
   InputType,
   LookupRegistry,
   TemplateManifest,
+  TemplateData,
 } from "@/api/lib/docx/types";
 import { isTemplateData } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -577,28 +580,38 @@ export const discoverTemplateSource = async ({
       ? []
       : await discoverClauseSlots(source.file);
   const bodies: Record<string, ClauseBody> = {};
+  const clauses: Record<string, ClauseProvenance> = {};
   if (source.templateId !== undefined && slots.length > 0) {
-    Object.assign(
-      bodies,
-      await resolveClauseSlotBodies(
-        source.templateId,
-        slots,
-        scopedDb,
-        organizationId,
-      ),
+    const resolved = await resolveClauseSlotSources(
+      source.templateId,
+      slots,
+      scopedDb,
+      organizationId,
     );
+    for (const [key, entry] of resolved) {
+      bodies[key] = entry.body;
+      clauses[key] = entry.clause;
+    }
   }
   for (const slot of slots) {
     const override = clauseOverrides?.[slot.patchKey];
     if (override !== undefined) {
       bodies[slot.patchKey] = override;
+      clauses[slot.patchKey] ??= { slotKey: slot.patchKey };
     }
   }
-  const discovered = await discoverTemplateWithClauses(
-    source.file,
-    Object.values(bodies),
-  );
-  return { slots, bodies, discovered, manifest: deriveManifest(discovered) };
+  const discovered = await discoverTemplateWithClauses({
+    file: source.file,
+    bodies,
+    clauses,
+  });
+  return {
+    slots,
+    bodies,
+    clauses,
+    discovered,
+    manifest: deriveManifest(discovered),
+  };
 };
 
 type FilledDocx = {
@@ -632,6 +645,63 @@ type FillDocxWithPolicyOptions<TRejection = never> =
     unusedValuePolicy: UnusedValuePolicy;
   };
 
+type ApplyClausePatchesOptions = Pick<
+  Awaited<ReturnType<typeof discoverTemplateSource>>,
+  "bodies" | "clauses" | "slots"
+> & {
+  record: TemplateData;
+  namedConditions: ReturnType<typeof manifestNamedConditions>;
+};
+
+const applyClausePatches = ({
+  slots,
+  bodies,
+  clauses,
+  record,
+  namedConditions,
+}: ApplyClausePatchesOptions): Result<void, HandlerError<422>> => {
+  for (const slot of slots) {
+    const body = bodies[slot.patchKey];
+    if (body === undefined) {
+      continue;
+    }
+    const patch = clauseBodyToRichPatch(body, {
+      values: record,
+      slotKey: slot.patchKey,
+      namedConditions,
+    });
+    if (Result.isError(patch)) {
+      const clause =
+        clauses[slot.patchKey] ??
+        panic(`Missing clause provenance for ${slot.patchKey}`);
+      const identity = `${clause.name ?? slot.name}${clause.id === undefined ? "" : ` (${clause.id})`}`;
+      const error = new HandlerError({
+        status: 422,
+        code: patch.error.code,
+        retryable: false,
+        clause,
+        message: `Clause ${identity} in slot ${slot.patchKey} has invalid directives: ${patch.error.message}`,
+        hint: `Open clause ${identity} in the clause editor, or call get_clause then save_clause, correct the named paragraphs, and fill slot ${slot.patchKey} again.`,
+        issues: patch.error.issues,
+      });
+      return Result.err(error);
+    }
+    record[slot.patchKey] = patch.value;
+  }
+
+  return Result.ok(undefined);
+};
+
+const clauseGroundingTexts = (
+  bodies: Record<string, ClauseBody>,
+  record: FillValues,
+): string[] =>
+  Object.entries(bodies).map(([key, body]) => {
+    const text = clauseBodyToPlainText(body);
+    record[key] = text;
+    return text;
+  });
+
 /**
  * Shared fill recipe over an already-loaded DOCX: discover linked content,
  * gate required fields, run manifest fill steps (lookups, composites, formulas,
@@ -660,12 +730,13 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   );
   const loaded = source;
   const { templateId } = source;
-  const { manifest, discovered, slots, bodies } = await discoverTemplateSource({
-    source: loaded,
-    scopedDb,
-    organizationId,
-    clauseOverrides,
-  });
+  const { manifest, discovered, slots, bodies, clauses } =
+    await discoverTemplateSource({
+      source: loaded,
+      scopedDb,
+      organizationId,
+      clauseOverrides,
+    });
   let strictInputPlaceholders: string[] | null = null;
 
   if (unusedValuePolicy === "reject") {
@@ -709,12 +780,8 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 
   let record: FillValues = { ...values };
 
-  // Reject before any AI/lookup work runs: a required, user-entered
-  // field (not AI-fillable, not formula/condition/source-derived) that is
-  // absent or empty must never be silently invented or left as a raw
-  // `{{marker}}` in the output. Ask the caller for exactly these fields
-  // instead of guessing. Every real fill passes "enforce" here; the live
-  // fill-preview route names its exception with "allow-partial".
+  // Reject missing user-entered fields before AI/lookup work. Every real fill
+  // enforces this gate; the live preview explicitly permits partial inputs.
   const missingRequiredFields = collectMissingRequiredFields({
     fields: manifest.fields,
     policy: requiredFields,
@@ -775,10 +842,15 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     return { error: stepError };
   }
 
-  const documentText = await documentTextForAiFields(
+  const templateText = await documentTextForAiFields(
     loaded.file,
     manifest.fields,
   );
+  const clauseTexts = clauseGroundingTexts(bodies, record);
+  const documentText =
+    templateText === undefined
+      ? undefined
+      : [templateText, ...clauseTexts].join("\n");
   const drafted = await resolveAiFields({
     values: record,
     fields: manifest.fields,
@@ -825,22 +897,18 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
   }
 
   const namedConditions = manifestNamedConditions(manifest);
-  if (slots.length > 0) {
-    for (const slot of slots) {
-      const body = bodies[slot.patchKey];
-      if (body === undefined) {
-        continue;
-      }
-      const patch = clauseBodyToRichPatch(body, {
-        values: record,
-        slotKey: slot.patchKey,
-        namedConditions,
-      });
-      if (Result.isError(patch)) {
-        return { error: patch.error.message, storedTemplateError: patch.error };
-      }
-      record[slot.patchKey] = patch.value;
-    }
+  const patchedClauses = applyClausePatches({
+    slots,
+    bodies,
+    clauses,
+    record,
+    namedConditions,
+  });
+  if (Result.isError(patchedClauses)) {
+    return {
+      error: patchedClauses.error.message,
+      storedTemplateError: patchedClauses.error,
+    };
   }
 
   const result = await fillTemplate(fillSource, record, { namedConditions });
@@ -860,8 +928,14 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     // substituted), so they are not "unused" in any user-meaningful sense.
     unusedValues: result.unusedValues.filter(
       (name) =>
+        !slots.some(
+          (slot) => slot.patchKey === name && bodies[name] !== undefined,
+        ) &&
         !adaptedPaths.includes(name) &&
-        !optionalDefaults.defaultedPaths.includes(name),
+        !optionalDefaults.defaultedPaths.includes(name) &&
+        !discovered.clauseFieldPaths?.some(
+          (path) => path === name || name.startsWith(`${path}.`),
+        ),
     ),
     structureErrors: result.structureErrors,
     aiFieldErrors,

@@ -194,15 +194,23 @@ export type DiscoveredField = {
   visibleWhen?: string;
 };
 
+export type ClauseProvenance = {
+  slotKey: string;
+  id?: string | undefined;
+  name?: string | undefined;
+};
+
 export type TemplateStructureError = {
   message: string;
   paragraphIndex: number;
   directive: string;
   /** Which container this error originated from. */
-  source?: ParagraphSource;
+  source?: ParagraphSource | "clause" | undefined;
+  clause?: ClauseProvenance | undefined;
 };
 
 export type DiscoveredTemplate = {
+  clauseFieldPaths?: string[] | undefined;
   placeholders: DiscoveredPlaceholder[];
   fields: DiscoveredField[];
   structureErrors: TemplateStructureError[];

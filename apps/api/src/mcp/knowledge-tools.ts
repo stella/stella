@@ -934,7 +934,12 @@ const clauseRunArgSchema = v.strictObject({
 });
 
 const clauseParagraphArgSchema = v.strictObject({
-  text: v.pipe(v.string(), v.description("Paragraph plain text")),
+  text: v.pipe(
+    v.string(),
+    v.description(
+      "Paragraph plain text; directive paragraphs must contain the literal {% ... %} tag, for example {% if enabled %}, with a balanced {% endif %} paragraph",
+    ),
+  ),
   style: v.optional(
     v.pipe(v.string(), v.description("Optional paragraph style name")),
   ),
@@ -2049,7 +2054,8 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
       "clause_id to create (title and body required); pass clause_id to update. " +
       "body is an ordered array of paragraphs, each with text and optional " +
       "style, level, runs, list_kind, list_level, is_directive, directive_kind, " +
-      "and directive_expression. " +
+      "and directive_expression. Use balanced literal {% ... %} directive tags. " +
+      "num(), ref(), nested clause(), and ai(adapt=true) belong in the template body. " +
       "category_id, language, description, usage_notes, and metadata " +
       "accept null to clear them on update. Set snapshot_version true on an " +
       "update to also append a version snapshot of the body. Returns the clause id.",

@@ -32,6 +32,7 @@ import { omitSourceBoundValues } from "@/api/lib/docx/ai-visible-values";
 import { isAiConditionField } from "@/api/lib/docx/resolve-ai-conditions";
 import type { FieldMeta } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { LIMITS } from "@/api/lib/limits";
 import {
   discoverTemplateSource,
   loadStoredTemplateSource,
@@ -259,9 +260,9 @@ const derivedManifestFields = async ({
  *
  * The manifest column is the cache of reading the document that exists for
  * exactly this kind of read (see `derived-manifest.ts`), and the form asks on
- * every typing pause. Unlinked templates use that cache; linked templates
- * rediscover the document and current clause versions together so the preview
- * sees the same condition declarations as a fill.
+ * every typing pause. The cache is reused when linked clauses contribute no
+ * markers. Conditions from per-fill clause edits are not previewed: this
+ * endpoint describes the stored template and its links only.
  */
 export const templateDecideConditionsLogic = async ({
   scopedDb,
@@ -288,8 +289,29 @@ export const templateDecideConditionsLogic = async ({
       with: {
         templateClauses: {
           columns: { id: true },
+          with: {
+            clause: {
+              columns: { body: true },
+              where: { organizationId: { eq: organizationId } },
+              with: {
+                versions: {
+                  columns: { body: true },
+                  where: { organizationId: { eq: organizationId } },
+                  limit: LIMITS.clauseVersionsPerClause,
+                },
+              },
+            },
+            clauseVariant: {
+              columns: { body: true },
+              where: { organizationId: { eq: organizationId } },
+            },
+            clauseVersion: {
+              columns: { body: true },
+              where: { organizationId: { eq: organizationId } },
+            },
+          },
           where: { organizationId: { eq: organizationId } },
-          limit: 1,
+          limit: LIMITS.templateClausesPerTemplate,
         },
       },
     }),
@@ -301,7 +323,27 @@ export const templateDecideConditionsLogic = async ({
   }
 
   let fields = template.manifest?.fields;
-  if (fields === undefined || template.templateClauses.length > 0) {
+  const clauseDeclarations = template.templateClauses.some((link) => {
+    const bodies = [
+      link.clause?.body,
+      link.clauseVariant?.body,
+      link.clauseVersion?.body,
+    ];
+    if (link.clause) {
+      for (const { body } of link.clause.versions) {
+        bodies.push(body);
+      }
+    }
+    return bodies.some((body) =>
+      body?.some((paragraph) => {
+        const text =
+          paragraph.runs?.map(({ text: runText }) => runText).join("") ??
+          paragraph.text;
+        return text.includes("{{") || text.includes("{%");
+      }),
+    );
+  });
+  if (fields === undefined || clauseDeclarations) {
     const derived = await derivedManifestFields({
       templateId,
       organizationId,

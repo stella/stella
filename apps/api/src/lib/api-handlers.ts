@@ -504,6 +504,7 @@ type SafeErrorBody = {
   message: string;
   /** Corrective next step for programmatic clients. */
   hint?: string;
+  clause?: HandlerError["clause"];
   contactUrl?: string;
   retryable?: boolean;
   /** Field-scoped reasons the request was rejected. */
@@ -1395,6 +1396,7 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),
+  ...(error.clause ? { clause: error.clause } : {}),
   ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
   ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
   ...(error.issues ? { issues: error.issues } : {}),

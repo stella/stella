@@ -481,7 +481,7 @@ export const templateFillDiscoverOptions = ({
       const blob = await res.blob();
       const file = new File([blob], context.fileName, { type: DOCX_MIME });
       const response = await api.templates.discover.post(
-        { file },
+        { file, templateId: toSafeId<"template">(key.templateId) },
         { fetch: { signal } },
       );
       if (response.error) {

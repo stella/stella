@@ -439,3 +439,46 @@ describe("templateDecideConditionsLogic access", () => {
     expect(result).rejects.toThrow("Request cancelled");
   });
 });
+
+test("linked clauses without markers reuse the cached condition manifest", async () => {
+  let reads = 0;
+  const { scopedDb } = createScopedDbMock({
+    query: {
+      templates: {
+        findFirst: async () => {
+          reads++;
+          if (reads > 1) {
+            throw new TypeError(
+              "Cached preview must not reload the template source",
+            );
+          }
+          return {
+            manifest: { fields },
+            templateClauses: [
+              {
+                id: "link",
+                clause: { body: [{ text: "Plain provision" }], versions: [] },
+                clauseVariant: null,
+                clauseVersion: { body: [{ text: "Pinned provision" }] },
+              },
+            ],
+          };
+        },
+      },
+    },
+  });
+  const result = await templateDecideConditionsLogic({
+    scopedDb,
+    organizationId: toSafeId<"organization">("org_caller"),
+    templateId: toSafeId<"template">("tmpl_cached"),
+    body: { values: { is_consumer: true, has_arbitration: false } },
+    orgAIConfig: null,
+    client: null,
+    abortSignal: new AbortController().signal,
+  });
+  expect(result.unwrap().conditions.map(({ decision }) => decision)).toEqual([
+    { state: "decided", decidedBy: "user", value: true },
+    { state: "decided", decidedBy: "user", value: false },
+  ]);
+  expect(reads).toBe(1);
+});

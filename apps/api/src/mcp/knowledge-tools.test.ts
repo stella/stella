@@ -389,6 +389,40 @@ describe("MCP knowledge tools", () => {
     });
   });
 
+  test.each(["create", "update"])(
+    "save_clause refuses unbalanced markers in %s mode",
+    async (mode) => {
+      const { scopedDb, insertedBodies } = createClauseWriteScopedDb();
+      const result = await handleMcpToolCall({
+        args: {
+          ...(mode === "update"
+            ? { clause_id: CLAUSE_ID }
+            : { title: "Terms" }),
+          body: [
+            {
+              text: "{% if enabled %}",
+              is_directive: true,
+              directive_kind: "if",
+            },
+          ],
+        },
+        context: createContext({ scopedDb }),
+        toolName: "save_clause",
+      });
+      expect(result.isError).toBe(true);
+      expect(parseToolPayload(result)).toMatchObject({
+        error: {
+          code: "validation_error",
+          hint: expect.stringContaining("save_clause"),
+          issues: [
+            { path: "body.0", message: expect.stringContaining("Unclosed") },
+          ],
+        },
+      });
+      expect(insertedBodies).toEqual([]);
+    },
+  );
+
   test("save_clause maps snake_case paragraph keys onto the persisted body", async () => {
     const { insertedBodies, scopedDb } = createClauseWriteScopedDb();
 
@@ -397,14 +431,18 @@ describe("MCP knowledge tools", () => {
         title: "Indemnity",
         body: [
           {
-            text: "The Supplier shall indemnify.",
-            runs: [{ text: "The Supplier shall indemnify.", bold: true }],
-            list_kind: "bullet",
-            list_level: 1,
+            text: "{% if party.isSupplier %}",
             is_directive: true,
             directive_kind: "if",
             directive_expression: "party.isSupplier",
           },
+          {
+            text: "The Supplier shall indemnify.",
+            runs: [{ text: "The Supplier shall indemnify.", bold: true }],
+            list_kind: "bullet",
+            list_level: 1,
+          },
+          { text: "{% endif %}", is_directive: true, directive_kind: "endif" },
         ],
       },
       context: createContext({ scopedDb }),
@@ -416,14 +454,18 @@ describe("MCP knowledge tools", () => {
     for (const body of insertedBodies) {
       expect(body).toEqual([
         {
-          text: "The Supplier shall indemnify.",
-          runs: [{ text: "The Supplier shall indemnify.", bold: true }],
-          listKind: "bullet",
-          listLevel: 1,
+          text: "{% if party.isSupplier %}",
           isDirective: true,
           directiveKind: "if",
           directiveExpression: "party.isSupplier",
         },
+        {
+          text: "The Supplier shall indemnify.",
+          runs: [{ text: "The Supplier shall indemnify.", bold: true }],
+          listKind: "bullet",
+          listLevel: 1,
+        },
+        { text: "{% endif %}", isDirective: true, directiveKind: "endif" },
       ]);
     }
   });

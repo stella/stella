@@ -634,6 +634,34 @@ describe("a mapped status survives the transport wrapper", () => {
     });
   });
 
+  test("clause directive refusals preserve linked identity at the HTTP boundary", async () => {
+    const clause = { slotKey: "@clause:Terms", id: "cls_1", name: "Terms" };
+    const response = await runEndpoint(async function* () {
+      return Result.err(
+        new HandlerError({
+          status: 422,
+          code: "clause_directives_invalid",
+          retryable: false,
+          message:
+            "Clause Terms (cls_1) in slot @clause:Terms has invalid directives.",
+          hint: "Open the clause editor or call get_clause then save_clause.",
+          clause,
+          issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
+        }),
+      );
+    });
+    expect(response).toMatchObject({
+      code: 422,
+      response: {
+        code: "clause_directives_invalid",
+        retryable: false,
+        clause,
+        hint: "Open the clause editor or call get_clause then save_clause.",
+        issues: [{ path: "body.2", message: "Paragraph 3: unclosed if" }],
+      },
+    });
+  });
+
   // Result.tryPromise answers a throw with UnhandledException, so an upstream
   // status mapped deep inside the wrapped call reaches the boundary nested.
   test("a status thrown through Result.tryPromise is answered, not graded 500", async () => {
