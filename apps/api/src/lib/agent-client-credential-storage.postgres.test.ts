@@ -1,9 +1,10 @@
 import { Result } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
 
 import { agentRegistration } from "@/api/db/agent-auth-schema";
 import { schedulerJobs } from "@/api/db/schema";
+import { env } from "@/api/env";
 import {
   AGENT_CLIENT_BATCH_SIZE,
   countPreviousAgentClientValues,
@@ -27,6 +28,15 @@ import {
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+
+let priorStorageSetting = false;
+beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+});
+afterEach(() => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+});
 
 type Transaction = Parameters<Parameters<GatedTestDb["transaction"]>[0]>[0];
 const databaseUrl = process.env["DATABASE_URL"];
@@ -95,7 +105,7 @@ if (!databaseUrl || !enabled) {
   });
 } else {
   describe("agent client storage batches (postgres)", () => {
-    test("a paused task retains rows and reports the remaining count", async () => {
+    test("a paused task retains rows without accessing storage", async () => {
       await withStoredValues(databaseUrl, async (db) => {
         await db.transaction(async (tx) => await seed(tx, 2));
         const before = await db.transaction(
@@ -146,18 +156,131 @@ if (!databaseUrl || !enabled) {
                 .orderBy(asc(agentRegistration.id)),
           ),
         ).toEqual(before);
-        expect(records).toEqual([
-          {
-            severityText: "INFO",
-            message: "scheduler.agent_client_storage",
-            attributes: {
-              "migration.updated_count": 0,
-              "migration.remaining_count": 2,
-              "migration.paused": true,
-            },
-          },
-        ]);
+        expect(records).toEqual([]);
         expect(JSON.stringify(records)).not.toContain(credential);
+      });
+    });
+
+    test("records completion across restarts and accepts an explicit reset", async () => {
+      await withStoredValues(databaseUrl, async (db) => {
+        await db.transaction(async (tx) => await seed(tx, 2));
+        const job = await db.transaction(async (tx) =>
+          (
+            await tx
+              .insert(schedulerJobs)
+              .values({
+                id: Bun.randomUUIDv7(),
+                task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+                schedule: { type: "interval", everyMs: 60_000 },
+                nextRunAt: new Date(),
+                payload: {},
+              })
+              .returning()
+          ).at(0),
+        );
+        if (!job) {
+          throw new Error("scheduler fixture missing");
+        }
+        const context = {
+          db,
+          job,
+          payload: job.payload,
+          runId: createSafeId<"schedulerJobRun">(),
+          scheduleContinuation: () => undefined,
+          signal: new AbortController().signal,
+          logger,
+        };
+        await backfillAgentClientStorage(context);
+        expect(await countPreviousAgentClientValues(db)).toBe(0);
+        const completed = await db.transaction(async (tx) =>
+          (
+            await tx
+              .select()
+              .from(schedulerJobs)
+              .where(eq(schedulerJobs.id, job.id))
+          ).at(0),
+        );
+        if (!completed) {
+          throw new Error("scheduler fixture missing");
+        }
+        expect(completed.payload?.["completed"]).toBe(true);
+        expect(completed.enabled).toBe(false);
+        await db.transaction(async (tx) => {
+          await seed(tx, 1);
+          await tx
+            .update(schedulerJobs)
+            .set({ enabled: true })
+            .where(eq(schedulerJobs.id, job.id));
+        });
+        const unusedDatabase = new Proxy(db, {
+          get() {
+            throw new Error("completed task must not access storage");
+          },
+        });
+        await backfillAgentClientStorage({
+          ...context,
+          db: unusedDatabase,
+          job: { ...completed, enabled: true },
+          payload: completed.payload,
+        });
+        expect(await countPreviousAgentClientValues(db)).toBe(1);
+        const reset = await db.transaction(async (tx) =>
+          (
+            await tx
+              .update(schedulerJobs)
+              .set({ payload: {}, enabled: true })
+              .where(eq(schedulerJobs.id, job.id))
+              .returning()
+          ).at(0),
+        );
+        if (!reset) {
+          throw new Error("scheduler fixture missing");
+        }
+        await backfillAgentClientStorage({
+          ...context,
+          job: reset,
+          payload: reset.payload,
+        });
+        expect(await countPreviousAgentClientValues(db)).toBe(0);
+      });
+    });
+
+    test("retains all rows before the write setting is enabled", async () => {
+      await withStoredValues(databaseUrl, async (db) => {
+        await db.transaction(async (tx) => await seed(tx, 2));
+        const job = await db.transaction(async (tx) =>
+          (
+            await tx
+              .insert(schedulerJobs)
+              .values({
+                id: Bun.randomUUIDv7(),
+                task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
+                schedule: { type: "interval", everyMs: 60_000 },
+                nextRunAt: new Date(),
+                payload: {},
+              })
+              .returning()
+          ).at(0),
+        );
+        if (!job) {
+          throw new Error("scheduler fixture missing");
+        }
+        env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+        const unusedDatabase = new Proxy(db, {
+          get() {
+            throw new Error("disabled task must not access storage");
+          },
+        });
+        await backfillAgentClientStorage({
+          db: unusedDatabase,
+          job,
+          payload: job.payload,
+          runId: createSafeId<"schedulerJobRun">(),
+          scheduleContinuation: () => undefined,
+          signal: new AbortController().signal,
+          logger,
+        });
+        expect(await countPreviousAgentClientValues(db)).toBe(2);
       });
     });
 

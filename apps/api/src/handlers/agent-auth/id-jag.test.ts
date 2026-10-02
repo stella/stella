@@ -2,6 +2,7 @@ import {
   afterAll,
   afterEach,
   beforeAll,
+  beforeEach,
   describe,
   expect,
   test,
@@ -46,6 +47,15 @@ import {
 // stubbed `globalThis.fetch` for the issuer's well-known URL. A
 // trusted-issuer row is inserted so the (empty-by-default) allow-list
 // accepts it; every other issuer stays rejected.
+
+let priorStorageSetting = false;
+beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+});
+afterEach(() => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+});
 
 type Json = Record<string, unknown>;
 

@@ -24,7 +24,7 @@ import {
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { readStoredAgentClientCredential } from "@/api/lib/agent-client-credential-storage";
-import { encryptAgentClientCredential } from "@/api/lib/agent-client-credentials";
+import { prepareAgentClientCredential } from "@/api/lib/agent-client-credentials";
 import { getAuth } from "@/api/lib/auth";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
@@ -337,7 +337,7 @@ export const startServiceAuthRegistration = async (
     userCode,
     claimTokenHash: hashClaimToken(claimToken),
     clientId: credentials.clientId,
-    clientSecretSink: await encryptAgentClientCredential(
+    clientSecretSink: await prepareAgentClientCredential(
       credentials.clientSecret,
     ),
     loginHint,
@@ -386,7 +386,7 @@ export const startAnonymousRegistration = async (): Promise<
     status: "pending",
     claimTokenHash: hashClaimToken(claimToken),
     clientId: credentials.clientId,
-    clientSecretSink: await encryptAgentClientCredential(
+    clientSecretSink: await prepareAgentClientCredential(
       credentials.clientSecret,
     ),
     grantedScopes: [...AGENT_AUTH_ANONYMOUS_SCOPES],
@@ -891,7 +891,7 @@ export const startAnonymousUpgrade = async ({
       userCode,
       claimTokenHash: hashClaimToken(newClaimToken),
       clientId: credentials.clientId,
-      clientSecretSink: await encryptAgentClientCredential(
+      clientSecretSink: await prepareAgentClientCredential(
         credentials.clientSecret,
       ),
       loginHint: email,

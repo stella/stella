@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import * as v from "valibot";
 
+import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   decryptAppContent,
@@ -16,6 +17,14 @@ const encryptedCredentialSchema = v.pipe(
 export type EncryptedAgentClientCredential = v.InferOutput<
   typeof encryptedCredentialSchema
 >;
+const previousCredentialSchema = v.pipe(
+  v.string(),
+  v.regex(/^[a-f0-9]{64}$/u),
+  v.brand("PreviousAgentClientCredential"),
+);
+export type StoredAgentClientCredential =
+  | EncryptedAgentClientCredential
+  | v.InferOutput<typeof previousCredentialSchema>;
 
 const CREDENTIAL_PREFIX = "stella-agent:v1:";
 const LEGACY_CREDENTIAL_PATTERN = /^[a-f0-9]{64}$/u;
@@ -46,6 +55,13 @@ export const encryptAgentClientCredential = async (
   return result.value;
 };
 
+export const prepareAgentClientCredential = async (
+  credential: string,
+): Promise<StoredAgentClientCredential> =>
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED
+    ? await encryptAgentClientCredential(credential)
+    : v.parse(previousCredentialSchema, credential);
+
 type ReadAgentClientCredentialOptions = {
   storedCredential: string;
   upgrade: (encrypted: EncryptedAgentClientCredential) => Promise<void>;
@@ -57,7 +73,9 @@ export const readAgentClientCredential = async ({
 }: ReadAgentClientCredentialOptions): Promise<string> => {
   if (LEGACY_CREDENTIAL_PATTERN.test(storedCredential)) {
     logger.info("agent.credentials.legacy_read", { "migration.read_count": 1 });
-    await upgrade(await encryptAgentClientCredential(storedCredential));
+    if (env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
+      await upgrade(await encryptAgentClientCredential(storedCredential));
+    }
     return storedCredential;
   }
 

@@ -1,4 +1,12 @@
-import { afterAll, beforeAll, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  describe,
+  expect,
+  test,
+} from "bun:test";
 import { eq } from "drizzle-orm";
 import * as v from "valibot";
 
@@ -11,6 +19,7 @@ import {
 } from "@/api/agent-auth/constants";
 import { agentRegistration } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
+import { env } from "@/api/env";
 import { isAgentAuthRateLimitedPath } from "@/api/handlers/agent-auth/rate-limit";
 import {
   agentAuthConfirmRoute,
@@ -29,6 +38,15 @@ import {
 // These tests drive the agent-auth slice end to end against the same
 // better-auth instance and database the API uses at runtime, so the token
 // mint exercises the real authorization-code + JWT path.
+
+let priorStorageSetting = false;
+beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+});
+afterEach(() => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+});
 
 type Json = Record<string, unknown>;
 
@@ -105,6 +123,25 @@ const createHumanSession = async () =>
 const unclaimedHint = () => `nobody-${Bun.randomUUIDv7()}@stella.dev`;
 
 describe("agent-auth service_auth flow", () => {
+  test("registration retains the initial stored format before activation", async () => {
+    env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
+    const response = await postIdentity({
+      type: "service_auth",
+      login_hint: unclaimedHint(),
+    });
+    expect(response.status).toBe(200);
+    const body = await readJson(response);
+    const rows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(body["registration_id"])));
+    const stored = rows.at(0)?.credential;
+    expect(stored).toMatch(/^[a-f0-9]{64}$/u);
+    expect(JSON.stringify(body)).not.toContain(
+      stored ?? "missing stored fixture",
+    );
+  });
+
   test("registration returns an RFC 8628 ceremony shape", async () => {
     const response = await postIdentity({
       type: "service_auth",

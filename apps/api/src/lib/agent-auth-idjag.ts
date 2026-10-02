@@ -32,7 +32,7 @@ import {
   startServiceAuthRegistration,
 } from "@/api/lib/agent-auth";
 import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
-import { encryptAgentClientCredential } from "@/api/lib/agent-client-credentials";
+import { prepareAgentClientCredential } from "@/api/lib/agent-client-credentials";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -300,7 +300,7 @@ const issueRegistrationForPrincipal = async (
     // notNull constraint holds and a claim-grant poll never resolves it.
     claimTokenHash: hashClaimToken(generateOpaqueToken()),
     clientId: credentials.clientId,
-    clientSecretSink: await encryptAgentClientCredential(
+    clientSecretSink: await prepareAgentClientCredential(
       credentials.clientSecret,
     ),
     boundUserId: principal.userId,

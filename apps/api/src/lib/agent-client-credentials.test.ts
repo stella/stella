@@ -1,7 +1,9 @@
-import { describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { env } from "@/api/env";
 import {
   encryptAgentClientCredential,
+  prepareAgentClientCredential,
   readAgentClientCredential,
 } from "@/api/lib/agent-client-credentials";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -11,10 +13,44 @@ import {
   type LogRecord,
 } from "@/api/lib/observability/logger";
 
+let priorStorageSetting = false;
+beforeEach(() => {
+  priorStorageSetting = env.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = true;
+});
+afterEach(() => {
+  env.AGENT_CLIENT_STORAGE_V1_ENABLED = priorStorageSetting;
+});
+
 const credential = Buffer.alloc(32, 0x2a).toString("hex");
 const alternateKey = Buffer.alloc(32, 0x2b).toString("hex");
 
 describe("stored agent credential reads", () => {
+  test("selects the configured write format and accepts both read formats", async () => {
+    const envelope = await encryptAgentClientCredential(credential);
+    for (const enabled of [false, true]) {
+      env.AGENT_CLIENT_STORAGE_V1_ENABLED = enabled;
+      const stored = await prepareAgentClientCredential(credential);
+      if (enabled) {
+        expect(stored).toStartWith("stella-agent:v1:");
+      } else {
+        expect(stored).toBe(credential);
+      }
+      for (const value of [credential, envelope]) {
+        const updates: string[] = [];
+        expect(
+          await readAgentClientCredential({
+            storedCredential: value,
+            upgrade: async (replacement) => {
+              updates.push(replacement);
+            },
+          }),
+        ).toBe(credential);
+        expect(updates.length).toBe(enabled && value === credential ? 1 : 0);
+      }
+    }
+  });
+
   test("records the count of upgraded credential reads", async () => {
     const records: LogRecord[] = [];
     const upgrades: string[] = [];
@@ -122,7 +158,11 @@ describe("stored agent credential reads", () => {
         `,
       ],
       cwd: new URL("../../", import.meta.url).pathname,
-      env: { ...process.env, CONTENT_ENCRYPTION_KEY: "" },
+      env: {
+        ...process.env,
+        CONTENT_ENCRYPTION_KEY: "",
+        AGENT_CLIENT_STORAGE_V1_ENABLED: "true",
+      },
       stdout: "pipe",
       stderr: "pipe",
     });

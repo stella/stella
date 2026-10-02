@@ -300,10 +300,11 @@ export const DECLARED_SCHEDULER_JOBS = [
   },
   {
     description: "Move stored agent client values to the shared envelope",
+    enabled: env.AGENT_CLIENT_STORAGE_V1_ENABLED,
     id: "agentClients.backfillStorage.minutely",
     mode: "recurring",
     payloadUpdate: "preserve",
-    payload: { paused: false },
+    payload: { paused: false, completed: false },
     schedule: { type: "interval", everyMs: 60 * 1000 },
     task: BACKFILL_AGENT_CLIENT_STORAGE_TASK,
   },

@@ -1,8 +1,17 @@
 import { panic, Result } from "better-result";
+import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
+import { schedulerJobs } from "@/api/db/schema";
 import {
+  setSharedLockTimeout,
+  setSharedStatementTimeout,
+} from "@/api/db/shared-pool-timeouts";
+import { env } from "@/api/env";
+import {
+  AGENT_CLIENT_LOCK_BUDGET_MS,
+  AGENT_CLIENT_STATEMENT_BUDGET_MS,
   countPreviousAgentClientValues,
   runAgentClientCredentialBatch,
 } from "@/api/lib/agent-client-credential-storage";
@@ -21,23 +30,32 @@ const backfillFailed = failureSink({
 
 export const backfillAgentClientStorage: SchedulerTask = async ({
   db,
+  job,
   payload,
   signal,
   logger,
 }) => {
+  if (!env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
+    return;
+  }
   const paused = payload?.["paused"] ?? false;
+  const completed = payload?.["completed"] ?? false;
   if (typeof paused !== "boolean") {
     panic("Agent client storage pause setting must be boolean");
   }
+  if (typeof completed !== "boolean") {
+    panic("Agent client storage completion setting must be boolean");
+  }
+  if (paused || completed) {
+    return;
+  }
   const result = await Result.tryPromise({
     try: async () =>
-      paused
-        ? 0
-        : await runAgentClientCredentialBatch({
-            db,
-            signal,
-            deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
-          }),
+      await runAgentClientCredentialBatch({
+        db,
+        signal,
+        deadline: Temporal.Now.instant().epochMilliseconds + RUN_BUDGET_MS,
+      }),
     catch: () =>
       new HandlerError({
         status: 503,
@@ -50,9 +68,31 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
   if (signal.aborted) {
     return;
   }
+  const remainingCount = await countPreviousAgentClientValues(db);
+  if (!Result.isError(result) && remainingCount === 0) {
+    await db.transaction(async (tx) => {
+      await setSharedStatementTimeout(tx, AGENT_CLIENT_STATEMENT_BUDGET_MS);
+      await setSharedLockTimeout(tx, AGENT_CLIENT_LOCK_BUDGET_MS);
+      await tx
+        .update(schedulerJobs)
+        .set({
+          enabled: false,
+          payload: sql`coalesce(${schedulerJobs.payload}, '{}'::jsonb) || '{"completed":true}'::jsonb`,
+        })
+        .where(
+          and(
+            eq(schedulerJobs.id, job.id),
+            eq(schedulerJobs.task, BACKFILL_AGENT_CLIENT_STORAGE_TASK),
+            payload === null
+              ? isNull(schedulerJobs.payload)
+              : eq(schedulerJobs.payload, payload),
+          ),
+        );
+    });
+  }
   logger.info("scheduler.agent_client_storage", {
-    "migration.updated_count": Result.isError(result) ? 0 : result.value,
-    "migration.remaining_count": await countPreviousAgentClientValues(db),
+    ...(!Result.isError(result) && { "migration.updated_count": result.value }),
+    "migration.remaining_count": remainingCount,
     "migration.paused": paused,
   });
 };

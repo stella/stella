@@ -9,6 +9,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import { env } from "@/api/env";
 import {
   encryptAgentClientCredential,
   readAgentClientCredential,
@@ -81,8 +82,8 @@ export const readStoredAgentClientCredential = async (
 
 const previousFormat = sql`${agentRegistration.clientSecretSink} ~ '^[a-f0-9]{64}$'`;
 export const AGENT_CLIENT_BATCH_SIZE = 25;
-const STATEMENT_BUDGET_MS = 2000;
-const LOCK_BUDGET_MS = 500;
+export const AGENT_CLIENT_STATEMENT_BUDGET_MS = 2000;
+export const AGENT_CLIENT_LOCK_BUDGET_MS = 500;
 
 type BatchDb = Pick<typeof rootDb, "transaction">;
 const withBatchBudget = async <T>(
@@ -90,8 +91,8 @@ const withBatchBudget = async <T>(
   work: (tx: CredentialDb) => Promise<T>,
 ): Promise<T> =>
   await db.transaction(async (tx) => {
-    await setSharedStatementTimeout(tx, STATEMENT_BUDGET_MS);
-    await setSharedLockTimeout(tx, LOCK_BUDGET_MS);
+    await setSharedStatementTimeout(tx, AGENT_CLIENT_STATEMENT_BUDGET_MS);
+    await setSharedLockTimeout(tx, AGENT_CLIENT_LOCK_BUDGET_MS);
     return await work(tx);
   });
 
@@ -121,6 +122,9 @@ export const runAgentClientCredentialBatch = async ({
   signal,
   deadline,
 }: AgentClientBatchOptions): Promise<number> => {
+  if (!env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
+    return 0;
+  }
   signal.throwIfAborted();
   if (Temporal.Now.instant().epochMilliseconds >= deadline) {
     return 0;

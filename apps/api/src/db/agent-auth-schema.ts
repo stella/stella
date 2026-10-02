@@ -10,7 +10,7 @@ import {
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
-import type { EncryptedAgentClientCredential } from "@/api/lib/agent-client-credentials";
+import type { StoredAgentClientCredential } from "@/api/lib/agent-client-credentials";
 
 /**
  * Agent-registration ceremony state for the auth.md protocol.
@@ -32,9 +32,9 @@ export const agentRegistration = pgTable(
     /** SHA-256 of the bearer claim token; never store the raw token. */
     claimTokenHash: text("claim_token_hash").notNull(),
     clientId: text("client_id").notNull(),
-    /** Versioned application-key envelope used for server-side code exchange. */
+    /** Server-side exchange value prepared by the shared storage helper. */
     clientSecretSink: text("client_secret_sink")
-      .$type<EncryptedAgentClientCredential>()
+      .$type<StoredAgentClientCredential>()
       .notNull(),
     loginHint: text("login_hint"),
     boundUserId: text("bound_user_id"),
