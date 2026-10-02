@@ -165,6 +165,7 @@ const buildRunScenarios = (): RunToolsProps[] => {
                         memoryEnabled,
                         organizationId,
                         orgAIConfig: null,
+                        managedAIResidency: "eu" as const,
                         pinServerValidatedWorkspaceId: () => true,
                         recordAuditEvent: noopAuditRecorder,
                         refRegistry: createChatRefRegistry(),

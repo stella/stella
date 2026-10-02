@@ -13,6 +13,7 @@ import {
   neutralizeChatRefTokens,
 } from "@/api/lib/chat/ref-registry";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { buildSearchTsQuery } from "@/api/lib/search/query";
 import { typedPgArray } from "@/api/lib/search/sql";
 
@@ -153,7 +154,7 @@ export const createPastChatTools = ({
   userId,
 }: CreatePastChatToolsProps) => {
   const searchPastChats = async ({
-    limit,
+    limit: requestedLimit,
     query,
     searchScope,
   }: {
@@ -161,6 +162,9 @@ export const createPastChatTools = ({
     query: string;
     searchScope: PastChatScope;
   }) => {
+    const limit = normalizeTenantPageLimit(
+      requestedLimit ?? LIMITS.chatHistorySearchPageSizeDefault,
+    );
     const normalizedQuery = query.trim();
     const hint =
       searchScope.type === PAST_CHAT_SCOPE_TYPE.matters
@@ -203,7 +207,7 @@ export const createPastChatTools = ({
           AND t.organization_id = ${organizationId}
           ${pastChatScopeSql(searchScope)}
         ORDER BY ts_rank(d.tsv, ${tsQuery}) DESC, d.created_at DESC, d.message_id DESC
-        LIMIT ${limit ?? LIMITS.chatHistorySearchPageSizeDefault}
+        LIMIT ${limit}
       `),
     );
     const rows = result.unwrap("Failed to search past chats.");

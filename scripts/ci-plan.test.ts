@@ -1,6 +1,14 @@
 import { afterAll, expect, test } from "bun:test";
 import fc from "fast-check";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  symlinkSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
 import * as v from "valibot";
@@ -369,6 +377,11 @@ const jobScopes = v.parse(
   JSON.parse(resultStep.env["JOB_SCOPES"] ?? ""),
 );
 
+const foldedSuites = v.parse(
+  v.record(v.string(), v.record(v.string(), v.string())),
+  JSON.parse(resultStep.env["FOLDED_SUITES"] ?? ""),
+);
+
 const EVENT = {
   mergeGroup: "merge_group",
   pullRequest: "pull_request",
@@ -388,6 +401,7 @@ type EvaluateResultOptions = {
   unplannedScopes?: readonly string[];
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
+  suiteResults?: Record<string, string>;
   cancellationEvidence?: "superseded" | "timeout" | "missing" | "wrong-group";
   apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
   newerRun?:
@@ -458,6 +472,7 @@ const evaluateResult = ({
     : SUITE_DEPTH.full,
   unplannedScopes = [],
   liveDraft,
+  suiteResults = {},
   cancellationEvidence = "timeout",
   apiFailure,
   missingJob = false,
@@ -466,7 +481,10 @@ const evaluateResult = ({
   queuedCancellation,
 }: EvaluateResultOptions) => {
   const plan = Object.fromEntries(
-    Object.values(jobScopes).flatMap((scope) =>
+    [
+      ...Object.values(jobScopes),
+      ...Object.values(foldedSuites).flatMap(Object.values),
+    ].flatMap((scope) =>
       scope === null
         ? []
         : [[scope, unplannedScopes.includes(scope) ? "false" : "true"]],
@@ -475,7 +493,15 @@ const evaluateResult = ({
   const needs = Object.fromEntries(
     resultJob.needs.map((job) => [
       job,
-      { result: results[job] ?? "success", outputs: {} },
+      {
+        result: results[job] ?? "success",
+        outputs: Object.fromEntries(
+          Object.keys(foldedSuites[job] ?? {}).map((suite) => [
+            suite,
+            suiteResults[suite] ?? "success",
+          ]),
+        ),
+      },
     ]),
   );
   const group =
@@ -574,6 +600,7 @@ const evaluateResult = ({
       FAKE_ANNOTATIONS: JSON.stringify(checkAnnotations),
       FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
+      FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
       NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
@@ -1335,8 +1362,8 @@ test("a failed API image run annotates the failing lines, escaped", () => {
 });
 
 test("manual full-depth runs leave the merge-group-only exact-base job unplanned", () => {
-  const step = jobSteps(ciJobs["ci-plan"]).find(({ run }) =>
-    run?.includes('if [[ "$EVENT_NAME" == "workflow_dispatch" ]]'),
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Check changed file scope",
   );
   expect(step?.run).toBeDefined();
   const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-exact-base-"));
@@ -1362,6 +1389,173 @@ test("manual full-depth runs leave the merge-group-only exact-base job unplanned
     );
   } finally {
     rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("folded Docker suites keep their scopes and fail independently, including missing or cancelled verdicts", () => {
+  expect(foldedSuites["docker-checks"]).toEqual({
+    "agent-sandbox-docker": "agent_sandbox_docker_required",
+    "api-image-deps": "api_image_deps_required",
+  });
+  for (const [job, suites] of Object.entries(foldedSuites)) {
+    const body = v.parse(
+      v.object({
+        outputs: v.record(v.string(), v.string()),
+        steps: v.array(
+          v.object({
+            id: v.optional(v.string()),
+            if: v.optional(v.string()),
+            run: v.optional(v.string()),
+          }),
+        ),
+      }),
+      ciJobs[job],
+    );
+    expect(new Set(Object.keys(body.outputs))).toEqual(
+      new Set(Object.keys(suites)),
+    );
+    for (const [suite, scope] of Object.entries(suites)) {
+      expect(
+        body.steps.some((step) =>
+          step.if?.includes(`needs.ci-plan.outputs.${scope} == 'true'`),
+        ),
+      ).toBe(true);
+      for (const verdict of [
+        "failure",
+        "cancelled",
+        "skipped",
+        "timed_out",
+        "",
+      ]) {
+        expect(
+          evaluateResult({
+            event: EVENT.mergeGroup,
+            results: {},
+            suiteResults: { [suite]: verdict },
+          }),
+          `${suite}: ${verdict}`,
+        ).toBe(1);
+        expect(
+          evaluateResult({
+            event: EVENT.mergeGroup,
+            results: {},
+            suiteResults: { [suite]: verdict },
+            unplannedScopes: [scope],
+          }),
+          `${suite}: unplanned ${verdict}`,
+        ).toBe(0);
+      }
+    }
+    const sandboxVerdict = body.outputs["agent-sandbox-docker"] ?? "";
+    const sandboxSteps = body.steps.filter(
+      (step) =>
+        step.id !== undefined &&
+        step.if?.includes(
+          "needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'",
+        ),
+    );
+    const verdictSteps = [
+      ...sandboxVerdict.matchAll(/steps\.([\w-]+)\.outcome == 'success'/gu),
+    ].map((match) => match.at(1));
+    expect(new Set(verdictSteps)).toEqual(
+      new Set(sandboxSteps.map((step) => step.id)),
+    );
+    const api = body.steps.find((step) => step.id === "api-deps");
+    expect(api?.if).toContain("!cancelled()");
+    expect(api?.run).toContain("--frozen-lockfile --ignore-scripts");
+    expect(api?.run).toContain(
+      "--production --frozen-lockfile --ignore-scripts",
+    );
+    expect(api?.run).toContain(
+      "bun apps/legal-atlas-runner/dist/index.js smoke",
+    );
+    expect(body.outputs["agent-sandbox-docker"]).toContain(
+      "steps.isolation.outcome == 'success'",
+    );
+    expect(body.outputs["agent-sandbox-docker"]).toContain(
+      "steps.cleanup.outcome == 'success'",
+    );
+    expect(body.outputs["api-image-deps"]).toBe(
+      ["$", "{{ steps.api-deps.outcome }}"].join(""),
+    );
+  }
+});
+
+test("the Docker fold is planned by either original scope without changing the suite selectors", () => {
+  for (const files of [
+    [],
+    ["README.md"],
+    ["scripts/retry.sh"],
+    ["apps/api/src/index.ts"],
+    ["bun.lock"],
+  ]) {
+    const [sandbox, imageDeps, folded] = runSelector(
+      files,
+      [
+        "agent_sandbox_docker_required",
+        "api_image_deps_required",
+        "docker_checks_required",
+      ],
+      "full",
+    );
+    expect(folded).toBe(
+      sandbox === "true" || imageDeps === "true" ? "true" : "false",
+    );
+  }
+});
+
+test("folded image checks preserve separate working directories for frozen installs and production smoke", () => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "folded-image-deps-"));
+  const bin = nodePath.join(directory, "bin");
+  mkdirSync(bin);
+  mkdirSync(nodePath.join(directory, "apps"));
+  mkdirSync(nodePath.join(directory, "packages"));
+  writeFileSync(nodePath.join(directory, "bun.lock"), "{}");
+  writeFileSync(nodePath.join(directory, "package.json"), "{}");
+  writeFileSync(
+    nodePath.join(bin, "bun"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s:%s\n' "$PWD" "$*" >> "$0.log"
+case "$*" in
+  -p*) echo 2.0.0 ;;
+  *'run case-law-ingest __smoke__') echo 'Unknown adapter: __smoke__'; exit 1 ;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  writeFileSync(
+    nodePath.join(bin, "turbo"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == "prune @stll/legal-atlas-runner --docker --out-dir out-runner" ]]
+mkdir -p out-runner/full
+`,
+    { mode: 0o755 },
+  );
+  const api = jobSteps(ciJobs["docker-checks"]).find(
+    ({ name }) => name === "Check image dependency trees and production runner",
+  );
+  try {
+    const result = Bun.spawnSync(["bash", "-eu", "-c", api?.run ?? "exit 1"], {
+      cwd: directory,
+      env: { PATH: `${bin}:${process.env["PATH"] ?? ""}` },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+    const commands = readFileSync(nodePath.join(bin, "bun.log"), "utf-8");
+    expect(commands).toContain(
+      `${directory}/api-install:install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts`,
+    );
+    expect(commands).toContain(
+      `${directory}/runner-install:install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts`,
+    );
+    expect(commands).toContain(
+      `${directory}/runner-install:apps/legal-atlas-runner/dist/index.js smoke`,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 
@@ -1523,6 +1717,260 @@ test("property-testing guards run only when dependencies are installed", () => {
     }
   }
   expect(guardCount).toBeGreaterThan(0);
+});
+
+test("dependency inputs plan a malware scan and unrelated paths do not", () => {
+  for (const depth of ["fast", "full"]) {
+    for (const file of [
+      "bun.lock",
+      ".claude/mcp/bun.lock",
+      "package.json",
+      "apps/web/package.json",
+      "tools/docs/yarn.lock",
+    ]) {
+      expect(
+        runSelector([file], ["dependency_malware_required"], depth),
+      ).toEqual(["true"]);
+    }
+    expect(
+      runSelector(
+        ["apps/web/src/page.tsx"],
+        ["dependency_malware_required"],
+        depth,
+      ),
+    ).toEqual(["false"]);
+  }
+});
+
+type RunChangedFilesOptions = {
+  baseRef?: string;
+  changedPath?: "bun.lock" | "package.json" | "e2e-spec" | "documentation";
+  gitShim?: string;
+};
+
+const runChangedFilesStep = ({
+  baseRef = "main",
+  changedPath,
+  gitShim,
+}: RunChangedFilesOptions) => {
+  const step = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Check changed file scope",
+  );
+  expect(step?.run).toBeDefined();
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-diff-"));
+  const output = nodePath.join(directory, "output");
+  const repository = nodePath.join(directory, "repository");
+  mkdirSync(repository);
+  symlinkSync(
+    new URL("../scripts", import.meta.url),
+    nodePath.join(repository, "scripts"),
+  );
+  const git = (args: string[]) => {
+    const result = Bun.spawnSync(["git", "-C", repository, ...args], {
+      env: {
+        ...process.env,
+        GIT_CONFIG_NOSYSTEM: "1",
+        GIT_AUTHOR_NAME: "CI plan test",
+        GIT_AUTHOR_EMAIL: "ci-plan-test@example.invalid",
+        GIT_COMMITTER_NAME: "CI plan test",
+        GIT_COMMITTER_EMAIL: "ci-plan-test@example.invalid",
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(
+      result.exitCode,
+      `${args.join(" ")}: ${new TextDecoder().decode(result.stderr)}`,
+    ).toBe(0);
+    return result.stdout.toString().trim();
+  };
+
+  try {
+    git(["init", "--quiet", "--initial-branch=main"]);
+    writeFileSync(nodePath.join(repository, "README.md"), "base\n");
+    git(["add", "README.md"]);
+    const commit = (message: string, parent?: string) => {
+      const tree = git(["write-tree"]);
+      const parents = parent === undefined ? [] : ["-p", parent];
+      const hash = git(["commit-tree", tree, ...parents, "-m", message]);
+      git(["update-ref", "HEAD", hash]);
+      return hash;
+    };
+    const baseCommit = commit("base");
+    git(["update-ref", "refs/remotes/origin/main", baseCommit]);
+
+    git(["switch", "--quiet", "-c", "feature"]);
+    const unusualDirectory = 'quote"back\\slash\ttab\nnewline';
+    const paths =
+      changedPath === undefined
+        ? []
+        : [
+            changedPath === "e2e-spec"
+              ? nodePath.join(
+                  "apps",
+                  "web",
+                  "e2e",
+                  `${unusualDirectory}.spec.ts`,
+                )
+              : nodePath.join("fixtures", unusualDirectory, changedPath),
+          ];
+    for (const [index, file] of paths.entries()) {
+      const absolute = nodePath.join(repository, file);
+      mkdirSync(nodePath.dirname(absolute), { recursive: true });
+      writeFileSync(absolute, `fixture ${index}\n`);
+    }
+    git(["add", "--", ...paths]);
+    commit("add unusual path", baseCommit);
+
+    const env = {
+      BASE_REF: baseRef,
+      EVENT_NAME: "pull_request",
+      GITHUB_OUTPUT: output,
+      PATH: gitShim
+        ? `${nodePath.dirname(gitShim)}:${process.env["PATH"] ?? ""}`
+        : (process.env["PATH"] ?? ""),
+      PR_TITLE: "",
+      SUITE_DEPTH: "fast",
+    };
+    const run = Bun.spawnSync(["bash", "-e", "-c", step?.run ?? "exit 1"], {
+      cwd: repository,
+      env,
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(run.exitCode, new TextDecoder().decode(run.stderr)).toBe(0);
+    return new Map(
+      readFileSync(output, "utf-8")
+        .trim()
+        .split("\n")
+        .map((line) => {
+          const separator = line.indexOf("=");
+          return [line.slice(0, separator), line.slice(separator + 1)];
+        }),
+    );
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+};
+
+for (const changedPath of ["bun.lock", "package.json", "e2e-spec"] as const) {
+  test(`the production changed-file step preserves unusual ${changedPath} paths`, () => {
+    const outputs = runChangedFilesStep({ changedPath });
+    const scope =
+      changedPath === "e2e-spec"
+        ? "e2e_core_required"
+        : "dependency_malware_required";
+    expect(outputs.get(scope)).toBe("true");
+  });
+}
+
+test("the production changed-file step skips scans for unrelated or empty diffs", () => {
+  for (const options of [{}, { changedPath: "documentation" }] as const) {
+    const outputs = runChangedFilesStep(options);
+    expect(outputs.get("dependency_malware_required")).toBe("false");
+    expect(outputs.get("e2e_core_required")).toBe("false");
+  }
+});
+
+test("an unknown diff base plans malware and e2e scans", () => {
+  const outputs = runChangedFilesStep({ baseRef: "missing-base" });
+  expect(outputs.get("dependency_malware_required")).toBe("true");
+  expect(outputs.get("e2e_core_required")).toBe("true");
+});
+
+test("a changed-file diff failure plans malware and e2e scans", () => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-git-"));
+  const shim = nodePath.join(directory, "git");
+  const systemGit = Bun.spawnSync(["which", "git"], {
+    stdout: "pipe",
+  })
+    .stdout.toString()
+    .trim();
+  writeFileSync(
+    shim,
+    `#!/bin/bash\nif [[ "$1" == diff ]]; then exit 1; fi\nexec ${systemGit} "$@"\n`,
+  );
+  chmodSync(shim, 0o755);
+  try {
+    const outputs = runChangedFilesStep({
+      changedPath: "bun.lock",
+      gitShim: shim,
+    });
+    expect(outputs.get("dependency_malware_required")).toBe("true");
+    expect(outputs.get("e2e_core_required")).toBe("true");
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("planned malware scan gates fast PRs and full merge groups", () => {
+  expect(jobScopes["dependency-malware"]).toBe("dependency_malware_required");
+  expect(fastRequired).toContain("dependency-malware");
+  for (const event of [EVENT.pullRequest, EVENT.mergeGroup]) {
+    for (const verdict of ["failure", "cancelled", "skipped"]) {
+      expect(
+        evaluateResult({ event, results: { "dependency-malware": verdict } }),
+      ).toBe(1);
+    }
+    expect(
+      evaluateResult({ event, results: { "dependency-malware": "success" } }),
+    ).toBe(0);
+    expect(
+      evaluateResult({
+        event,
+        results: { "dependency-malware": "skipped" },
+        unplannedScopes: ["dependency_malware_required"],
+      }),
+    ).toBe(0);
+  }
+});
+
+test("only the dedicated malware gate activates Safe Chain and keeps Bun packages cold", () => {
+  const users = Object.entries(ciJobs)
+    .filter(([, job]) => {
+      const parsed = v.parse(
+        v.object({
+          steps: v.optional(
+            v.array(v.object({ uses: v.optional(v.string()) })),
+            [],
+          ),
+        }),
+        job,
+      );
+      return parsed.steps.some(
+        ({ uses }) => uses === "./.github/actions/safe-chain",
+      );
+    })
+    .map(([name]) => name);
+  expect(users).toEqual(["dependency-malware"]);
+  const job = v.parse(
+    v.object({
+      steps: v.array(
+        v.object({ uses: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["dependency-malware"],
+  );
+  expect(
+    job.steps.some(
+      ({ uses }) =>
+        uses?.includes("setup-bun-cached") ||
+        uses?.startsWith("actions/cache@"),
+    ),
+  ).toBe(false);
+  expect(
+    job.steps.some(({ uses }) => uses === "./.github/actions/osv-scanner"),
+  ).toBe(true);
+  expect(
+    job.steps.some(
+      ({ run }) => run === "bash scripts/scan-dependency-malware.sh",
+    ),
+  ).toBe(true);
+  expect(
+    job.steps.some(
+      ({ run }) => run === "bash scripts/test-malware-scanners.sh",
+    ),
+  ).toBe(true);
 });
 
 test("every browser suite belongs to exactly one required matrix leg", () => {

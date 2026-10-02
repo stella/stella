@@ -91,6 +91,7 @@ import type {
   BusinessRegistrySlug,
   RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import type {
   ChatToolMap,
@@ -330,6 +331,7 @@ export type GetChatToolsProps = {
   // platform provider. A missing value silently falls back and fails there, so
   // every caller must thread it through explicitly.
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   /**
    * The request's scope workspace (or `null` for global chat), for
    * subagent usage metering. Distinct from `toolWorkspaceIds`, which
@@ -645,6 +647,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     memberRole,
     orgAIConfig,
+    managedAIResidency,
     requestWorkspaceId,
     threadId,
     workspaceId,
@@ -697,6 +700,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           createAbortSignal: createAIAbortSignal,
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
           refRegistry,
           safeDb,
@@ -972,6 +976,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         organizationId,
         userId,
         orgAIConfig,
+        managedAIResidency,
         recordAuditEvent,
         thirdPartyBoundary,
       })
@@ -987,6 +992,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         organizationId,
         userId,
         orgAIConfig,
+        managedAIResidency,
         thirdPartyBoundary,
       })
     : {};
@@ -1086,6 +1092,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           }),
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         safeDb,
         thirdPartyBoundary,
         userId,

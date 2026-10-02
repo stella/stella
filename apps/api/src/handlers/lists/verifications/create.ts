@@ -156,7 +156,7 @@ const createVerification = createSafeHandler(
     const model = getTanStackTextModelInfoForRole(
       VERIFICATION_MODEL_ROLE,
       orgAIConfig,
-      { organizationId },
+      { dataClass: "customer", organizationId },
     );
     const sizeError = await assertRunSizeConfirmedForHandler({
       metering: {

@@ -32,6 +32,7 @@ const generateBoundingBoxes = createSafeHandler(
     workspaceId,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
   }) {
@@ -75,6 +76,7 @@ const generateBoundingBoxes = createSafeHandler(
         justificationId,
         organizationId,
         orgAIConfig: orgAIConfig ?? null,
+        managedAIResidency,
         promptCachingEnabled,
         workspaceId,
         data: {

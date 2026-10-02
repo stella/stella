@@ -95,6 +95,10 @@ import {
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
 import {
+  getTenantActionSizePolicy,
+  normalizeTenantPageLimit as normalizePage,
+} from "@/api/lib/rate-limit/action-size-limits";
+import {
   brandPersistedCaseLawDecisionId,
   brandPersistedCaseLawSourceId,
   brandPersistedContactId,
@@ -1240,7 +1244,7 @@ const handleListMattersTool: TypedMcpToolHandler<
   }
 
   const status = requestedStatus ?? "active";
-  const limit = requestedLimit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizePage(requestedLimit ?? DEFAULT_LIST_LIMIT);
 
   let boundaryId: string | undefined;
   if (cursor !== undefined) {
@@ -1459,7 +1463,7 @@ const handleSearchAcrossMattersTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { cursor, query } = parsed.output;
-  const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
+  const limit = normalizePage(parsed.output.limit ?? DEFAULT_SEARCH_LIMIT);
 
   // Reject an undecodable provider cursor instead of forwarding it: the
   // provider treats a malformed cursor as no cursor and silently returns the
@@ -2017,6 +2021,36 @@ const caseLawSearchRequestFilters = ({
   ...(strict === undefined ? {} : { strict }),
 });
 
+const validateSearchQueryPage = (limit: number, queryCount: number) => {
+  if (getTenantActionSizePolicy() !== undefined && limit < queryCount) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "The configured page limit cannot include every search query",
+      issues: [
+        {
+          path: "queries",
+          message: "Each query needs at least one result slot.",
+        },
+      ],
+      hint: `Send at most ${String(limit)} queries per search_case_law call, keeping the same queries when continuing a cursor.`,
+    });
+  }
+  return undefined;
+};
+
+const mismatchedSearchCursorResult = (encoded: number, queryCount: number) =>
+  structuredErrorResult({
+    code: "validation_error",
+    message: "Cursor was issued for a different set of queries",
+    issues: [
+      {
+        path: "cursor",
+        message: `This cursor continues ${String(encoded)} queries; the call carries ${String(queryCount)}.`,
+      },
+    ],
+    hint: `Send the same ${String(encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
+  });
+
 const handleSearchCaseLawTool: TypedMcpToolHandler<
   v.InferInput<typeof SEARCH_CASE_LAW_PROJECTION>
 > = async ({ args, context }) => {
@@ -2037,7 +2071,11 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     language,
     queries,
   } = parsed.output;
-  const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
+  const limit = normalizePage(parsed.output.limit ?? DEFAULT_SEARCH_LIMIT);
+  const pageError = validateSearchQueryPage(limit, queries.length);
+  if (pageError !== undefined) {
+    return pageError;
+  }
   const publicCountry = publicCaseLawCountry(country);
   if (publicCountry === null) {
     return notFoundResult(
@@ -2045,7 +2083,6 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
       `Pass one of the admitted country codes: ${ADMITTED_CASE_LAW_COUNTRIES}.`,
     );
   }
-
   const resolved = resolveCaseLawSearchCursors({
     cursor,
     queryCount: queries.length,
@@ -2057,17 +2094,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     });
   }
   if (resolved.type === "count_mismatch") {
-    return structuredErrorResult({
-      code: "validation_error",
-      message: "Cursor was issued for a different set of queries",
-      issues: [
-        {
-          path: "cursor",
-          message: `This cursor continues ${String(resolved.encoded)} queries; the call carries ${String(queries.length)}.`,
-        },
-      ],
-      hint: `Send the same ${String(resolved.encoded)} queries this cursor was issued for, in the same order, or omit 'cursor' to start a new search.`,
-    });
+    return mismatchedSearchCursorResult(resolved.encoded, queries.length);
   }
 
   // A court filter is read onto a stored court before any query runs, so
@@ -2843,8 +2870,9 @@ const handleReadCaseLawCitationsTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { cursor, decision_id: decisionId, direction } = parsed.output;
-  const limit =
-    parsed.output.limit ?? LIMITS.caseLawAgentCitationPageSizeDefault;
+  const limit = normalizePage(
+    parsed.output.limit ?? LIMITS.caseLawAgentCitationPageSizeDefault,
+  );
 
   // The same publication gate the decision read applies, and for the same
   // reason: a decision's citation texts are as much its content as its
