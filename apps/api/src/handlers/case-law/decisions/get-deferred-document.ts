@@ -116,17 +116,17 @@ const hydrate = async (
   recordDemand: boolean,
   documentHydration: DecisionDocumentHydration,
 ): Promise<ReadableDecision> => {
+  // The development reparse fetches the document from the publisher, so a
+  // caller without a permit answers from what is stored before that branch.
+  if (documentHydration.type === "stored-only") {
+    return decision;
+  }
   // The local shared-corpus mode is strictly read-side. An incomplete remote
   // decision stays metadata-only instead of starting the ingestion path,
   // which would otherwise crawl the publisher and write through the local
-  // ingestion database. Checked before the caller's fetch budget, because a
-  // caller that declines a publisher fetch is still owed the parser in this
-  // tree: the reparse is not the fetch it declined.
+  // ingestion database.
   if (readsSharedPublicLawCorpus()) {
     return await reparsedForDev(decision);
-  }
-  if (documentHydration.type === "stored-only") {
-    return decision;
   }
 
   if (
