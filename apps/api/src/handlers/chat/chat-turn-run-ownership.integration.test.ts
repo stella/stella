@@ -23,6 +23,7 @@ import {
   ChatTurnOwnership,
   ChatTurnRun,
 } from "@/api/handlers/chat/chat-turn-run";
+import type { ChatTurnStoredSettlement } from "@/api/handlers/chat/chat-turn-run";
 import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -169,15 +170,17 @@ const produceUntilCut = ({
   ownerDb?: SafeDb;
   ownership?: ChatTurnOwnership;
   /** Stores the cut; the turn's own settlement by default. */
-  persist?: () => Promise<void>;
+  persist?: () => Promise<ChatTurnStoredSettlement>;
   threadId: SafeId<"chatThread">;
 }) => {
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
+    mode: "raw",
     heartbeat,
     ownership,
     owner: {
+      indexThread: async () => await Promise.resolve(),
       execution,
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
@@ -198,17 +201,22 @@ const produceUntilCut = ({
     await run.settle(
       persist ??
         (async () => {
-          stored.settlement = unwrap(
+          const outcome = cutShortOutcome(signal.reason);
+          const settlement = unwrap(
             await safeDb(
               async (tx) =>
                 await settleChatTurnOnTx({
                   assistantMessageId: null,
                   execution,
-                  outcome: cutShortOutcome(signal.reason),
+                  outcome,
                   tx,
                 }),
             ),
           );
+          stored.settlement = settlement;
+          return settlement === "not-owned"
+            ? { type: "not-owned" }
+            : { type: "stored", outcome };
         }),
     );
   };
@@ -286,8 +294,10 @@ describe("a producing run", () => {
     const run = new ChatTurnRun({
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1 },
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution,
         owningAssistantMessage: undefined,
         recordAuditEvent: noAudit,
@@ -305,7 +315,10 @@ describe("a producing run", () => {
               await settleChatTurnOnTx({
                 assistantMessageId: null,
                 execution,
-                outcome: { reason: "client-disconnected", type: "interrupted" },
+                outcome: {
+                  reason: "client-disconnected",
+                  type: "interrupted",
+                },
                 tx,
               }),
           ),
@@ -313,6 +326,10 @@ describe("a producing run", () => {
         // The turn is no longer running while the settlement finishes: a
         // beat now would read it as lost.
         await Bun.sleep(30);
+        return {
+          type: "stored",
+          outcome: { reason: "client-disconnected", type: "interrupted" },
+        };
       });
       yield* [];
     };
@@ -436,9 +453,11 @@ describe("a producing run", () => {
     const run = new ChatTurnRun({
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership,
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution,
         owningAssistantMessage: undefined,
         recordAuditEvent: noAudit,
@@ -458,11 +477,18 @@ describe("a producing run", () => {
               await settleChatTurnOnTx({
                 assistantMessageId: null,
                 execution,
-                outcome: { reason: "client-disconnected", type: "interrupted" },
+                outcome: {
+                  reason: "client-disconnected",
+                  type: "interrupted",
+                },
                 tx,
               }),
           ),
         );
+        return {
+          type: "stored",
+          outcome: { reason: "client-disconnected", type: "interrupted" },
+        };
       });
       yield* [];
     };
@@ -528,9 +554,8 @@ describe("a producing run", () => {
       execution,
       heartbeat: { intervalMs: 60_000, renewEvery: 4 },
       ownership,
-      persist: async () => {
-        await Promise.reject(new Error("The database is unavailable"));
-      },
+      persist: async () =>
+        await Promise.reject(new Error("The database is unavailable")),
       threadId,
     });
 

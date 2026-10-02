@@ -272,6 +272,7 @@ run_knip() {
       bun --no-env-file run knip --production --strict --no-progress \
       --include unlisted,unresolved --workspace "$workspace" || return 1
   done
+  bun run dependencies:check
 }
 
 run_knip_exports() {
@@ -345,6 +346,8 @@ run_step "i18n" bun run i18n:check
 run_step "Release changelog guard" bash scripts/check-release-changelog.sh --base "$base_ref"
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
+run_step "Generate web sources" bun run generate
+run_step "Web API types determinism guard" bun --filter @stll/api gen:web-api-types --check
 run_step "Typecheck coverage" run_typecheck_coverage
 run_step "Code quality" run_code_check
 run_step "Query cache types" bun run check:query-cache-types
@@ -413,7 +416,8 @@ run_step "Desktop release promotion self-test" bash \
 run_step "Web container platform self-test" bun test \
   scripts/check-web-docker-platform.test.ts
 run_step "Published export artifact guard self-test" bun test \
-  scripts/published-export-guards.test.ts
+  scripts/published-export-guards.test.ts \
+  scripts/check-published-exports.test.ts
 run_step "API release contract self-test" bun test \
   --preload ./apps/api/src/tests/setup-env.ts \
   scripts/check-api-cli-contract.test.ts \

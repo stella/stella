@@ -120,6 +120,9 @@ export const buildClaimMemoryExtractionQueueQuery = ({
       AND compaction.memory_extracted_at IS NULL
       AND compaction.status = 'active'
       AND compaction.created_at >= due.memory_extraction_enabled_at
+      -- Extraction has no anonymization step, so it never reads a thread
+      -- that used anonymized mode.
+      AND thread.used_anonymization = false
     ORDER BY
       compaction.memory_extraction_attempted_at ASC NULLS FIRST,
       compaction.created_at,
@@ -162,11 +165,15 @@ export const buildSettleMemoryExtractionQueueQuery = ({
     WHEN EXISTS (
       SELECT 1
       FROM chat_thread_compactions AS compaction
+      INNER JOIN chat_threads AS thread ON thread.id = compaction.thread_id
       WHERE compaction.memory_extraction_organization_id = settings.organization_id
         AND compaction.memory_extraction_consent_at = settings.memory_extraction_enabled_at
         AND compaction.memory_extracted_at IS NULL
         AND compaction.status = 'active'
         AND compaction.created_at >= settings.memory_extraction_enabled_at
+        -- The same set the claim reads, or a tenant whose only pending work
+        -- is on such a thread would be woken on every pass.
+        AND thread.used_anonymization = false
       LIMIT 1
     ) THEN ${now}
     ELSE NULL

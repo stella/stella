@@ -51,7 +51,7 @@ Pagination: list_* and search_* tools take a \`limit\` and a \`cursor\`. A respo
 
 ${MCP_CASING_RULE}
 
-Errors: a failed tool returns a single text content of \`{"error":{"code","message","hint","retryable"}}\` with isError set. Branch on \`code\` (validation_error, missing_scope, feature_disabled, not_found, confirmation_required, permission_denied, usage_limited, conflict, rate_limited, upstream_unavailable, unknown_tool, internal_error); \`hint\` states the next step. missing_scope means re-run OAuth consent with the complete scope set in the hint.
+Errors: failed tools return text \`{"error":{"code","message","hint","retryable"}}\` with isError set. Follow \`hint\`. result_too_large needs a smaller selection or page; missing_scope needs OAuth consent with every scope in the hint. Success with applied:true and resultOmitted:true means the action completed; inspect it with a read tool, never repeat it.
 
 First-party destructive operations require \`confirm: true\` after human approval; mixed tools request it only for destructive actions. External connector tools follow their owning server's confirmation contract.
 

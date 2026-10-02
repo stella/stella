@@ -15,7 +15,11 @@ const config = {
     "keeps the sort order it already had. Ordering is cosmetic, so no audit " +
     "event is recorded.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: reorderDocumentTypesBodySchema,
 } satisfies HandlerConfig;
 

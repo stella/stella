@@ -1,18 +1,12 @@
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
+import type { JsonValue } from "@/api/lib/json-value";
 import { isRecord } from "@/api/lib/type-guards";
 
 export {
   DANGEROUS_CHARS,
   stripDangerousChars,
 } from "@stll/legal-ast/text-sanitize";
-
-type JsonPrimitive = string | number | boolean | null;
-type JsonValue = JsonPrimitive | JsonObject | JsonArray;
-type JsonObject = {
-  [key: string]: JsonPrimitive | JsonObject | JsonArray;
-};
-type JsonArray = JsonValue[];
 
 const sanitizeMetadataValue = (value: unknown): JsonValue => {
   if (typeof value === "string") {

@@ -16,7 +16,11 @@ const config = {
     "entities.versions.diff returns. Returns summary null for identical " +
     "versions, skipping the model call entirely. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   access: "write",
   params: workspaceParams({
     entityId: tSafeId("entity"),
@@ -40,6 +44,7 @@ const versionSummarize = createSafeHandler(
     session,
     user,
     orgAIConfig,
+    managedAIResidency,
   }) {
     const organizationId = session.activeOrganizationId;
 
@@ -60,6 +65,7 @@ const versionSummarize = createSafeHandler(
     let summary: string | null = null;
     if (segments.length > 0) {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId,
@@ -81,6 +87,7 @@ const versionSummarize = createSafeHandler(
             await summarizeVersionDiff({
               diffText: diffSegmentsToText(segments),
               orgAIConfig,
+              managedAIResidency,
               organizationId,
               aiAnalytics,
             }),

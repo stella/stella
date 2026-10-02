@@ -1724,8 +1724,12 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-      await loadOrgSettings();
+    const {
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      managedAIResidency,
+    } = await loadOrgSettings();
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
@@ -1734,6 +1738,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
         orgAIConfig,
         orgAIConfigStatus,
         promptCachingEnabled,
+        managedAIResidency,
         recordAuditEvent: context.recordAuditEvent,
         body: {
           name,
@@ -1829,8 +1834,12 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
   }
 
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await loadOrgSettings();
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       safeDb: context.safeDb,
@@ -1839,6 +1848,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,
+      managedAIResidency,
       recordAuditEvent: context.recordAuditEvent,
       body: {
         name,
@@ -2000,6 +2010,7 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
 
 export const KNOWLEDGE_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List clauses",
       destructiveHint: false,
@@ -2031,6 +2042,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create or update a clause in the organization's clause library. Omit " +
       "clause_id to create (title and body required); pass clause_id to update. " +
@@ -2060,6 +2072,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete clause",
       destructiveHint: true,
@@ -2078,6 +2091,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List playbooks",
       destructiveHint: false,
@@ -2110,6 +2124,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create a review playbook, or add, change, and remove positions in one. " +
       "Omit playbook_id to create (name required); pass playbook_id and " +
@@ -2148,6 +2163,7 @@ export const KNOWLEDGE_TOOL_DEFINITIONS = [
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     description:
       "Run a review playbook over a matter's documents. Materializes the " +
       "playbook's extraction and verdict columns onto the matter's table " +

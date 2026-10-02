@@ -31,7 +31,12 @@ import { PROVISION_STATUS } from "@/api/lib/legal-search/legislation-provision-v
 import { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import {
   isLegislationSearchSuccess,
   isStatuteDocument,
@@ -137,11 +142,11 @@ const anchorInputSchema = v.pipe(
   v.minLength(1),
   v.maxLength(256),
   v.description(
-    "Anchor of the provision in the publisher's own scheme. read_statute's " +
-      "outline lists a consolidation's provision anchors (par_1729); a " +
-      "subdivision of one of them is accepted too and narrows the answer to " +
-      "that subdivision (par_1729-odst_1, par_1729-odst_2-pism_a). Anchors " +
-      "are not derivable from a section number.",
+    "Publisher provision anchor; confirm it in read_statute's outline for " +
+      "the chosen consolidation. Czech e-Sbírka commonly uses par_<section>, " +
+      "-odst_<paragraph>, and -pism_<letter> (par_1729, par_1729-odst_1, " +
+      "par_1729-odst_2-pism_a). Subdivision anchors narrow the answer to " +
+      "that subdivision. Other publishers may use different schemes.",
   ),
 );
 
@@ -323,6 +328,7 @@ const readProvisionHistoryArgsSchema = nullAsAbsent(
 
 const LEGISLATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Search legislation",
       destructiveHint: false,
@@ -358,6 +364,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Read statute",
       destructiveHint: false,
@@ -383,6 +390,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Read statute provisions",
       destructiveHint: false,
@@ -417,6 +425,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Read provision history",
       destructiveHint: false,
@@ -525,7 +534,9 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     query,
     status,
   } = parsed.output;
-  const limit = parsed.output.limit ?? DEFAULT_SEARCH_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_SEARCH_LIMIT,
+  );
 
   const jurisdiction = publicLegislationCountry(country);
   if (jurisdiction === null) {
@@ -535,6 +546,10 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     );
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.corpusRequest,
+  );
   const result = await (
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler
@@ -551,6 +566,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(dateTo === undefined ? {} : { dateTo }),
     },
     legislationPublicReadDb,
+    observer,
   );
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);
@@ -664,7 +680,11 @@ const handleReadStatuteTool: TypedMcpToolHandler<
     defaultListStatuteVersionsHandler
   )({
     documentId: resolved.id,
-    query: { limit: LIMITS.legislationVersionsPageSizeDefault },
+    query: {
+      limit: normalizeTenantPageLimit(
+        LIMITS.legislationVersionsPageSizeDefault,
+      ),
+    },
     legislationDb: legislationPublicReadDb,
   });
   if (!isStatuteVersionsPage(versionsPage)) {
@@ -998,8 +1018,9 @@ const handleReadProvisionHistoryTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { anchor, cursor, eli, language } = parsed.output;
-  const limit =
-    parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
+  );
 
   // The history walks the whole Work, so it resolves the Work rather than a
   // consolidation applicable today: a repealed, expired or not-yet-effective

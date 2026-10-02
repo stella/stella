@@ -51,7 +51,11 @@ const config = {
   description:
     "Create a two-column bilingual copy of a DOCX document (source text on the left, a copy to translate on the right) as a new document.",
   permissions: { entity: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   body: createBilingualBody,
 } satisfies WorkspaceHandlerConfig;
 

@@ -30,6 +30,9 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
         ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
         ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
+        ACTION_REQUEST_MAX_BYTES: env.ACTION_REQUEST_MAX_BYTES,
+        ACTION_RESPONSE_MAX_BYTES: env.ACTION_RESPONSE_MAX_BYTES,
+        ACTION_PAGE_SIZE_MAX: env.ACTION_PAGE_SIZE_MAX,
       };
       const organizationId = toSafeId<"organization">(
         `mcp_period_${Bun.randomUUIDv7()}`,
@@ -71,6 +74,9 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         ACTION_ADMISSION_LEASE_MS: 120_000,
         ACTION_ADMISSION_PERIOD_MS: 86_400_000,
         ACTION_ADMISSION_PERIOD_ACTIONS: 2,
+        ACTION_REQUEST_MAX_BYTES: 2048,
+        ACTION_RESPONSE_MAX_BYTES: 2048,
+        ACTION_PAGE_SIZE_MAX: 7,
       });
       try {
         await client.connect();
@@ -103,7 +109,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         expect(errors).toHaveLength(0);
         const budget = resolveActionPeriodBudget({
           organizationId,
-          identity: { actionKind: "mcp.tools/call", logicalPhaseId: "lookup" },
+          identity: { actionKind: "mcp.data/call", logicalPhaseId: "lookup" },
           policy: { periodMs: 86_400_000, limit: 2 },
           nowMs: Temporal.Now.instant().epochMilliseconds,
         });

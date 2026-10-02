@@ -46,7 +46,11 @@ const config = {
     "performs the action and reports what it produced.",
   permissions: { signal: ["resolve"] },
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: signalParamsSchema,
   body: acceptBodySchema,
 } satisfies HandlerConfig;

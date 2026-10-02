@@ -53,6 +53,7 @@ test("compared generations read through the search endpoint, not the mutation on
     indexId: "case_law_v5_cs_sk",
     query: "text:smlouva",
     maxHits: 1,
+    observer: "unobserved",
   });
   const candidate = await corpusIndexQueryDiffClientForGeneration(
     "case_law_v6",
@@ -60,6 +61,7 @@ test("compared generations read through the search endpoint, not the mutation on
     indexId: "case_law_v6_cs_sk",
     query: "text:smlouva",
     maxHits: 1,
+    observer: "unobserved",
   });
 
   expect(base.isOk()).toBe(true);

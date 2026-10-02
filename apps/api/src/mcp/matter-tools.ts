@@ -80,6 +80,10 @@ import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
@@ -998,7 +1002,12 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const result = await lookupBusinessRegistryShared({
+    observer,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     registry: parsed.output.registry,
@@ -1240,7 +1249,12 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
   if (Result.isError(subject)) {
     return internalFailureResult(subject.error);
   }
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const result = await runEntityCheckShared({
+    observer,
     check: parsed.output.check,
     subject: subject.value,
     runCheck: context.testDependencies?.runEntityCheck,
@@ -2364,6 +2378,7 @@ const handleLinkMatterContactTool: TypedMcpToolHandler<
 
 export const MATTER_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create, update, archive, or unarchive a matter. Omit matter_id to " +
       "create a new matter (name required; pass client_id to attach a client " +
@@ -2389,6 +2404,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete matter",
       destructiveHint: true,
@@ -2407,6 +2423,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List contacts",
       destructiveHint: false,
@@ -2428,6 +2445,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create or update a contact (a person or organization in the address " +
       "book, shared across the whole organization). Omit contact_id to create " +
@@ -2459,6 +2477,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:contacts_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete contact",
       destructiveHint: true,
@@ -2478,6 +2497,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:contacts_write",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Look up business registry",
       destructiveHint: false,
@@ -2498,6 +2518,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Check counterparty",
       destructiveHint: false,
@@ -2538,6 +2559,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List tasks",
       destructiveHint: false,
@@ -2564,6 +2586,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create or update a task, and manage its assignees and entity links. " +
       "Omit task_id to create a task (matter_id and name required). Pass " +
@@ -2591,6 +2614,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete task",
       destructiveHint: true,
@@ -2610,6 +2634,7 @@ export const MATTER_TOOL_DEFINITIONS = [
     scope: "stella:matters_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Link a contact to a matter in a party role (opposing party/counsel, " +
       "co-counsel, witness, expert witness, third party, judge, mediator, or " +

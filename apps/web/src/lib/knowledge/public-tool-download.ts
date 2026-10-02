@@ -3,6 +3,8 @@ import JSZip from "jszip";
 import { loadCatalogue } from "@stll/catalogue";
 import { findCatalogueSkillInstallPayload } from "@stll/catalogue/install-payloads";
 
+import { ssrCacheClassHeaders } from "@/route-response-policy";
+
 const notFound = () => new Response("Not Found", { status: 404 });
 
 /**
@@ -32,6 +34,7 @@ export const publicToolDownloadResponse = async (
 
   return new Response(bytes, {
     headers: {
+      ...ssrCacheClassHeaders("public-anonymous"),
       "Cache-Control": "public, max-age=3600",
       "Content-Disposition": `attachment; filename="${slug}.zip"`,
       "Content-Type": "application/zip",

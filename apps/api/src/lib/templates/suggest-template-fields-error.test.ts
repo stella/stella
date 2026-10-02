@@ -30,6 +30,7 @@ describe("suggestTemplateFields", () => {
     // propagates the failure. Callers (suggest-fields.ts, prepare.ts,
     // template-tools.ts) are responsible for calling captureError.
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       analytics: {
         capture: () => undefined,
         flush: async () => undefined,
@@ -44,6 +45,7 @@ describe("suggestTemplateFields", () => {
     const rejection: unknown = await suggestTemplateFields({
       documentText: "Granted by MODRZEW INWESTYCJE Sp. z o.o.",
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       organizationId,
       aiAnalytics,
       generateObjectForRole: async () => {
@@ -62,6 +64,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
   test("degrades to [] and captures the failure instead of rejecting", async () => {
     const captured: unknown[] = [];
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       analytics: {
         capture: (params) => {
           captured.push(params);
@@ -76,6 +79,7 @@ describe("suggestTemplateFieldsOrEmpty", () => {
     const suggestions = await suggestTemplateFieldsOrEmpty({
       documentText: "Granted by MODRZEW INWESTYCJE Sp. z o.o.",
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       organizationId,
       aiAnalytics,
       generateObjectForRole: async () => {

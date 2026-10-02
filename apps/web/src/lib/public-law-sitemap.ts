@@ -36,6 +36,7 @@ import {
   isPublicToolsSitemapEnabled,
 } from "@/lib/public-tools-launch";
 import { isPublicStatuteCountry } from "@/lib/statute-route";
+import { createPublicCrawlRules } from "@/public-crawl-policy";
 
 const LAW_SITEMAP_PATH = "/sitemaps/law.xml";
 const LAW_CASES_SITEMAP_BASE_PATH = "/sitemaps/law-cases";
@@ -380,23 +381,6 @@ type RobotsTxtOptions = {
   seoIndexable?: boolean;
 };
 
-// The published template catalogue's pages; the rest of Knowledge is either
-// an organization's own or a page that only points to them.
-const KNOWLEDGE_TEMPLATE_CATALOGUE_PATH = "/knowledge/templates/catalogue";
-
-// The ONLY crawlable path prefixes on the app host. The indexable robots.txt
-// allow-lists exactly these (boundary-anchored, see below) and then
-// default-denies everything else with a trailing `Disallow: /`, so every route
-// that is not one of these is private by default — a newly added route cannot
-// leak into crawler reach without being added here on purpose. Longest-match
-// precedence means the `Allow:` rules win for their own prefixes while
-// `Disallow: /` covers the rest.
-export const PUBLIC_CRAWL_PATH_PREFIXES = [
-  "/law",
-  "/sitemap.xml",
-  "/sitemaps",
-] as const;
-
 export const createRobotsTxt = ({
   publicKnowledgeCrawlAllowed = isPublicKnowledgeCrawlAllowed(),
   publicLawCrawlAllowed = isPublicLawCrawlAllowed(),
@@ -417,32 +401,15 @@ Disallow: /
     env.VITE_PUBLIC_APP_URL,
   ).toString();
 
-  // Fail closed: allow-list the public crawl prefixes (only once crawling is
-  // permitted), then default-deny everything else. When crawling is not
-  // permitted the allow-list is empty, so `Disallow: /` alone keeps the whole
-  // host — including /law — out of crawler reach.
-  //
-  // Boundary-anchored rules: raw robots.txt prefix matching means `Allow: /law`
-  // would also open `/lawyer` or `/law-admin`, silently un-failing-closed for a
-  // future sibling route. So a directory prefix emits two rules — `<prefix>/`
-  // (the subtree) and `<prefix>$` (the exact path) — and a file prefix (one
-  // containing a ".") emits just `<prefix>$`. `$` is the end-of-path anchor
-  // supported by Googlebot and Bing; crawlers that don't support `$` treat it
-  // literally and simply fail to match, erring toward not crawling — the
-  // failure direction we want.
-  const crawlPrefixes: string[] = publicLawCrawlAllowed
-    ? [...PUBLIC_CRAWL_PATH_PREFIXES]
-    : [];
-  if (publicToolsCrawlAllowed) {
-    crawlPrefixes.push(publicToolsBasePath());
-  }
-  if (publicKnowledgeCrawlAllowed) {
-    crawlPrefixes.push(KNOWLEDGE_TEMPLATE_CATALOGUE_PATH);
-  }
-  const allowLines = crawlPrefixes.flatMap((prefix) =>
-    prefix.includes(".")
-      ? [`Allow: ${prefix}$`]
-      : [`Allow: ${prefix}/`, `Allow: ${prefix}$`],
+  const allowLines = createPublicCrawlRules({
+    publicKnowledgeCrawlAllowed,
+    publicLawCrawlAllowed,
+    publicToolsCrawlAllowed,
+    toolsBasePath: publicToolsBasePath(),
+  }).flatMap(({ path, scope }) =>
+    scope === "exact"
+      ? [`Allow: ${path}$`]
+      : [`Allow: ${path}/`, `Allow: ${path}$`],
   );
 
   return `${["User-agent: *", ...allowLines, "Disallow: /", `Sitemap: ${sitemapUrl}`].join("\n")}

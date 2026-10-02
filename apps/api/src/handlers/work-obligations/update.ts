@@ -140,7 +140,11 @@ const updateWorkObligation = createSafeHandler(
     description:
       "Update accountable ownership, dates, type, or provenance for a governed task or deadline.",
     permissions: { entity: ["update"] },
-    mcp: { type: "capability", reason: "workflow_orchestration" },
+    mcp: {
+      type: "capability",
+      reason: "workflow_orchestration",
+      consumesServices: false,
+    },
     params: updateWorkObligationParams,
     body: updateWorkObligationBody,
   },

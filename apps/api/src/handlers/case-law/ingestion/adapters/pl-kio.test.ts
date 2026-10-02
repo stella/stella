@@ -7,7 +7,7 @@
  */
 
 import { Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
@@ -43,9 +43,16 @@ const gzFixtureText = async (name: string): Promise<string> =>
   );
 
 const originalFetch = globalThis.fetch;
+const originalSleep = Bun.sleep;
+
+beforeEach(() => {
+  // These fixtures prove retry outcomes; backoff timing is covered by retry.test.ts.
+  Bun.sleep = async () => {};
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Bun.sleep = originalSleep;
 });
 
 const html = (body: string, status = 200): Response =>
@@ -502,6 +509,8 @@ type Seen = { url: string; body: string };
 type StubOverrides = {
   detailStatus?: number;
   contentStatus?: number;
+  /** Serves a document body of this many bytes instead of the fixture. */
+  contentBytes?: number;
   listingStatus?: number;
   /** Replaces the captured month listing, keyed by page number. */
   monthPages?: Readonly<Record<string, string>>;
@@ -541,6 +550,9 @@ const stubPublisher = async (
       return overrides.detailStatus === undefined
         ? html(detail)
         : html("<html>Brak strony</html>", overrides.detailStatus);
+    }
+    if (overrides.contentBytes !== undefined) {
+      return html("x".repeat(overrides.contentBytes));
     }
     return overrides.contentStatus === undefined
       ? html(content)
@@ -613,9 +625,10 @@ describe("walking a month", () => {
   });
 
   test("a refused listing is the page's error and moves no cursor", async () => {
-    await stubPublisher({ listingStatus: 503 });
+    const seen = await stubPublisher({ listingStatus: 503 });
     const page = await plKioAdapter.fetchPage("2025-09:0+0", {});
     expect(Result.isError(page)).toBe(true);
+    expect(listingRequests(seen)).toHaveLength(3);
   });
 
   test("a page yielding fewer rows than its count promises fails rather than advancing", async () => {
@@ -672,6 +685,20 @@ describe("walking a month", () => {
     expect(
       Result.isError(await plKioAdapter.fetchPage("2025-09:10+0", {})),
     ).toBe(true);
+  });
+
+  test("a document past the size cap keeps the record with no document", async () => {
+    await stubPublisher({ contentBytes: 16 * 1024 * 1024 + 1 });
+    const page = await plKioAdapter.fetchPage("2025-09:10+0", {});
+    expect(Result.isOk(page)).toBe(true);
+    if (Result.isOk(page)) {
+      expect(page.value.decisions).toHaveLength(10);
+      for (const decision of page.value.decisions) {
+        expect(decision.isListingOnly).toBeUndefined();
+        expect(decision.fulltext).toBeUndefined();
+        expect(decision.metadata["presiding"]).toBe("Ewa Sikorska");
+      }
+    }
   });
 
   test("a counted row without a record link is kept under a quarantine identity", async () => {

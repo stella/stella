@@ -67,6 +67,7 @@ export const createReviewParties = ({
       body,
       session,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       user,
@@ -125,6 +126,7 @@ export const createReviewParties = ({
       }
 
       yield* requireTanStackAIAvailableForRole({
+        dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
         role: "pdf",
@@ -166,6 +168,7 @@ export const createReviewParties = ({
         organizationId,
         workspaceId,
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier,
         usageMetering: {

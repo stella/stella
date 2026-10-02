@@ -22,7 +22,7 @@ on:
 
 concurrency:
   group: sync-branch-protection
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions: {}
 

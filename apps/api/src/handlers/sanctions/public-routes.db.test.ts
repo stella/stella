@@ -239,6 +239,7 @@ const assertParity = async ({
   const publicPool = caches?.public ?? benchmarkPool();
   const inProduct = (
     await runEntityCheckShared({
+      observer: "unobserved",
       check: "sanctions",
       subject,
       sanctions: {

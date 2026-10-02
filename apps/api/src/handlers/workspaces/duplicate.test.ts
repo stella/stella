@@ -4,6 +4,7 @@ import { member } from "@/api/db/auth-schema";
 import {
   auditLogs,
   documentCounters,
+  documentReferenceCounters,
   entities,
   entityVersions,
   fields,
@@ -22,12 +23,16 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createFileKey } from "@/api/lib/file-key";
 import { THUMBNAIL_MIME_TYPE } from "@/api/lib/files/image-derivative";
 import { LIMITS } from "@/api/lib/limits";
+import { MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS } from "@/api/lib/matter-reference";
 import { PDF_MIME_TYPE } from "@/api/mime-types";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import { createDuplicateWorkspace } from "./duplicate";
 
@@ -167,6 +172,7 @@ const createContext = ({
     memberRole: { role: "owner" },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     request: recorderBindings.request,
     route: "/v1/workspaces/:workspaceId/duplicate",
     session: {
@@ -217,6 +223,11 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (
+          selectedFields["reference"] === documentReferenceCounters.reference
+        ) {
+          return createSelectQueryMock([]);
+        }
         if ("total" in selectedFields) {
           return {
             from: () => ({
@@ -251,7 +262,11 @@ describe("duplicateWorkspace", () => {
           if (table === matterCounters) {
             return {
               onConflictDoUpdate: () => ({
-                returning: async () => [{ lastValue: 1 }],
+                returning: async () => [
+                  {
+                    lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+                  },
+                ],
               }),
             };
           }
@@ -274,6 +289,10 @@ describe("duplicateWorkspace", () => {
           throw new Error("Unexpected insert table");
         },
       }),
+      update: (table: unknown) => {
+        expect(table).toBe(matterCounters);
+        return { set: () => ({ where: async () => undefined }) };
+      },
       execute: async () => undefined,
     });
 
@@ -358,6 +377,11 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (
+          selectedFields["reference"] === documentReferenceCounters.reference
+        ) {
+          return createSelectQueryMock([]);
+        }
         if ("total" in selectedFields) {
           return {
             from: () => ({
@@ -381,7 +405,11 @@ describe("duplicateWorkspace", () => {
           if (table === matterCounters) {
             return {
               onConflictDoUpdate: () => ({
-                returning: async () => [{ lastValue: 1 }],
+                returning: async () => [
+                  {
+                    lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS,
+                  },
+                ],
               }),
             };
           }
@@ -398,6 +426,10 @@ describe("duplicateWorkspace", () => {
           throw new Error("Unexpected insert table");
         },
       }),
+      update: (table: unknown) => {
+        expect(table).toBe(matterCounters);
+        return { set: () => ({ where: async () => undefined }) };
+      },
       execute: async () => undefined,
     });
 
@@ -525,6 +557,11 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (
+          selectedFields["reference"] === documentReferenceCounters.reference
+        ) {
+          return createSelectQueryMock([]);
+        }
         if ("total" in selectedFields) {
           return {
             from: () => ({
@@ -550,7 +587,15 @@ describe("duplicateWorkspace", () => {
               onConflictDoUpdate: () => ({
                 returning: async () => {
                   nextMatterSequence += 1;
-                  return [{ lastValue: nextMatterSequence }];
+                  return [
+                    {
+                      lastValue:
+                        nextMatterSequence +
+                        (table === matterCounters
+                          ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS - 1
+                          : 0),
+                    },
+                  ];
                 },
               }),
             };
@@ -764,6 +809,11 @@ describe("duplicateWorkspace", () => {
         },
       },
       select: (selectedFields: Record<string, unknown>) => {
+        if (
+          selectedFields["reference"] === documentReferenceCounters.reference
+        ) {
+          return createSelectQueryMock([]);
+        }
         if ("total" in selectedFields) {
           return { from: () => ({ where: async () => [{ total: 0 }] }) };
         }
@@ -781,7 +831,15 @@ describe("duplicateWorkspace", () => {
               onConflictDoUpdate: () => ({
                 returning: async () => {
                   nextSequence += 1;
-                  return [{ lastValue: nextSequence }];
+                  return [
+                    {
+                      lastValue:
+                        nextSequence +
+                        (table === matterCounters
+                          ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS - 1
+                          : 0),
+                    },
+                  ];
                 },
               }),
             };
@@ -921,7 +979,14 @@ describe("duplicateWorkspace", () => {
           insertedTables.push(table);
           return {
             onConflictDoUpdate: () => ({
-              returning: async () => [{ lastValue: 1 }],
+              returning: async () => [
+                {
+                  lastValue:
+                    table === matterCounters
+                      ? MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS
+                      : 1,
+                },
+              ],
             }),
           };
         },

@@ -1,6 +1,10 @@
 import * as v from "valibot";
 
-import { ENTITY_KINDS, NUMBER_SERIES_DOCUMENT_TYPES } from "@stll/api-contract";
+import {
+  ENTITY_KINDS,
+  NUMBER_SERIES_DOCUMENT_TYPES,
+  TIME_ENTRY_ACTIVITY_GROUPS,
+} from "@stll/api-contract";
 import { COURT_TIER_LABELS } from "@stll/api-contract/case-law-court-tiers";
 import {
   DECISION_TEXT_FIELD,
@@ -55,6 +59,7 @@ import {
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1153,6 +1158,7 @@ export const LIST_PLAYBOOKS_PROJECTION = v.union([
 const timeEntryFieldEntries = (workspace: { from: "inputParam" | "sibling" }) =>
   ({
     id: passthroughId(),
+    activityGroup: v.picklist(TIME_ENTRY_ACTIVITY_GROUPS),
     entityId: v.nullable(
       chatEntityRef(
         workspace.from === "inputParam"
@@ -1586,57 +1592,86 @@ const decisionTextFieldProjections = {
 
 const caseLawDecisionProjection = v.strictObject({
   // Nullable for the same reason as search_case_law's `results[].appUrl`.
-  appUrl: v.nullable(v.string()),
+  appUrl: v.optional(v.nullable(v.string())),
   caseNumber: v.string(),
   caseNumberType: caseNumberTypeProjection,
-  citationsFrom: v.array(
-    v.strictObject({
-      id: passthroughId(),
-      citationText: v.string(),
-      citedDecisionId: v.nullable(passthroughId()),
-      sectionIndex: v.nullable(v.number()),
-    }),
+  citationsFrom: v.optional(
+    v.array(
+      v.strictObject({
+        id: passthroughId(),
+        citationText: v.string(),
+        citedDecisionId: v.nullable(passthroughId()),
+        sectionIndex: v.nullable(v.number()),
+      }),
+    ),
   ),
-  citationsTo: v.array(
-    v.strictObject({
-      id: passthroughId(),
-      citationText: v.string(),
-      citingDecisionId: passthroughId(),
-      sectionIndex: v.nullable(v.number()),
-    }),
+  citationsTo: v.optional(
+    v.array(
+      v.strictObject({
+        id: passthroughId(),
+        citationText: v.string(),
+        citingDecisionId: passthroughId(),
+        sectionIndex: v.nullable(v.number()),
+      }),
+    ),
   ),
-  country: v.string(),
-  court: v.string(),
+  country: v.optional(v.string()),
+  court: v.optional(v.string()),
   // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
   // derived from the decision's ECLI or the jurisdiction's apex-court
   // names. Null where nothing states one: it is never guessed, so a
   // caller quoting it is quoting the court's own abbreviation.
-  courtAbbreviation: v.nullable(v.string()),
-  decisionDate: v.nullable(v.string()),
+  courtAbbreviation: v.optional(v.nullable(v.string())),
+  decisionDate: v.optional(v.nullable(v.string())),
   decisionId: passthroughId(),
   resourceName: passthroughId(),
-  decisionType: v.nullable(v.string()),
+  decisionType: v.optional(v.nullable(v.string())),
   // The publisher's own document URL, which may embed the publisher's own
   // UUID — never a Stella tenant id, so it is forwarded unchanged.
-  documentUrl: v.nullable(publicUrl()),
-  ecli: v.nullable(v.string()),
+  documentUrl: v.optional(v.nullable(publicUrl())),
+  ecli: v.optional(v.nullable(v.string())),
   identifiers: decisionIdentifiersProjection,
-  language: v.string(),
-  metadata: unenumeratedJson(),
-  textFields: v.strictObject(decisionTextFieldProjections),
-  source: v.strictObject({
-    id: passthroughId(),
-    name: v.string(),
-    adapterKey: v.string(),
-    allowsDerivedAi: v.boolean(),
-  }),
-  sourceUrl: v.nullable(publicUrl()),
+  language: v.optional(v.string()),
+  metadata: v.optional(unenumeratedJson()),
+  textFields: v.optional(v.strictObject(decisionTextFieldProjections)),
+  source: v.optional(
+    v.strictObject({
+      id: passthroughId(),
+      name: v.string(),
+      adapterKey: v.string(),
+      allowsDerivedAi: v.boolean(),
+    }),
+  ),
+  sourceUrl: v.optional(v.nullable(publicUrl())),
   // Where this decision's data is freely available. An agent quoting the
   // decision has to be able to attribute it, and some courts make the
   // attribution a condition of reuse, so the tool states the page rather
   // than leaving the caller to derive one from `source.adapterKey`.
-  sourceAttributionUrl: v.nullable(publicUrl()),
+  sourceAttributionUrl: v.optional(v.nullable(publicUrl())),
   text: v.nullable(v.string()),
+  outline: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          title: v.pipe(
+            v.string(),
+            v.description(
+              "Heading or numbered paragraph opening, in document order.",
+            ),
+          ),
+          cursor: v.pipe(
+            v.string(),
+            v.description(
+              "Pass as cursor with this decision id to read from this heading; citation lists are skipped.",
+            ),
+          ),
+        }),
+      ),
+      v.description(
+        'Navigation entries for one decision, supplied by default on the cursor-less window or requested with include: ["outline"], when AI use of the text is permitted.',
+      ),
+    ),
+  ),
   charCount: v.nullable(v.number()),
   truncated: v.boolean(),
   // Why there is no text, when there is none. At most one is present, and
@@ -2734,6 +2769,7 @@ export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   promptCachingEnabled: v.optional(v.boolean()),

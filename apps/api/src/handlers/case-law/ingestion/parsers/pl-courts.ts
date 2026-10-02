@@ -347,6 +347,13 @@ const parseTableElement = (
   state: ParserState,
   node: cheerio.Cheerio<AnyNode>,
 ): void => {
+  node.children("caption").each((_, caption) => {
+    const inlines = walkInlines($, $(caption));
+    const plainText = normalizeWhitespace(inlinesToPlainText(inlines));
+    if (plainText) {
+      pushParagraph(state, plainText, inlines);
+    }
+  });
   const rows: TableCell[][] = [];
 
   node.find("tr").each((_, row) => {

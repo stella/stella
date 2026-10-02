@@ -1,0 +1,1175 @@
+{
+  "$defs": {
+    "AudioResponseFormat": {
+      "additionalProperties": false,
+      "properties": {
+        "bitRate": {
+          "type": "integer"
+        },
+        "delivery": {
+          "enum": ["DELIVERY_UNSPECIFIED", "INLINE", "URI"],
+          "type": "string"
+        },
+        "mimeType": {
+          "enum": [
+            "MIME_TYPE_UNSPECIFIED",
+            "AUDIO_MP3",
+            "AUDIO_OGG_OPUS",
+            "AUDIO_L16",
+            "AUDIO_WAV",
+            "AUDIO_ALAW",
+            "AUDIO_MULAW"
+          ],
+          "type": "string"
+        },
+        "sampleRate": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "AudioTranscription": {
+      "additionalProperties": false,
+      "properties": {
+        "speakerLabel": {
+          "type": "string"
+        },
+        "text": {
+          "type": "string"
+        },
+        "words": {
+          "items": {
+            "$ref": "#/$defs/WordInfo"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "AudioTranscriptionConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "adaptationPhrases": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "customVocabulary": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "diarization": {
+          "type": "boolean"
+        },
+        "languageAuto": {
+          "$ref": "#/$defs/LanguageAuto"
+        },
+        "languageCodes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "languageHints": {
+          "$ref": "#/$defs/LanguageHints"
+        },
+        "mode": {
+          "enum": ["MODE_UNSPECIFIED", "VERBATIM", "SMART"],
+          "type": "string"
+        },
+        "wordTimestamp": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "Blob": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "displayName": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "CodeExecution": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "CodeExecutionResult": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "outcome": {
+          "enum": [
+            "OUTCOME_UNSPECIFIED",
+            "OUTCOME_OK",
+            "OUTCOME_FAILED",
+            "OUTCOME_DEADLINE_EXCEEDED"
+          ],
+          "type": "string"
+        },
+        "output": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ComputerUse": {
+      "additionalProperties": false,
+      "properties": {
+        "disabledSafetyPolicies": {
+          "items": {
+            "enum": [
+              "SAFETY_POLICY_UNSPECIFIED",
+              "FINANCIAL_TRANSACTIONS",
+              "SENSITIVE_DATA_MODIFICATION",
+              "COMMUNICATION_TOOL",
+              "ACCOUNT_CREATION",
+              "DATA_MODIFICATION",
+              "USER_CONSENT_MANAGEMENT",
+              "LEGAL_TERMS_AND_AGREEMENTS"
+            ],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "enablePromptInjectionDetection": {
+          "type": "boolean"
+        },
+        "environment": {
+          "enum": [
+            "ENVIRONMENT_UNSPECIFIED",
+            "ENVIRONMENT_BROWSER",
+            "ENVIRONMENT_MOBILE",
+            "ENVIRONMENT_DESKTOP"
+          ],
+          "type": "string"
+        },
+        "excludedPredefinedFunctions": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "Content": {
+      "additionalProperties": false,
+      "properties": {
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/Part"
+          },
+          "type": "array"
+        },
+        "role": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "DynamicRetrievalConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "dynamicThreshold": {
+          "type": "number"
+        },
+        "mode": {
+          "enum": ["MODE_UNSPECIFIED", "MODE_DYNAMIC"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ExecutableCode": {
+      "additionalProperties": false,
+      "properties": {
+        "code": {
+          "type": "string"
+        },
+        "id": {
+          "type": "string"
+        },
+        "language": {
+          "enum": ["LANGUAGE_UNSPECIFIED", "PYTHON"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "FileData": {
+      "additionalProperties": false,
+      "properties": {
+        "displayName": {
+          "type": "string"
+        },
+        "fileUri": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "FileSearch": {
+      "additionalProperties": false,
+      "properties": {
+        "fileSearchStoreNames": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "metadataFilter": {
+          "type": "string"
+        },
+        "topK": {
+          "type": "integer"
+        }
+      },
+      "type": "object"
+    },
+    "FunctionCall": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "FunctionCallingConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "allowedFunctionNames": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "mode": {
+          "enum": ["MODE_UNSPECIFIED", "AUTO", "ANY", "NONE", "VALIDATED"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "FunctionDeclaration": {
+      "additionalProperties": false,
+      "properties": {
+        "behavior": {
+          "enum": ["UNSPECIFIED", "BLOCKING", "NON_BLOCKING"],
+          "type": "string"
+        },
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parameters": {
+          "$ref": "#/$defs/Schema"
+        },
+        "parametersJsonSchema": {},
+        "response": {
+          "$ref": "#/$defs/Schema"
+        },
+        "responseJsonSchema": {}
+      },
+      "type": "object"
+    },
+    "FunctionResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parts": {
+          "items": {
+            "$ref": "#/$defs/FunctionResponsePart"
+          },
+          "type": "array"
+        },
+        "response": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "scheduling": {
+          "enum": [
+            "SCHEDULING_UNSPECIFIED",
+            "SILENT",
+            "WHEN_IDLE",
+            "INTERRUPT"
+          ],
+          "type": "string"
+        },
+        "willContinue": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "FunctionResponseBlob": {
+      "additionalProperties": false,
+      "properties": {
+        "data": {
+          "type": "string"
+        },
+        "mimeType": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "FunctionResponsePart": {
+      "additionalProperties": false,
+      "properties": {
+        "inlineData": {
+          "$ref": "#/$defs/FunctionResponseBlob"
+        }
+      },
+      "type": "object"
+    },
+    "GenerateContentRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "cachedContent": {
+          "type": "string"
+        },
+        "contents": {
+          "items": {
+            "$ref": "#/$defs/Content"
+          },
+          "type": "array"
+        },
+        "generationConfig": {
+          "$ref": "#/$defs/GenerationConfig"
+        },
+        "labels": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "model": {
+          "type": "string"
+        },
+        "safetySettings": {
+          "items": {
+            "$ref": "#/$defs/SafetySetting"
+          },
+          "type": "array"
+        },
+        "serviceTier": {
+          "enum": ["unspecified", "standard", "flex", "priority"],
+          "type": "string"
+        },
+        "store": {
+          "type": "boolean"
+        },
+        "systemInstruction": {
+          "$ref": "#/$defs/Content"
+        },
+        "toolConfig": {
+          "$ref": "#/$defs/ToolConfig"
+        },
+        "tools": {
+          "items": {
+            "$ref": "#/$defs/Tool"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "GenerationConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "_responseJsonSchema": {},
+        "audioTranscriptionConfig": {
+          "$ref": "#/$defs/AudioTranscriptionConfig"
+        },
+        "candidateCount": {
+          "type": "integer"
+        },
+        "enableAffectiveDialog": {
+          "type": "boolean"
+        },
+        "enableEnhancedCivicAnswers": {
+          "type": "boolean"
+        },
+        "frequencyPenalty": {
+          "type": "number"
+        },
+        "imageConfig": {
+          "$ref": "#/$defs/ImageConfig"
+        },
+        "logprobs": {
+          "type": "integer"
+        },
+        "maxOutputTokens": {
+          "type": "integer"
+        },
+        "mediaResolution": {
+          "enum": [
+            "MEDIA_RESOLUTION_UNSPECIFIED",
+            "MEDIA_RESOLUTION_LOW",
+            "MEDIA_RESOLUTION_MEDIUM",
+            "MEDIA_RESOLUTION_HIGH"
+          ],
+          "type": "string"
+        },
+        "presencePenalty": {
+          "type": "number"
+        },
+        "responseFormat": {
+          "$ref": "#/$defs/ResponseFormatConfig"
+        },
+        "responseJsonSchema": {},
+        "responseLogprobs": {
+          "type": "boolean"
+        },
+        "responseMimeType": {
+          "type": "string"
+        },
+        "responseModalities": {
+          "items": {
+            "enum": ["MODALITY_UNSPECIFIED", "TEXT", "IMAGE", "AUDIO"],
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "responseSchema": {
+          "$ref": "#/$defs/Schema"
+        },
+        "seed": {
+          "type": "integer"
+        },
+        "speechConfig": {
+          "$ref": "#/$defs/SpeechConfig"
+        },
+        "stopSequences": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "temperature": {
+          "type": "number"
+        },
+        "thinkingConfig": {
+          "$ref": "#/$defs/ThinkingConfig"
+        },
+        "topK": {
+          "type": "integer"
+        },
+        "topP": {
+          "type": "number"
+        },
+        "translationConfig": {
+          "$ref": "#/$defs/TranslationConfig"
+        }
+      },
+      "type": "object"
+    },
+    "GoogleMaps": {
+      "additionalProperties": false,
+      "properties": {
+        "enableWidget": {
+          "type": "boolean"
+        }
+      },
+      "type": "object"
+    },
+    "GoogleSearch": {
+      "additionalProperties": false,
+      "properties": {
+        "searchTypes": {
+          "$ref": "#/$defs/SearchTypes"
+        },
+        "timeRangeFilter": {
+          "$ref": "#/$defs/Interval"
+        }
+      },
+      "type": "object"
+    },
+    "GoogleSearchRetrieval": {
+      "additionalProperties": false,
+      "properties": {
+        "dynamicRetrievalConfig": {
+          "$ref": "#/$defs/DynamicRetrievalConfig"
+        }
+      },
+      "type": "object"
+    },
+    "ImageConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "aspectRatio": {
+          "type": "string"
+        },
+        "imageSize": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ImageResponseFormat": {
+      "additionalProperties": false,
+      "properties": {
+        "aspectRatio": {
+          "enum": [
+            "ASPECT_RATIO_UNSPECIFIED",
+            "ASPECT_RATIO_ONE_BY_ONE",
+            "ASPECT_RATIO_TWO_BY_THREE",
+            "ASPECT_RATIO_THREE_BY_TWO",
+            "ASPECT_RATIO_THREE_BY_FOUR",
+            "ASPECT_RATIO_FOUR_BY_THREE",
+            "ASPECT_RATIO_FOUR_BY_FIVE",
+            "ASPECT_RATIO_FIVE_BY_FOUR",
+            "ASPECT_RATIO_NINE_BY_SIXTEEN",
+            "ASPECT_RATIO_SIXTEEN_BY_NINE",
+            "ASPECT_RATIO_TWENTY_ONE_BY_NINE",
+            "ASPECT_RATIO_ONE_BY_EIGHT",
+            "ASPECT_RATIO_EIGHT_BY_ONE",
+            "ASPECT_RATIO_ONE_BY_FOUR",
+            "ASPECT_RATIO_FOUR_BY_ONE"
+          ],
+          "type": "string"
+        },
+        "delivery": {
+          "enum": ["DELIVERY_UNSPECIFIED", "INLINE", "URI"],
+          "type": "string"
+        },
+        "imageSize": {
+          "enum": [
+            "IMAGE_SIZE_UNSPECIFIED",
+            "IMAGE_SIZE_FIVE_TWELVE",
+            "IMAGE_SIZE_ONE_K",
+            "IMAGE_SIZE_TWO_K",
+            "IMAGE_SIZE_FOUR_K"
+          ],
+          "type": "string"
+        },
+        "mimeType": {
+          "enum": ["MIME_TYPE_UNSPECIFIED", "IMAGE_JPEG"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ImageSearch": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "Interval": {
+      "additionalProperties": false,
+      "properties": {
+        "endTime": {
+          "type": "string"
+        },
+        "startTime": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "LanguageAuto": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "LanguageHints": {
+      "additionalProperties": false,
+      "properties": {
+        "languageCodes": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "LatLng": {
+      "additionalProperties": false,
+      "properties": {
+        "latitude": {
+          "type": "number"
+        },
+        "longitude": {
+          "type": "number"
+        }
+      },
+      "type": "object"
+    },
+    "McpServer": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "streamableHttpTransport": {
+          "$ref": "#/$defs/StreamableHttpTransport"
+        }
+      },
+      "type": "object"
+    },
+    "MultiSpeakerVoiceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "speakerVoiceConfigs": {
+          "items": {
+            "$ref": "#/$defs/SpeakerVoiceConfig"
+          },
+          "type": "array"
+        }
+      },
+      "type": "object"
+    },
+    "Part": {
+      "additionalProperties": false,
+      "properties": {
+        "audioTranscription": {
+          "$ref": "#/$defs/AudioTranscription"
+        },
+        "codeExecutionResult": {
+          "$ref": "#/$defs/CodeExecutionResult"
+        },
+        "executableCode": {
+          "$ref": "#/$defs/ExecutableCode"
+        },
+        "fileData": {
+          "$ref": "#/$defs/FileData"
+        },
+        "functionCall": {
+          "$ref": "#/$defs/FunctionCall"
+        },
+        "functionResponse": {
+          "$ref": "#/$defs/FunctionResponse"
+        },
+        "inlineData": {
+          "$ref": "#/$defs/Blob"
+        },
+        "mediaProcessing": {
+          "enum": ["MEDIA_PROCESSING_UNSPECIFIED", "STATIC", "AGENTIC"],
+          "type": "string"
+        },
+        "mediaResolution": {
+          "$ref": "#/$defs/V1mainMediaResolution"
+        },
+        "partMetadata": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "speechMetadata": {
+          "$ref": "#/$defs/SpeechMetadata"
+        },
+        "text": {
+          "type": "string"
+        },
+        "thought": {
+          "type": "boolean"
+        },
+        "thoughtSignature": {
+          "type": "string"
+        },
+        "toolCall": {
+          "$ref": "#/$defs/ToolCall"
+        },
+        "toolResponse": {
+          "$ref": "#/$defs/ToolResponse"
+        },
+        "videoMetadata": {
+          "$ref": "#/$defs/VideoMetadata"
+        }
+      },
+      "type": "object"
+    },
+    "PrebuiltVoiceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "voiceName": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ResponseFormatConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "audio": {
+          "$ref": "#/$defs/AudioResponseFormat"
+        },
+        "image": {
+          "$ref": "#/$defs/ImageResponseFormat"
+        },
+        "text": {
+          "$ref": "#/$defs/TextResponseFormat"
+        }
+      },
+      "type": "object"
+    },
+    "RetrievalConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "languageCode": {
+          "type": "string"
+        },
+        "latLng": {
+          "$ref": "#/$defs/LatLng"
+        }
+      },
+      "type": "object"
+    },
+    "SafetySetting": {
+      "additionalProperties": false,
+      "properties": {
+        "category": {
+          "enum": [
+            "HARM_CATEGORY_UNSPECIFIED",
+            "HARM_CATEGORY_DEROGATORY",
+            "HARM_CATEGORY_TOXICITY",
+            "HARM_CATEGORY_VIOLENCE",
+            "HARM_CATEGORY_SEXUAL",
+            "HARM_CATEGORY_MEDICAL",
+            "HARM_CATEGORY_DANGEROUS",
+            "HARM_CATEGORY_HARASSMENT",
+            "HARM_CATEGORY_HATE_SPEECH",
+            "HARM_CATEGORY_SEXUALLY_EXPLICIT",
+            "HARM_CATEGORY_DANGEROUS_CONTENT",
+            "HARM_CATEGORY_CIVIC_INTEGRITY",
+            "HARM_CATEGORY_JAILBREAK"
+          ],
+          "type": "string"
+        },
+        "threshold": {
+          "enum": [
+            "HARM_BLOCK_THRESHOLD_UNSPECIFIED",
+            "BLOCK_LOW_AND_ABOVE",
+            "BLOCK_MEDIUM_AND_ABOVE",
+            "BLOCK_ONLY_HIGH",
+            "BLOCK_NONE",
+            "OFF"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Schema": {
+      "additionalProperties": false,
+      "properties": {
+        "anyOf": {
+          "items": {
+            "$ref": "#/$defs/Schema"
+          },
+          "type": "array"
+        },
+        "default": {},
+        "description": {
+          "type": "string"
+        },
+        "enum": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "example": {},
+        "format": {
+          "type": "string"
+        },
+        "items": {
+          "$ref": "#/$defs/Schema"
+        },
+        "maxItems": {
+          "type": ["string", "integer"]
+        },
+        "maxLength": {
+          "type": ["string", "integer"]
+        },
+        "maxProperties": {
+          "type": ["string", "integer"]
+        },
+        "maximum": {
+          "type": "number"
+        },
+        "minItems": {
+          "type": ["string", "integer"]
+        },
+        "minLength": {
+          "type": ["string", "integer"]
+        },
+        "minProperties": {
+          "type": ["string", "integer"]
+        },
+        "minimum": {
+          "type": "number"
+        },
+        "nullable": {
+          "type": "boolean"
+        },
+        "pattern": {
+          "type": "string"
+        },
+        "properties": {
+          "additionalProperties": {
+            "$ref": "#/$defs/Schema"
+          },
+          "type": "object"
+        },
+        "propertyOrdering": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "required": {
+          "items": {
+            "type": "string"
+          },
+          "type": "array"
+        },
+        "title": {
+          "type": "string"
+        },
+        "type": {
+          "enum": [
+            "TYPE_UNSPECIFIED",
+            "STRING",
+            "NUMBER",
+            "INTEGER",
+            "BOOLEAN",
+            "ARRAY",
+            "OBJECT",
+            "NULL"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "SearchTypes": {
+      "additionalProperties": false,
+      "properties": {
+        "imageSearch": {
+          "$ref": "#/$defs/ImageSearch"
+        },
+        "webSearch": {
+          "$ref": "#/$defs/WebSearch"
+        }
+      },
+      "type": "object"
+    },
+    "SpeakerVoiceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "speaker": {
+          "type": "string"
+        },
+        "voiceConfig": {
+          "$ref": "#/$defs/VoiceConfig"
+        }
+      },
+      "type": "object"
+    },
+    "SpeechConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "languageCode": {
+          "type": "string"
+        },
+        "multiSpeakerVoiceConfig": {
+          "$ref": "#/$defs/MultiSpeakerVoiceConfig"
+        },
+        "voiceConfig": {
+          "$ref": "#/$defs/VoiceConfig"
+        }
+      },
+      "type": "object"
+    },
+    "SpeechMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "speaker": {
+          "type": "string"
+        },
+        "style": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "StreamableHttpTransport": {
+      "additionalProperties": false,
+      "properties": {
+        "headers": {
+          "additionalProperties": {
+            "type": "string"
+          },
+          "type": "object"
+        },
+        "sseReadTimeout": {
+          "type": "string"
+        },
+        "terminateOnClose": {
+          "type": "boolean"
+        },
+        "timeout": {
+          "type": "string"
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "TextResponseFormat": {
+      "additionalProperties": false,
+      "properties": {
+        "mimeType": {
+          "enum": ["MIME_TYPE_UNSPECIFIED", "APPLICATION_JSON", "TEXT_PLAIN"],
+          "type": "string"
+        },
+        "schema": {}
+      },
+      "type": "object"
+    },
+    "ThinkingConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "includeThoughts": {
+          "type": "boolean"
+        },
+        "thinkingBudget": {
+          "type": "integer"
+        },
+        "thinkingLevel": {
+          "enum": [
+            "THINKING_LEVEL_UNSPECIFIED",
+            "MINIMAL",
+            "LOW",
+            "MEDIUM",
+            "HIGH"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "Tool": {
+      "additionalProperties": false,
+      "properties": {
+        "codeExecution": {
+          "$ref": "#/$defs/CodeExecution"
+        },
+        "computerUse": {
+          "$ref": "#/$defs/ComputerUse"
+        },
+        "fileSearch": {
+          "$ref": "#/$defs/FileSearch"
+        },
+        "functionDeclarations": {
+          "items": {
+            "$ref": "#/$defs/FunctionDeclaration"
+          },
+          "type": "array"
+        },
+        "googleMaps": {
+          "$ref": "#/$defs/GoogleMaps"
+        },
+        "googleSearch": {
+          "$ref": "#/$defs/GoogleSearch"
+        },
+        "googleSearchRetrieval": {
+          "$ref": "#/$defs/GoogleSearchRetrieval"
+        },
+        "mcpServers": {
+          "items": {
+            "$ref": "#/$defs/McpServer"
+          },
+          "type": "array"
+        },
+        "urlContext": {
+          "$ref": "#/$defs/UrlContext"
+        }
+      },
+      "type": "object"
+    },
+    "ToolCall": {
+      "additionalProperties": false,
+      "properties": {
+        "args": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "id": {
+          "type": "string"
+        },
+        "toolName": {
+          "type": "string"
+        },
+        "toolType": {
+          "enum": [
+            "TOOL_TYPE_UNSPECIFIED",
+            "GOOGLE_SEARCH_WEB",
+            "GOOGLE_SEARCH_IMAGE",
+            "URL_CONTEXT",
+            "GOOGLE_MAPS",
+            "FILE_SEARCH"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ToolConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "functionCallingConfig": {
+          "$ref": "#/$defs/FunctionCallingConfig"
+        },
+        "includeServerSideToolInvocations": {
+          "type": "boolean"
+        },
+        "retrievalConfig": {
+          "$ref": "#/$defs/RetrievalConfig"
+        }
+      },
+      "type": "object"
+    },
+    "ToolResponse": {
+      "additionalProperties": false,
+      "properties": {
+        "id": {
+          "type": "string"
+        },
+        "response": {
+          "additionalProperties": {},
+          "type": "object"
+        },
+        "toolType": {
+          "enum": [
+            "TOOL_TYPE_UNSPECIFIED",
+            "GOOGLE_SEARCH_WEB",
+            "GOOGLE_SEARCH_IMAGE",
+            "URL_CONTEXT",
+            "GOOGLE_MAPS",
+            "FILE_SEARCH"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "TranslationConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "echoTargetLanguage": {
+          "type": "boolean"
+        },
+        "targetLanguageCode": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "UrlContext": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "V1mainMediaResolution": {
+      "additionalProperties": false,
+      "properties": {
+        "level": {
+          "enum": [
+            "MEDIA_RESOLUTION_UNSPECIFIED",
+            "MEDIA_RESOLUTION_LOW",
+            "MEDIA_RESOLUTION_MEDIUM",
+            "MEDIA_RESOLUTION_HIGH",
+            "MEDIA_RESOLUTION_ULTRA_HIGH"
+          ],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "VideoMetadata": {
+      "additionalProperties": false,
+      "properties": {
+        "endOffset": {
+          "type": "string"
+        },
+        "fps": {
+          "type": "number"
+        },
+        "startOffset": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "VoiceConfig": {
+      "additionalProperties": false,
+      "properties": {
+        "prebuiltVoiceConfig": {
+          "$ref": "#/$defs/PrebuiltVoiceConfig"
+        },
+        "voice": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "WebSearch": {
+      "additionalProperties": false,
+      "properties": {},
+      "type": "object"
+    },
+    "WordInfo": {
+      "additionalProperties": false,
+      "properties": {
+        "endOffset": {
+          "type": "string"
+        },
+        "startOffset": {
+          "type": "string"
+        },
+        "word": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/GenerateContentRequest",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

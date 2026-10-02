@@ -30,7 +30,11 @@ const config = {
     "matter past its term limit. Organization-wide terms are managed " +
     "separately.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   body: t.Object({
     entries: t.Array(termSchema, { minItems: 1, maxItems: 100 }),
   }),

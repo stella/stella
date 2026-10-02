@@ -38,47 +38,6 @@ export {
   KANBAN_CHROME_ROW_HEIGHT_PX,
 } from "./layout-tokens";
 export type {
-  KanbanCardDragSurfaceProps,
-  KanbanDragHandleProps,
-  KanbanDragCancelEvent,
-  KanbanDragEndEvent,
-  KanbanDragOverEvent,
-  KanbanDragStartEvent,
-  KanbanSortableActivationMode,
-  KanbanSortableBindings,
-  KanbanSortableBoardProps,
-  KanbanSortableColumnsProps,
-  KanbanSortableListProps,
-  KanbanVirtualScrollRequest,
-  KanbanCellVirtualNavigation,
-  UseKanbanSortableOptions,
-  UseKanbanDropTargetOptions,
-} from "./sortable-interactions";
-export {
-  KANBAN_BOARD_AUTO_SCROLL_OPTIONS,
-  KANBAN_MOUSE_ACTIVATION_DISTANCE,
-  KANBAN_BOARD_COLLISION_DETECTION,
-  KANBAN_DRAG_OVERLAY_Z_INDEX,
-  KANBAN_SORTABLE_ACTIVATION_MODES,
-  KANBAN_TOUCH_ACTIVATION_CONSTRAINT,
-  KanbanCardDragSurface,
-  KanbanDragHandle,
-  KanbanSortableBoard,
-  KanbanSortableColumns,
-  KanbanSortableList,
-  useKanbanSortable,
-  useKanbanDropTarget,
-  useKanbanSortableSensors,
-  kanbanKeyboardCoordinates,
-} from "./sortable-interactions";
-export type { KanbanSortableCellPosition } from "./sortable-interactions";
-export type { KanbanDirection, KanbanHorizontalEdge } from "./sortable-edge";
-export {
-  getKanbanHorizontalEdge,
-  KANBAN_DIRECTIONS,
-  KANBAN_HORIZONTAL_EDGES,
-} from "./sortable-edge";
-export type {
   RegisterKanbanBoardAutoScrollOptions,
   RegisterKanbanCardDragOptions,
 } from "./drag-interactions";
@@ -152,7 +111,6 @@ export {
 export type {
   KanbanVirtualCellPagination,
   KanbanVirtualCellProps,
-  KanbanVirtualCellSortableContext,
 } from "./virtual-cell";
 export {
   KANBAN_VIRTUAL_CELL_PAGINATION,
