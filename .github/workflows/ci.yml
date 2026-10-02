@@ -77,6 +77,7 @@ jobs:
       service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
+      route_smoke_required: ${{ steps.changed-files.outputs.route_smoke_required }}
       route_tree_required: ${{ steps.changed-files.outputs.route_tree_required }}
       stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
       web_api_types_required: ${{ steps.changed-files.outputs.web_api_types_required }}
@@ -261,7 +262,12 @@ jobs:
             if [[ "$SUITE_DEPTH" == "full" ]]; then
               landing_build_required=false
             fi
+            route_smoke_required=false
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              route_smoke_required=true
+            fi
             {
+              echo "route_smoke_required=$route_smoke_required"
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
               echo "docker_checks_required=true"
@@ -314,6 +320,7 @@ jobs:
               echo "package_checks_required=true"
               echo "published_exports_required=false"
               echo "release_typecheck_required=false"
+              echo "route_smoke_required=false"
               echo "route_tree_required=false"
               echo "stack_redaction_browsers_required=false"
               echo "web_api_types_required=false"
@@ -357,6 +364,10 @@ jobs:
           model_catalog_drift_required=false
           published_exports_required=false
           release_typecheck_required=false
+          route_smoke_required=false
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            route_smoke_required=$(bun scripts/detect-route-smoke-changes.ts "${changed_files[@]}")
+          fi
           route_tree_required=false
           stack_redaction_browsers_required=false
           web_api_types_required=false
@@ -534,7 +545,7 @@ jobs:
 
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
-          if [[ "$e2e_core_required" == "true" ]]; then
+          if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then
             web_build_required=true
           fi
 
@@ -561,6 +572,7 @@ jobs:
             echo "package_checks_required=$package_checks_required"
             echo "published_exports_required=$published_exports_required"
             echo "release_typecheck_required=$release_typecheck_required"
+            echo "route_smoke_required=$route_smoke_required"
             echo "route_tree_required=$route_tree_required"
             echo "stack_redaction_browsers_required=$stack_redaction_browsers_required"
             echo "web_api_types_required=$web_api_types_required"
@@ -1782,6 +1794,9 @@ jobs:
       - name: Test detect-desktop-release-changes script
         run: bash scripts/detect-desktop-release-changes.test.sh
 
+      - name: Test route smoke change detector
+        run: bun test scripts/detect-route-smoke-changes.test.ts
+
       - name: Test CI workflow invariants
         run: >-
           bun test
@@ -2873,6 +2888,7 @@ jobs:
         if: >-
           needs.ci-plan.outputs.e2e_core_required == 'true'
           || needs.ci-plan.outputs.marketing_screenshots_required == 'true'
+          || needs.ci-plan.outputs.route_smoke_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-web-build
@@ -3062,6 +3078,67 @@ jobs:
   # a small Vite dependency canary, and the built landing-page suite. The
   # production shards start only after their production build is published.
   # Marketing screenshots remain in the nightly test workflow.
+  route-smoke:
+    needs: [ci-plan, web-build]
+    if: >-
+      always()
+      && needs.ci-plan.outputs.trusted == 'true'
+      && needs.ci-plan.outputs.route_smoke_required == 'true'
+      && needs.web-build.result == 'success'
+      && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      # The recorder uses this exact setup, build artifact, seed and browser.
+      - name: Setup production browser stack
+        id: e2e-stack
+        uses: ./.github/actions/setup-production-e2e
+        with:
+          expected-sha: ${{ github.sha }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Require production browser stack
+        env:
+          STACK_STATUS: ${{ steps.e2e-stack.outputs.status }}
+        run: |
+          if [[ "$STACK_STATUS" != "ready" ]]; then
+            echo "::error::Route smoke requires a ready production browser stack."
+            exit 1
+          fi
+
+      - name: Check route network baseline
+        env:
+          E2E_EXECUTION_PROFILE: network-baseline
+          E2E_EXPECT_DEV_ROUTES: "false"
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-pr.zip
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke
+
+      - name: Upload route smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: route-smoke-pr-blob
+          path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
   e2e-production-shard:
     needs: [ci-plan, web-build]
     if: >-
@@ -3916,6 +3993,7 @@ jobs:
         landing-build,
         marketing-screenshots,
         migration-upgrade-rehearsal,
+        route-smoke,
         e2e-production-shard,
         e2e-vite-canary,
         e2e-landing,
@@ -3965,6 +4043,7 @@ jobs:
             "dependency-malware": "dependency_malware_required",
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
+            "route-smoke": "route_smoke_required",
             "e2e-production-shard": "e2e_core_required",
             "e2e-vite-canary": "e2e_core_required",
             "fix-tests-on-base": "fix_tests_on_base_required",
@@ -3987,7 +4066,7 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "web-image-smoke"]
+            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "route-smoke", "web-image-smoke"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled
