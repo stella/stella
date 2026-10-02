@@ -7,7 +7,10 @@ import { entities, templates } from "@/api/db/schema";
 import type { TemplatePersistenceResult } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadManagedAIResidency,
+  loadOrgAIConfig,
+} from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
@@ -87,6 +90,7 @@ import { MCP_MAX_REQUEST_BODY_BYTES } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { OPENAI_FILE_REFERENCE_SCHEMA } from "@/api/mcp/document-file-upload";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
+import { plainRecord } from "@/api/mcp/input-schemas";
 import {
   TEMPLATE_CONDITION_DECISION_OUTPUT_SCHEMA,
   type TemplateConditionDecisionOutput,
@@ -569,6 +573,7 @@ const buildPreviewConditionsTextFieldSpecs = (
 ];
 
 export const CREATE_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   _meta: {
     "openai/fileParams": ["file"],
   },
@@ -616,7 +621,7 @@ const previewTemplateConditionsArgsSchema = nullAsAbsent(
       "Template whose AI-decided conditions to ask about, as returned by list_templates",
     ),
     values: v.pipe(
-      v.record(v.string(), v.unknown()),
+      plainRecord(v.unknown()),
       v.description(
         "Map of field path to value. It is the same map fill_template takes. Partial is fine: the model decides on what it is given.",
       ),
@@ -625,6 +630,7 @@ const previewTemplateConditionsArgsSchema = nullAsAbsent(
 );
 
 const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   description:
     "Ask what current values decide without filling. Returns every AI " +
     'condition with `path`, `label`, and either `state: "decided"`, its ' +
@@ -641,6 +647,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
     openWorldHint: false,
   },
   access: "read",
+  readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
     // Placeholder org id: derivation only ever reads `.path`, see the
@@ -652,6 +659,7 @@ const PREVIEW_TEMPLATE_CONDITIONS_TOOL_DEFINITION = defineValibotMcpTool({
 });
 
 export const CONFIGURE_TEMPLATE_FIELDS_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   description:
     "Configure an existing template's fields: who fills each one, its input " +
     "control, options and validation. The configuration lives in the " +
@@ -707,6 +715,7 @@ const listTemplatesArgsSchema = nullAsAbsent(
 );
 
 const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   annotations: {
     title: "List templates",
     destructiveHint: false,
@@ -727,6 +736,7 @@ const LIST_TEMPLATES_TOOL_DEFINITION = defineValibotMcpTool({
     "`arrays` marks {% for %} fields as arrays of objects, not dotted keys.",
   inputSchema: listTemplatesArgsSchema,
   access: "read",
+  readClass: "tenant",
   anonymized: {
     exposure: "anonymize",
     // Placeholder org id: derivation only ever reads `.path`, see the
@@ -744,7 +754,7 @@ const fillTemplateArgsSchema = nullAsAbsent(
   v.strictObject({
     template_id: uuidInputSchema("Template id, as returned by list_templates"),
     values: v.pipe(
-      v.record(v.string(), v.unknown()),
+      plainRecord(v.unknown()),
       v.description("Map of field path to value."),
     ),
     allow_unused_values: v.optional(
@@ -769,6 +779,7 @@ const fillTemplateArgsSchema = nullAsAbsent(
 );
 
 const FILL_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   description:
     "Fill a template and return the rendered text; pass output_mode='docx' " +
     "for base64 bytes. Call list_templates first, then pass its field paths " +
@@ -834,7 +845,7 @@ const saveFilledTemplateArgsSchema = nullAsAbsent(
       ),
     ),
     values: v.pipe(
-      v.record(v.string(), v.unknown()),
+      plainRecord(v.unknown()),
       v.description("Map of template field path to value"),
     ),
     completion_mode: templateFillCompletionModeSchema,
@@ -842,6 +853,7 @@ const saveFilledTemplateArgsSchema = nullAsAbsent(
 );
 
 const SAVE_FILLED_TEMPLATE_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   description:
     "Fill a registered template and persist its DOCX in a matter. Use " +
     "create_document (optionally with parent_id) or create_version with " +
@@ -1300,8 +1312,17 @@ const handleFillTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency:
+        await (context.testDependencies?.loadManagedAIResidency?.(
+          context.organizationId,
+        ) ??
+          context.scopedDb(
+            async (tx) =>
+              await loadManagedAIResidency(tx, context.organizationId),
+          )),
       organizationId: context.organizationId,
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,
@@ -1743,6 +1764,14 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency:
+        await (context.testDependencies?.loadManagedAIResidency?.(
+          context.organizationId,
+        ) ??
+          context.scopedDb(
+            async (tx) =>
+              await loadManagedAIResidency(tx, context.organizationId),
+          )),
       organizationId: context.organizationId,
       skillContext: {
         organizationId: context.organizationId,
@@ -1750,6 +1779,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         userId: context.userId,
       },
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,

@@ -571,12 +571,14 @@ export const structuredErrorResult = ({
   issues,
   message,
   retryable,
+  contactUrl,
 }: {
   code: McpErrorCode;
   hint?: string | undefined;
   issues?: readonly McpValidationIssue[] | undefined;
   message: string;
   retryable?: boolean | undefined;
+  contactUrl?: string | undefined;
 }): InternalToolErrorResult => {
   const error: {
     type: "structured";
@@ -585,6 +587,7 @@ export const structuredErrorResult = ({
     hint?: string;
     issues?: readonly McpValidationIssue[];
     retryable?: boolean;
+    contactUrl?: string;
     requestId?: string;
   } = { type: "structured", code, message };
   if (hint !== undefined) {
@@ -595,6 +598,9 @@ export const structuredErrorResult = ({
   }
   if (retryable !== undefined) {
     error.retryable = retryable;
+  }
+  if (contactUrl !== undefined) {
+    error.contactUrl = contactUrl;
   }
   const requestId = getCurrentRequestId();
   if (requestId !== undefined) {
@@ -944,7 +950,7 @@ export type WindowBounds = {
  * Resolve a half-open `[start, end)` window of `size` items into a stream of
  * `length` items, starting at `offset` (clamped into range). `nextOffset` is
  * the resume point for the next window, or null when the window reaches the
- * end. Works for any positional stream (string chars, array items).
+ * end. Use resolveTextWindowBounds for Unicode text windows.
  */
 export const resolveWindowBounds = (
   length: number,
@@ -955,6 +961,36 @@ export const resolveWindowBounds = (
   const end = Math.min(start + size, length);
 
   return { start, end, nextOffset: end < length ? end : null };
+};
+
+const MAX_BMP_CODE_POINT = 0xff_ff;
+
+type TextWindowBoundsOptions = {
+  text: string;
+  offset: number;
+  size: number;
+};
+
+/**
+ * UTF-16 cursor offsets, with windows ending on complete Unicode code points.
+ * A one-unit budget includes a whole surrogate pair to guarantee progress.
+ */
+export const resolveTextWindowBounds = ({
+  text,
+  offset,
+  size,
+}: TextWindowBoundsOptions): WindowBounds => {
+  const bounds = resolveWindowBounds(text.length, offset, size);
+  const splitsCodePoint = (at: number) => {
+    const previous = text.codePointAt(at - 1);
+    return previous !== undefined && previous > MAX_BMP_CODE_POINT;
+  };
+  const start = splitsCodePoint(bounds.start) ? bounds.start - 1 : bounds.start;
+  let end = bounds.end;
+  if (splitsCodePoint(end)) {
+    end = end - 1 > start ? end - 1 : end + 1;
+  }
+  return { start, end, nextOffset: end < text.length ? end : null };
 };
 
 const decodeTextWindowOffset = (
@@ -994,11 +1030,11 @@ export const windowTextByCursor = ({
     return offset;
   }
 
-  const { start, end, nextOffset } = resolveWindowBounds(
-    text.length,
+  const { start, end, nextOffset } = resolveTextWindowBounds({
+    text,
     offset,
-    maxChars,
-  );
+    size: maxChars,
+  });
 
   return {
     text: text.slice(start, end),

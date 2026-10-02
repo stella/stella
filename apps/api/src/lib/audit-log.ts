@@ -12,6 +12,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { resolveClientIp } from "@/api/lib/client-ip";
 import { insertInChunks } from "@/api/lib/db/bulk-write";
 
+import { auditDetailsForResource } from "./audit-log-details";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "./audit-log.constants";
 import type { AuditAction, AuditResourceType } from "./audit-log.constants";
 
@@ -358,8 +359,8 @@ export const createBackgroundAuditRecorder =
     const execution = executionColumns(bindings.execution, bindings.userId);
     const toRow = (e: AuditEvent) => ({
       action: e.action,
-      changes: e.changes ?? null,
-      metadata: e.metadata ?? null,
+      changes: auditDetailsForResource(e.resourceType, e.changes),
+      metadata: auditDetailsForResource(e.resourceType, e.metadata) ?? null,
       organizationId: bindings.organizationId,
       resourceId: e.resourceId,
       resourceType: e.resourceType,
@@ -389,8 +390,11 @@ export const createAuditRecorder = (
     const execution = executionColumns(bindings.execution, bindings.userId);
     const toRow = (e: AuditEvent) => ({
       action: e.action,
-      changes: e.changes ?? null,
-      metadata: e.metadata ? { ...base, ...e.metadata } : base,
+      changes: auditDetailsForResource(e.resourceType, e.changes),
+      metadata: {
+        ...base,
+        ...auditDetailsForResource(e.resourceType, e.metadata),
+      },
       organizationId: bindings.organizationId,
       resourceId: e.resourceId,
       resourceType: e.resourceType,

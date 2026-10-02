@@ -11,7 +11,6 @@
 import { expect, test } from "bun:test";
 import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import nodePath from "node:path";
-import core from "ultracite/oxlint/core";
 
 import {
   libraryIgnorePatterns,
@@ -31,11 +30,13 @@ import {
   stringArray,
   trackedRepoFiles,
 } from "./oxlint-config-scopes.ts";
+import core from "./oxlint-presets/core.mjs";
 import {
   builtinRules,
   pluginScope,
   ruleCanonicalizer,
 } from "./oxlint-rule-ids.ts";
+import validatorLedger from "./parser-validator-call-ledger.json" with { type: "json" };
 
 const TIMEOUT_MS = 60_000;
 
@@ -286,5 +287,103 @@ test("the pre-commit autofix preserves includes checks", () => {
     expect(result.exitCode).toBe(0);
   } finally {
     rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+const PARSER_VALIDATOR_RULE_ID =
+  "no-parser-validator-calls/no-parser-validator-calls";
+const PARSER_VALIDATOR_LEDGER_PATH =
+  "scripts/parser-validator-call-ledger.json";
+const PARSER_VALIDATOR_REPO_ROOT = nodePath.resolve(import.meta.dir, "..");
+
+const isParserValidatorGuarded = (file: string) => {
+  let guarded = false;
+  for (const scope of readScopes(config)) {
+    if (
+      !scope.files.some((glob) => new Bun.Glob(glob).match(file)) ||
+      scope.excludeFiles.some((glob) => new Bun.Glob(glob).match(file))
+    ) {
+      continue;
+    }
+    if (PARSER_VALIDATOR_RULE_ID in scope.rules) {
+      guarded = !ruleIsOff(scope.rules[PARSER_VALIDATOR_RULE_ID]);
+    }
+  }
+  return guarded;
+};
+
+test("parser validation guard covers both parser trees and adapters, leaving the pipeline and oracle as owners", () => {
+  for (const file of [
+    "apps/api/src/handlers/case-law/ingestion/parsers/new-source.ts",
+    "apps/api/src/handlers/case-law/ingestion/parsers/nested/new-source.ts",
+    "apps/api/src/handlers/case-law/ingestion/adapters/new-source.ts",
+    "apps/api/src/lib/legal-search/parsers/new-source.ts",
+  ]) {
+    expect(isParserValidatorGuarded(file)).toBe(true);
+  }
+  for (const file of [
+    "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts",
+    "apps/api/src/lib/legal-search/parsers/validate-ast.ts",
+    "apps/api/src/handlers/case-law/ingestion/parsers/new-source.test.ts",
+    ".oxlint-plugins/__fixtures__/no-parser-validator-calls.fixture.pipeline.ts",
+  ]) {
+    expect(isParserValidatorGuarded(file)).toBe(false);
+  }
+});
+
+test("validator ledger only removes entries from the target branch", () => {
+  const exists = Bun.spawnSync(
+    ["git", "cat-file", "-e", `origin/main:${PARSER_VALIDATOR_LEDGER_PATH}`],
+    {
+      cwd: PARSER_VALIDATOR_REPO_ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  if (exists.exitCode !== 0) {
+    // The initial guard introduces the ledger; subsequent changes compare it
+    // to main so removing debt cannot finance another legacy caller.
+    const tree = Bun.spawnSync(
+      ["git", "rev-parse", "--verify", "origin/main"],
+      {
+        cwd: PARSER_VALIDATOR_REPO_ROOT,
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(tree.exitCode).toBe(0);
+    return;
+  }
+  const previous = Bun.spawnSync(
+    ["git", "show", `origin/main:${PARSER_VALIDATOR_LEDGER_PATH}`],
+    {
+      cwd: PARSER_VALIDATOR_REPO_ROOT,
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  expect(previous.exitCode).toBe(0);
+  const parsed: unknown = JSON.parse(previous.stdout.toString());
+  expect(Array.isArray(parsed)).toBe(true);
+  if (!Array.isArray(parsed)) {
+    return;
+  }
+  const allowed = new Set(parsed);
+  expect(validatorLedger.filter((entry) => !allowed.has(entry))).toEqual([]);
+});
+
+test("legacy ledger entries remain scoped and point to existing source files", () => {
+  expect(validatorLedger).toEqual([...new Set(validatorLedger)].toSorted());
+  for (const entry of validatorLedger) {
+    const file = entry.split("::").at(0);
+    expect(file).toBeDefined();
+    if (file === undefined) {
+      continue;
+    }
+    expect(isParserValidatorGuarded(file)).toBe(true);
+    expect(
+      readFileSync(nodePath.join(PARSER_VALIDATOR_REPO_ROOT, file), "utf-8")
+        .length,
+    ).toBeGreaterThan(0);
   }
 });

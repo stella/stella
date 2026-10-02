@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/entities/list-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const listFoldersQuerySchema = t.Object({
   limit: t.Optional(
@@ -36,7 +37,9 @@ const listFoldersHandler = async function* ({
   safeDb,
   workspaceId,
 }: ListFoldersHandlerProps) {
-  const limit = query.limit ?? LIMITS.entitiesWindowSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.entitiesWindowSizeDefault,
+  );
   const cursor = decodeEntityListCursor(query.cursor);
   const cursorCondition = entityListCursorCondition(cursor);
   const rows = yield* Result.await(

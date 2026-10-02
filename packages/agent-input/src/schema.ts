@@ -390,14 +390,20 @@ const normalizeLeaf = ({
       return normalizeLocale(value);
     case "number": {
       const locale = annotation.locale;
+      const types = isUnknownArray(schema["type"])
+        ? schema["type"]
+        : [schema["type"]];
       if (annotation.range === "clamp") {
-        const types = isUnknownArray(schema["type"])
-          ? schema["type"]
-          : [schema["type"]];
         return normalizeNumberInRange(value, {
           minimum: numericKeyword(schema, "minimum"),
           maximum: numericKeyword(schema, "maximum"),
           integer: types.includes("integer"),
+          ...(locale === undefined ? {} : { locale }),
+        });
+      }
+      if (types.includes("integer")) {
+        return normalizeNumberInRange(value, {
+          integer: true,
           ...(locale === undefined ? {} : { locale }),
         });
       }
@@ -757,7 +763,7 @@ const childSchemasOf = (
   const properties = schema["properties"];
   const patternProperties = schema["patternProperties"];
   const childSchemas: unknown[] = [];
-  if (isRecord(properties) && key in properties) {
+  if (isRecord(properties) && Object.hasOwn(properties, key)) {
     childSchemas.push(properties[key]);
   }
   if (isRecord(patternProperties)) {
@@ -827,7 +833,12 @@ const walkObject = ({
     // A placeholder in an optional property is read as not sent, so the key
     // is left out of the output rather than carried with its placeholder.
     if (reading.status === "value") {
-      output[key] = reading.value;
+      Object.defineProperty(output, key, {
+        value: reading.value,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
     }
   }
   return issues.length > 0

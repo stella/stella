@@ -23,8 +23,10 @@ import { isRecord } from "@/api/lib/type-guards";
 // cached prefix:
 // - `cache_control` markers. A marker says where a cached prefix ends; moving
 //   it forward to the newest message is how an incremental conversation is
-//   cached, so its position is not prefix content. Chat marks only its system
-//   prompt (`systemPromptsPatch`), where it never moves.
+//   cached, so its position is not prefix content. Chat marks the ends of its
+//   system prompt's static and organization layers, which never move, and
+//   sets the request-level marker that lands on each request's last block
+//   (`chat-request.ts`).
 // - Model options, OpenAI's `prompt_cache_key` among them: a request's
 //   settings, not its prompt. The key is derived from the stable part of the
 //   system prompt (`buildChatPromptCacheKey`), so it holds whenever the

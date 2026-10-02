@@ -63,7 +63,7 @@ describe("lookupByTaxId (fixture)", () => {
       });
     });
 
-    const company = await lookupByTaxId("22099131");
+    const company = await lookupByTaxId("22099131", { observer: "unobserved" });
     expect(company).not.toBeNull();
     expect(company?.taxId).toBe("22099131");
     expect(company?.name).toBe("台灣積體電路製造股份有限公司");
@@ -87,7 +87,7 @@ describe("lookupByTaxId (fixture)", () => {
         }),
     );
 
-    const company = await lookupByTaxId("12345676");
+    const company = await lookupByTaxId("12345676", { observer: "unobserved" });
     expect(company).toBeNull();
   });
 
@@ -102,7 +102,7 @@ describe("lookupByTaxId (fixture)", () => {
         }),
     );
 
-    const company = await lookupByTaxId("12345676");
+    const company = await lookupByTaxId("12345676", { observer: "unobserved" });
     expect(company).toBeNull();
   });
 
@@ -115,7 +115,9 @@ describe("lookupByTaxId (fixture)", () => {
         }),
     );
 
-    expect(lookupByTaxId("22099131")).rejects.toMatchObject({
+    expect(
+      lookupByTaxId("22099131", { observer: "unobserved" }),
+    ).rejects.toMatchObject({
       name: "GcisAPIError",
       httpStatus: 500,
     });
@@ -134,7 +136,9 @@ describe("lookupByTaxId (fixture)", () => {
         }),
     );
 
-    expect(lookupByTaxId("22099131")).rejects.toMatchObject({
+    expect(
+      lookupByTaxId("22099131", { observer: "unobserved" }),
+    ).rejects.toMatchObject({
       name: "GcisAPIError",
     });
   });
@@ -161,7 +165,7 @@ describe("searchByName (fixture)", () => {
         }),
     );
 
-    const results = await searchByName("台積電");
+    const results = await searchByName("台積電", { observer: "unobserved" });
     expect(results.length).toBe(2);
     expect(results[0]?.taxId).toBe("54900838");
     expect(results[0]?.name).toBe("台積電機有限公司");
@@ -178,7 +182,7 @@ describe("searchByName (fixture)", () => {
       });
     });
 
-    await searchByName("台積", { limit: 7 });
+    await searchByName("台積", { observer: "unobserved", limit: 7 });
     expect(captured).toHaveLength(2);
     const status01Url = captured.at(0);
     const status02Url = captured.at(1);
@@ -225,7 +229,10 @@ describe("searchByName (fixture)", () => {
       );
     });
 
-    const results = await searchByName("台積", { limit: 2 });
+    const results = await searchByName("台積", {
+      observer: "unobserved",
+      limit: 2,
+    });
     expect(results.map((result) => result.taxId)).toEqual([
       "54900838",
       "90312187",
@@ -249,7 +256,10 @@ describe("searchByName (fixture)", () => {
         ),
     );
 
-    const results = await searchByName("台積", { activeOnly: false });
+    const results = await searchByName("台積", {
+      observer: "unobserved",
+      activeOnly: false,
+    });
     expect(results.map((result) => result.taxId)).toEqual(["54900838"]);
   });
 
@@ -262,7 +272,9 @@ describe("searchByName (fixture)", () => {
         }),
     );
 
-    expect(lookupByTaxId("22099131")).rejects.toMatchObject({
+    expect(
+      lookupByTaxId("22099131", { observer: "unobserved" }),
+    ).rejects.toMatchObject({
       name: "GcisAPIError",
       message: "GCIS returned no rows with the fields required by stella",
     });
@@ -278,7 +290,10 @@ describe("searchByName (fixture)", () => {
       });
     });
 
-    await searchByName("Bob's 台積", { activeOnly: false });
+    await searchByName("Bob's 台積", {
+      observer: "unobserved",
+      activeOnly: false,
+    });
     const url = captured.at(0);
     expect(url).toBeDefined();
     expect(url).toContain("Bob%27%27s");
@@ -294,7 +309,7 @@ describe("searchByName (fixture)", () => {
       });
     });
 
-    await searchByName("台積", { activeOnly: false });
+    await searchByName("台積", { observer: "unobserved", activeOnly: false });
     expect(captured).toHaveLength(1);
     const url = captured.at(0);
     expect(url).toBeDefined();
@@ -307,25 +322,29 @@ describe("searchByName (fixture)", () => {
 // ---------------------------------------------------------------------------
 describe("lookupByTaxId validation", () => {
   test("rejects format violations", () => {
-    expect(lookupByTaxId("1234567")).rejects.toBeInstanceOf(
-      GcisValidationError,
-    );
-    expect(lookupByTaxId("abcdefgh")).rejects.toBeInstanceOf(
-      GcisValidationError,
-    );
+    expect(
+      lookupByTaxId("1234567", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(GcisValidationError);
+    expect(
+      lookupByTaxId("abcdefgh", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(GcisValidationError);
   });
 
   test("rejects bad checksum", () => {
     // 22099131 is valid; bump the check digit.
-    expect(lookupByTaxId("22099130")).rejects.toBeInstanceOf(
-      GcisValidationError,
-    );
+    expect(
+      lookupByTaxId("22099130", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(GcisValidationError);
   });
 });
 
 describe("searchByName validation", () => {
   test("rejects empty input", () => {
-    expect(searchByName("")).rejects.toBeInstanceOf(GcisValidationError);
-    expect(searchByName("  ")).rejects.toBeInstanceOf(GcisValidationError);
+    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
+      GcisValidationError,
+    );
+    expect(
+      searchByName("  ", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(GcisValidationError);
   });
 });

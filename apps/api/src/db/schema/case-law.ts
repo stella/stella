@@ -70,7 +70,10 @@ import {
 import { liveCaseLawLegacyReferenceSql } from "@/api/lib/legal-search/case-law-legacy-reference-sql";
 import { PACK_MEMBER_KINDS } from "@/api/lib/legal-search/corpus-pack";
 import { DECISION_SUPPLEMENT_KINDS } from "@/api/lib/legal-search/decision-supplement-kind";
-import { storedObservationHasDetail } from "@/api/lib/legal-search/partial-observation-sql";
+import {
+  storedObservationHasDetail,
+  storedObservationIsListingOnly,
+} from "@/api/lib/legal-search/partial-observation-sql";
 import { documentFetchParked } from "@/api/lib/legal-search/sk-document-parking-sql";
 
 import {
@@ -483,6 +486,15 @@ export const caseLawDecisions = p.pgTable(
      * identifiers.
      */
     citationKey: p.varchar("citation_key", { length: 128 }),
+    /**
+     * The case file `caseNumber` belongs to, keyed by its jurisdiction's
+     * docket grammar with any sheet or part the publisher printed after it
+     * cut away (`docketFamilyKeyOf`), so every decision of one file shares it
+     * however its own docket is spelled. Null when the docket does not parse,
+     * when the jurisdiction has no docket grammar, when the reference is not
+     * a docket, and on rows no write has keyed yet.
+     */
+    docketFamilyKey: p.text("docket_family_key"),
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
@@ -502,6 +514,8 @@ export const caseLawDecisions = p.pgTable(
     decisionDate: p.date("decision_date"),
     decisionType: p.varchar("decision_type", { length: 128 }),
     fulltext: p.text(),
+    /** Last reconciliation attempt to re-read a textless listing-only detail. */
+    textlessDetailRecheckedAt: timestamptz("textless_detail_rechecked_at"),
     sections: jsonb().$type<DecisionSection[]>(),
     documentAst: jsonb("document_ast").$type<DocumentAst | EmptyAst>(),
     /**
@@ -714,6 +728,12 @@ export const caseLawDecisions = p.pgTable(
       .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
+    // A bare docket's lookup reads its whole case file by this key, siblings
+    // stored with their sheet included.
+    p
+      .index("case_law_decisions_docket_family_key_idx")
+      .on(t.docketFamilyKey)
+      .where(isNotNull(t.docketFamilyKey)),
     p
       .index("case_law_decisions_lang_group_idx")
       .on(t.languageGroupKey)
@@ -753,6 +773,18 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_generation_cursor_idx")
       .on(t.sourceId, t.createdAt, t.id),
     p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
+    p
+      .index("case_law_decisions_textless_detail_recheck_idx")
+      .on(
+        t.sourceId,
+        sql`coalesce(${t.textlessDetailRecheckedAt}, ${t.updatedAt})`,
+        t.id,
+      )
+      .where(
+        sql`${t.fulltext} IS NULL
+          AND ${storedObservationIsListingOnly(t.metadata)}
+          AND ${t.redactedAt} IS NULL`,
+      ),
     p
       .index("case_law_decisions_live_legacy_raw_source_idx")
       .on(t.sourceId, t.id)
@@ -1201,6 +1233,37 @@ export const caseLawDecisionSourceIdentities = p.pgTable(
     p
       .index("case_law_decision_source_identities_decision_idx")
       .on(t.decisionId),
+    ...caseLawIngestionOnlyPolicies(),
+  ],
+);
+
+/** Retired UUIDs outlive their rows; targets remain live and chains are flattened. */
+export const caseLawDecisionAliases = p.pgTable(
+  "case_law_decision_aliases",
+  {
+    retiredDecisionId: safeUuid<"caseLawDecision">(
+      "retired_decision_id",
+    ).primaryKey(),
+    canonicalDecisionId: safeUuid<"caseLawDecision">(
+      "canonical_decision_id",
+    ).notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p
+      .index("case_law_decision_aliases_canonical_idx")
+      .on(t.canonicalDecisionId),
+    p
+      .foreignKey({
+        name: "case_law_decision_aliases_canonical_fk",
+        columns: [t.canonicalDecisionId],
+        foreignColumns: [caseLawDecisions.id],
+      })
+      .onDelete("restrict"),
+    p.check(
+      "case_law_decision_aliases_not_self",
+      sql`${t.retiredDecisionId} <> ${t.canonicalDecisionId}`,
+    ),
     ...caseLawIngestionOnlyPolicies(),
   ],
 );
@@ -2902,12 +2965,21 @@ export const caseLawIngestionFailures = p.pgTable(
     errorType: p.varchar("error_type", { length: 128 }).notNull(),
     errorMessage: p.varchar("error_message", { length: 2048 }).notNull(),
     cursor: p.text(),
+    /**
+     * The failing record's stable identity where its caller names one; a
+     * record written again with the same identity keeps its one row.
+     */
+    recordIdentity: p.varchar("record_identity", { length: 256 }),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
     p.index("case_law_ingestion_failures_source_idx").on(t.sourceId),
     p.index("case_law_ingestion_failures_error_type_idx").on(t.errorType),
     p.index("case_law_ingestion_failures_created_idx").on(t.createdAt),
+    p
+      .uniqueIndex("case_law_ingestion_failures_source_record_uidx")
+      .on(t.sourceId, t.recordIdentity)
+      .where(isNotNull(t.recordIdentity)),
     ...globalCaseLawPolicies(),
   ],
 );

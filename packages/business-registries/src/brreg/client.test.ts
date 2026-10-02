@@ -5,28 +5,32 @@ import { BrregTooBroadError, BrregValidationError } from "./errors.js";
 
 describe("lookupByOrgnr validation", () => {
   test("throws BrregValidationError for short input", () => {
-    expect(lookupByOrgnr("12345678")).rejects.toBeInstanceOf(
-      BrregValidationError,
-    );
+    expect(
+      lookupByOrgnr("12345678", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(BrregValidationError);
   });
 
   test("throws BrregValidationError on bad checksum", () => {
-    expect(lookupByOrgnr("974760674")).rejects.toBeInstanceOf(
-      BrregValidationError,
-    );
+    expect(
+      lookupByOrgnr("974760674", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(BrregValidationError);
   });
 });
 
 describe("searchByName validation", () => {
   test("rejects empty input", () => {
-    expect(searchByName("")).rejects.toBeInstanceOf(BrregValidationError);
-    expect(searchByName("   ")).rejects.toBeInstanceOf(BrregValidationError);
+    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
+      BrregValidationError,
+    );
+    expect(
+      searchByName("   ", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(BrregValidationError);
   });
 
   test("rejects overlong input", () => {
-    expect(searchByName("a".repeat(181))).rejects.toBeInstanceOf(
-      BrregValidationError,
-    );
+    expect(
+      searchByName("a".repeat(181), { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(BrregValidationError);
   });
 });
 
@@ -48,6 +52,8 @@ describe("searchByName upstream 400 handling", () => {
       preconnect: originalFetch.preconnect,
     });
 
-    expect(searchByName("a")).rejects.toBeInstanceOf(BrregTooBroadError);
+    expect(
+      searchByName("a", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(BrregTooBroadError);
   });
 });

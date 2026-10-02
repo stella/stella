@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
-import { and, asc, eq, gt, ne, sql } from "drizzle-orm";
+import { and, asc, eq, gt, ne, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { parsePlainDate } from "@stll/time";
 
 import { timeDailyTargets, timeEntries, workspaces } from "@/api/db/schema";
@@ -22,13 +23,15 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 
 const DELETING_WORKSPACE_STATUS = "deleting" as const;
 
 const myTimeEntryColumns = {
   id: timeEntries.id,
-  workspaceId: workspaces.id,
+  activityGroup: timeEntries.activityGroup,
+  workspaceId: timeEntries.workspaceId,
   workspaceName: workspaces.name,
   workspaceReference: workspaces.reference,
   dateWorked: timeEntries.dateWorked,
@@ -42,26 +45,53 @@ const myTimeEntryColumns = {
 };
 
 type MyTimeEntrySourceRow = typeof timeEntries.$inferSelect & {
-  workspaceName: (typeof workspaces.$inferSelect)["name"];
-  workspaceReference: (typeof workspaces.$inferSelect)["reference"];
+  workspaceName: (typeof workspaces.$inferSelect)["name"] | null;
+  workspaceReference: (typeof workspaces.$inferSelect)["reference"] | null;
 };
 
 const toMyTimeEntryItem = (
   row: Pick<MyTimeEntrySourceRow, keyof typeof myTimeEntryColumns>,
-) => ({
-  id: row.id,
-  workspaceId: row.workspaceId,
-  workspaceName: row.workspaceName,
-  workspaceReference: row.workspaceReference,
-  dateWorked: row.dateWorked,
-  durationMinutes: row.durationMinutes,
-  billedMinutes: row.billedMinutes,
-  narrative: row.narrative,
-  billable: row.billable,
-  status: row.status,
-  source: row.source,
-  timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
-});
+) => {
+  const common = {
+    id: row.id,
+    dateWorked: row.dateWorked,
+    durationMinutes: row.durationMinutes,
+    billedMinutes: row.billedMinutes,
+    narrative: row.narrative,
+    billable: row.billable,
+    status: row.status,
+    source: row.source,
+    timerStartedAt: row.timerStartedAt?.toISOString() ?? null,
+  };
+  switch (row.activityGroup) {
+    case TIME_ENTRY_ACTIVITY_GROUP.CLIENT:
+      if (
+        !row.workspaceId ||
+        row.workspaceName === null ||
+        row.workspaceReference === null
+      ) {
+        return panic("Client time entry is missing its authorized matter");
+      }
+      return {
+        ...common,
+        activityGroup: row.activityGroup,
+        workspaceId: row.workspaceId,
+        workspaceName: row.workspaceName,
+        workspaceReference: row.workspaceReference,
+      };
+    case TIME_ENTRY_ACTIVITY_GROUP.INTERNAL:
+      return {
+        ...common,
+        activityGroup: row.activityGroup,
+        workspaceId: null,
+        workspaceName: null,
+        workspaceReference: null,
+      };
+    default:
+      row.activityGroup satisfies never;
+      return panic("Unknown time entry activity group");
+  }
+};
 
 const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   // The request is scoped to the active organization and signed-in user.
@@ -85,6 +115,13 @@ const UNPROJECTED_MY_TIME_ENTRY_COLUMNS = [
   "timerStoppedAt",
   "createdAt",
   "updatedAt",
+  // Approval metadata is exposed by the approval queue.
+  "approverUserId",
+  "approvedByUserId",
+  "approvedAt",
+  "returnedByUserId",
+  "returnedAt",
+  "returnComment",
 ] as const satisfies readonly (keyof MyTimeEntrySourceRow)[];
 
 type MissingMyTimeEntryColumn = UnprojectedColumns<
@@ -103,12 +140,17 @@ true satisfies UnexpectedMyTimeEntryColumn extends never ? true : never;
 
 const config = {
   description:
-    "List the signed-in user's time entries for one work date across matters " +
-    "in the active organization. Returns only matters the caller can still access, " +
-    "with a cursor for the next page. Logged minutes, daily target and remaining minutes cover all " +
+    "List the signed-in user's client and internal time entries for one work date " +
+    "in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
+    "Follow the cursor for the next page. Logged minutes, daily target and remaining minutes cover all " +
     "accessible entries for the date, independently of pagination. Logged minutes sum client and internal durations; target and remaining minutes are null when no target is set.",
   permissions: { timeEntry: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     date: t.String({
@@ -151,20 +193,28 @@ const listMyTimeEntries = createSafeRootHandler(
       );
     }
 
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const dayScope = and(
       eq(timeEntries.organizationId, session.activeOrganizationId),
       eq(timeEntries.userId, user.id),
       eq(timeEntries.dateWorked, query.date),
-      eq(workspaces.organizationId, session.activeOrganizationId),
-      ne(workspaces.status, DELETING_WORKSPACE_STATUS),
+      or(
+        eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.INTERNAL),
+        and(
+          eq(timeEntries.activityGroup, TIME_ENTRY_ACTIVITY_GROUP.CLIENT),
+          eq(workspaces.organizationId, session.activeOrganizationId),
+          ne(workspaces.status, DELETING_WORKSPACE_STATUS),
+        ),
+      ),
     );
     const day = yield* Result.await(
       safeDb(async (tx) => {
         const rows = await tx
           .select(myTimeEntryColumns)
           .from(timeEntries)
-          .innerJoin(
+          .leftJoin(
             workspaces,
             and(
               eq(timeEntries.workspaceId, workspaces.id),
@@ -187,7 +237,7 @@ const listMyTimeEntries = createSafeRootHandler(
           )`,
           })
           .from(timeEntries)
-          .innerJoin(
+          .leftJoin(
             workspaces,
             and(
               eq(timeEntries.workspaceId, workspaces.id),

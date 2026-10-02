@@ -1,0 +1,67 @@
+import { describe, expect, test } from "bun:test";
+
+import { integrationStatus, matchesConnectionQuery } from "./connections.logic";
+
+describe("connection search", () => {
+  test("an empty or blank query matches every row", () => {
+    expect(matchesConnectionQuery("", ["Claude"])).toBe(true);
+    expect(matchesConnectionQuery("   ", ["Claude"])).toBe(true);
+  });
+
+  test("matching ignores case and accents", () => {
+    expect(matchesConnectionQuery("cesky", ["Český katastr"])).toBe(true);
+    expect(matchesConnectionQuery("KATASTR", ["Český katastr"])).toBe(true);
+  });
+
+  test("every word must appear, in any field", () => {
+    expect(
+      matchesConnectionQuery("drive firm", ["Document Drive", "Firm files"]),
+    ).toBe(true);
+    expect(matchesConnectionQuery("drive chat", ["Document Drive"])).toBe(
+      false,
+    );
+  });
+
+  test("missing fields are skipped", () => {
+    expect(
+      matchesConnectionQuery("harbrook", [null, undefined, "Harbrook"]),
+    ).toBe(true);
+  });
+});
+
+describe("integration status", () => {
+  test("a server that needs no sign-in shows no status until used", () => {
+    expect(integrationStatus("none", undefined)).toBeNull();
+  });
+
+  test("a server that needs sign-in and has none reads as not connected", () => {
+    expect(integrationStatus("oauth", undefined)).toEqual({
+      tone: "neutral",
+      labelKey: "settings.connections.notConnected",
+    });
+    expect(
+      integrationStatus("bearer", { status: "revoked", enabled: true }),
+    ).toEqual({
+      tone: "neutral",
+      labelKey: "settings.connections.notConnected",
+    });
+  });
+
+  test("an expired sign-in asks for a reconnect", () => {
+    expect(
+      integrationStatus("oauth", { status: "needs_reauth", enabled: true }),
+    ).toEqual({ tone: "warning", labelKey: "knowledge.mcp.needsReauth" });
+  });
+
+  test("a connected server the user switched off says so", () => {
+    expect(
+      integrationStatus("oauth", { status: "connected", enabled: false }),
+    ).toEqual({ tone: "neutral", labelKey: "settings.connections.turnedOff" });
+  });
+
+  test("a live connection reads as connected", () => {
+    expect(
+      integrationStatus("oauth", { status: "connected", enabled: true }),
+    ).toEqual({ tone: "success", labelKey: "settings.connections.connected" });
+  });
+});

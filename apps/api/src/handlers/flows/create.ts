@@ -20,7 +20,11 @@ const config = {
     "registered with the scheduler afterwards. Refused once the organization " +
     "holds its maximum number of flows.",
   permissions: { flow: ["create"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   body: flowDefinitionBodySchema,
 } satisfies HandlerConfig;
 

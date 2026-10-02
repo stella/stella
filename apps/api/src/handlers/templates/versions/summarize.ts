@@ -21,7 +21,11 @@ const config = {
     "Returns summary null when the two are identical, skipping the model " +
     "call. Consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   access: "write",
   params: templateVersionSummarizeParamsSchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -35,7 +39,15 @@ const config = {
  */
 const templateVersionSummarize = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params, safeDb, user, orgAIConfig }) {
+  async function* ({
+    scopedDb,
+    session,
+    params,
+    safeDb,
+    user,
+    orgAIConfig,
+    managedAIResidency,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     const sources = yield* Result.await(
@@ -71,6 +83,7 @@ const templateVersionSummarize = createSafeRootHandler(
         currentText: sources.currentText,
         feature: "templates.version_summary",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         safeDb,
         userId: user.id,

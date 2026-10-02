@@ -9,7 +9,9 @@
  * scans the table however few rows it matches, and no empty-database rehearsal
  * can tell the two apart. `scripts/check-migration-safety.ts` therefore refuses
  * UPDATE, DELETE, INSERT ... SELECT and MERGE against these names in a schema
- * migration, with no acknowledgement. A data repair on one of them is a
+ * migration, with no acknowledgement. Index builds on existing tables in this
+ * size class also belong in ONLINE_MIGRATION_INDEXES in the online phase.
+ * A data repair on one of them is a
  * registered online repair (`online-migrations.ts`): bounded batches over an
  * indexed access path, resumable, validated on completion.
  *

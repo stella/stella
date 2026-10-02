@@ -25,7 +25,11 @@ const config = {
     "Pass expectedUpdatedAt from style-sets.editor.get so an edit made in " +
     "the meantime is rejected instead of overwritten.",
   permissions: { styleSet: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: paramsSchema,
   body: updateStyleSetFromEditorSchema,
 } satisfies HandlerConfig;

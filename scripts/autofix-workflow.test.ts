@@ -245,7 +245,7 @@ describe("changed-file autofix boundary", () => {
     expect(job.slice(planStep, runStep)).not.toContain("GH_TOKEN:");
     expect(
       job.slice(restrictionStep, job.indexOf("- name: Push autofixes")),
-    ).not.toContain("bun ");
+    ).toContain("--check-improvements-only");
     expect(job).toContain(
       'if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then',
     );
@@ -261,12 +261,16 @@ describe("changed-file autofix boundary", () => {
     expect(
       ordered.findIndex(({ id }) => id === "capability-catalog"),
     ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
+    expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
+      ordered.findIndex(({ id }) => id === "cli-runtime"),
+    );
     expect(ordered.map(({ id }) => id).toSorted()).toEqual(
       [
+        "ratchet-improvements",
         "capability-catalog",
         "cli-registry",
+        "cli-runtime",
         "mcp-app-bundles",
-        "web-api-types",
         "mcp-surface",
         "module-ownership",
         "design-tokens",
@@ -306,9 +310,15 @@ describe("changed-file autofix boundary", () => {
           .split("\n")
           .map((line) => line.trim().replace(/^run: /u, "")),
       );
-      const write: readonly string[] = generator.write;
-      const check = write.includes("--write")
-        ? write.map((part) => (part === "--write" ? "--check" : part))
+      // Runtime flags don't change what a command checks; an improvements-only
+      // writer is guarded by the full check.
+      const write = generator.write.filter(
+        (part) => part !== "--no-install" && part !== "--no-env-file",
+      );
+      const writesBaseline = (part: string) =>
+        part === "--write" || part === "--write-improvements-only";
+      const check = write.some(writesBaseline)
+        ? write.map((part) => (writesBaseline(part) ? "--check" : part))
         : [...write, "--check"];
       const render = (argv: readonly string[]) => {
         const cwd = argv.at(1);
@@ -360,7 +370,9 @@ describe("changed-file autofix boundary", () => {
       "mapfile -d '' -t changed < \"$RUNNER_TEMP/autofix-changed-paths\"",
     );
     expect(fix).toContain('[[ -f "$path" && ! -L "$path" ]]');
-    expect(fix).toContain('if [[ "$path" == .github/workflows/* ]]; then');
+    expect(fix).toContain(
+      'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
+    );
     expect(fix).toContain(
       `bun --bun oxlint -c oxlint.config.ts --no-error-on-unmatched-pattern --fix "\${lint_paths[@]}"`,
     );
@@ -379,7 +391,7 @@ describe("changed-file autofix boundary", () => {
       'excludes+=(":(exclude,literal)$path")',
     );
     expect(job.slice(restrictionStep, pushStep)).toContain(
-      'if [[ "$path" == .github/workflows/* ]]; then',
+      'if [[ "$path" == .github/workflows/* || "$path" == scripts/ratchet-baseline.json ]]; then',
     );
     expect(job).not.toContain("git commit");
     expect(job).not.toContain("git push");

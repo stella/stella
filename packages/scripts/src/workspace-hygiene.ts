@@ -46,17 +46,13 @@ const TYPESCRIPT6_COMPATIBILITY = {
   astro: {
     dependency: "@astrojs/check",
     packagePath: "apps/landing/package.json",
-    script: "bun --bun astro check",
+    script:
+      "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
     specifier: "^0.9.9",
   },
   compilerApi: {
     dependency: "typescript",
     packagePath: "packages/scripts/package.json",
-    specifier: "catalog:",
-  },
-  ultracite: {
-    dependency: "ultracite",
-    packagePath: "package.json",
     specifier: "catalog:",
   },
 } as const;

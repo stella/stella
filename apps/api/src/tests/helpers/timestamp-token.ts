@@ -13,7 +13,10 @@ import * as pkijs from "pkijs";
 
 import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
 import { createTestCertificate } from "@/api/tests/helpers/test-pki";
-import type { TestCertificate } from "@/api/tests/helpers/test-pki";
+import type {
+  TestCertificate,
+  TestRsaKeyPool,
+} from "@/api/tests/helpers/test-pki";
 
 const ID_CT_TST_INFO = "1.2.840.113549.1.9.16.1.4";
 const ID_SIGNED_DATA = "1.2.840.113549.1.7.2";
@@ -40,17 +43,20 @@ export const createTestTimestampCertificate = async ({
   critical = true,
   extendedKeyUsages = [TIME_STAMPING_USAGE],
   issuer,
+  keyPool,
   notAfter,
   notBefore,
 }: {
   critical?: boolean;
   extendedKeyUsages?: string[];
   issuer?: TestCertificate;
+  keyPool?: TestRsaKeyPool;
   notAfter?: Date;
   notBefore?: Date;
 } = {}) =>
   await createTestCertificate({
     commonName: "stella test timestamp authority",
+    ...(keyPool !== undefined && { keyPool }),
     extendedKeyUsages,
     extendedKeyUsagesCritical: critical,
     ...(issuer !== undefined && { issuer }),
@@ -155,13 +161,19 @@ export type TestTimestampAuthority = TimestampAuthority & {
 
 /** A `TimestampAuthority` answering in process, with no nonce. */
 export const createTestTimestampAuthority = async ({
+  keyPool,
   misbehaviour,
   signer,
 }: {
+  keyPool?: TestRsaKeyPool;
   misbehaviour?: TestTimestampMisbehaviour;
   signer?: TestCertificate;
 } = {}): Promise<TestTimestampAuthority> => {
-  const tsa = signer ?? (await createTestTimestampCertificate());
+  const tsa =
+    signer ??
+    (await createTestTimestampCertificate({
+      ...(keyPool !== undefined && { keyPool }),
+    }));
   let serial = 0;
   return {
     issued: () => serial,
@@ -183,9 +195,15 @@ export const createTestTimestampAuthority = async ({
  * answers with a TimeStampResp, echoing its nonce unless told not to.
  */
 export const createTestTimestampResponder = async ({
+  keyPool,
   misbehaviour,
-}: { misbehaviour?: TestTimestampMisbehaviour } = {}) => {
-  const signer = await createTestTimestampCertificate();
+}: {
+  keyPool?: TestRsaKeyPool;
+  misbehaviour?: TestTimestampMisbehaviour;
+} = {}) => {
+  const signer = await createTestTimestampCertificate({
+    ...(keyPool !== undefined && { keyPool }),
+  });
   const requests: { contentType?: string; url: string }[] = [];
   let serial = 0;
   const fetcher: PkiFetcher = async ({ body, contentType, url }) => {

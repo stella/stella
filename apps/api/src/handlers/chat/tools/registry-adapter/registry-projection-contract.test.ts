@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
   countedSearchTotal,
@@ -189,6 +190,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       pinnedIds: [],
     }),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
     testDependencies: {
       readWorkspaceHandler: readWorkspaceHandlerMock,
       readOverviewHandler: readOverviewHandlerMock,
@@ -1089,6 +1091,7 @@ const CONTRACT_CORPUS = {
           [
             {
               id: uid(40),
+              activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: uid(41),
               userId: uid(42),
               dateWorked: "2026-01-01",
@@ -1117,6 +1120,7 @@ const CONTRACT_CORPUS = {
           [
             {
               id: uid(44),
+              activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: null,
               userId: null,
               dateWorked: "2026-01-02",
@@ -1124,7 +1128,7 @@ const CONTRACT_CORPUS = {
               billedMinutes: 30,
               rateAtEntry: 0,
               currency: "XXX",
-              narrative: "Unassigned internal work",
+              narrative: "Unassigned non-billable work",
               narrativeLanguage: null,
               invoiceNarrative: null,
               billable: false,
@@ -1148,6 +1152,7 @@ const CONTRACT_CORPUS = {
           [
             {
               id: uid(40),
+              activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
               entityId: uid(41),
               userId: uid(42),
               dateWorked: "2026-01-01",
@@ -1179,6 +1184,8 @@ const CONTRACT_CORPUS = {
             {
               id: uid(45),
               invoiceNumber: "INV-1",
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: "Acme January",
               status: "draft",
               invoiceDate: "2026-01-01",
@@ -1202,6 +1209,8 @@ const CONTRACT_CORPUS = {
               id: uid(46),
               workspaceId: WS,
               invoiceNumber: "INV-2",
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: "Acme February",
               status: "draft",
               invoiceDate: "2026-02-01",
@@ -1406,6 +1415,7 @@ const CONTRACT_CORPUS = {
       buildArgs: () => ({ decision_ids: [uid(54)] }),
       setup: () => {
         readGatedDecisionWithDocumentMock.mockResolvedValue({
+          hasDocument: true,
           documentPending: false,
           documentReadFailed: false,
           documentUnavailable: false,

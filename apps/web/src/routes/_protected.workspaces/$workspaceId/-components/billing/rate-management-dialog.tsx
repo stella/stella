@@ -1,8 +1,7 @@
 import { useState } from "react";
 
-import { useForm } from "@tanstack/react-form";
+import { useForm, useSelector } from "@tanstack/react-form";
 import { useMutation, useQuery, useSuspenseQuery } from "@tanstack/react-query";
-import { useSelector } from "@tanstack/react-store";
 import { useTranslations } from "use-intl";
 import * as v from "valibot";
 
@@ -25,6 +24,7 @@ import {
 } from "@stll/ui/select";
 import { stellaToast } from "@stll/ui/toast";
 
+import { formatCurrencyAmount } from "@/components/billing/format-currency";
 import { DatePickerPopover } from "@/components/date-picker-popover";
 import { UserIdentity } from "@/components/user-avatar";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -45,7 +45,6 @@ import {
   rateEntriesOptions,
   rateTablesOptions,
 } from "@/lib/workspaces/queries/rates";
-import { formatCurrencyAmount } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/format-currency";
 
 type RateManagementDialogProps = {
   open: boolean;

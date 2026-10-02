@@ -8,6 +8,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { MemberRole } from "@/api/lib/member-roles";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { bindWorkspaceRecorder } from "@/api/mcp/tool-utils";
@@ -34,7 +35,7 @@ export type SynthesizedCapabilityContext = {
   request: Request;
   route: string;
   set: { headers: Record<string, string> };
-  user: { id: SafeId<"user"> };
+  user: { id: SafeId<"user">; email: string };
   session: { activeOrganizationId: SafeId<"organization"> };
   scopedDb: ScopedDb;
   safeDb: SafeDb;
@@ -48,6 +49,7 @@ export type SynthesizedCapabilityContext = {
   orgAIConfig: OrgAIConfig | null;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
   recordAuditEvent: AuditRecorder;
   createAuditRecorder: (opts?: {
     workspaceId?: SafeId<"workspace"> | null;
@@ -108,11 +110,15 @@ export const synthesizeCapabilityContext = async ({
     organizationId: context.organizationId,
     userId: context.userId,
   };
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
-      operationDatabaseScope.scopedDb(
-        async (tx) => await loadOrgSettingsForAuth(tx, reader),
-      ));
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = await (context.testDependencies?.loadOrgSettingsForAuth?.(reader) ??
+    operationDatabaseScope.scopedDb(
+      async (tx) => await loadOrgSettingsForAuth(tx, reader),
+    ));
 
   return {
     body: input.body,
@@ -121,7 +127,7 @@ export const synthesizeCapabilityContext = async ({
     request,
     route: capabilityRoute(capabilityId),
     set: { headers: {} },
-    user: { id: context.userId },
+    user: { id: context.userId, email: context.userEmail },
     session: { activeOrganizationId: context.organizationId },
     scopedDb: operationDatabaseScope.scopedDb,
     safeDb: operationDatabaseScope.safeDb,
@@ -148,6 +154,7 @@ export const synthesizeCapabilityContext = async ({
     orgAIConfig,
     orgAIConfigStatus,
     promptCachingEnabled,
+    managedAIResidency,
     recordAuditEvent,
     createAuditRecorder: (opts) =>
       createAuditRecorder({

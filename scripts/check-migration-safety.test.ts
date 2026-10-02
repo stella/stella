@@ -4,6 +4,8 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
+import { propertyConfig } from "@stll/property-testing";
+
 type CheckerResult = {
   exitCode: number | null;
   stderr: string;
@@ -642,7 +644,7 @@ describe("check-migration-safety", () => {
               );
             },
           ),
-          { numRuns: 30 },
+          propertyConfig({ numRuns: 30 }),
         );
       },
       PROPERTY_TEST_TIMEOUT_MS,
@@ -664,7 +666,7 @@ describe("check-migration-safety", () => {
               expect(result.exitCode).toBe(1);
             },
           ),
-          { numRuns: 20 },
+          propertyConfig({ numRuns: 20 }),
         );
       },
       PROPERTY_TEST_TIMEOUT_MS,
@@ -753,8 +755,6 @@ describe("check-migration-safety", () => {
       expectClean(
         runChecker(`
           ALTER TABLE "case_law_citations" ADD COLUMN "note" text;
-          CREATE INDEX CONCURRENTLY "case_law_citations_note_idx"
-            ON "case_law_citations" ("note");
           INSERT INTO "case_law_decisions" ("id") VALUES ('x')
             ON CONFLICT ON CONSTRAINT "case_law_decisions_pkey" DO UPDATE SET "id" = 'x';
           SELECT "id" FROM "case_law_decisions" WHERE "id" = 'x' FOR UPDATE;

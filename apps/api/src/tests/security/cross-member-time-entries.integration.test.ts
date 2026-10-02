@@ -243,6 +243,7 @@ const contextFor = (
     memberRole: { role: actor.role },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
     recordAuditEvent,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),
@@ -1331,6 +1332,7 @@ const mcpContextFor = (name: ActorName): McpRequestContext => {
       createScopedDb(testDb, workspaceIds, organizationId, actor.userId),
     ),
     userId: actor.userId,
+    userEmail: "standard@example.test",
   });
 };
 

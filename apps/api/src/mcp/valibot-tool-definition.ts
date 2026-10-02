@@ -37,7 +37,11 @@ type JsonSchemaProjectionWaiver = {
   reason: string;
 };
 
-type ValibotMcpToolInput = Omit<McpToolDefinition, "inputSchema"> & {
+type ToolWithoutInputSchema<TDefinition> = TDefinition extends McpToolDefinition
+  ? Omit<TDefinition, "inputSchema">
+  : never;
+
+type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
   inputSchema: NullAsAbsentInputSchema;
   /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
   inputNormalization?: Readonly<
@@ -52,6 +56,7 @@ type ValibotMcpToolDefinition<TDefinition extends ValibotMcpToolInput> = Omit<
 > & {
   inputSchema: McpToolInputSchema;
   inputSchemaSource: TDefinition["inputSchema"];
+  inputSchemaProjectionWaiver: JsonSchemaProjectionWaiver | undefined;
 };
 
 const appendGuidance = (
@@ -775,6 +780,7 @@ export const defineValibotMcpTool = <
       inputNormalization,
     ),
     inputSchemaSource: inputSchema,
+    inputSchemaProjectionWaiver: jsonSchemaProjectionWaiver,
   };
 };
 

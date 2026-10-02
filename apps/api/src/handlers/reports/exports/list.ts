@@ -10,7 +10,12 @@ const config = {
   description:
     "List report exports requested by the current user in a matter, newest first with cursor pagination.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "reporting_export" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "reporting_export",
+    consumesServices: false,
+  },
   access: "read",
   params: workspaceParams({}),
   query: t.Object({

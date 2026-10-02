@@ -27,7 +27,10 @@ import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
-import { applyCaseLawIngestionBatch } from "@/api/handlers/case-law/ingestion/pipeline/batch";
+import {
+  applyCaseLawIngestionBatch,
+  recordIngestionFailures,
+} from "@/api/handlers/case-law/ingestion/pipeline/batch";
 import {
   admitPageDecisions,
   CASE_LAW_BATCH_BOUNDS_REASON,
@@ -276,6 +279,7 @@ type Applied =
   | { type: "held"; detail: string };
 
 type ApplyOptions = {
+  batchRecordLimit?: number;
   sourceId: SafeId<"caseLawSource">;
   decisions: readonly IngestionResult[];
   corpus: CaseLawCorpusDependencies;
@@ -300,7 +304,7 @@ const leaseFor = async (sourceId: SafeId<"caseLawSource">) =>
 const crawlCaller: Caller = {
   name: "a crawl page",
   source: crawlSource,
-  apply: async ({ sourceId, decisions, corpus }) => {
+  apply: async ({ sourceId, decisions, corpus, batchRecordLimit }) => {
     const sourceLease = await leaseFor(sourceId);
     const nextCursor = `${sourceLease.source.syncCursor ?? "page"}+`;
     czNsAdapter.fetchPage = async () =>
@@ -314,6 +318,7 @@ const crawlCaller: Caller = {
           sourceLease,
           scopedDb,
           maxPages: 1,
+          ...(batchRecordLimit === undefined ? {} : { batchRecordLimit }),
           corpus,
         }),
       catch: (cause) => cause,
@@ -622,6 +627,124 @@ describe("source-rejected batch records", () => {
     ]);
   });
 
+  test("a mixed ledger write absorbs only the identity conflict", async () => {
+    const sourceId = await recordSource();
+    const failure = (
+      recordIdentity: string | undefined,
+      id = createSafeId<"caseLawIngestionFailure">(),
+    ) => ({
+      id,
+      sourceId,
+      caseNumber: `mixed ${recordIdentity ?? "anonymous"}`,
+      language: "cs",
+      errorType: "SourceRecordInvalid",
+      errorMessage: "cannot be parsed",
+      cursor: null,
+      ...(recordIdentity === undefined ? {} : { recordIdentity }),
+    });
+    const write = async (failures: ReturnType<typeof failure>[]) =>
+      await recordIngestionFailures({
+        scopedDb,
+        failures,
+        adapterKey: "mixed-ledger",
+      });
+    const rows = async () =>
+      (
+        await db
+          .select({
+            id: caseLawIngestionFailures.id,
+            recordIdentity: caseLawIngestionFailures.recordIdentity,
+          })
+          .from(caseLawIngestionFailures)
+          .where(eq(caseLawIngestionFailures.sourceId, sourceId))
+      ).map(({ recordIdentity }) => recordIdentity ?? "anonymous");
+
+    const anonymous = failure(undefined);
+    expect(await write([anonymous, failure("import:m:1")])).toEqual({
+      type: "written",
+    });
+
+    // An identity-less row keeps the plain insert: its own conflict is not
+    // absorbed because an identified row shares its batch.
+    expect(
+      await write([failure(undefined, anonymous.id), failure("import:m:1")]),
+    ).toEqual({ type: "rejected" });
+    // Nor is any conflict of an identified row other than its identity's.
+    expect(await write([failure("import:m:9", anonymous.id)])).toEqual({
+      type: "rejected",
+    });
+
+    expect(
+      await write([
+        failure(undefined),
+        failure("import:m:1"),
+        failure("import:m:2"),
+      ]),
+    ).toEqual({ type: "written" });
+    expect((await rows()).toSorted()).toEqual([
+      "anonymous",
+      "anonymous",
+      "import:m:1",
+      "import:m:2",
+    ]);
+  });
+
+  test("records that name their identity keep one ledger row across replays", async () => {
+    const sourceId = await recordSource();
+    const rejection = { ...sourceRejection(9), recordIdentity: "import:e1:1" };
+    const failing = {
+      type: "decision" as const,
+      decision: rejectedRecord(91),
+      recordIdentity: "import:e1:2",
+    };
+    const settled = {
+      type: "decision" as const,
+      decision: record(3),
+      recordIdentity: "import:e1:0",
+    };
+    const whole = prepareCaseLawIngestionBatch({
+      records: [settled, rejection, failing],
+    });
+    // The same failing record again, alone, as a caller replays it.
+    const alone = prepareCaseLawIngestionBatch({ records: [failing] });
+    if (Result.isError(whole) || Result.isError(alone)) {
+      throw new TypeError("fixture batch refused");
+    }
+    const { corpus } = landingTransfer();
+    for (const batch of [whole.value, whole.value, alone.value]) {
+      const applied = await applyPrepared({ sourceId, batch, corpus });
+      expect(Result.isError(applied) ? applied.error.reason : null).toBe(
+        CASE_LAW_BATCH_FAILURE.RECORD_REJECTED,
+      );
+    }
+    const ledger = await db
+      .select({
+        recordIdentity: caseLawIngestionFailures.recordIdentity,
+        cursor: caseLawIngestionFailures.cursor,
+      })
+      .from(caseLawIngestionFailures)
+      .where(eq(caseLawIngestionFailures.sourceId, sourceId))
+      .orderBy(asc(caseLawIngestionFailures.recordIdentity));
+    expect(ledger).toEqual([
+      {
+        recordIdentity: "import:e1:1",
+        cursor: `${rejection.recordKey}:${rejection.recordHash}`,
+      },
+      { recordIdentity: "import:e1:2", cursor: null },
+    ]);
+    expect(await decisionRows(sourceId)).toHaveLength(1);
+
+    // The identity is bounded like the column that stores it.
+    for (const recordIdentity of ["", "x".repeat(257)]) {
+      const refused = prepareCaseLawIngestionBatch({
+        records: [{ ...settled, recordIdentity }],
+      });
+      expect(Result.isError(refused) ? refused.error.reason : null).toBe(
+        CASE_LAW_BATCH_BOUNDS_REASON.INVALID_RECORD,
+      );
+    }
+  });
+
   test("unwritten failures outrank rejected records, with no decision identity", async () => {
     const sourceId = await recordSource();
     const batch = prepareCaseLawIngestionBatch({
@@ -738,15 +861,43 @@ describe("the batch bounds", () => {
       CASE_LAW_BATCH_BOUNDS_REASON.RECORD_TOO_LARGE,
     );
   });
+  test("a smaller record bound admits exactly the bound and splits the next record", () => {
+    const recordLimit = 2;
+    const admitted = prepareCaseLawIngestionBatch({
+      decisions: records(recordLimit),
+      recordLimit,
+    });
+    expect(Result.isOk(admitted) ? admitted.value.decisions : null).toEqual(
+      records(recordLimit),
+    );
+    const refused = prepareCaseLawIngestionBatch({
+      decisions: records(recordLimit + 1),
+      recordLimit,
+    });
+    expect(Result.isError(refused) ? refused.error.reason : null).toBe(
+      CASE_LAW_BATCH_BOUNDS_REASON.TOO_MANY_RECORDS,
+    );
+    expect(
+      admitPageDecisions(records(recordLimit + 1), recordLimit).map(
+        ({ decisions }) => decisions.map(({ caseNumber }) => caseNumber),
+      ),
+    ).toEqual([
+      records(recordLimit).map(({ caseNumber }) => caseNumber),
+      [record(recordLimit + 1).caseNumber],
+    ]);
+  });
+
   test(
     "a crawl page over the record bound is applied in bounded batches",
     async () => {
       const sourceId = await crawlSource();
       const { corpus, landed } = landingTransfer();
-      const count = CASE_LAW_INGESTION_BATCH_LIMITS.records + 1;
+      const batchRecordLimit = 2;
+      const count = batchRecordLimit + 1;
 
       const applied = await crawlCaller.apply({
         sourceId,
+        batchRecordLimit,
         decisions: records(count),
         corpus,
       });

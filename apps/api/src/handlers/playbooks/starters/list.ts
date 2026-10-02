@@ -11,7 +11,12 @@ const config = {
     "positions it holds. Metadata only, enough to render a picker; create " +
     "one with playbooks.from-starter.create.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

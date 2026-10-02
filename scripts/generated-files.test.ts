@@ -8,6 +8,7 @@ import { pathToFileURL } from "node:url";
 
 import {
   GENERATORS,
+  allowedOutputs,
   GUARD_A_EXCLUSIONS,
   generatorsForFiles,
   matchesGeneratedGlob,
@@ -70,6 +71,30 @@ test("Guard A rejects an unregistered generated source and ignores ordinary comm
   expect(isRegisteredGeneratedFile("apps/desktop/src-tauri/Cargo.lock")).toBe(
     true,
   );
+});
+
+test("CLI runtime outputs have one owner and stay ignored when regenerated", () => {
+  const outputs = generator("cli-runtime").outputs;
+  for (const output of outputs) {
+    expect(
+      GENERATORS.filter(({ outputs: ownerOutputs }) =>
+        ownerOutputs.some((glob) => matchesGeneratedGlob(glob, output)),
+      ).map(({ id }) => id),
+    ).toEqual(["cli-runtime"]);
+  }
+  const ignored = Bun.spawnSync(
+    ["git", "check-ignore", "--no-index", "--stdin"],
+    {
+      cwd: new URL("..", import.meta.url).pathname,
+      stdin: new TextEncoder().encode(`${outputs.join("\n")}\n`),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  expect(ignored.exitCode).toBe(0);
+  expect(
+    new TextDecoder().decode(ignored.stdout).trim().split("\n").toSorted(),
+  ).toEqual([...outputs].toSorted());
 });
 
 test("Guard A ignores hand-written certificate and error fixtures", async () => {
@@ -160,14 +185,17 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   const requiredIds = [
     "capability-catalog",
     "cli-registry",
+    "cli-runtime",
     "mcp-surface",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["module-ownership", "route-tree"]);
-  expect(generatorsForFiles(["docs/unrelated.md"])).toEqual([]);
+  ).toEqual(["ratchet-improvements", "module-ownership", "route-tree"]);
+  expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
+    ["ratchet-improvements"],
+  );
   for (const file of [
     "apps/api/src/lib/format.ts",
     "packages/time/src/format.ts",
@@ -183,6 +211,9 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   expect(
     ordered.findIndex(({ id }) => id === "capability-catalog"),
   ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
+  expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
+    ordered.findIndex(({ id }) => id === "cli-runtime"),
+  );
 });
 
 test("autofix selection closes over generated outputs and ordering dependencies", () => {
@@ -191,7 +222,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
     .split("\0")
     .filter(Boolean);
   const changedPaths = [
-    [".oxfmtrc.json", "capability-catalog", "cli-registry"],
+    [".oxfmtrc.json", "capability-catalog", "cli-registry", "cli-runtime"],
     [
       "packages/api-contract/src/mcp-tool.ts",
       "mcp-app-bundles",
@@ -232,7 +263,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
   }
 });
 
-test("the planned allowlist is exactly the selected output union", () => {
+test("the planned allowlist is exactly the selected committed output union", () => {
   for (const paths of [
     ".oxfmtrc.json\n",
     "packages/api-contract/src/mcp-tool.ts\n",
@@ -256,7 +287,7 @@ test("the planned allowlist is exactly the selected output union", () => {
       selected.map(({ id }) => id).toSorted(),
     );
     expect(values["allowed"]?.split("|").filter(Boolean).toSorted()).toEqual(
-      [...new Set(selected.flatMap(({ outputs }) => outputs))].toSorted(),
+      allowedOutputs(selected).toSorted(),
     );
   }
 });
@@ -270,11 +301,37 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
     [...ci.matchAll(/^\s+- name: (.+)$/gmu)].map((match) => match[1]),
   );
   for (const entry of GENERATORS) {
-    for (const glob of [...entry.inputs, ...entry.outputs]) {
+    for (const glob of entry.inputs) {
       expect(
         tracked.some((file) => matchesGeneratedGlob(glob, file)),
         `${entry.id}: ${glob}`,
       ).toBe(true);
+    }
+    for (const glob of entry.outputs) {
+      const isTracked = tracked.some((file) =>
+        matchesGeneratedGlob(glob, file),
+      );
+      switch (entry.outputKind) {
+        case "committed":
+          expect(isTracked, `${entry.id}: ${glob}`).toBe(true);
+          break;
+        case "derived": {
+          expect(isTracked, `${entry.id}: ${glob} must stay untracked`).toBe(
+            false,
+          );
+          const ignored = Bun.spawnSync(
+            ["git", "check-ignore", "--no-index", "--", glob],
+            { stdout: "pipe", stderr: "pipe" },
+          );
+          expect(ignored.exitCode, `${entry.id}: ${glob} must be ignored`).toBe(
+            0,
+          );
+          expect(allowedOutputs([entry])).not.toContain(glob);
+          break;
+        }
+        default:
+          entry satisfies never;
+      }
     }
     if ("checkedBy" in entry) {
       expect(
@@ -322,6 +379,22 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
   }
 });
 
+test("the plan alone never authorizes the ratchet baseline", () => {
+  const selected = generatorsForFiles(["apps/web/src/example.ts"]);
+  expect(selected.some(({ id }) => id === "ratchet-improvements")).toBe(true);
+  expect(allowedOutputs(selected)).not.toContain(
+    "scripts/ratchet-baseline.json",
+  );
+  expect(
+    allowedOutputs([
+      {
+        ...generator("ratchet-improvements"),
+        outputs: ["scripts/**", "scripts/ratchet-baseline.json"],
+      },
+    ]),
+  ).not.toContain("scripts/ratchet-baseline.json");
+});
+
 test("autofix refuses an empty selected-generator handoff", () => {
   const run = Bun.spawnSync(["bun", "scripts/autofix-plan.ts", "allowed", ""], {
     stdout: "pipe",
@@ -333,7 +406,7 @@ test("autofix refuses an empty selected-generator handoff", () => {
   );
 });
 
-test("lint selection derives generated outputs from the manifest", () => {
+test("lint selection derives committed generated outputs from the manifest", () => {
   expect(isChangedLintPath("apps/web/src/routeTree.gen.ts")).toBe(false);
   expect(isChangedLintPath("packages/skills/src/blueprints.gen.ts")).toBe(
     false,
@@ -359,18 +432,6 @@ const casePatternsAfter = (marker: string) => {
   return (match?.[1] ?? "").split("|");
 };
 
-test("CI path cases stay pinned to the manifest", () => {
-  for (const [id, marker] of [
-    ["web-api-types", "# The web API types drift guard"],
-    ["model-rates", "# The committed rate and capability snapshots"],
-  ] as const) {
-    const inputs = generator(id).inputs.map((glob) =>
-      glob.replace(/\/\*\*$/u, "/*"),
-    );
-    expect(casePatternsAfter(marker).toSorted(), id).toEqual(inputs.toSorted());
-  }
-});
-
 test("route-tree CI scope covers every manifest input and output", () => {
   const routeTree = generator("route-tree");
   const paths = [...routeTree.inputs, ...routeTree.outputs].map((glob) =>
@@ -383,17 +444,80 @@ test("route-tree CI scope covers every manifest input and output", () => {
   ).toEqual(paths.toSorted());
 });
 
+test("CI rate snapshot scope stays pinned to the manifest", () => {
+  const inputs = generator("model-rates").inputs.map((glob) =>
+    glob.replace(/\/\*\*$/u, "/*"),
+  );
+  expect(
+    casePatternsAfter(
+      "# The committed rate and capability snapshots",
+    ).toSorted(),
+  ).toEqual(inputs.toSorted());
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const generationInputs = (name: string) => {
+  const config: unknown = Bun.JSONC.parse(
+    readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+  );
+  if (!isRecord(config) || !isRecord(config["tasks"])) {
+    panic("Turbo configuration has no tasks");
+  }
+  const task = config["tasks"][`@stll/web#${name}`];
+  if (!isRecord(task) || !Array.isArray(task["inputs"])) {
+    panic(`Missing generation task inputs for ${name}`);
+  }
+  return task["inputs"]
+    .map((input: unknown) => {
+      if (typeof input !== "string") {
+        panic("Generation task input must be a glob");
+      }
+      return input;
+    })
+    .filter((input) => !input.startsWith("!"));
+};
+
+test("CI determinism selectors cover the cached generators' input contracts", () => {
+  for (const [name, marker] of [
+    ["generate:api-types", "# The web API types"],
+  ] as const) {
+    const selectors = casePatternsAfter(marker);
+    for (const glob of generationInputs(name)) {
+      const rooted = glob.startsWith("$TURBO_ROOT$/")
+        ? glob.replace("$TURBO_ROOT$/", "")
+        : `apps/web/${glob}`;
+      // Shell case * crosses directory separators, unlike Bun.Glob's *.
+      const sample = rooted
+        .replace(/\*\*/gu, "nested")
+        .replace(/\*/gu, "fixture")
+        .replace(/\?/gu, "x");
+      expect(
+        selectors.some((selector) =>
+          new Bun.Glob(selector.replace(/\*+/gu, "**")).match(sample),
+        ),
+        `${name} CI selector covers ${rooted}`,
+      ).toBe(true);
+    }
+  }
+});
+
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ci.slice(
-    ci.indexOf("- name: CLI registry snapshot guard"),
+    ci.indexOf("- name: CLI committed registry and derived runtime guard"),
     ci.indexOf("- name: MCP App bundle guard"),
   );
   const diff = cli.split("git diff --exit-code -- \\\n")[1];
   expect(diff).toBeDefined();
-  const paths = (diff ?? "")
-    .split("\n")
-    .slice(0, 4)
-    .map((line) => line.trim().replace(/ \\$/u, ""));
+  const paths: string[] = [];
+  for (const line of (diff ?? "").split("\n")) {
+    const argument = line.trim();
+    paths.push(argument.replace(/ \\$/u, ""));
+    if (!argument.endsWith("\\")) {
+      break;
+    }
+  }
   expect(paths.toSorted()).toEqual(
     generator("cli-registry")
       .outputs.map((glob) => glob.replace(/\/\*\*$/u, ""))

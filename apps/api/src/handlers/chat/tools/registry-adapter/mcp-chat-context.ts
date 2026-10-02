@@ -19,6 +19,7 @@ export type ChatRegistryContextDeps = {
   testDependencies?: McpRequestContext["testDependencies"];
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  userEmail: string;
   memberRole: MemberRole;
   /**
    * Pin a workspace into the request's RLS identity only when request auth
@@ -126,5 +127,6 @@ export const buildMcpContextFromChat = (
     safeDb: deps.safeDb,
     scopedDb: deps.scopedDb,
     userId: deps.userId,
+    userEmail: deps.userEmail,
   };
 };

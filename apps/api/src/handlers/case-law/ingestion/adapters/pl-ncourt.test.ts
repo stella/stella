@@ -10,6 +10,11 @@
 import { panic, Result } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
+import {
+  DECISION_DOCUMENT_ROLE,
+  type DecisionDocumentRole,
+} from "@stll/api-contract/decision-document-role";
+
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
@@ -36,7 +41,10 @@ import {
   readPlNcourtListing,
   readPlNcourtListingRow,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
-import type { PlNcourtBuild } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import type {
+  PlNcourtBuild,
+  PlNcourtComponent,
+} from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
 import { PL_NCOURT_COURT_NAMES } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt-courts";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import {
@@ -44,6 +52,7 @@ import {
   validatePlNcourtDocument,
 } from "@/api/handlers/case-law/ingestion/parsers/pl-ncourt";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
 import {
   AST_BOUNDARY_WHITESPACE,
   AST_CONTENT_LOST,
@@ -218,6 +227,7 @@ describe("identity", () => {
     expect(result.sourceDocumentId).toBe(PAIR);
     expect(result.rawHash).toBe(decision.rawHash);
     expect(result.fulltext).toBe(decision.fulltext);
+    expect(result.documentRole).toBe(DECISION_DOCUMENT_ROLE.RULING);
   });
 });
 
@@ -303,6 +313,9 @@ describe("building a judgment", () => {
         : panic(`the reasons built ${outcome.type}`);
     // The same shape SAOS's reasons take, so the pipeline joins either.
     expect(supplement.kind).toBe(DECISION_SUPPLEMENT_KIND.REASONS);
+    expect(supplement.document.documentRole).toBe(
+      DECISION_DOCUMENT_ROLE.REASONS,
+    );
     expect(supplement.target).toEqual({
       decisionTypes: PL_COURTS_RULING_DECISION_TYPES,
       latestDecisionDate: "2018-03-22",
@@ -345,6 +358,13 @@ describe("building a judgment", () => {
     expect(
       replayed !== undefined && "type" in replayed ? replayed.type : undefined,
     ).toBe("supplement");
+    expect(
+      replayed !== undefined &&
+        "type" in replayed &&
+        replayed.type === "supplement"
+        ? replayed.supplement.document.documentRole
+        : undefined,
+    ).toBe(DECISION_DOCUMENT_ROLE.REASONS);
   });
 
   test("a crawl page carries listed reasons as supplements, beside its decisions", async () => {
@@ -562,6 +582,112 @@ describe("building a judgment", () => {
 // ── Types ────────────────────────────────────────────────
 
 describe("decision types", () => {
+  test("unknown structural components emit drift diagnostics", () => {
+    const publisherValues: unknown[] = [];
+    setLogSinkForTesting(({ message, attributes }) => {
+      if (message === DOCUMENT_ROLE_UNMAPPED) {
+        publisherValues.push(attributes?.["publisherValue"]);
+      }
+    });
+    try {
+      const decision = built(
+        assemblePlNcourtDecision({
+          listingXml: rowXml({
+            id: PAIR,
+            signature: "II Ca 236/18",
+            courtId: "15502000",
+            type: "FUTURE",
+          }),
+          detailXml: undefined,
+          contentXml: undefined,
+        }),
+      );
+      expect(decision.documentRole).toBeUndefined();
+      expect(publisherValues).toEqual(["FUTURE"]);
+    } finally {
+      resetLogSinkForTesting();
+    }
+  });
+
+  const publisherRoleFixtures = {
+    SENTENCE: DECISION_DOCUMENT_ROLE.RULING,
+    DECISION: DECISION_DOCUMENT_ROLE.RULING,
+    RESOLUTION: DECISION_DOCUMENT_ROLE.RULING,
+    REGULATION: DECISION_DOCUMENT_ROLE.RULING,
+    REASON: DECISION_DOCUMENT_ROLE.REASONS,
+    RECORD: undefined,
+    OTHER: undefined,
+  } as const satisfies Record<
+    PlNcourtComponent,
+    DecisionDocumentRole | undefined
+  >;
+
+  test.each([
+    ...Object.entries(publisherRoleFixtures),
+    ["REASON", DECISION_DOCUMENT_ROLE.REASONS],
+    ["SENTENCE, REASON", DECISION_DOCUMENT_ROLE.RULING],
+    ["FUTURE", undefined],
+    ["SENTENCE, FUTURE", undefined],
+    ["", undefined],
+  ])(
+    "publisher components %s survive old and new stored replay",
+    async (type, role) => {
+      const listingXml = rowXml({
+        id: PAIR,
+        signature: "II Ca 236/18",
+        courtId: "15502000",
+        type,
+      });
+      const detailXml = recordFor(PAIR, {
+        signature: "II Ca 236/18",
+        courtId: "15502000",
+        type,
+      });
+      const outcome = assemblePlNcourtDecision({
+        listingXml,
+        detailXml,
+        // The same Polish prose must not classify unknown structural enums.
+        contentXml: await fixture(`pl-ncourt-content-${PAIR}.xml.gz`),
+      });
+      const decision =
+        outcome.type === "supplement"
+          ? outcome.supplement.document
+          : built(outcome);
+      expect(decision.documentRole).toBe(role);
+      expect(decision.metadata["documentTypes"]).toEqual(
+        type === "" ? undefined : plNcourtComponents(type),
+      );
+      for (const metadata of [{}, { documentRole: role }]) {
+        const replayed = plNcourtAdapter.reparseStoredRaw?.({
+          raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
+          contentType: decision.sourceRawContentType ?? null,
+          caseNumber: decision.caseNumber,
+          sourceDocumentId: decision.sourceDocumentId ?? null,
+          language: decision.language,
+          court: decision.court,
+          ecli: null,
+          decisionDate: decision.decisionDate ?? null,
+          decisionType: decision.decisionType ?? null,
+          sourceUrl: decision.sourceUrl ?? null,
+          documentUrl: decision.documentUrl ?? null,
+          metadata,
+        });
+        if (replayed === undefined || !("type" in replayed)) {
+          panic("the structural components did not replay");
+        }
+        if (replayed.type !== "supplement" && replayed.type !== "parsed") {
+          panic("the structural components were rejected");
+        }
+        const rebuilt =
+          replayed.type === "supplement"
+            ? replayed.supplement.document
+            : replayed.result;
+        expect(rebuilt).toEqual(decision);
+        expect(rebuilt.decisionType).toBe(decision.decisionType);
+      }
+    },
+  );
+
   // Each combination as the API lists it, beside the type SAOS stores for the
   // same judgment (recorded against 94 judgments both hold).
   test.each([
@@ -685,8 +811,22 @@ describe("fields the API adds later", () => {
  * some marks as spaces; the words and their order are what must agree.
  */
 const withoutWhitespace = (text: string): string => text.replace(/\s+/gu, "");
+const layoutPayload = "before <xText>nested</xText><![CDATA[cdata]]> after";
 
 describe("the document", () => {
+  test("a line break keeps its nested text and CDATA", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xBlock><xText>Before<xBRx>after <![CDATA[inside]]><xBx> bold</xBx></xBRx><xBRx/></xText></xBlock></xPart>",
+      ) ?? panic("the document did not read");
+    expect(content.html).toBe(
+      "<p>Before<br/>after inside<strong> bold</strong><br/></p>",
+    );
+    expect(content.sourceParagraphs).toEqual(["Beforeafter inside bold"]);
+    expect(content.comparisonParagraphs).toEqual(["Before after inside bold"]);
+    expect(content.unmappedMarkup).toEqual([]);
+  });
+
   test.each([PAIR, LIST_DOC, TABLE_DOC])(
     "%s reads to the blocks and text the API's own HTML rendering reads to",
     async (id) => {
@@ -862,7 +1002,103 @@ describe("the document", () => {
       "Source paragraph",
       "Source note",
     ]);
+    expect(content.html).toBe("<p>Source paragraph</p>\n<p>Source note</p>");
+    expect(content.unmappedMarkup).toEqual(["xCOLGROUPx", "xCOLx", "#cdata"]);
+
+    const parsed = parsePlDecisionContent({
+      caseNumber: "I C 1/15",
+      ecli: undefined,
+      court: "",
+      decisionDate: undefined,
+      decisionType: undefined,
+      sourceUrl: undefined,
+      documentUrl: undefined,
+      content: content.html,
+      keywords: [],
+      statutes: [],
+      documentId: "layout-text",
+    });
+    const text = parsed.fulltext;
+    expect(text.indexOf("Source paragraph")).toBeGreaterThanOrEqual(0);
+    expect(text.indexOf("Source note")).toBeGreaterThan(
+      text.indexOf("Source paragraph"),
+    );
   });
+
+  test("empty layout elements remain omitted", () => {
+    const content =
+      readPlNcourtContent(
+        "<xPart><xCOLGROUPx><xCOLx/></xCOLGROUPx><xText>Visible</xText></xPart>",
+      ) ?? panic("the document did not read");
+
+    expect(content.html).toBe("\n<p>Visible</p>");
+    expect(content.unmappedMarkup).toEqual([]);
+  });
+
+  for (const { container, layoutXml, layoutTag } of [
+    {
+      container: "xPart",
+      layoutXml: `<xPart><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xRows",
+      layoutXml: `<xPart><xRows><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xRows></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xRow",
+      layoutXml: `<xPart><xRows><xRow><xCOLx>${layoutPayload}</xCOLx></xRow></xRows></xPart>`,
+      layoutTag: "xCOLx",
+    },
+    {
+      container: "xClmn",
+      layoutXml: `<xPart><xRows><xRow><xClmn><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xClmn></xRow></xRows></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+    {
+      container: "xEnum",
+      layoutXml: `<xPart><xEnum><xCOLx>${layoutPayload}</xCOLx><xEnumElem><xText>list item</xText></xEnumElem></xEnum></xPart>`,
+      layoutTag: "xCOLx",
+    },
+    {
+      container: "xEnumElem",
+      layoutXml: `<xPart><xEnum><xEnumElem><xCOLGROUPx>${layoutPayload}</xCOLGROUPx></xEnumElem></xEnum></xPart>`,
+      layoutTag: "xCOLGROUPx",
+    },
+  ]) {
+    test(`visible layout text survives in ${container}`, () => {
+      const content =
+        readPlNcourtContent(layoutXml) ?? panic("the document did not read");
+      const expectedParagraphs = ["before", "nested", "cdata", "after"];
+      if (container === "xEnum") {
+        expectedParagraphs.push("list item");
+      }
+      expect(content.sourceParagraphs).toEqual(expectedParagraphs);
+      expect(content.unmappedMarkup).toEqual([layoutTag, "#text", "#cdata"]);
+
+      const parsed = parsePlDecisionContent({
+        caseNumber: "I C 1/15",
+        ecli: undefined,
+        court: "",
+        decisionDate: undefined,
+        decisionType: undefined,
+        sourceUrl: undefined,
+        documentUrl: undefined,
+        content: content.html,
+        keywords: [],
+        statutes: [],
+        documentId: `layout-${container}`,
+      });
+      const positions = expectedParagraphs.map((text) =>
+        parsed.fulltext.indexOf(text),
+      );
+      expect(positions.every((position) => position >= 0)).toBe(true);
+      expect(positions).toEqual(
+        positions.toSorted((left, right) => left - right),
+      );
+    });
+  }
 
   test("CDATA inside a paragraph stays beside its inline text", () => {
     const content =

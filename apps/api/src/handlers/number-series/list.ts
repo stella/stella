@@ -14,6 +14,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedNumberSeriesId } from "@/api/lib/safe-id-boundaries";
 
 type NumberSeriesRow = typeof numberSeries.$inferSelect;
@@ -53,7 +54,12 @@ true satisfies UnexpectedNumberSeriesListColumn extends never ? true : never;
 const config = {
   description: "List active document number series in the active organization.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     limit: t.Optional(
@@ -71,7 +77,9 @@ const cursorCodec = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session }) {
-    const limit = query.limit ?? LIMITS.numberSeriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.numberSeriesPageSizeDefault,
+    );
     const conditions = [
       eq(numberSeries.organizationId, session.activeOrganizationId),
       isNull(numberSeries.archivedAt),

@@ -1,26 +1,37 @@
 {
   "$schema": "https://unpkg.com/knip@6/schema.json",
   "workspaces": {
+    // Include present and future workspace packages; exact entries below
+    // retain the entry points their frameworks cannot infer.
+    "apps/*": {},
+    "packages/*": {},
     ".": {
-      "entry": [
-        "scripts/*.ts",
-        "i18n-unused.config.js",
-        "oxlint.config.ts",
-        "oxlint.design.config.ts"
-      ],
+      // Include compiler-only ambient types from the tooling/test projects.
+      "typescript": { "config": ["tsconfig*.json", "package.json"] },
+      "entry": ["scripts/*.ts", "oxlint.config.ts", "oxlint.design.config.ts"],
       "ignoreDependencies": [
+        // tsc-native.ts constructs this compiler binary path dynamically.
+        "@typescript/native",
         "@tanstack/eslint-plugin-query",
         "@tanstack/eslint-plugin-router",
         "eslint",
-        "eslint-plugin-drizzle",
         "oxlint-tsgolint",
-        "ultracite",
-        "i18n-unused",
         "oxlint",
-        "squawk-cli",
-        "vite"
+        "squawk-cli"
       ],
       "ignoreBinaries": ["scripts/dev.sh"]
+    },
+    "apps/desktop": {
+      "typescript": { "config": ["tsconfig*.json"] }
+    },
+    "apps/mobile": {
+      "typescript": { "config": ["tsconfig*.json"] },
+      // Metro requires Babel; the doctor script constructs its executable path.
+      "ignoreDependencies": ["@babel/core", "expo-doctor"]
+    },
+    "packages/ai-catalog": {
+      // Compile-time provider capability assertions consume the adapter types.
+      "entry": ["src/**/*.type-test.ts"]
     },
     "packages/agent-input": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
@@ -44,22 +55,19 @@
         "src/lib/ocr-local/ocr-local-worker.ts!",
         "src/lib/ocr-searchable-pdf-worker.ts!",
         "scripts/*.ts",
+        // Compiler contract tests are checked by the API typecheck script.
+        "contracts/**/*.ts",
         "src/scripts/*.ts",
         "src/dev/register-mock-ai.ts",
         "src/lib/__fixtures__/*.ts",
         "src/handlers/case-law/seed-court-weights.ts",
         "src/handlers/case-law/ingestion/adapters/health-check.ts",
         "src/handlers/case-law/ingestion/adapters/update-fixtures.ts",
-        "src/lib/docx/generate-sample.ts",
-        "src/lib/docx/generate-samples.ts",
-        "src/lib/docx/generate-spa-filled.ts",
-        "src/lib/docx/prepare-spa-template.ts",
         "src/tests/load/*.ts",
         "drizzle.config.ts",
         "src/**/*.test.ts",
         "scripts/**/*.test.ts"
-      ],
-      "ignoreDependencies": ["@electric-sql/pglite"]
+      ]
     },
     "apps/web": {
       "entry": [
@@ -83,10 +91,8 @@
       // imports it through @stll/ui/icons; the app keeps the dependency so
       // vite's `resolve.dedupe` and icon chunking resolve one copy.
       "ignoreDependencies": [
+        // Dynamically imported from the inline bootstrap in index.html.
         "react-grab",
-        "@libpdf/core",
-        "@stll/docx-core",
-        "@stll/docx-utils",
         "lucide-react",
         "tailwindcss"
       ]
@@ -106,10 +112,10 @@
         "src/**/*.astro",
         "src/content.config.ts",
         "src/pages/**/*.ts",
-        "astro.config.*",
-        "postcss.config.mjs"
+        "astro.config.*"
       ],
-      "ignoreDependencies": ["@tailwindcss/postcss"]
+      // Tailwind scans workspace-ui through the CSS @source directive.
+      "ignoreDependencies": ["@tailwindcss/postcss", "@stll/workspace-ui"]
     },
     "apps/legal-atlas-runner": {
       "entry": ["src/index.ts", "src/**/*.test.ts"],
@@ -124,10 +130,21 @@
     "packages/concurrency": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/db-load-gate": {
+      "entry": [
+        "src/health.ts",
+        "src/indicators.ts",
+        "src/heavy-work-slot.ts",
+        "src/**/*.test.ts"
+      ]
+    },
     "packages/legal-atlas": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/legal-ast": {
+      "entry": ["src/index.ts", "src/**/*.test.ts"]
+    },
+    "packages/mcp-kit": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
     "packages/mojibake": {
@@ -141,6 +158,9 @@
     },
     "packages/permissions": {
       "entry": ["src/index.ts"]
+    },
+    "packages/redis-config": {
+      "entry": ["src/connection.ts", "src/**/*.test.ts"]
     },
     "packages/runtime-mode": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
@@ -164,11 +184,16 @@
     "packages/template-conditions": {
       "entry": ["src/index.ts", "src/**/*.test.ts"]
     },
+    "packages/typescript-config": {
+      "entry": ["*.json", "**/*.test.ts"]
+    },
     "packages/transactional": {
       "entry": ["emails/*.tsx"],
       "ignoreDependencies": ["react-dom", "@react-email/preview-server"]
     },
     "packages/ui": {
+      // Browser fixture CSS imports Tailwind; the Vite plugin consumes its peer.
+      "ignoreDependencies": ["tailwindcss"],
       "entry": [
         "src/index.ts",
         "src/components/*.tsx",
@@ -192,8 +217,5 @@
   },
   "exclude": ["exports", "types"],
   "ignoreBinaries": ["docker", "oxfmt", "tsc", "bun", "tail"],
-  "ignoreDependencies": ["@stll/typescript-config"],
-  // packages/typescript-config ships JSON compiler presets and no TypeScript
-  // source, so there is nothing for knip to analyse there.
-  "ignoreWorkspaces": ["packages/typescript-config"]
+  "ignoreDependencies": ["@stll/typescript-config"]
 }

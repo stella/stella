@@ -96,7 +96,11 @@ const config = {
     "citation style. Returns a short-lived download URL.",
   permissions: { chat: ["create"] },
   access: "write",
-  mcp: { type: "capability", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({ workspaceId: t.Optional(tSafeId("workspace")) }),
   body: t.Object({

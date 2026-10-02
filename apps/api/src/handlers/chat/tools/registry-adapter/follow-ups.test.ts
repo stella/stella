@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { toSafeId } from "@/api/lib/branded-types";
 import { containsRawUuid } from "@/api/lib/chat/projection-schema";
@@ -48,6 +50,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       pinnedIds: [],
     }),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   });
 };
 
@@ -136,6 +139,7 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
         chainable([
           {
             id: TE_UUID,
+            activityGroup: TIME_ENTRY_ACTIVITY_GROUP.CLIENT,
             entityId: ENTITY_UUID,
             userId: null,
             dateWorked: "2026-01-01",
@@ -180,6 +184,8 @@ describe("follow-up (a): detail-mode workspace resolution from the fetched row",
             id: INV_UUID,
             workspaceId: WS_UUID,
             invoiceNumber: "INV-1",
+            documentType: "invoice",
+            originalInvoiceId: null,
             reference: "REF-1",
             status: "draft",
             invoiceDate: "2026-01-01",

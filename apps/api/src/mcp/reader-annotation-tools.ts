@@ -646,6 +646,7 @@ const MARK_OWNERSHIP =
 
 const READER_ANNOTATION_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List reader annotations",
       destructiveHint: false,
@@ -659,6 +660,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
       "anchor and quote, oldest first.",
     inputSchema: listArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: deriveTextFieldPaths(readerAnnotationTextFieldSpecs("")),
@@ -667,6 +669,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Create reader annotation",
       destructiveHint: false,
@@ -687,6 +690,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Update reader annotation",
       destructiveHint: false,
@@ -702,6 +706,7 @@ const READER_ANNOTATION_TOOL_DEFINITIONS = [
     scope: "stella:knowledge_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete reader annotation",
       destructiveHint: true,

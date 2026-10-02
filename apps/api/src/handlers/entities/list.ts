@@ -16,6 +16,7 @@ import {
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readEntitiesBodySchema = t.Object({
@@ -84,7 +85,9 @@ export const createReadEntitiesHandler = (
         return Result.err(cursorResult.error);
       }
 
-      const limit = body.limit ?? LIMITS.entitiesPageSizeDefault;
+      const limit = normalizeTenantPageLimit(
+        body.limit ?? LIMITS.entitiesPageSizeDefault,
+      );
       const result = yield* Result.await(
         queryEntitiesImpl({
           safeDb,

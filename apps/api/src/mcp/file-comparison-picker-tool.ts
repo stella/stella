@@ -40,6 +40,7 @@ export type OpenFileComparisonOutput = v.InferInput<
 >;
 
 export const OPEN_FILE_COMPARISON_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   _meta: {
     ui: {
       resourceUri: FILE_COMPARISON_APP_RESOURCE_URI,

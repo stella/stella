@@ -9,6 +9,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const readInvoicesQuerySchema = t.Object({
@@ -36,7 +37,7 @@ const readInvoices = createSafeHandler(
   {
     description:
       "List a matter's invoices oldest first with cursor pagination, " +
-      "returning each invoice's number, reference, status, dates, currency, " +
+      "returning each invoice's number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +
       "and total, but not its line items. Use invoices.get to read the " +
       "attached time entries and expenses.",
     permissions: { workspace: ["read"] },
@@ -45,7 +46,9 @@ const readInvoices = createSafeHandler(
     query: readInvoicesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.invoicesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.invoicesPageSizeDefault,
+    );
     const conditions = [eq(invoices.workspaceId, workspaceId)];
 
     if (query.cursor) {
@@ -74,6 +77,8 @@ const readInvoices = createSafeHandler(
           .select({
             id: invoices.id,
             invoiceNumber: invoices.invoiceNumber,
+            documentType: invoices.documentType,
+            originalInvoiceId: invoices.originalInvoiceId,
             reference: invoices.reference,
             status: invoices.status,
             invoiceDate: invoices.invoiceDate,
@@ -103,6 +108,8 @@ const readInvoices = createSafeHandler(
       items: page.items.map((row) => ({
         id: row.id,
         invoiceNumber: row.invoiceNumber,
+        documentType: row.documentType,
+        originalInvoiceId: row.originalInvoiceId,
         reference: row.reference,
         status: row.status,
         invoiceDate: row.invoiceDate,

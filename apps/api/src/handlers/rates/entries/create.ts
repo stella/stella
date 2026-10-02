@@ -39,7 +39,11 @@ const createRateEntry = createSafeHandler(
       "for the same user, when userId is not a member of the organization, " +
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: rateEntryParamsSchema,
     body: createRateEntryBodySchema,
   },

@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteDecisionAliases,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -25,6 +26,7 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
@@ -263,7 +265,16 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
+/**
+ * Reader columns this release declares `permitted` but no migration grants
+ * yet: the grant lands in a later release, so running readers accept it. The
+ * harness mirrors the migrations, so it leaves them ungranted too.
+ */
+const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
+  new Set(["case_law_decisions.docket_family_key"]);
+
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public TO stella
@@ -273,6 +284,12 @@ export const ROLE_GRANT_STATEMENTS = [
   `,
   `
     REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
+      FROM stella
+  `,
+  `
+    REVOKE ALL PRIVILEGES ON TABLE
+      ${quoteSqlIdentifier(getTableName(schema.actionCostRecords))},
+      ${quoteSqlIdentifier(getTableName(schema.actionCostCalls))}
       FROM stella
   `,
   `
@@ -440,6 +457,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
       "case_law_decision_source_identities",
+      "case_law_decision_aliases",
       "case_law_raw_sweeps",
       "case_law_decision_supplements",
       "case_law_citation_reviews"
@@ -561,6 +579,15 @@ export const ROLE_GRANT_STATEMENTS = [
     GRANT UPDATE (provisioning_status, attested_at, updated_at)
       ON TABLE "corpus_index_group_enrollments" TO stella_ingestion
   `,
+  // The withdrawal trail is append-only: ingestion records, the app reads.
+  `
+    REVOKE INSERT, UPDATE, DELETE ON TABLE "corpus_index_group_withdrawals"
+    FROM stella
+  `,
+  `
+    GRANT SELECT, INSERT ON TABLE "corpus_index_group_withdrawals"
+    TO stella_ingestion
+  `,
   `
     GRANT INSERT, UPDATE ON TABLE
       ${CORPUS_PROJECTION_HISTORY_TABLES_SQL}
@@ -593,13 +620,26 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
-    ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
+  // Alias reader grants land only after the release declaring them optional.
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
+    .filter(
+      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+    )
+    .map(
+      ([relation, columns]) => `
+      GRANT SELECT (${Object.keys(columns)
+        .filter(
+          (column) =>
+            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+              `${relation}.${column}`,
+            ),
+        )
+        .map(quoteSqlIdentifier)
+        .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-  ),
+    ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `
@@ -675,6 +715,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);
@@ -685,6 +726,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteSchedulerJobPauseLog(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));
@@ -697,9 +739,16 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
 /**
  * Create a test PGlite: from the batching runner's snapshot when
  * PGLITE_TEST_SNAPSHOT is set, otherwise via the full in-process build so
- * solo `bun test <file>` runs keep working without the runner.
+ * solo `bun test <file>` runs keep working without the runner. A suite may
+ * supply its own snapshot with additional DDL and seed data baked in.
  */
-export const createTestPglite = async (): Promise<PGlite> => {
+export const createTestPglite = async (snapshot?: Blob): Promise<PGlite> => {
+  if (snapshot !== undefined) {
+    return await PGlite.create({
+      extensions: { pg_trgm },
+      loadDataDir: snapshot,
+    });
+  }
   const snapshotPath = process.env[PGLITE_TEST_SNAPSHOT_ENV];
   if (snapshotPath === undefined || snapshotPath.length === 0) {
     return await buildFullTestPglite();

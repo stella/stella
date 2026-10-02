@@ -64,6 +64,7 @@ type Session = "checking" | "anonymous" | "org-a" | "org-b";
 let session: Session = "checking";
 const requests: { path: string; session: Session }[] = [];
 let holdMemberTemplates = false;
+let templateCatalogue: "available" | "empty" | "missing" = "available";
 const heldResponses: (() => void)[] = [];
 
 const SESSION_USER = {
@@ -171,12 +172,28 @@ globalThis.fetch = Object.assign(
       return Response.json(sessionBody());
     }
     if (path === "/v1/public/knowledge/template-packs") {
-      return Response.json({ items: [CATALOGUE_PACK] });
+      return Response.json({
+        items: templateCatalogue === "missing" ? [] : [CATALOGUE_PACK],
+      });
     }
     if (path === "/v1/public/knowledge/template-packs/general-legal") {
       return Response.json({
         ...CATALOGUE_PACK,
-        templates: [CATALOGUE_TEMPLATE],
+        templates: templateCatalogue === "empty" ? [] : [CATALOGUE_TEMPLATE],
+      });
+    }
+    if (
+      path ===
+      "/v1/public/knowledge/template-packs/general-legal/templates/nda/preview"
+    ) {
+      return Response.json({
+        paragraphs: [
+          {
+            index: 0,
+            text: "The parties agree to keep information confidential.",
+          },
+        ],
+        structureErrors: [],
       });
     }
     if (
@@ -233,6 +250,17 @@ const { Route: KnowledgeLayoutRoute } =
   await import("@/routes/knowledge/route");
 const { Route: TemplatesRoute } = await import("@/routes/knowledge/templates");
 
+const { publicKnowledgeKeys } =
+  await import("@/features/knowledge/public/public-knowledge-queries");
+const { PublicKnowledgeLanding } =
+  await import("@/routes/knowledge/-public/public-knowledge-landing");
+const { Route: CatalogueRoute } =
+  await import("@/routes/knowledge/templates_.catalogue");
+const { Route: CatalogueIndexRoute } =
+  await import("@/routes/knowledge/templates_.catalogue.index");
+const { Route: CatalogueDetailRoute } =
+  await import("@/routes/knowledge/templates_.catalogue.$packId.$templateId");
+
 /** A page's component, which these routes always declare. */
 const componentOf = (component: RouteComponent | undefined) => {
   if (component === undefined) {
@@ -241,7 +269,7 @@ const componentOf = (component: RouteComponent | undefined) => {
   return component;
 };
 
-const createApp = () => {
+const createApp = (initialEntry = "/knowledge/templates") => {
   const queryClient = new QueryClient({
     defaultOptions: { queries: { retry: false } },
   });
@@ -271,7 +299,9 @@ const createApp = () => {
     </RouteErrorLifecycleProvider>
   );
 
-  const rootRoute = router.createRootRoute({
+  const rootRoute = router.createRootRouteWithContext<{
+    queryClient: InstanceType<typeof QueryClient>;
+  }>()({
     component: () => (
       <ApiVersionMismatchProvider>
         <AppFrameHost>
@@ -297,14 +327,43 @@ const createApp = () => {
     validateSearch: TemplatesRoute.options.validateSearch,
     component: componentOf(TemplatesRoute.options.component),
   });
+  const landingRoute = router.createRoute({
+    getParentRoute: () => knowledgeRoute,
+    path: "/",
+    component: () => <PublicKnowledgeLanding from={undefined} />,
+  });
+  // Attach the real file routes to this test root, as the generated tree does.
+  const catalogueRoute = CatalogueRoute;
+  Object.assign(catalogueRoute.options, {
+    getParentRoute: () => knowledgeRoute,
+    id: "/templates_/catalogue",
+    path: "/templates/catalogue",
+  });
+  const catalogueIndexRoute = CatalogueIndexRoute;
+  Object.assign(catalogueIndexRoute.options, {
+    getParentRoute: () => catalogueRoute,
+    id: "/",
+    path: "/",
+  });
+  const catalogueDetailRoute = CatalogueDetailRoute;
+  Object.assign(catalogueDetailRoute.options, {
+    getParentRoute: () => catalogueRoute,
+    id: "/$packId/$templateId",
+    path: "/$packId/$templateId",
+  });
   const appRouter = router.createRouter({
+    context: { queryClient },
     history: router.createMemoryHistory({
-      initialEntries: ["/knowledge/templates"],
+      initialEntries: [initialEntry],
     }),
     isServer: false,
     routeTree: rootRoute.addChildren([
       protectedRoute,
-      knowledgeRoute.addChildren([templatesRoute]),
+      knowledgeRoute.addChildren([
+        templatesRoute,
+        landingRoute,
+        catalogueRoute.addChildren([catalogueIndexRoute, catalogueDetailRoute]),
+      ]),
     ]),
   });
 
@@ -352,6 +411,50 @@ afterAll(async () => {
 });
 
 describe("Knowledge for every visitor, on one live client", () => {
+  test("the catalogue index still shows the public template list", async () => {
+    session = "anonymous";
+    templateCatalogue = "available";
+    requests.length = 0;
+    const { view } = createApp("/knowledge/templates/catalogue");
+    try {
+      await testing.waitFor(() =>
+        view.getByRole("button", { name: CATALOGUE_TEMPLATE.title }),
+      );
+      expect(
+        view.getByRole("heading", { level: 2, name: "Templates" }),
+      ).toBeDefined();
+      expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
+    } finally {
+      view.unmount();
+    }
+  });
+
+  test("an anonymous detail URL mounts the catalogue detail and preview", async () => {
+    session = "anonymous";
+    templateCatalogue = "available";
+    requests.length = 0;
+    const { view } = createApp(
+      "/knowledge/templates/catalogue/general-legal/nda",
+    );
+    try {
+      await testing.waitFor(() =>
+        view.getByRole("heading", {
+          level: 1,
+          name: CATALOGUE_TEMPLATE.title,
+        }),
+      );
+      await testing.waitFor(() =>
+        view.getByText("The parties agree to keep information confidential."),
+      );
+      expect(
+        view.queryByRole("heading", { level: 2, name: "Templates" }),
+      ).toBeNull();
+      expect(requests.filter(({ path }) => !isPublicRequest(path))).toEqual([]);
+    } finally {
+      view.unmount();
+    }
+  });
+
   test("while the session is unknown nothing but the session is asked for", async () => {
     session = "checking";
     requests.length = 0;
@@ -382,6 +485,48 @@ describe("Knowledge for every visitor, on one live client", () => {
     }
     view.unmount();
   });
+
+  test.each(["empty", "missing"] as const)(
+    "public template surfaces hide an %s catalogue",
+    async (state) => {
+      session = "anonymous";
+      templateCatalogue = state;
+      requests.length = 0;
+      const { queryClient, appRouter, view } = createApp("/knowledge");
+      try {
+        await testing.waitFor(() => view.getByText("Tools"));
+        await testing.waitFor(() => {
+          const catalogue = queryClient
+            .getQueryCache()
+            .find({ queryKey: publicKnowledgeKeys.templates.catalogue() });
+          expect(catalogue?.state.status).toBe("success");
+        });
+        expect(view.queryByText("Templates")).toBeNull();
+        for (const href of [
+          "/knowledge/templates",
+          "/knowledge/templates/catalogue/general-legal/nda",
+        ]) {
+          await testing.act(async () => {
+            await appRouter.navigate({ href });
+          });
+          expect(view.queryByText("Templates")).toBeNull();
+          expect(
+            view.queryByText("Catalogue nondisclosure agreement"),
+          ).toBeNull();
+          expect(view.queryByText("Catalogue unavailable")).toBeNull();
+        }
+        expect(
+          requests.filter(
+            ({ path }) =>
+              path === "/v1/public/knowledge/template-packs/general-legal",
+          ),
+        ).toHaveLength(state === "missing" ? 0 : 1);
+      } finally {
+        view.unmount();
+        templateCatalogue = "available";
+      }
+    },
+  );
 
   test("organization A, a read in flight, sign-out, then organization B: nothing of A survives", async () => {
     session = "org-a";

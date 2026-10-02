@@ -11,8 +11,6 @@ import {
   parseTimeEntrySuggestionsResponse,
   parseTimeEntrySummary,
   parseTimeEntryUpdatedResponse,
-  parseTimerStartResponse,
-  parseTimerStopResponse,
 } from "@stll/api-contract/time-entries";
 import type {
   TimeEntry,
@@ -154,8 +152,6 @@ type TimeEntryMutation =
   | { body: unknown; type: "create" }
   | { body: unknown; type: "update" }
   | { body: unknown; type: "delete" }
-  | { body: unknown; type: "timer_start" }
-  | { body: unknown; type: "timer_stop" }
   | { body: unknown; type: "batch_update" }
   | { body: unknown; type: "batch_delete" }
   | { body: unknown; type: "split" }
@@ -195,24 +191,6 @@ export const sendTimeEntryMutation = async ({
         method: "DELETE",
         parse: parseTimeEntryDeleteResponse,
         path: "/",
-        workspaceId,
-      });
-      return;
-    case "timer_start":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "POST",
-        parse: parseTimerStartResponse,
-        path: "/timer/start",
-        workspaceId,
-      });
-      return;
-    case "timer_stop":
-      await requestTimeEntries({
-        body: mutation.body,
-        method: "POST",
-        parse: parseTimerStopResponse,
-        path: "/timer/stop",
         workspaceId,
       });
       return;

@@ -17,7 +17,11 @@ const config = {
     "the fields you pass are written. A category cannot become its own " +
     "parent, and a move that would make the tree circular is refused.",
   permissions: { clause: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: updateClauseCategoryParamsSchema,
   body: updateCategoryBodySchema,
 } satisfies HandlerConfig;

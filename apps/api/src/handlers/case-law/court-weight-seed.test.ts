@@ -11,6 +11,8 @@ import {
   courtWeightSeedSql,
   seededCourtWeightEntries,
 } from "@/api/handlers/case-law/court-weight-seed";
+import { courtAbbreviation } from "@/api/lib/case-law/court-abbreviations";
+import { SK_ECLI_COURTS } from "@/api/lib/case-law/ecli-court-codes";
 import {
   HIGHEST_COURT_TIER,
   LOWEST_COURT_TIER,
@@ -37,6 +39,31 @@ const SEEDED_AFTER_THE_FULL_SEED: ReadonlySet<string> = new Set(["USA"]);
  */
 const WITHOUT_A_CONSTITUTIONAL_COURT: ReadonlySet<string> = new Set(["USA"]);
 
+// The merged full seed retains the Slovak declaration it originally shipped.
+const HISTORICAL_SVK_SEED = [
+  {
+    country: "SVK",
+    courtPattern: "ústavný súd",
+    tier: 4,
+    tierLabel: "constitutional",
+    weight: 10,
+  },
+  {
+    country: "SVK",
+    courtPattern: "najvyšší",
+    tier: 3,
+    tierLabel: "supreme",
+    weight: 8,
+  },
+  {
+    country: "SVK",
+    courtPattern: "krajský súd",
+    tier: 2,
+    tierLabel: "regional",
+    weight: 4,
+  },
+];
+
 describe("court weight seed", () => {
   test("each seed migration is the rendering of its part of the declaration", async () => {
     const full = await Bun.file(
@@ -44,13 +71,24 @@ describe("court weight seed", () => {
     ).text();
     const fullRows = COURT_WEIGHT_SEED.filter(
       (row) => !SEEDED_AFTER_THE_FULL_SEED.has(row.country),
-    );
+    ).flatMap((row) => {
+      if (row.country !== "SVK") {
+        return [row];
+      }
+      return row.courtPattern === "ústavný súd" ? HISTORICAL_SVK_SEED : [];
+    });
     expect(full.trimEnd().endsWith(courtWeightSeedSql(fullRows))).toBe(true);
 
     const usa = await Bun.file(
       migrationPath("20260927200200_case_law_court_weight_seed_usa"),
     ).text();
     expect(usa.trimEnd().endsWith(courtWeightJurisdictionSeedSql("USA"))).toBe(
+      true,
+    );
+    const svk = await Bun.file(
+      migrationPath("20261003122700_case_law_court_weight_seed_svk"),
+    ).text();
+    expect(svk.trimEnd().endsWith(courtWeightJurisdictionSeedSql("SVK"))).toBe(
       true,
     );
   });
@@ -238,6 +276,73 @@ describe("court weight seed", () => {
       );
       expect([court, matched.length]).toEqual([court, 1]);
     }
+  });
+
+  test("Slovakia ranks every court family once, including retired names", () => {
+    const families: readonly [court: string, label: string, tier: number][] = [
+      ["Ústavný súd Slovenskej republiky", "constitutional", 4],
+      ["Najvyšší súd Slovenskej republiky", "supreme", 3],
+      ["Najvyšší správny súd Slovenskej republiky", "supreme", 3],
+      ["Krajský súd v Bratislave", "regional", 2],
+      ["Okresný súd Bratislava I", "district", 1],
+      ["Mestský súd Bratislava I", "district", 1],
+      ["Mestský súd Košice", "district", 1],
+      ["Správny súd v Bratislave", "administrative", 1],
+      ["Správny súd v Banskej Bystrici", "administrative", 1],
+      ["Správny súd v Košiciach", "administrative", 1],
+      ["Špecializovaný trestný súd", "special", 1],
+      ["Špeciálny súd", "special", 1],
+    ];
+    for (const [court, tierLabel, tier] of families) {
+      const matches = seededCourtWeightEntries("SVK").filter((entry) =>
+        entry.pattern.test(court),
+      );
+      expect(matches, court).toHaveLength(1);
+      expect(matches.at(0), court).toMatchObject({ tierLabel, tier });
+      if (tierLabel !== "supreme") {
+        continue;
+      }
+      for (const space of ["  ", "\u00a0"]) {
+        const spaced = court.replaceAll(" ", () => space);
+        expect(spaced).not.toBe(court);
+        const spacedMatches = seededCourtWeightEntries("SVK").filter((entry) =>
+          entry.pattern.test(spaced),
+        );
+        expect(spacedMatches, spaced).toHaveLength(1);
+        expect(spacedMatches.at(0), spaced).toMatchObject({ tierLabel, tier });
+      }
+    }
+  });
+
+  test("every declared Slovak ECLI court has one rank and an abbreviation", () => {
+    for (const [code, court] of Object.entries(SK_ECLI_COURTS)) {
+      const matches = seededCourtWeightEntries("SVK").filter((entry) =>
+        entry.pattern.test(court),
+      );
+      expect(matches, code).toHaveLength(1);
+      expect(
+        courtAbbreviation({
+          country: "SVK",
+          court: "",
+          ecli: `ECLI:SK:${code}:2024:1.1`,
+        }),
+        code,
+      ).toBeDefined();
+    }
+    expect(
+      courtAbbreviation({
+        country: "SVK",
+        court: "",
+        ecli: "ECLI:SK:SpSBA:2024:1.1",
+      }),
+    ).toBe("SpS");
+    expect(
+      courtAbbreviation({
+        country: "SVK",
+        court: "",
+        ecli: "ECLI:SK:SSPK:2024:1.1",
+      }),
+    ).toBe("ŠTS");
   });
 
   test("the United States keeps its one legacy name row and names no other court", () => {

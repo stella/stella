@@ -17,7 +17,7 @@ import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
-} from "@/api/lib/auth-paths";
+} from "@/api/lib/auth/auth-paths";
 
 describe("OAuth authorization server metadata", () => {
   const assertMetadataResponse = async (path: string) => {
@@ -26,6 +26,7 @@ describe("OAuth authorization server metadata", () => {
     );
 
     expect(response.status).toBe(200);
+    expect(response.headers.get("Cache-Control")).toBe("public, max-age=300");
     expect(response.headers.get("Access-Control-Allow-Origin")).toBe("*");
     expect(response.headers.get("Access-Control-Allow-Methods")).toBe(
       "GET, OPTIONS",

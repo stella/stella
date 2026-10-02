@@ -18,7 +18,11 @@ const config = {
     "the variant fall back to the clause itself and keep only a stale label " +
     "snapshot of what was removed.",
   permissions: { clause: ["delete"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: deleteVariantParamsSchema,
 } satisfies HandlerConfig;
 

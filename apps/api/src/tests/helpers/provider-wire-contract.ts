@@ -11,17 +11,13 @@ import * as v from "valibot";
 
 import { BYOK_DEFAULT_MODELS, BYOK_MODEL_OPTIONS } from "@stll/ai-catalog";
 
+import { chatAttemptRequestOptions } from "@/api/handlers/chat/chat-request";
 import { classifyRunErrorChunk } from "@/api/handlers/chat/stream-chat";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { getTemperatureForRole } from "@/api/lib/ai-config";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { chatToolMapToArray } from "@/api/lib/chat/chat-tool-types";
-import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import { streamChatChunks } from "@/api/lib/chat/tanstack-chat-runtime";
-import {
-  chatTurnOutputTokens,
-  mergeGenerationOptions,
-} from "@/api/lib/tanstack-ai-generate";
+import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   clearByokAdapterCache,
   createTanStackTextAdapterFactory,
@@ -185,33 +181,37 @@ const prepareWireRequest = ({
       chatModel: scenario === "bad-request" ? wireChatModel(provider) : model,
       provider,
     }),
-    { organizationId: null },
+    { dataClass: "public_corpus", organizationId: null },
   );
-  const adapter =
-    resolved.modelId === model
-      ? resolved.adapter
-      : createTanStackTextAdapterFactory({ apiKey, provider })(model);
-  const modelOptions = mergeGenerationOptions({
+  // The chat attempt's own request options, so each cassette pins the
+  // request a chat turn sends (its system prompt aside: the scenarios send
+  // only their prompt).
+  const requestOptions = chatAttemptRequestOptions({
     caching: { enabled: false, reason: "org-disabled" },
-    model: resolved,
-    maxOutputTokens:
-      scenario === "length"
-        ? LENGTH_SCENARIO_MAX_TOKENS
-        : chatTurnOutputTokens(resolved),
-    serviceTier: "standard",
-    temperature: getTemperatureForRole("chat"),
-  });
-  const tools = projectChatToolSchemasForProvider({
+    ...(scenario === "length"
+      ? { maxOutputTokens: LENGTH_SCENARIO_MAX_TOKENS }
+      : {}),
+    model:
+      resolved.modelId === model
+        ? resolved
+        : {
+            ...resolved,
+            adapter: createTanStackTextAdapterFactory({
+              dataClass: "public_corpus",
+              apiKey,
+              provider,
+            })(model),
+          },
     modelTools: chatToolMapToArray({ [WIRE_TOOL_NAME]: wireTool() }),
-    provider,
+    role: "chat",
+    system: undefined,
+    toolCallIds: new ToolCallIdLedger([]),
   });
   return {
-    adapter,
+    ...requestOptions,
     messages: [
       { role: "user" as const, content: scenarioPrompt(provider, scenario) },
     ],
-    modelOptions,
-    tools,
   };
 };
 
@@ -226,7 +226,7 @@ export const runWireScenario = async (options: {
   provider: ProviderWireProvider;
   scenario: ProviderWireScenario;
 }): Promise<WireRun> => {
-  const { adapter, messages, modelOptions, tools } =
+  const { adapter, messages, tools, ...requestOptions } =
     prepareWireRequest(options);
   const abortController = new AbortController();
   const chunks: StreamChunk[] = [];
@@ -244,10 +244,11 @@ export const runWireScenario = async (options: {
   const run = (async () => {
     try {
       for await (const chunk of adapter.chatStream({
+        // Everything else the chat attempt sets, as it sets it.
+        ...requestOptions,
         logger: resolveDebugOption(false),
         messages,
         model: options.model,
-        modelOptions,
         request: { signal: abortController.signal },
         runId: "wire-run",
         threadId: "wire-thread",
@@ -298,7 +299,7 @@ export const runCancelledWireScenario = async (options: {
   provider: ProviderWireProvider;
   scenario: ProviderWireScenario;
 }): Promise<WireRun> => {
-  const { adapter, messages, modelOptions, tools } =
+  const { adapter, messages, tools, ...requestOptions } =
     prepareWireRequest(options);
   const abortController = new AbortController();
   const chunks: StreamChunk[] = [];
@@ -310,11 +311,11 @@ export const runCancelledWireScenario = async (options: {
   const run = (async () => {
     try {
       for await (const chunk of streamChatChunks({
+        ...requestOptions,
         abortController,
         adapter,
         agentLoopStrategy: maxIterations(1),
         messages,
-        modelOptions,
         runId: "wire-run",
         threadId: "wire-thread",
         tools,
@@ -832,16 +833,20 @@ export const replayWireScenario = async ({
   cancelAfterFirstDelta,
   cassette,
   chunking,
+  recordedRetryResponses,
   replay,
 }: {
   cancelAfterFirstDelta?: boolean | undefined;
   cassette: ProviderWireCassette;
   /** Where the bodies are cut into reads; the replay's default otherwise. */
   chunking?: Chunking | undefined;
+  /** Keep these responses on the SDK's recorded backoff before the hint. */
+  recordedRetryResponses?: number | undefined;
   replay: ProviderWireReplay;
 }) => {
   replay.serve(cassette, {
     chunking,
+    recordedRetryResponses,
     ...(cancelAfterFirstDelta === true
       ? { holdAfterBytes: holdPoint(cassette) }
       : {}),

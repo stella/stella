@@ -118,23 +118,31 @@ const WHICH_MATTERS = "Which matters should I search, or all you can access?";
 const read = (turn: number, entityId: string) =>
   event(turn, "read_content_across_matters", { entity_id: entityId });
 
+const OPENING_QUESTIONS = [
+  "Do you have past executed agreements to ground the playbook in?",
+  "Which side is your organization on?",
+  "Which governing law should the playbook assume?",
+  "What language should the playbook be written in?",
+];
+/** Steps 2 to 4 of "Look for them" on the chosen matter, then a save. */
+const readChosenMatter = (turn: number): BuilderEvent[] => [
+  event(turn, "list_documents", { matter_id: supplyMatterId }),
+  ask(
+    turn,
+    "Which of these should I read? Keller GmbH, Brandt AG, Vogel (draft)",
+  ),
+  read(turn, keller),
+  read(turn, brandt),
+  event(turn, "save_playbook"),
+];
+
 /** The run the `contracts-later` scenario describes, on the MCP surface. */
 const contractsLaterRun = (): BuilderEvent[] => [
-  ask(
-    1,
-    "Do you have past executed agreements to ground the playbook in?",
-    "Which side is your organization on?",
-    "Which governing law should the playbook assume?",
-    "What language should the playbook be written in?",
-  ),
+  ask(1, ...OPENING_QUESTIONS),
   event(1, "save_playbook"),
   event(2, "list_matters"),
   askWith(2, WHICH_MATTERS, MATTER_OPTIONS),
-  event(2, "list_documents", { matter_id: supplyMatterId }),
-  ask(2, "Which of these should I read? Keller GmbH, Brandt AG, Vogel (draft)"),
-  read(2, keller),
-  read(2, brandt),
-  event(2, "save_playbook"),
+  ...readChosenMatter(2),
 ];
 
 const score = (
@@ -234,6 +242,23 @@ describe("contracts-later scoring", () => {
   });
 });
 
+/**
+ * The run the `discovery` scenario describes, on the MCP surface. The user
+ * names the matter in their contracts answer, so the run skips the "which
+ * matters" question.
+ */
+const discoveryRun = (): BuilderEvent[] => [
+  ask(1, ...OPENING_QUESTIONS),
+  event(1, "list_matters"),
+  ...readChosenMatter(1),
+];
+
+describe("discovery scoring", () => {
+  test("the described run has no defects", () => {
+    expect(score("discovery", discoveryRun())).toEqual([]);
+  });
+});
+
 describe("scripted answers", () => {
   test("the matters question is answered with a matter, not a document pick", () => {
     const [question] = askWith(1, WHICH_MATTERS, MATTER_OPTIONS).questions;
@@ -323,22 +348,13 @@ const GROUNDING_OPTIONS = [
   "Finish without",
 ];
 const groundingLaterRun = (): BuilderEvent[] => [
-  ask(
-    1,
-    "Do you have past executed agreements to ground the playbook in?",
-    "Which side is your organization on?",
-    "Which governing law should the playbook assume?",
-  ),
+  ask(1, ...OPENING_QUESTIONS),
   event(1, "save_playbook"),
   event(1, "save_playbook"),
   askWith(1, GROUNDING_QUESTION, GROUNDING_OPTIONS),
   event(1, "list_matters"),
   askWith(1, WHICH_MATTERS, MATTER_OPTIONS),
-  event(1, "list_documents", { matter_id: supplyMatterId }),
-  ask(1, "Which of these should I read? Keller GmbH, Brandt AG, Vogel (draft)"),
-  read(1, keller),
-  read(1, brandt),
-  event(1, "save_playbook"),
+  ...readChosenMatter(1),
 ];
 
 describe("grounding-later scoring", () => {

@@ -1,12 +1,7 @@
 #!/usr/bin/env bun
 
-// While a release pull request is open, a CLI changeset landing ahead of it
-// leaves the release with a CLI change it did not version, and the release
-// coupling guard ejects the release from the merge queue. This guard holds the
-// other pull request instead: in the merge queue it fails a non-release pull
-// request that adds a changeset naming @stll/cli while a release is open, so
-// the release lands first and the changeset rolls into the next one. On a pull
-// request it only warns.
+// Hold new CLI changesets until the open release merges and its VERSION is
+// tagged. They then belong to the next release. Pull request runs only warn.
 
 import path from "node:path";
 
@@ -31,11 +26,14 @@ const panic = (message: string): never => {
 
 export type ReleaseHoldEvent = "pull_request" | "merge_group";
 
+type ReleaseVersionState = "pending" | "tagged";
+
 export type ReleaseHoldInput = {
   readonly addedCliChangesets: readonly string[];
   readonly event: ReleaseHoldEvent;
   readonly isReleasePullRequest: boolean;
   readonly openReleases: number;
+  readonly versionState: ReleaseVersionState;
 };
 
 export type ReleaseHoldVerdict =
@@ -50,10 +48,11 @@ export const decideReleaseHold = ({
   event,
   isReleasePullRequest,
   openReleases,
+  versionState,
 }: ReleaseHoldInput): ReleaseHoldVerdict => {
   if (
     isReleasePullRequest ||
-    openReleases === 0 ||
+    (openReleases === 0 && versionState === "tagged") ||
     addedCliChangesets.length === 0
   ) {
     return { status: "clear" };
@@ -74,13 +73,13 @@ export const report = (verdict: ReleaseHoldVerdict): number => {
   const changesets = verdict.changesets.join(", ");
   if (verdict.status === "warn") {
     process.stdout.write(
-      `::warning::release-cli-changeset-hold: a release pull request is open and this pull request adds a changeset naming @stll/cli (${changesets}). The merge queue holds it until the release merges.\n`,
+      `::warning::release-cli-changeset-hold: a release is open or awaiting its tag and this pull request adds a changeset naming @stll/cli (${changesets}). The merge queue holds it until the release is tagged.\n`,
     );
     return 0;
   }
   process.stderr.write(
-    `::error::release-cli-changeset-hold: a release pull request is open and this pull request adds a changeset naming @stll/cli (${changesets}). Landing it now would leave the release a CLI change it did not version.\n` +
-      "  fix: enqueue this pull request again after the release merges; its changeset then goes into the next release.\n",
+    `::error::release-cli-changeset-hold: a release is open or awaiting its tag and this pull request adds a changeset naming @stll/cli (${changesets}). Landing it now would leave the release a CLI change it did not version.\n` +
+      "  fix: enqueue this pull request again after the release is tagged; its changeset then goes into the next release.\n",
   );
   return 1;
 };
@@ -143,11 +142,12 @@ type HoldOptions = {
   readonly event: ReleaseHoldEvent;
   readonly isReleasePullRequest: boolean;
   readonly openReleases: number;
+  readonly versionState: ReleaseVersionState;
 };
 
 const USAGE =
   "usage: check-release-cli-changeset-hold.ts --event <pull_request|merge_group> " +
-  "--open-releases <count> --is-release <true|false> [--base <ref>] [--root <path>]";
+  "--open-releases <count> --version-state <pending|tagged> --is-release <true|false> [--base <ref>] [--root <path>]";
 
 const parseEvent = (value: string): ReleaseHoldEvent =>
   value === "pull_request" || value === "merge_group" ? value : panic(USAGE);
@@ -170,6 +170,7 @@ export const parseHoldArgs = (args: readonly string[]): HoldOptions => {
   let base = "origin/main";
   let event: ReleaseHoldEvent | null = null;
   let openReleases: number | null = null;
+  let versionState: ReleaseVersionState | null = null;
   let isReleasePullRequest: boolean | null = null;
   for (let index = 0; index < args.length; index += 2) {
     const flag = args[index] ?? panic(USAGE);
@@ -187,6 +188,12 @@ export const parseHoldArgs = (args: readonly string[]): HoldOptions => {
       case "--open-releases":
         openReleases = parseCount(value);
         break;
+      case "--version-state":
+        if (value !== "pending" && value !== "tagged") {
+          return panic(USAGE);
+        }
+        versionState = value;
+        break;
       case "--is-release":
         isReleasePullRequest = parseBoolean(value);
         break;
@@ -197,11 +204,19 @@ export const parseHoldArgs = (args: readonly string[]): HoldOptions => {
   if (
     event === null ||
     openReleases === null ||
+    versionState === null ||
     isReleasePullRequest === null
   ) {
     return panic(USAGE);
   }
-  return { root, base, event, openReleases, isReleasePullRequest };
+  return {
+    root,
+    base,
+    event,
+    openReleases,
+    versionState,
+    isReleasePullRequest,
+  };
 };
 
 const main = (args: readonly string[]): number => {
@@ -212,6 +227,7 @@ const main = (args: readonly string[]): number => {
       event: options.event,
       isReleasePullRequest: options.isReleasePullRequest,
       openReleases: options.openReleases,
+      versionState: options.versionState,
     }),
   );
 };

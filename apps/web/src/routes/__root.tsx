@@ -29,9 +29,18 @@ import "@/fonts.css";
 import type { AnalyticsValue } from "@/lib/analytics/provider";
 import type { RouteErrorLifecycleController } from "@/lib/analytics/route-error-lifecycle";
 import { RouteErrorLifecycleProvider } from "@/lib/analytics/route-error-lifecycle-context";
+import {
+  isPublicKnowledgeEnabled,
+  isPublicKnowledgeCrawlAllowed,
+} from "@/lib/knowledge/public-knowledge-launch";
+import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
+import { isPublicLawCrawlAllowed } from "@/lib/public-law-launch";
 import { isPublicSsrPath } from "@/lib/public-ssr-paths";
+import { isPublicToolsCrawlAllowed } from "@/lib/public-tools-launch";
 import { requireFreshDocument } from "@/lib/session-cache-guard";
+import { documentResponsePolicyHeaders } from "@/route-response-policy";
 import { AppFrameHost } from "@/routes/-app-frame-host";
+import { createRootHead } from "@/routes/-root-head";
 import "@/styles/app.css";
 
 const isDev = import.meta.env.DEV;
@@ -52,14 +61,17 @@ export const Route = createRootRouteWithContext<{
   component: RootComponent,
   // Document head management via route `head` option.
   // https://tanstack.com/router/latest/docs/framework/react/guide/document-head-management
-  head: () => ({
-    meta: [
-      { charSet: "utf-8" },
-      { name: "viewport", content: "width=device-width, initial-scale=1.0" },
-      { title: "stella" },
-    ],
-    links: [{ rel: "icon", href: "/favicon.svg", type: "image/svg+xml" }],
-  }),
+  head: () => createRootHead(isPublicKnowledgeEnabled()),
+  headers: ({ matches }) =>
+    documentResponsePolicyHeaders({
+      match: matches.at(-1),
+      crawl: {
+        publicKnowledgeCrawlAllowed: isPublicKnowledgeCrawlAllowed(),
+        publicLawCrawlAllowed: isPublicLawCrawlAllowed(),
+        publicToolsCrawlAllowed: isPublicToolsCrawlAllowed(),
+        toolsBasePath: publicToolsBasePath(),
+      },
+    }),
   pendingComponent: () => <DefaultPendingComponent className="h-dvh" />,
   errorComponent: RootErrorComponent,
 });

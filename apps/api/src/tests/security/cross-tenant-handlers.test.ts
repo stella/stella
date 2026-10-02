@@ -33,6 +33,7 @@ import {
   entityVersions,
   fields,
   invoiceLines,
+  invoices,
   legalLists,
   legalReaderAnnotations,
   numberSeries,
@@ -89,6 +90,7 @@ import readVersions from "@/api/handlers/entities/versions/list";
 import listEntityViews from "@/api/handlers/entity-views/list";
 import readExpenses from "@/api/handlers/expenses/list";
 import { readEmailHtmlPreviewHandler } from "@/api/handlers/files/get";
+import createInvoice from "@/api/handlers/invoices/create";
 import readInvoiceById from "@/api/handlers/invoices/get";
 import createInvoiceLine from "@/api/handlers/invoices/lines/create";
 import updateInvoiceLine from "@/api/handlers/invoices/lines/update";
@@ -154,6 +156,7 @@ type TestHandlerContext = {
   memberRole: { role: "owner" };
   orgAIConfig: null;
   orgAIConfigStatus: "ok";
+  managedAIResidency: "eu";
   promptCachingEnabled: false;
   recordAuditEvent: AuditRecorder;
   request: Request;
@@ -189,6 +192,9 @@ const savedSearchA = toSafeId<"savedSearch">(
 );
 const savedSearchB = toSafeId<"savedSearch">(
   "22222222-2222-4222-8222-222222222245",
+);
+const creditOriginalB = toSafeId<"invoice">(
+  "22222222-2222-4222-8222-222222222261",
 );
 const sellerProfileB = toSafeId<"sellerProfile">(
   "22222222-2222-4222-8222-222222222257",
@@ -757,6 +763,36 @@ const isolationCases: IsolationCase[] = [
       expectTranslationRunIdEquals(result, documentTranslationRunB),
   },
   {
+    name: "credit note create against another tenant original",
+    runAAgainstB: async ({ ids: testIds, workspaceA }) =>
+      await runHandler(createInvoice, workspaceA, {
+        params: { workspaceId: testIds.wsA1 },
+        body: {
+          documentType: "credit_note",
+          originalInvoiceId: creditOriginalB,
+          invoiceDate: "2026-09-29",
+          currency: "USD",
+          timeEntryIds: [],
+        },
+      }),
+    runBPositive: async ({ ids: testIds, workspaceB }) =>
+      await runHandler(createInvoice, workspaceB, {
+        params: { workspaceId: testIds.wsB1 },
+        body: {
+          documentType: "credit_note",
+          originalInvoiceId: creditOriginalB,
+          invoiceDate: "2026-09-29",
+          currency: "USD",
+          timeEntryIds: [],
+        },
+      }),
+    expectDenied: expectStatus(422),
+    expectPositive: (result) => {
+      expect(getStatusCode(result)).toBeNull();
+      expect(result).toMatchObject({ id: expect.any(String) });
+    },
+  },
+  {
     name: "invoice read by id",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(readInvoiceById, workspaceA, {
@@ -1214,7 +1250,7 @@ const isolationCases: IsolationCase[] = [
     name: "governed work queue",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(listMyWork, workspaceA, {
-        user: { id: testIds.userB1 },
+        user: { id: testIds.userB1, email: "user-b@example.test" },
         query: { queue: "to_acknowledge", limit: 100, asOf: "2026-08-24" },
       }),
     runBPositive: async ({ workspaceB }) =>
@@ -1757,6 +1793,16 @@ beforeAll(async () => {
   testDb = await getTestDb();
   ids = createTestIds();
   await setupRlsTestData(testDb, ids);
+  await testDb.insert(invoices).values({
+    id: creditOriginalB,
+    organizationId: ids.orgB,
+    workspaceId: ids.wsB1,
+    invoiceNumber: "CREDIT-ORIGINAL-B",
+    invoiceDate: "2026-09-29",
+    currency: "USD",
+    status: "finalized",
+  });
+
   await testDb.insert(sellerProfiles).values({
     id: sellerProfileB,
     organizationId: ids.orgB,
@@ -2181,6 +2227,7 @@ const createWorkspaceContext = ({
     memberRole: { role: "owner" },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),

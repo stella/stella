@@ -20,7 +20,11 @@ const config = {
     "templates.clauses.link. The template's own document is not rewritten, " +
     "so the slot marker stays in it.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: unlinkTemplateClauseParamsSchema,
 } satisfies HandlerConfig;
 

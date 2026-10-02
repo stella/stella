@@ -2,7 +2,10 @@ import { describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { hostedUsageWebhookEventSchema } from "@/api/lib/hosted-usage-provider/event-schemas";
-import { normalizePolarEvent } from "@/api/lib/hosted-usage-provider/polar/events";
+import {
+  normalizePolarEvent,
+  POLAR_HANDLED_EVENT_TYPES,
+} from "@/api/lib/hosted-usage-provider/polar/events";
 import { normalizeProviderEvent } from "@/api/lib/hosted-usage-provider/provider-event-normalizer";
 
 const polarSubscription = (overrides: Record<string, unknown> = {}) => ({
@@ -79,6 +82,22 @@ describe("normalizePolarEvent — subscription lifecycle", () => {
       ).toBe(true);
     });
   }
+
+  test("preserves provider creation time independently of modification time", () => {
+    const created_at = "2026-06-01T00:00:00Z";
+    const modified_at = "2026-06-03T00:00:00Z";
+    for (const { native } of cases) {
+      const result = normalizePolarEvent(
+        { type: native, data: polarSubscription({ created_at, modified_at }) },
+        native,
+      );
+      const parsed = v.parse(hostedUsageWebhookEventSchema, result.candidate);
+      expect(parsed.data).toMatchObject({
+        created_at,
+        occurred_at: modified_at,
+      });
+    }
+  });
 
   test("omits quantity when Polar seats is null so dispatch defaults to one", () => {
     const result = normalizePolarEvent(
@@ -264,5 +283,61 @@ describe("normalizePolarEvent — occurred_at ordering signal", () => {
   test("omitted when the provider sends no usable timestamp", () => {
     const mapped = mappedData({ modified_at: null });
     expect(mapped["occurred_at"]).toBeUndefined();
+  });
+});
+
+describe("native event dispositions", () => {
+  const dispositions = {
+    "subscription.created": "entitlement.created",
+    "subscription.active": "entitlement.active",
+    "subscription.updated": "entitlement.updated",
+    "subscription.past_due": "entitlement.updated",
+    "subscription.uncanceled": "entitlement.updated",
+    "subscription.canceled": "entitlement.canceled",
+    "subscription.revoked": "entitlement.revoked",
+    "subscription.cycled": "entitlement.updated",
+    "subscription.paused": "entitlement.paused",
+    "subscription.resumed": "entitlement.updated",
+    "subscription.migrated": "entitlement.reconciliation",
+    "order.paid": "allocation.created",
+  } as const satisfies Record<
+    (typeof POLAR_HANDLED_EVENT_TYPES)[number],
+    string
+  >;
+  for (const native of POLAR_HANDLED_EVENT_TYPES) {
+    test(`deliberately maps ${native}`, () => {
+      const result = normalizePolarEvent(
+        {
+          type: native,
+          data: native === "order.paid" ? polarOrder() : polarSubscription(),
+        },
+        native,
+      );
+      expect(result.handled).toBe(true);
+      const parsed = v.parse(hostedUsageWebhookEventSchema, result.candidate);
+      expect(parsed.type).toBe(dispositions[native]);
+    });
+  }
+  test("keeps an unknown event outside dispatch", () => {
+    const raw = {
+      type: "subscription.unrecognised",
+      data: polarSubscription(),
+    };
+    expect(normalizePolarEvent(raw, raw.type)).toEqual({
+      candidate: raw,
+      handled: false,
+    });
+  });
+  test("preserves nullable end bounds for paused snapshots", () => {
+    const raw = {
+      type: "subscription.paused",
+      data: polarSubscription({ status: "paused", current_period_end: null }),
+    };
+    expect(
+      v.parse(
+        hostedUsageWebhookEventSchema,
+        normalizePolarEvent(raw, raw.type).candidate,
+      ).data,
+    ).toMatchObject({ status: "paused", current_period_end: null });
   });
 });

@@ -24,7 +24,10 @@ import {
   tSafeId,
 } from "@/api/lib/custom-schema";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
-import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
+import {
+  tPublicCountryUnavailable,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
@@ -36,6 +39,14 @@ export const searchDecisionsBodySchema = t.Object({
   limit: t.Optional(tPaginationLimit(LIMITS.caseLawSearchPageSizeMax)),
   cursor: t.Optional(tPaginationCursor()),
   court: t.Optional(t.String({ maxLength: 512 })),
+  courts: t.Optional(
+    t.Array(t.String({ minLength: 1, maxLength: 512 }), {
+      minItems: 1,
+      maxItems: 16,
+    }),
+  ),
+  category: t.Optional(t.String({ minLength: 1, maxLength: 128 })),
+  hasLegalSentence: t.Optional(t.Boolean()),
   country: tPublicLawCountry,
   dateFrom: t.Optional(t.String({ format: "date" })),
   dateTo: t.Optional(t.String({ format: "date" })),
@@ -228,6 +239,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
 
 export const searchDecisionsResponseSchema = {
   ...safeHandlerResponseSchemas(searchDecisionsSuccessResponseSchema),
+  503: t.Union([safeHandlerErrorResponseSchema, tPublicCountryUnavailable]),
   404: t.Union([
     safeHandlerErrorResponseSchema,
     t.Object(

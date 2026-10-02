@@ -2,7 +2,7 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
 import { getAuth } from "@/api/lib/auth";
-import { getAuthEndpointUrl } from "@/api/lib/auth-paths";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,

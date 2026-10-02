@@ -34,6 +34,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
@@ -166,7 +167,9 @@ const readTimeEntries = createSafeHandler(
     workspaceId,
     query,
   }) {
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const canReviewMatterEntries = canApproveTimeEntries(memberRole);
 
     const conditions = [eq(timeEntries.workspaceId, workspaceId)];
@@ -300,6 +303,12 @@ const readTimeEntries = createSafeHandler(
         billedMinutes: row.billedMinutes,
         rateAtEntry: row.rateAtEntry,
         currency: row.currency,
+        approverUserId: row.approverUserId,
+        approvedByUserId: row.approvedByUserId,
+        approvedAt: row.approvedAt?.toISOString() ?? null,
+        returnedByUserId: row.returnedByUserId,
+        returnedAt: row.returnedAt?.toISOString() ?? null,
+        returnComment: row.returnComment,
         narrative: row.narrative,
         narrativeLanguage: row.narrativeLanguage,
         invoiceNarrative: row.invoiceNarrative,

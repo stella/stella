@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  BOE_SEARCH_PAGE_LIMITS,
   findRelatedLaws,
   getConsolidatedLaw,
   getLawStructure,
@@ -30,6 +31,7 @@ import {
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
@@ -195,6 +197,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
 );
 
 const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   annotations: {
     title: "List audit log",
     destructiveHint: false,
@@ -218,6 +221,7 @@ const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
   // fields cannot be enumerated for redaction, so this read tool fails closed
   // and never appears on the anonymized surface.
   access: "read",
+  readClass: "tenant",
   anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
   name: "list_audit_log",
   scope: "stella:admin_read",
@@ -455,6 +459,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
 );
 
 const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   annotations: {
     title: "Search BOE legislation",
     destructiveHint: false,
@@ -477,6 +482,7 @@ const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
       "BOE date/id/cursor patterns and the law_id read/search mode rules remain authoritative in the runtime schema; the wire schema only advertises type and length bounds.",
   },
   access: "read",
+  readClass: "public",
   anonymized: { exposure: "passthrough" },
   feature: "FEATURE_PUBLIC_LAW",
   name: "search_boe_legislation",
@@ -574,7 +580,9 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
           : { matterCode: input.matter_code }),
         ...(input.date_from === undefined ? {} : { dateFrom: input.date_from }),
         ...(input.date_to === undefined ? {} : { dateTo: input.date_to }),
-        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        limit: normalizeTenantPageLimit(
+          input.limit ?? BOE_SEARCH_PAGE_LIMITS.default,
+        ),
         ...(offset === undefined ? {} : { offset }),
       }),
     catch: mapBoeError,
@@ -866,6 +874,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
 );
 
 const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   description:
     "Manage organization members and non-secret settings. Member actions " +
     "require matter_id and user_id. update_org_settings controls matter " +

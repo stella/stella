@@ -18,6 +18,7 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { formatDateInTimeZone } from "@/api/lib/date-format";
@@ -125,6 +126,7 @@ const extractFieldValues = async ({
   targets,
   sources,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   aiAnalytics,
   timezone,
@@ -132,13 +134,16 @@ const extractFieldValues = async ({
   targets: readonly PrefillTarget[];
   sources: readonly PrefillSource[];
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   timezone: string;
 }): Promise<PrefillSuggestion[]> => {
   const { fields } = await generateTanStackObjectForRole({
+    dataClass: "customer",
     role: "fast",
     orgAIConfig,
+    managedAIResidency,
     organizationId,
     // Root-scoped handler: sources may span multiple accessible workspaces,
     // no single workspace id to scope to.
@@ -172,7 +177,11 @@ const config = {
     "Consumes AI usage.",
   permissions: { template: ["use"] },
   access: "write",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   // The only OPTIONAL file field in the catalog: `file` is one of three source
   // modes, so the capability stays invokable over JSON with `text` and/or
   // `entityIds`. Clients hide `file` from the JSON surface and refuse it when
@@ -211,12 +220,14 @@ const prefillTemplate = createSafeRootHandler(
     params,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     user,
   }) {
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -405,6 +416,7 @@ const prefillTemplate = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -427,6 +439,7 @@ const prefillTemplate = createSafeRootHandler(
             targets,
             sources: boundedSources,
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             aiAnalytics,
             timezone: body.timezone ?? "UTC",

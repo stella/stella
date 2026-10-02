@@ -14,8 +14,25 @@ import { CASE_LAW_DECISION_DATE_BOUNDS_CONSTRAINT } from "@/api/lib/decision-dat
 import { isRecord } from "@/api/lib/type-guards";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
-import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
+import { createDecisionDateCeilingRepair } from "./decision-date-ceiling-repair";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+
+const DECISION_DATE_CEILING_REPAIR = createDecisionDateCeilingRepair({
+  sleep: async () => {},
+  readVerdict: async () => ({
+    kind: "normal",
+    signals: [
+      {
+        indicator: "ebs_balance",
+        kind: "normal",
+        value: 90,
+        threshold: 70,
+        observedAt: "2026-10-01T12:00:00.000Z",
+        reason: "Injected health for repair semantics",
+      },
+    ],
+  }),
+});
 
 /**
  * The ceiling migration and its online repair against a table still carrying
@@ -154,13 +171,6 @@ const corruptCount = async (
     );
   return rows.length;
 };
-
-const rejectionOf = async (run: Promise<void>): Promise<string> =>
-  await run.then(
-    () => "",
-    (error: unknown) =>
-      error instanceof Error ? error.message : String(error),
-  );
 
 test("the migration swaps the CHECK untouched, the repair clears and reopens, both converge", async () => {
   const client = await createTestPglite();
@@ -373,14 +383,24 @@ test("an interrupted repair keeps its committed batches and resumes by running a
   const dropped = connectionOver(client, {
     failOn: (statement, count) => statement === "COMMIT" && count === 2,
   });
-  expect(await rejectionOf(DECISION_DATE_CEILING_REPAIR.repair(dropped))).toBe(
-    "connection dropped at COMMIT",
+  const rejection: unknown = await DECISION_DATE_CEILING_REPAIR.repair(
+    dropped,
+  ).then(
+    () => null,
+    (error: unknown) => error,
   );
+  expect(rejection).toBeInstanceOf(Error);
+  expect(
+    rejection instanceof Error ? rejection.message : String(rejection),
+  ).toContain("connection dropped at COMMIT");
   expect(await corruptCount(db)).toBe(population - 50);
   expect((await constraintState(db))?.isValidated).toBe(false);
   expect(await DECISION_DATE_CEILING_REPAIR.readCompletion(dropped)).toEqual({
     reason: expect.stringContaining("is not validated"),
-    type: "incomplete",
+    type: "pending",
+    cursor: null,
+    heldSince: null,
+    holdUntil: null,
   });
 
   await DECISION_DATE_CEILING_REPAIR.repair(connectionOver(client));

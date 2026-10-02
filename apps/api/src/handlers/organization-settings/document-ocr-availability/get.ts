@@ -11,7 +11,12 @@ const config = {
   // The response is only an ephemeral availability bit; it exposes no worker
   // topology or provider configuration.
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

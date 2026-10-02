@@ -76,11 +76,14 @@ const emptyCatalogsByWorkspace = async ({
   );
 
 const anonymizeTextFieldsMock = mock(
-  async ({ fields }: AnonymizeTextFieldsInput) => ({
-    entityCount: fields.length,
-    fields: fields.map((_field, index) => `[ANON_${index}]`),
-    redactionMap: new Map<string, string>(),
-  }),
+  async ({ fields }: AnonymizeTextFieldsInput) =>
+    await Promise.resolve(
+      Result.ok({
+        entityCount: fields.length,
+        fields: fields.map((_field, index) => `[ANON_${index}]`),
+        redactionMap: new Map<string, string>(),
+      }),
+    ),
 );
 
 type SearchProviderHit = {
@@ -280,6 +283,7 @@ const buildContext = ({
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 
@@ -1275,6 +1279,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "te_1",
+              activityGroup: "client",
               entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_2",
               dateWorked: "2026-01-01",
@@ -1324,6 +1329,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "00000000-0000-4000-8000-0000000f0002",
+              activityGroup: "client",
               entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_3",
               dateWorked: "2026-01-01",
@@ -1366,7 +1372,9 @@ describe("MCP anonymization canary corpus", () => {
           chainableRows([
             {
               id: "inv_1",
-              invoiceNumber: "INV-1",
+              invoiceNumber: null,
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: referenceSeed,
               status: "draft",
               invoiceDate: "2026-01-01",
@@ -1382,6 +1390,12 @@ describe("MCP anonymization canary corpus", () => {
       const response = await BILLING_TOOL_HANDLERS.list_invoices({
         args: { matter_id: "00000000-0000-4000-8000-0000000a0001" },
         context,
+      });
+      expect(response).toMatchObject({
+        egress: "structured",
+        payload: {
+          invoices: [expect.objectContaining({ invoiceNumber: null })],
+        },
       });
       const result = await finalize(context, response);
 
@@ -1419,7 +1433,9 @@ describe("MCP anonymization canary corpus", () => {
             findFirst: async () => ({
               id: "00000000-0000-4000-8000-000000020002",
               workspaceId: "00000000-0000-4000-8000-0000000a0001",
-              invoiceNumber: "INV-2",
+              invoiceNumber: null,
+              documentType: "invoice",
+              originalInvoiceId: null,
               reference: referenceSeed,
               status: "draft",
               invoiceDate: "2026-01-01",
@@ -1495,6 +1511,10 @@ describe("MCP anonymization canary corpus", () => {
       const response = await BILLING_TOOL_HANDLERS.list_invoices({
         args: { invoice_id: "00000000-0000-4000-8000-000000020002" },
         context,
+      });
+      expect(response).toMatchObject({
+        egress: "structured",
+        payload: { invoice: expect.objectContaining({ invoiceNumber: null }) },
       });
       const result = await finalize(context, response);
 

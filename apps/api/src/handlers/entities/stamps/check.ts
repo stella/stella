@@ -86,7 +86,12 @@ const config = {
     "what distinguishes adding a new version of an existing document from " +
     "uploading a new one.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   access: "read",
   transport: {
     type: "file-input",

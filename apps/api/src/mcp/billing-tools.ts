@@ -40,6 +40,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedInvoiceId,
@@ -512,6 +513,7 @@ const listTimeEntriesArgsSchema = nullAsAbsent(
 /** Columns list_time_entries surfaces, shared by the list and detail branches. */
 const timeEntryColumns = {
   id: timeEntries.id,
+  activityGroup: timeEntries.activityGroup,
   entityId: timeEntries.workItemId,
   userId: timeEntries.userId,
   dateWorked: timeEntries.dateWorked,
@@ -645,7 +647,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       return invalidCursorResult({ cursor: input.cursor });
     }
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
   const canReview = hasEffectiveAuthority(context, {
     timeEntry: ["approve"],
   });
@@ -1309,6 +1311,8 @@ const handleListInvoicesTool: TypedMcpToolHandler<
       // layer reads it to mint the line items' entity refs.
       workspaceId,
       invoiceNumber: invoiceRow.invoiceNumber,
+      documentType: invoiceRow.documentType,
+      originalInvoiceId: invoiceRow.originalInvoiceId,
       reference: invoiceRow.reference,
       status: invoiceRow.status,
       invoiceDate: invoiceRow.invoiceDate,
@@ -1396,13 +1400,15 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   if (input.cursor !== undefined && cursor === null) {
     return invalidCursorResult({ cursor: input.cursor });
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
 
   const rows = await context.scopedDb((tx) =>
     tx
       .select({
         id: invoices.id,
         invoiceNumber: invoices.invoiceNumber,
+        documentType: invoices.documentType,
+        originalInvoiceId: invoices.originalInvoiceId,
         reference: invoices.reference,
         status: invoices.status,
         invoiceDate: invoices.invoiceDate,
@@ -1489,6 +1495,7 @@ const handleGetUsageTool: TypedMcpToolHandler<
 
 export const BILLING_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List time entries",
       destructiveHint: false,
@@ -1512,6 +1519,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -1526,6 +1534,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create or update a time entry. Omit time_entry_id to create (matter_id, " +
       "date_worked, timezone_id, duration_minutes, and narrative required; " +
@@ -1558,6 +1567,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:billing_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete time entry",
       destructiveHint: true,
@@ -1581,6 +1591,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:billing_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Resolve billing rate",
       destructiveHint: false,
@@ -1595,6 +1606,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
     isVisibleToMemberRole: (memberRole) =>
@@ -1603,6 +1615,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List invoices",
       destructiveHint: false,
@@ -1615,7 +1628,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "VAT breakdown, taxable supply date, seller profile id, buyer details, " +
       "and attached time entries and expenses. Otherwise pass matter_id to " +
       "list the matter's " +
-      "invoices. Returns each invoice's id, number, reference, status, dates, currency, " +
+      "invoices. Returns each invoice's id, number (null before numbering), document type, original invoice id, reference, status, dates, currency, " +
       "and total (integer minor currency units).",
     inputSchema: listInvoicesArgsSchema,
     jsonSchemaProjectionWaiver: {
@@ -1624,6 +1637,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -1638,6 +1652,7 @@ export const BILLING_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Get usage",
       destructiveHint: false,
@@ -1651,6 +1666,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",
     isVisibleToMemberRole: (memberRole) =>

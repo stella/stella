@@ -10,12 +10,14 @@ import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
 import {
   refuseTurnPausingRequest,
   withDecidedStopReasons,
 } from "@/api/lib/chat/provider-stop-reasons";
 import { TOOL_CALL_STEP_METADATA_KEY } from "@/api/lib/chat/tool-call-step";
 import { withUniqueToolCallIds } from "@/api/lib/chat/unique-tool-call-ids";
+import type { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import { withModelPlaceholdersOmitted } from "@/api/lib/json-schema/null-optionals";
 
 // One owner for what every provider adapter's stream promises the rest of
@@ -31,7 +33,7 @@ export const INCOMPLETE_STREAM_CODE = "stream_incomplete";
 const isTerminal = (chunk: StreamChunk): boolean =>
   chunk.type === EventType.RUN_FINISHED || chunk.type === EventType.RUN_ERROR;
 
-const runError = (
+export const runError = (
   model: string,
   error: { code?: string | undefined; message: string },
   rawEvent?: unknown,
@@ -332,19 +334,20 @@ async function* withOneTerminalEvent(
   }
 }
 
-/**
- * `adapter` with its chat stream held to the contract above. Every other
- * member is the adapter's own, its methods bound to it, so class state
- * (private fields included) keeps working. `provider` names the table the
- * adapter's stop reasons are decided by (`provider-stop-reasons.ts`); an
- * adapter that reports none (a mock) passes its terminal event through. A
- * request whose turn could pause, which no run can continue yet, is refused
- * before it is sent (`refuseTurnPausingRequest`).
- */
-export const withProviderStreamContract = (
-  adapter: AnyTextAdapter,
-  provider?: TanStackAIProvider,
-): AnyTextAdapter => {
+type StreamContract = {
+  /** The adapter the contract wraps, never itself contracted. */
+  adapter: AnyTextAdapter;
+  /** The run's tool call ids; absent outside a chat run. */
+  ledger: ToolCallIdLedger | undefined;
+  provider: TanStackAIProvider | undefined;
+};
+
+/** What each contracted adapter wraps, so a run can bind its ledger to the
+ *  same contract instead of stacking a second one. */
+const streamContracts = new WeakMap<AnyTextAdapter, StreamContract>();
+
+const contracted = (contract: StreamContract): AnyTextAdapter => {
+  const { adapter, ledger, provider } = contract;
   const decided = (chunks: AsyncIterable<StreamChunk>) =>
     provider === undefined
       ? chunks
@@ -352,14 +355,28 @@ export const withProviderStreamContract = (
           provider,
           unfinishedCode: INCOMPLETE_STREAM_CODE,
         });
-  const chatStream: AnyTextAdapter["chatStream"] = (options) => {
+  const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
+    // Signed reasoning reaches only the provider that signed it.
+    const options =
+      provider === undefined
+        ? requested
+        : {
+            ...requested,
+            messages: withReasoningBoundToProvider(
+              requested.messages,
+              provider,
+            ),
+          };
     refuseTurnPausingRequest(provider, options);
     return withOneTerminalEvent(
       withDeclaredToolInput(
         readOutputCeilingStopAsLength(
           decided(
             withToolCallSteps(
-              withUniqueToolCallIds(adapter.chatStream(options), options),
+              withUniqueToolCallIds(adapter.chatStream(options), {
+                ledger,
+                messages: options.messages,
+              }),
             ),
           ),
         ),
@@ -368,7 +385,7 @@ export const withProviderStreamContract = (
       options,
     );
   };
-  return new Proxy(adapter, {
+  const proxy = new Proxy(adapter, {
     get: (target, key) => {
       if (key === "chatStream") {
         return chatStream;
@@ -380,5 +397,51 @@ export const withProviderStreamContract = (
       const bound: unknown = value.bind(target);
       return bound;
     },
+  });
+  streamContracts.set(proxy, contract);
+  return proxy;
+};
+
+/**
+ * `adapter` with its chat stream held to the contract above. Every other
+ * member is the adapter's own, its methods bound to it, so class state
+ * (private fields included) keeps working. `provider` names the table the
+ * adapter's stop reasons are decided by (`provider-stop-reasons.ts`); an
+ * adapter that reports none (a mock) passes its terminal event through. A
+ * request whose turn could pause, which no run can continue yet, is refused
+ * before it is sent (`refuseTurnPausingRequest`), and reasoning another
+ * provider signed is left out of it (`provider-bound-reasoning.ts`).
+ *
+ * The contract holds an adapter once: two layers would each rename a reused
+ * tool call id on their own.
+ */
+export const withProviderStreamContract = (
+  adapter: AnyTextAdapter,
+  provider?: TanStackAIProvider,
+): AnyTextAdapter => {
+  if (streamContracts.has(adapter)) {
+    panic("The adapter is already held to the provider stream contract");
+  }
+  return contracted({ adapter, ledger: undefined, provider });
+};
+
+/**
+ * `adapter`, which the stream contract already holds, for one run of a
+ * thread: every request of the run keeps its tool call ids clear of `ledger`
+ * (`unique-tool-call-ids.ts`). The ledger lives in the contract, not in the
+ * request, so it cannot reach a provider.
+ */
+export const withRunToolCallIds = (
+  adapter: AnyTextAdapter,
+  ledger: ToolCallIdLedger,
+): AnyTextAdapter => {
+  const contract = streamContracts.get(adapter);
+  if (contract === undefined) {
+    panic("A run's adapter must be held to the provider stream contract");
+  }
+  return contracted({
+    adapter: contract.adapter,
+    ledger,
+    provider: contract.provider,
   });
 };

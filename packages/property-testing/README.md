@@ -1,72 +1,108 @@
 # @stll/property-testing
 
-Shared fast-check wiring for the repo's property tests. No arbitraries
-live here — write those next to the code under test. This package owns
-the three things every property must agree on: how long it runs, how long
-it may take, and which inputs it draws.
+Shared fast-check wiring for property budgets, seeds, and replayable failures.
+Keep arbitraries beside the code under test.
 
 ## Writing a property
 
 ```ts
+import { expect, test } from "bun:test";
 import fc from "fast-check";
+import { assertProperty } from "@stll/property-testing";
 
-import { propertyConfig, propertySeed } from "@stll/property-testing";
-
-fc.assert(
-  fc.property(arbitrary, (value) => {
-    expect(normalize(normalize(value))).toBe(normalize(value));
-  }),
-  propertyConfig({ numRuns: 300, seed: propertySeed() }),
-);
+test("normalization is idempotent", () => {
+  assertProperty(
+    "normalization is idempotent",
+    fc.property(arbitrary, (value) => {
+      expect(normalize(normalize(value))).toBe(normalize(value));
+    }),
+    { numRuns: 300 },
+  );
+});
 ```
 
-`propertyConfig` is required, and a guard enforces it: a bare `fc.assert`
-opts out of nightly scaling and CI verbose reporting without anyone
-noticing. The workspace also needs a `test:property` script preloading
-`@stll/property-testing/preload`; `convention.test.ts` holds the set of
-workspaces with property files and the set with that script to exact
-agreement, in both directions.
+Use an explicit stable id matching the literal test title so `bun test -t`
+selects the property. Async properties return a promise: await it or return it
+from the test. Custom reporters are unsupported because this API owns failure
+reporting. Older `fc.assert(property, propertyConfig({ seed: propertySeed() }))`
+call sites remain supported; migrate them to `assertProperty` to replay pins.
 
-## Seeding: fixed in CI, exploring nightly
+Every workspace with properties needs a `test:property` script preloading
+`@stll/property-testing/preload`. Property runners select both `fc.assert` and
+`assertProperty`; the convention guard checks workspace/script agreement.
 
-`propertySeed()` returns a fixed seed in PR CI and `undefined` during the
-nightly sweep, so fast-check draws its own.
+Every `fc.assert` or `fc.check` call must pass parameters through
+`propertyConfig`, directly or through a configured helper. The guard checks
+each call, including files that already import the configuration helper.
 
-The two runs answer different questions. **PR CI is a regression gate.**
-It has to fail the same way for everyone who runs it; a counterexample
-that appears for one engineer and not the next is a flake, and a flaky
-gate gets muted. **The nightly sweep is the search.** It already runs
-every property ten times longer, and reusing one seed there would re-walk
-the same inputs every night — the extra budget would buy nothing.
+`propertyConfig()` defaults an omitted `seed` key to `propertySeed()`: a fixed
+seed in PR CI and `undefined` during the nightly sweep, so fast-check draws
+its own. Callers do not need to pass `propertySeed()` themselves. An explicitly
+supplied seed is preserved.
 
-Nightly is detected from `PROPERTY_TEST_NUM_RUNS_FACTOR`, which
-`.github/workflows/nightly-property-test.yml` already exports to widen
-the run budget. One signal means the sweep cannot end up scaled but not
-exploring, or the reverse.
+`PROPERTY_TEST_SEED` controls the default seed in every environment, sweep or
+not. A non-integer value throws rather than being silently ignored. A seed
+explicitly supplied by the caller takes precedence over this default.
 
-### Replaying a nightly failure
+## Seeds and failures
 
-The nightly run log prints the seed fast-check drew. Export it and the
-run reproduces, without editing the test:
+`assertProperty` first replays every entry under `<repo-relative file>::<id>`
+in `property-seeds.json`, then runs the ordinary `propertyConfig` pass with
+`propertySeed()`. Replays clear examples so recorded paths remain stable and
+ignore nightly time limits. PR and merge-queue runs use the fixed seed
+`20_260_901` plus pinned seeds. No per-commit random seed is used in PR CI.
+The private nightly tier uses factor 10 and an explicit exploratory seed (or
+fast-check's random seed when none is supplied).
+
+Failures throw fast-check's report followed by a shell-quoted `Replay:` command
+(run it from the repository root) and a `Pin:` JSON hint (fill its date after the fix merges). For example:
 
 ```sh
-PROPERTY_TEST_SEED=1234 bun run test:property
+PROPERTY_TEST_SEED=1234 PROPERTY_TEST_PATH='0:1' bun run --cwd 'packages/example' test --preload @stll/property-testing/preload './src/normalize.property.test.ts' -t 'normalization is idempotent'
 ```
 
-`PROPERTY_TEST_SEED` wins in every environment, sweep or not. A
-non-integer value throws rather than being silently ignored.
+`PROPERTY_TEST_PATH` applies only when the selected seed equals the explicitly
+set `PROPERTY_TEST_SEED`; pinned entries always use their own path. A failing
+seed is a real bug: fix it, then pin it after the fix merges. Extend the generator
+or oracle to cover the input class. Never rerun until green. Public notes must
+be neutral; sensitive counterexamples belong in private reports.
 
-### Scope
+```json
+{
+  "packages/example/src/normalize.property.test.ts::normalization is idempotent": [
+    {
+      "seed": 1234,
+      "path": "0:1",
+      "note": "Regression coverage",
+      "date": "2026-09-30"
+    }
+  ]
+}
+```
 
-`propertySeed()` is opt-in per file. Suites written before this
-convention run unseeded everywhere and are being migrated separately; do
-not assume a property file is seeded because this package offers it.
+`$`-prefixed keys are comments. The seed meta-test requires existing tests using
+the named explicit id, integer seeds, paths matching `^\d+(:\d+)*$`, and a
+nonempty note and ISO date.
+
+Under CI each failed assertion emits one `STELLA_PROPERTY_FAILURE {json}` line:
+`file`, `id`, `seed`, `path`, `factor`, `fingerprint`, and `replay`, plus
+`counterexample` only when `PROPERTY_TEST_REDACT` is unset. Redaction applies to
+the machine marker; fast-check's thrown report still contains failure details.
+`failureFingerprint({ id, error })` hashes the id and normalized first error
+line (quoted strings, UUIDs, hex ids, and numbers masked), returning 16 hex
+characters. It is pure and independent of file, seed, and later stack lines.
 
 ## Environment variables
 
-| Variable                        | Set by                       | Effect                                                                                                    |
-| ------------------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------- |
-| `PROPERTY_TEST_NUM_RUNS_FACTOR` | nightly workflow             | Scales every property's `numRuns` and `propertyTestTimeout`; also switches `propertySeed()` to exploring. |
-| `PROPERTY_TEST_SEED`            | a person replaying a failure | Pins `propertySeed()` to that seed.                                                                       |
-| `PROPERTY_TEST_TIMEOUT_BASE_MS` | owning test runner           | Baseline `propertyTestDefaultTimeout()` scales from.                                                      |
-| `CI`                            | CI                           | Turns on fast-check verbose reporting, so a failing run logs every shrunk value.                          |
+| Variable                        | Effect                                                                                                                                      |
+| ------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PROPERTY_TEST_NUM_RUNS_FACTOR` | Scales `numRuns` and Bun timeouts; a factor above 1 selects exploratory seeds.                                                              |
+| `PROPERTY_TEST_SEED`            | Pins the generated pass in every environment, unless the property supplies its own seed. Invalid integers throw.                            |
+| `PROPERTY_TEST_PATH`            | Replays the counterexample for the matching explicitly set seed.                                                                            |
+| `PROPERTY_TEST_TIME_LIMIT_MS`   | Positive integer; nightly generation uses `interruptAfterTimeLimit` with `markInterruptAsFailure: false`. Does not truncate pinned replays. |
+| `PROPERTY_TEST_REDACT`          | Any set value omits counterexamples from CI markers.                                                                                        |
+| `PROPERTY_TEST_TIMEOUT_BASE_MS` | Owning runner's baseline for the factor-scaled Bun timeout.                                                                                 |
+| `CI`                            | Enables verbose fast-check reports and failure markers.                                                                                     |
+
+Time boxing interrupts between evaluations; it cannot preempt a synchronous
+predicate that never returns. Keep hostile-input parsers bounded independently.

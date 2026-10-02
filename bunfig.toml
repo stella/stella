@@ -26,23 +26,6 @@ minimumReleaseAgeExcludes = [
   # quarantined optional bindings otherwise leave the executable unavailable.
   # TanStack AI 0.61.0 and its adapters publish as one release family; keep
   # direct and transitive packages coherent until the normal quarantine admits them.
-  "@tanstack/ai", # quarantine-expires: 2026-09-29T18:03:44.822Z
-  "@tanstack/ai-anthropic", # quarantine-expires: 2026-09-29T18:00:44.474Z
-  "@tanstack/ai-bedrock", # quarantine-expires: 2026-09-29T17:59:11.426Z
-  "@tanstack/ai-client", # quarantine-expires: 2026-09-29T17:59:42.311Z
-  "@tanstack/ai-code-mode", # quarantine-expires: 2026-09-29T17:57:49.106Z
-  "@tanstack/ai-codex", # quarantine-expires: 2026-09-29T17:57:51.713Z
-  "@tanstack/ai-event-client", # quarantine-expires: 2026-09-29T17:59:16.384Z
-  "@tanstack/ai-gemini", # quarantine-expires: 2026-09-29T18:04:50.385Z
-  "@tanstack/ai-mcp", # quarantine-expires: 2026-09-29T17:57:40.063Z
-  "@tanstack/ai-mistral", # quarantine-expires: 2026-09-29T18:02:01.217Z
-  "@tanstack/ai-openai", # quarantine-expires: 2026-09-29T17:58:02.919Z
-  "@tanstack/ai-openrouter", # quarantine-expires: 2026-09-29T17:59:26.167Z
-  "@tanstack/ai-persistence", # quarantine-expires: 2026-09-29T17:59:29.011Z
-  "@tanstack/ai-react", # quarantine-expires: 2026-09-29T17:58:07.017Z
-  "@tanstack/ai-sandbox", # quarantine-expires: 2026-09-29T17:58:59.624Z
-  "@tanstack/ai-skills", # quarantine-expires: 2026-09-30T06:33:20.708Z
-  "@tanstack/openai-base", # quarantine-expires: 2026-09-29T18:01:25.477Z
   "@stll/oxlint-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/typescript-config", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/aho-corasick-wasm", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
@@ -57,6 +40,7 @@ minimumReleaseAgeExcludes = [
   "@stll/conditions", # quarantine-excluded-since: 2026-08-11T09:34:37.000Z
   "@stll/docx-core", # quarantine-excluded-since: 2026-07-13T12:21:46.000Z
   "@stll/folio-agents", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
+  "@stll/mcp-kit", # quarantine-excluded-since: 2026-09-30T00:00:00.000Z
   "@stll/folio-core", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/folio-react", # quarantine-excluded-since: 2026-07-08T00:22:40.000Z
   "@stll/fuzzy-search", # quarantine-excluded-since: 2026-09-27T00:00:00.000Z

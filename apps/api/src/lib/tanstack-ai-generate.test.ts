@@ -14,6 +14,10 @@ import type { CachingDecision } from "@/api/lib/ai-config";
 import { classifyAIError, isAnticipatedAIFailure } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  managedProviderUnavailable,
+} from "@/api/lib/chat/provider-data-policy";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { StructuredOutputBudgetError } from "@/api/lib/structured-output-budget";
@@ -24,6 +28,7 @@ import {
   mergeGenerationOptions,
   streamTanStackObjectForRole,
   streamTanStackTextForRole,
+  systemPromptsPatch,
 } from "@/api/lib/tanstack-ai-generate";
 import {
   type ResolvedTanStackTextModel,
@@ -41,6 +46,7 @@ import type {
   RecordingAnalytics,
   RecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 // The real `chat()` engine runs here; only the provider boundary is faked.
 // Replacing the engine instead lets a fixture invent public chunk shapes the
@@ -385,6 +391,84 @@ afterEach(() => {
 });
 
 describe("TanStack AI structured output generation", () => {
+  for (const path of [
+    "text",
+    "object",
+    "text-stream",
+    "object-stream",
+  ] as const) {
+    test(`preserves configured provider availability on ${path}`, async () => {
+      const refusal = managedProviderUnavailable("openrouter");
+      const objectPath = path === "object" || path === "object-stream";
+      queueRun(
+        objectPath
+          ? throwingRun(refusal)
+          : runErrorRun({
+              code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+              message: refusal.message,
+            }),
+      );
+      queueRun(
+        objectPath ? objectRun({ answer: "ok" }) : textRun(["ok"], "stop"),
+      );
+      const options = {
+        caching: noCaching,
+        finishPolicy: "require-complete" as const,
+        organizationId: null,
+        dataClass: "customer" as const,
+        managedAIResidency: "eu" as const,
+        orgAIConfig: null,
+        prompt: "Reply with the answer.",
+        role: "chat" as const,
+        serviceTier: "flex" as const,
+        tenantWorkspaceIds: [],
+      };
+      const outputSchema = v.strictObject({ answer: v.string() });
+      const caught = await (async () => {
+        switch (path) {
+          case "text":
+            await generateTextForTestModel(options);
+            return;
+          case "object":
+            await generateObjectForTestModel({
+              ...options,
+              outputSchema,
+            });
+            return;
+          case "text-stream":
+            for await (const _chunk of streamTextForTestModel(options)) {
+              /* consume stream */
+            }
+            return;
+          case "object-stream":
+            for await (const _chunk of streamObjectForTestModel({
+              ...options,
+              outputSchema,
+            })) {
+              /* consume stream */
+            }
+            return;
+          default:
+            path satisfies never;
+            return;
+        }
+      })().then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      expect(caught).toMatchObject({
+        status: 503,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        message: refusal.message,
+      });
+      expect(classifyAIError(caught)).toBe("model_unavailable");
+      expect(providerRequests).toHaveLength(1);
+      if (path === "object-stream") {
+        expect(caught).toBe(refusal);
+      }
+    });
+  }
+
   test("converts Valibot schemas into TanStack JSON-schema-compatible schemas", () => {
     const tanStackSchema = toTanStackValibotSchema(
       v.strictObject({ answer: v.string() }),
@@ -467,6 +551,8 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
@@ -493,6 +579,8 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: rawSchema,
       prompt: "Extract the answer.",
@@ -545,6 +633,8 @@ describe("TanStack AI structured output generation", () => {
     const failure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: overBudgetSchema(),
       prompt: "Extract the answer.",
@@ -567,6 +657,8 @@ describe("TanStack AI structured output generation", () => {
       for await (const event of streamObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         outputSchema: overBudgetSchema(),
         prompt: "Extract the answer.",
@@ -595,6 +687,8 @@ describe("TanStack AI structured output generation", () => {
     const validationFailure = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -903,6 +997,8 @@ describe("TanStack AI structured output generation", () => {
     const result = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -931,6 +1027,8 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -972,6 +1070,8 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -995,6 +1095,8 @@ describe("TanStack AI structured output generation", () => {
     const caught = await generateObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -1037,6 +1139,8 @@ describe("TanStack AI structured output generation", () => {
       const caught = await generateObjectForTestModel({
         caching: noCaching,
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         outputSchema: v.strictObject({ answer: v.string() }),
         prompt: "Extract the answer.",
@@ -1076,6 +1180,8 @@ describe("TanStack AI structured output generation", () => {
     for await (const event of streamObjectForTestModel({
       caching: noCaching,
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       outputSchema: v.strictObject({ answer: v.string() }),
       prompt: "Extract the answer.",
@@ -1126,6 +1232,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: `Summarize https://my.stll.app/workspaces/${tenantWorkspaceId}/matters and decision ${publicDecisionId}`,
       role: "chat",
@@ -1157,6 +1265,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: `Summarize decision ${publicDecisionId}`,
       role: "chat",
@@ -1182,6 +1292,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Draft it.",
       role: "chat",
@@ -1213,6 +1325,8 @@ describe("TanStack AI model-ingress guard", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Draft it.",
       role: "chat",
@@ -1250,6 +1364,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1281,6 +1397,8 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-incomplete",
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Recap it.",
         role: "chat",
@@ -1304,6 +1422,8 @@ describe("TanStack AI text generation", () => {
         caching: noCaching,
         finishPolicy: "allow-output-ceiling",
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Recap it.",
         role: "chat",
@@ -1328,6 +1448,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "require-complete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Recap it.",
       role: "chat",
@@ -1353,6 +1475,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1389,6 +1513,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1412,6 +1538,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1431,6 +1559,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Rewrite it.",
       role: "chat",
@@ -1448,6 +1578,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1473,6 +1605,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1499,6 +1633,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1535,6 +1671,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1556,6 +1694,8 @@ describe("TanStack AI text generation", () => {
       caching: noCaching,
       finishPolicy: "allow-incomplete",
       organizationId: null,
+      dataClass: "customer",
+      managedAIResidency: "eu",
       orgAIConfig: null,
       prompt: "Say hello.",
       role: "chat",
@@ -1582,6 +1722,8 @@ describe("TanStack AI text generation", () => {
       for await (const _delta of streamTextForTestModel({
         caching: noCaching,
         organizationId: null,
+        dataClass: "customer",
+        managedAIResidency: "eu",
         orgAIConfig: null,
         prompt: "Say hello.",
         role: "chat",
@@ -1601,6 +1743,151 @@ describe("TanStack AI text generation", () => {
       message: "OpenAI rate limit exceeded.",
       status: 502,
     });
+  });
+});
+
+describe("prompt caching at the layer boundaries", () => {
+  const caching = {
+    enabled: true,
+    scopeKey: "organization:contract-probe",
+    ttl: "5m",
+  } satisfies CachingDecision;
+  const marker = { cache_control: { ttl: "5m", type: "ephemeral" } };
+  const layered = {
+    organization: "\n\nUser generally practices law in: Czechia.",
+    static: "You are an AI inside stella.",
+    turn: "\n\nUser registered as: First Member",
+  } as const;
+  const joined = `${layered.static}${layered.organization}${layered.turn}`;
+  const modelOf = (
+    provider: ResolvedTanStackTextModel["provider"],
+    modelId: string,
+  ) =>
+    // The patch and the option merge read provider, modelId and modelOptions
+    // only; the adapter is irrelevant here.
+    asTestRaw<ResolvedTanStackTextModel>({
+      adapter: {},
+      keySource: "instance",
+      modelId,
+      modelOptions: {},
+      provider,
+    });
+  const markerModels = [
+    modelOf("anthropic", "claude-sonnet-4-6"),
+    modelOf("openrouter", "anthropic/claude-sonnet-5.5"),
+  ];
+  const stringModels = [
+    modelOf("openai", "gpt-5.5"),
+    modelOf("openrouter", "openai/gpt-5.5"),
+    modelOf("google", "gemini-3.5-flash"),
+    modelOf("bedrock", "us.anthropic.claude-sonnet-4-5-20250929-v1:0"),
+    modelOf("mistral", "mistral-medium-latest"),
+  ];
+
+  test("marks the static and organization layers where the provider caches at markers", () => {
+    for (const model of markerModels) {
+      expect(systemPromptsPatch({ caching, model, system: layered })).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          { content: layered.organization, metadata: marker },
+          layered.turn,
+        ],
+      });
+      expect(
+        systemPromptsPatch({
+          caching,
+          model,
+          system: { ...layered, organization: "" },
+        }),
+      ).toEqual({
+        systemPrompts: [
+          { content: layered.static, metadata: marker },
+          layered.turn,
+        ],
+      });
+    }
+  });
+
+  test("sends every other provider, and any request without caching, the layers as one string", () => {
+    for (const model of [...stringModels, ...markerModels]) {
+      expect(
+        systemPromptsPatch({
+          caching: noCaching,
+          model,
+          system: layered,
+        }),
+      ).toEqual({ systemPrompts: [joined] });
+    }
+    for (const model of stringModels) {
+      expect(systemPromptsPatch({ caching, model, system: layered })).toEqual({
+        systemPrompts: [joined],
+      });
+    }
+  });
+
+  test("keeps a plain prompt's single end-of-prompt marker on Anthropic only", () => {
+    const [anthropic, openRouterAnthropic] = markerModels;
+    if (anthropic === undefined || openRouterAnthropic === undefined) {
+      throw new TypeError("Both marker models are listed.");
+    }
+    expect(
+      systemPromptsPatch({ caching, model: anthropic, system: joined }),
+    ).toEqual({ systemPrompts: [{ content: joined, metadata: marker }] });
+    expect(
+      systemPromptsPatch({
+        caching,
+        model: openRouterAnthropic,
+        system: joined,
+      }),
+    ).toEqual({ systemPrompts: [joined] });
+  });
+
+  test("adds the request-level marker only to a layered request on a marker-caching provider", () => {
+    const optionsOf = (
+      model: ResolvedTanStackTextModel,
+      cacheConversation: boolean,
+      decision: CachingDecision = caching,
+    ) =>
+      mergeGenerationOptions({
+        cacheConversation,
+        caching: decision,
+        maxOutputTokens: 1000,
+        model,
+        serviceTier: "standard",
+        temperature: undefined,
+      });
+    const [anthropic, openRouterAnthropic] = markerModels;
+    if (anthropic === undefined || openRouterAnthropic === undefined) {
+      throw new TypeError("Both marker models are listed.");
+    }
+    expect(optionsOf(anthropic, true)).toHaveProperty(
+      "cache_control",
+      marker.cache_control,
+    );
+    expect(optionsOf(openRouterAnthropic, true)).toHaveProperty(
+      "cacheControl",
+      marker.cache_control,
+    );
+    for (const model of markerModels) {
+      expect(optionsOf(model, false)).toEqual(
+        mergeGenerationOptions({
+          caching,
+          maxOutputTokens: 1000,
+          model,
+          serviceTier: "standard",
+          temperature: undefined,
+        }),
+      );
+      expect(optionsOf(model, true, noCaching)).not.toHaveProperty(
+        "cache_control",
+      );
+      expect(optionsOf(model, true, noCaching)).not.toHaveProperty(
+        "cacheControl",
+      );
+    }
+    for (const model of stringModels) {
+      expect(optionsOf(model, true)).toEqual(optionsOf(model, false));
+    }
   });
 });
 

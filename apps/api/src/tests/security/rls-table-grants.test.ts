@@ -126,6 +126,8 @@ const POST_BOOTSTRAP_SELECT_ONLY_TABLES = new Set([
   // A group's contract binding and readiness: ingestion binds and attests,
   // request code only asks whether a group may be read.
   "corpus_index_group_enrollments",
+  // Withdrawal history is read by requests and appended only by ingestion.
+  "corpus_index_group_withdrawals",
   // Mutation revisions are appended and pruned only by ingestion triggers;
   // request code may read the current proof watermark.
   "corpus_index_projection_revisions",
@@ -167,6 +169,10 @@ const POST_BOOTSTRAP_SCOPED_HANDOFF_TABLES = new Set([
 // deliberately grant stella nothing, so the grant requirement does not
 // apply. Their migration must REVOKE ALL from stella instead.
 const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
+  // Maintenance checkpoints belong to the database owner, never request roles.
+  "database_backfill_states",
+  "action_cost_records",
+  "action_cost_calls",
   // Search backfill retries are ingestion control state, not request data.
   "case_law_search_backfill_failures",
   "agent_registration",
@@ -196,6 +202,8 @@ const POST_BOOTSTRAP_DENY_STELLA_TABLES = new Set([
   // Internal ingestion coordination: publisher aliases are reserved before
   // decision writes and must never be queried through the request role.
   "case_law_decision_source_identities",
+  // UUID retirement is ingestion-owned; request transactions cannot access it.
+  "case_law_decision_aliases",
   // The same: reasons and other supplements waiting for, or composed into,
   // their judgment; only the ingestion role reads or writes them.
   "case_law_decision_supplements",

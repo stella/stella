@@ -10,7 +10,11 @@ const updateDailyTarget = createSafeRootHandler(
       "Set the signed-in user's daily time target in the active organization. Pass minutes from 1 to 1440, or null to clear the target. Read time-entries.me.list for the target and remaining minutes for a work date.",
     permissions: { timeEntry: ["create"] },
     access: "write",
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: dailyTargetBody,
   },
   async function* ({ safeDb, session, user, body, recordAuditEvent }) {

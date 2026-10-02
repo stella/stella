@@ -22,6 +22,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTemplateLookupFormatId } from "@/api/lib/safe-id-boundaries";
 
 const config = {
@@ -29,7 +30,12 @@ const config = {
     "List shared company specification formats and the default for a business registry in the active organization.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   query: t.Object({
     registry: t.UnionEnum(LOOKUP_REGISTRIES),
     limit: t.Optional(
@@ -42,7 +48,9 @@ const config = {
 const listLookupFormats = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, query }) {
-    const limit = query.limit ?? FORMAT_LIMITS.pageDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? FORMAT_LIMITS.pageDefault,
+    );
     const conditions = [
       eq(templateLookupFormats.organizationId, session.activeOrganizationId),
       eq(templateLookupFormats.registry, query.registry),

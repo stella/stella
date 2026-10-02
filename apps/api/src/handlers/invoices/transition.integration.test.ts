@@ -6,13 +6,14 @@ import {
   setDefaultTimeout,
   test,
 } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import {
   BILLING_STATUS,
   expenses,
   INVOICE_STATUS,
   invoices,
+  numberSeries,
   timeEntries,
 } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
@@ -39,6 +40,7 @@ let ids: TestIds;
 
 const seededInvoiceIds: SafeId<"invoice">[] = [];
 const seededTimeEntryIds: SafeId<"timeEntry">[] = [];
+const seededSeriesIds: SafeId<"numberSeries">[] = [];
 const seededExpenseIds: SafeId<"expense">[] = [];
 
 beforeAll(async () => {
@@ -49,6 +51,11 @@ beforeAll(async () => {
 
 afterAll(async () => {
   try {
+    if (seededSeriesIds.length > 0) {
+      await testDb
+        .delete(numberSeries)
+        .where(inArray(numberSeries.id, seededSeriesIds));
+    }
     if (seededTimeEntryIds.length > 0) {
       await testDb
         .delete(timeEntries)
@@ -82,6 +89,94 @@ describe("invoice transition integration", () => {
       response: { message: "Cannot finalize invoice from its current status" },
     });
     expect(await readInvoiceStatus(invoiceId)).toBe(INVOICE_STATUS.FINALIZED);
+  });
+
+  test("allocates consecutive default-series numbers and keeps the first through revert and refinalize", async () => {
+    const seriesId = createSafeId<"numberSeries">();
+    seededSeriesIds.push(seriesId);
+    await testDb.insert(numberSeries).values({
+      id: seriesId,
+      organizationId: ids.orgA,
+      documentType: "invoice",
+      name: "Default invoices",
+      pattern: "AUTO-{YYYY}-{SEQ}",
+      padding: 3,
+      isDefault: true,
+    });
+    const first = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: null,
+    });
+    const second = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: null,
+    });
+    expect(await runTransition(first, "finalize")).toEqual({ id: first });
+    expect(await runTransition(second, "finalize")).toEqual({ id: second });
+    const readNumber = async (invoiceId: SafeId<"invoice">) =>
+      (
+        await testDb.query.invoices.findFirst({
+          where: { id: { eq: invoiceId } },
+          columns: { invoiceNumber: true },
+        })
+      )?.invoiceNumber;
+    expect(await readNumber(first)).toBe("AUTO-2026-001");
+    expect(await readNumber(second)).toBe("AUTO-2026-002");
+    expect(await runTransition(first, "revert_to_draft")).toEqual({
+      id: first,
+    });
+    expect(await readNumber(first)).toBe("AUTO-2026-001");
+    expect(await runTransition(first, "finalize")).toEqual({ id: first });
+    expect(await readNumber(first)).toBe("AUTO-2026-001");
+    const third = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: null,
+    });
+    expect(await runTransition(third, "finalize")).toEqual({ id: third });
+    expect(await readNumber(third)).toBe("AUTO-2026-003");
+    await testDb.delete(numberSeries).where(eq(numberSeries.id, seriesId));
+  });
+
+  test("requires a default series for an unnumbered invoice but preserves a manual number", async () => {
+    const unnumbered = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: null,
+    });
+    expect(await runTransition(unnumbered, "finalize")).toMatchObject({
+      code: 409,
+      response: { hint: expect.any(String) },
+    });
+    expect(await readInvoiceStatus(unnumbered)).toBe(INVOICE_STATUS.DRAFT);
+    const manual = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: "MANUAL-001",
+    });
+    expect(await runTransition(manual, "finalize")).toEqual({ id: manual });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: manual } },
+        columns: { invoiceNumber: true },
+      }),
+    ).toEqual({ invoiceNumber: "MANUAL-001" });
+  });
+
+  test("marking an invoice paid records the time and voiding clears it", async () => {
+    const invoiceId = await seedInvoice({ status: INVOICE_STATUS.SENT });
+    expect(await runTransition(invoiceId, "mark_paid")).toEqual({
+      id: invoiceId,
+    });
+    const paid = await testDb.query.invoices.findFirst({
+      where: { id: { eq: invoiceId } },
+      columns: { paidAt: true },
+    });
+    expect(paid?.paidAt).toBeInstanceOf(Date);
+    expect(await runTransition(invoiceId, "void")).toEqual({ id: invoiceId });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { paidAt: true },
+      }),
+    ).toEqual({ paidAt: null });
   });
 
   test("voiding a paid invoice detaches billed entries and expenses", async () => {
@@ -149,8 +244,10 @@ describe("invoice transition integration", () => {
 
 const seedInvoice = async ({
   status,
+  invoiceNumber,
 }: {
   status: (typeof INVOICE_STATUS)[keyof typeof INVOICE_STATUS];
+  invoiceNumber?: string | null;
 }) => {
   const invoiceId = createSafeId<"invoice">();
   seededInvoiceIds.push(invoiceId);
@@ -158,7 +255,8 @@ const seedInvoice = async ({
     id: invoiceId,
     organizationId: ids.orgA,
     workspaceId: ids.wsA1,
-    invoiceNumber: `INV-TEST-${invoiceId}`,
+    invoiceNumber:
+      invoiceNumber === undefined ? `INV-TEST-${invoiceId}` : invoiceNumber,
     invoiceDate: "2026-06-23",
     currency: "USD",
     status,
@@ -210,6 +308,7 @@ const createContext = ({
     memberRole: { role: "owner" },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     params: { workspaceId: ids.wsA1, invoiceId },
     promptCachingEnabled: false,
     recordAuditEvent,

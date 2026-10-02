@@ -16,6 +16,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAuditLogId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({
@@ -36,7 +37,12 @@ const config = {
     "changes, and the operation label.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: paramsSchema,
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -49,7 +55,9 @@ const activityCursor = createTimestampIdCursorCodec({
 const readItemActivity = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListActivityPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListActivityPageSizeDefault,
+    );
     const cursor = query.cursor ? activityCursor.decode(query.cursor) : null;
     if (query.cursor && !cursor) {
       return Result.err(

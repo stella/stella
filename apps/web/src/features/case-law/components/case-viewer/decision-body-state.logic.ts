@@ -1,3 +1,15 @@
+import type { PublicCaseLawDecision } from "@/features/case-law/public-decision";
+
+export const decisionHasNoDocument = (
+  decision: Pick<
+    PublicCaseLawDecision,
+    "hasDocument" | "documentReadFailed" | "documentPending"
+  >,
+): boolean =>
+  !decision.hasDocument &&
+  !decision.documentReadFailed &&
+  !decision.documentPending;
+
 /**
  * Why a decision is on screen without its text.
  *

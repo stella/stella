@@ -6,6 +6,7 @@ import { fetchWithTimeout } from "@stll/fetch";
 
 import {
   getHostedUsageProviderKind,
+  getHostedUsageProviderApiVersion,
   type HostedUsageProviderApiCredentials,
 } from "@/api/lib/hosted-usage-provider/config";
 
@@ -89,6 +90,7 @@ const postProviderJson = async (
       headers: {
         authorization: `Bearer ${credentials.apiKey}`,
         "content-type": "application/json",
+        "Polar-Version": getHostedUsageProviderApiVersion(),
       },
       body: JSON.stringify(body),
       timeoutMs: REQUEST_TIMEOUT_MS,

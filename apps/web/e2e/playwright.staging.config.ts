@@ -16,6 +16,9 @@ const STAGING_WEB_URL =
 const EDGE_HEADER_NAME = process.env["E2E_EDGE_HEADER_NAME"] ?? "";
 const EDGE_HEADER_VALUE = process.env["E2E_EDGE_HEADER_VALUE"] ?? "";
 
+export const STAGING_API_URL =
+  process.env["E2E_API_URL"] ?? "https://api-staging.stll.app";
+
 export const EDGE_HEADERS: Record<string, string> =
   EDGE_HEADER_NAME && EDGE_HEADER_VALUE
     ? { [EDGE_HEADER_NAME]: EDGE_HEADER_VALUE }
@@ -32,7 +35,12 @@ export default defineConfig({
   fullyParallel: false,
   workers: 1,
   retries: 0,
-  reporter: [["github"], ["list"], ["html", { open: "never" }]],
+  reporter: [
+    ["github"],
+    ["list"],
+    ["html", { open: "never" }],
+    ["./helpers/staging-reporter.ts"],
+  ],
   timeout: 90_000,
   expect: { timeout: 15_000 },
 
@@ -52,4 +60,7 @@ export default defineConfig({
       use: { ...devices["Desktop Chrome"] },
     },
   ],
+  metadata: {
+    apiBaseURL: STAGING_API_URL,
+  },
 });
