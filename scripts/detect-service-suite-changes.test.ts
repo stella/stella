@@ -14,6 +14,19 @@ import {
   requiresServiceSuites,
   serviceSuiteDependencies,
 } from "./detect-service-suite-changes";
+import { GENERATORS } from "./generated-files";
+
+// The detector and the modules it imports, copied into fixture checkouts.
+const DETECTOR_SOURCES = Object.fromEntries(
+  [
+    "detect-service-suite-changes.ts",
+    "generated-files.ts",
+    "baseline-paths.ts",
+  ].map((file) => [
+    `scripts/${file}`,
+    readFileSync(new URL(file, import.meta.url), "utf-8"),
+  ]),
+);
 
 test("database, migrations, scheduler, backfills, suites, and harness changes require service suites", () => {
   for (const file of [
@@ -57,13 +70,34 @@ test("service-suite import closure covers every discovered dependency and leaves
   }
 });
 
+test("a derived module is followed through its generator inputs, never its ignored output", () => {
+  const graph = serviceSuiteDependencies();
+  if (graph.status !== "complete") {
+    throw new TypeError(graph.message);
+  }
+  const runtime = GENERATORS.find(({ id }) => id === "capability-runtime");
+  if (runtime === undefined) {
+    throw new TypeError(
+      "the generator manifest has no capability-runtime entry",
+    );
+  }
+  for (const output of runtime.outputs) {
+    expect(graph.dependencies.has(output), output).toBe(false);
+  }
+  expect(graph.dependencies).toContain(
+    "apps/api/scripts/generate-capability-runtime.ts",
+  );
+  expect(
+    [...graph.dependencies].some((file) =>
+      file.startsWith("packages/cli/capabilities/"),
+    ),
+  ).toBe(true);
+});
+
 test("a newly added transitive import is picked up without editing the detector", () => {
   const root = mkdtempSync(path.join(tmpdir(), "service-suite-graph-"));
   const sources = {
-    "scripts/detect-service-suite-changes.ts": readFileSync(
-      new URL("detect-service-suite-changes.ts", import.meta.url),
-      "utf-8",
-    ),
+    ...DETECTOR_SOURCES,
     "apps/api/package.json": readFileSync(
       new URL("../apps/api/package.json", import.meta.url),
       "utf-8",
@@ -190,13 +224,9 @@ test("removed runner metadata widens the detector inside its guarded execution",
   try {
     mkdirSync(path.join(root, "scripts"));
     mkdirSync(path.join(root, "apps/api"), { recursive: true });
-    writeFileSync(
-      path.join(root, "scripts/detect-service-suite-changes.ts"),
-      readFileSync(
-        new URL("detect-service-suite-changes.ts", import.meta.url),
-        "utf-8",
-      ),
-    );
+    for (const [file, source] of Object.entries(DETECTOR_SOURCES)) {
+      writeFileSync(path.join(root, file), source);
+    }
     for (const metadata of [
       {},
       { ciGateTestRunners: { "test:renamed": {} } },

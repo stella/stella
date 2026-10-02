@@ -879,7 +879,8 @@ const runAdmittedFiniteHandler = async function* <
         // Check before composing signals: composition can drop the request's
         // reason. Keep a typed refusal's status; any other disconnect is a 400.
         if (ctx.request.signal.aborted) {
-          const { reason } = ctx.request.signal;
+          // The DOM types the reason as any; read it as unknown and narrow.
+          const reason: unknown = ctx.request.signal.reason;
           return Result.err(
             reason instanceof HandlerError
               ? reason
