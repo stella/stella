@@ -5,7 +5,7 @@ CREATE TABLE "soft_law_document_locators" (
 	"id" uuid PRIMARY KEY,
 	"document_id" uuid NOT NULL,
 	"source_id" uuid NOT NULL,
-	"state" text NOT NULL CHECK ("state" IN ('current','historical')),
+	"state" text NOT NULL CONSTRAINT "soft_law_locators_state_check" CHECK ("state" IN ('current','historical')),
 	"last_seen_run" uuid NOT NULL,
 	"url" text NOT NULL,
 	"first_seen_at" timestamp with time zone NOT NULL,
@@ -72,6 +72,8 @@ CREATE TABLE "soft_law_sources" (
 	"descriptor" jsonb NOT NULL,
 	"sync_cursor" text,
 	"listing_baseline" integer DEFAULT 0 NOT NULL,
+	"listing_seen" integer,
+	"listing_expected_total" integer,
 	"last_sync_at" timestamp with time zone,
 	"run_state" text DEFAULT 'idle' NOT NULL,
 	"run_id" uuid,
@@ -79,7 +81,8 @@ CREATE TABLE "soft_law_sources" (
 	"lease_token" uuid,
 	"lease_expires_at" timestamp with time zone,
 	"failure_tag" text,
-	CONSTRAINT "soft_law_sources_state_check" CHECK ("run_state" IN ('idle','running','blocked','failed')),
+	CONSTRAINT "soft_law_sources_listing_counts_check" CHECK ((listing_seen IS NULL OR listing_seen >= 0) AND (listing_expected_total IS NULL OR listing_expected_total >= 0) AND (run_state <> 'listing_incomplete' OR listing_seen IS NOT NULL)),
+	CONSTRAINT "soft_law_sources_state_check" CHECK ("run_state" IN ('idle','running','blocked','failed','listing_incomplete')),
 	CONSTRAINT "soft_law_sources_run_check" CHECK (("run_state" = 'idle' AND "run_id" IS NULL AND "run_started_at" IS NULL AND "sync_cursor" IS NULL) OR ("run_state" <> 'idle' AND "run_id" IS NOT NULL AND "run_started_at" IS NOT NULL)),
 	CONSTRAINT "soft_law_sources_lease_check" CHECK (("lease_token" IS NULL AND "lease_expires_at" IS NULL) OR ("run_state" = 'running' AND "lease_token" IS NOT NULL AND "lease_expires_at" IS NOT NULL))
 );
@@ -91,11 +94,11 @@ CREATE UNIQUE INDEX "soft_law_versions_open_unique" ON "soft_law_document_versio
 --> statement-breakpoint
 CREATE INDEX "soft_law_documents_run_idx" ON "soft_law_documents" ("source_id","last_seen_run");
 --> statement-breakpoint
-ALTER TABLE "soft_law_document_locators" ADD CONSTRAINT "soft_law_document_locators_tunJo2R6ktOy_fkey" FOREIGN KEY ("document_id") REFERENCES "soft_law_documents"("id");
+ALTER TABLE "soft_law_document_locators" ADD CONSTRAINT "soft_law_locators_document_fk" FOREIGN KEY ("document_id") REFERENCES "soft_law_documents"("id");
 --> statement-breakpoint
-ALTER TABLE "soft_law_document_versions" ADD CONSTRAINT "soft_law_document_versions_sPgCvYAiUjFy_fkey" FOREIGN KEY ("document_id") REFERENCES "soft_law_documents"("id");
+ALTER TABLE "soft_law_document_versions" ADD CONSTRAINT "soft_law_versions_document_fk" FOREIGN KEY ("document_id") REFERENCES "soft_law_documents"("id");
 --> statement-breakpoint
-ALTER TABLE "soft_law_documents" ADD CONSTRAINT "soft_law_documents_source_id_soft_law_sources_id_fkey" FOREIGN KEY ("source_id") REFERENCES "soft_law_sources"("id");
+ALTER TABLE "soft_law_documents" ADD CONSTRAINT "soft_law_documents_source_fk" FOREIGN KEY ("source_id") REFERENCES "soft_law_sources"("id");
 --> statement-breakpoint
 CREATE POLICY "case_law_ingestion_access" ON "soft_law_document_locators" AS PERMISSIVE FOR ALL TO stella_ingestion USING (true) WITH CHECK (true);
 --> statement-breakpoint
@@ -128,13 +131,13 @@ CREATE UNIQUE INDEX soft_law_locators_current_url_unique ON soft_law_document_lo
 --> statement-breakpoint
 CREATE TABLE soft_law_ingestion_attempts (
  id uuid PRIMARY KEY,
- source_id uuid NOT NULL REFERENCES soft_law_sources(id),
+ source_id uuid NOT NULL CONSTRAINT soft_law_attempts_source_fk REFERENCES soft_law_sources(id),
  run_id uuid NOT NULL,
  url text NOT NULL,
  entry jsonb NOT NULL,
- status text NOT NULL CHECK (status IN ('applied','unchanged','rejected','retryable')),
+ status text NOT NULL CONSTRAINT soft_law_attempts_status_check CHECK (status IN ('applied','unchanged','rejected','retryable')),
  tag text,
- count integer NOT NULL CHECK (count BETWEEN 1 AND 3),
+ count integer NOT NULL CONSTRAINT soft_law_attempts_count_check CHECK (count BETWEEN 1 AND 3),
  observed_at timestamptz NOT NULL,
  CONSTRAINT soft_law_attempts_item_unique UNIQUE(source_id,run_id,url),
  CONSTRAINT soft_law_attempts_tag_check CHECK ((status = 'rejected' AND tag IS NOT NULL AND tag IN ('identity_collision','ambiguous_locator','invalid_document','retry_exhausted')) OR (status <> 'rejected' AND tag IS NULL))
@@ -152,4 +155,4 @@ GRANT SELECT ON soft_law_sources,soft_law_documents,soft_law_document_versions,s
 --> statement-breakpoint
 GRANT INSERT,UPDATE ON soft_law_documents,soft_law_document_versions,soft_law_document_locators,soft_law_ingestion_attempts TO stella_ingestion;
 --> statement-breakpoint
-GRANT UPDATE(listing_baseline,sync_cursor,last_sync_at,run_state,run_id,run_started_at,lease_token,lease_expires_at,failure_tag) ON soft_law_sources TO stella_ingestion;
+GRANT UPDATE(listing_baseline,listing_seen,listing_expected_total,sync_cursor,last_sync_at,run_state,run_id,run_started_at,lease_token,lease_expires_at,failure_tag) ON soft_law_sources TO stella_ingestion;

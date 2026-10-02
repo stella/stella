@@ -52,9 +52,18 @@ export type SoftLawRunResult =
   | { status: "complete" | "paused" | "busy" }
   | { status: "paused"; reason: "deferred_window" }
   | { status: "blocked"; reason: "forbidden" | "rate_limited" | "challenge" }
+  | {
+      status: "listing_incomplete";
+      seen: number;
+      baseline: number;
+      expectedTotal: number | null;
+    }
   | { status: "failed"; error: unknown };
 
 const assertPublisherAvailable = (fetch: SoftLawFetch) => {
+  if (fetch.getLeaseState() === "lost") {
+    throw new SoftLawIngestionError({ message: "Ingestion lease was lost" });
+  }
   const reason = fetch.getBlockReason();
   if (reason) {
     throw new SoftLawBlockedError({
@@ -173,6 +182,7 @@ const fetchSoftLawPage = async ({
       continue;
     }
     const count = (previous?.count ?? 0) + 1;
+    await store.renew();
     const maxRawBytes = PAGE_RAW_BYTE_LIMIT - retainedRawBytes;
     const result = await Result.tryPromise(() =>
       fetchSoftLawItem({ entry, adapter, signal, fetch, count, maxRawBytes }),
@@ -309,6 +319,7 @@ export const runSoftLawIngestion = async ({
     policy: adapter.access,
     signal,
     ...accessDependencies,
+    beforeRequest: store.renew,
   });
   let cursor = source.row.syncCursor;
   const outcome = await Result.tryPromise(
@@ -357,7 +368,7 @@ export const runSoftLawIngestion = async ({
         const retryable = prepared.attempts.some(
           (attempt) => attempt.status === "retryable",
         );
-        await store.persistPage({
+        const persisted = await store.persistPage({
           ...prepared,
           expectedCursor: cursor,
           nextCursor: retryable ? cursor : page.nextCursor,
@@ -365,6 +376,9 @@ export const runSoftLawIngestion = async ({
           expectedTotal,
           pendingRetries: retryable,
         });
+        if (persisted.status === "listing_incomplete") {
+          return persisted;
+        }
         if (retryable) {
           return { status: "paused" };
         }

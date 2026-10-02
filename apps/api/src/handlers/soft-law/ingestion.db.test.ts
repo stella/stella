@@ -839,7 +839,7 @@ if (!databaseUrl || !enabled) {
               },
             )
           ).status,
-        ).toBe("failed");
+        ).toBe("listing_incomplete");
         expect(
           await db
             .select()
@@ -861,13 +861,278 @@ if (!databaseUrl || !enabled) {
               getTotalCount: async () => ({ type: "count", total: 2 }),
             })
           ).status,
-        ).toBe("failed");
+        ).toBe("listing_incomplete");
         expect(
           await db
             .select()
             .from(softLawDocuments)
             .where(eq(softLawDocuments.sourceId, sourceId)),
-        ).toEqual(before);
+        ).toMatchObject(
+          before.map((row) => ({ id: row.id, listingState: "listed" })),
+        );
+      }));
+
+    test("a thirty-percent removal re-walks from page one and persists new documents without sweeping until acknowledgment", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const initial = Array.from({ length: 10 }, (_, index) =>
+          entry(
+            `https://uoou.gov.cz/${index}`,
+            `Guidance ${index}`,
+            `REF-${index}`,
+          ),
+        );
+        expect(await run(adapter(initial))).toEqual({ status: "complete" });
+        const starts: (string | null)[] = [];
+        const runIds = new Set<string | null>();
+        for (let round = 0; round < 2; round++) {
+          const added = entry(
+            `https://uoou.gov.cz/new-${round}`,
+            `New ${round}`,
+            `NEW-${round}`,
+          );
+          const retained = [...initial.slice(0, 6), added];
+          const result = await run({
+            ...adapter(retained),
+            getTotalCount: async () => ({ type: "count", total: 7 }),
+            discover: async ({ cursor }) => {
+              if (cursor === null) {
+                starts.push(cursor);
+              }
+              return cursor === null
+                ? { entries: retained.slice(0, 4), nextCursor: "second" }
+                : { entries: retained.slice(4), nextCursor: null };
+            },
+          });
+          expect(result).toMatchObject({
+            status: "listing_incomplete",
+            seen: 7,
+            expectedTotal: 7,
+          });
+          const source = (
+            await db
+              .select()
+              .from(softLawSources)
+              .where(eq(softLawSources.id, sourceId))
+          ).at(0);
+          expect(source).toMatchObject({
+            runState: "listing_incomplete",
+            failureTag: "listing_incomplete",
+            listingSeen: 7,
+            listingExpectedTotal: 7,
+            syncCursor: null,
+            leaseToken: null,
+          });
+          runIds.add(source?.runId ?? null);
+          const rows = await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId));
+          expect(rows).toHaveLength(11 + round);
+          expect(rows.every((row) => row.listingState === "listed")).toBe(true);
+          expect(rows.some((row) => row.title === added.metadata.title)).toBe(
+            true,
+          );
+        }
+        expect(starts).toEqual([null, null]);
+        expect(runIds.size).toBe(2);
+        // Even a full listing cannot silently acknowledge a held removal.
+        expect((await run(adapter(initial))).status).toBe("listing_incomplete");
+      }));
+
+    test("identical source bytes and metadata keep one version when derived extraction changes", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const item = entry();
+        expect(await run(adapter([item]))).toEqual({ status: "complete" });
+        expect(
+          await run({
+            ...adapter([item]),
+            fetchDocument: async () => ({
+              ...document(item),
+              text: "improved extraction",
+              extractionQuality: "text_layer",
+              raw: document(item).raw.map((part) => ({
+                role: part.role,
+                bytes: part.bytes,
+                contentType: "application/pdf",
+              })),
+            }),
+          }),
+        ).toEqual({ status: "complete" });
+        const versions = await db
+          .select({
+            text: softLawDocumentVersions.extractedText,
+            quality: softLawDocumentVersions.extractionQuality,
+          })
+          .from(softLawDocumentVersions)
+          .innerJoin(
+            softLawDocuments,
+            eq(softLawDocumentVersions.documentId, softLawDocuments.id),
+          )
+          .where(eq(softLawDocuments.sourceId, sourceId));
+        expect(versions).toEqual([{ text: "original", quality: "html" }]);
+      }));
+
+    test("HTML at a requested binary surface is retried then rejected without storing a document", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const item = entry("https://uoou.gov.cz/media/attachment.pdf");
+        let requests = 0;
+        const sourceAdapter = {
+          ...adapter([item]),
+          fetchDocument: async (
+            value: SoftLawEntry,
+            { fetch }: Parameters<SoftLawSourceAdapter["fetchDocument"]>[1],
+          ) => {
+            await fetch(value.url, {
+              expectedContentTypes: ["application/pdf"],
+            });
+            return document(value);
+          },
+        };
+        const request = async () => {
+          requests++;
+          return new Response("<title>Maintenance</title>", {
+            headers: { "content-type": "text/html" },
+          });
+        };
+        for (let round = 0; round < 3; round++) {
+          expect(
+            (
+              await run(sourceAdapter, {
+                request,
+              })
+            ).status,
+          ).toBe(round < 2 ? "paused" : "complete");
+        }
+        expect(requests).toBe(3);
+        expect(
+          await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId)),
+        ).toHaveLength(0);
+        expect(
+          (
+            await db
+              .select()
+              .from(softLawIngestionAttempts)
+              .where(eq(softLawIngestionAttempts.sourceId, sourceId))
+          ).at(0),
+        ).toMatchObject({
+          status: "rejected",
+          tag: "retry_exhausted",
+          count: 3,
+        });
+      }));
+
+    test("per-document lease renewal completes a page longer than one lease under a simulated clock", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        let elapsedSeconds = 0;
+        const items = Array.from({ length: 5 }, (_, index) =>
+          entry(
+            `https://uoou.gov.cz/${index}`,
+            `Guidance ${index}`,
+            `REF-${index}`,
+          ),
+        );
+        expect(
+          await run({
+            ...adapter(items),
+            fetchDocument: async (item) => {
+              elapsedSeconds += 120;
+              // Advance time relative to this lease without sleeping or changing the server clock.
+              await db
+                .update(softLawSources)
+                .set({
+                  leaseExpiresAt: sql`${softLawSources.leaseExpiresAt} - interval '120 seconds'`,
+                })
+                .where(eq(softLawSources.id, sourceId));
+              return document(item);
+            },
+          }),
+        ).toEqual({ status: "complete" });
+        expect(elapsedSeconds).toBeGreaterThan(300);
+        expect(
+          await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId)),
+        ).toHaveLength(5);
+      }));
+
+    test("lease loss between document requests stops access even if the adapter catches the error", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        let requests = 0;
+        const result = await run(
+          {
+            ...adapter([entry()]),
+            fetchDocument: async (item, { fetch }) => {
+              await fetch(item.url);
+              await db
+                .update(softLawSources)
+                .set({ leaseToken: createSafeId<"softLawIngestionLease">() })
+                .where(eq(softLawSources.id, sourceId));
+              const refused = await Result.tryPromise(() => fetch(item.url));
+              expect(Result.isError(refused)).toBe(true);
+              return document(item);
+            },
+          },
+          {
+            request: async () => {
+              requests++;
+              return new Response("body");
+            },
+          },
+        );
+        expect(result.status).toBe("failed");
+        expect(requests).toBe(1);
+        expect(
+          await db
+            .select()
+            .from(softLawDocuments)
+            .where(eq(softLawDocuments.sourceId, sourceId)),
+        ).toHaveLength(0);
+      }));
+
+    test("publisher blocks received after a takeover still durably block the source", async () =>
+      await withSource(databaseUrl, async ({ db, sourceId, run }) => {
+        const result = await run(
+          {
+            ...adapter([entry()]),
+            fetchDocument: async (item, { fetch }) => {
+              await fetch(item.url);
+              return document(item);
+            },
+          },
+          {
+            request: async () => {
+              await db
+                .update(softLawSources)
+                .set({ leaseExpiresAt: sql`now() - interval '1 second'` })
+                .where(eq(softLawSources.id, sourceId));
+              expect(await run(adapter([entry()]))).toEqual({
+                status: "complete",
+              });
+              return new Response("throttled", { status: 429 });
+            },
+          },
+        );
+        expect(result).toEqual({ status: "blocked", reason: "rate_limited" });
+        expect(
+          (
+            await db
+              .select()
+              .from(softLawSources)
+              .where(eq(softLawSources.id, sourceId))
+          ).at(0),
+        ).toMatchObject({
+          runState: "blocked",
+          failureTag: "rate_limited",
+          leaseToken: null,
+        });
+        expect(await run(adapter([entry()]))).toEqual({
+          status: "blocked",
+          reason: "rate_limited",
+        });
       }));
 
     test("swallowing or wrapping a block cannot hide the latch or issue another request", async () => {
@@ -991,7 +1256,7 @@ if (!databaseUrl || !enabled) {
         expect(versions.at(0)?.observedFrom).toEqual(docs.at(0)?.lastSeenAt);
       }));
 
-    test("database calls stay constant as a page grows", async () => {
+    test("page persistence stays batched while each additional document renews its lease once", async () => {
       const calls: number[] = [];
       for (const size of [1, 8]) {
         await withSource(databaseUrl, async ({ db, run }) => {
@@ -1009,7 +1274,9 @@ if (!databaseUrl || !enabled) {
           calls.push(count);
         });
       }
-      expect(calls.at(0)).toBe(calls.at(1));
+      expect(calls.at(1)).toBe(
+        (calls.at(0) ?? panic("Missing small-page result")) + 7,
+      );
     });
 
     test("all reader roles lack every soft-law operation; ingestion can write only operational data", async () =>

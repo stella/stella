@@ -76,7 +76,6 @@ export const softLawContentHash = (input: SoftLawDocumentInput) => {
   const raw = input.raw
     .map((part) => ({
       role: part.role,
-      contentType: part.contentType,
       digest: new Bun.CryptoHasher("sha256").update(part.bytes).digest("hex"),
     }))
     .toSorted((a, b) => compareCanonicalKeys(a.role, b.role));
@@ -88,8 +87,6 @@ export const softLawContentHash = (input: SoftLawDocumentInput) => {
       JSON.stringify({
         metadata: canonical,
         raw,
-        text: input.text,
-        extractionQuality: input.extractionQuality,
         sourceDates,
       }),
     )

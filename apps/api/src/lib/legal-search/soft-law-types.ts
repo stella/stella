@@ -1,12 +1,12 @@
 import { TaggedError } from "better-result";
 
-import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type {
   SourceFieldInventory,
   SourceSurfaceCensus,
   SourceTotalCount,
   SourceSliceWalk,
 } from "@/api/lib/legal-search/ingestion-types";
+import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 
 import {
   SOFT_LAW_BLOCK_REASONS,
@@ -50,6 +50,7 @@ export const SOFT_LAW_RUN_STATES = [
   "running",
   "blocked",
   "failed",
+  "listing_incomplete",
 ] as const;
 export const SOFT_LAW_FAILURE_TAGS = [
   ...SOFT_LAW_BLOCK_REASONS,

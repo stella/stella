@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
@@ -7,6 +8,7 @@ import {
   detectSoftLawBlock,
   SoftLawBlockedError,
   SoftLawAccessError,
+  SoftLawContentTypeMismatchError,
   softLawAccessWindowOpen,
 } from "./publisher-access";
 
@@ -167,10 +169,9 @@ test("the recorded CMS newsletter CAPTCHA is not a challenge shell", async () =>
   expect((await fetch("https://uoou.gov.cz/listing")).bytes).toEqual(bytes);
 });
 
-test("attachment bytes cannot trigger a text challenge, but status blocks still latch", async () => {
+test("binary response bytes cannot trigger a text challenge", async () => {
   for (const [url, contentType] of [
     ["https://uoou.gov.cz/media/document.pdf", "application/pdf"],
-    ["https://uoou.gov.cz/media/document.docx", "text/html"],
     ["https://uoou.gov.cz/page", "application/pdf"],
   ]) {
     const fetch = createSoftLawFetch({
@@ -185,6 +186,113 @@ test("attachment bytes cannot trigger a text challenge, but status blocks still 
     expect((await fetch(url)).bytes.byteLength).toBeGreaterThan(0);
     expect(fetch.getBlockReason()).toBeNull();
   }
+});
+
+test("HTML challenge responses block even at attachment URLs", async () => {
+  for (const url of [
+    "https://uoou.gov.cz/media/document.docx",
+    "https://uoou.gov.cz/document.pdf",
+  ]) {
+    const fetch = createSoftLawFetch({
+      policy,
+      signal: new AbortController().signal,
+      reserve: async () => {},
+      request: async () =>
+        new Response("Verify you are human", {
+          headers: { "content-type": "text/html" },
+        }),
+    });
+    await expect(fetch(url)).rejects.toBeInstanceOf(SoftLawBlockedError);
+    expect(fetch.getBlockReason()).toBe("challenge");
+  }
+});
+
+test("an expected binary surface answering ordinary HTML is a retryable content-type mismatch", async () => {
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {},
+    request: async () =>
+      new Response("<title>Maintenance</title>", {
+        headers: { "content-type": "text/html" },
+      }),
+  });
+  await expect(
+    fetch("https://uoou.gov.cz/media/document.pdf", {
+      expectedContentTypes: ["application/pdf"],
+    }),
+  ).rejects.toBeInstanceOf(SoftLawContentTypeMismatchError);
+  expect(fetch.getBlockReason()).toBeNull();
+});
+
+test("lease loss during pacing prevents every later request", async () => {
+  let ownsLease = true;
+  let requests = 0;
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {
+      ownsLease = false;
+    },
+    beforeRequest: async () => {
+      if (!ownsLease) {
+        throw new SoftLawAccessError({ message: "Lease lost" });
+      }
+    },
+    request: async () => {
+      requests++;
+      return new Response("body");
+    },
+  });
+  await expect(fetch("https://uoou.gov.cz/page")).rejects.toBeInstanceOf(
+    SoftLawAccessError,
+  );
+  ownsLease = true;
+  await expect(fetch("https://uoou.gov.cz/page")).rejects.toBeInstanceOf(
+    SoftLawAccessError,
+  );
+  expect(requests).toBe(0);
+  expect(fetch.getLeaseState()).toBe("lost");
+});
+
+test("a block arriving during another request's lease check prevents that request", async () => {
+  let release!: () => void;
+  const pending = new Promise<void>((resolve) => {
+    release = resolve;
+  });
+  let entered!: () => void;
+  const checking = new Promise<void>((resolve) => {
+    entered = resolve;
+  });
+  let leases = 0;
+  let requests = 0;
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {},
+    beforeRequest: async () => {
+      leases++;
+      if (leases === 1) {
+        entered();
+        await pending;
+      }
+    },
+    request: async () => {
+      requests++;
+      return new Response("blocked", { status: 429 });
+    },
+  });
+  const slow = Result.tryPromise(() => fetch("https://uoou.gov.cz/slow"));
+  await checking;
+  try {
+    await expect(fetch("https://uoou.gov.cz/fast")).rejects.toBeInstanceOf(
+      SoftLawBlockedError,
+    );
+  } finally {
+    release();
+  }
+  expect(Result.isError(await slow)).toBe(true);
+  expect(requests).toBe(1);
 });
 
 test("a challenge redirect latches and all later requests are refused", async () => {

@@ -10,7 +10,7 @@ const lint = async (lines: readonly string[], sourcePath = ADAPTER_PATH) =>
     sourcePath,
   });
 
-describe.serial("soft-law adapters use the supplied fetch capability", () => {
+describe.serial("soft-law handlers use the supplied fetch capability", () => {
   test("rejects network primitives even when the destination is fixed", async () => {
     expect(
       await lint([
@@ -79,5 +79,25 @@ describe.serial("soft-law adapters use the supplied fetch capability", () => {
         "apps/api/src/handlers/soft-law/publisher-access.ts",
       ),
     ).toEqual([]);
+  });
+
+  test("handlers and helpers cannot bypass the transport outside the adapter directory", async () => {
+    for (const sourcePath of [
+      "apps/api/src/handlers/soft-law/ingestion.ts",
+      "apps/api/src/handlers/soft-law/helpers/download.ts",
+      "apps/api/src/handlers/soft-law/helpers/publisher-access.ts",
+      "apps/api/src/handlers/soft-law/publisher-access-other.ts",
+    ]) {
+      expect(
+        await lint(
+          [
+            'import { safeOutboundFetchBytes } from "@/api/lib/safe-outbound-fetch";',
+            'await fetch("https://uoou.gov.cz/document");',
+            "await safeOutboundFetchBytes({ url: input, maxBytes: 1000, timeoutMs: 1000 });",
+          ],
+          sourcePath,
+        ),
+      ).toEqual([2, 3]);
+    }
   });
 });

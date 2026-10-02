@@ -22,7 +22,6 @@ import {
   SOFT_LAW_AUTHORITIES,
   SOFT_LAW_BATCH_LIMIT,
   SoftLawIngestionError,
-  SoftLawListingIncompleteError,
 } from "@/api/lib/legal-search/soft-law-types";
 import type {
   SoftLawEntry,
@@ -84,30 +83,37 @@ const claimSoftLawSource = async ({
             : panic("Blocked source has no block reason"),
       };
     }
-    const listed = row.runId
-      ? row.listingBaseline
-      : ((
-          await tx
-            .select({ count: sql<number>`count(*)::integer` })
-            .from(softLawDocuments)
-            .where(
-              and(
-                eq(softLawDocuments.sourceId, sourceId),
-                eq(softLawDocuments.listingState, "listed"),
-              ),
-            )
-        ).at(0)?.count ?? 0);
+    const restart = row.runState === "listing_incomplete";
+    const listed =
+      row.runId && !restart
+        ? row.listingBaseline
+        : ((
+            await tx
+              .select({ count: sql<number>`count(*)::integer` })
+              .from(softLawDocuments)
+              .where(
+                and(
+                  eq(softLawDocuments.sourceId, sourceId),
+                  eq(softLawDocuments.listingState, "listed"),
+                ),
+              )
+          ).at(0)?.count ?? 0);
     const claimed = (
       await tx
         .update(softLawSources)
         .set({
           runState: "running",
           listingBaseline: listed,
-          runId: row.runId ?? Bun.randomUUIDv7(),
-          runStartedAt: row.runStartedAt ?? new Date(),
+          runId: restart
+            ? Bun.randomUUIDv7()
+            : (row.runId ?? Bun.randomUUIDv7()),
+          runStartedAt: restart ? new Date() : (row.runStartedAt ?? new Date()),
           leaseToken,
           leaseExpiresAt: sql`now() + make_interval(secs => ${LEASE_SECONDS})`,
-          failureTag: null,
+          failureTag:
+            restart || row.failureTag === "listing_incomplete"
+              ? "listing_incomplete"
+              : null,
         })
         .where(
           and(
@@ -233,6 +239,14 @@ type PersistSoftLawPageOptions = {
   expectedTotal: number | null;
   pendingRetries: boolean;
 };
+export type SoftLawPageResult =
+  | { status: "persisted" }
+  | {
+      status: "listing_incomplete";
+      seen: number;
+      baseline: number;
+      expectedTotal: number | null;
+    };
 type PersistSoftLawRowsOptions = {
   items: readonly SoftLawObservation[];
   sourceId: SafeId<"softLawSource">;
@@ -367,6 +381,63 @@ const persistSoftLawVersions = async (
     );
   }
 };
+type PersistRejectedSoftLawListingsOptions = {
+  attempts: readonly SoftLawAttempt[];
+  sourceId: SafeId<"softLawSource">;
+  runId: string;
+  observedAt: Date;
+};
+const persistRejectedSoftLawListings = async (
+  tx: Transaction,
+  {
+    attempts,
+    sourceId,
+    runId,
+    observedAt,
+  }: PersistRejectedSoftLawListingsOptions,
+) => {
+  // A rejected body is still evidence that its current locator was listed.
+  const rejectedUrls = attempts
+    .filter((attempt) => attempt.status === "rejected")
+    .map((attempt) => attempt.entry.url);
+  if (rejectedUrls.length) {
+    await tx
+      .update(softLawDocuments)
+      .set({
+        listingState: "listed",
+        lastSeenAt: observedAt,
+        lastSeenRun: runId,
+      })
+      .where(
+        and(
+          eq(softLawDocuments.sourceId, sourceId),
+          inArray(
+            softLawDocuments.id,
+            tx
+              .select({ id: softLawDocumentLocators.documentId })
+              .from(softLawDocumentLocators)
+              .where(
+                and(
+                  eq(softLawDocumentLocators.sourceId, sourceId),
+                  eq(softLawDocumentLocators.state, "current"),
+                  inArray(softLawDocumentLocators.url, rejectedUrls),
+                ),
+              ),
+          ),
+        ),
+      );
+    await tx
+      .update(softLawDocumentLocators)
+      .set({ lastSeenAt: observedAt, lastSeenRun: runId })
+      .where(
+        and(
+          eq(softLawDocumentLocators.sourceId, sourceId),
+          eq(softLawDocumentLocators.state, "current"),
+          inArray(softLawDocumentLocators.url, rejectedUrls),
+        ),
+      );
+  }
+};
 const persistSoftLawPage = async (
   { sourceId, scopedDb, adapter, leaseToken, ownsLease }: SoftLawStoreContext,
   {
@@ -378,7 +449,8 @@ const persistSoftLawPage = async (
     expectedTotal,
     pendingRetries,
   }: PersistSoftLawPageOptions,
-) =>
+): Promise<SoftLawPageResult> => {
+  let result: SoftLawPageResult = { status: "persisted" };
   await commitReplaySafeIngestionBatch({
     items: observations,
     checkpoint: nextCursor,
@@ -406,47 +478,12 @@ const persistSoftLawPage = async (
         observedAt,
       });
       await persistSoftLawVersions(tx, { items, observedAt });
-      // A rejected body is still evidence that its current locator was listed.
-      const rejectedUrls = attempts
-        .filter((attempt) => attempt.status === "rejected")
-        .map((attempt) => attempt.entry.url);
-      if (rejectedUrls.length) {
-        await tx
-          .update(softLawDocuments)
-          .set({
-            listingState: "listed",
-            lastSeenAt: observedAt,
-            lastSeenRun: runId,
-          })
-          .where(
-            and(
-              eq(softLawDocuments.sourceId, sourceId),
-              inArray(
-                softLawDocuments.id,
-                tx
-                  .select({ id: softLawDocumentLocators.documentId })
-                  .from(softLawDocumentLocators)
-                  .where(
-                    and(
-                      eq(softLawDocumentLocators.sourceId, sourceId),
-                      eq(softLawDocumentLocators.state, "current"),
-                      inArray(softLawDocumentLocators.url, rejectedUrls),
-                    ),
-                  ),
-              ),
-            ),
-          );
-        await tx
-          .update(softLawDocumentLocators)
-          .set({ lastSeenAt: observedAt, lastSeenRun: runId })
-          .where(
-            and(
-              eq(softLawDocumentLocators.sourceId, sourceId),
-              eq(softLawDocumentLocators.state, "current"),
-              inArray(softLawDocumentLocators.url, rejectedUrls),
-            ),
-          );
-      }
+      await persistRejectedSoftLawListings(tx, {
+        attempts,
+        sourceId,
+        runId,
+        observedAt,
+      });
       if (attempts.length) {
         await tx
           .insert(softLawIngestionAttempts)
@@ -486,7 +523,10 @@ const persistSoftLawPage = async (
         const source =
           (
             await tx
-              .select({ baseline: softLawSources.listingBaseline })
+              .select({
+                baseline: softLawSources.listingBaseline,
+                listingSeen: softLawSources.listingSeen,
+              })
               .from(softLawSources)
               .where(eq(softLawSources.id, sourceId))
               .limit(1)
@@ -508,21 +548,52 @@ const persistSoftLawPage = async (
         const seen = totals?.count ?? 0;
         if (
           totals?.retryable ||
+          source.listingSeen !== null ||
           seen < Math.ceil(source.baseline * MINIMUM_LISTING_FRACTION) ||
           (expectedTotal !== null && seen < expectedTotal)
         ) {
-          throw new SoftLawListingIncompleteError({
-            message: "Listing is smaller than its declared or previous size",
+          const checkpoint = await advanceCorpusIngestionCheckpoint({
+            scopedDb: async (fn) => await fn(tx),
+            source: {
+              type: CORPUS_SOURCE_TYPE.SOFT_LAW,
+              id: sourceId,
+              leaseToken,
+            },
+            expectedCursor,
+            nextCursor: null,
           });
+          if (checkpoint.status !== INGESTION_CHECKPOINT_STATUS.ADVANCED) {
+            throw new SoftLawIngestionError({
+              message: "Checkpoint was superseded",
+            });
+          }
+          await tx
+            .update(softLawSources)
+            .set({
+              runState: "listing_incomplete",
+              failureTag: "listing_incomplete",
+              listingSeen: seen,
+              listingExpectedTotal: expectedTotal,
+              leaseToken: null,
+              leaseExpiresAt: null,
+            })
+            .where(ownsLease);
+          result = {
+            status: "listing_incomplete",
+            seen,
+            baseline: source.baseline,
+            expectedTotal,
+          };
+          return;
         }
       }
-      const result = await advanceCorpusIngestionCheckpoint({
+      const checkpointResult = await advanceCorpusIngestionCheckpoint({
         scopedDb: async (fn) => await fn(tx),
         source: { type: CORPUS_SOURCE_TYPE.SOFT_LAW, id: sourceId, leaseToken },
         expectedCursor,
         nextCursor: checkpointCursor,
       });
-      if (result.status !== INGESTION_CHECKPOINT_STATUS.ADVANCED) {
+      if (checkpointResult.status !== INGESTION_CHECKPOINT_STATUS.ADVANCED) {
         throw new SoftLawIngestionError({
           message: "Checkpoint was superseded",
         });
@@ -557,16 +628,20 @@ const persistSoftLawPage = async (
           leaseToken: null,
           leaseExpiresAt: null,
           listingBaseline: 0,
+          listingSeen: null,
+          listingExpectedTotal: null,
         })
         .where(ownsLease);
     },
   });
+  return result;
+};
 type SoftLawSettlement =
   | { status: "paused"; reason?: "deferred_window" }
   | { status: "failed"; reason: "ingestion_failed" | "listing_incomplete" }
   | { status: "blocked"; reason: "forbidden" | "rate_limited" | "challenge" };
 const settleSoftLawSource = async (
-  { scopedDb, ownsLease }: SoftLawStoreContext,
+  { scopedDb, ownsLease, sourceId, leaseToken }: SoftLawStoreContext,
   state: SoftLawSettlement,
 ) =>
   await scopedDb(async (tx) => {
@@ -593,15 +668,18 @@ const settleSoftLawSource = async (
           .where(ownsLease);
         return;
       case "blocked":
+        // Publisher refusal is source-wide evidence, including a response received after takeover.
         await tx
           .update(softLawSources)
           .set({
             runState: "blocked",
+            runId: sql`coalesce(${softLawSources.runId}, ${leaseToken}::uuid)`,
+            runStartedAt: sql`coalesce(${softLawSources.runStartedAt}, now())`,
             failureTag: state.reason,
             leaseToken: null,
             leaseExpiresAt: null,
           })
-          .where(ownsLease);
+          .where(eq(softLawSources.id, sourceId));
         return;
       default:
         state satisfies never;

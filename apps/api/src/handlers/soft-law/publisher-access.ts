@@ -1,4 +1,4 @@
-import { TaggedError } from "better-result";
+import { TaggedError, Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
@@ -21,6 +21,12 @@ export class SoftLawBlockedError extends TaggedError("SoftLawBlockedError")<{
 }> {}
 export class SoftLawAccessError extends TaggedError("SoftLawAccessError")<{
   message: string;
+}> {}
+export class SoftLawContentTypeMismatchError extends TaggedError(
+  "SoftLawContentTypeMismatchError",
+)<{
+  message: string;
+  contentType: string;
 }> {}
 
 export const detectSoftLawBlock = (status: number, body: string) => {
@@ -77,6 +83,7 @@ type CreateSoftLawFetchOptions = {
   now?: () => Date;
   request?: typeof fetchWithTimeout;
   reserve?: typeof reservePublisherGateSlot;
+  beforeRequest?: () => Promise<void>;
 };
 
 /** Every response is inspected before the adapter receives it; no retries. */
@@ -86,9 +93,16 @@ export const createSoftLawFetch = ({
   now = () => new Date(),
   request = fetchWithTimeout,
   reserve = reservePublisherGateSlot,
+  beforeRequest,
 }: CreateSoftLawFetchOptions): SoftLawFetch => {
   let blocked: SoftLawBlockReason | null = null;
   let windowState: "open" | "deferred_window" = "open";
+  let leaseState: "active" | "lost" = "active";
+  const assertLeaseActive = () => {
+    if (leaseState === "lost") {
+      throw new SoftLawAccessError({ message: "Ingestion lease was lost" });
+    }
+  };
   const stop = (reason: SoftLawBlockReason): never => {
     blocked = reason;
     throw new SoftLawBlockedError({
@@ -96,7 +110,11 @@ export const createSoftLawFetch = ({
       reason,
     });
   };
-  const fetch = async (rawUrl: string) => {
+  const fetch = async (
+    rawUrl: string,
+    options?: { expectedContentTypes: readonly string[] },
+  ) => {
+    assertLeaseActive();
     if (blocked) {
       return stop(blocked);
     }
@@ -129,6 +147,18 @@ export const createSoftLawFetch = ({
       });
     }
     signal.throwIfAborted();
+    if (blocked) {
+      return stop(blocked);
+    }
+    const lease = await Result.tryPromise(async () => {
+      await beforeRequest?.();
+    });
+    if (Result.isError(lease)) {
+      leaseState = "lost";
+      throw lease.error.cause;
+    }
+    signal.throwIfAborted();
+    assertLeaseActive();
     if (blocked) {
       return stop(blocked);
     }
@@ -185,13 +215,8 @@ export const createSoftLawFetch = ({
       }
       const contentType =
         response.headers.get("content-type") ?? "application/octet-stream";
-      const surface = new URL(url).pathname;
       const inspectText =
-        /^(?:text\/|application\/(?:xhtml\+xml|xml|json))/iu.test(
-          contentType,
-        ) &&
-        !surface.startsWith("/media/") &&
-        !/\.(?:pdf|docx)$/iu.test(surface);
+        /^(?:text\/|application\/(?:xhtml\+xml|xml|json))/iu.test(contentType);
       const block = detectSoftLawBlock(
         response.status,
         inspectText
@@ -204,6 +229,14 @@ export const createSoftLawFetch = ({
       if (!response.ok) {
         throw new SoftLawAccessError({
           message: `Publisher returned HTTP ${response.status}`,
+        });
+      }
+      const mime = contentType.split(";").at(0)?.trim().toLowerCase();
+      if (options && !options.expectedContentTypes.includes(mime ?? "")) {
+        throw new SoftLawContentTypeMismatchError({
+          message:
+            "Publisher response content type does not match the requested surface",
+          contentType,
         });
       }
       return {
@@ -238,6 +271,7 @@ export const createSoftLawFetch = ({
     Object.assign(fetch, {
       getBlockReason: () => blocked,
       getWindowState: () => windowState,
+      getLeaseState: () => leaseState,
     }),
   );
 };

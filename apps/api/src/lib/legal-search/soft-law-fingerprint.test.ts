@@ -25,6 +25,13 @@ const document: SoftLawDocumentInput = {
   sourceDates: {},
 };
 
+test("soft-law contracts depend only on library owners", async () => {
+  const source = await Bun.file(
+    new URL("soft-law-types.ts", import.meta.url),
+  ).text();
+  expect(source).not.toMatch(/from\s+["'][^"']*\/handlers\//u);
+});
+
 test("canonical metadata changes create a new fingerprint, including withdrawal and reversion", () => {
   const withdrawn = {
     ...document,
@@ -45,12 +52,21 @@ test("canonical metadata changes create a new fingerprint, including withdrawal 
     },
   };
   expect(softLawContentHash(reordered)).toBe(softLawContentHash(document));
-  expect(
-    softLawContentHash({ ...document, text: "updated extraction" }),
-  ).not.toBe(softLawContentHash(document));
+  expect(softLawContentHash({ ...document, text: "updated extraction" })).toBe(
+    softLawContentHash(document),
+  );
   expect(
     softLawContentHash({ ...document, extractionQuality: "needs_ocr" }),
-  ).not.toBe(softLawContentHash(document));
+  ).toBe(softLawContentHash(document));
+  expect(
+    softLawContentHash({
+      ...document,
+      raw: document.raw.map((part) => ({
+        ...part,
+        contentType: "application/pdf",
+      })),
+    }),
+  ).toBe(softLawContentHash(document));
   expect(
     softLawContentHash({ ...document, sourceDates: { cms: "2024-01-01" } }),
   ).not.toBe(softLawContentHash(document));
