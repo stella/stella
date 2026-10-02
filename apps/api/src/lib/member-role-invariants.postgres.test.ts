@@ -164,8 +164,8 @@ const applyOperation = async ({
       return;
     }
     default: {
-      const exhaustive: never = operation;
-      return exhaustive;
+      operation satisfies never;
+      return;
     }
   }
 };

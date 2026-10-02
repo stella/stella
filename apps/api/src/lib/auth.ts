@@ -964,7 +964,10 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         message: "Select one product membership role.",
       });
     }
-    const headers = endpoint?.headers ?? endpoint?.request?.headers;
+    const headers =
+      endpoint?.headers instanceof Headers
+        ? endpoint.headers
+        : endpoint?.request?.headers;
     if (!headers) {
       throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
     }
@@ -1024,7 +1027,7 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
       // Translate the database's final refusal at the adapter boundary.
       update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
         const update = await Result.tryPromise({
-          try: () => adapter.update<T>(args),
+          try: async () => await adapter.update<T>(args),
           catch: mapMembershipInvariantError,
         });
         if (Result.isError(update)) {
@@ -1582,8 +1585,8 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             const userId = brandPersistedUserId(removedMember.userId);
             await refuseLastOwnerChange(organizationId, removedMember.role);
             const removal = await Result.tryPromise({
-              try: () =>
-                rootDb.transaction(async (tx) => {
+              try: async () =>
+                await rootDb.transaction(async (tx) => {
                   const timerClose = await closeRemovedMemberActiveTimer({
                     organizationId,
                     tx,

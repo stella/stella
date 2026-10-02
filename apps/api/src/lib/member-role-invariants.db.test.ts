@@ -1,10 +1,11 @@
 import { PGlite } from "@electric-sql/pglite";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { compareCodeUnit } from "@stll/collation";
 import { roles } from "@stll/permissions";
 import { assertProperty, propertyTestTimeout } from "@stll/property-testing";
 
@@ -23,7 +24,7 @@ afterAll(async () => {
 const observeFailure = async (operation: Promise<unknown>) =>
   (
     await Result.tryPromise({
-      try: () => operation,
+      try: async () => await operation,
       catch: (error) => error,
     })
   ).match({ ok: () => undefined, err: (error) => error });
@@ -235,15 +236,17 @@ describe("membership role database invariants", () => {
       `SELECT conname AS name, pg_get_constraintdef(oid) AS definition, convalidated AS validated
        FROM pg_constraint WHERE conname IN ('member_single_product_role', 'invitation_single_product_role')`,
     );
-    expect(rows.map((row) => row.name).toSorted()).toEqual([
+    expect(rows.map((row) => row.name).toSorted(compareCodeUnit)).toEqual([
       "invitation_single_product_role",
       "member_single_product_role",
     ]);
     for (const row of rows) {
       const literals = [...row.definition.matchAll(/'([^']+)'/gu)].map(
-        (match) => match[1],
+        (match) => match[1] ?? panic("SQL role capture is missing"),
       );
-      expect(literals.toSorted()).toEqual(Object.keys(roles).toSorted());
+      expect(literals.toSorted(compareCodeUnit)).toEqual(
+        Object.keys(roles).toSorted(compareCodeUnit),
+      );
       expect(row.validated).toBe(true);
     }
     const migration = readFileSync(
@@ -258,17 +261,23 @@ describe("membership role database invariants", () => {
         /ADD CONSTRAINT "(member_single_product_role|invitation_single_product_role)"\s+CHECK \(([^;]+)\) NOT VALID/gu,
       ),
     ];
-    expect(definitions.map((definition) => definition[1]).toSorted()).toEqual([
-      "invitation_single_product_role",
-      "member_single_product_role",
-    ]);
+    expect(
+      definitions
+        .map(
+          (definition) =>
+            definition[1] ?? panic("SQL constraint name capture is missing"),
+        )
+        .toSorted(compareCodeUnit),
+    ).toEqual(["invitation_single_product_role", "member_single_product_role"]);
     for (const definition of definitions) {
       const sqlDefinition = definition[2];
       expect(sqlDefinition).toBeDefined();
       const literals = [...(sqlDefinition ?? "").matchAll(/'([^']+)'/gu)].map(
-        (match) => match[1],
+        (match) => match[1] ?? panic("SQL role capture is missing"),
       );
-      expect(literals.toSorted()).toEqual(Object.keys(roles).toSorted());
+      expect(literals.toSorted(compareCodeUnit)).toEqual(
+        Object.keys(roles).toSorted(compareCodeUnit),
+      );
     }
   });
 
@@ -404,8 +413,8 @@ describe("membership role database invariants", () => {
                       ]);
                       break;
                     default: {
-                      const exhaustive: never = operation;
-                      return exhaustive;
+                      operation satisfies never;
+                      break;
                     }
                   }
                 });
@@ -434,8 +443,8 @@ describe("membership role database invariants", () => {
                       expectedMembers.delete(userId);
                       break;
                     default: {
-                      const exhaustive: never = operation;
-                      return exhaustive;
+                      operation satisfies never;
+                      break;
                     }
                   }
                 }

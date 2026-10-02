@@ -34,8 +34,8 @@ describe("membership constraint refusals", () => {
         constraint,
       });
       const raised = await Result.tryPromise({
-        try: () =>
-          getDatabase().exec(
+        try: async () =>
+          await getDatabase().exec(
             `DO $$ BEGIN RAISE EXCEPTION USING ERRCODE = '23514', CONSTRAINT = '${constraint}', MESSAGE = 'Membership constraint refusal'; END $$;`,
           ),
         catch: (cause) => cause,
