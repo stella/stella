@@ -1,2 +1,21 @@
 # Patch payloads preserve upstream whitespace in their diff context.
 patches/*.patch -whitespace
+
+# Generated projections are collapsed in review; Git uses its normal merge.
+**/*.gen.* linguist-generated=true
+**/*.generated.* linguist-generated=true
+**/generated/** linguist-generated=true
+**/capability-catalog.json linguist-generated=true
+packages/cli/skills/** linguist-generated=true
+docs/capability-coverage.md linguist-generated=true
+docs/module-ownership.md linguist-generated=true
+docs/self-hosting.md linguist-generated=true
+AGENTS.md linguist-generated=true
+GEMINI.md linguist-generated=true
+apps/*/AGENTS.md linguist-generated=true
+packages/*/AGENTS.md linguist-generated=true
+.agents/skills/** linguist-generated=true
+.claude/skills/** linguist-generated=true
+chatgpt-app-submission.json linguist-generated=true
+scripts/ratchet-baseline.json linguist-generated=true
+apps/api/mcp-surface-baseline.json linguist-generated=true
