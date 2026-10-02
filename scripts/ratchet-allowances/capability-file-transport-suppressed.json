@@ -1,5 +1,5 @@
 {
   "metric": "capability-file-transport-suppressed",
   "delta": 20,
-  "reason": "The 20 suppressed capabilities moved from packages/cli/capability-catalog.json into one file per capability under packages/cli/capabilities/; the set of suppressed capabilities is unchanged."
+  "reason": "The same 20 suppressed capabilities moved from the single CLI catalog into one file per capability under packages/cli/capabilities/; the suppressed set is unchanged."
 }
