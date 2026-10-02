@@ -56,12 +56,15 @@ const CONFIRMED_ENTRY_COLUMNS = {
 type TimeEntryRow = typeof timeEntries.$inferSelect;
 // Exact legacy values travel together; every persisted field is either here
 // or explicitly classified as contextual, recomputed, or reset below.
-const preservedLegacyBilling = (legacy: TimeEntryRow) => ({
+// The no-charge disposition and invoice wording were written for the draft's
+// own matter; completing it in another matter starts them over, as it does the
+// rate snapshot.
+const preservedLegacyBilling = (legacy: TimeEntryRow, sameMatter: boolean) => ({
   dateWorked: legacy.dateWorked,
   timezoneId: legacy.timezoneId,
   narrativeLanguage: legacy.narrativeLanguage,
-  noCharge: legacy.noCharge,
-  invoiceNarrative: legacy.invoiceNarrative,
+  noCharge: sameMatter ? legacy.noCharge : false,
+  invoiceNarrative: sameMatter ? legacy.invoiceNarrative : null,
   taskCode: legacy.taskCode,
   activityCode: legacy.activityCode,
 });
@@ -359,7 +362,9 @@ const prepareTimer = async ({
       body: {
         dateWorked: dateResult.value,
         timezoneId,
-        ...(legacy ? preservedLegacyBilling(legacy) : {}),
+        ...(legacy
+          ? preservedLegacyBilling(legacy, legacy.workspaceId === workspaceId)
+          : {}),
         durationMinutes,
         narrative,
         billable:

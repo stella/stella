@@ -613,6 +613,94 @@ describe("global timer lifecycle", () => {
     expect(await readTimer(started.id)).toBeUndefined();
   });
 
+  test("a migrated draft completed in another matter starts its billing fields over", async () => {
+    const originalMatterId = createSafeId<"workspace">();
+    await db.insert(workspaces).values({
+      id: originalMatterId,
+      organizationId: ids.orgA,
+      name: "Original timer matter",
+      reference: originalMatterId,
+      status: "active",
+    });
+    await db.insert(workspaceMembers).values({
+      id: createSafeId<"workspaceMember">(),
+      workspaceId: originalMatterId,
+      userId: ids.userA1,
+    });
+    const legacyId = createSafeId<"timeEntry">();
+    await db.insert(timeEntries).values({
+      id: legacyId,
+      organizationId: ids.orgA,
+      workspaceId: originalMatterId,
+      userId: ids.userA1,
+      dateWorked: "2026-09-01",
+      timezoneId: "UTC",
+      durationMinutes: 0,
+      timerStartedAt: new Date(START),
+      billedMinutes: 0,
+      rateAtEntry: cents(12_345),
+      currency: "CHF",
+      narrative: "Legacy research",
+      // Not billable, so completion in a matter without a rate table succeeds.
+      billable: false,
+      noCharge: true,
+      invoiceNarrative: "Wording for the original client",
+      source: TIME_ENTRY_SOURCE.TIMER,
+      status: BILLING_STATUS.DRAFT,
+    });
+    const timerId = createSafeId<"timeTimer">();
+    await db.insert(timeTimers).values({
+      id: timerId,
+      organizationId: ids.orgA,
+      workspaceId: originalMatterId,
+      userId: ids.userA1,
+      legacyTimeEntryId: legacyId,
+      description: "Legacy research",
+      state: "paused",
+      startedAt: new Date(START),
+      accumulatedSeconds: 120,
+      lastResumedAt: null,
+    });
+    const completeInOtherMatter = async () => {
+      const bothMatters = context([originalMatterId, ids.wsA1]);
+      const reassigned = await updateTimer.handler(
+        createTestHandlerContext<Parameters<typeof updateTimer.handler>[0]>({
+          ...bothMatters,
+          params: { id: timerId },
+          body: checkedBody(updateTimer.config.body, { matterId: ids.wsA1 }),
+        }),
+      );
+      expect(reassigned).toMatchObject({ id: timerId, matterId: ids.wsA1 });
+      const completed = await confirmTimer.handler(
+        createTestHandlerContext<Parameters<typeof confirmTimer.handler>[0]>({
+          ...bothMatters,
+          params: { id: timerId },
+          body: checkedBody(confirmTimer.config.body, { timezoneId: "UTC" }),
+        }),
+      );
+      if ("code" in completed) {
+        throw new Error(`Timer confirm failed: ${JSON.stringify(completed)}`);
+      }
+      expect(
+        await db.query.timeEntries.findFirst({
+          where: { id: { eq: completed.id } },
+        }),
+      ).toMatchObject({
+        workspaceId: ids.wsA1,
+        noCharge: false,
+        invoiceNarrative: null,
+      });
+      await db.delete(timeEntries).where(eq(timeEntries.id, completed.id));
+    };
+    try {
+      await completeInOtherMatter();
+    } finally {
+      await db.delete(timeTimers).where(eq(timeTimers.id, timerId));
+      await db.delete(timeEntries).where(eq(timeEntries.id, legacyId));
+      await db.delete(workspaces).where(eq(workspaces.id, originalMatterId));
+    }
+  });
+
   test("a timer survives matter membership removal and confirms after reassignment", async () => {
     const originalMatterId = createSafeId<"workspace">();
     await db.insert(workspaces).values({
