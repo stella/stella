@@ -9,6 +9,7 @@ import { McpClientError } from "./mcp-client.js";
 import {
   CACHE_SCHEMA_VERSION,
   cachePathFor,
+  credentialFingerprint,
   readCacheFile,
   writeCacheFile,
   type RegistryCacheFile,
@@ -115,6 +116,7 @@ const writeCache = async (
     fetchedAt: new Date().toISOString(),
     ttlSeconds: 86_400,
     toolsListHash: "h",
+    credentialFingerprint: credentialFingerprint("t"),
     listings: [listing("list_matters")],
     delta: { added: [], removed: [], changed: [] },
     ...over,

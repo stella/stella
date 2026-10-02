@@ -5,6 +5,7 @@ import type {
 import type * as v from "valibot";
 
 import type { env } from "@/api/env";
+import type { FeatureId } from "@/api/lib/auth/feature-access/registry";
 import type {
   MCP_ALL_RESOURCE_SCOPES,
   MCP_DEFAULT_RESOURCE_SCOPES,
@@ -254,6 +255,7 @@ export type McpToolDefinition = McpToolAccessBranch &
      * (or the deployment runs in dev). Omitted for always-available tools.
      */
     feature?: McpToolFeatureFlag;
+    featureId?: FeatureId;
     inputSchema: McpToolInputSchema;
     /**
      * Optional session-member visibility predicate, enforced centrally for both
@@ -309,6 +311,7 @@ export type McpCliDiscriminatorSubcommand = {
 };
 
 export type McpCliToolAnnotation = {
+  featureId?: FeatureId;
   command: readonly string[];
   additionalScopes?: readonly McpCliToolScope[];
   /** API-owned finite transport deadline projected into generated CLI leaves. */

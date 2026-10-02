@@ -9,6 +9,7 @@ import { CAPABILITY_TOOL_HANDLERS } from "@/api/mcp/capability-tools";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { DOCUMENT_TOOL_HANDLERS } from "@/api/mcp/document-tools";
 import { finalizeToolEgress } from "@/api/mcp/egress";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
 import { FEEDBACK_TOOL_HANDLERS } from "@/api/mcp/feedback-tools";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/gateway/list-tools";
 import {
@@ -253,6 +254,21 @@ export const runRegistryWriteTool = async (
   const staticDefinition =
     getStaticMcpToolDefinition(toolName) ??
     panic(`Write tool ${toolName} is missing from the static registry`);
+  if (
+    !isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: staticDefinition.name,
+      featureId: staticDefinition.featureId,
+    })
+  ) {
+    return Result.err(
+      new ChatToolError({
+        kind: "unavailable",
+        message: "Tool is unavailable.",
+      }),
+    );
+  }
   if (!dependencies.isMcpToolFeatureEnabled(staticDefinition.feature)) {
     return Result.err(
       new ChatToolError({

@@ -4,6 +4,10 @@ import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import type { Transaction } from "@/api/db/root";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import {
+  createFeatureAccessSnapshot,
+  decideFeatureAccess,
+} from "@/api/lib/auth/feature-access/policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runWithRequestId } from "@/api/lib/observability/request-context";
 import { isRecord } from "@/api/lib/type-guards";
@@ -2405,5 +2409,114 @@ describe("status-to-envelope mapping", () => {
     const error = mappedError(mapped);
     expect(error.code).toBe("internal_error");
     expect(error.message).not.toContain("10.0.3.7");
+  });
+});
+
+describe("feature access discovery guard: real capability catalog", () => {
+  const featureId = "fixture-access";
+  const registry = { [featureId]: { enrolment: "invitation" } } as const;
+  const bindings = {
+    capabilities: new Map(capabilityCatalog.map(({ id }) => [id, featureId])),
+    tools: new Map<string, string>(),
+    resources: new Map<string, string>(),
+  };
+  const fixtureContext = (userId: string, organizationId: string) => {
+    const context = createContext();
+    context.userId = toSafeId<"user">(userId);
+    context.organizationId = toSafeId<"organization">(organizationId);
+    context.testDependencies = {
+      ...context.testDependencies,
+      featureAccessBindings: bindings,
+      featureAccessSnapshot: createFeatureAccessSnapshot({
+        organizationId,
+        userId,
+        decisions: new Map([
+          [
+            featureId,
+            decideFeatureAccess({
+              registry,
+              grants: {
+                [featureId]: [
+                  {
+                    type: "member",
+                    organizationId: "org_1",
+                    email: "invited@example.test",
+                  },
+                ],
+              },
+              featureId,
+              organizationId,
+              userId,
+              user: {
+                email:
+                  userId === "user_1"
+                    ? "invited@example.test"
+                    : "colleague@example.test",
+                emailVerified: true,
+              },
+              membership: true,
+            }),
+          ],
+        ]),
+      }),
+    };
+    return context;
+  };
+  test.each([
+    ["user_2", "org_1"],
+    ["user_1", "org_2"],
+  ])(
+    "catalog and schema discovery hide without caller grant: %s %s",
+    async (userId, organizationId) => {
+      const context = fixtureContext(userId, organizationId);
+      const list = await handleMcpToolCall({
+        toolName: "list_capabilities",
+        args: { limit: 50 },
+        context,
+      });
+      expect(parseToolPayload<{ items: unknown[] }>(list).items).toHaveLength(
+        0,
+      );
+      for (const { id } of capabilityCatalog) {
+        const described = await handleMcpToolCall({
+          toolName: "describe_capability",
+          args: { capability: id },
+          context,
+        });
+        expect(errorEnvelope(described).code, id).toBe("not_found");
+        const invoked = await handleMcpToolCall({
+          toolName: "invoke_capability",
+          args: { capability: id, validate_only: true },
+          context,
+        });
+        expect(errorEnvelope(invoked).code, id).toBe("not_found");
+      }
+      expect(loadOrgSettingsMock).not.toHaveBeenCalled();
+      const typo = await handleMcpToolCall({
+        toolName: "describe_capability",
+        args: { capability: "time-entries.creat" },
+        context,
+      });
+      expect(errorEnvelope(typo).hint).not.toContain("time-entries.create");
+    },
+  );
+  test("caller grant permits real catalog and live schema discovery", async () => {
+    const context = fixtureContext("user_1", "org_1");
+    const list = await handleMcpToolCall({
+      toolName: "list_capabilities",
+      args: { limit: 50 },
+      context,
+    });
+    expect(
+      parseToolPayload<{ items: unknown[] }>(list).items.length,
+    ).toBeGreaterThan(0);
+    const described = await handleMcpToolCall({
+      toolName: "describe_capability",
+      args: { capability: "time-entries.create" },
+      context,
+    });
+    expect(parseToolPayload<{ id: string }>(described).id).toBe(
+      "time-entries.create",
+    );
   });
 });

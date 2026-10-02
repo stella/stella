@@ -13,6 +13,12 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { loadFeatureAccessSnapshot } from "@/api/lib/auth/feature-access/context";
+import {
+  isFeatureAccessSnapshotForPrincipal,
+  isFeatureEnabled,
+} from "@/api/lib/auth/feature-access/policy";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -52,7 +58,22 @@ type OrganizationSettingsRow = {
 
 export const projectOrganizationSettingsRow = (
   row: OrganizationSettingsRow | null | undefined,
+  snapshot: FeatureAccessSnapshot,
 ) => ({
+  capabilities: Object.fromEntries(
+    Array.from(
+      snapshot.decisions,
+      ([featureId]) =>
+        [
+          featureId,
+          {
+            status: isFeatureEnabled(snapshot, featureId, snapshot)
+              ? ("enabled" as const)
+              : ("hidden" as const),
+          },
+        ] as const,
+    ),
+  ),
   documentProcessingMode:
     row?.documentProcessingMode ?? DEFAULT_DOCUMENT_PROCESSING_MODE,
   matterNumberPattern:
@@ -73,7 +94,7 @@ export const projectOrganizationSettingsRow = (
 
 const readOrganizationSettings = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session }) {
+  async function* ({ safeDb, session, user, featureAccessSnapshot }) {
     const row = yield* Result.await(
       safeDb((tx) =>
         tx.query.organizationSettings.findFirst({
@@ -95,7 +116,19 @@ const readOrganizationSettings = createSafeRootHandler(
       ),
     );
 
-    return Result.ok(projectOrganizationSettingsRow(row));
+    const principal = {
+      organizationId: session.activeOrganizationId,
+      userId: user.id,
+    };
+    const snapshot =
+      featureAccessSnapshot !== undefined &&
+      isFeatureAccessSnapshotForPrincipal(featureAccessSnapshot, principal)
+        ? featureAccessSnapshot
+        : yield* Result.await(
+            loadFeatureAccessSnapshot({ safeDb, ...principal }),
+          );
+
+    return Result.ok(projectOrganizationSettingsRow(row, snapshot));
   },
 );
 

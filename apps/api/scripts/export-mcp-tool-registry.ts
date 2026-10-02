@@ -44,15 +44,19 @@ import { DEFAULT_MCP_TOOL_DEFINITIONS } from "@/api/mcp/static-tool-definitions"
 import {
   MCP_CLI_TOOL_SCOPES,
   type McpCliToolAnnotation,
+  type McpToolDefinition,
 } from "@/api/mcp/tool-types";
 
 type StaticMcpToolDefinition = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 
 const deriveCliAnnotation = (
-  tool: StaticMcpToolDefinition,
+  tool: StaticMcpToolDefinition & McpToolDefinition,
 ): McpCliToolAnnotation => {
-  const annotation: McpCliToolAnnotation =
-    DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
+  const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
+  const annotation =
+    tool.featureId === undefined
+      ? declared
+      : { ...declared, featureId: tool.featureId };
   const behavior =
     "destructiveBehavior" in tool ? tool.destructiveBehavior : undefined;
   if (behavior === undefined || behavior.type === "always") {

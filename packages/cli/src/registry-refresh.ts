@@ -22,6 +22,12 @@ import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
+import {
+  hasFeatureCommands,
+  projectFeatureCommands,
+} from "./feature-command-projection.js";
+import type { CallerFeatureAccess } from "./feature-command-projection.js";
+import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
@@ -34,6 +40,7 @@ import {
 import {
   CACHE_SCHEMA_VERSION,
   cachePathFor,
+  credentialFingerprint,
   computeDelta,
   DEFAULT_TTL_SECONDS,
   isCacheStale,
@@ -50,6 +57,7 @@ import {
   NO_DISABLED_COMMANDS,
   type RegistryToolListing,
   type RouteNode,
+  type ToolAnnotation,
 } from "./route-types.js";
 
 const SNAPSHOT_URL = new URL(
@@ -83,9 +91,16 @@ const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
     const name = entry["name"];
     const inputSchema = entry["inputSchema"];
     const description = entry["description"];
+    const cli = entry["cli"];
+    const meta = entry["_meta"];
+    const cliFeatureId = isRecord(cli) ? cli["featureId"] : undefined;
+    const metaFeatureId = isRecord(meta) ? meta["featureId"] : undefined;
+    const featureId =
+      typeof cliFeatureId === "string" ? cliFeatureId : metaFeatureId;
     if (typeof name === "string" && isRecord(inputSchema)) {
       listings.push({
         name,
+        ...(typeof featureId === "string" ? { featureId } : {}),
         description: typeof description === "string" ? description : "",
         inputSchema,
       });
@@ -146,6 +161,30 @@ const retainAttestedOmittedListings = ({
   return retained.length === 0 ? fetched : [...fetched, ...retained];
 };
 
+type RequiresFeatureAccessRefreshArgs = {
+  serverOrigin: string | undefined;
+  env: CacheEnv;
+  tree?: RouteNode;
+};
+
+export const requiresFeatureAccessRefresh = async ({
+  serverOrigin,
+  env,
+  tree = generatedRouteMap,
+}: RequiresFeatureAccessRefreshArgs): Promise<boolean> => {
+  if (hasFeatureCommands(tree)) {
+    return true;
+  }
+  if (serverOrigin === undefined) {
+    return false;
+  }
+  const file = await readCacheFile(cachePathFor(serverOrigin, env));
+  return (
+    file?.serverOrigin === serverOrigin &&
+    file.listings.some((listing) => listing.featureId !== undefined)
+  );
+};
+
 export type ResolvedCommandTree = {
   tree: RouteNode;
   /**
@@ -172,16 +211,33 @@ export type ResolvedCommandTree = {
 export const resolveCommandTree = async ({
   serverOrigin,
   env,
+  token,
+  featureAccess,
+  bakedTree = generatedRouteMap,
+  loadCatalog = loadBakedCapabilityCatalog,
+  annotations = TOOL_ANNOTATIONS,
 }: {
   serverOrigin: string | undefined;
   env: CacheEnv;
+  token?: string;
+  featureAccess?: CallerFeatureAccess;
+  bakedTree?: RouteNode;
+  loadCatalog?: () => Promise<readonly CapabilityCatalogEntry[] | null>;
+  annotations?: Readonly<Record<string, ToolAnnotation>>;
 }): Promise<ResolvedCommandTree> => {
+  const project = (tree: RouteNode) =>
+    projectFeatureCommands({ tree, featureAccess });
   if (serverOrigin === undefined) {
-    return { tree: generatedRouteMap, disabled: NO_DISABLED_COMMANDS };
+    return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
   }
   const file = await readCacheFile(cachePathFor(serverOrigin, env));
-  if (file === undefined || file.serverOrigin !== serverOrigin) {
-    return { tree: generatedRouteMap, disabled: NO_DISABLED_COMMANDS };
+  if (
+    file === undefined ||
+    file.serverOrigin !== serverOrigin ||
+    (token !== undefined &&
+      file.credentialFingerprint !== credentialFingerprint(token))
+  ) {
+    return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
   }
   // Tools and capabilities the server attested it omits because a deployment
   // feature is off. They stay in the tree (the server answers a call with its
@@ -193,16 +249,37 @@ export const resolveCommandTree = async ({
   const prunedByScope = (file.scopeOmittedTools ?? []).some(
     (name) => !isCompoundTool(name),
   );
-  if (isDeltaEmpty(file.delta) && !prunedByScope) {
-    return { tree: generatedRouteMap, disabled };
+  const featureListings = file.listings.some(
+    (listing) => listing.featureId !== undefined,
+  );
+  const enabledTools = new Set(featureAccess?.tools);
+  const hiddenTools = new Set(
+    Object.entries(annotations).flatMap(([name, annotation]) =>
+      annotation.featureId !== undefined && !enabledTools.has(name)
+        ? [name]
+        : [],
+    ),
+  );
+  for (const listing of file.listings) {
+    if (listing.featureId !== undefined && !enabledTools.has(listing.name)) {
+      hiddenTools.add(listing.name);
+    }
+  }
+  const delta: RegistryDelta = {
+    added: file.delta.added.filter((name) => !hiddenTools.has(name)),
+    removed: file.delta.removed.filter((name) => !hiddenTools.has(name)),
+    changed: file.delta.changed.filter((name) => !hiddenTools.has(name)),
+  };
+  if (isDeltaEmpty(file.delta) && !prunedByScope && !featureListings) {
+    return { tree: project(bakedTree), disabled };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
   // the cached listings + the baked capability merge), so a diverged registry
   // never drops the generated capability leaves. A missing/corrupt catalog or
   // a tree that fails to build falls back to the baked-in tree (rule 6).
-  const entries = await loadBakedCapabilityCatalog();
+  const entries = await loadCatalog();
   if (entries === null) {
-    return { tree: generatedRouteMap, disabled };
+    return { tree: project(bakedTree), disabled };
   }
   const listings = retainAttestedOmittedListings({
     fetched: file.listings,
@@ -214,16 +291,16 @@ export const resolveCommandTree = async ({
     () =>
       buildCliRouteTree({
         listings,
-        annotations: TOOL_ANNOTATIONS,
+        annotations,
         entries,
       }).tree,
   );
   if (Result.isError(built)) {
-    return { tree: generatedRouteMap, disabled };
+    return { tree: project(bakedTree), disabled };
   }
-  return isDeltaEmpty(file.delta)
-    ? { tree: built.value, disabled }
-    : { tree: built.value, drift: file.delta, disabled };
+  return isDeltaEmpty(delta)
+    ? { tree: project(built.value), disabled }
+    : { tree: project(built.value), drift: delta, disabled };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */
@@ -231,7 +308,12 @@ export type RefreshOutcome =
   | { status: "skipped"; reason: "no-cache" | "fresh" }
   | { status: "failed"; warning: string }
   | { status: "admission-refused"; refusal: CliActionAdmissionRefusal }
-  | { status: "refreshed"; deltaEmpty: boolean; nudge?: string };
+  | {
+      status: "refreshed";
+      deltaEmpty: boolean;
+      nudge?: string;
+      featureAccess?: CallerFeatureAccess;
+    };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
 type FetchLatestVersion = () => Promise<string | undefined>;
@@ -278,7 +360,10 @@ export const refreshRegistryCache = async ({
       if (!(await cacheFileExists(filePath))) {
         return { status: "skipped", reason: "no-cache" };
       }
-    } else if (!isCacheStale(existing, now)) {
+    } else if (
+      existing.credentialFingerprint === credentialFingerprint(token) &&
+      !isCacheStale(existing, now)
+    ) {
       return { status: "skipped", reason: "fresh" };
     }
   }
@@ -337,6 +422,7 @@ export const refreshRegistryCache = async ({
   const file: RegistryCacheFile = {
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
+    credentialFingerprint: credentialFingerprint(token),
     fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({
       fractionalSecondDigits: 3,
     }),
@@ -362,6 +448,9 @@ export const refreshRegistryCache = async ({
   return {
     status: "refreshed",
     deltaEmpty: isDeltaEmpty(delta),
+    ...(trust.featureAccess === undefined
+      ? {}
+      : { featureAccess: trust.featureAccess }),
     ...(nudge.line === undefined ? {} : { nudge: nudge.line }),
   };
 };

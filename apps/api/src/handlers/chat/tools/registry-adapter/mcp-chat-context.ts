@@ -2,6 +2,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import type { FeatureAccessSnapshot } from "@/api/lib/auth/feature-access/policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
@@ -20,6 +21,7 @@ export type ChatRegistryContextDeps = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   userEmail: string;
+  featureAccessSnapshot?: FeatureAccessSnapshot | undefined;
   memberRole: MemberRole;
   /**
    * Pin a workspace into the request's RLS identity only when request auth
@@ -106,6 +108,7 @@ export const buildMcpContextFromChat = (
       )
     : undefined;
   return {
+    featureAccessSnapshot: deps.featureAccessSnapshot,
     ...(deps.testDependencies === undefined
       ? {}
       : { testDependencies: deps.testDependencies }),

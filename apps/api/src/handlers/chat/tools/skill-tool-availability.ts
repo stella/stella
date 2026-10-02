@@ -13,6 +13,8 @@ import {
 } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import type { MemberRole } from "@/api/lib/member-roles";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 
@@ -21,15 +23,30 @@ import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
  * the deployment feature it is tagged with and the member-role predicate the
  * MCP surface applies. Chat-only tools carry no such gates.
  */
-const isRegistryToolUsable = (
-  toolName: string,
-  memberRole: MemberRole,
-): boolean => {
+const isRegistryToolUsable = ({
+  toolName,
+  memberRole,
+  context,
+}: {
+  toolName: string;
+  memberRole: MemberRole;
+  context: McpFeatureAccessContext;
+}): boolean => {
   const definition = getStaticMcpToolDefinition(toolName);
   if (definition === undefined) {
-    return true;
+    return isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: toolName,
+    });
   }
   return (
+    isMcpDescriptorFeatureEnabled({
+      context,
+      kind: "tools",
+      id: definition.name,
+      featureId: definition.featureId,
+    }) &&
     isMcpToolFeatureEnabled(definition.feature) &&
     (definition.isVisibleToMemberRole?.(memberRole) ?? true)
   );
@@ -42,9 +59,11 @@ const isRegistryToolUsable = (
  * `resolveSkillToolAvailability`.
  */
 const chatOfferedToolNames = ({
+  context,
   memberRole,
   tools,
 }: {
+  context: McpFeatureAccessContext;
   memberRole: MemberRole;
   tools: ChatToolMap;
 }): ReadonlySet<string> => {
@@ -52,7 +71,7 @@ const chatOfferedToolNames = ({
     tool === undefined ? [] : [name],
   );
   if (names.includes(CODE_MODE_EXECUTE_TOOL_NAME)) {
-    names.push(...chatScriptReadToolNames());
+    names.push(...chatScriptReadToolNames(context));
   }
   for (const [readName, directTool] of Object.entries(
     DIRECT_ONLY_CHAT_READ_TOOLS,
@@ -62,7 +81,9 @@ const chatOfferedToolNames = ({
     }
   }
   return new Set(
-    names.filter((name) => isRegistryToolUsable(name, memberRole)),
+    names.filter((name) =>
+      isRegistryToolUsable({ toolName: name, memberRole, context }),
+    ),
   );
 };
 
@@ -92,6 +113,7 @@ export const chatToolNamesForSkills = ({
     skillMetadata: undefined,
   });
   return chatOfferedToolNames({
+    context: props,
     memberRole: props.memberRole,
     tools:
       toolScope === undefined

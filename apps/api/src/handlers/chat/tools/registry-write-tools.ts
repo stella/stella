@@ -20,6 +20,11 @@ import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import type { WithToolSchemaInputs } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import {
+  hiddenMcpDescriptorIds,
+  scopeMcpDescriptorProse,
+} from "@/api/mcp/feature-access-prose";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -94,6 +99,10 @@ export const buildChatWriteTools = (
 ): ChatToolMap => {
   const { refRegistry, toolDefectMemo, ...contextDeps } = props;
   const context = buildMcpContextFromChat(contextDeps);
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
 
   const tools: ChatToolMap = {};
   for (const toolName of projectedWriteToolNames()) {
@@ -101,6 +110,16 @@ export const buildChatWriteTools = (
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat write tool ${toolName} is missing from the static registry`);
+    if (
+      !isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: definition.name,
+        featureId: definition.featureId,
+      })
+    ) {
+      continue;
+    }
     const inputSchema =
       "unavailableInputParams" in entry
         ? toToolInputSchema(
@@ -115,7 +134,7 @@ export const buildChatWriteTools = (
 
     tools[toolName] = toolDefinition({
       name: toolName,
-      description,
+      description: scopeMcpDescriptorProse(description, hiddenIds),
       inputSchema,
     }).server(async (args: unknown) => {
       const toolArgs = isRecord(args) ? args : {};

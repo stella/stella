@@ -38,6 +38,7 @@ export type RegistryDelta = {
 export type RegistryCacheFile = {
   version: number;
   serverOrigin: string;
+  credentialFingerprint?: string;
   fetchedAt: string;
   ttlSeconds: number;
   toolsListHash: string;
@@ -76,6 +77,10 @@ export const cacheDir = (env: CacheEnv): string => {
 /** A stable sha256 hex of the server origin, used as the cache filename. */
 export const originHash = (serverOrigin: string): string =>
   createHash("sha256").update(serverOrigin).digest("hex");
+
+/** One-way credential identity; the registry cache never stores its bearer token. */
+export const credentialFingerprint = (token: string): string =>
+  createHash("sha256").update(token).digest("hex");
 
 /** The cache file path for a given origin (one file per origin; spec S5.5 rule 5). */
 export const cachePathFor = (serverOrigin: string, env: CacheEnv): string =>
@@ -215,6 +220,17 @@ const parseListings = (value: unknown): RegistryToolListing[] | undefined => {
       description: entry["description"],
       inputSchema: entry["inputSchema"],
     };
+    const featureId = entry["featureId"];
+    if (featureId !== undefined) {
+      if (
+        typeof featureId !== "string" ||
+        featureId.length === 0 ||
+        featureId.length > 128
+      ) {
+        return undefined;
+      }
+      listing.featureId = featureId;
+    }
     const annotations = entry["annotations"];
     if (isRecord(annotations)) {
       const hints: { readOnlyHint?: boolean; destructiveHint?: boolean } = {};
@@ -295,6 +311,13 @@ export const readCacheFile = async (
     return undefined;
   }
   const serverOrigin = value["serverOrigin"];
+  const fingerprint = value["credentialFingerprint"];
+  if (
+    fingerprint !== undefined &&
+    (typeof fingerprint !== "string" || !/^[a-f0-9]{64}$/u.test(fingerprint))
+  ) {
+    return undefined;
+  }
   const fetchedAt = value["fetchedAt"];
   const ttlSeconds = value["ttlSeconds"];
   const toolsListHash = value["toolsListHash"];
@@ -328,6 +351,9 @@ export const readCacheFile = async (
   return {
     version: CACHE_SCHEMA_VERSION,
     serverOrigin,
+    ...(typeof fingerprint === "string"
+      ? { credentialFingerprint: fingerprint }
+      : {}),
     fetchedAt,
     ttlSeconds,
     toolsListHash,
