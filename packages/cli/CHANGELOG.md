@@ -1,5 +1,17 @@
 # @stll/cli
 
+## 3.3.4
+
+### Patch Changes
+
+- [#4383](https://github.com/stella/stella/pull/4383) [`c3b7126`](https://github.com/stella/stella/commit/c3b7126d592481ebd098379dddafaa9fa96801d5) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Generate CLI route maps and tool annotations from committed inputs before building.
+
+## 3.3.3
+
+### Patch Changes
+
+- [#4426](https://github.com/stella/stella/pull/4426) [`802b552`](https://github.com/stella/stella/commit/802b5523fe77710018bce9e8385801257bbae1c6) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Refresh the generated command catalog.
+
 ## 3.3.2
 
 ### Patch Changes

@@ -15,6 +15,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workspace_schema",
     consumesServices: false,
   },

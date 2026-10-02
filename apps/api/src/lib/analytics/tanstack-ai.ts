@@ -30,6 +30,8 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import { emitPromptCacheMetric } from "@/api/lib/observability/request-metrics";
+import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import {
   getTanStackTextModelInfoById,
   getTanStackTextModelInfoForRole,
@@ -118,6 +120,12 @@ type TanStackAIAnalyticsProps = {
    * organization from `usageMetering` and may omit this.
    */
   organizationId?: SafeId<"organization"> | null;
+  /**
+   * The surface whose model calls report their input tokens and prompt-cache
+   * hit rate as a metric (`emitPromptCacheMetric`), one line per call that
+   * reported usage, finished or failed. Omitted: no metric.
+   */
+  promptCacheSurface?: PromptCacheMetricSurface | undefined;
   usageMetering?: TanStackAIUsageMetering;
 };
 
@@ -615,6 +623,33 @@ export const createTanStackAIAnalyticsCallbacks = ({
     run.usage.completionTokens += usageSnapshot.value.completionTokens;
     run.usage.totalTokens += usageSnapshot.value.totalTokens;
     run.usageReported = true;
+    if (config.promptCacheSurface !== undefined) {
+      const promptTokens = Result.try({
+        try: () =>
+          normalizeProviderPromptTokens({
+            provider: resolvedModelInfo.provider,
+            modelId: resolvedModelInfo.modelId,
+            promptTokens: usage.promptTokens,
+            cacheReadTokens: usage.promptTokensDetails?.cachedTokens ?? 0,
+            cacheWriteTokens: usage.promptTokensDetails?.cacheWriteTokens ?? 0,
+          }),
+        catch: (error) => error,
+      });
+      // A payload that cannot be normalized is reported once, by the metering
+      // below, which normalizes the same usage; the metric skips the call.
+      if (Result.isOk(promptTokens)) {
+        // Per model call rather than per run: a run parked at an approval or
+        // a client tool reaches no terminal hook, and its calls count too.
+        const { cacheReadTokens, cacheWriteTokens, uncachedInputTokens } =
+          promptTokens.value;
+        emitPromptCacheMetric({
+          cachedInputTokens: cacheReadTokens,
+          inputTokens: uncachedInputTokens + cacheReadTokens + cacheWriteTokens,
+          provider: resolvedModelInfo.provider,
+          surface: config.promptCacheSurface,
+        });
+      }
+    }
 
     const metering = config.usageMetering;
     if (metering) {

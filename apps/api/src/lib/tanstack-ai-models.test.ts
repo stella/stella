@@ -634,87 +634,172 @@ describe("TanStack text model resolution", () => {
     expect(model.adapter.name).toBe("bedrock-converse");
   });
 
-  test("sends a Bedrock model an attached image as its bytes", async () => {
-    const model = getTanStackTextModelForRole(
-      "chat",
-      orgConfigForProvider("bedrock"),
-      {
+  test.each(["within-limit", "oversized"] as const)(
+    "sends a Bedrock model a valid %s image within provider limits",
+    async (size) => {
+      const orgConfig = orgConfigForProvider("bedrock");
+      orgConfig.overrideModels.chat = {
+        provider: "bedrock",
+        modelId: "us.amazon.nova-lite-v1:0",
+      };
+      const model = getTanStackTextModelForRole("chat", orgConfig, {
         dataClass: "customer",
         managedAIResidency: "eu",
         organizationId: orgId,
-      },
-    );
-    const png = new Uint8Array([
-      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
-    ]);
-    const bodies: unknown[] = [];
-    const originalFetch = globalThis.fetch;
-    globalThis.fetch = Object.assign(
-      async (
-        input: Parameters<typeof globalThis.fetch>[0],
-        init?: RequestInit,
-      ): Promise<Response> => {
-        const request =
-          input instanceof Request
-            ? input
-            : new Request(input.toString(), init);
-        bodies.push(await request.clone().json());
-        return new Response(JSON.stringify({ message: "stop" }), {
-          status: 400,
-          headers: {
-            "content-type": "application/json",
-            "x-amzn-errortype": "ValidationException",
-          },
-        });
-      },
-      { preconnect: originalFetch.preconnect },
-    );
-    try {
-      for await (const _chunk of model.adapter.chatStream({
-        logger: resolveDebugOption(false),
+      });
+      const validPng = Buffer.from(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/ltyVPwAAAABJRU5ErkJggg==",
+        "base64",
+      );
+      const png =
+        size === "oversized"
+          ? Buffer.concat([
+              validPng,
+              Buffer.alloc(3_750_001 - validPng.byteLength),
+            ])
+          : validPng;
+      expect(png.byteLength > 3_750_000).toBe(size === "oversized");
+      const bodies: unknown[] = [];
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = Object.assign(
+        async (
+          input: Parameters<typeof globalThis.fetch>[0],
+          init?: RequestInit,
+        ): Promise<Response> => {
+          const request =
+            input instanceof Request
+              ? input
+              : new Request(input.toString(), init);
+          bodies.push(await request.clone().json());
+          return new Response(JSON.stringify({ message: "stop" }), {
+            status: 400,
+            headers: {
+              "content-type": "application/json",
+              "x-amzn-errortype": "ValidationException",
+            },
+          });
+        },
+        { preconnect: originalFetch.preconnect },
+      );
+      try {
+        for await (const _chunk of model.adapter.chatStream({
+          logger: resolveDebugOption(false),
+          messages: [
+            {
+              role: "user",
+              content: [
+                { type: "text", content: "Describe the attached image." },
+                {
+                  type: "image",
+                  // How a chat attachment reaches the model.
+                  source: {
+                    type: "url",
+                    value: toDataUrl(png, "image/png"),
+                    mimeType: "image/png",
+                  },
+                },
+              ],
+            },
+          ],
+          model: model.modelId,
+        })) {
+          // The refusal ends the stream once the request is written.
+        }
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+
+      expect(bodies).toHaveLength(1);
+      expect(bodies.at(0)).toMatchObject({
         messages: [
           {
             role: "user",
             content: [
-              { type: "text", content: "Describe the attached image." },
+              { text: "Describe the attached image." },
               {
-                type: "image",
-                // How a chat attachment reaches the model.
-                source: {
-                  type: "url",
-                  value: toDataUrl(png, "image/png"),
-                  mimeType: "image/png",
+                image: {
+                  format: size === "oversized" ? "webp" : "png",
+                  source: {
+                    bytes:
+                      size === "oversized"
+                        ? expect.any(String)
+                        : Buffer.from(png).toString("base64"),
+                  },
                 },
               },
             ],
           },
         ],
-        model: model.modelId,
-      })) {
-        // The refusal ends the stream once the request is written.
-      }
-    } finally {
-      globalThis.fetch = originalFetch;
-    }
+      });
+    },
+  );
 
-    expect(bodies).toHaveLength(1);
-    expect(bodies.at(0)).toMatchObject({
-      messages: [
-        {
-          role: "user",
-          content: [
-            { text: "Describe the attached image." },
+  test.each([
+    "us.amazon.nova-micro-v1:0",
+    "openai.gpt-oss-120b-1:0",
+    "openai.gpt-oss-20b-1:0",
+  ])(
+    "refuses images for text-only Bedrock model %s before fetch",
+    async (modelId) => {
+      const orgConfig = orgConfigForProvider("bedrock");
+      orgConfig.overrideModels.chat = { provider: "bedrock", modelId };
+      const model = getTanStackTextModelForRole("chat", orgConfig, {
+        dataClass: "customer",
+        managedAIResidency: "eu",
+        organizationId: orgId,
+      });
+      let fetchCalls = 0;
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = Object.assign(
+        async () => {
+          fetchCalls += 1;
+          return new Response(JSON.stringify({ message: "stop" }), {
+            status: 400,
+            headers: {
+              "content-type": "application/json",
+              "x-amzn-errortype": "ValidationException",
+            },
+          });
+        },
+        { preconnect: originalFetch.preconnect },
+      );
+      try {
+        const chunks = [];
+        for await (const chunk of model.adapter.chatStream({
+          logger: resolveDebugOption(false),
+          messages: [
             {
-              image: {
-                format: "png",
-                source: { bytes: Buffer.from(png).toString("base64") },
-              },
+              role: "user",
+              content: [
+                {
+                  type: "image",
+                  source: {
+                    type: "url",
+                    value:
+                      "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAFgwJ/ltyVPwAAAABJRU5ErkJggg==",
+                    mimeType: "image/png",
+                  },
+                },
+              ],
             },
           ],
-        },
-      ],
-    });
-  });
+          model: model.modelId,
+        })) {
+          chunks.push(chunk);
+        }
+        expect(chunks).toMatchObject([
+          {
+            type: "RUN_ERROR",
+            code: "image_input_unsupported",
+            error: { code: "image_input_unsupported" },
+          },
+        ]);
+        expect(fetchCalls).toBe(0);
+      } finally {
+        globalThis.fetch = originalFetch;
+      }
+    },
+  );
 
   test("normalizes existing Google regional BYOK selections to global", () => {
     const orgConfig = orgConfigForProvider("google", "eu");

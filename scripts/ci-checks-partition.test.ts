@@ -71,9 +71,25 @@ const readBaseline = (source: v.InferOutput<typeof workflowSchema>["jobs"]) => {
 const baseline = readBaseline(baseJobs);
 
 type Step = v.InferOutput<typeof jobSchema>["steps"][number];
+// A full commit SHA pin is version metadata that dependency updates bump; the
+// action path, the fact that it is pinned, and everything else about the step
+// must stay intact. A branch or tag ref is left as written, so moving a step
+// from a pin to a mutable ref still reads as a modified check.
+const PINNED_REF = /@[0-9a-f]{40}$/u;
+const usesOf = (step: Step): string | undefined =>
+  v.parse(v.looseObject({ uses: v.optional(v.string()) }), step).uses;
+const withoutActionRef = (step: Step): Step => {
+  const uses = usesOf(step);
+  return uses === undefined
+    ? step
+    : { ...step, uses: uses.replace(PINNED_REF, "@<pinned>") };
+};
+const setupSteps = (steps: readonly Step[]) =>
+  steps.filter(({ name }) => prerequisites.has(name)).map(withoutActionRef);
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(withoutActionRef)
     .toSorted((left, right) => left.name.localeCompare(right.name));
 
 type CoverageOptions = {
@@ -169,17 +185,13 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       ...originalScope
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
-    const originalSetup = originalSteps.filter(({ name }) =>
-      prerequisites.has(name),
-    );
+    const originalSetup = setupSteps(originalSteps);
     expect(originalSetup).toHaveLength(prerequisites.size);
     expect(scope).toEqual(originalScope);
     expect(timeout).toBe(
       partitionIds.at(index) === "ci-checks-generated" ? 60 : originalTimeout,
     );
-    expect(steps.filter(({ name }) => prerequisites.has(name))).toEqual(
-      originalSetup,
-    );
+    expect(setupSteps(steps)).toEqual(originalSetup);
     const installIndex = steps.findIndex(
       ({ name }) => name === "Install dependencies",
     );
@@ -224,6 +236,68 @@ test("CI coverage accepts a new check alongside every merge-base check", () => {
   expect(() =>
     expectCoverage({ current: renamed, base: baseSteps, removed: [] }),
   ).toThrow("toEqual");
+});
+
+const otherSha = "0".repeat(40);
+const pinnedAction = (
+  steps: readonly Step[],
+  names: (name: string) => boolean,
+) => {
+  const step = steps.find(
+    (current) => names(current.name) && PINNED_REF.test(usesOf(current) ?? ""),
+  );
+  const uses = step === undefined ? undefined : usesOf(step);
+  if (step === undefined || uses === undefined) {
+    panic("Merge-base CI checks contain no SHA-pinned action step");
+  }
+  const withUses = (next: string) =>
+    steps.map((current) =>
+      current.name === step.name ? { ...current, uses: next } : current,
+    );
+  return { action: uses.replace(PINNED_REF, ""), withUses };
+};
+
+test("CI coverage accepts a pinned action bump but not a different action or a mutable ref", () => {
+  const { action, withUses } = pinnedAction(
+    baseSteps,
+    (name) => !prerequisites.has(name),
+  );
+  expectCoverage({
+    current: withUses(`${action}@${otherSha}`),
+    base: baseSteps,
+    removed: [],
+  });
+  for (const changed of [
+    `${action}-other@${otherSha}`,
+    `${action}@main`,
+    `${action}@v1`,
+  ]) {
+    expect(
+      () =>
+        expectCoverage({
+          current: withUses(changed),
+          base: baseSteps,
+          removed: [],
+        }),
+      changed,
+    ).toThrow("toEqual");
+  }
+});
+
+test("each leg's setup accepts a pinned action bump but not a mutable ref", () => {
+  const leg = partitions.at(0);
+  if (!leg) {
+    panic("CI checks have no legs");
+  }
+  const { action, withUses } = pinnedAction(leg.steps, (name) =>
+    prerequisites.has(name),
+  );
+  expect(setupSteps(withUses(`${action}@${otherSha}`))).toEqual(
+    setupSteps(leg.steps),
+  );
+  expect(setupSteps(withUses(`${action}@main`))).not.toEqual(
+    setupSteps(leg.steps),
+  );
 });
 
 test("CI coverage rejects duplicate and modified checks", () => {

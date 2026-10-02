@@ -33,7 +33,7 @@ export const INCOMPLETE_STREAM_CODE = "stream_incomplete";
 const isTerminal = (chunk: StreamChunk): boolean =>
   chunk.type === EventType.RUN_FINISHED || chunk.type === EventType.RUN_ERROR;
 
-const runError = (
+export const runError = (
   model: string,
   error: { code?: string | undefined; message: string },
   rawEvent?: unknown,

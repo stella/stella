@@ -1034,50 +1034,32 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
 
 const checkCounterpartySubjectSchema = v.variant("type", [
   v.strictObject({
-    type: v.pipe(
-      v.literal("company-id"),
-      v.description("A registered business, by its national business ID."),
-    ),
+    type: v.pipe(v.literal("company-id"), v.description("Business ID")),
     company_id: v.pipe(
       v.string(),
       v.minLength(1),
       v.maxLength(32),
       v.description(
-        "National business ID, e.g. the Czech IČO 26863154. The sanctions " +
-          "check reads the company's name from its register (ARES for CZ, " +
-          "RPO for SK) and screens that name.",
+        "Business ID (e.g. IČO 26863154); sanctions resolves its registered name.",
       ),
     ),
     country: v.optional(
       countryInputSchema(
-        "Country that issued the ID, as an ISO 3166-1 alpha-2 code or the " +
-          "country's name: CZ (the default) or SK. The register checks " +
-          "cover CZ only.",
+        "ID country: CZ (default) or SK; register checks cover CZ only.",
       ),
     ),
   }),
   v.strictObject({
-    type: v.pipe(
-      v.literal("tax-id"),
-      v.description("A taxpayer, by its tax ID."),
-    ),
+    type: v.pipe(v.literal("tax-id"), v.description("Taxpayer")),
     tax_id: v.pipe(
       v.string(),
       v.minLength(1),
       v.maxLength(32),
-      v.description(
-        "Tax ID in the check's country, e.g. the Czech DIČ CZ45274649",
-      ),
+      v.description("Tax ID, e.g. DIČ CZ45274649"),
     ),
   }),
   v.strictObject({
-    type: v.pipe(
-      v.literal("person"),
-      v.description(
-        "A natural person, by name. cz-insolvency also needs the full birth " +
-          "date; the sanctions check uses whatever date and nationalities are known.",
-      ),
-    ),
+    type: v.pipe(v.literal("person"), v.description("Person")),
     first_name: v.pipe(
       v.string(),
       v.minLength(2),
@@ -1088,15 +1070,14 @@ const checkCounterpartySubjectSchema = v.variant("type", [
       v.string(),
       v.minLength(2),
       v.maxLength(100),
-      v.description("Last name (surname)"),
+      v.description("Surname"),
     ),
     birth_date: v.optional(
       v.pipe(
         ISO_DATE_SCHEMA,
         v.maxLength(10),
         v.description(
-          "Full birth date. When only the year or the month is known, send " +
-            "date_of_birth instead; never invent a day.",
+          "Full birth date; use date_of_birth for partial dates, never invent a day.",
         ),
       ),
     ),
@@ -1104,8 +1085,7 @@ const checkCounterpartySubjectSchema = v.variant("type", [
       v.pipe(
         dateOfBirthInputSchema,
         v.description(
-          "Birth date at the precision known, in the shape read_contact " +
-            "returns: year only, year and month, or a full date.",
+          "Birth date at known precision, as read_contact returns.",
         ),
       ),
     ),
@@ -1113,33 +1093,27 @@ const checkCounterpartySubjectSchema = v.variant("type", [
       v.pipe(
         v.array(countryInputSchema("Nationality country")),
         v.maxLength(MAX_CONTACT_NATIONALITY_CODES),
-        v.description(
-          "Nationalities, as ISO 3166-1 alpha-2 codes; used by the sanctions check",
-        ),
+        v.description("Known nationalities for sanctions"),
       ),
     ),
   }),
   v.strictObject({
     type: v.pipe(
       v.literal("organization"),
-      v.description(
-        "A company or other organization, by name. For the sanctions check.",
-      ),
+      v.description("Organization name (sanctions only)"),
     ),
     name: v.pipe(
       v.string(),
       v.minLength(1),
       v.maxLength(512),
-      v.description("The organization's name as registered"),
+      v.description("Registered name"),
     ),
     company_id: v.optional(
       v.pipe(
         v.string(),
         v.minLength(1),
         v.maxLength(32),
-        v.description(
-          "Its registration number, if known; screened beside the name",
-        ),
+        v.description("Known registration number; screened with the name"),
       ),
     ),
   }),
@@ -1149,20 +1123,15 @@ const checkCounterpartyInputSchema = v.strictObject({
   check: v.pipe(
     v.picklist(COUNTERPARTY_CHECK_KINDS),
     v.description(
-      "Source to screen against. cz-insolvency: the Czech insolvency " +
-        "register (ISIR), pending and ended proceedings; takes a company " +
-        "or a person with a full birth date. cz-vat-reliability: the Czech " +
-        "VAT register, unreliable-payer status and published bank " +
-        "accounts; takes a tax ID, or a company ID sent as CZ + IČO and " +
-        "marked derived. sanctions: every sanctions list stella keeps (the " +
-        "EU, UN and national lists), one outcome per list; takes a company " +
-        "ID, an organization by name, or a person by name with any known " +
-        "birth date and nationalities.",
+      "cz-insolvency: ISIR proceedings, company ID or person with full birth date. " +
+        "cz-vat-reliability: unreliable payer and bank accounts, tax ID or derived CZ+IČO. " +
+        "sanctions: all EU, UN and national lists; company ID, organization name, " +
+        "or person with any known birth date and nationalities.",
     ),
   ),
   subject: v.pipe(
     checkCounterpartySubjectSchema,
-    v.description("The company or person to screen"),
+    v.description("Subject to screen"),
   ),
 });
 
@@ -2439,6 +2408,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "people or organizations.",
     inputSchema: listContactsArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "excluded",
       reason: "dynamic_tenant_payload",
@@ -2515,6 +2485,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
     scope: "stella:read",
@@ -2556,6 +2527,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       }),
     },
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
     scope: "stella:read",
@@ -2577,6 +2549,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [

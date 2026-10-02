@@ -5,7 +5,11 @@ import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  getModelImageInputCapability,
+  TANSTACK_AI_PROVIDERS,
+} from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
@@ -33,8 +37,10 @@ import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encodeChatModelSelection } from "@/api/lib/chat-model-selection";
+import { BEDROCK_IMAGE_MAX_BYTES } from "@/api/lib/chat/provider-image-input";
 import type { StreamChatChunksOptions } from "@/api/lib/chat/tanstack-chat-runtime";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
+import { toDataUrl } from "@/api/lib/data-url";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   APPROVAL_TOOL_NAME,
@@ -95,6 +101,7 @@ import type {
   ProviderWireReplay,
   ReplayedRequest,
 } from "@/api/tests/helpers/provider-wire-replay";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import {
   replayedHarnessModel,
   WIRE_PROMPT_SECTIONS,
@@ -387,15 +394,16 @@ afterAll(async () => {
 
 /** The organization whose chat model is `endpoint`'s, with the provider's
  *  other model answering side calls (the thread title). */
-const orgConfigOf = (endpoint: ModelEndpoint) => {
-  const model = modelOf(cassettes, endpoint);
-  return wireOrgAIConfig({
+const orgConfigOf = (
+  endpoint: ModelEndpoint,
+  model = modelOf(cassettes, endpoint),
+) =>
+  wireOrgAIConfig({
     apiKey: "cassette-replay-no-credentials",
     chatModel: model,
     provider: endpoint.provider,
     sideModel: wireSideModel(endpoint.provider, model),
   });
-};
 
 /**
  * The thread `threadId` opened in a page of an organization whose chat model
@@ -404,16 +412,18 @@ const orgConfigOf = (endpoint: ModelEndpoint) => {
 const openSession = async ({
   caching,
   endpoint,
+  modelId,
   threadId,
   tools,
 }: {
   caching: CachingSetting;
   endpoint: ModelEndpoint;
+  modelId?: string;
   threadId: SafeId<"chatThread">;
   tools: ToolSurface;
 }) => {
   const { provider } = endpoint;
-  const model = modelOf(cassettes, endpoint);
+  const model = modelId ?? modelOf(cassettes, endpoint);
   const seam = replayedHarnessModel({
     prompts: createPromptPrefixLedger(),
     provider,
@@ -422,7 +432,7 @@ const openSession = async ({
   const harness = createApprovalHarness({
     ids,
     model: seam,
-    organizationAIConfig: orgConfigOf(endpoint),
+    organizationAIConfig: orgConfigOf(endpoint, model),
     promptCachingEnabled: caching === "on",
     safeDb,
     scopedDb,
@@ -799,6 +809,230 @@ const turnViolations = async (
 const CONVERSATION_TIMEOUT_MS = 60_000;
 
 // --- Tests --------------------------------------------------------------------
+
+const checkImageRequest = async ({
+  provider,
+  modelId,
+  status,
+}: {
+  provider: TanStackAIProvider;
+  modelId: string;
+  status: "supported" | "unlisted";
+}) => {
+  expect(getModelImageInputCapability({ modelId, provider })).toBe(
+    status === "unlisted" ? undefined : status,
+  );
+  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(threadId);
+  const session = await openSession({
+    caching: "off",
+    endpoint: { provider, slot: "recorded" },
+    modelId,
+    threadId,
+    tools: "default",
+  });
+  const logs = installRecordingLogger();
+  try {
+    replay.serve(session.answer);
+    const part = await composerAttachmentPart(ATTACHMENTS.image);
+    if (part.type !== "image" || part.source.type !== "url") {
+      panic("The composer image fixture must hold an inline image URL");
+    }
+    const payload = part.source.value.slice(part.source.value.indexOf(",") + 1);
+    await session.client.sendUserContent(Bun.randomUUIDv7(), [
+      { type: "text", content: "Read this image." },
+      part,
+    ]);
+    await session.harness.expectSoundWebClient({
+      client: session.client,
+      threadId,
+    });
+    const requests = chatRequestsOf(session.seam.sentRequests());
+    expect(requests.length).toBeGreaterThan(0);
+    expect(requests.some(({ body }) => body.includes(payload))).toBe(true);
+    expect(requests.flatMap(findProviderRuleViolations)).toEqual([]);
+    const unknownLogs = logs.records.filter(
+      ({ message }) => message === "ai.image_capability_unknown",
+    );
+    if (status === "unlisted") {
+      expect(unknownLogs.length).toBeGreaterThan(0);
+      expect(
+        unknownLogs.every(
+          ({ attributes }) =>
+            attributes?.["provider"] === provider &&
+            attributes["image_capability_unknown"] === true &&
+            attributes["reason"] === "unlisted_model",
+        ),
+      ).toBe(true);
+    } else {
+      expect(unknownLogs).toEqual([]);
+    }
+  } finally {
+    logs.restore();
+    await session.close();
+  }
+};
+
+const checkImageRefusal = async ({
+  provider,
+  modelId,
+}: {
+  provider: TanStackAIProvider;
+  modelId: string;
+}) => {
+  const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+  seededThreadIds.push(threadId);
+  const session = await openSession({
+    caching: "off",
+    endpoint: { provider, slot: "recorded" },
+    modelId,
+    threadId,
+    tools: "default",
+  });
+  try {
+    replay.serve(session.answer);
+    const exchanges = session.harness.recordThread(threadId);
+    await session.client.sendUserContent(Bun.randomUUIDv7(), [
+      { type: "text", content: "Read this image." },
+      await composerAttachmentPart(ATTACHMENTS.image),
+    ]);
+    expect(exchanges).toHaveLength(1);
+    const response = exchanges.at(0)?.response;
+    expect(response).toMatchObject({ status: 422 });
+    expect(JSON.parse(response?.body ?? "null")).toMatchObject({
+      code: "image_input_unsupported",
+    });
+    expect(session.client.runtimeState().hasError).toBe(true);
+    expect(session.seam.sentRequests()).toEqual([]);
+  } finally {
+    await session.close();
+  }
+};
+
+// The catalog's image capability decides: an unsupported entry refuses before
+// dispatch, and a model the catalog does not list is sent and logged. Offered
+// models and unlisted choices both go through the real send path and adapter.
+describe("image input at the provider request boundary", () => {
+  for (const provider of TANSTACK_AI_PROVIDERS) {
+    const models: readonly string[] = BYOK_MODEL_OPTIONS[provider];
+    const capable = models.find(
+      (modelId) =>
+        getModelImageInputCapability({ modelId, provider }) === "supported",
+    );
+    if (capable === undefined) {
+      panic(`The ${provider} image matrix needs an image-capable model`);
+    }
+    for (const imageModel of [
+      { status: "supported", modelId: capable },
+      { status: "unlisted", modelId: "stella-cassette-unknown-vision-model" },
+    ] as const) {
+      test(
+        `${provider}/${imageModel.status}: image input sends a valid request`,
+        async () => await checkImageRequest({ provider, ...imageModel }),
+        propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+      );
+    }
+
+    for (const modelId of models.filter(
+      (candidate) =>
+        getModelImageInputCapability({ modelId: candidate, provider }) ===
+        "unsupported",
+    )) {
+      test(
+        `${provider}/${modelId}: a model without image input refuses before any provider request`,
+        async () => await checkImageRefusal({ provider, modelId }),
+        propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+      );
+    }
+  }
+
+  test(
+    "Bedrock re-encodes an image above its provider cap before sending",
+    async () => {
+      const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(threadId);
+      const session = await openSession({
+        caching: "off",
+        endpoint: { provider: "bedrock", slot: "recorded" },
+        threadId,
+        tools: "default",
+      });
+      try {
+        replay.serve(session.answer);
+        const original = Buffer.from(
+          "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
+          "base64",
+        );
+        // Trailing padding retains decodable pixels while making the encoded
+        // image exceed Bedrock's cap within the upload limit.
+        const oversized = Buffer.alloc(BEDROCK_IMAGE_MAX_BYTES + 1);
+        original.copy(oversized);
+        expect(oversized.byteLength).toBeGreaterThan(BEDROCK_IMAGE_MAX_BYTES);
+        expect(oversized.byteLength).toBeLessThan(10 * 1024 * 1024);
+        await session.client.sendUserContent(Bun.randomUUIDv7(), [
+          { type: "text", content: "Read this image." },
+          {
+            type: "image",
+            source: {
+              type: "url",
+              value: toDataUrl(oversized, "image/png"),
+              mimeType: "image/png",
+            },
+            metadata: { filename: "oversized.png" },
+          },
+        ]);
+        await session.harness.expectSoundWebClient({
+          client: session.client,
+          threadId,
+        });
+        const requests = chatRequestsOf(session.seam.sentRequests());
+        expect(requests.length).toBeGreaterThan(0);
+        expect(requests.flatMap(findProviderRuleViolations)).toEqual([]);
+        const images: Record<string, unknown>[] = [];
+        const visit = (value: unknown): void => {
+          if (isUnknownArray(value)) {
+            for (const item of value) {
+              visit(item);
+            }
+            return;
+          }
+          if (!isRecord(value)) {
+            return;
+          }
+          const image = value["image"];
+          if (isRecord(image)) {
+            images.push(image);
+          }
+          for (const item of Object.values(value)) {
+            visit(item);
+          }
+        };
+        for (const request of requests) {
+          visit(parsedBody(request));
+        }
+        expect(images.length).toBeGreaterThan(0);
+        for (const image of images) {
+          expect(image["format"]).toBe("webp");
+          const source = image["source"];
+          if (!isRecord(source) || typeof source["bytes"] !== "string") {
+            panic("A Bedrock image request must hold base64 image bytes");
+          }
+          const encoded = Buffer.from(source["bytes"], "base64");
+          expect(encoded.byteLength).toBeLessThanOrEqual(
+            BEDROCK_IMAGE_MAX_BYTES,
+          );
+          expect(await new Bun.Image(encoded).metadata()).toMatchObject({
+            width: 1,
+            height: 1,
+          });
+        }
+      } finally {
+        await session.close();
+      }
+    },
+    propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
+  );
+});
 
 describe(`chat requests: ${String(combinations.included.length)} combinations the product can produce (${String(combinations.total - combinations.included.length)} excluded by a production predicate); ${runPlan.mode}: ${String(selectedCombinations.length)} run`, () => {
   test("every combination is producible or excluded by a named predicate", () => {

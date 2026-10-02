@@ -1,9 +1,7 @@
-import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
+import { ADMITTED_PUBLIC_COUNTRIES } from "./public-country-capability";
 
-/** Statute jurisdictions admitted to public readers; independent of case-law readiness. */
-export const PUBLIC_LEGISLATION_COUNTRIES = [
-  "CZE",
-] as const satisfies readonly CaseLawJurisdiction[];
+/** Statute jurisdictions admitted by the shared public capability. */
+export const PUBLIC_LEGISLATION_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES;
 
 export type PublicLegislationCountry =
   (typeof PUBLIC_LEGISLATION_COUNTRIES)[number];
