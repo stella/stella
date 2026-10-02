@@ -168,7 +168,7 @@ test("each suite follows its own import closure without planning unrelated sibli
       ["corpus", "apps/api/src/corpus-only.ts"],
       ["valkey", "apps/api/src/valkey-only.ts"],
       ["collab", "packages/collaboration-only/src/new.ts"],
-    ]) {
+    ] as const) {
       expect(planServiceSuites([file], root), file).toEqual({
         postgres: suite === "postgres",
         corpus: suite === "corpus",

@@ -111,6 +111,7 @@ const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
       }
     }
   }
+  return undefined;
 };
 
 /** Workspace packages are scoped as units, including exports and non-code assets.
@@ -186,6 +187,12 @@ export const serviceSuiteDependencies = (
     )) {
       if (specifier.startsWith("@stll/")) {
         const name = specifier.split("/").at(1);
+        if (name === undefined) {
+          return {
+            status: "unresolved" as const,
+            message: `Invalid workspace import: ${specifier}`,
+          };
+        }
         const scope = `packages/${name}/`;
         if (packageScopes.has(scope)) {
           continue;
@@ -278,17 +285,21 @@ export const planServiceSuites = (
         defaultGraphs.set(suite, graph);
       }
     }
+    let selected: boolean;
     switch (graph.status) {
       case "unresolved":
         console.error(graph.message);
-        return true;
+        selected = true;
+        break;
       case "complete":
-        return files.some(
+        selected = files.some(
           (file) =>
             graph.dependencies.has(file) ||
             [...graph.packageScopes].some((scope) => file.startsWith(scope)),
         );
+        break;
     }
+    return selected;
   };
   return {
     postgres: required("postgres"),

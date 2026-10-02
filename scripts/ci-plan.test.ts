@@ -1885,14 +1885,17 @@ test("folded service suites preserve both scopes and independent verdicts", () =
     "Run Valkey-gated API suites",
     "Run cross-replica collaboration suite",
   ]);
-  const suiteScopes = new Map([
+  const suiteScopes = [
     ["Run Postgres-gated API suites", "postgres_suites_required"],
     ["Run corpus engine suites", "corpus_suites_required"],
     ["Run Valkey-gated API suites", "valkey_suites_required"],
     ["Run cross-replica collaboration suite", "collaboration_suite_required"],
-  ]);
+  ] as const;
   for (const suite of suites) {
-    const scope = suiteScopes.get(suite.name);
+    const scope = suiteScopes.find(([name]) => name === suite.name)?.[1];
+    if (scope === undefined) {
+      throw new TypeError(`No service scope for ${suite.name}`);
+    }
     const predicate = `needs.ci-plan.outputs.${scope} == 'true'`;
     expect(suite.if).toBe(
       suite.run === "bun run test:postgres"
@@ -2409,7 +2412,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
         .replaceAll("always()", "true")
         .replace(
           /needs\.ci-plan\.outputs\.(\w+)/gu,
-          (_, scope: string) => `'${values[scope]}'`,
+          (_, scope: string) => `'${String(values[scope])}'`,
         )} ]]`,
     ]).exitCode;
   expect(evaluateStep(collaboration?.if ?? "false", planned)).toBe(0);
@@ -2420,7 +2423,7 @@ test("each folded service step follows its own dependency scope at PR depth", ()
     ["Corpus engine diagnostics and cleanup", "corpus_suites_required"],
     ["Run Valkey-gated API suites", "valkey_suites_required"],
     ["Run cross-replica collaboration suite", "collaboration_suite_required"],
-  ]) {
+  ] as const) {
     const predicate =
       jobSteps(ciJobs["service-suites"]).find((step) => step.name === name)
         ?.if ?? "false";
