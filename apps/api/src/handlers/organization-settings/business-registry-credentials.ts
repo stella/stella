@@ -22,6 +22,10 @@ import {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 const credentialRegistrySchema = t.UnionEnum(
   BUSINESS_REGISTRY_CREDENTIAL_SLUGS,
@@ -74,6 +78,10 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
     ),
   },
   async function* ({ body, safeDb, session, recordAuditEvent }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const credential = body.credential.trim();
     if (!credential || /[\r\n]/u.test(credential)) {
       return Result.err(
@@ -100,6 +108,7 @@ export const saveBusinessRegistryCredential = createSafeRootHandler(
       encryptRegistryCredential(session.activeOrganizationId, credential),
     );
     const probe = await executeRegistryLookup({
+      observer,
       handler: bindRegistryCredential(
         BUSINESS_REGISTRY_DISPATCH[body.registry],
         credential,

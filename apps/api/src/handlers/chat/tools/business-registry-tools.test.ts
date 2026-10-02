@@ -2,6 +2,7 @@ import { convertSchemaToJsonSchema } from "@tanstack/ai";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import type { RegistryHandler } from "@/api/lib/business-registries/dispatch";
 
@@ -25,12 +26,16 @@ const hasToolInputJsonSchema = (
 
 describe("createBusinessRegistryTools", () => {
   test("does not register the tool when no jurisdictions are enabled", () => {
-    const tools = createBusinessRegistryTools({ enabledHandlers: [] });
+    const tools = createBusinessRegistryTools({
+      organizationId: toSafeId<"organization">("fixture-org"),
+      enabledHandlers: [],
+    });
     expect(BUSINESS_REGISTRY_LOOKUP_TOOL_NAME in tools).toBe(false);
   });
 
   test("registers business_registry_lookup when at least one jurisdiction is enabled", () => {
     const tools = createBusinessRegistryTools({
+      organizationId: toSafeId<"organization">("fixture-org"),
       enabledHandlers: [BUSINESS_REGISTRY_DISPATCH.ares],
     });
     expect(tools[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]).toBeDefined();
@@ -38,6 +43,7 @@ describe("createBusinessRegistryTools", () => {
 
   test("registers the tool with multiple jurisdictions in the picklist", () => {
     const tools = createBusinessRegistryTools({
+      organizationId: toSafeId<"organization">("fixture-org"),
       enabledHandlers: [
         BUSINESS_REGISTRY_DISPATCH.ares,
         BUSINESS_REGISTRY_DISPATCH.brreg,
@@ -48,6 +54,7 @@ describe("createBusinessRegistryTools", () => {
 
   test("accepts the EU pseudo-jurisdiction (VIES)", () => {
     const tools = createBusinessRegistryTools({
+      organizationId: toSafeId<"organization">("fixture-org"),
       enabledHandlers: [BUSINESS_REGISTRY_DISPATCH.vies],
     });
     expect(tools[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME]).toBeDefined();
@@ -55,6 +62,7 @@ describe("createBusinessRegistryTools", () => {
 
   test("tells the model which enabled registries require canonical identifiers", () => {
     const tools = createBusinessRegistryTools({
+      organizationId: toSafeId<"organization">("fixture-org"),
       enabledHandlers: [
         BUSINESS_REGISTRY_DISPATCH.edgar,
         BUSINESS_REGISTRY_DISPATCH.vies,
@@ -90,9 +98,11 @@ describe("createBusinessRegistryTools", () => {
       },
     } satisfies RegistryHandler;
     const tool =
-      createBusinessRegistryTools({ enabledHandlers: [boundHandler] })[
-        BUSINESS_REGISTRY_LOOKUP_TOOL_NAME
-      ] ?? panic("Expected a registry tool");
+      createBusinessRegistryTools({
+        organizationId: toSafeId<"organization">("fixture-org"),
+        enabledHandlers: [boundHandler],
+      })[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME] ??
+      panic("Expected a registry tool");
     const execute =
       tool.execute ?? panic("Expected an executable registry tool");
 
@@ -125,9 +135,11 @@ describe("a jurisdiction with more than one register", () => {
 
   const executorFor = (handlers: readonly RegistryHandler[]) => {
     const tool =
-      createBusinessRegistryTools({ enabledHandlers: handlers })[
-        BUSINESS_REGISTRY_LOOKUP_TOOL_NAME
-      ] ?? panic("Expected a registry tool");
+      createBusinessRegistryTools({
+        organizationId: toSafeId<"organization">("fixture-org"),
+        enabledHandlers: handlers,
+      })[BUSINESS_REGISTRY_LOOKUP_TOOL_NAME] ??
+      panic("Expected a registry tool");
     return {
       tool,
       execute: tool.execute ?? panic("Expected an executable registry tool"),

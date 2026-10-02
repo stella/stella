@@ -12,6 +12,7 @@ import {
 } from "@/components/route-components";
 import { installChatRuntimeCleanup } from "@/features/chat/queries";
 import { installSessionChangeListener } from "@/lib/account/session-change-listener";
+import { listenForSessionDocumentRestore } from "@/lib/account/session-document";
 import { listenForSessionChange } from "@/lib/account/session-signal";
 import { installUserScopedStorage } from "@/lib/account/user-scoped-storage";
 import { createAnalyticsValue } from "@/lib/analytics/provider";
@@ -58,17 +59,7 @@ export function getRouter() {
     installUserScopedStorage(queryClient);
     installSessionChangeListener(queryClient, {
       listen: listenForSessionChange,
-      onRestore: (listener) => {
-        const onPageShow = (event: PageTransitionEvent) => {
-          if (event.persisted) {
-            listener();
-          }
-        };
-        window.addEventListener("pageshow", onPageShow);
-        return () => {
-          window.removeEventListener("pageshow", onPageShow);
-        };
-      },
+      onRestore: listenForSessionDocumentRestore,
       isHidden: () => document.visibilityState === "hidden",
       onVisible: (listener) => {
         const onChange = () => {

@@ -28,6 +28,7 @@ import {
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
 import { streamChat } from "@/api/handlers/chat/stream-chat";
+import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import { createStellaMcpToolSource } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import cancelTurn from "@/api/handlers/chat/turns/cancel";
@@ -43,6 +44,7 @@ import {
 import { readChatThreadNames } from "@/api/lib/chat/thread-names";
 import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat-turn-reaper";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import {
   findLiveViewViolations,
   findUnservedSnapshotMessages,
@@ -229,6 +231,8 @@ export type HarnessModel = Pick<
 >;
 
 export const createApprovalHarness = ({
+  beforeTurnSettles,
+  boundaryAnonymizer,
   ids,
   model,
   organizationAIConfig = orgAIConfig,
@@ -239,6 +243,22 @@ export const createApprovalHarness = ({
   testDb,
   withDirectRefTool = false,
 }: {
+  /**
+   * Replaces the anonymizer an anonymized turn's provider boundary calls, so a
+   * test can make it fail. The real pipeline by default.
+   */
+  boundaryAnonymizer?: typeof anonymizeTextFields | undefined;
+  /**
+   * Runs once a turn's stream has ended and before the send stores its
+   * outcome, with the outcome the run proposes: what a stop or another owner
+   * does there races the turn's own settlement.
+   */
+  beforeTurnSettles?:
+    | ((props: {
+        outcome: StreamChatFinishEvent["outcome"];
+        threadId: SafeId<"chatThread">;
+      }) => Promise<void>)
+    | undefined;
   ids: TestIds;
   /**
    * What a turn can draw on beyond Stella's own tools: the matters in its
@@ -334,7 +354,32 @@ export const createApprovalHarness = ({
       ),
     rollbackSideEffects: rollbackUnpersistedChatSideEffects,
     compactMessagesForContext,
-    streamResponse: streamChat,
+    streamResponse:
+      boundaryAnonymizer === undefined && beforeTurnSettles === undefined
+        ? streamChat
+        : async (props) =>
+            await streamChat({
+              ...props,
+              ...(beforeTurnSettles === undefined
+                ? {}
+                : {
+                    onFinish: async (event) => {
+                      await beforeTurnSettles({
+                        outcome: event.outcome,
+                        threadId: props.threadId,
+                      });
+                      return await props.onFinish(event);
+                    },
+                  }),
+              thirdPartyBoundary:
+                boundaryAnonymizer !== undefined &&
+                props.thirdPartyBoundary.type === "anonymized"
+                  ? {
+                      ...props.thirdPartyBoundary,
+                      anonymizeFields: boundaryAnonymizer,
+                    }
+                  : props.thirdPartyBoundary,
+            }),
     uploadMessageFiles: uploadMessageFilesWithRollback,
   } satisfies Omit<SendMessageDependencies, "createRefRegistry">;
   /** Per thread: the send handler, recording each request's ref registry. */

@@ -114,27 +114,6 @@ export const GENERATORS = [
     after: [],
   },
   {
-    id: "web-api-types",
-    outputs: ["apps/web/src/generated/api-routes.gen.ts"],
-    inputs: [
-      "apps/api/**",
-      "apps/web/package.json",
-      "apps/web/src/generated/**",
-      "packages/**",
-      "patches/**",
-      "types/**",
-      "bun.lock",
-      "bunfig.toml",
-      "package.json",
-      ".github/workflows/ci.yml",
-    ],
-    write: ["bun", "--filter", "@stll/api", "gen:web-api-types"],
-    check: null,
-    checkedBy: "Web API types drift guard",
-    autofix: true,
-    after: [],
-  },
-  {
     id: "mcp-surface",
     outputs: ["apps/api/mcp-surface-baseline.json"],
     inputs: [
