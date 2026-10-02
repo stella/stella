@@ -144,3 +144,135 @@ test("missing stated identity fields return classified errors", () => {
     }).unwrap(),
   ).toBe(JSON.stringify(["cz-uoou", "title", "guidance", "2024-02-29"]));
 });
+
+test("every raw part's bytes, presence and role contribute to version identity", () => {
+  const attachment = {
+    role: "attachment:one.pdf",
+    bytes: new Uint8Array([0, 255, 17, 128]),
+    contentType: "application/pdf",
+  };
+  const parts = {
+    ...document,
+    raw: [...document.raw, attachment],
+  } satisfies SoftLawDocumentInput;
+  const baseline = softLawContentHash(parts);
+  const variants = [
+    {
+      name: "page bytes",
+      raw: parts.raw.map((part) =>
+        part.role === "page"
+          ? { ...part, bytes: new TextEncoder().encode("changed page") }
+          : part,
+      ),
+    },
+    {
+      name: "attachment bytes",
+      raw: parts.raw.map((part) =>
+        part.role === attachment.role
+          ? { ...part, bytes: new Uint8Array([0, 255, 18, 128]) }
+          : part,
+      ),
+    },
+    { name: "removed attachment", raw: document.raw },
+    {
+      name: "added attachment",
+      raw: [...parts.raw, { ...attachment, role: "attachment:two.pdf" }],
+    },
+    {
+      name: "renamed attachment role",
+      raw: parts.raw.map((part) =>
+        part.role === attachment.role
+          ? { ...part, role: "attachment:renamed.pdf" }
+          : part,
+      ),
+    },
+  ] satisfies readonly {
+    name: string;
+    raw: SoftLawDocumentInput["raw"];
+  }[];
+  expect(attachment.bytes).not.toEqual(new Uint8Array([0, 255, 18, 128]));
+  for (const variant of variants) {
+    expect({
+      case: variant.name,
+      changed: softLawContentHash({ ...parts, raw: variant.raw }) !== baseline,
+    }).toEqual({ case: variant.name, changed: true });
+  }
+  expect(softLawContentHash({ ...parts, raw: parts.raw.toReversed() })).toBe(
+    baseline,
+  );
+});
+
+test("each stated metadata field independently contributes to version identity", () => {
+  const stated = {
+    ...metadata,
+    issuedOn: { state: "stated", value: "2024-01-01" },
+  } as const satisfies SoftLawMetadata;
+  const validityVariants = {
+    state: {
+      ...stated,
+      validity: { state: "withdrawn", basis: stated.validity.basis },
+    },
+    basis: {
+      ...stated,
+      validity: {
+        state: stated.validity.state,
+        basis: "archived_source_stated",
+      },
+    },
+  } as const satisfies Record<
+    keyof SoftLawMetadata["validity"],
+    SoftLawMetadata
+  >;
+  const variants = {
+    title: [{ ...stated, title: "Revised guidance" }],
+    kind: [{ ...stated, kind: "methodology" }],
+    statedReference: [
+      { ...stated, statedReference: { state: "stated", value: "03/2024" } },
+      { ...stated, statedReference: { state: "not_stated" } },
+    ],
+    issuedOn: [
+      { ...stated, issuedOn: { state: "stated", value: "2024-01-02" } },
+      { ...stated, issuedOn: { state: "not_stated" } },
+    ],
+    validity: Object.values(validityVariants),
+  } as const satisfies Record<
+    keyof SoftLawMetadata,
+    readonly SoftLawMetadata[]
+  >;
+  const baseline = softLawContentHash({ ...document, metadata: stated });
+  for (const [field, alternatives] of Object.entries(variants)) {
+    for (const alternative of alternatives) {
+      expect({
+        field,
+        changed:
+          softLawContentHash({ ...document, metadata: alternative }) !==
+          baseline,
+      }).toEqual({ field, changed: true });
+    }
+  }
+});
+
+test("title identities normalize canonical Unicode, whitespace and case without compatibility folding", () => {
+  const canonical = "Doporučení úřadu";
+  const sourceForms = [
+    canonical.normalize("NFD"),
+    "  DOPORUČENÍ\t\nÚŘADU  ",
+    "Doporučení     úřadu",
+  ];
+  const key = (title: string) =>
+    softLawIdentityKey("cz-uoou", {
+      ...metadata,
+      title,
+      statedReference: { state: "not_stated" },
+    }).unwrap();
+  expect(sourceForms.at(0)).not.toBe(canonical);
+  for (const source of sourceForms) {
+    expect(source).not.toBe(canonical);
+    expect(key(source)).toBe(key(canonical));
+  }
+  const compatibilityForm = "Ｇｕｉｄａｎｃｅ";
+  const ascii = "Guidance";
+  expect(compatibilityForm).not.toBe(ascii);
+  expect(compatibilityForm.normalize("NFKC")).toBe(ascii);
+  expect(key(compatibilityForm)).not.toBe(key(ascii));
+});

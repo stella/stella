@@ -3,7 +3,6 @@ import { describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import fc from "fast-check";
 
-import type { fetchWithTimeout } from "@stll/fetch";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -21,7 +20,6 @@ import {
   softLawDocumentVersions,
   softLawDocumentLocators,
 } from "@/api/db/schema";
-import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
@@ -33,10 +31,12 @@ import type {
   SoftLawDocumentInput,
 } from "@/api/lib/legal-search/soft-law-types";
 import { SoftLawIngestionError } from "@/api/lib/legal-search/soft-law-types";
-import { withGatedTestClients } from "@/api/tests/gated-test-database";
-import type { GatedTestDb } from "@/api/tests/gated-test-database";
-
-import { runSoftLawIngestion } from "./ingestion";
+import {
+  entry,
+  document,
+  adapter,
+  withSource,
+} from "@/api/tests/soft-law-ingestion-support";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -59,125 +59,6 @@ const permissionDenied = (error: unknown) => {
   }
   return false;
 };
-const entry = (
-  url = "https://uoou.gov.cz/a",
-  title = "Doporučení",
-  reference = "02/2024",
-): SoftLawEntry => ({
-  url,
-  metadata: {
-    title,
-    kind: "recommendation",
-    statedReference: { state: "stated", value: reference },
-    issuedOn: { state: "not_stated" },
-    validity: { state: "not_stated", basis: "source_stated" },
-  },
-  sourceDates: {},
-});
-const document = (
-  item: SoftLawEntry,
-  content = "original",
-): SoftLawDocumentInput => ({
-  metadata: item.metadata,
-  raw: [
-    {
-      role: "document",
-      bytes: new TextEncoder().encode(content),
-      contentType: "text/html",
-    },
-  ],
-  text: content,
-  extractionQuality: "html",
-  sourceDates: item.sourceDates,
-});
-const adapter = (entries: readonly SoftLawEntry[], content = "original") =>
-  ({
-    key: "soft-law-test",
-    authority: "cz-uoou",
-    access: {
-      publisherGate: "uoou-cz",
-      userAgent: "Stella/1.0 (+https://stella.example/contact)",
-      window: { type: "any_time" },
-    },
-    discover: async () => ({ entries, nextCursor: null }),
-    fetchDocument: async (item) => Result.ok(document(item, content)),
-    getTotalCount: async () => ({ type: "no-count-endpoint" }),
-    sliceWalk: { type: "unsupported", reason: "Complete listing" },
-    sourceFields: {
-      status: "declared",
-      fields: {},
-      listSourceFields: () => [],
-    },
-    sourceSurfaces: { surfaces: {} },
-  }) as const satisfies SoftLawSourceAdapter;
-
-type TestRunOptions = {
-  request?: typeof fetchWithTimeout;
-  now?: () => Date;
-  scopedDb?: ScopedDb;
-  writeRaw?: WriteRawSourcePayload;
-};
-const withSource = async (
-  url: string,
-  fn: (options: {
-    db: GatedTestDb;
-    sourceId: SafeId<"softLawSource">;
-    run: (
-      sourceAdapter: SoftLawSourceAdapter,
-      options?: TestRunOptions,
-    ) => ReturnType<typeof runSoftLawIngestion>;
-  }) => Promise<void>,
-) =>
-  await withGatedTestClients(url, async ({ openClient }) => {
-    const { db } = openClient({ max: 3 });
-    const sourceId = createSafeId<"softLawSource">();
-    await db.insert(softLawSources).values({
-      id: sourceId,
-      adapterKey: `soft-law-test-${sourceId}`,
-      descriptor: {
-        license: "public-domain",
-        attribution: null,
-        allowsRedistribution: true,
-        allowsDerivedAi: true,
-      },
-    });
-    const run = async (
-      sourceAdapter: SoftLawSourceAdapter,
-      options: TestRunOptions = {},
-    ) =>
-      await runSoftLawIngestion({
-        sourceId,
-        adapter: { ...sourceAdapter, key: `soft-law-test-${sourceId}` },
-        scopedDb:
-          options.scopedDb ?? (async (work) => await db.transaction(work)),
-        signal: new AbortController().signal,
-        writeRaw:
-          options.writeRaw ??
-          (async (rawOptions) => rawSourcePayloadKey(rawOptions)),
-        accessDependencies: {
-          reserve: async () => {},
-          ...(options.request ? { request: options.request } : {}),
-          ...(options.now ? { now: options.now } : {}),
-        },
-      });
-    try {
-      await fn({ db, sourceId, run });
-    } finally {
-      await db
-        .delete(softLawIngestionAttempts)
-        .where(eq(softLawIngestionAttempts.sourceId, sourceId));
-      await db.execute(
-        sql`DELETE FROM soft_law_document_locators WHERE document_id IN (SELECT id FROM soft_law_documents WHERE source_id = ${sourceId})`,
-      );
-      await db.execute(
-        sql`DELETE FROM soft_law_document_versions WHERE document_id IN (SELECT id FROM soft_law_documents WHERE source_id = ${sourceId})`,
-      );
-      await db
-        .delete(softLawDocuments)
-        .where(eq(softLawDocuments.sourceId, sourceId));
-      await db.delete(softLawSources).where(eq(softLawSources.id, sourceId));
-    }
-  });
 
 if (!databaseUrl || !enabled) {
   describe.skip("guidance ingestion on real Postgres", () => {

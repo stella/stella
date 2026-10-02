@@ -1,7 +1,13 @@
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { getTableConfig } from "drizzle-orm/pg-core";
+import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
 
+import {
+  SOFT_LAW_ATTEMPT_STATES,
+  SOFT_LAW_ITEM_TAGS,
+} from "@/api/lib/legal-search/soft-law-types";
+import type { SoftLawEntry } from "@/api/lib/legal-search/soft-law-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 import * as softLawSchema from "./soft-law";
@@ -9,6 +15,28 @@ import * as softLawSchema from "./soft-law";
 const configurations = Object.values(softLawSchema).map((table) =>
   getTableConfig(table),
 );
+
+const postgresFailure = (error: unknown) => {
+  let current = error;
+  for (let depth = 0; depth < 8; depth++) {
+    if (typeof current !== "object" || current === null) {
+      return undefined;
+    }
+    if (
+      "code" in current &&
+      typeof current.code === "string" &&
+      "constraint" in current &&
+      typeof current.constraint === "string"
+    ) {
+      return { code: current.code, constraint: current.constraint };
+    }
+    if (!("cause" in current)) {
+      return undefined;
+    }
+    current = current.cause;
+  }
+  return undefined;
+};
 
 test("soft-law foreign keys have explicit names", () => {
   for (const configuration of configurations) {
@@ -74,5 +102,332 @@ if (!databaseUrl || !enabled) {
           .map(({ relation, name, type }) => `${relation}/${type}/${name}`)
           .toSorted();
       expect(constraintKeys(actual)).toEqual(constraintKeys(expected));
+    }));
+
+  test("migrated foreign keys preserve targets, ordered columns and update/delete actions", async () =>
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const expected = configurations.flatMap((configuration) =>
+        configuration.foreignKeys.map((key) => {
+          const reference = key.reference();
+          const target = getTableConfig(reference.foreignTable);
+          return {
+            relation: configuration.name,
+            name: key.getName(),
+            columns: reference.columns.map(({ name }) => name),
+            targetSchema: target.schema ?? "public",
+            target: target.name,
+            foreignColumns: reference.foreignColumns.map(({ name }) => name),
+            onUpdate: key.onUpdate ?? "no action",
+            onDelete: key.onDelete ?? "no action",
+          };
+        }),
+      );
+      const actual = await db.execute<(typeof expected)[number]>(sql`
+        SELECT relation.relname AS relation, c.conname AS name,
+          ARRAY(SELECT a.attname FROM unnest(c.conkey) WITH ORDINALITY k(number, position)
+            JOIN pg_catalog.pg_attribute a ON a.attrelid = c.conrelid AND a.attnum = k.number
+            ORDER BY k.position) AS columns,
+          target_namespace.nspname AS "targetSchema", target.relname AS target,
+          ARRAY(SELECT a.attname FROM unnest(c.confkey) WITH ORDINALITY k(number, position)
+            JOIN pg_catalog.pg_attribute a ON a.attrelid = c.confrelid AND a.attnum = k.number
+            ORDER BY k.position) AS "foreignColumns",
+          CASE c.confupdtype WHEN 'a' THEN 'no action' WHEN 'r' THEN 'restrict'
+            WHEN 'c' THEN 'cascade' WHEN 'n' THEN 'set null' WHEN 'd' THEN 'set default' END AS "onUpdate",
+          CASE c.confdeltype WHEN 'a' THEN 'no action' WHEN 'r' THEN 'restrict'
+            WHEN 'c' THEN 'cascade' WHEN 'n' THEN 'set null' WHEN 'd' THEN 'set default' END AS "onDelete"
+        FROM pg_catalog.pg_constraint c
+        JOIN pg_catalog.pg_class relation ON relation.oid = c.conrelid
+        JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+        JOIN pg_catalog.pg_class target ON target.oid = c.confrelid
+        JOIN pg_catalog.pg_namespace target_namespace ON target_namespace.oid = target.relnamespace
+        WHERE namespace.nspname = 'public' AND c.contype = 'f'
+          AND relation.relname IN (${sql.join(
+            configurations.map(({ name }) => sql`${name}`),
+            sql`, `,
+          )})
+      `);
+      const keys = (rows: typeof expected) =>
+        rows
+          .map((row) =>
+            JSON.stringify(
+              Object.entries(row).toSorted(([left], [right]) =>
+                left < right ? -1 : Number(left > right),
+              ),
+            ),
+          )
+          .toSorted();
+      expect(keys(actual)).toEqual(keys(expected));
+    }));
+
+  test("migrated indexes preserve uniqueness, ordered keys and PostgreSQL-canonical predicates", async () =>
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      await db.transaction(async (tx) => {
+        const expected: {
+          relation: string;
+          name: string;
+          columns: string[];
+          unique: boolean;
+          predicate: string | null;
+        }[] = [];
+        for (const configuration of configurations) {
+          const shadow = `parity_${configuration.name}`;
+          await tx.execute(sql`CREATE TEMP TABLE ${sql.identifier(shadow)}
+            (LIKE public.${sql.identifier(configuration.name)}) ON COMMIT DROP`);
+          for (const unique of configuration.uniqueConstraints) {
+            expected.push({
+              relation: configuration.name,
+              name: unique.getName() ?? panic("Unique constraint has no name"),
+              columns: unique.columns.map(({ name }) => name),
+              unique: true,
+              predicate: null,
+            });
+          }
+          for (const column of configuration.columns.filter(
+            (candidate) => candidate.isUnique,
+          )) {
+            expected.push({
+              relation: configuration.name,
+              name:
+                column.uniqueName ??
+                panic("Unique column has no constraint name"),
+              columns: [column.name],
+              unique: true,
+              predicate: null,
+            });
+          }
+          for (const index of configuration.indexes) {
+            const name = index.config.name ?? panic("Index has no name");
+            const columns = index.config.columns.map((column) => {
+              if (!("name" in column) || typeof column.name !== "string") {
+                return panic("Soft-law index must declare a column key");
+              }
+              return column.name;
+            });
+            const rendered = index.config.where
+              ? new PgDialect().sqlToQuery(index.config.where)
+              : null;
+            if (rendered && rendered.params.length !== 0) {
+              panic("Index predicate unexpectedly uses bound parameters");
+            }
+            const predicate = rendered
+              ? sql.raw(rendered.sql.replaceAll(`"${configuration.name}".`, ""))
+              : null;
+            await tx.execute(sql`CREATE ${index.config.unique ? sql`UNIQUE` : sql``} INDEX ${sql.identifier(name)}
+              ON ${sql.identifier(shadow)} (${sql.join(
+                columns.map((column) => sql.identifier(column)),
+                sql`, `,
+              )})
+              ${predicate ? sql`WHERE ${predicate}` : sql``}`);
+            const canonical =
+              (
+                await tx.execute<{ predicate: string | null }>(sql`
+              SELECT pg_catalog.pg_get_expr(i.indpred, i.indrelid) AS predicate
+              FROM pg_catalog.pg_index i JOIN pg_catalog.pg_class r ON r.oid = i.indexrelid
+              WHERE r.relnamespace = pg_catalog.pg_my_temp_schema() AND r.relname = ${name}
+            `)
+              ).at(0) ?? panic("Schema-derived index is missing");
+            expected.push({
+              relation: configuration.name,
+              name,
+              columns,
+              unique: index.config.unique,
+              predicate: canonical.predicate,
+            });
+          }
+        }
+        const actual = await tx.execute<{
+          relation: string;
+          name: string;
+          columns: string[];
+          unique: boolean;
+          predicate: string | null;
+        }>(sql`
+          SELECT relation.relname AS relation, index_relation.relname AS name,
+            ARRAY(SELECT pg_catalog.pg_get_indexdef(i.indexrelid, position, true)
+              FROM generate_series(1, i.indnkeyatts) position ORDER BY position) AS columns,
+            i.indisunique AS unique, pg_catalog.pg_get_expr(i.indpred, i.indrelid) AS predicate
+          FROM pg_catalog.pg_index i
+          JOIN pg_catalog.pg_class relation ON relation.oid = i.indrelid
+          JOIN pg_catalog.pg_namespace namespace ON namespace.oid = relation.relnamespace
+          JOIN pg_catalog.pg_class index_relation ON index_relation.oid = i.indexrelid
+          WHERE namespace.nspname = 'public' AND NOT i.indisprimary
+            AND relation.relname IN (${sql.join(
+              configurations.map(({ name }) => sql`${name}`),
+              sql`, `,
+            )})
+        `);
+        const keys = (rows: typeof expected) =>
+          rows
+            .map((row) =>
+              JSON.stringify(
+                Object.entries(row).toSorted(([left], [right]) =>
+                  left < right ? -1 : Number(left > right),
+                ),
+              ),
+            )
+            .toSorted();
+        expect(keys(actual)).toEqual(keys(expected));
+      });
+    }));
+
+  test("migrated version checks reject nonpositive sequence numbers and reversed observation intervals", async () =>
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const sourceId = Bun.randomUUIDv7();
+      const documentId = Bun.randomUUIDv7();
+      const observedFrom = new Date("2024-01-02T00:00:00Z");
+      await db.execute(sql`INSERT INTO soft_law_sources (id, adapter_key, descriptor)
+        VALUES (${sourceId}, ${`constraint-parity-${sourceId}`}, '{}'::jsonb)`);
+      try {
+        await db.execute(sql`INSERT INTO soft_law_documents (
+          id, source_id, identity_key, jurisdiction, authority, kind, title,
+          stated_reference_state, issued_on_state, listing_state, validity_state,
+          validity_basis, first_seen_at, last_seen_at, last_seen_run)
+          VALUES (${documentId}, ${sourceId}, 'constraint-parity', 'cz', 'cz-uoou',
+            'recommendation', 'Constraint parity', 'not_stated', 'not_stated', 'listed',
+            'not_stated', 'source_stated', ${observedFrom}, ${observedFrom}, ${Bun.randomUUIDv7()})`);
+        const insert = async (sequence: number, observedTo: Date | null) =>
+          await db.execute(sql`INSERT INTO soft_law_document_versions (
+            id, document_id, sequence, content_hash, raw_objects, metadata,
+            extraction_quality, source_dates, observed_from, observed_to)
+            VALUES (${Bun.randomUUIDv7()}, ${documentId}, ${sequence}, 'constraint-parity',
+              '[]'::jsonb, '{}'::jsonb, 'html', '{}'::jsonb, ${observedFrom}, ${observedTo})`);
+        // Equality is a valid interval; the invalid witnesses differ only on the tested boundary.
+        await insert(1, observedFrom);
+        const invalid = [
+          {
+            sequence: 0,
+            observedTo: observedFrom,
+            constraint: "soft_law_versions_sequence_check",
+          },
+          {
+            sequence: -1,
+            observedTo: observedFrom,
+            constraint: "soft_law_versions_sequence_check",
+          },
+          {
+            sequence: 2,
+            observedTo: new Date("2024-01-01T00:00:00Z"),
+            constraint: "soft_law_versions_window_check",
+          },
+        ];
+        for (const witness of invalid) {
+          const attempted = await Result.tryPromise(
+            async () => await insert(witness.sequence, witness.observedTo),
+          );
+          if (attempted.status !== "error") {
+            panic(`Invalid version accepted by ${witness.constraint}`);
+          }
+          expect(postgresFailure(attempted.error.cause)).toEqual({
+            code: "23514",
+            constraint: witness.constraint,
+          });
+        }
+        await insert(2, null);
+      } finally {
+        await db.execute(
+          sql`DELETE FROM soft_law_document_versions WHERE document_id = ${documentId}`,
+        );
+        await db.execute(
+          sql`DELETE FROM soft_law_documents WHERE id = ${documentId}`,
+        );
+        await db.execute(
+          sql`DELETE FROM soft_law_sources WHERE id = ${sourceId}`,
+        );
+      }
+    }));
+  test("collision receipts require identity while every other receipt forbids it", async () =>
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db } = openClient();
+      const sourceId = Bun.randomUUIDv7();
+      await db.execute(sql`INSERT INTO soft_law_sources (id, adapter_key, descriptor)
+        VALUES (${sourceId}, ${`identity-parity-${sourceId}`}, '{}'::jsonb)`);
+      type ReceiptWitness = {
+        status: (typeof SOFT_LAW_ATTEMPT_STATES)[number];
+        tag: (typeof SOFT_LAW_ITEM_TAGS)[number] | null;
+        identityKey: string | null;
+      };
+      const insert = async ({ status, tag, identityKey }: ReceiptWitness) => {
+        const url = `https://uoou.gov.cz/receipt/${Bun.randomUUIDv7()}`;
+        const entry = {
+          url,
+          metadata: {
+            title: "Receipt constraint",
+            kind: "recommendation",
+            statedReference: { state: "not_stated" },
+            issuedOn: { state: "not_stated" },
+            validity: { state: "not_stated", basis: "source_stated" },
+          },
+          sourceDates: {},
+        } satisfies SoftLawEntry;
+        await db.execute(sql`INSERT INTO soft_law_ingestion_attempts (
+          id, source_id, run_id, url, entry, status, tag, identity_key, count, observed_at)
+          VALUES (${Bun.randomUUIDv7()}, ${sourceId}, ${Bun.randomUUIDv7()}, ${url},
+            ${JSON.stringify(entry)}::text::jsonb, ${status}, ${tag}, ${identityKey}, 1, now())`);
+      };
+      const otherTags = SOFT_LAW_ITEM_TAGS.filter(
+        (tag) => tag !== "identity_collision",
+      );
+      const nonRejected = SOFT_LAW_ATTEMPT_STATES.filter(
+        (status) => status !== "rejected",
+      );
+      const accepted = [
+        {
+          status: "rejected",
+          tag: "identity_collision",
+          identityKey: "identity",
+        },
+        ...otherTags.map((tag) => ({
+          status: "rejected" as const,
+          tag,
+          identityKey: null,
+        })),
+        ...nonRejected.map((status) => ({
+          status,
+          tag: null,
+          identityKey: null,
+        })),
+      ] as const satisfies readonly ReceiptWitness[];
+      const rejected = [
+        { status: "rejected", tag: "identity_collision", identityKey: null },
+        ...otherTags.map((tag) => ({
+          status: "rejected" as const,
+          tag,
+          identityKey: "identity",
+        })),
+        ...nonRejected.map((status) => ({
+          status,
+          tag: null,
+          identityKey: "identity",
+        })),
+      ] as const satisfies readonly ReceiptWitness[];
+      try {
+        for (const witness of accepted) {
+          await insert(witness);
+        }
+        for (const witness of rejected) {
+          const attempted = await Result.tryPromise(
+            async () => await insert(witness),
+          );
+          if (attempted.status !== "error") {
+            panic(
+              "Receipt identity CHECK accepted an invalid tag/identity pair",
+            );
+          }
+          expect(postgresFailure(attempted.error.cause)).toEqual({
+            code: "23514",
+            constraint: "soft_law_attempts_identity_check",
+          });
+        }
+      } finally {
+        await db.execute(
+          sql`DELETE FROM soft_law_ingestion_attempts WHERE source_id = ${sourceId}`,
+        );
+        await db.execute(
+          sql`DELETE FROM soft_law_sources WHERE id = ${sourceId}`,
+        );
+      }
     }));
 }
