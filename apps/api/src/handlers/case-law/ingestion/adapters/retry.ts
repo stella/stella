@@ -35,6 +35,8 @@ export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** A supplementary publisher, distinct from the decision listing's host. */
   publisherGate?: PublisherGateId | undefined;
   retryPolicy?: "publisher-backoff";
+  /** Publisher-defined redirect target; use manual redirects to inspect it. */
+  isRateLimitRedirect?: (response: Response) => boolean;
 };
 
 /**
@@ -50,7 +52,12 @@ export const fetchPublisher = async (
   if (retryPolicy === "publisher-backoff") {
     return await retryPublisherRequest(url, init);
   }
-  const { adapterKey, publisherGate, ...requestInit } = init;
+  const {
+    adapterKey,
+    publisherGate,
+    isRateLimitRedirect: _isRateLimitRedirect,
+    ...requestInit
+  } = init;
   if (publisherGate === undefined) {
     await reservePublisherSlot(adapterKey, requestInit.signal);
   } else {
@@ -199,11 +206,45 @@ export const fetchWithRetry = async (
   return panic("fetchWithRetry: unreachable");
 };
 
+type PublisherRateLimitRefusalErrorOptions = {
+  cursor: string | null;
+  publisherKey: PublisherGateId;
+  status: number;
+  cooldownUntilEpochMs: number;
+  adapterKey: AdapterKey;
+};
+
+/** A terminal refusal for this cycle; its shared cooldown uses the Redis TIME clock. */
+export class PublisherRateLimitRefusalError extends AdapterFetchError {
+  readonly publisherKey: PublisherGateId;
+  readonly status: number;
+  readonly cooldownUntilEpochMs: number;
+
+  constructor({
+    publisherKey,
+    status,
+    cooldownUntilEpochMs,
+    adapterKey,
+    cursor,
+  }: PublisherRateLimitRefusalErrorOptions) {
+    super({
+      message: `Publisher rate limit refused: ${status}`,
+      adapterKey,
+      cursor,
+      httpStatus: status,
+    });
+    this.name = "PublisherRateLimitRefusalError";
+    this.publisherKey = publisherKey;
+    this.status = status;
+    this.cooldownUntilEpochMs = cooldownUntilEpochMs;
+  }
+}
+
 const PUBLISHER_MAX_ATTEMPTS = 6;
 const PUBLISHER_BASE_DELAY_MS = 2000;
 const PUBLISHER_MAX_DELAY_MS = 300_000;
 const RETRY_AFTER_MAX_MS = 900_000;
-const PUBLISHER_RETRY_STATUSES = new Set([408, 429, 502, 503, 504]);
+const PUBLISHER_RETRY_STATUSES = new Set([408, 502, 503, 504]);
 
 type PublisherRetryDelayOptions = {
   attempt: number;
@@ -253,7 +294,7 @@ const isPublisherTimeout = (cause: unknown): boolean =>
 
 type PublisherRetryDependencies = {
   request: (url: string | URL, init: PublisherFetchInit) => Promise<Response>;
-  defer: (durationMs: number, signal?: AbortSignal) => Promise<void>;
+  defer: (durationMs: number, signal?: AbortSignal) => Promise<number>;
   sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
   now: () => number;
   random: () => number;
@@ -277,7 +318,11 @@ export const retryPublisherRequest = async (
     now: () => Temporal.Now.instant().epochMilliseconds,
     random: Math.random,
   };
-  const { retryPolicy: _retryPolicy, ...requestInit } = init;
+  const {
+    retryPolicy: _retryPolicy,
+    isRateLimitRedirect,
+    ...requestInit
+  } = init;
   for (let attempt = 0; attempt < PUBLISHER_MAX_ATTEMPTS; attempt++) {
     init.signal?.throwIfAborted();
     const fetched = await Result.tryPromise({
@@ -293,6 +338,29 @@ export const retryPublisherRequest = async (
     init.signal?.throwIfAborted();
     if (Result.isError(fetched) && !isPublisherTimeout(fetched.error.cause)) {
       throw fetched.error;
+    }
+    if (
+      Result.isOk(fetched) &&
+      (fetched.value.status === 429 || isRateLimitRedirect?.(fetched.value))
+    ) {
+      const delay = Math.ceil(
+        publisherRetryDelay({
+          attempt,
+          retryAfter: fetched.value.headers.get("Retry-After"),
+          now: runtime.now(),
+          random: runtime.random(),
+        }),
+      );
+      const cooldownUntilEpochMs = await runtime.defer(delay, init.signal);
+      await fetched.value.body?.cancel();
+      throw new PublisherRateLimitRefusalError({
+        cursor: null,
+        publisherKey:
+          init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey],
+        status: fetched.value.status,
+        cooldownUntilEpochMs,
+        adapterKey: init.adapterKey,
+      });
     }
     if (
       Result.isOk(fetched) &&
@@ -312,14 +380,16 @@ export const retryPublisherRequest = async (
         httpStatus: fetched.value.status,
       });
     }
-    const delay = publisherRetryDelay({
-      attempt,
-      retryAfter: Result.isOk(fetched)
-        ? fetched.value.headers.get("Retry-After")
-        : null,
-      now: runtime.now(),
-      random: runtime.random(),
-    });
+    const delay = Math.ceil(
+      publisherRetryDelay({
+        attempt,
+        retryAfter: Result.isOk(fetched)
+          ? fetched.value.headers.get("Retry-After")
+          : null,
+        now: runtime.now(),
+        random: runtime.random(),
+      }),
+    );
     // Publish the cooldown before sleeping. The Redis gate checks it before
     // every ECJ request, including slots reserved before this backoff began.
     await runtime.defer(delay, init.signal);

@@ -4,6 +4,7 @@ import { TaggedError } from "better-result";
 import { Temporal } from "@stll/time";
 
 import type * as RedisClientModule from "@/api/lib/redis-client";
+import { coordinationKey } from "@/api/lib/redis-keys";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
@@ -31,8 +32,25 @@ if ARGV[1] then
     redis.call("PSETEX", KEYS[1], untilAt - now, tostring(untilAt))
   end
 end
-return math.max(0, untilAt - now)
+return ARGV[1] and untilAt or math.max(0, untilAt - now)
 `;
+
+// Deadline and expiry are evaluated on the same Redis TIME clock as reservations.
+const READ_COOLDOWN_SCRIPT = `
+local clock = redis.call("TIME")
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local untilAt = tonumber(redis.call("GET", KEYS[1])) or now
+return untilAt > now and untilAt or 0
+`;
+
+export const publisherGateKeys = (slot: string) => ({
+  key: coordinationKey({ scope: "case-law-publisher-gate", slot }),
+  cooldownKey: coordinationKey({
+    scope: "case-law-publisher-gate",
+    slot,
+    suffix: "cooldown",
+  }),
+});
 
 export type PublisherGateClient = {
   send: (command: string, args: string[]) => unknown;
@@ -150,6 +168,9 @@ const defaultDependencies = (
   const localRedis: PublisherGateClient = {
     send: (_command, args) => {
       const now = Temporal.Now.instant().epochMilliseconds;
+      if (args[0] === READ_COOLDOWN_SCRIPT) {
+        return localCooldownUntil > now ? localCooldownUntil : 0;
+      }
       if (args[0] === COOLDOWN_SCRIPT) {
         const duration = args.at(3);
         if (duration !== undefined) {
@@ -158,7 +179,9 @@ const defaultDependencies = (
             now + Number(duration),
           );
         }
-        return Math.max(0, localCooldownUntil - now);
+        return duration === undefined
+          ? Math.max(0, localCooldownUntil - now)
+          : Math.max(now, localCooldownUntil);
       }
       const slot = Math.max(now, localNextRequestAt, localCooldownUntil);
       localNextRequestAt = slot + intervalMs;
@@ -197,10 +220,10 @@ class PublisherGateReplyError extends TaggedError("PublisherGateReplyError")<{
 }> {}
 
 export const createPublisherRequestSlot = (
-  { intervalMs, key, publisher, cooldown }: PublisherRequestGateConfig,
+  { intervalMs, key: slot, publisher, cooldown }: PublisherRequestGateConfig,
   dependencies = defaultDependencies(intervalMs),
 ) => {
-  const cooldownKey = `${key}:cooldown`;
+  const { key, cooldownKey } = publisherGateKeys(slot);
   const commandWait = async (args: string[], signal?: AbortSignal) => {
     const redis = await dependencies.redis();
     const rawWait = await withTimeout(
@@ -243,11 +266,18 @@ export const createPublisherRequestSlot = (
     }
   };
   return Object.assign(reserve, {
-    defer: async (durationMs: number, signal?: AbortSignal) => {
+    readCooldown: async (): Promise<number | null> => {
+      const deadline = await commandWait([
+        READ_COOLDOWN_SCRIPT,
+        "1",
+        cooldownKey,
+      ]);
+      return deadline === 0 ? null : deadline;
+    },
+    defer: async (durationMs: number, signal?: AbortSignal) =>
       await commandWait(
         [COOLDOWN_SCRIPT, "1", cooldownKey, String(durationMs)],
         signal,
-      );
-    },
+      ),
   });
 };

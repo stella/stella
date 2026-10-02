@@ -1,13 +1,20 @@
 import { describe, expect, test } from "bun:test";
 
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 import {
+  createPublisherGateSlot,
+  readPublisherCooldown,
+} from "./publisher-policy";
+import {
   abortableSleep,
   createPublisherRequestSlot,
+  publisherGateKeys,
   type PublisherGateClient,
   type PublisherRequestGateDependencies,
 } from "./publisher-request-gate";
+import { PublisherRateLimitRefusalError, retryPublisherRequest } from "./retry";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 const COOLDOWN_MS = 1000;
@@ -30,8 +37,8 @@ type PublisherStore = {
 const withStore = async (run: (store: PublisherStore) => Promise<void>) => {
   const first = createRedisClient();
   const second = createRedisClient();
-  const key = `publisher-backoff-test:${Bun.randomUUIDv7()}`;
-  const cooldownKey = `${key}:cooldown`;
+  const slot = `publisher-backoff-test:${Bun.randomUUIDv7()}`;
+  const { key, cooldownKey } = publisherGateKeys(slot);
   try {
     await Promise.all([first.connect(), second.connect()]);
     await run({
@@ -43,7 +50,7 @@ const withStore = async (run: (store: PublisherStore) => Promise<void>) => {
         createPublisherRequestSlot(
           {
             intervalMs,
-            key,
+            key: slot,
             publisher: "ECJ backoff test",
             cooldown: "shared",
           },
@@ -88,6 +95,203 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("publisher backoff (valkey)", () => {
+    test("the public cooldown reader observes the real publisher gate deadline and expiry", async () => {
+      await withStore(async ({ first, second }) => {
+        const publisherKey = "cellar-eu";
+        const { key, cooldownKey } = publisherGateKeys(publisherKey);
+        const firstDependencies = {
+          redis: () => first,
+          sleep: abortableSleep,
+        };
+        const secondDependencies = {
+          redis: () => second,
+          sleep: abortableSleep,
+        };
+        await first.send("DEL", [key, cooldownKey]);
+        try {
+          expect(
+            await readPublisherCooldown(publisherKey, secondDependencies),
+          ).toBeNull();
+          const deadline = await createPublisherGateSlot(
+            publisherKey,
+            firstDependencies,
+          ).defer(COOLDOWN_MS);
+          expect(deadline).toBe(Number(await first.send("GET", [cooldownKey])));
+          expect(
+            await readPublisherCooldown(publisherKey, secondDependencies),
+          ).toBe(deadline);
+          await abortableSleep((await positiveTtl(first, cooldownKey)) + 25);
+          expect(
+            await readPublisherCooldown(publisherKey, firstDependencies),
+          ).toBeNull();
+          expect(
+            await readPublisherCooldown(publisherKey, secondDependencies),
+          ).toBeNull();
+        } finally {
+          await first.send("DEL", [key, cooldownKey]);
+        }
+      });
+    });
+
+    test("cooldown reads expose the Redis deadline until it expires", async () => {
+      await withStore(async ({ first, second, cooldownKey, gate }) => {
+        const firstGate = gate({ client: first });
+        const secondGate = gate({ client: second });
+        expect(await firstGate.readCooldown()).toBeNull();
+        const before = await redisNow(first);
+        const deadline = await firstGate.defer(INTERVAL_MS);
+        expect(deadline).toBeGreaterThanOrEqual(before + INTERVAL_MS);
+        expect(deadline).toBeLessThanOrEqual(
+          (await redisNow(first)) + INTERVAL_MS,
+        );
+        expect(deadline).toBe(Number(await first.send("GET", [cooldownKey])));
+        expect(await secondGate.readCooldown()).toBe(deadline);
+        await abortableSleep((await positiveTtl(first, cooldownKey)) + 25);
+        expect(await firstGate.readCooldown()).toBeNull();
+        expect(await secondGate.readCooldown()).toBeNull();
+      });
+    });
+
+    test("503 fractional jitter publishes the same integer cooldown it sleeps and blocks another client", async () => {
+      await withStore(async ({ first, second, cooldownKey, gate }) => {
+        const publishedDurations: number[] = [];
+        const observed: PublisherGateClient = {
+          send: async (command, args) => {
+            if (args.at(2) === cooldownKey && args.length === 4) {
+              publishedDurations.push(Number(args.at(3)));
+            }
+            return await first.send(command, args);
+          },
+        };
+        const firstGate = gate({ client: observed });
+        const retryWaits: number[] = [];
+        const random = 0.370123;
+        expect(Number.isInteger(random * 2000)).toBe(false);
+        let requests = 0;
+        const response = await retryPublisherRequest(
+          "https://publications.europa.eu/test",
+          { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 },
+          {
+            request: async (_url, init) => {
+              await firstGate(init.signal);
+              requests += 1;
+              return new Response(null, {
+                status: requests === 1 ? 503 : 200,
+              });
+            },
+            defer: firstGate.defer,
+            sleep: async (durationMs, signal) => {
+              retryWaits.push(durationMs);
+              expect(Number.isInteger(durationMs)).toBe(true);
+              expect(publishedDurations).toEqual(retryWaits);
+              expect(await positiveTtl(first, cooldownKey)).toBeLessThanOrEqual(
+                durationMs,
+              );
+              const deadline = Number(await first.send("GET", [cooldownKey]));
+              const sleeping = Promise.withResolvers<number>();
+              let admitted = false;
+              const reservation = gate({
+                client: second,
+                sleep: async (waitMs, waitSignal) => {
+                  sleeping.resolve(waitMs);
+                  await abortableSleep(waitMs, waitSignal);
+                },
+              })().then(async () => {
+                admitted = true;
+                return await redisNow(second);
+              });
+              try {
+                await Promise.race([sleeping.promise, reservation]);
+                expect(admitted).toBe(false);
+                expect(await sleeping.promise).toBeGreaterThan(0);
+                const [, admittedAt] = await Promise.all([
+                  abortableSleep(durationMs, signal),
+                  reservation,
+                ]);
+                expect(admittedAt).toBeGreaterThanOrEqual(deadline);
+              } finally {
+                await reservation;
+              }
+            },
+            now: Date.now,
+            random: () => random,
+          },
+        );
+        expect(response.status).toBe(200);
+        expect(requests).toBe(2);
+        expect(retryWaits).toEqual([Math.ceil(random * 2000)]);
+        expect(publishedDurations).toEqual(retryWaits);
+      });
+    });
+
+    test("a 429 halts after one request and its cooldown blocks another client", async () => {
+      await withStore(async ({ first, second, cooldownKey, gate }) => {
+        const firstGate = gate({ client: first });
+        let requests = 0;
+        const retryWaits: number[] = [];
+        const pending = retryPublisherRequest(
+          "https://publications.europa.eu/test",
+          { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 },
+          {
+            request: async (_url, init) => {
+              await firstGate(init.signal);
+              requests += 1;
+              return new Response(null, {
+                status: 429,
+                headers: { "Retry-After": "1" },
+              });
+            },
+            defer: firstGate.defer,
+            sleep: async (durationMs) => {
+              retryWaits.push(durationMs);
+            },
+            now: Date.now,
+            random: () => 0.370123,
+          },
+        );
+        expect(
+          await pending.then(
+            () => "accepted",
+            (error: unknown) => error,
+          ),
+        ).toBeInstanceOf(PublisherRateLimitRefusalError);
+        const deadline = Number(await first.send("GET", [cooldownKey]));
+        expect(
+          await pending.then(
+            () => "accepted",
+            (error: unknown) => error,
+          ),
+        ).toMatchObject({
+          status: 429,
+          publisherKey: "cellar-eu",
+          cooldownUntilEpochMs: deadline,
+        });
+        expect(requests).toBe(1);
+        expect(retryWaits).toEqual([]);
+        await positiveTtl(first, cooldownKey);
+        const sleeping = Promise.withResolvers<number>();
+        let admitted = false;
+        const reservation = gate({
+          client: second,
+          sleep: async (durationMs, signal) => {
+            sleeping.resolve(durationMs);
+            await abortableSleep(durationMs, signal);
+          },
+        })().then(async () => {
+          admitted = true;
+          return await redisNow(second);
+        });
+        try {
+          await Promise.race([sleeping.promise, reservation]);
+          expect(admitted).toBe(false);
+          expect(await sleeping.promise).toBeGreaterThan(0);
+          expect(await reservation).toBeGreaterThanOrEqual(deadline);
+        } finally {
+          await reservation;
+        }
+      });
+    });
+
     test("one client's Redis-time cooldown blocks another client until expiry", async () => {
       await withStore(async ({ first, second, key, cooldownKey, gate }) => {
         const before = await redisNow(first);
@@ -224,10 +428,18 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         const reason = new DOMException("Already cancelled", "AbortError");
         controller.abort(reason);
         const firstGate = gate({ client: first });
-        await expect(firstGate(controller.signal)).rejects.toBe(reason);
-        await expect(
-          firstGate.defer(COOLDOWN_MS, controller.signal),
-        ).rejects.toBe(reason);
+        expect(
+          await firstGate(controller.signal).then(
+            () => "accepted",
+            (error: unknown) => error,
+          ),
+        ).toBe(reason);
+        expect(
+          await firstGate.defer(COOLDOWN_MS, controller.signal).then(
+            () => "accepted",
+            (error: unknown) => error,
+          ),
+        ).toBe(reason);
         expect(await first.send("EXISTS", [key, cooldownKey])).toBe(0);
       });
     });

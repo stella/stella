@@ -42,7 +42,10 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchPublisher,
+  PublisherRateLimitRefusalError,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -2845,7 +2848,19 @@ export const euEcjAdapter = defineSourceAdapter({
 
         return { decisions, nextCursor };
       },
-      catch: adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor),
+      catch: (cause) => {
+        const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);
+        if (error instanceof PublisherRateLimitRefusalError) {
+          return new PublisherRateLimitRefusalError({
+            publisherKey: error.publisherKey,
+            status: error.status,
+            cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor,
+          });
+        }
+        return error;
+      },
     });
   },
 });

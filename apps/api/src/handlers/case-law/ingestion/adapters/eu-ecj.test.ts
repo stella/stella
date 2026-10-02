@@ -28,6 +28,7 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 import { SHELL_STEM } from "../parsers/__fixtures__/eu-ecj/corpus";
 import sparqlFixture from "./__fixtures__/eu-ecj-sparql.json";
+import { PublisherRateLimitRefusalError } from "./retry";
 
 const fulltextHtml = await Bun.file(
   new URL("__fixtures__/eu-ecj-fulltext-en.html", import.meta.url),
@@ -37,6 +38,38 @@ const CELLAR_RESOURCE_PREFIX = "http://publications.europa.eu/resource/cellar/";
 const EN_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0011.05";
 const FR_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0012.05";
 const DE_MANIFESTATION_ID = "5980acd6-b5e4-11ee-b164-01aa75ed71a1.0013.05";
+
+describe("publisher rate-limit halt (rule 13)", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+  test("a 429 spends one request and leaves the page cursor untouched", async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requests += 1;
+        return new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "3" },
+        });
+      }),
+    );
+    const cursor = "2024-01-18";
+    const result = await ecjAdapter.fetchPage(cursor, {});
+    expect(Result.isError(result)).toBe(true);
+    if (!Result.isError(result)) {
+      throw new TypeError("Expected publisher refusal");
+    }
+    expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
+    expect(result.error).toMatchObject({
+      cursor,
+      httpStatus: 429,
+      publisherKey: "cellar-eu",
+    });
+    expect(requests).toBe(1);
+  });
+});
 
 type SparqlFixtureBinding = (typeof sparqlFixture.results.bindings)[number];
 
@@ -1313,12 +1346,16 @@ describe("euEcjAdapter.reconciliation.buildDecision", () => {
         }),
       );
 
-      expect(rejectionMessage(rejection)).toContain(
-        status === 500
-          ? `CJEU document request failed: ${status}`
-          : `Publisher retry budget exhausted: ${status}`,
+      let expectedMessage = `Publisher retry budget exhausted: ${status}`;
+      if (status === 429) {
+        expectedMessage = `Publisher rate limit refused: ${status}`;
+      } else if (status === 500) {
+        expectedMessage = `CJEU document request failed: ${status}`;
+      }
+      expect(rejectionMessage(rejection)).toContain(expectedMessage);
+      expect(fetches).toHaveLength(
+        ordinal + (status === 500 || status === 429 ? 1 : 6),
       );
-      expect(fetches).toHaveLength(ordinal + (status === 500 ? 1 : 6));
       expect(fetches.at(-1)?.url).toBe(failedUrl);
     },
   );

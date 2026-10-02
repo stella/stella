@@ -6,7 +6,11 @@ import { propertyConfig } from "@stll/property-testing";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 
-import { publisherRetryDelay, retryPublisherRequest } from "./retry";
+import {
+  PublisherRateLimitRefusalError,
+  publisherRetryDelay,
+  retryPublisherRequest,
+} from "./retry";
 
 const NOW = new Date("2026-10-02T00:00:00Z").getTime();
 const URL = "https://publications.europa.eu/test";
@@ -34,7 +38,7 @@ describe("publisher throttling and transient failures", () => {
       wait: 900_000,
     },
   ];
-  for (const status of [408, 429, 502, 503, 504]) {
+  for (const status of [408, 502, 503, 504]) {
     for (const header of headers) {
       test(`${status} respects Retry-After ${header.label} before recovering`, async () => {
         let requests = 0;
@@ -55,6 +59,7 @@ describe("publisher throttling and transient failures", () => {
           },
           defer: async (durationMs) => {
             gateWaits.push(durationMs);
+            return NOW + durationMs;
           },
           sleep: async (durationMs) => {
             waits.push(durationMs);
@@ -70,13 +75,96 @@ describe("publisher throttling and transient failures", () => {
     }
   }
 
-  test("repeated throttling succeeds with five exponential waits", async () => {
+  for (const status of [429, 302]) {
+    for (const header of headers) {
+      test(`${status} publishes Retry-After ${header.label} and stops after one typed refusal`, async () => {
+        let requests = 0;
+        const gateWaits: number[] = [];
+        const waits: number[] = [];
+        const pending = retryPublisherRequest(
+          URL,
+          {
+            ...INIT,
+            redirect: "manual",
+            isRateLimitRedirect: (response) =>
+              response.status === 302 &&
+              response.headers.get("Location") === "/limit-exceeded.html",
+          },
+          {
+            request: async () => {
+              requests += 1;
+              return new Response(null, {
+                status,
+                headers: {
+                  Location: "/limit-exceeded.html",
+                  ...(header.value === null
+                    ? {}
+                    : { "Retry-After": header.value }),
+                },
+              });
+            },
+            defer: async (durationMs) => {
+              gateWaits.push(durationMs);
+              return NOW + durationMs;
+            },
+            sleep: async (durationMs) => {
+              waits.push(durationMs);
+            },
+            now: () => NOW,
+            random: () => 0.5,
+          },
+        );
+        expect(
+          await pending.then(
+            () => "accepted",
+            (error: unknown) => error,
+          ),
+        ).toBeInstanceOf(PublisherRateLimitRefusalError);
+        expect(
+          await pending.then(
+            () => "accepted",
+            (error: unknown) => error,
+          ),
+        ).toMatchObject({
+          publisherKey: "cellar-eu",
+          status,
+          cooldownUntilEpochMs: NOW + header.wait,
+        });
+        expect(requests).toBe(1);
+        expect(gateWaits).toEqual([header.wait]);
+        expect(waits).toEqual([]);
+      });
+    }
+  }
+
+  test("fractional jitter publishes and sleeps the same integer milliseconds", async () => {
+    const deferred: number[] = [];
+    const slept: number[] = [];
+    let requests = 0;
+    await retryPublisherRequest(URL, INIT, {
+      request: async () =>
+        new Response(null, { status: ++requests === 1 ? 503 : 200 }),
+      defer: async (ms) => {
+        deferred.push(ms);
+        return NOW + ms;
+      },
+      sleep: async (ms) => {
+        slept.push(ms);
+      },
+      now: () => NOW,
+      random: () => 0.370123,
+    });
+    expect(deferred).toEqual([741]);
+    expect(slept).toEqual(deferred);
+  });
+
+  test("repeated transient failures succeed with five exponential waits", async () => {
     let requests = 0;
     const waits: number[] = [];
     const response = await retryPublisherRequest(URL, INIT, {
       request: async () =>
-        new Response(null, { status: ++requests <= 5 ? 429 : 200 }),
-      defer: async () => {},
+        new Response(null, { status: ++requests <= 5 ? 503 : 200 }),
+      defer: async () => NOW,
       sleep: async (durationMs) => {
         waits.push(durationMs);
       },
@@ -96,14 +184,19 @@ describe("publisher throttling and transient failures", () => {
         requests += 1;
         return new Response(null, { status: 503 });
       },
-      defer: async () => {},
+      defer: async () => NOW,
       sleep: async (durationMs) => {
         waits.push(durationMs);
       },
       now: () => NOW,
       random: () => 0.5,
     });
-    await expect(pending).rejects.toBeInstanceOf(AdapterFetchError);
+    expect(
+      await pending.then(
+        () => "accepted",
+        (error: unknown) => error,
+      ),
+    ).toBeInstanceOf(AdapterFetchError);
     expect(requests).toBe(6);
     expect(waits).toHaveLength(5);
   });
@@ -124,6 +217,7 @@ describe("publisher throttling and transient failures", () => {
         },
         defer: async (durationMs) => {
           waits.push(durationMs);
+          return NOW + durationMs;
         },
         sleep: async (durationMs) => {
           waits.push(durationMs);
@@ -151,7 +245,7 @@ describe("publisher throttling and transient failures", () => {
           }
           return new Response(null);
         },
-        defer: async () => {},
+        defer: async () => NOW,
         sleep: async (durationMs) => {
           waits.push(durationMs);
         },
@@ -174,9 +268,9 @@ describe("publisher throttling and transient failures", () => {
       {
         request: async () => {
           requests += 1;
-          return new Response(null, { status: 429 });
+          return new Response(null, { status: 503 });
         },
-        defer: async () => {},
+        defer: async () => NOW,
         sleep: async (_durationMs, signal) => {
           expect(signal).toBe(controller.signal);
           controller.abort(reason);
@@ -186,7 +280,12 @@ describe("publisher throttling and transient failures", () => {
         random: () => 0.5,
       },
     );
-    await expect(pending).rejects.toBe(reason);
+    expect(
+      await pending.then(
+        () => "accepted",
+        (error: unknown) => error,
+      ),
+    ).toBe(reason);
     expect(requests).toBe(1);
   });
 
@@ -198,13 +297,23 @@ describe("publisher throttling and transient failures", () => {
         requests += 1;
         throw reason;
       },
-      defer: async () => {},
+      defer: async () => NOW,
       sleep: async () => {},
       now: () => NOW,
       random: () => 0.5,
     });
-    await expect(pending).rejects.toBeInstanceOf(AdapterFetchError);
-    await expect(pending).rejects.toMatchObject({ cause: reason });
+    expect(
+      await pending.then(
+        () => "accepted",
+        (error: unknown) => error,
+      ),
+    ).toBeInstanceOf(AdapterFetchError);
+    expect(
+      await pending.then(
+        () => "accepted",
+        (error: unknown) => error,
+      ),
+    ).toMatchObject({ cause: reason });
     expect(requests).toBe(1);
   });
 });

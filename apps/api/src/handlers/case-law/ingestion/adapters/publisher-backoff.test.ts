@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  createPublisherGateSlot,
+  readPublisherCooldown,
+} from "./publisher-policy";
 import { createPublisherRequestSlot } from "./publisher-request-gate";
 
 const createGateClock = () => {
@@ -16,13 +20,17 @@ const createGateClock = () => {
       }
       // Model Redis replies against a shared clock to exercise scheduling; this fake does not execute Lua.
       if (key.endsWith(":cooldown")) {
+        if (args.at(0)?.includes("return untilAt > now")) {
+          const deadline = values.get(key) ?? now;
+          return deadline > now ? deadline : 0;
+        }
         const duration = args.at(3);
         const until = Math.max(
           values.get(key) ?? now,
           duration === undefined ? now : now + Number(duration),
         );
         values.set(key, until);
-        return Math.max(0, until - now);
+        return duration === undefined ? Math.max(0, until - now) : until;
       }
       const cooldownKey = keyCount === 2 ? args.at(3) : undefined;
       const slot = Math.max(
@@ -76,6 +84,42 @@ const CONFIG = {
 } as const;
 
 describe("a publisher cooldown shared across workers", () => {
+  test("production reservation keys share the same nonempty cluster hash tag", async () => {
+    const commands: string[][] = [];
+    const gate = createPublisherGateSlot("cellar-eu", {
+      redis: () => ({
+        send: (_command, args) => {
+          commands.push(args);
+          return 0;
+        },
+      }),
+      sleep: async () => {},
+    });
+    await gate();
+    const keys = commands.at(0)?.slice(2, 4);
+    expect(keys).toHaveLength(2);
+    const tags = keys?.map((key) => /\{([^{}]+)\}/u.exec(key)?.at(1));
+    expect(tags).toEqual(["cellar-eu", "cellar-eu"]);
+  });
+
+  test("cooldown reads expose the shared deadline and become null at expiry", async () => {
+    const clock = createGateClock();
+    const first = createPublisherRequestSlot(CONFIG, clock.dependencies);
+    const second = createPublisherRequestSlot(CONFIG, clock.dependencies);
+    expect(await first.readCooldown()).toBeNull();
+    expect(await first.defer(2000)).toBe(2000);
+    expect(await second.readCooldown()).toBe(2000);
+    const shared = createPublisherGateSlot("cellar-eu", clock.dependencies);
+    await shared.defer(3000);
+    expect(await readPublisherCooldown("cellar-eu", clock.dependencies)).toBe(
+      3000,
+    );
+    clock.advanceTo(3000);
+    expect(
+      await readPublisherCooldown("cellar-eu", clock.dependencies),
+    ).toBeNull();
+    expect(await second.readCooldown()).toBeNull();
+  });
   test("a second eu-ecj request cannot pass the gate during backoff", async () => {
     const clock = createGateClock();
     const firstWorker = createPublisherRequestSlot(CONFIG, clock.dependencies);
