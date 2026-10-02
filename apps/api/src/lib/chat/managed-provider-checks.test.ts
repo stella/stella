@@ -71,6 +71,10 @@ describe("managed request catalog checks", () => {
     let stopped = false;
     let missing = false;
     let requests = 0;
+    let holding = false;
+    let heldRequests = 0;
+    const held = Promise.withResolvers<Response>();
+    const heldStarted = Promise.withResolvers<undefined>();
     Object.assign(env, {
       FEATURE_MANAGED_PROVIDER_CHECKS: true,
       MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
@@ -80,6 +84,11 @@ describe("managed request catalog checks", () => {
     globalThis.fetch = Object.assign(
       async () => {
         requests++;
+        if (holding) {
+          heldRequests++;
+          if (heldRequests === 2) {heldStarted.resolve(undefined);}
+          return (await held.promise).clone();
+        }
         return Response.json({ data: missing ? [] : [{ id: MODEL }] });
       },
       { preconnect: originalFetch.preconnect },
@@ -117,6 +126,19 @@ describe("managed request catalog checks", () => {
       expect(requests).toBe(6);
       for (const residency of MANAGED_AI_RESIDENCIES) {
         expect(checkManagedOpenRouterModel(MODEL, residency).isOk()).toBe(true);
+      }
+      holding = true;
+      const refreshing = options.run();
+      await heldStarted.promise;
+      for (const residency of MANAGED_AI_RESIDENCIES) {
+        expect(checkManagedOpenRouterModel(MODEL, residency).isOk()).toBe(true);
+      }
+      held.resolve(Response.json({ data: [] }));
+      await refreshing;
+      for (const residency of MANAGED_AI_RESIDENCIES) {
+        expect(checkManagedOpenRouterModel(MODEL, residency).isErr()).toBe(
+          true,
+        );
       }
       await close();
       close = undefined;

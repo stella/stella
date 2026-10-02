@@ -53,11 +53,11 @@ export const createManagedProviderAvailability = ({
     us: { status: "unavailable" },
   };
 
+  // Completed observations survive one slow refresh, but never indefinite stalling.
+  const maxStalenessMs = 2 * intervalMs + timeoutMs;
   const refresh = async () =>
     await Promise.all(
       MANAGED_AI_RESIDENCIES.map(async (residency) => {
-        availability[residency] = { status: "unavailable" };
-        const expiresAt = now() + intervalMs;
         const observed = await Result.tryPromise({
           try: async () =>
             await withTimeout(
@@ -112,7 +112,7 @@ export const createManagedProviderAvailability = ({
         availability[residency] = {
           status: "available",
           models: result.value,
-          expiresAt,
+          expiresAt: now() + maxStalenessMs,
         };
         return Result.ok(undefined);
       }),

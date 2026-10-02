@@ -1,5 +1,5 @@
 import { Result, panic } from "better-result";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, jest, test } from "bun:test";
 
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -59,7 +59,7 @@ describe("regional catalog availability", () => {
       );
       expect(monitor.check(MODEL, residency).isOk()).toBe(true);
       expect(monitor.check("fixture/missing", residency).isErr()).toBe(true);
-      monitor.advance(53);
+      monitor.advance(117);
       const expired = monitor.check(MODEL, residency);
       expect(expired.isErr()).toBe(true);
       if (Result.isError(expired)) {
@@ -129,7 +129,7 @@ describe("regional catalog availability", () => {
         expect(monitor.check(MODEL, residency).isOk()).toBe(true);
         failing = true;
         const refreshing = monitor.refresh();
-        expect(monitor.check(MODEL, residency).isErr()).toBe(true);
+        expect(monitor.check(MODEL, residency).isOk()).toBe(true);
         const outcomes = await refreshing;
         expect(outcomes.filter((result) => result.isErr())).toHaveLength(1);
         const result = monitor.check(MODEL, residency);
@@ -153,4 +153,142 @@ describe("regional catalog availability", () => {
       });
     }
   }
+});
+
+describe("completed regional observations", () => {
+  test.each(MANAGED_AI_RESIDENCIES)(
+    "keeps completed %s availability during a refresh",
+    async (residency) => {
+      jest.useFakeTimers();
+      const pending = Promise.withResolvers<Response>();
+      const started = Promise.withResolvers<undefined>();
+      let waiting = false;
+      let requests = 0;
+      const monitor = fixture(async () => {
+        if (!waiting) {return catalog([MODEL]);}
+        requests++;
+        if (requests === MANAGED_AI_RESIDENCIES.length)
+          {started.resolve(undefined);}
+        return (await pending.promise).clone();
+      });
+      let refreshing: ReturnType<typeof monitor.refresh> | undefined;
+      try {
+        await monitor.refresh();
+        waiting = true;
+        refreshing = monitor.refresh();
+        await started.promise;
+        monitor.advance(10);
+        jest.advanceTimersByTime(10);
+        expect(monitor.check(MODEL, residency).isOk()).toBe(true);
+        pending.resolve(catalog([MODEL]));
+        await refreshing;
+        expect(monitor.check(MODEL, residency).isOk()).toBe(true);
+        monitor.advance(116);
+        jest.advanceTimersByTime(116);
+        expect(monitor.check(MODEL, residency).isOk()).toBe(true);
+      } finally {
+        pending.resolve(catalog([MODEL]));
+        await refreshing;
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  test.each(["failure", "timeout", "missing"] as const)(
+    "a completed %s refresh replaces prior availability",
+    async (outcome) => {
+      jest.useFakeTimers();
+      const pending = Promise.withResolvers<Response>();
+      const started = Promise.withResolvers<undefined>();
+      let failing = false;
+      const monitor = fixture(async () => {
+        if (!failing) {return catalog([MODEL]);}
+        started.resolve(undefined);
+        return (await pending.promise).clone();
+      });
+      let refreshing: ReturnType<typeof monitor.refresh> | undefined;
+      try {
+        await monitor.refresh();
+        failing = true;
+        refreshing = monitor.refresh();
+        await started.promise;
+        for (const residency of MANAGED_AI_RESIDENCIES) {
+          expect(monitor.check(MODEL, residency).isOk()).toBe(true);
+        }
+        switch (outcome) {
+          case "failure":
+            pending.resolve(new Response(null, { status: 503 }));
+            break;
+          case "missing":
+            pending.resolve(catalog([]));
+            break;
+          case "timeout":
+            monitor.advance(11);
+            jest.advanceTimersByTime(11);
+            break;
+          default:
+            outcome satisfies never;
+            panic("Unexpected catalog observation outcome.");
+        }
+        await refreshing;
+        for (const residency of MANAGED_AI_RESIDENCIES) {
+          expect(monitor.check(MODEL, residency).isErr()).toBe(true);
+        }
+      } finally {
+        pending.resolve(catalog([]));
+        await refreshing;
+        jest.useRealTimers();
+      }
+    },
+  );
+
+  test("no completed boot observation refuses requests", async () => {
+    jest.useFakeTimers();
+    const pending = Promise.withResolvers<Response>();
+    const started = Promise.withResolvers<undefined>();
+    const monitor = fixture(async () => {
+      started.resolve(undefined);
+      return (await pending.promise).clone();
+    });
+    let refreshing: ReturnType<typeof monitor.refresh> | undefined;
+    try {
+      for (const residency of MANAGED_AI_RESIDENCIES) {
+        expect(monitor.check(MODEL, residency).isErr()).toBe(true);
+      }
+      refreshing = monitor.refresh();
+      await started.promise;
+      for (const residency of MANAGED_AI_RESIDENCIES) {
+        expect(monitor.check(MODEL, residency).isErr()).toBe(true);
+      }
+      pending.resolve(catalog([MODEL]));
+      await refreshing;
+      for (const residency of MANAGED_AI_RESIDENCIES) {
+        expect(monitor.check(MODEL, residency).isOk()).toBe(true);
+      }
+    } finally {
+      pending.resolve(catalog([MODEL]));
+      await refreshing;
+      jest.useRealTimers();
+    }
+  });
+
+  test("completed availability expires at the configured staleness bound", async () => {
+    jest.useFakeTimers();
+    const monitor = fixture(async () => catalog([MODEL]));
+    try {
+      await monitor.refresh();
+      monitor.advance(116);
+      jest.advanceTimersByTime(116);
+      for (const residency of MANAGED_AI_RESIDENCIES) {
+        expect(monitor.check(MODEL, residency).isOk()).toBe(true);
+      }
+      monitor.advance(1);
+      jest.advanceTimersByTime(1);
+      for (const residency of MANAGED_AI_RESIDENCIES) {
+        expect(monitor.check(MODEL, residency).isErr()).toBe(true);
+      }
+    } finally {
+      jest.useRealTimers();
+    }
+  });
 });
