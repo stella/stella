@@ -45,6 +45,8 @@ import {
 } from "@/api/tests/helpers/recording-telemetry";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
+import { PublisherPageError } from "./publisher-page";
+
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
 const readFixture = async (name: string): Promise<string> =>
@@ -605,6 +607,100 @@ describe("the crawl keeps a refused row as its listing", () => {
     mock.restore();
   });
 
+  for (const fixture of [
+    { name: "HTML challenge", body: "<html><form><input></form></html>" },
+    { name: "empty JSON", body: "{}" },
+    { name: "missing items field", body: '{"totalPages":0}' },
+    { name: "truncated JSON", body: '{"items":[' },
+    { name: "empty bytes", body: "" },
+  ]) {
+    test(`rejects a 200 ${fixture.name} listing with its typed page failure`, async () => {
+      globalThis.fetch = asFetchMock(async () => new Response(fixture.body));
+      const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+    test(`isolates a 200 ${fixture.name} document beside a valid item`, async () => {
+      const district = await itemByDocket(LISTING, DISTRICT_DOCKET);
+      const appellate = await itemByDocket(LISTING, APPELLATE_DOCKET);
+      const listing = JSON.stringify({
+        items: [district, appellate],
+        totalPages: 2,
+        pageNumber: 0,
+      });
+      const validDocument = await readFixture(APPELLATE_DOCUMENT);
+      globalThis.fetch = asFetchMock(async (input: string) => {
+        if (input === district.odkaz) {
+          return new Response(fixture.body);
+        }
+        return new Response(
+          input === appellate.odkaz ? validDocument : listing,
+        );
+      });
+      const page = (
+        await czRegionalAdapter.fetchPage("2025-06-11:0", {})
+      ).unwrap();
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      expect(
+        page.decisions.map(({ caseNumber, isListingOnly }) => ({
+          caseNumber,
+          isListingOnly,
+        })),
+      ).toEqual([
+        { caseNumber: "18 C 130/2024", isListingOnly: true },
+        { caseNumber: "26 Co 43/2025", isListingOnly: undefined },
+      ]);
+      expect(page.nextCursor).toBe("2025-06-11:1");
+    });
+  }
+  test("accepts a small valid empty listing", async () => {
+    globalThis.fetch = asFetchMock(async () => new Response('{"items":[]}'));
+    const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+    expect(result.unwrap().decisions).toEqual([]);
+  });
+  test("a malformed listing member does not reject its valid sibling", async () => {
+    const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const listing = JSON.stringify({
+      items: [{ jednaciCislo: 7 }, item],
+      totalPages: 2,
+    });
+    const document = await readFixture(DISTRICT_DOCUMENT);
+    globalThis.fetch = asFetchMock(
+      async (input: string) =>
+        new Response(input === item.odkaz ? document : listing),
+    );
+    const page = (
+      await czRegionalAdapter.fetchPage("2025-06-11:0", {})
+    ).unwrap();
+    expect(page.decisions).toHaveLength(1);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.nextCursor).toBe("2025-06-11:1");
+  });
+  test("accepts a small valid document with its publisher identifier", async () => {
+    const item = await itemByDocket(LISTING, DISTRICT_DOCKET);
+    const listing = JSON.stringify({ items: [item], totalPages: 1 });
+    let requests = 0;
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(
+          ++requests === 1
+            ? listing
+            : JSON.stringify({ uuid: "499830de-0000-4000-8000-a32aab555555" }),
+        ),
+    );
+    const result = await czRegionalAdapter.fetchPage("2025-06-11:0", {});
+    expect(requests).toBe(2);
+    expect(result.unwrap().decisions).toHaveLength(1);
+  });
+
   /** Crawl one day page whose district document carries `districtMetadata`. */
   const crawlDay = async ({
     cursor,
@@ -651,6 +747,10 @@ describe("the crawl keeps a refused row as its listing", () => {
     });
 
     const decisions = page.unwrap().decisions;
+    expect(page.unwrap().itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
     expect(
       decisions.map(({ caseNumber, isListingOnly }) => ({
         caseNumber,
@@ -722,12 +822,19 @@ describe("the crawl keeps a refused row as its listing", () => {
           errorType: "TypeError",
           grade: "transient",
         },
-        {
-          caseNumber: "26 Co 43/2025",
-          errorType: "SyntaxError",
-          grade: "transient",
-        },
       ]);
+      expect(page.unwrap().itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      expect(
+        logs
+          .at("WARN")
+          .filter(
+            (record) =>
+              record.message === "case_law.ingestion.item_build_failed",
+          ),
+      ).toHaveLength(1);
     } finally {
       logs.restore();
     }
@@ -932,6 +1039,43 @@ describe("the crawl keeps a refused row as its listing", () => {
     });
 
     expect(page.unwrap().nextCursor).toBe("2025-06-12:0");
+  });
+
+  test("a day of unkeyable rows counts failures without empty-day gap skipping", async () => {
+    const item = await itemByDocket(MINISTRY_LISTING, MINISTRY_DOCKET);
+    expect(
+      assembleCzRegionalDecision({ item, document: null, chain: null }).type,
+    ).toBe("unkeyable");
+    globalThis.fetch = asFetchMock(
+      async () =>
+        new Response(JSON.stringify({ items: [item], totalPages: 1 })),
+    );
+
+    const page = (
+      await czRegionalAdapter.fetchPage("2025-06-11:0:30", {})
+    ).unwrap();
+    expect(page.decisions).toHaveLength(0);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.nextCursor).toBe("2025-06-12:0");
+  });
+
+  test("a document with no court counts as an item failure on a populated day", async () => {
+    const page = (
+      await crawlDay({
+        cursor: "2025-06-11:0:30",
+        withAppellate: false,
+        districtMetadata: { courtCode: "NONE" },
+      })
+    ).unwrap();
+    expect(page.decisions).toHaveLength(0);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.nextCursor).toBe("2025-06-12:0");
   });
 
   test("an assembly failure other than a refusal halts the page", async () => {
