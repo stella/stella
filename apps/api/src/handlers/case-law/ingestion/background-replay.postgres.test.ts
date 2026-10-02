@@ -44,7 +44,10 @@ import {
   REPLAY_ROW_OUTCOME,
   type ReplayRunReport,
 } from "@/api/handlers/case-law/ingestion/replay";
-import { REPLAY_ENROLMENT } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import {
+  BACKGROUND_REPLAY_LIMITS,
+  REPLAY_ENROLMENT,
+} from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -198,6 +201,9 @@ if (!databaseUrl || !enabled) {
         store,
         metrics,
         now: () => clock,
+        advanceTime: (milliseconds: number) => {
+          clock += milliseconds;
+        },
         nextDay: () => {
           clock += 86_400_000;
         },
@@ -600,7 +606,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("canonical dry-run persists its preview cursor while leaving decisions, receipts and budget rows untouched", async () => {
+    test("canonical dry-run persists budgeted preview receipts while leaving decisions untouched", async () => {
       const state = await fixture(3, "dry-run");
       const before = await db
         .select()
@@ -626,24 +632,127 @@ if (!databaseUrl || !enabled) {
                 .from(caseLawDecisions)
                 .where(eq(caseLawDecisions.sourceId, state.source.id)),
             ).toEqual(before);
+            const receipts = await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.sourceId, state.source.id));
+            expect(receipts).toHaveLength(2);
             expect(
-              await db
-                .select()
-                .from(caseLawReplayBatches)
-                .where(eq(caseLawReplayBatches.sourceId, state.source.id)),
-            ).toHaveLength(0);
+              receipts.every(
+                (row) =>
+                  row.id.endsWith(":dry-run") &&
+                  row.status === "completed" &&
+                  row.failed === 0 &&
+                  row.applied === 0,
+              ),
+            ).toBe(true);
             expect(
               await db
                 .select()
                 .from(caseLawReplayDailyRows)
                 .where(eq(caseLawReplayDailyRows.sourceId, state.source.id)),
-            ).toHaveLength(0);
+            ).toHaveLength(2);
             expect(fake.requests).toHaveLength(0);
           },
         });
       } finally {
         fake.stop();
       }
+    });
+
+    test("a failed dry-run tick leaves its cursor before the row and retries after durable backoff", async () => {
+      const state = await fixture(3, "dry-run");
+      const before = await db
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, state.source.id));
+      await withSlots({
+        run: async ([slot]) => {
+          const canonical = canonicalReplay();
+          let fail = true;
+          const inspected: string[] = [];
+          const adapter = {
+            ...canonical.adapter,
+            reparseStoredRaw: (stored) => {
+              inspected.push(stored.caseNumber);
+              if (fail) {
+                throw new TypeError("fixture adapter failure");
+              }
+              return canonical.adapter.reparseStoredRaw(stored);
+            },
+          } satisfies SourceAdapter;
+          expect(
+            (await tick({ fixture: state, slot, canonical: { adapter } }))
+              .status,
+          ).toBe("retryable");
+          expect(inspected).toEqual(["engine-0"]);
+          const cursor = async () =>
+            (
+              await db
+                .select()
+                .from(databaseBackfillStates)
+                .where(
+                  eq(
+                    databaseBackfillStates.name,
+                    `case-law-replay:${state.source.id}:2:dry-run`,
+                  ),
+                )
+            ).at(0)?.cursor;
+          expect(await cursor()).toBeUndefined();
+          const failed = (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.sourceId, state.source.id))
+          ).at(0);
+          expect(failed).toMatchObject({
+            failed: 1,
+            attempts: 1,
+            failureCode: "adapter-exception",
+          });
+          expect(failed?.retryAt).toEqual(
+            new Date(state.now() + BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs),
+          );
+          await tick({
+            fixture: state,
+            slot,
+            canonical: { adapter },
+            maxRows: 1,
+          });
+          expect(inspected).toHaveLength(1);
+          expect(await cursor()).toBeUndefined();
+          fail = false;
+          state.advanceTime(BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs);
+          await tick({
+            fixture: state,
+            slot,
+            canonical: { adapter },
+            maxRows: 1,
+          });
+          expect(inspected).toEqual(["engine-0", "engine-0"]);
+          expect(await cursor()).toBe(state.ids.at(0));
+          expect(
+            (
+              await db
+                .select()
+                .from(caseLawReplayBatches)
+                .where(eq(caseLawReplayBatches.sourceId, state.source.id))
+            ).at(0),
+          ).toMatchObject({ failed: 0, attempts: 2, retryAt: null });
+          expect(
+            await db
+              .select()
+              .from(caseLawReplayDailyRows)
+              .where(eq(caseLawReplayDailyRows.sourceId, state.source.id)),
+          ).toHaveLength(1);
+          expect(
+            await db
+              .select()
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.sourceId, state.source.id)),
+          ).toEqual(before);
+        },
+      });
     });
 
     test("lease cleanup uses a fresh schema-lane handle and survives a concurrent exclusive upgrade", async () => {

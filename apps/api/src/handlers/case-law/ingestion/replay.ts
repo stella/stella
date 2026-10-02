@@ -231,6 +231,8 @@ const replayScopePredicate = (scope: CaseLawReplayScope): SQL | undefined => {
 };
 
 /** Operator replay keeps its timestamp order; background work walks only parser lag by ID. */
+export const BACKGROUND_REPLAY_PREVIEW_SUFFIX = ":dry-run";
+
 export type ReplaySelection =
   | { type: "operator" }
   | { type: "background"; currentParserVersion: number };
@@ -293,6 +295,8 @@ const replaySelectionPredicate = (
           .where(
             and(
               eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
+              // Preview bookkeeping never excludes a row from apply or retry.
+              sql`right(${caseLawReplayBatches.id}, length(${BACKGROUND_REPLAY_PREVIEW_SUFFIX})) <> ${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`,
               eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
               eq(
                 caseLawReplayBatches.parserVersionTo,

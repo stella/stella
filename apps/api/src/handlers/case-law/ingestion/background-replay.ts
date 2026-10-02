@@ -98,7 +98,7 @@ export type BackgroundReplayDependencies = {
   previewBatch: (
     source: BackgroundReplaySource,
     after: SafeId<"caseLawDecision"> | null,
-  ) => Promise<BackgroundReplayBatch | null>;
+  ) => Promise<BackgroundReplayReservation | { type: "waiting" }>;
   replay: (
     batch: BackgroundReplayBatch,
     options: { apply: boolean },
@@ -146,7 +146,7 @@ type ReplayAdmission =
   | BackgroundReplayReservation
   | {
       type: "stopped";
-      status: "killed" | "time-limit";
+      status: "killed" | "time-limit" | "retryable";
     };
 
 /** Resume durable work before inspecting current parser lag or reserving new work. */
@@ -157,8 +157,10 @@ const admitReplayBatch = async ({
   stopRequested,
 }: AdmitReplayBatchOptions): Promise<ReplayAdmission> => {
   if (source.mode === "dry-run") {
-    const batch = await dependencies.previewBatch(source, after);
-    return batch === null ? { type: "empty" } : { type: "reserved", batch };
+    const preview = await dependencies.previewBatch(source, after);
+    return preview.type === "waiting"
+      ? { type: "stopped", status: "retryable" }
+      : preview;
   }
   const utcDay = new Date(dependencies.now()).toISOString().slice(0, 10);
   const pending = await dependencies.pendingBatch(source, utcDay);
@@ -219,6 +221,18 @@ type RunReplayBatchOptions = {
   signal: AbortSignal | undefined;
 };
 
+type ReplayFailureStopOptions = {
+  mode: BackgroundReplaySource["mode"];
+  code: ReplayFailure["code"];
+  scope: ReplayFailure["scope"];
+};
+const replayFailureStop = ({ mode, code, scope }: ReplayFailureStopOptions) => {
+  if (scope === "systemic") {
+    return code === "tick-deadline" ? "time-limit" : "failed";
+  }
+  return mode === "dry-run" ? "retryable" : null;
+};
+
 const runReplayBatch = async ({
   dependencies,
   source,
@@ -251,7 +265,7 @@ const runReplayBatch = async ({
   ) {
     failure = replayFailure("writer-retryable");
   }
-  let stop: "failed" | "time-limit" | null = null;
+  let stop: "failed" | "time-limit" | "retryable" | null = null;
   if (failure === null && source.mode === "enrolled" && replayed !== null) {
     const completion = await Result.tryPromise(
       async () =>
@@ -284,31 +298,31 @@ const runReplayBatch = async ({
     let settledScope = failure.scope;
     const failureToRecord = failure;
     report.errors += 1;
-    if (source.mode === "enrolled") {
-      const settlement = await Result.tryPromise(
-        async () =>
-          await dependencies.recordFailure(batch, {
-            ...failureToRecord,
-            durationMs,
-            verdict,
-            healthyEvidence: report.applied > 0 ? "adjacent-row" : "none",
-          }),
-      );
-      if (settlement.isOk()) {
-        if (settlement.value === "isolated" || settlement.value === "failed") {
-          settledScope = "row";
-        }
-        report.failed += Number(settlement.value === "failed");
-        report.applied += Number(settlement.value === "applied");
-      } else {
-        stop = "failed";
+    const settlement = await Result.tryPromise(
+      async () =>
+        await dependencies.recordFailure(batch, {
+          ...failureToRecord,
+          durationMs,
+          verdict,
+          healthyEvidence: report.applied > 0 ? "adjacent-row" : "none",
+        }),
+    );
+    if (settlement.isOk()) {
+      if (settlement.value === "isolated" || settlement.value === "failed") {
+        settledScope = "row";
       }
+      report.failed += Number(settlement.value === "failed");
+      report.applied += Number(settlement.value === "applied");
+    } else {
+      stop = "failed";
     }
-    if (settledScope === "systemic" && stop !== "failed") {
-      stop = failure.code === "tick-deadline" ? "time-limit" : "failed";
-    }
+    stop ??= replayFailureStop({
+      mode: source.mode,
+      code: failure.code,
+      scope: settledScope,
+    });
   }
-  if (source.mode === "dry-run") {
+  if (source.mode === "dry-run" && failure === null) {
     await dependencies.advancePreview(batch);
   }
   return { durationMs, stop };
