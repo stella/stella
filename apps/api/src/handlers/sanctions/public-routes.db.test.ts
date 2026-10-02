@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
+import { Worker } from "node:worker_threads";
+import type { TransferListItem } from "node:worker_threads";
 
 import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
@@ -25,6 +27,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
 import { createSanctionsMatcherPool } from "@/api/lib/lists/sanctions/matcher-pool";
+import type {
+  SanctionsMatcherMessage,
+  SanctionsMatcherReply,
+} from "@/api/lib/lists/sanctions/matcher-protocol";
 import { createPublicSanctionsScreening } from "@/api/lib/lists/sanctions/public-screening";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
@@ -362,6 +368,139 @@ const clearSubject = {
   name: "UnmatchedPrivateIdentityQxzv",
   companyId: null,
 } as const satisfies NameSubject;
+
+const exerciseColdWarmup = async (size: 1 | 2) => {
+  const firstEntered = Promise.withResolvers<undefined>();
+  const releaseFirst = Promise.withResolvers<undefined>();
+  const warmEntered = Promise.withResolvers<undefined>();
+  const releaseWarm = Promise.withResolvers<undefined>();
+  const warmCacheAccessed = Promise.withResolvers<undefined>();
+  const warmFinished = Promise.withResolvers<undefined>();
+  const messages: SanctionsMatcherMessage[] = [];
+  const screenedSources = new Set<SanctionsSource>();
+  let reads = 0;
+  class RecordingWorker extends Worker {
+    constructor() {
+      super(
+        new URL(
+          "../../lib/lists/sanctions/sanctions-matcher-worker.ts",
+          import.meta.url,
+        ),
+      );
+      this.on("message", (reply: SanctionsMatcherReply) => {
+        const message = messages.at(-1);
+        if (reply.status !== "screened" || message?.type !== "screen") {return;}
+        screenedSources.add(message.source);
+        if (message.source === sanctionsSourceIds().at(-1))
+          {warmFinished.resolve(undefined);}
+      });
+    }
+    override postMessage(
+      value: unknown,
+      transfers: readonly TransferListItem[] = [],
+    ) {
+      messages.push(asTestRaw<SanctionsMatcherMessage>(value));
+      super.postMessage(value, transfers);
+    }
+  }
+  const pool = createSanctionsMatcherPool({
+    size,
+    deadlineMs: 250,
+    createWorker: () => new RecordingWorker(),
+  });
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      close: pool.close,
+      run: async (operation, options) =>
+        await pool.run(
+          async (session) =>
+            await operation({
+              signal: session.signal,
+              match: session.match,
+              hasEdition: (source, editionId) => {
+                const cached = session.hasEdition(source, editionId);
+                if (options?.onSettled !== undefined && source === "eu") {
+                  warmCacheAccessed.resolve(undefined);
+                }
+                return cached;
+              },
+            }),
+          options,
+        ),
+    },
+    loadEntries: async (options) => {
+      reads += 1;
+      if (reads === 1) {
+        firstEntered.resolve(undefined);
+        await releaseFirst.promise;
+        return [];
+      }
+      warmEntered.resolve(undefined);
+      await releaseWarm.promise;
+      return await loadEditionEntries(options);
+    },
+  });
+  const props = {
+    db: publicDb,
+    now: FRESH_NOW,
+    practiceJurisdictions: [],
+    subject: {
+      type: "person",
+      name: "Ivan Sidorov",
+      birthDate: { year: 1960, month: 5, day: 12 },
+      nationalityCodes: ["RU"],
+    },
+  } as const;
+  const missingProgress = Promise.withResolvers<never>();
+  const progressTimeout = setTimeout(
+    () =>
+      missingProgress.reject(
+        new TypeError("Background warming did not complete"),
+      ),
+    5000,
+  );
+  const first = publicScreen(props);
+  try {
+    await Promise.race([firstEntered.promise, missingProgress.promise]);
+    const unavailable = (await first).unwrap();
+    expect(unavailable.status).toBe("unavailable");
+    expect(
+      unavailable.lists.every(({ status }) => status === "unavailable"),
+    ).toBe(true);
+    if (size === 2) {
+      await Promise.race([warmCacheAccessed.promise, missingProgress.promise]);
+    }
+    releaseFirst.resolve(undefined);
+    await Promise.race([warmEntered.promise, missingProgress.promise]);
+    releaseWarm.resolve(undefined);
+    await Promise.race([warmFinished.promise, missingProgress.promise]);
+    expect([...screenedSources].toSorted()).toEqual(
+      sanctionsSourceIds().toSorted(),
+    );
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    const warmedReads = reads;
+    const backgroundMessages = [...messages];
+    const matched = (await publicScreen(props)).unwrap();
+    expect(matched.status).toBe("possible-match");
+    expect(
+      matched.lists.find(({ source }) => source === "eu")?.possibleMatches.at(0)
+        ?.sourceEntryId,
+    ).toBe("person");
+    expect(matched.lists.find(({ source }) => source === "eu")?.editionId).toBe(
+      activeEdition("eu"),
+    );
+    expect(reads).toBe(warmedReads);
+    return { messages: backgroundMessages, matched };
+  } finally {
+    clearTimeout(progressTimeout);
+    releaseFirst.resolve(undefined);
+    releaseWarm.resolve(undefined);
+    await first;
+    await pool.close();
+  }
+};
 
 describe("public sanctions search parity", () => {
   test(
@@ -806,6 +945,14 @@ describe("public sanctions search parity", () => {
         await pool.close();
         pools.delete(pool);
       }
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test.each([1, 2] as const)(
+    "cold deadline warms real indexes and the next public request matches (size %s)",
+    async (size) => {
+      await exerciseColdWarmup(size);
     },
     DB_TEST_TIMEOUT_MS,
   );
