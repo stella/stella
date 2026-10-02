@@ -43,13 +43,12 @@ const sections = fc.record({
   justification: fc.array(paragraph, { minLength: 1, maxLength: 3 }),
   information: fc.array(paragraph, { minLength: 1, maxLength: 3 }),
 });
-const id = "Czech regional section markers retain their source order";
 
 test(
-  id,
+  "Czech regional section markers retain their source order",
   () => {
     assertProperty(
-      id,
+      "Czech regional section markers retain their source order",
       fc.property(
         markerPlan,
         sections,
