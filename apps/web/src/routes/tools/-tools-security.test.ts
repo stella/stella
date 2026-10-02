@@ -76,6 +76,7 @@ const resolveLocalImport = (
   for (const suffix of CANDIDATE_SUFFIXES) {
     const candidate = base + suffix;
     if (
+      /\.[cm]?[jt]sx?$/u.test(candidate) &&
       candidate.startsWith(`${webSrc}${nodePath.sep}`) &&
       existsSync(candidate) &&
       statSync(candidate).isFile()
@@ -86,31 +87,26 @@ const resolveLocalImport = (
   return null;
 };
 
-// Static imports only: `import ... from "x"`, `export ... from "x"`, and
-// bare `import "x"`. Dynamic `import("x")` has no `from` clause and is
-// intentionally not matched. Server/loader modules reached dynamically are
-// explicit roots above; client-only islands remain the sanctioned escape
-// hatch for the auth/install path.
-const collectStaticImportSpecifiers = (source: string): readonly string[] => {
-  const specifiers: string[] = [];
-  for (const match of source.matchAll(
-    /\bfrom\s*["'](?<specifier>[^"']+)["']/gu,
-  )) {
-    const specifier = match.groups?.["specifier"];
-    if (specifier !== undefined) {
-      specifiers.push(specifier);
-    }
-  }
-  for (const match of source.matchAll(
-    /(?:^|[\n;])\s*import\s+["'](?<specifier>[^"']+)["']/gu,
-  )) {
-    const specifier = match.groups?.["specifier"];
-    if (specifier !== undefined) {
-      specifiers.push(specifier);
-    }
-  }
-  return specifiers;
+// Follow the emitted static graph: type imports are erased, and client-only
+// dynamic imports remain outside the server module graph.
+const importScanners = {
+  ts: new Bun.Transpiler({ loader: "ts" }),
+  tsx: new Bun.Transpiler({ loader: "tsx" }),
 };
+
+type CollectStaticImportSpecifiersOptions = {
+  source: string;
+  file: string;
+};
+
+const collectStaticImportSpecifiers = ({
+  source,
+  file,
+}: CollectStaticImportSpecifiersOptions): readonly string[] =>
+  importScanners[file.endsWith("x") ? "tsx" : "ts"]
+    .scanImports(source)
+    .filter(({ kind }) => kind === "import-statement")
+    .map(({ path }) => path);
 
 type Violation = {
   module: string;
@@ -135,7 +131,7 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
     visited.add(file);
 
     const source = readFileSync(file, "utf-8");
-    for (const specifier of collectStaticImportSpecifiers(source)) {
+    for (const specifier of collectStaticImportSpecifiers({ source, file })) {
       if (
         FORBIDDEN_IMPORT_PATTERNS.some((pattern) => pattern.test(specifier))
       ) {
@@ -159,6 +155,50 @@ const walkSsrGraph = (entries: readonly string[]): WalkResult => {
 };
 
 describe("public tools security invariants", () => {
+  test("follows static value imports and exports", () => {
+    expect(
+      collectStaticImportSpecifiers({
+        file: "module.tsx",
+        source: `
+        import type { TypeOnly } from "./types";
+        import { type MixedType, value } from "./mixed";
+        import { type InlineType } from "./inline-types";
+        export type { ExportType } from "./export-types";
+        export { forwarded } from "./forwarded";
+        export * from "./all";
+        import "./side-effect";
+        const lazy = import("./lazy");
+        // import commented from "./comment";
+        const text = 'from "./text"';
+      `,
+      }),
+    ).toEqual(["./mixed", "./forwarded", "./all", "./side-effect"]);
+  });
+
+  test("scans TypeScript generic arrows with the source loader", () => {
+    expect(
+      collectStaticImportSpecifiers({
+        file: "module.ts",
+        source:
+          'import { value } from "./value"; export const identity = <T>(value: T) => value;',
+      }),
+    ).toEqual(["./value"]);
+  });
+
+  test.each(["@/styles/app.css", "@/i18n/langs/en.json"])(
+    "treats %s as a non-script asset",
+    (specifier) => {
+      const file = nodePath.resolve(webSrc, "routes/tools/index.tsx");
+      expect(existsSync(nodePath.resolve(webSrc, specifier.slice(2)))).toBe(
+        true,
+      );
+      expect(resolveLocalImport(specifier, file)).toBeNull();
+      expect(resolveLocalImport("./route", file)).toBe(
+        nodePath.resolve(webSrc, "routes/tools/route.tsx"),
+      );
+    },
+  );
+
   test("no SSR-reachable tools module statically imports an authed query, the auth client, or the install path", () => {
     const entries = SSR_ENTRY_MODULES.map((path) =>
       nodePath.resolve(repoRoot, path),
