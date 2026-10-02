@@ -1,0 +1,19 @@
+name: Prepare network comparison baseline
+description: Load the main recording at the merge base and apply reviewed budget declarations
+inputs:
+  base-sha:
+    description: PR or merge-group base SHA
+    required: true
+  token:
+    description: Read-only Actions token
+    required: true
+runs:
+  using: composite
+  steps:
+    - name: Resolve merge base and baseline
+      shell: bash
+      env:
+        GH_TOKEN: ${{ inputs.token }}
+        BASE_SHA: ${{ inputs.base-sha }}
+        REPOSITORY: ${{ github.repository }}
+      run: bash .github/actions/prepare-network-baseline/prepare.sh
