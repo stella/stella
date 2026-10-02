@@ -878,7 +878,7 @@ describe("replay of a source", () => {
           reparsesToDocument(stored.caseNumber)
             ? {
                 type: "parsed",
-                result: {
+                result: plainTextIngestionResult({
                   caseNumber: stored.caseNumber,
                   court: stored.court,
                   country: "EU",
@@ -889,7 +889,7 @@ describe("replay of a source", () => {
                   ),
                   rawHash: `new-${stored.caseNumber}`,
                   documentAst: EMPTY_AST,
-                },
+                }),
               }
             : {
                 type: "rejected",
