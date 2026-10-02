@@ -244,13 +244,17 @@ export const extractToGraded = (position: ExtractPosition): GradedPosition => ({
 // ── Sources ───────────────────────────────────────────
 // The editor can remove a source the reader can see, but never adds one. An
 // empty list is never stored, so removing the last source drops the field.
+// A source is matched on matter and document together, the same key readers
+// resolve it by, so a removal never touches a source the reader cannot see.
 export const withoutPositionSource = (
   position: Position,
-  entityId: string,
+  removed: NonNullable<Position["sources"]>[number],
 ): Position => {
   const { sources, ...rest } = position;
   const remaining = optionalArray(sources).filter(
-    (source) => source.entityId !== entityId,
+    (source) =>
+      source.workspaceId !== removed.workspaceId ||
+      source.entityId !== removed.entityId,
   );
   return remaining.length === 0 ? rest : { ...rest, sources: remaining };
 };

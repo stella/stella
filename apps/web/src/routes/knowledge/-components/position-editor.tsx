@@ -457,8 +457,8 @@ export const PositionEditor = ({
             />
           )}
           <PositionSourcesRow
-            onRemove={(entityId) =>
-              onChange(withoutPositionSource(position, entityId))
+            onRemove={(source) =>
+              onChange(withoutPositionSource(position, source))
             }
             sources={sources}
           />
@@ -486,7 +486,7 @@ const PositionSourcesRow = ({
   onRemove,
 }: {
   sources: readonly ResolvedPositionSource[];
-  onRemove: (entityId: string) => void;
+  onRemove: (source: ResolvedPositionSource) => void;
 }) => {
   const t = useTranslations();
   if (sources.length === 0) {
@@ -501,7 +501,7 @@ const PositionSourcesRow = ({
         {sources.map((source) => (
           <li
             className="bg-muted/50 flex max-w-full min-w-0 items-center rounded-md text-xs"
-            key={source.entityId}
+            key={`${source.workspaceId}:${source.entityId}`}
           >
             <button
               className="hover:text-foreground flex min-w-0 items-baseline gap-1.5 py-1 ps-2 text-start"
@@ -529,7 +529,7 @@ const PositionSourcesRow = ({
                 documentName: source.name,
               })}
               className="shrink-0"
-              onClick={() => onRemove(source.entityId)}
+              onClick={() => onRemove(source)}
               size="icon-xs"
               type="button"
               variant="ghost"

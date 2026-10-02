@@ -509,14 +509,28 @@ describe("Playbook position sources", () => {
   });
 
   test("removing a visible source leaves the unresolved one, and the last removal drops the key", () => {
-    const withoutReadable = withoutPositionSource(graded, READABLE.entityId);
+    const withoutReadable = withoutPositionSource(graded, READABLE);
     expect(withoutReadable.sources).toEqual([UNRESOLVED]);
     expect(
-      withoutPositionSource(withoutReadable, UNRESOLVED.entityId),
+      withoutPositionSource(withoutReadable, UNRESOLVED),
     ).not.toHaveProperty("sources");
     // Everything else about the position is untouched.
     const restored: Position = { ...withoutReadable, sources: SOURCES };
     expect(restored).toEqual(graded);
+  });
+
+  test("removing a source matches its matter as well as its document", () => {
+    const sameDocumentElsewhere = {
+      workspaceId: UNRESOLVED.workspaceId,
+      entityId: READABLE.entityId,
+    };
+    const position: Position = {
+      ...graded,
+      sources: [sameDocumentElsewhere, READABLE],
+    };
+    expect(withoutPositionSource(position, READABLE).sources).toEqual([
+      sameDocumentElsewhere,
+    ]);
   });
 
   test("only a source the reader can open counts toward the approval notice", () => {
