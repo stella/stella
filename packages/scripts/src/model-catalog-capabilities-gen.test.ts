@@ -240,7 +240,7 @@ describe("image-input evidence", () => {
           "gpt-5.4-mini": {
             supported: true,
             reason:
-              "Reviewed correction: https://developers.openai.com/api/docs/guides/images-vision",
+              "2026-10-02: Reviewed correction: https://developers.openai.com/api/docs/guides/images-vision",
           },
         },
       },
@@ -362,4 +362,22 @@ describe("image-input evidence", () => {
       ts.flattenDiagnosticMessageText(missing.at(0)?.messageText ?? "", "\n"),
     ).toContain("additional-model");
   });
+});
+
+test("source corrections expire when upstream image evidence agrees", () => {
+  expect(() =>
+    buildCapabilityRows({
+      openRouterDefaults: new Map(),
+      upstream: upstreamWithToolCall(() => true),
+      imageInputOverrides: {
+        openai: {
+          "gpt-5.4-mini": {
+            supported: false,
+            reason:
+              "2026-10-02: Reviewed correction: https://developers.openai.com/api/docs/guides/images-vision",
+          },
+        },
+      },
+    }),
+  ).toThrow("Image-input override now agrees with models.dev");
 });

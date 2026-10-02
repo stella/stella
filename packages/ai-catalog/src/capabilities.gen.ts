@@ -6,7 +6,7 @@
 // `modalities.input`, `limit.output`, and release dates (first-party,
 // openrouter, and amazon-bedrock catalogs);
 // OpenRouter's public per-model `default_effort`; plus reviewed provider
-// policies and dated entries from capabilities-overrides.ts and
+// policies and dated capability/image-input entries from capabilities-overrides.ts and
 // document-input-overrides.ts.
 // The nightly `model-catalog-upstream` check fails CI on unsafe drift.
 import type {

@@ -96,6 +96,14 @@ const resolveImageInputCapability = (
   override: ImageInputOverride | undefined,
 ): ImageInputCapability => {
   if (override !== undefined) {
+    if (
+      inputModalities !== null &&
+      override.supported === inputModalities.includes("image")
+    ) {
+      return panic(
+        "Image-input override now agrees with models.dev; delete the override so sourced data wins",
+      );
+    }
     return override.supported ? "supported" : "unsupported";
   }
   if (inputModalities === null) {
@@ -365,7 +373,7 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
 // \`modalities.input\`, \`limit.output\`, and release dates (first-party,
 // openrouter, and amazon-bedrock catalogs);
 // OpenRouter's public per-model \`default_effort\`; plus reviewed provider
-// policies and dated entries from capabilities-overrides.ts and
+// policies and dated capability/image-input entries from capabilities-overrides.ts and
 // document-input-overrides.ts.
 // The nightly \`model-catalog-upstream\` check fails CI on unsafe drift.
 import type {
