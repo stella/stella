@@ -17,6 +17,7 @@ import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
   correspondenceAddressOptions,
+  CORRESPONDENCE_PAGE_SIZE,
   CORRESPONDENCE_STATE_LABEL_KEYS,
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
@@ -28,10 +29,6 @@ import {
   useRevokeCorrespondenceAddress,
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
-
-/** Page size of the matter's correspondence list; the view loader prefetches
- *  the same first page. */
-export const CORRESPONDENCE_PAGE_SIZE = 50;
 
 /**
  * Body of a matter's correspondence view: the matter's inbound address, the

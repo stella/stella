@@ -42,6 +42,7 @@ import { overviewOptions } from "@/lib/workspaces/queries";
 import {
   correspondenceAddressOptions,
   correspondenceInfiniteOptions,
+  CORRESPONDENCE_PAGE_SIZE,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   DEFAULT_ENTITY_WINDOW_SIZE,
@@ -56,10 +57,7 @@ import {
 } from "@/lib/workspaces/queries/time-entries";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { useTableStore } from "@/lib/workspaces/table-store";
-import {
-  CORRESPONDENCE_PAGE_SIZE,
-  CorrespondenceViewSkeleton,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
+import { CorrespondenceViewSkeleton } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { includesListItems } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-kind-filters";
 import { ViewSwitcher } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-switcher";
 import { ViewToolbar } from "@/routes/_protected.workspaces/$workspaceId/-components/view/view-toolbar";

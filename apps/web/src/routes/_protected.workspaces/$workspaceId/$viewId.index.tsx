@@ -23,6 +23,7 @@ import {
 import {
   correspondenceAddressOptions,
   correspondenceInfiniteOptions,
+  CORRESPONDENCE_PAGE_SIZE,
 } from "@/lib/workspaces/queries/correspondence";
 import {
   filesystemEntitiesOptions,
@@ -34,10 +35,7 @@ import { propertiesOptions } from "@/lib/workspaces/queries/properties";
 import { viewsOptions } from "@/lib/workspaces/queries/views";
 import { isAvtView, isTableView } from "@/lib/workspaces/view-layout";
 import { CalendarView } from "@/routes/_protected.workspaces/$workspaceId/-components/calendar/calendar-view";
-import {
-  CORRESPONDENCE_PAGE_SIZE,
-  CorrespondenceView,
-} from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
+import { CorrespondenceView } from "@/routes/_protected.workspaces/$workspaceId/-components/correspondence-view";
 import { FilesystemView } from "@/routes/_protected.workspaces/$workspaceId/-components/filesystem/tree-view";
 import { KanbanView } from "@/routes/_protected.workspaces/$workspaceId/-components/kanban/kanban-view";
 import { OverviewView } from "@/routes/_protected.workspaces/$workspaceId/-components/overview-view";
