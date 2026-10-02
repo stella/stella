@@ -36,10 +36,12 @@ export const publicStatuteSearchRateLimitKey = scopedGenerator(
   PUBLIC_STATUTE_SEARCH_RATE_LIMIT_SCOPE,
 );
 
-export const createPublicStatuteSearchRateLimitOptions = () =>
+export const createPublicStatuteSearchRateLimitOptions = (
+  createRedisBinding = createRedisRateLimit,
+) =>
   ({
     ...PUBLIC_STATUTE_SEARCH_RATE_LIMIT_POLICY,
-    ...createRedisRateLimit({
+    ...createRedisBinding({
       counterKeyGenerator: publicStatuteSearchRateLimitKey,
       failurePolicy: "fail_open_local",
       scope: PUBLIC_STATUTE_SEARCH_RATE_LIMIT_SCOPE,

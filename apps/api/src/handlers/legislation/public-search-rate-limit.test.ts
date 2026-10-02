@@ -6,16 +6,17 @@ import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
 import {
   InMemoryRateLimitContext,
-  rateLimit,
+  type RateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
+import type { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 import {
   isPublicStatuteSearchRateLimitedRequest,
   PUBLIC_STATUTE_SEARCH_PATH,
-  PUBLIC_STATUTE_SEARCH_RATE_LIMIT_POLICY,
   publicStatuteSearchRateLimitKey,
 } from "./public-search-rate-limit";
+import { createPublicStatuteSearchRateLimitComposition } from "./public-search-rate-limit-composition";
 
 const searchPath = `${STELLA_API_VERSION_PREFIX}${PUBLIC_STATUTE_SEARCH_PATH}`;
 const request = (path: string, method = "GET") =>
@@ -74,85 +75,150 @@ describe("public statute search request budget", () => {
     expect(firstKey).toBe("public-statute-search:192.0.2.1");
   });
 
-  test("the N+1th search returns the standard 429 without consuming the shared bucket", async () => {
-    const sharedContext = new InMemoryRateLimitContext();
-    const searchContext = new InMemoryRateLimitContext();
-    const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (versioned) =>
-      versioned
-        .use(
-          rateLimit({
-            context: sharedContext,
-            duration: API_RATE_LIMITS.api.duration,
-            generator: scopedGenerator("api"),
-            max: 1,
-            skip: isPublicStatuteSearchRateLimitedRequest,
-          }),
-        )
-        .use(
-          new Elysia()
-            .use(
-              rateLimit({
-                ...PUBLIC_STATUTE_SEARCH_RATE_LIMIT_POLICY,
-                context: searchContext,
-                generator: publicStatuteSearchRateLimitKey,
-              }),
-            )
-            .get(PUBLIC_STATUTE_SEARCH_PATH, () => ({ items: [] }))
-            .get("/law/statutes", () => "browse"),
-        )
-        .get("/other", () => "ordinary"),
+  test("the server installs both halves of the exercised production composition", async () => {
+    const source = await Bun.file(
+      new URL("../../server.ts", import.meta.url),
+    ).text();
+    const imports = new Bun.Transpiler({ loader: "ts" }).scan(source).imports;
+    expect(imports.map(({ path }) => path)).toContain(
+      "@/api/handlers/legislation/public-search-rate-limit-composition",
     );
-    try {
-      for (
-        let index = 0;
-        index < API_RATE_LIMITS.publicStatuteSearch.max;
-        index += 1
-      ) {
-        const response = await app.handle(request(searchPath));
-        expect(response.status).toBe(200);
-      }
-      const limited = await app.handle(request(`${searchPath}/`));
-      expect(limited.status).toBe(429);
-      expect(await limited.text()).toBe("rate-limit reached");
-      expect(limited.headers.get("retry-after")).toMatch(/^\d+$/u);
-      expect(limited.headers.get("ratelimit-limit")).toBe(
-        String(API_RATE_LIMITS.publicStatuteSearch.max),
-      );
-      const browse = await app.handle(request("/v1/law/statutes"));
-      expect(browse.status).toBe(200);
-      // The browse request consumes the first shared token; none of the 31 searches did.
-      expect((await app.handle(request("/v1/other"))).status).toBe(429);
-    } finally {
-      sharedContext.kill();
-      searchContext.kill();
-    }
+    expect(
+      /const publicStatuteSearchRateLimits\s*=\s*createPublicStatuteSearchRateLimitComposition\(\{\s*routes: publicLegislationRoute,/u.test(
+        source,
+      ),
+    ).toBe(true);
+    const group = source.slice(
+      source.indexOf(".group(STELLA_API_VERSION_PREFIX"),
+    );
+    expect(group.includes(".use(publicStatuteSearchRateLimits.shared)")).toBe(
+      true,
+    );
+    expect(
+      group.includes(".use(publicStatuteSearchRateLimits.publicLegislation)"),
+    ).toBe(true);
+    expect(/\.use\(\s*publicLegislationRoute\s*\)/u.test(source)).toBe(false);
   });
 
-  test("unrelated public law traffic cannot consume the search budget", async () => {
-    const context = new InMemoryRateLimitContext();
-    const app = new Elysia()
-      .use(
-        rateLimit({
-          ...PUBLIC_STATUTE_SEARCH_RATE_LIMIT_POLICY,
-          context,
-          generator: publicStatuteSearchRateLimitKey,
-        }),
-      )
-      .get(searchPath, () => "search")
-      .get("/v1/law/statutes", () => "browse");
-    try {
-      for (
-        let index = 0;
-        index <= API_RATE_LIMITS.publicStatuteSearch.max;
-        index += 1
-      ) {
+  for (const method of ["GET", "HEAD"]) {
+    test(`production composition budgets ${method} searches without consuming the shared quota`, async () => {
+      const { app, bindings, searchKeys, sharedKeys, kill } = createBudgetApp();
+      try {
+        expect(
+          bindings.map(({ scope, failurePolicy }) => ({
+            scope,
+            failurePolicy,
+          })),
+        ).toEqual([
+          { scope: "api", failurePolicy: "fail_open_local" },
+          { scope: "public-statute-search", failurePolicy: "fail_open_local" },
+        ]);
+        for (
+          let index = 0;
+          index < API_RATE_LIMITS.publicStatuteSearch.max;
+          index += 1
+        ) {
+          expect((await app.handle(request(searchPath, method))).status).toBe(
+            200,
+          );
+        }
+        const limited = await app.handle(request(`${searchPath}/`, method));
+        expect(limited.status).toBe(429);
+        if (method === "GET") {
+          expect(await limited.text()).toBe("rate-limit reached");
+        }
+        expect(limited.headers.get("retry-after")).toMatch(/^\d+$/u);
+        expect(limited.headers.get("ratelimit-limit")).toBe(
+          String(API_RATE_LIMITS.publicStatuteSearch.max),
+        );
+        expect(searchKeys).toHaveLength(
+          API_RATE_LIMITS.publicStatuteSearch.max + 1,
+        );
+        expect(new Set(searchKeys)).toEqual(new Set(["public-statute-search"]));
+        expect(sharedKeys).toEqual([]);
         expect((await app.handle(request("/v1/law/statutes"))).status).toBe(
           200,
         );
+        expect((await app.handle(request("/v1/other"))).status).toBe(429);
+        expect(sharedKeys).toEqual(["api", "api"]);
+        expect(searchKeys).toHaveLength(
+          API_RATE_LIMITS.publicStatuteSearch.max + 1,
+        );
+      } finally {
+        kill();
       }
+    });
+  }
+
+  test("exhausting the production shared quota leaves search available", async () => {
+    const { app, searchKeys, sharedKeys, kill } = createBudgetApp();
+    try {
+      expect((await app.handle(request("/v1/law/statutes"))).status).toBe(200);
+      expect((await app.handle(request("/v1/law/statutes"))).status).toBe(429);
       expect((await app.handle(request(searchPath))).status).toBe(200);
+      expect(sharedKeys).toEqual(["api", "api"]);
+      expect(searchKeys).toEqual(["public-statute-search"]);
     } finally {
-      context.kill();
+      kill();
     }
   });
 });
+
+const createBudgetApp = () => {
+  const bindings: Parameters<typeof createRedisRateLimit>[0][] = [];
+  const sharedKeys: string[] = [];
+  const searchKeys: string[] = [];
+  const sharedContext = new InMemoryRateLimitContext();
+  const searchContext = new InMemoryRateLimitContext();
+  // One observed shared request fills its quota, so independence is checked
+  // without issuing hundreds of unrelated requests per test.
+  const sharedCounter: RateLimitContext = {
+    init: (options) => sharedContext.init(options),
+    increment: (key, duration, requestTime) => {
+      sharedKeys.push(key);
+      const counter = sharedContext.increment(key, duration, requestTime);
+      return { ...counter, count: counter.count * API_RATE_LIMITS.api.max };
+    },
+    decrement: (key) => sharedContext.decrement(key),
+    kill: () => sharedContext.kill(),
+  };
+  const searchCounter: RateLimitContext = {
+    init: (options) => searchContext.init(options),
+    increment: (key, duration, requestTime) => {
+      searchKeys.push(key);
+      return searchContext.increment(key, duration, requestTime);
+    },
+    decrement: (key) => searchContext.decrement(key),
+    kill: () => searchContext.kill(),
+  };
+  const composition = createPublicStatuteSearchRateLimitComposition({
+    routes: new Elysia()
+      .get(PUBLIC_STATUTE_SEARCH_PATH, () => ({ items: [] }))
+      .get("/law/statutes", () => "browse"),
+    createRedisBinding: (options) => {
+      bindings.push(options);
+      expect(["api", "public-statute-search"]).toContain(options.scope);
+      return {
+        context: options.scope === "api" ? sharedCounter : searchCounter,
+        generator:
+          options.counterKeyGenerator ?? scopedGenerator(options.scope),
+      };
+    },
+  });
+  const app = new Elysia().group(STELLA_API_VERSION_PREFIX, (versioned) =>
+    versioned
+      .use(composition.shared)
+      .use(composition.publicLegislation)
+      .get("/other", () => "ordinary"),
+  );
+  return {
+    app,
+    bindings,
+    searchKeys,
+    sharedKeys,
+    kill: () => {
+      sharedContext.kill();
+      searchContext.kill();
+    },
+  };
+};
