@@ -244,7 +244,9 @@ describe.skipIf(!enabled)(
           const runnerOptions = {
             repairs: [repair],
             indexGate: { ebs: { type: "disabled" } },
-            log: (record: unknown) => events.push(record),
+            log: (record: unknown) => {
+              events.push(record);
+            },
           } satisfies OnlineRepairOptions;
           await runOnlineMigrations(pool, runnerOptions);
           const processed = (
@@ -255,7 +257,7 @@ describe.skipIf(!enabled)(
           expect(processed).toBe(fixture.firstBatch);
           const connection = repairConnection(await client.reserve());
           const pending = await repair.readCompletion(connection);
-          connection.release();
+          await connection.release();
           expect(pending).toMatchObject({
             type: "pending",
             heldSince: now,

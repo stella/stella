@@ -257,13 +257,17 @@ describe("online index gate", () => {
       observerDatabase: "another_database",
     });
 
-    await expect(
-      harness.gate.attempt(
-        "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+    const rejection: unknown = await harness.gate
+      .attempt("CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)")
+      .then(
+        () => null,
+        (error: unknown) => error,
+      );
+    expect(rejection).toMatchObject({
+      message: expect.stringContaining(
+        "Online index observer must use a separate physical session in the same database",
       ),
-    ).rejects.toThrow(
-      "Online index observer must use a separate physical session in the same database",
-    );
+    });
     expect(harness.statements).not.toContain(
       "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
     );

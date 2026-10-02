@@ -537,7 +537,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 throw onlineError;
               },
             });
-            await expect(run).rejects.toBe(onlineError);
+            expect(await rejectionOf(async () => await run)).toBe(onlineError);
             // The server drops the advisory lock when the closed backend exits,
             // which can trail the client-side close by a moment.
             let laneOpen = await laneOpenToWriters();
