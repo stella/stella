@@ -141,18 +141,18 @@ if (!databaseUrl || !runPostgresTests) {
             },
           }),
         );
-      const makeDefault = (id: SafeId<"numberSeries">) =>
-        setDefault.handler(
+      const makeDefault = async (id: SafeId<"numberSeries">) =>
+        await setDefault.handler(
           asTestRaw<Parameters<typeof setDefault.handler>[0]>({
             ...context,
             params: { numberSeriesId: id },
           }),
         );
-      const update = (
+      const update = async (
         id: SafeId<"numberSeries">,
         sellerProfileId: SafeId<"sellerProfile"> | null,
       ) =>
-        updateSeries.handler(
+        await updateSeries.handler(
           asTestRaw<Parameters<typeof updateSeries.handler>[0]>({
             ...context,
             params: { numberSeriesId: id },
@@ -199,12 +199,14 @@ if (!databaseUrl || !runPostgresTests) {
       const all = await f.insert({ isDefault: true });
       const a = await f.insert({ sellerProfileId: f.sellerA, isDefault: true });
       const b = await f.insert({ sellerProfileId: f.sellerB, isDefault: true });
-      const result = await f.scopedDb(async (tx) =>
-        Promise.all(
-          [f.sellerA, f.sellerB, f.sellerC, null].map((seller) =>
-            findDefaultNumberSeries(tx, "invoice", seller),
+      const result = await f.scopedDb(
+        async (tx) =>
+          await Promise.all(
+            [f.sellerA, f.sellerB, f.sellerC, null].map(
+              async (seller) =>
+                await findDefaultNumberSeries(tx, "invoice", seller),
+            ),
           ),
-        ),
       );
       expect(result.map((row) => row?.id)).toEqual([a, b, all, all]);
     });
