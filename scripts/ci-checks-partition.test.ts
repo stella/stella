@@ -112,8 +112,8 @@ const expectScope = ({ current, base }: ScopeOptions) => {
   }
   // Heavy-only main runs skip the thin ci-checks legs. Only this wrapper
   // may change their scope; every token of the base condition stays intact.
-  const wrapped = conditionTokens(v.parse(v.string(), condition)).match(
-    /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u,
+  const wrapped = /^inputs\.heavy_only != true && \(\s*(.*?)\s*\)$/u.exec(
+    conditionTokens(v.parse(v.string(), condition)),
   );
   expect(wrapped?.at(1)).toBe(
     conditionTokens(v.parse(v.string(), originalCondition)),
