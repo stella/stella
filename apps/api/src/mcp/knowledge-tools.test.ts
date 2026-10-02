@@ -133,6 +133,12 @@ const STORED_EXTRACT_POSITION = {
   },
   enabled: true,
 } as const;
+const READABLE_SOURCE_ROW = {
+  entityId: "00000000-0000-4000-8000-0000000000d1",
+  workspaceId: "00000000-0000-4000-8000-0000000000d2",
+  name: "Keller supply agreement.docx",
+  workspaceName: "Keller supply",
+} as const;
 const STORED_PLAYBOOK = {
   id: PLAYBOOK_ID,
   name: "NDA playbook",
@@ -152,7 +158,19 @@ const STORED_PLAYBOOK = {
  */
 const createPlaybookWriteScopedDb = ({
   lockedUpdatedAt = STORED_UPDATED_AT,
-}: { lockedUpdatedAt?: Date } = {}) => {
+  readableSources = [],
+  storedPositions = STORED_PLAYBOOK.positions.items,
+}: {
+  lockedUpdatedAt?: Date;
+  /** Rows the scoped source lookup answers: the documents the caller can read. */
+  readableSources?: readonly {
+    entityId: string;
+    workspaceId: string;
+    name: string;
+    workspaceName: string;
+  }[];
+  storedPositions?: readonly Record<string, unknown>[];
+} = {}) => {
   const writes: Record<string, unknown>[] = [];
   const savedAt = new Date("2026-09-20T10:05:00.000Z");
   const scopedDb = asTestRaw<
@@ -166,6 +184,7 @@ const createPlaybookWriteScopedDb = ({
           playbookDefinitions: {
             findFirst: async () => ({
               ...STORED_PLAYBOOK,
+              positions: { version: 3, items: storedPositions },
               ...(writes.length === 0 ? {} : { updatedAt: savedAt }),
             }),
           },
@@ -174,6 +193,9 @@ const createPlaybookWriteScopedDb = ({
           from: () => ({
             where: () => ({
               for: async () => [{ updatedAt: lockedUpdatedAt }],
+            }),
+            innerJoin: () => ({
+              where: () => ({ limit: async () => readableSources }),
             }),
           }),
         }),
@@ -483,6 +505,159 @@ describe("MCP knowledge tools", () => {
       positions: [{ issue: "Term", change: "added" }],
       issues: [],
     });
+  });
+
+  test("save_playbook stores a source under the matter the caller's lookup resolved, and refuses an entry citing a document it did not", async () => {
+    const { scopedDb, writes } = createPlaybookWriteScopedDb({
+      readableSources: [READABLE_SOURCE_ROW],
+    });
+    const unreadableId = "00000000-0000-4000-8000-0000000000d9";
+
+    const result = await handleMcpToolCall({
+      args: {
+        name: "MSA playbook",
+        positions: [
+          {
+            mode: "extract",
+            issue: "Term",
+            ask: { question: "How long is the term?" },
+            sources: [READABLE_SOURCE_ROW.entityId],
+          },
+          {
+            mode: "extract",
+            issue: "Notice",
+            ask: { question: "How much notice?" },
+            sources: [unreadableId],
+          },
+        ],
+      },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "save_playbook",
+    });
+
+    expect(result.isError).toBeFalsy();
+    expect(writes[0]?.["positions"]).toMatchObject({
+      items: [
+        {
+          issue: "Term",
+          sources: [
+            {
+              workspaceId: READABLE_SOURCE_ROW.workspaceId,
+              entityId: READABLE_SOURCE_ROW.entityId,
+            },
+          ],
+        },
+      ],
+    });
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      positionCount: 1,
+      issues: [
+        {
+          code: "unreadable_source",
+          path: "positions.1.sources.0",
+          hint: expect.stringContaining("list_documents"),
+        },
+      ],
+    });
+    // Neither the stored position nor the refusal carries a document name.
+    expect(JSON.stringify([writes, payload])).not.toContain(
+      READABLE_SOURCE_ROW.name,
+    );
+  });
+
+  test("save_playbook leaves an approved playbook alone when a position is resent with the sources a read showed", async () => {
+    const hidden = {
+      workspaceId: "00000000-0000-4000-8000-0000000000e1",
+      entityId: "00000000-0000-4000-8000-0000000000e2",
+    };
+    const { scopedDb, writes } = createPlaybookWriteScopedDb({
+      readableSources: [READABLE_SOURCE_ROW],
+      storedPositions: [
+        {
+          ...STORED_EXTRACT_POSITION,
+          sources: [
+            hidden,
+            {
+              workspaceId: READABLE_SOURCE_ROW.workspaceId,
+              entityId: READABLE_SOURCE_ROW.entityId,
+            },
+          ],
+        },
+      ],
+    });
+    const resend = {
+      mode: "extract",
+      source_id: STORED_EXTRACT_POSITION.sourceId,
+      issue: STORED_EXTRACT_POSITION.issue,
+      ask: { question: STORED_EXTRACT_POSITION.ask.question },
+    };
+
+    for (const position of [
+      resend,
+      { ...resend, sources: [READABLE_SOURCE_ROW.entityId] },
+    ]) {
+      const result = await handleMcpToolCall({
+        args: {
+          playbook_id: PLAYBOOK_ID,
+          expected_updated_at: STORED_UPDATED_AT.toISOString(),
+          positions: [position],
+        },
+        context: createPlaybookWriteContext(scopedDb),
+        toolName: "save_playbook",
+      });
+      expect(result.isError).toBeFalsy();
+    }
+    expect(writes).toEqual([]);
+  });
+
+  test("list_playbooks shows a position only the sources the caller can read", async () => {
+    const { scopedDb } = createPlaybookWriteScopedDb({
+      readableSources: [READABLE_SOURCE_ROW],
+      storedPositions: [
+        {
+          ...STORED_EXTRACT_POSITION,
+          sources: [
+            {
+              workspaceId: "00000000-0000-4000-8000-0000000000e1",
+              entityId: "00000000-0000-4000-8000-0000000000e2",
+            },
+            {
+              workspaceId: READABLE_SOURCE_ROW.workspaceId,
+              entityId: READABLE_SOURCE_ROW.entityId,
+            },
+          ],
+        },
+      ],
+    });
+
+    const result = await handleMcpToolCall({
+      args: { playbook_id: PLAYBOOK_ID },
+      context: createPlaybookWriteContext(scopedDb),
+      toolName: "list_playbooks",
+    });
+
+    expect(result.isError).toBeFalsy();
+    const payload = parseToolPayload(result);
+    expect(payload).toMatchObject({
+      playbook: {
+        positions: {
+          items: [
+            {
+              sources: [
+                {
+                  workspaceId: READABLE_SOURCE_ROW.workspaceId,
+                  entityId: READABLE_SOURCE_ROW.entityId,
+                },
+              ],
+            },
+          ],
+        },
+      },
+    });
+    expect(JSON.stringify(payload)).not.toContain(
+      "00000000-0000-4000-8000-0000000000e2",
+    );
   });
 
   test("save_playbook stores an empty scope as unscoped", async () => {

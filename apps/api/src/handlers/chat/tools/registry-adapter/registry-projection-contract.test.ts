@@ -1021,6 +1021,12 @@ const CONTRACT_CORPUS = {
                     severity: "high",
                     purpose: "Bounds how long the recipient stays bound",
                     guidance: "Cap at 3 years",
+                    // One source the caller's lookup returns and one it
+                    // does not: only the first may reach the model, as refs.
+                    sources: [
+                      { workspaceId: WS, entityId: uid(105) },
+                      { workspaceId: uid(106), entityId: uid(107) },
+                    ],
                     enabled: true,
                     ask: {
                       mode: "manual",
@@ -1078,8 +1084,22 @@ const CONTRACT_CORPUS = {
             }),
           },
         },
+        // The scoped source lookup (`readablePositionSources`).
+        select: selectQueue([
+          [
+            {
+              entityId: uid(105),
+              workspaceId: WS,
+              name: "Supply agreement.docx",
+              workspaceName: "Supply matter",
+            },
+          ],
+        ]),
       }),
-      expectRefPaths: [],
+      expectRefPaths: [
+        "playbook.positions.items[].sources[].workspaceId",
+        "playbook.positions.items[].sources[].entityId",
+      ],
     },
   ],
   list_time_entries: [

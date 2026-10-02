@@ -230,7 +230,9 @@ describe("reference passage isolation", () => {
         asTestRaw<Parameters<typeof assertPositionsValid>[0]>({
           safeDb: scopedSafeDb,
           organizationId: ids.orgA,
+          accessibleWorkspaceIds: [ids.wsA1],
           positions: positionsPinning(PASSAGE_A_ID),
+          storedPositions: null,
         }),
       );
 
@@ -253,7 +255,9 @@ describe("reference passage isolation", () => {
         asTestRaw<Parameters<typeof assertPositionsValid>[0]>({
           safeDb: scopedSafeDb,
           organizationId: ids.orgA,
+          accessibleWorkspaceIds: [ids.wsA1],
           positions: positionsPinning(PASSAGE_B_ID),
+          storedPositions: null,
         }),
       );
 

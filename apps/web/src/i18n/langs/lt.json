@@ -3424,6 +3424,7 @@
         "approvedOn": "Patvirtinta {date}",
         "approvedToast": "Peržiūros vadovas patvirtintas",
         "saveBeforeApprove": "Prieš patvirtindami šį peržiūros vadovą, išsaugokite pakeitimus.",
+        "sourcesNotice": "Prieš patvirtindami patikrinkite, ar jokioje pozicijoje neįvardytas dokumentas, byla ar priešinga šalis: šį peržiūros vadovą gali skaityti visa organizacija.",
         "statusApproved": "Patvirtinta",
         "statusDraft": "Juodraštis"
       },
@@ -3522,6 +3523,7 @@
       "referenceStandard": "Iš referencijos",
       "removeCheck": "Pašalinti patikrą",
       "removeIdeal": "Pašalinti idealią formuluotę",
+      "removeSource": "Pašalinti šaltinį {documentName}",
       "reorderPosition": "Pertvarkyti poziciją",
       "review": {
         "changePlaybook": "Pasirinkti kitą peržiūros vadovą",
@@ -3553,6 +3555,10 @@
         "blocker": "Blokuojanti"
       },
       "severityLabel": "Svarba",
+      "staleCopy": {
+        "loaded": "Įkelta naujesnė šio peržiūros vadovo versija. Prieš redaguodami įkelkite iš naujo.",
+        "unavailable": "Nepavyko įkelti naujausios šio peržiūros vadovo versijos. Tai paskutinė įkelta kopija; ji gali būti pasenusi."
+      },
       "starters": {
         "addedToast": "Peržiūros vadovas pridėtas",
         "browseButton": "Naršyti parengtus peržiūros vadovus",
