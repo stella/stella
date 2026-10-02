@@ -1,22 +1,34 @@
 import { panic } from "better-result";
 import { afterAll, beforeAll, expect, setDefaultTimeout, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
+import { createHash } from "node:crypto";
 
 import { roles } from "@stll/permissions";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
+import type { SanctionsEntry } from "@stll/sanctions";
 
 import { member } from "@/api/db/auth-schema";
-import type { contacts } from "@/api/db/schema";
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   auditLogs,
+  contacts,
   organizationSettings,
+  sanctionsContactMarks,
   sanctionsOrganizationMarks,
   sanctionsSources,
+  sanctionsEditions,
+  sanctionsEditionEntries,
+  sanctionsEntryPayloads,
+  sanctionsContactMatches,
+  sanctionsContactScreenings,
+  sanctionsScreeningEvents,
 } from "@/api/db/schema";
+import { createMembershipScopedDb } from "@/api/db/scoped";
 import { contactsRoute } from "@/api/handlers/contacts/routes";
 import { organizationSettingsRoute } from "@/api/handlers/organization-settings/routes";
 import { getAuth } from "@/api/lib/auth";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
+import { drainSanctionsContactMarks } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
@@ -32,6 +44,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -256,5 +269,287 @@ test("firm monitoring changes require the firm-settings grant in HTTP and MCP", 
         expect(after.marks.at(0)?.organizationId).toBe(organizationId);
       }
     }
+  }
+});
+
+const contactState = async (contactId: typeof contacts.$inferSelect.id) => ({
+  contacts: await db.select().from(contacts).where(eq(contacts.id, contactId)),
+  screenings: await db
+    .select()
+    .from(sanctionsContactScreenings)
+    .where(eq(sanctionsContactScreenings.contactId, contactId))
+    .orderBy(sanctionsContactScreenings.sourceId),
+  matches: await db
+    .select()
+    .from(sanctionsContactMatches)
+    .where(eq(sanctionsContactMatches.contactId, contactId))
+    .orderBy(
+      sanctionsContactMatches.sourceId,
+      sanctionsContactMatches.sourceEntryId,
+    ),
+  events: await db
+    .select()
+    .from(sanctionsScreeningEvents)
+    .where(eq(sanctionsScreeningEvents.contactId, contactId))
+    .orderBy(sanctionsScreeningEvents.createdAt, sanctionsScreeningEvents.id),
+  marks: await db
+    .select()
+    .from(sanctionsContactMarks)
+    .where(eq(sanctionsContactMarks.contactId, contactId)),
+  audits: await db
+    .select()
+    .from(auditLogs)
+    .where(eq(auditLogs.resourceId, contactId))
+    .orderBy(auditLogs.createdAt, auditLogs.id),
+});
+
+const seedActiveEdition = async () => {
+  const editionId = createSafeId<"sanctionsEdition">();
+  const hash = createHash("sha256").update(editionId).digest("hex");
+  const payload = {
+    source: "eu",
+    issuer: SANCTIONS_SOURCES.eu.issuer,
+    sourceId: "dispatch-hit",
+    referenceNumber: null,
+    entityType: "person",
+    names: [{ name: "Synthetic Dispatch Person", quality: "strong" }],
+    birthDates: [],
+    nationalities: [],
+    identifiers: [],
+    addresses: [],
+    programme: null,
+    legalBasis: null,
+    listedOn: null,
+    sourceUrl: "https://example.test/dispatch-hit",
+  } satisfies SanctionsEntry;
+  await db.insert(sanctionsEditions).values({
+    id: editionId,
+    sourceId: "eu",
+    markerKey: hash,
+    contentHash: hash,
+    publishedAt: "2026-10-02",
+    state: "ready",
+    entryCount: 1,
+  });
+  await db
+    .insert(sanctionsEntryPayloads)
+    .values({ contentHash: hash, payload });
+  await db
+    .insert(sanctionsEditionEntries)
+    .values({ editionId, sourceEntryId: payload.sourceId, contentHash: hash });
+  await db
+    .update(sanctionsSources)
+    .set({ activeEditionId: editionId, lastSuccessfulVerifiedAt: new Date() })
+    .where(eq(sanctionsSources.id, "eu"));
+};
+
+const readHttp = async (browser: HumanBrowser, path: string) => {
+  const response = await contactsRoute.handle(
+    new Request(`http://localhost${path}`, {
+      headers: { cookie: browser.cookieHeader() },
+    }),
+  );
+  expect(response.status, await response.clone().text()).toBe(200);
+  const payload: unknown = await response.json();
+  return payload;
+};
+
+test("contact monitoring endpoint and capability perform the requested transition", async () => {
+  for (const transport of transports) {
+    await seedActiveEdition();
+    const { browser, organizationId } = await caller("member");
+    const contact =
+      (
+        await db
+          .insert(contacts)
+          .values({
+            organizationId,
+            type: "person",
+            displayName: "Synthetic Dispatch Person",
+          })
+          .returning()
+      ).at(0) ?? panic("Contact fixture missing");
+    const scopedDb = asTestRaw<ScopedDb>(
+      createMembershipScopedDb(db, {
+        organizationId,
+        userId: toSafeId<"user">(browser.userId),
+        serverValidatedWorkspaceIds: [],
+      }),
+    );
+    const drain = async () =>
+      await drainSanctionsContactMarks({
+        db: scopedDb,
+        organizationId,
+        now: new Date(),
+        signal: new AbortController().signal,
+      });
+    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    const before = await contactState(contact.id);
+    expect(before.matches).toHaveLength(1);
+    expect(before.matches.at(0)?.state).toBe("active");
+    expect(before.events).toHaveLength(1);
+    expect(before.marks).toHaveLength(0);
+    expect(
+      await readHttp(browser, "/contacts/sanctions/matches"),
+    ).toMatchObject({ items: [{ contactId: contact.id }] });
+    const excluded = await dispatch({
+      transport,
+      browser,
+      capability: "contacts.sanctions.monitoring.update",
+      contactId: contact.id,
+      mode: "excluded",
+    });
+    expect(excluded.ok, JSON.stringify(excluded.payload)).toBe(true);
+    expect(excluded.payload).toMatchObject(
+      transport === "http"
+        ? { mode: "excluded" }
+        : { result: { mode: "excluded" } },
+    );
+    const after = await contactState(contact.id);
+    expect(after.contacts).toHaveLength(1);
+    expect(after.contacts.at(0)?.sanctionsMonitoringMode).toBe("excluded");
+    expect(after.screenings.map((row) => row.sourceId).toSorted()).toEqual(
+      sanctionsSourceIds().toSorted(),
+    );
+    expect(after.screenings).toHaveLength(sanctionsSourceIds().length);
+    expect(
+      after.screenings.every(
+        (row) =>
+          row.status === "excluded" &&
+          row.editionId === null &&
+          row.reason === "contact-excluded",
+      ),
+    ).toBe(true);
+    expect(after.matches).toHaveLength(1);
+    expect(after.matches.at(0)).toMatchObject({
+      state: "lapsed",
+      match: before.matches.at(0)?.match,
+      sourceEntryId: "dispatch-hit",
+    });
+    expect(after.events).toEqual(before.events);
+    expect(after.marks).toHaveLength(1);
+    expect(after.audits).toHaveLength(1);
+    expect(after.audits.at(0)).toMatchObject({
+      userId: browser.userId,
+      organizationId,
+      workspaceId: null,
+      resourceId: contact.id,
+      changes: {
+        sanctionsMonitoringMode: { old: "included", new: "excluded" },
+      },
+    });
+    expect(
+      await readHttp(browser, `/contacts/${contact.id}/sanctions`),
+    ).toMatchObject({ contactMode: "excluded", matches: { items: [] } });
+    expect(
+      await readHttp(browser, "/contacts/sanctions/matches"),
+    ).toMatchObject({ items: [] });
+    expect(await readHttp(browser, "/contacts/sanctions/events")).toMatchObject(
+      { items: [] },
+    );
+    const replay = await dispatch({
+      transport,
+      browser,
+      capability: "contacts.sanctions.monitoring.update",
+      contactId: contact.id,
+      mode: "excluded",
+    });
+    expect(replay.ok).toBe(true);
+    expect((await contactState(contact.id)).audits).toEqual(after.audits);
+    expect((await contactState(contact.id)).events).toEqual(before.events);
+    const included = await dispatch({
+      transport,
+      browser,
+      capability: "contacts.sanctions.monitoring.update",
+      contactId: contact.id,
+      mode: "included",
+    });
+    expect(included.ok, JSON.stringify(included.payload)).toBe(true);
+    expect(included.payload).toMatchObject(
+      transport === "http"
+        ? { mode: "included" }
+        : { result: { mode: "included" } },
+    );
+    const queued = await contactState(contact.id);
+    expect(queued.contacts.at(0)?.sanctionsMonitoringMode).toBe("included");
+    expect(queued.marks).toHaveLength(1);
+    expect(queued.marks.at(0)?.contactId).toBe(contact.id);
+    expect(queued.audits).toHaveLength(2);
+    expect(queued.audits.at(-1)).toMatchObject({
+      userId: browser.userId,
+      changes: {
+        sanctionsMonitoringMode: { old: "excluded", new: "included" },
+      },
+    });
+    const includedReplay = await dispatch({
+      transport,
+      browser,
+      capability: "contacts.sanctions.monitoring.update",
+      contactId: contact.id,
+      mode: "included",
+    });
+    expect(includedReplay.ok).toBe(true);
+    expect((await contactState(contact.id)).audits).toEqual(queued.audits);
+    expect((await contactState(contact.id)).marks).toEqual(queued.marks);
+    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    const refreshed = await contactState(contact.id);
+    expect(refreshed.marks).toHaveLength(0);
+    expect(refreshed.matches).toHaveLength(1);
+    expect(refreshed.matches.at(0)?.state).toBe("active");
+    expect(refreshed.events).toHaveLength(2);
+    expect(refreshed.events.at(-1)?.type).toBe("reopened");
+    expect(
+      await readHttp(browser, "/contacts/sanctions/matches"),
+    ).toMatchObject({ items: [{ contactId: contact.id }] });
+
+    const stable = await contactState(contact.id);
+    const outsider = await caller("external");
+    const foreign = await dispatch({
+      transport,
+      browser: outsider.browser,
+      capability: "contacts.sanctions.monitoring.update",
+      contactId: contact.id,
+      mode: "excluded",
+    });
+    expect(foreign.ok).toBe(false);
+    if (transport === "http") {
+      expect(foreign.status).toBe(403);
+    } else {
+      expect(foreign.payload).toMatchObject({
+        error: { code: "permission_denied" },
+      });
+    }
+    const foreignMember = await caller("member");
+    const wrongOrganization = await dispatch({
+      transport,
+      browser: foreignMember.browser,
+      capability: "contacts.sanctions.monitoring.update",
+      contactId: contact.id,
+      mode: "excluded",
+    });
+    expect(wrongOrganization.ok).toBe(false);
+    if (transport === "http") {
+      expect(wrongOrganization.status).toBe(404);
+    } else {
+      expect(wrongOrganization.payload).toMatchObject({
+        error: { code: "not_found" },
+      });
+    }
+    const invalid = await dispatch({
+      transport,
+      browser,
+      capability: "contacts.sanctions.monitoring.update",
+      contactId: contact.id,
+      mode: "unsupported",
+    });
+    expect(invalid.ok).toBe(false);
+    if (transport === "http") {
+      expect(invalid.status).toBe(422);
+    } else {
+      expect(invalid.payload).toMatchObject({
+        error: { code: "validation_error" },
+      });
+    }
+    expect(await contactState(contact.id)).toEqual(stable);
   }
 });
