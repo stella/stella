@@ -3,13 +3,17 @@ import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
 
-import { safeHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
+import {
+  safeHandlerErrorResponseSchema,
+  safeHandlerResponseSchemasWithStatusText,
+} from "@/api/lib/api-handlers";
 import {
   tPaginationCursor,
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
 import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
@@ -70,7 +74,9 @@ export const searchLegislationSuccessResponseSchema = t.Object(
   { additionalProperties: false },
 );
 
-export const searchLegislationResponseSchema =
-  safeHandlerResponseSchemasWithStatusText(
+export const searchLegislationResponseSchema = {
+  ...safeHandlerResponseSchemasWithStatusText(
     searchLegislationSuccessResponseSchema,
-  );
+  ),
+  503: t.Union([safeHandlerErrorResponseSchema, tPublicCountryUnavailable]),
+};

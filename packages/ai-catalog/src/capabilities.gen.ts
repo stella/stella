@@ -6,13 +6,14 @@
 // `modalities.input`, `limit.output`, and release dates (first-party,
 // openrouter, and amazon-bedrock catalogs);
 // OpenRouter's public per-model `default_effort`; plus reviewed provider
-// policies and dated entries from capabilities-overrides.ts and
+// policies and dated capability/image-input entries from capabilities-overrides.ts and
 // document-input-overrides.ts.
 // The nightly `model-catalog-upstream` check fails CI on unsafe drift.
 import type {
   BYOKModelIdByProvider,
   BYOKProvider,
   OfferedBYOKModelId,
+  ImageInputCapability,
   ReasoningEffort,
   TemperaturePolicy,
 } from "./index";
@@ -93,6 +94,85 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
   mistral: [],
 } as const satisfies {
   [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
+};
+
+/** Every offered provider/model pair has explicit image-input evidence. */
+export const MODEL_IMAGE_INPUT_CAPABILITIES = {
+  google: {
+    "gemini-3.8-flash": "supported",
+    "gemini-3.7-flash": "supported",
+    "gemini-3.6-flash": "supported",
+    "gemini-3.5-flash-lite": "supported",
+    "gemini-3.1-pro-preview": "supported",
+    "gemini-3.5-flash": "supported",
+    "gemini-3.1-flash-lite": "supported",
+  },
+  openrouter: {
+    "openai/gpt-6.1-sol": "supported",
+    "openai/gpt-6-astra": "supported",
+    "openai/gpt-6-sol": "supported",
+    "openai/gpt-6-luna": "supported",
+    "openai/gpt-5.6-sol": "supported",
+    "openai/gpt-5.6-terra": "supported",
+    "openai/gpt-5.6-luna": "supported",
+    "google/gemini-3.8-flash": "supported",
+    "google/gemini-3.7-flash": "supported",
+    "google/gemini-3.6-flash": "supported",
+    "google/gemini-3.5-flash-lite": "supported",
+    "google/gemini-3.1-pro-preview": "supported",
+    "google/gemini-3.5-flash": "supported",
+    "google/gemini-3.1-flash-lite": "supported",
+    "anthropic/claude-sonnet-5.5": "supported",
+    "anthropic/claude-sonnet-5": "supported",
+    "anthropic/claude-opus-5": "supported",
+    "anthropic/claude-opus-4.8": "supported",
+    "anthropic/claude-sonnet-4.6": "supported",
+    "openai/gpt-5.5": "supported",
+    "openai/gpt-5.4-mini": "supported",
+  },
+  openai: {
+    "gpt-6.1-sol": "supported",
+    "gpt-6-astra": "supported",
+    "gpt-6-sol": "supported",
+    "gpt-6-luna": "supported",
+    "gpt-5.6": "supported",
+    "gpt-5.6-terra": "supported",
+    "gpt-5.6-luna": "supported",
+    "gpt-5.5": "supported",
+    "gpt-5.4": "supported",
+    "gpt-5.4-mini": "supported",
+    "gpt-5.4-nano": "supported",
+    "gpt-5.2": "supported",
+  },
+  anthropic: {
+    "claude-sonnet-5-5": "supported",
+    "claude-sonnet-5": "supported",
+    "claude-fable-5-1": "supported",
+    "claude-fable-5": "supported",
+    "claude-opus-5-5": "supported",
+    "claude-opus-5": "supported",
+    "claude-opus-4-8": "supported",
+    "claude-opus-4-7": "supported",
+    "claude-sonnet-4-6": "supported",
+    "claude-opus-4-6": "supported",
+    "claude-haiku-4-5-20251001": "supported",
+  },
+  bedrock: {
+    "us.anthropic.claude-sonnet-4-5-20250929-v1:0": "supported",
+    "us.anthropic.claude-haiku-4-5-20251001-v1:0": "supported",
+    "us.amazon.nova-pro-v1:0": "supported",
+    "us.amazon.nova-lite-v1:0": "supported",
+    "us.amazon.nova-micro-v1:0": "unsupported",
+    "openai.gpt-oss-120b-1:0": "unsupported",
+    "openai.gpt-oss-20b-1:0": "unsupported",
+  },
+  mistral: {
+    "mistral-large-latest": "supported",
+    "mistral-medium-latest": "supported",
+    "mistral-small-latest": "supported",
+  },
+} as const satisfies {
+  [TProvider in BYOKProvider]: Record<BYOKModelIdByProvider[TProvider], ImageInputCapability>;
 };
 
 /**

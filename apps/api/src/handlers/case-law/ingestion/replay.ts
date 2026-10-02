@@ -815,8 +815,15 @@ const replayRow = async ({
     });
   }
 
+  // A legacy spelling the adapter vouched for stands in for the regenerated
+  // docket, and only on a row the write locates by publisher document: one
+  // keyed by its docket would be inserted again under the new spelling.
+  const identityCaseNumber =
+    reparsed.legacyCaseNumber !== undefined && reparsed.result.sourceDocumentId
+      ? reparsed.legacyCaseNumber
+      : reparsed.result.caseNumber;
   const regeneratedIdentity = decisionReplayIdentity(row.country, {
-    caseNumber: reparsed.result.caseNumber,
+    caseNumber: identityCaseNumber,
     country: reparsed.result.country,
     language: reparsed.result.language,
     sourceDocumentId: reparsed.result.sourceDocumentId ?? null,

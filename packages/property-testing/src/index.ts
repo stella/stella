@@ -148,9 +148,9 @@ const DEFAULT_PROPERTY_SEED = 20_260_901;
  * a new one and explores.
  *
  * Nightly is detected from `PROPERTY_TEST_NUM_RUNS_FACTOR`, the variable
- * `.github/workflows/nightly-property-test.yml` already exports to widen
- * the run budget — one signal for "this is the sweep", rather than a
- * second flag that could be set inconsistently with the first.
+ * the nightly sweep already exports to widen the run budget — one signal
+ * for "this is the sweep", rather than a second flag that could be set
+ * inconsistently with the first.
  *
  * Set `PROPERTY_TEST_SEED` to pin a specific seed in any environment.
  * That is how a nightly failure is replayed: the run log prints the seed

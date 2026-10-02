@@ -1,0 +1,49 @@
+import { panic, Result } from "better-result";
+
+import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
+import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
+
+export type IndicatorQuery = (
+  statement: string,
+  parameters?: readonly (string | number | null)[],
+) => Promise<readonly unknown[]>;
+
+type BoundedIndicatorQueryOptions<Transaction> = {
+  runInTransaction: IngestionTransactionRunner<Transaction>;
+  transactionQuery: (tx: Transaction) => IndicatorQuery;
+  readTimeoutMs: number;
+};
+
+/**
+ * A logical indicator timeout cannot cancel SQL. Each read therefore owns a
+ * short transaction with a server-side budget, and settle waits for cancellation
+ * and rollback before the shared session can start a batch transaction.
+ */
+export const createBoundedIndicatorQuery = <Transaction>({
+  runInTransaction,
+  transactionQuery,
+  readTimeoutMs,
+}: BoundedIndicatorQueryOptions<Transaction>) => {
+  if (!Number.isFinite(readTimeoutMs) || readTimeoutMs <= 0) {
+    panic("Indicator read timeout must be finite and positive");
+  }
+  let pending = Promise.resolve();
+  const query: IndicatorQuery = async (statement, parameters) => {
+    // The online repair session is reserved: its catalog reads cannot open
+    // overlapping transactions even when indicators are evaluated together.
+    const read = pending.then(
+      async () =>
+        await runInTransaction(async (tx) => {
+          const execute = transactionQuery(tx);
+          await setSharedQueryTimeouts(execute, {
+            statementTimeoutMs: Math.ceil(readTimeoutMs),
+          });
+          return await execute(statement, parameters);
+        }),
+    );
+    // Failure still rejects read; this tail only tracks when cleanup finished.
+    pending = Result.tryPromise(async () => await read).then(() => undefined);
+    return await read;
+  };
+  return { query, settle: async () => await pending };
+};

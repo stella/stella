@@ -6,7 +6,6 @@ import type { SQLWrapper } from "drizzle-orm";
  * bun run src/scripts/complete-sk-us-raw.ts --checkpoint <path> [--dry-run|--apply] [--limit 200]
  * Checkpoints belong to one source and one operator; dry runs write nothing.
  */
-import { open, readFile, rename } from "node:fs/promises";
 import * as v from "valibot";
 
 import { setSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
@@ -31,12 +30,16 @@ import {
   brandPersistedCaseLawSourceId,
 } from "@/api/lib/safe-id-boundaries";
 import {
+  journalSkUsRawOutcome,
+  readSkUsRawCheckpoint,
+  persistSkUsRawCheckpoint,
+} from "@/api/scripts/complete-sk-us-raw-checkpoint";
+import {
   completeSkUsRawStatement,
   completedSkUsRawEnvelope,
   completeSkUsRawObservation,
-  runSkUsRawPage,
+  runSkUsRawBatch,
   selectSkUsRawPageStatement,
-  SK_US_RAW_OUTCOMES,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import type {
   SkUsRawCursor,
@@ -81,65 +84,12 @@ if (source === undefined) {
   process.exit(0);
 }
 const sourceId = brandPersistedCaseLawSourceId(source.id);
-const cursorSchema = v.object({
-  id: v.pipe(v.string(), v.uuid()),
-  createdAt: v.pipe(v.string(), v.isoTimestamp()),
-});
-const checkpointSchema = v.object({
-  version: v.literal(1),
-  sourceId: v.pipe(v.string(), v.uuid()),
-  cursor: cursorSchema,
-  outcome: v.picklist(SK_US_RAW_OUTCOMES),
-});
-const checkpointRead = await Result.tryPromise({
-  try: async () => await readFile(checkpointPath, "utf-8"),
-  catch: (cause) => cause,
-});
-let after: SkUsRawCursor | null = null;
-if (Result.isOk(checkpointRead)) {
-  const state = v.parse(checkpointSchema, JSON.parse(checkpointRead.value));
-  if (state.sourceId !== sourceId) {
-    panic("Checkpoint belongs to a different source");
-  }
-  if (
-    state.outcome === "would_complete" ||
-    state.outcome === "retry_later" ||
-    state.outcome === "concurrent_write" ||
-    state.outcome === "publisher_rate_limited"
-  ) {
-    panic("Checkpoint does not record a terminal applied outcome");
-  }
-  after = {
-    id: brandPersistedCaseLawDecisionId(state.cursor.id),
-    createdAt: state.cursor.createdAt,
-  };
-} else if (
-  !(
-    checkpointRead.error instanceof Error &&
-    "code" in checkpointRead.error &&
-    checkpointRead.error.code === "ENOENT"
-  )
-) {
-  throw checkpointRead.error;
-}
-
-// The maintenance lane serializes checkpoint writers and releases on a crash.
+const after = await readSkUsRawCheckpoint({ checkpointPath, sourceId });
 const persistCheckpoint = async (
   cursor: SkUsRawCursor,
   outcome: SkUsRawOutcome,
-) => {
-  const state = { version: 1, sourceId, cursor, outcome };
-  const journal = await open(`${checkpointPath}.outcomes.jsonl`, "a");
-  await journal.write(`${JSON.stringify(state)}\n`);
-  await journal.sync();
-  await journal.close();
-  const temporaryPath = `${checkpointPath}.${process.pid}.tmp`;
-  const temporary = await open(temporaryPath, "w");
-  await temporary.write(JSON.stringify(state));
-  await temporary.sync();
-  await temporary.close();
-  await rename(temporaryPath, checkpointPath);
-};
+) =>
+  await persistSkUsRawCheckpoint({ checkpointPath, sourceId, cursor, outcome });
 
 const rowSchema = v.object({
   id: v.pipe(v.string(), v.uuid()),
@@ -267,45 +217,41 @@ const selected = v.parse(
   ),
   executedRows(await execute(selection)),
 );
-const counts: Record<string, number> = {};
-let scanned = 0;
-let stopped = false;
-for (let offset = 0; offset < selected.length; offset += pageSize) {
-  const page = selected.slice(offset, offset + pageSize);
-  const result = await runSkUsRawPage({
-    rows: page.map((row) => ({
-      id: brandPersistedCaseLawDecisionId(row.id),
-      createdAt: row.created_at,
-    })),
-    mode,
-    complete: async (row, operation) => {
-      const completed = await Result.tryPromise({
-        try: async () => await complete(row, operation),
-        catch: (cause) => cause,
-      });
-      if (Result.isOk(completed)) {
-        return completed.value;
-      }
-      console.info(
-        JSON.stringify({
-          id: row.id,
-          outcome: "retry_later",
-          error: errorTag(completed.error),
-        }),
-      );
-      return "retry_later";
-    },
-    checkpoint: persistCheckpoint,
-  });
-  for (const [outcome, count] of Object.entries(result.counts)) {
-    counts[outcome] = (counts[outcome] ?? 0) + count;
-    scanned += count;
-  }
-  after = result.cursor ?? after;
-  if (result.stopped) {
-    stopped = true;
-    break;
-  }
-}
-console.info(JSON.stringify({ mode, scanned, counts, cursor: after, stopped }));
+const {
+  scanned,
+  counts,
+  cursor: finalCursor,
+  stopped,
+} = await runSkUsRawBatch({
+  rows: selected.map((row) => ({
+    id: brandPersistedCaseLawDecisionId(row.id),
+    createdAt: row.created_at,
+  })),
+  pageSize,
+  after,
+  mode,
+  complete: async (row, operation) => {
+    const completed = await Result.tryPromise({
+      try: async () => await complete(row, operation),
+      catch: (cause) => cause,
+    });
+    if (Result.isOk(completed)) {
+      return completed.value;
+    }
+    console.info(
+      JSON.stringify({
+        id: row.id,
+        outcome: "retry_later",
+        error: errorTag(completed.error),
+      }),
+    );
+    return "retry_later";
+  },
+  journal: async (cursor, outcome) =>
+    await journalSkUsRawOutcome({ checkpointPath, sourceId, cursor, outcome }),
+  checkpoint: persistCheckpoint,
+});
+console.info(
+  JSON.stringify({ mode, scanned, counts, cursor: finalCursor, stopped }),
+);
 process.exit(stopped ? 2 : 0);
