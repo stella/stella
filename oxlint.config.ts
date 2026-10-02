@@ -197,6 +197,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-ad-hoc-find-shortcut.fixture.ts", [
     "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut",
   ]),
+  fixtureRuleOverride("no-hand-rolled-typed-character.fixture.ts", [
+    "no-hand-rolled-typed-character/no-hand-rolled-typed-character",
+  ]),
   fixtureRuleOverride("no-ambient-hotkey-format.fixture.ts", [
     "no-ambient-hotkey-format/no-ambient-hotkey-format",
   ]),
@@ -1186,6 +1189,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
+    "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -2735,6 +2739,16 @@ export default defineConfig({
       files: ["apps/web/src/**/*.{ts,tsx}"],
       rules: {
         "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut": "error",
+      },
+    },
+    {
+      // Which character a keystroke typed is decided by `typedCharacter` in
+      // `@stll/ui/typed-character`; hand-rolled Alt checks drop text typed
+      // with Option on macOS layouts or AltGr on Windows.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-hand-rolled-typed-character/no-hand-rolled-typed-character":
+          "error",
       },
     },
     {

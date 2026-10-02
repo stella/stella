@@ -233,9 +233,7 @@ const AssistantPanel = () => {
 const DesktopSetupPanel = () => {
   const t = useTranslations();
   const platform = useHydrationSafeDesktopPlatform();
-  // Downloading here starts the watch, so launching the app is the whole
-  // setup: no trip back to settings to connect.
-  const { connect, startWatch, state } = useDesktopAccountConnection();
+  const { connect, state } = useDesktopAccountConnection();
   const shortcut = platform === "mac" ? "⌘ ⇧ V" : "Ctrl + Shift + V";
   const copyShortcut = platform === "mac" ? "⌘ C" : "Ctrl + C";
 
@@ -255,7 +253,17 @@ const DesktopSetupPanel = () => {
           {shortcut}
         </kbd>
       </p>
-      <DesktopDownloadButtons onDownload={startWatch} platform={platform} />
+      <DesktopDownloadButtons platform={platform} />
+      <Button
+        loading={state.status === "connecting"}
+        onClick={() => {
+          detached(connect(), "onboarding-download-step.connect-desktop");
+        }}
+        type="button"
+        variant="outline"
+      >
+        {t("common.connect")}
+      </Button>
       <DesktopConnectionStatus
         onRetry={() => {
           detached(connect(), "onboarding-download-step.connect-desktop");

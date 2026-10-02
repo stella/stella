@@ -55,7 +55,11 @@ import {
   type Writers,
 } from "./output.js";
 import { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
-import type { FlagSpec, LeafCommandSpec } from "./route-types.js";
+import type {
+  CompositeView,
+  FlagSpec,
+  LeafCommandSpec,
+} from "./route-types.js";
 
 export { flagKey } from "./flag-name.js";
 export { RESERVED_FLAG_KEYS } from "./reserved-flag-keys.js";
@@ -1165,6 +1169,8 @@ type RenderCommandResultOptions = {
   context: Context;
   format: OutputFormat;
   itemsKey: string | undefined;
+  /** See `LeafCommandSpec.composite`. */
+  composite?: CompositeView | undefined;
   result: CallToolResult;
   /** Set exactly for a windowed-text leaf; see `LeafCommandSpec.textPath`. */
   textPath: string | undefined;
@@ -1178,6 +1184,7 @@ export const renderCommandResult = ({
   context,
   format,
   itemsKey,
+  composite,
   result,
   textPath,
   writers,
@@ -1199,6 +1206,7 @@ export const renderCommandResult = ({
     textPath,
     singleReadActive: false,
     columns: undefined,
+    composite,
   });
   renderResult({
     plan,
@@ -1375,6 +1383,7 @@ export const runLeafCommand = async ({
       context,
       format,
       itemsKey: spec.itemsKey,
+      composite: spec.composite,
       result,
       textPath: spec.textPath,
       writers,

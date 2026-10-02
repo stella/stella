@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  getModelImageInputCapability,
   isBYOKModelRoleSupported,
   REASONING_EFFORTS,
   supportsStreamingToolUse,
@@ -15,7 +16,6 @@ import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-m
 import { TEXT_CSV_MIME_TYPE } from "@/api/handlers/chat/attachment-validation";
 import { canHydrateFilePartAsPlainText } from "@/api/handlers/chat/upload-files";
 import { isChatModelReasoningEffortAvailable } from "@/api/lib/chat-model-selection";
-import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { REASONING_ANSWERS } from "@/api/tests/helpers/provider-reasoning-answers";
@@ -215,9 +215,9 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
   },
   ...endpointPredicates("origin"),
   ...endpointPredicates("target"),
-  "attachment: getModelImageCapability": (combination, cassettes) =>
+  "attachment: getModelImageInputCapability": (combination, cassettes) =>
     combination.attachment !== "image" ||
-    getModelImageCapability({
+    getModelImageInputCapability({
       modelId: modelOf(cassettes, combination.target),
       provider: combination.target.provider,
     }) !== "unsupported",
@@ -253,7 +253,7 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
   "attempt: the fallback model accepts image input": (combination, cassettes) =>
     combination.attempt === "primary" ||
     combination.attachment !== "image" ||
-    getModelImageCapability({
+    getModelImageInputCapability({
       modelId: reasoningModelOf(
         combination.target.provider,
         modelOf(cassettes, combination.target),
