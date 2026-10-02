@@ -2,7 +2,7 @@ import { Result } from "better-result";
 
 import { validateDocxArchive } from "@/api/lib/docx-archive";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";

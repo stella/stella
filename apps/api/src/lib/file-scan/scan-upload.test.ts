@@ -1,5 +1,12 @@
 import { Result } from "better-result";
-import { describe, expect, setDefaultTimeout, test } from "bun:test";
+import {
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setDefaultTimeout,
+  test,
+} from "bun:test";
 import JSZip from "jszip";
 
 import { API_FILE_SECURITY_REJECTED_ERROR_CODE } from "@stll/api-contract";
@@ -9,8 +16,8 @@ import {
   FileScanFailedError,
   FileScanRejectedError,
   scanUpload,
-  scanUploadForHandler,
 } from "@/api/lib/file-scan/scan-upload";
+import { scanUploadForHandler } from "@/api/lib/file-scan/scan-upload-handler";
 import {
   DOCX_MIME_TYPE,
   PPTX_MIME_TYPE,
@@ -22,6 +29,8 @@ import {
   mediaHeavyDocx,
   mediaHeavyPptx,
 } from "@/api/tests/helpers/large-ooxml";
+import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
+import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 const attachedTemplateDocx = async (): Promise<Uint8Array> => {
   const zip = new JSZip();
@@ -122,5 +131,75 @@ describe("scanUploadForHandler", () => {
     expect(scanned.error.rejection.issues.map(({ code }) => code)).toEqual([
       "ooxml_dde",
     ]);
+  });
+});
+
+describe("a refusal raised because inspection failed", () => {
+  let analytics: RecordingAnalytics;
+  beforeEach(() => {
+    analytics = installRecordingAnalytics();
+  });
+  afterEach(() => {
+    analytics.restore();
+  });
+
+  const defect = new TypeError("inspection defect");
+  // The scan as the archive inspector answers a defect: a rejecting finding
+  // that carries the error.
+  const scanWithDefect: typeof scanFile = async () =>
+    await Promise.resolve(
+      Result.ok({
+        verdict: "reject" as const,
+        findings: [
+          {
+            rule: "archive-inspection-failed",
+            severity: "reject" as const,
+            message:
+              "Archive inspection failed, so the file cannot be inspected",
+            failure: defect,
+          },
+        ],
+      }),
+    );
+  const input = {
+    bytes: new Uint8Array([1, 2, 3]),
+    declaredMimeType: DOCX_MIME_TYPE,
+    fileName: "any.docx",
+  };
+
+  test("carries the error on the rejection", async () => {
+    const scanned = await scanUpload(input, scanWithDefect);
+
+    if (!Result.isError(scanned) || !FileScanRejectedError.is(scanned.error)) {
+      throw new TypeError("expected a security rejection");
+    }
+    expect(scanned.error.inspectionFailures).toEqual([defect]);
+  });
+
+  test("answers with the typed rejection and reports the error", async () => {
+    const result = await scanUploadForHandler(
+      input,
+      async (upload) => await scanUpload(upload, scanWithDefect),
+    );
+
+    if (!Result.isError(result)) {
+      throw new TypeError("expected the scan to reject the file");
+    }
+    expect(result.error.status).toBe(422);
+    expect(result.error.code).toBe(API_FILE_SECURITY_REJECTED_ERROR_CODE);
+    expect(
+      analytics.exceptions().map((event) => event.properties["error.class"]),
+    ).toEqual(["TypeError"]);
+  });
+
+  test("reports nothing for an ordinary rejection", async () => {
+    const result = await scanUploadForHandler({
+      bytes: await attachedTemplateDocx(),
+      declaredMimeType: DOCX_MIME_TYPE,
+      fileName: "linked.docx",
+    });
+
+    expect(Result.isError(result)).toBe(true);
+    expect(analytics.exceptions()).toEqual([]);
   });
 });

@@ -56,4 +56,5 @@ export const mapMatchFinding = (m: Match): ScanFinding => ({
     typeof m.meta?.["description"] === "string"
       ? m.meta["description"]
       : m.rule,
+  ...(m.failure === undefined ? {} : { failure: m.failure }),
 });

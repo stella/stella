@@ -6,15 +6,12 @@ const repoRoot = path.resolve(import.meta.dir, "../../../../..");
 const apiRoot = path.join(repoRoot, "apps/api/src");
 const routeFile = path.join(apiRoot, "handlers/public-knowledge/routes.ts");
 
-// The factory, env, error translator and failure telemetry are trusted
-// boundary modules. Their broad shared dependency graphs do not grant a
-// public handler access to data.
+// The factory, env, and error translator are trusted boundary modules. Their
+// broad shared dependency graphs do not grant a public handler access to data.
 const boundaryLeaves = new Set([
   "env.ts",
   "lib/api-handlers.ts",
   "lib/errors/tagged-errors.ts",
-  "lib/observability/failure.ts",
-  "lib/observability/observe-failure.ts",
 ]);
 
 const allowedModules = new Set([
@@ -39,8 +36,7 @@ const allowedModules = new Set([
   "lib/docx/types.ts",
   "lib/template-binding/binding-sources.ts",
   // Parsers take a `ScannedFile`; bundled bytes get one from the security
-  // scan, whose graph reads its YARA rules from disk and nothing else, and
-  // reports its own failures through the telemetry leaves above.
+  // scan, whose graph reads its YARA rules from disk and nothing else.
   "lib/file-scan/archive.ts",
   "lib/file-scan/attached-template.ts",
   "lib/file-scan/document-parsers.ts",

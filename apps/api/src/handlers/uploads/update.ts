@@ -44,6 +44,7 @@ import {
   FileScanRejectedError,
   scanUpload,
 } from "@/api/lib/file-scan/scan-upload";
+import { observeScanFailures } from "@/api/lib/file-scan/scan-upload-handler";
 import {
   commitOrganizationFileBytes,
   reserveOrganizationFileBytes,
@@ -541,6 +542,7 @@ const runFinalize = async function* ({
   });
   if (Result.isError(scanResult)) {
     const scanError = scanResult.error;
+    observeScanFailures(scanError);
     return Result.err(
       FileScanRejectedError.is(scanError)
         ? new UploadFinalizeError({

@@ -1,5 +1,5 @@
 import { compile } from "@litko/yara-x";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 import JSZip from "jszip";
 
@@ -21,8 +21,6 @@ import {
   yaraWindowedRuleNames,
   yaraWindowedRules,
 } from "@/api/lib/file-scan/yara";
-import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
-import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
 
 // Never fires, so every verdict below comes from inspecting the entries.
 const permissiveGuard = createZipBombGuard({
@@ -377,33 +375,25 @@ describe("archives that cannot be inspected", () => {
     expect(verdictOf(matches)).toBe("reject");
   });
 
-  describe("when inspection itself fails", () => {
-    let analytics: RecordingAnalytics;
-    beforeEach(() => {
-      analytics = installRecordingAnalytics();
-    });
-    afterEach(() => {
-      analytics.restore();
-    });
-
-    test("refuses the archive and reports the failure", async () => {
-      const matches = await createArchiveContentScanner({
-        rules: {
-          ...yaraWindowedRules,
-          occurrences: () => {
-            throw new TypeError("inspection defect");
-          },
+  test("refuses an archive whose inspection fails and carries the error", async () => {
+    const defect = new TypeError("inspection defect");
+    const matches = await createArchiveContentScanner({
+      rules: {
+        ...yaraWindowedRules,
+        occurrences: () => {
+          throw defect;
         },
-        budget: REFUSAL_BUDGET,
-        guard: permissiveGuard,
-      }).scan(await zipOf(ONE_ENTRY));
+      },
+      budget: REFUSAL_BUDGET,
+      guard: permissiveGuard,
+    }).scan(await zipOf(ONE_ENTRY));
 
-      expect(rulesOf(matches)).toEqual(["archive-inspection-failed"]);
-      expect(verdictOf(matches)).toBe("reject");
-      expect(
-        analytics.exceptions().map((event) => event.properties["error.class"]),
-      ).toEqual(["TypeError"]);
-    });
+    expect(rulesOf(matches)).toEqual(["archive-inspection-failed"]);
+    expect(verdictOf(matches)).toBe("reject");
+    // The scanner reports nothing itself; the finding hands the error on.
+    expect(matches.map(mapMatchFinding).map(({ failure }) => failure)).toEqual([
+      defect,
+    ]);
   });
 
   test("rejects an archive whose inspection runs out of time", async () => {

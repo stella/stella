@@ -28,8 +28,6 @@ import type {
 } from "@/api/lib/file-scan/yara";
 import { hasZipMagic, readZipIndex } from "@/api/lib/file-scan/zip";
 import type { ZipEntry } from "@/api/lib/file-scan/zip";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 export type ArchiveInspectionBudget = {
@@ -382,11 +380,6 @@ const inspectArchive = async ({
     : Result.ok(evidence.evaluate());
 };
 
-const INSPECTION_FAILURE_SINK = failureSink({
-  event: "file_scan.archive_inspection_failed",
-  expected: [],
-});
-
 type ArchiveContentScannerOptions = {
   rules: WindowedRuleSet;
   budget: ArchiveInspectionBudget;
@@ -428,16 +421,13 @@ export const createArchiveContentScanner = ({
           : inspected.value.value;
       }
       // A damaged deflate stream is a property of the file. Anything else is
-      // a defect: it is reported, and the file is still refused rather than
-      // left to a retry that would fail the same way.
+      // a defect: the file is still refused rather than left to a retry that
+      // would fail the same way, and the refusal carries the error for the
+      // handler to report.
       if (isInflateError(inspected.error)) {
         return [ARCHIVE_REFUSAL.corrupt];
       }
-      observeFailure(inspected.error, {
-        sink: INSPECTION_FAILURE_SINK,
-        ctx: { feature: "file_scan.archive_inspection" },
-      });
-      return [ARCHIVE_REFUSAL.failed];
+      return [{ ...ARCHIVE_REFUSAL.failed, failure: inspected.error }];
     },
   };
 };
