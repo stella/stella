@@ -587,7 +587,7 @@ const conditionEvaluator = ({
     needs: { "ci-plan": { outputs: scopes } },
   });
   return (condition: string) => {
-    const expression = condition.startsWith('${{')
+    const expression = condition.startsWith("${{")
       ? condition.slice(4, -3)
       : condition;
     return v.parse(
