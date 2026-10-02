@@ -41,9 +41,25 @@ orphan="$(new_fixture orphan)"
 rm -r "$orphan/.ai/local-skills/example"
 expect_status 1 "does not exist; drop the line" "$script" "$orphan"
 
+deleted_ledger="$(new_fixture deleted-ledger)"
+rm "$deleted_ledger/.ai/local-skills/shared-bases.sha256"
+expect_status 1 "shared-bases.sha256 is missing" "$script" "$deleted_ledger"
+
 unrecorded="$(new_fixture unrecorded)"
-rm "$unrecorded/.ai/local-skills/shared-bases.sha256"
-expect_status 0 "" "$script" "$unrecorded"
+mkdir -p "$unrecorded/.ai/shared/skills/other" "$unrecorded/.ai/local-skills/other"
+printf '%s\n' 'Shared other' >"$unrecorded/.ai/shared/skills/other/SKILL.md"
+printf '%s\n' 'Local other' >"$unrecorded/.ai/local-skills/other/SKILL.md"
+expect_status 1 "local skill other overrides the shared one with no recorded base" "$script" "$unrecorded"
+
+duplicate="$(new_fixture duplicate)"
+recorded_line="$(cat "$duplicate/.ai/local-skills/shared-bases.sha256")"
+printf '%s\n' "$recorded_line" >>"$duplicate/.ai/local-skills/shared-bases.sha256"
+expect_status 1 "lists example 2 times" "$script" "$duplicate"
+
+local_only="$(new_fixture local-only)"
+rm -r "$local_only/.ai/shared/skills/example"
+rm "$local_only/.ai/local-skills/shared-bases.sha256"
+expect_status 0 "" "$script" "$local_only"
 
 no_submodule="$(new_fixture no-submodule)"
 rm -r "$no_submodule/.ai/shared"
