@@ -237,7 +237,9 @@ test("only main heavy forwards its validated SHA while ordinary checkouts use th
       uses?.startsWith("actions/checkout@"),
     ) ?? []) {
       const reference = checkout.with?.["ref"];
-      if (reference === undefined) {continue;}
+      if (reference === undefined) {
+        continue;
+      }
       expect(expressionValue(reference, mainContext), job).toBe(validatedSha);
       for (const event of [
         "pull_request",
