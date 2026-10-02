@@ -5,7 +5,7 @@ import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
-import { SANCTIONS_SOURCES } from "@stll/sanctions";
+import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import type { Transaction } from "@/api/db/root";
@@ -28,7 +28,10 @@ import { createSanctionsMatcherPool } from "@/api/lib/lists/sanctions/matcher-po
 import { createPublicSanctionsScreening } from "@/api/lib/lists/sanctions/public-screening";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
+import {
+  createSanctionsIndexCache,
+  loadEditionEntries,
+} from "@/api/lib/lists/sanctions/screening-index";
 import {
   SANCTIONS_MATCH_LIMIT,
   screenSanctionsSubject,
@@ -621,6 +624,157 @@ describe("public sanctions search parity", () => {
         await db
           .delete(sanctionsEditions)
           .where(eq(sanctionsEditions.id, heldId));
+      }
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test.each([
+    { engine: "index", entryCount: 2 },
+    { engine: "index", entryCount: 3 },
+    { engine: "worker", entryCount: 2 },
+    { engine: "worker", entryCount: 3 },
+  ] as const)(
+    "public search reloads a newly activated edition without a refresh notification ($engine, $entryCount entries)",
+    async ({ engine, entryCount }) => {
+      let loads = 0;
+      const cache = createSanctionsIndexCache({
+        build: (lists) => {
+          loads += 1;
+          return buildScreeningIndex(lists);
+        },
+      });
+      const pool = benchmarkPool();
+      const screen =
+        engine === "index"
+          ? async (props: Parameters<typeof screenSanctionsSubject>[0]) =>
+              await screenSanctionsSubject({ ...props, indexCache: cache })
+          : createPublicSanctionsScreening({
+              pool,
+              loadEntries: async (props) => {
+                loads += 1;
+                return await loadEditionEntries(props);
+              },
+            });
+      const context = new InMemoryRateLimitContext();
+      const route = createPublicSanctionsRoute({
+        db: publicDb,
+        now: FRESH_NOW,
+        screen,
+        rateLimitOptions: { context, max: 1000, duration: 60_000 },
+      });
+      const search = async (firstName: string, lastName: string) => {
+        const response = await route.handle(
+          new Request("http://localhost/sanctions/search", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              subject: { type: "person", firstName, lastName },
+            }),
+          }),
+        );
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect([...Value.Errors(publicSanctionsResponseSchema, body)]).toEqual(
+          [],
+        );
+        return body;
+      };
+      const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+      const entries = Array.from({ length: entryCount }, (_, index) =>
+        entry({
+          source: "eu",
+          sourceId: `rollover-${id}-${index}`,
+          overrides:
+            index === 0
+              ? {
+                  entityType: "person",
+                  names: [{ name: "Zbigniew Wroblewski", quality: "strong" }],
+                }
+              : {},
+        }),
+      );
+      try {
+        const initial = await search("Ivan", "Sidorov");
+        expect(initial.status).toBe("possible-match");
+        expect(
+          initial.lists.find((list: { source: string }) => list.source === "eu")
+            .editionId,
+        ).toBe(activeEdition("eu"));
+        const warmed = loads;
+        expect(warmed).toBe(sanctionsSourceIds().length);
+        await search("Ivan", "Sidorov");
+        expect(loads).toBe(warmed);
+        await db.insert(sanctionsEditions).values({
+          id,
+          sourceId: "eu",
+          markerKey: hash(id),
+          publishedAt: "2026-09-20",
+          contentHash: hash(`${id}:content`),
+          entryCount,
+          state: "ready",
+          activatedAt: VERIFIED_AT,
+        });
+        await db.insert(sanctionsEntryPayloads).values(
+          entries.map((payload) => ({
+            contentHash: hash(JSON.stringify(payload)),
+            payload,
+          })),
+        );
+        await db.insert(sanctionsEditionEntries).values(
+          entries.map((payload) => ({
+            editionId: id,
+            sourceEntryId: payload.sourceId,
+            contentHash: hash(JSON.stringify(payload)),
+          })),
+        );
+        await db
+          .update(sanctionsSources)
+          .set({ activeEditionId: id })
+          .where(eq(sanctionsSources.id, "eu"));
+        // The same mounted route and cache receive no refresh call or notification.
+        const oldPerson = await search("Ivan", "Sidorov");
+        expect(oldPerson.status).toBe("clear");
+        expect(
+          oldPerson.lists.find(
+            (list: { source: string }) => list.source === "eu",
+          ).editionId,
+        ).toBe(id);
+        expect(loads).toBe(warmed + 1);
+        const newPerson = await search("Zbigniew", "Wroblewski");
+        expect(newPerson.status).toBe("possible-match");
+        const eu = newPerson.lists.find(
+          (list: { source: string }) => list.source === "eu",
+        );
+        expect(eu.editionId).toBe(id);
+        expect(eu.possibleMatches.at(0).sourceEntryId).toBe(
+          entries.at(0)?.sourceId,
+        );
+        await search("Ivan", "Sidorov");
+        await search("Zbigniew", "Wroblewski");
+        expect(loads).toBe(warmed + 1);
+      } finally {
+        await db
+          .update(sanctionsSources)
+          .set({ activeEditionId: activeEdition("eu") })
+          .where(eq(sanctionsSources.id, "eu"));
+        await db
+          .delete(sanctionsEditionEntries)
+          .where(eq(sanctionsEditionEntries.editionId, id));
+        for (const payload of entries) {
+          await db
+            .delete(sanctionsEntryPayloads)
+            .where(
+              eq(
+                sanctionsEntryPayloads.contentHash,
+                hash(JSON.stringify(payload)),
+              ),
+            );
+        }
+        await db.delete(sanctionsEditions).where(eq(sanctionsEditions.id, id));
+        context.kill();
+        await pool.close();
+        pools.delete(pool);
       }
     },
     DB_TEST_TIMEOUT_MS,
