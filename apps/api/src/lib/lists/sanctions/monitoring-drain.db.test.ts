@@ -1518,3 +1518,140 @@ test(
   },
   TIMEOUT,
 );
+
+test(
+  "invalid persisted identity retains prior hits without poisoning matching and clear neighbors",
+  async () => {
+    const { organizationId, scoped } = await isolatedMonitoringOrganization(
+      "drain-invalid-recovery",
+    );
+    await seedIdentityEdition(futureNow());
+    const original =
+      (
+        await scoped(
+          async (tx) =>
+            await tx
+              .insert(contacts)
+              .values({
+                organizationId,
+                type: "person",
+                displayName: "Alexandrov Zhuravlev",
+              })
+              .returning(),
+        )
+      ).at(0) ?? panic("Invalid recovery contact missing");
+    const drain = async () =>
+      await drainSanctionsContactMarks({
+        db: scoped,
+        organizationId,
+        now: futureNow(),
+        signal: new AbortController().signal,
+      });
+    expect(await drain()).toEqual({ claimed: 1, terminal: 1 });
+    const priorMatches = await scoped(
+      async (tx) => await tx.select().from(sanctionsContactMatches),
+    );
+    const priorEvents = await scoped(
+      async (tx) => await tx.select().from(sanctionsScreeningEvents),
+    );
+    expect(
+      priorMatches.map(({ sourceEntryId, state }) => ({
+        sourceEntryId,
+        state,
+      })),
+    ).toEqual([{ sourceEntryId: "identity-a", state: "active" }]);
+    const invalid =
+      (
+        await scoped(
+          async (tx) =>
+            await tx
+              .update(contacts)
+              .set({ displayName: "123 !!!" })
+              .where(eq(contacts.id, original.id))
+              .returning(),
+        )
+      ).at(0) ?? panic("Invalid contact missing");
+    const validated =
+      (
+        await screenSanctionsSubjects({
+          db: scoped,
+          subjects: [monitoringSubject(invalid)],
+          practiceJurisdictions: [],
+          now: futureNow(),
+          resultMode: "complete",
+        })
+      ).at(0) ?? panic("Invalid validation result missing");
+    expect(validated.isErr()).toBe(true);
+    const neighbors = await scoped(
+      async (tx) =>
+        await tx
+          .insert(contacts)
+          .values([
+            { organizationId, type: "person", displayName: "Kwame Nkrumah" },
+            { organizationId, type: "person", displayName: "Marisol Benitez" },
+          ])
+          .returning(),
+    );
+    expect(await drain()).toEqual({ claimed: 3, terminal: 3 });
+    const matching =
+      neighbors.find(({ displayName }) => displayName === "Kwame Nkrumah") ??
+      panic("Matching neighbor missing");
+    const clear =
+      neighbors.find(({ displayName }) => displayName === "Marisol Benitez") ??
+      panic("Clear neighbor missing");
+    const snapshot = async () =>
+      await scoped(async (tx) => ({
+        matches: await tx.select().from(sanctionsContactMatches),
+        coverage: await tx.select().from(sanctionsContactScreenings),
+        events: await tx.select().from(sanctionsScreeningEvents),
+        marks: await tx.select().from(sanctionsContactMarks),
+      }));
+    const state = await snapshot();
+    expect(state.marks).toEqual([]);
+    expect(
+      state.matches.filter(({ contactId }) => contactId === invalid.id),
+    ).toEqual(priorMatches);
+    expect(
+      state.events.filter(({ contactId }) => contactId === invalid.id),
+    ).toEqual(priorEvents);
+    expect(
+      state.matches
+        .filter(({ contactId }) => contactId === matching.id)
+        .map(({ sourceEntryId }) => sourceEntryId),
+    ).toEqual(["identity-d"]);
+    expect(
+      state.matches.filter(({ contactId }) => contactId === clear.id),
+    ).toEqual([]);
+    const invalidCoverage = state.coverage.filter(
+      ({ contactId }) => contactId === invalid.id,
+    );
+    expect(invalidCoverage.map(({ sourceId }) => sourceId).toSorted()).toEqual(
+      sanctionsSourceIds().toSorted(),
+    );
+    expect(
+      invalidCoverage.every(
+        ({ status, contactFingerprint }) =>
+          status === "unavailable" &&
+          contactFingerprint === monitoringFingerprint(invalid),
+      ),
+    ).toBe(true);
+    expect(
+      invalidCoverage.find(({ sourceId }) => sourceId === "eu"),
+    ).toMatchObject({ status: "unavailable", reason: "load-failed" });
+    expect(
+      state.coverage.find(
+        ({ contactId, sourceId }) =>
+          contactId === matching.id && sourceId === "eu",
+      )?.status,
+    ).toBe("possible-match");
+    expect(
+      state.coverage.find(
+        ({ contactId, sourceId }) =>
+          contactId === clear.id && sourceId === "eu",
+      )?.status,
+    ).toBe("clear");
+    expect(await drain()).toEqual({ claimed: 0, terminal: 0 });
+    expect(await snapshot()).toEqual(state);
+  },
+  TIMEOUT,
+);
