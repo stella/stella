@@ -92,9 +92,9 @@ if (!databaseUrl || !runPostgresTests) {
               .where(eq(contacts.id, contactId))
           ).at(0);
         expect(await update("JPY")).toEqual({ id: contactId });
-        expect(await read()).toEqual({ currency: "JPY", rate: 151 });
+        expect(await read()).toEqual({ currency: "JPY", rate: cents(151) });
         expect(await update("KWD")).toEqual({ id: contactId });
-        expect(await read()).toEqual({ currency: "KWD", rate: 151_000 });
+        expect(await read()).toEqual({ currency: "KWD", rate: cents(151_000) });
         await db
           .update(contacts)
           .set({ currency: "JPY", defaultHourlyRate: cents(9_007_199_254_740) })
@@ -102,7 +102,7 @@ if (!databaseUrl || !runPostgresTests) {
         expect(await update("KWD")).toEqual({ id: contactId });
         expect(await read()).toEqual({
           currency: "KWD",
-          rate: 9_007_199_254_740_000,
+          rate: cents(9_007_199_254_740_000),
         });
         await db
           .update(contacts)
@@ -116,7 +116,7 @@ if (!databaseUrl || !runPostgresTests) {
         });
         expect(await read()).toEqual({
           currency: "JPY",
-          rate: 9_007_199_254_741,
+          rate: cents(9_007_199_254_741),
         });
       } finally {
         if (organizationInserted) {

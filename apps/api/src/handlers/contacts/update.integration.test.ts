@@ -43,8 +43,10 @@ const update = async (body: UpdateContactContext["body"]) => {
       safeDb: asTestRaw<SafeDb>(
         createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
       ),
-      recordAuditEvent: async (_tx, event) => {
-        auditFields.push(event.changes);
+      recordAuditEvent: async (_tx, events) => {
+        for (const event of Array.isArray(events) ? events : [events]) {
+          auditFields.push(event.changes);
+        }
       },
       body,
     }),
@@ -119,7 +121,7 @@ test("refuses an unsafe restatement before changing any field", async () => {
   });
   expect(row).toEqual({
     currency: "JPY",
-    defaultHourlyRate: 9_007_199_254_741,
+    defaultHourlyRate: cents(9_007_199_254_741),
     notes: "Before",
   });
   expect(auditFields).toEqual([]);
