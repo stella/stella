@@ -2194,7 +2194,8 @@ jobs:
             read -r -a args <<<"$scope"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
-          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
+          export API_TEST_SHARD
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
@@ -2218,7 +2219,8 @@ jobs:
             read -r -a args <<<"$scope"
           fi
           read -r -a shard_args <<<"$(bun scripts/test-shards.ts --filters "$SHARD")"
-          export API_TEST_SHARD="$(bun scripts/test-shards.ts --api-shard "$SHARD")"
+          API_TEST_SHARD=$(bun scripts/test-shards.ts --api-shard "$SHARD")
+          export API_TEST_SHARD
           set -o pipefail
           plan="$RUNNER_TEMP/test-plan-$SHARD.json"
           output="$RUNNER_TEMP/test-output-$SHARD.log"
