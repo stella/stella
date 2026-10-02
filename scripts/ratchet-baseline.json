@@ -461,7 +461,7 @@
       "apps/api/src/lib/sse-broadcast.ts": 1,
       "apps/api/src/lib/style-set-editor.ts": 1,
       "apps/api/src/lib/subprocess.ts": 1,
-      "apps/api/src/lib/tanstack-ai-models.ts": 9,
+      "apps/api/src/lib/tanstack-ai-models.ts": 13,
       "apps/api/src/lib/tasks/update-task.ts": 2,
       "apps/api/src/lib/two-factor.ts": 1,
       "apps/api/src/lib/web-search/jina.ts": 2,
