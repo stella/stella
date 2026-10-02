@@ -3,8 +3,9 @@
 SET LOCAL lock_timeout = '1s';--> statement-breakpoint
 SET LOCAL statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "contacts" ADD CONSTRAINT "contacts_org_id_unique" UNIQUE USING INDEX "contacts_org_id_unique";--> statement-breakpoint
-ALTER TABLE contacts ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'included', ADD CONSTRAINT "contacts_sanctions_monitoring_mode_check" CHECK (sanctions_monitoring_mode IN ('included', 'excluded'));--> statement-breakpoint
-ALTER TABLE organization_settings ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'enabled', ADD CONSTRAINT "organization_settings_sanctions_monitoring_mode_check" CHECK (sanctions_monitoring_mode IN ('enabled', 'disabled'));--> statement-breakpoint
+-- New columns give existing rows valid defaults; the online phase validates after DDL locks are released.
+ALTER TABLE contacts ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'included', ADD CONSTRAINT "contacts_sanctions_monitoring_mode_check" CHECK (sanctions_monitoring_mode IN ('included', 'excluded')) NOT VALID;--> statement-breakpoint
+ALTER TABLE organization_settings ADD COLUMN sanctions_monitoring_mode text NOT NULL DEFAULT 'enabled', ADD CONSTRAINT "organization_settings_sanctions_monitoring_mode_check" CHECK (sanctions_monitoring_mode IN ('enabled', 'disabled')) NOT VALID;--> statement-breakpoint
 CREATE TABLE sanctions_contact_screenings (
   organization_id varchar(128) NOT NULL REFERENCES organization(id) ON DELETE CASCADE,
   contact_id uuid NOT NULL,
