@@ -7,7 +7,7 @@ import { createHash } from "node:crypto";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 
-import { organization } from "@/api/db/auth-schema";
+import { organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -571,6 +571,101 @@ test(
         }),
       "sanctions_contact_screenings_clear_edition_check",
     );
+  },
+  TIMEOUT,
+);
+
+test(
+  "active evidence changes append one changed event and preserve unchanged reviews",
+  async () => {
+    await activate("3");
+    const contact = await addContact();
+    const work = await prepare(contact);
+    if (work.outcome.status !== "possible-match") {
+      panic("Expected active matching fixture");
+    }
+    await commit(work);
+    const old = await matchFor(contact.id);
+    const newEdition = await activate("4");
+    const changed = await prepare(contact);
+    if (changed.outcome.status !== "possible-match") {
+      panic("Expected changed matching fixture");
+    }
+    await commit(changed);
+    await commit(changed);
+    const history = await eventsFor(contact.id);
+    expect(history.map(({ type }) => type).toSorted()).toEqual([
+      "changed",
+      "new",
+    ]);
+    expect(history.find(({ type }) => type === "changed")).toMatchObject({
+      oldMatch: old.match,
+      newMatch: changed.outcome.possibleMatches[0],
+      oldEditionId: old.editionId,
+      newEditionId: newEdition,
+      reason: "evidence-changed",
+    });
+    const reviewer = toSafeId<"user">("monitoring-evidence-reviewer");
+    await db
+      .insert(user)
+      .values({
+        id: reviewer,
+        name: "Reviewer",
+        email: "monitoring-reviewer@example.test",
+      });
+    await db
+      .update(sanctionsContactMatches)
+      .set({
+        disposition: "dismissed",
+        reviewedBy: reviewer,
+        reviewReason: "Confirmed distinct identity",
+      })
+      .where(eq(sanctionsContactMatches.contactId, contact.id));
+    const before = await matchFor(contact.id);
+    const hit = changed.outcome.possibleMatches[0];
+    const evidenceOnly = {
+      ...changed,
+      outcome: {
+        ...changed.outcome,
+        possibleMatches: [
+          {
+            ...hit,
+            evidence: { ...hit.evidence, matchedName: "Synthetic Alternate" },
+          },
+        ],
+      } satisfies typeof changed.outcome,
+    };
+    await commit(evidenceOnly);
+    const after = await matchFor(contact.id);
+    expect(after).toMatchObject({
+      disposition: before.disposition,
+      reviewedBy: reviewer,
+      reviewReason: before.reviewReason,
+      entryHash: before.entryHash,
+      contactFingerprint: before.contactFingerprint,
+      match: evidenceOnly.outcome.possibleMatches[0],
+    });
+    const evidenceHistory = await eventsFor(contact.id);
+    expect(evidenceHistory.map(({ type }) => type).toSorted()).toEqual([
+      "changed",
+      "changed",
+      "new",
+    ]);
+    expect(
+      evidenceHistory.find(
+        ({ newMatch }) =>
+          newMatch?.evidence.matchedName === "Synthetic Alternate",
+      ),
+    ).toMatchObject({
+      oldMatch: before.match,
+      newMatch: evidenceOnly.outcome.possibleMatches[0],
+      oldEditionId: newEdition,
+      newEditionId: newEdition,
+      reason: "evidence-changed",
+    });
+    await commit(evidenceOnly);
+    expect(await eventsFor(contact.id)).toEqual(evidenceHistory);
+    expect(await matchFor(contact.id)).toEqual(after);
   },
   TIMEOUT,
 );
