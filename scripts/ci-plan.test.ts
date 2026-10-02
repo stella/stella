@@ -1483,7 +1483,7 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
       .filter(({ run }) => run?.includes("scripts/cli-runtime-pack.test.ts"))
       .map(({ name, if: condition }) => ({ job, name, condition })),
   );
-  expect(parity.map(({ job, name }) => `${job}: ${name}`)).toEqual([
+  expect(parity.map(({ job, name }) => `${job}: ${String(name)}`)).toEqual([
     "ci-checks-rest: Test CLI runtime package parity",
   ]);
   expect(parity.at(0)?.condition).toBe(
@@ -1496,7 +1496,8 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
   );
   expect(generators).toHaveLength(2);
   const cliPaths = [
-    ...generators.flatMap(({ inputs, outputs }) => inputs.concat(outputs)),
+    ...generators.flatMap(({ inputs }) => inputs),
+    ...generators.flatMap(({ outputs }) => outputs),
     "packages/cli/src/cli.ts",
     "packages/cli/src/codegen-version.ts",
     "scripts/generated-files.ts",

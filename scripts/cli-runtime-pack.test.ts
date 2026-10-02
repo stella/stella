@@ -77,14 +77,13 @@ const eventBaseRevision = (
   eventName: string | undefined,
   readPayload: () => unknown,
 ): string | undefined => {
-  switch (eventName) {
-    case "merge_group":
-      return v.parse(MergeGroupEvent, readPayload()).merge_group.base_sha;
-    case "pull_request":
-      return v.parse(PullRequestEvent, readPayload()).pull_request.base.sha;
-    default:
-      return undefined;
+  if (eventName === "merge_group") {
+    return v.parse(MergeGroupEvent, readPayload()).merge_group.base_sha;
   }
+  if (eventName === "pull_request") {
+    return v.parse(PullRequestEvent, readPayload()).pull_request.base.sha;
+  }
+  return undefined;
 };
 
 const baseRevision = (): string =>
