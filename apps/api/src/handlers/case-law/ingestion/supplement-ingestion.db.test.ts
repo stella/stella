@@ -65,6 +65,7 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // Written reasons SAOS publishes apart from their ruling, through the real
@@ -1242,6 +1243,45 @@ describe("the reasons' stored payload", () => {
     ).toEqual([]);
     expect(rawKeysUnder(fixture.sourceId, ruling.id)).toEqual([]);
   });
+});
+
+test("a supplement and its standalone decision share one persisted source schema lookup", async () => {
+  const fixture = await newSource();
+  let schemaReads = 0;
+  const countedDb = drizzle({
+    client,
+    relations: { ...relations, ...authRelationsPart },
+    logger: {
+      logQuery(query) {
+        if (
+          query.startsWith("select ") &&
+          query.includes('"adapter_key"') &&
+          query.includes('from "case_law_sources"')
+        ) {
+          schemaReads += 1;
+        }
+      },
+    },
+  });
+  const countedScopedDb: ScopedDb = async (callback) =>
+    await countedDb.transaction(async (tx) => await callback(asTestRaw(tx)));
+  const placed = await processSupplement({
+    supplement: supplementOf(REASONS),
+    sourceId: fixture.sourceId,
+    scopedDb: countedScopedDb,
+    observedAt: new Date("2026-09-23T10:00:00.000Z"),
+    nextObservationOrder: fixture.nextObservationOrder,
+    reparseStoredRaw,
+    readStoredRaw,
+  });
+  expect(placed).toMatchObject({
+    status: PROCESS_DECISION_STATUS.COMPLETE,
+    disposition: { type: "standalone", reason: "no-judgment" },
+  });
+  expect((await decisionBy(fixture.sourceId, "339001")).fulltext).toContain(
+    REASONS_TEXT,
+  );
+  expect(schemaReads).toBe(1);
 });
 
 test("a jurisdiction keyed by publisher document takes no docket-keyed supplement", async () => {

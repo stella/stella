@@ -491,6 +491,16 @@ test.each([ADAPTER_KEYS.PL_COURTS, ADAPTER_KEYS.CZ_NS])(
       plainTextIngestionResult(
         {
           ...record(number),
+          country: adapterKey === ADAPTER_KEYS.PL_COURTS ? "POL" : "CZE",
+          language: adapterKey === ADAPTER_KEYS.PL_COURTS ? "pl" : "cs",
+          court:
+            adapterKey === ADAPTER_KEYS.PL_COURTS
+              ? "Sąd Rejonowy"
+              : "Nejvyšší správní soud",
+          caseNumber:
+            adapterKey === ADAPTER_KEYS.PL_COURTS
+              ? `II K ${number}/26`
+              : `4 As ${number}/2008`,
           metadata:
             adapterKey === ADAPTER_KEYS.PL_COURTS
               ? checkedDecisionMetadata(
