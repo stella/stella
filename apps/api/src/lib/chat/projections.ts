@@ -1312,6 +1312,7 @@ export const LIST_INVOICES_DETAIL_PROJECTION = v.strictObject({
         currency: v.string(),
         narrative: v.string(),
         invoiceNarrative: v.nullable(v.string()),
+        noCharge: v.boolean(),
         status: v.string(),
         entity: v.nullable(invoiceLineEntityProjection()),
       }),

@@ -16,7 +16,7 @@ import type {
   InvoiceTotals,
   VatTreatment,
 } from "@stll/invoicing";
-import { applyMarkupCents, prorateHourlyCents } from "@stll/money";
+import { applyMarkupCents, timeEntryAmount } from "@stll/money";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -137,6 +137,7 @@ type TimeEntryForLine = {
   rateAtEntry: CentsAmount;
   narrative: string;
   invoiceNarrative: string | null;
+  noCharge: boolean;
 };
 
 /**
@@ -156,11 +157,8 @@ export const timeEntryLineDraft = (
   ),
   quantity: hoursQuantity(entry.billedMinutes),
   unit: "h",
-  unitPrice: entry.rateAtEntry,
-  netAmount: prorateHourlyCents({
-    billedMinutes: entry.billedMinutes,
-    hourlyRateCents: entry.rateAtEntry,
-  }),
+  unitPrice: entry.noCharge ? cents(0) : entry.rateAtEntry,
+  netAmount: timeEntryAmount(entry),
   ...vat,
   source: INVOICE_LINE_SOURCE.TIME_ENTRY,
   timeEntryId: entry.id,
@@ -426,6 +424,7 @@ const materialiseAttachedEntryLines = async (
         rateAtEntry: timeEntries.rateAtEntry,
         narrative: timeEntries.narrative,
         invoiceNarrative: timeEntries.invoiceNarrative,
+        noCharge: timeEntries.noCharge,
       })
       .from(timeEntries)
       .where(

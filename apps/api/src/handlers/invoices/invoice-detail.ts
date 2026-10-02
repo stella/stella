@@ -16,6 +16,7 @@ export const INVOICE_DETAIL_RELATIONS = {
       currency: true,
       narrative: true,
       invoiceNarrative: true,
+      noCharge: true,
       status: true,
     },
     with: { workItem: { columns: { id: true, name: true } } },
