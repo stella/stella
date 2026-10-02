@@ -683,23 +683,31 @@ export class ChatSendLifecycle {
     return this.admission?.signal;
   }
 
-  checkAdmission(): Result<void, HandlerError> {
+  async checkAdmission(): Promise<Result<void, HandlerError>> {
     if (!this.admission?.signal.aborted) {
       return Result.ok(undefined);
     }
-    const error = this.admission.signal.reason;
-    return Result.err(
-      new HandlerError({
-        ...(ActionAdmissionError.is(error)
-          ? actionAdmissionRefusal(error)
-          : {
-              status: 503 as const,
-              code: "service_unavailable",
-              message: "Action admission is unavailable",
-            }),
-        cause: error,
-      }),
-    );
+    const error: unknown = this.admission.signal.reason;
+    const refusal = new HandlerError({
+      ...(ActionAdmissionError.is(error)
+        ? actionAdmissionRefusal(error)
+        : {
+            status: 503 as const,
+            code: "service_unavailable",
+            message: "Action admission is unavailable",
+          }),
+      cause: error,
+    });
+    if (
+      this.claimedTurn.status === "preflight" &&
+      !(await this.restorePreExecutionCheckpoint())
+    ) {
+      const settled = await this.refuseCurrentTurn(refusal);
+      if (Result.isError(settled)) {
+        return settled;
+      }
+    }
+    return Result.err(refusal);
   }
 
   private async restorePreExecutionCheckpoint(): Promise<boolean> {
@@ -2362,7 +2370,7 @@ export const createSendMessage = (
                 : undefined,
           }),
         );
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
           managedAIResidency,
@@ -2794,7 +2802,7 @@ export const createSendMessage = (
           sendMode: body.sendMode,
         });
 
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
         yield* Result.await(
           prepareDispatch({
             phase: "dispatch",
@@ -2806,7 +2814,7 @@ export const createSendMessage = (
           }),
         );
 
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
 
         const isServerTool = (toolName: string) =>
           streamingTools[toolName]?.execute !== undefined;

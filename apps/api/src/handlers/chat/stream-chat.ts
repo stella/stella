@@ -2247,6 +2247,15 @@ export const processServerChatStream = async function* ({
             mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
           ),
         ];
+  const announceAdmissionFailure = function* (
+    outcome: ChatTurnOutcome,
+  ): Generator<PublicStreamChunk> {
+    if (outcome.type !== "failed" || outcome.refusal === undefined) {
+      return;
+    }
+    yield* announceBeforeFailure();
+    yield* admissionFailureChunks(outcome);
+  };
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -2282,7 +2291,7 @@ export const processServerChatStream = async function* ({
         for (const finish of deferredRunFinishedChunks.splice(0)) {
           yield finish;
         }
-        yield* admissionFailureChunks(outcome);
+        yield* announceAdmissionFailure(outcome);
         return;
       }
       const processed = processPersistenceChunk({
@@ -2324,7 +2333,7 @@ export const processServerChatStream = async function* ({
       for (const chunk of deferredRunFinishedChunks.splice(0)) {
         yield chunk;
       }
-      yield* admissionFailureChunks(outcome);
+      yield* announceAdmissionFailure(outcome);
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
@@ -2363,7 +2372,7 @@ export const processServerChatStream = async function* ({
       for (const finish of deferredRunFinishedChunks.splice(0)) {
         yield finish;
       }
-      yield* admissionFailureChunks(outcome);
+      yield* announceAdmissionFailure(outcome);
       return;
     }
     const kind = classifyAIError(error);
