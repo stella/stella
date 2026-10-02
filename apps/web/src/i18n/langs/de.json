@@ -4234,7 +4234,6 @@
       "deleteAccountWarningExplanation": "Wir senden einen Bestätigungscode an Ihre E-Mail-Adresse, um diese Anfrage zu bestätigen. Abgeschlossene Arbeitsbereichshistorie bleibt Ihrem gelöschten Konto zugeordnet.",
       "desktop": "Desktop",
       "desktopAppDescription": "Rufen Sie kopierte Inhalte wieder auf und öffnen Sie stella-Dokumente in den Desktop-Apps, die Sie bereits verwenden.",
-      "desktopAutoConnectHint": "Öffnen Sie stella desktop nach der Installation. Die App verbindet sich selbst mit diesem Konto.",
       "desktopClipboardDescription": "Öffnen, durchsuchen, organisieren und verwenden Sie kopierten Text aus jeder App erneut.",
       "desktopClipboardTitle": "Durchsuchbarer Zwischenablageverlauf",
       "desktopConnectFailed": "Die Verbindung zu stella desktop ist fehlgeschlagen.",
