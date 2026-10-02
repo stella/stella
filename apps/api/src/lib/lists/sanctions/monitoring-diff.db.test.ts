@@ -263,13 +263,45 @@ test(
       ...hit,
       sourceEntryId: `bound-${index.toString().padStart(4, "0")}`,
     }));
+    const payload =
+      (
+        await db
+          .select()
+          .from(sanctionsEntryPayloads)
+          .where(eq(sanctionsEntryPayloads.contentHash, "5".repeat(64)))
+      ).at(0)?.payload ?? panic("Bound fixture payload missing");
+    const entries = hits.map(({ sourceEntryId }) => {
+      const entry = { ...payload, sourceId: sourceEntryId };
+      return {
+        sourceEntryId,
+        payload: entry,
+        contentHash: createHash("sha256")
+          .update(JSON.stringify(entry))
+          .digest("hex"),
+      };
+    });
+    await db
+      .insert(sanctionsEntryPayloads)
+      .values(
+        entries.map(({ payload: entry, contentHash }) => ({
+          payload: entry,
+          contentHash,
+        })),
+      );
+    await db
+      .delete(sanctionsEditionEntries)
+      .where(eq(sanctionsEditionEntries.editionId, editionId));
     await db.insert(sanctionsEditionEntries).values(
-      hits.map(({ sourceEntryId }) => ({
+      entries.slice(0, 2).map(({ sourceEntryId, contentHash }) => ({
         editionId,
         sourceEntryId,
-        contentHash: "5".repeat(64),
+        contentHash,
       })),
     );
+    await db
+      .update(sanctionsEditions)
+      .set({ entryCount: 2 })
+      .where(eq(sanctionsEditions.id, editionId));
     const first = hits.at(0) ?? panic("First hit missing");
     const second = hits.at(1) ?? panic("Second hit missing");
     expect(
@@ -291,6 +323,21 @@ test(
       );
       expect(await stateFor(contact.id)).toEqual(initial);
     }
+    await db
+      .insert(sanctionsEditionEntries)
+      .values(
+        entries
+          .slice(2, 1000)
+          .map(({ sourceEntryId, contentHash }) => ({
+            editionId,
+            sourceEntryId,
+            contentHash,
+          })),
+      );
+    await db
+      .update(sanctionsEditions)
+      .set({ entryCount: 1000 })
+      .where(eq(sanctionsEditions.id, editionId));
     const complete = {
       ...work,
       outcome: outcomeWithHits([first, ...hits.slice(1, 1000)]),
@@ -606,13 +653,11 @@ test(
       reason: "evidence-changed",
     });
     const reviewer = toSafeId<"user">("monitoring-evidence-reviewer");
-    await db
-      .insert(user)
-      .values({
-        id: reviewer,
-        name: "Reviewer",
-        email: "monitoring-reviewer@example.test",
-      });
+    await db.insert(user).values({
+      id: reviewer,
+      name: "Reviewer",
+      email: "monitoring-reviewer@example.test",
+    });
     await db
       .update(sanctionsContactMatches)
       .set({
