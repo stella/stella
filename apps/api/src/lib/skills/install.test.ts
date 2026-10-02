@@ -1,12 +1,14 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+
 import { authorizeSkillInstallScope, isUnchangedUrlSkill } from "./install";
 
 describe("agent skill install authorization", () => {
   test("rejects team installs for non-admin organization members", () => {
     const result = authorizeSkillInstallScope({
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       scope: "team",
     });
 
@@ -15,7 +17,7 @@ describe("agent skill install authorization", () => {
 
   test("allows private installs for organization members", () => {
     const result = authorizeSkillInstallScope({
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       scope: "private",
     });
 

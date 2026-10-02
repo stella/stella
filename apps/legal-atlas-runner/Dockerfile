@@ -34,6 +34,11 @@ ENV NODE_ENV=production
 COPY --from=pruner /app/out/full/ .
 RUN bun --filter @stll/legal-atlas-runner build
 RUN bun apps/legal-atlas-runner/dist/index.js smoke
+RUN DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
+    S3_ENDPOINT=http://localhost \
+    S3_BUCKET=smoke \
+    S3_REGION=eu-central-1 \
+    bun apps/legal-atlas-runner/dist/index.js run eu-ecj-refetch --help
 RUN out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
             S3_ENDPOINT=http://localhost \
             S3_BUCKET=smoke \
@@ -48,6 +53,7 @@ ENV NODE_ENV=production
 RUN groupadd --system --gid 1001 stella && \
     useradd --system --uid 1001 --gid stella --no-create-home stella
 COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/index.js /app/legal-atlas.js
+COPY --chown=stella:stella --from=builder /app/apps/legal-atlas-runner/dist/eu-ecj-refetch.js /app/eu-ecj-refetch.js
 WORKDIR /app
 USER stella
 ENTRYPOINT ["bun", "/app/legal-atlas.js"]

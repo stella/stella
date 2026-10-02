@@ -69,6 +69,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "MCP_READ_TENANT_USER_BYTES",
   "MCP_READ_PUBLIC_ORG_BYTES",
   "MCP_READ_PUBLIC_USER_BYTES",
+  "AGENT_CLIENT_STORAGE_V1_ENABLED",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -179,6 +180,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "S3_REGION",
   "S3_SCOPED_SIGNING_ROLE_ARN",
   "SELFHOST_LOCAL_PASSWORD_AUTH",
+  "SESSION_TOKEN_ROTATION_ENABLED",
+  "SESSION_LIFETIME_CAP_ENABLED",
   "SES_CONFIGURATION_SET",
   "SES_REGION",
   "SKIP_MIGRATION_CHECK",
@@ -262,6 +265,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  AGENT_CLIENT_STORAGE_V1_ENABLED:
+    "Enable the shared agent client storage format.",
   ACTION_LIMIT_CONTACT_URL:
     "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
@@ -427,6 +432,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     'S3 secret access key. Required with S3_CREDENTIALS_PROVIDER="env"; otherwise omit it with the access-key ID.',
   SECURITY_CANARY_API_KEY_SHA256:
     "SHA-256 digest of a decoy machine API key. Keep its plaintext outside this environment.",
+  SESSION_TOKEN_ROTATION_ENABLED:
+    "Rotate browser session credentials on refresh. Defaults off; enable after every API instance supports prior credentials.",
+  SESSION_LIFETIME_CAP_ENABLED:
+    "Apply the ninety-day session cap at startup after one idle hour. Defaults off; enable after activity tracking is established.",
   SES_REGION: "AWS region used for SES transactional email delivery.",
   SMTP_HOST: "SMTP relay hostname.",
   SMTP_PORT: "SMTP relay port.",
@@ -587,7 +596,7 @@ const sectionFor = (name: string) => {
     return "AI providers";
   }
   if (
-    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY)/u.test(
+    /^(BETTER_AUTH|GOOGLE_AUTH|MICROSOFT_AUTH|SELFHOST|SECURITY_CANARY|SESSION_)/u.test(
       name,
     )
   ) {
@@ -905,6 +914,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "RAILWAY_SMOKE_WEB_URL",
   "RAILWAY_TEMPLATE_ENVIRONMENT",
   "RAILWAY_TEMPLATE_PROJECT_ID",
+  // CI names the revision the convention ratchet measures as its base.
+  "RATCHET_BASE_REF",
   "RECORD_ANTHROPIC_API_KEY",
   "RECORD_BEDROCK_API_KEY",
   "RECORD_GOOGLE_API_KEY",
@@ -951,6 +962,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_TEST_OMIT_ASSET",
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",
+  "STORED_AGENT_TEST_CREDENTIAL",
+  "STORED_AGENT_TEST_VALUE",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
   "TURBO_HASH",
   "TURBO_SCM_BASE",

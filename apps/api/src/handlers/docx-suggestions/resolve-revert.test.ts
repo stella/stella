@@ -16,6 +16,8 @@ import resolveDocxSuggestion from "@/api/handlers/docx-suggestions/resolve";
 import revertDocxSuggestion from "@/api/handlers/docx-suggestions/revert";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -31,7 +33,7 @@ import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
 setDefaultTimeout(120_000);
 
 type WorkspaceTestContext = {
-  memberRole: { role: "owner" };
+  memberRole: AuthorizedMemberRole;
   request: Request;
   route: string;
   safeDb: ReturnType<typeof createSafeDb<TestDatabaseTransaction>>;
@@ -230,7 +232,7 @@ const createWorkspaceContext = ({
 }): WorkspaceTestContext => {
   const activeWorkspaceIds = [workspaceId];
   return {
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     request: new Request(
       `https://example.test/docx-suggestions/${workspaceId}`,
     ),

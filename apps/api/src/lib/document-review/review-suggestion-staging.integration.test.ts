@@ -41,6 +41,8 @@ import type {
 } from "@/api/lib/document-review/run-contract";
 import { DOCUMENT_REVIEW_RUN_EXECUTOR } from "@/api/lib/document-review/run-contract";
 import { finalizeReviewRun } from "@/api/lib/document-review/run-finalize";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -241,7 +243,7 @@ const recordAuditEvent: AuditRecorder = async (_tx, event) => {
 };
 
 type WorkspaceTestContext = {
-  memberRole: { role: "owner" };
+  memberRole: AuthorizedMemberRole;
   recordAuditEvent: AuditRecorder;
   request: Request;
   route: string;
@@ -253,7 +255,7 @@ type WorkspaceTestContext = {
 };
 
 const workspaceContext = (): WorkspaceTestContext => ({
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   recordAuditEvent,
   request: new Request("https://example.test/docx-suggestions"),
   route: "/document-review/suggestion-staging",
