@@ -1007,6 +1007,27 @@ const fastRequired = v.parse(
   JSON.parse(resultStep.env["FAST_REQUIRED"] ?? ""),
 );
 
+test("a planned release screenshot check runs and must pass on the release pull request", () => {
+  // The planner selects it only for release pull requests and tags, so a
+  // full-depth gate would skip it on the pull request every time.
+  expect(jobIf(ciJobs["marketing-screenshots"])).toContain(
+    "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
+  );
+  expect(heavyJobs).not.toContain("marketing-screenshots");
+  expect(fastRequired).toContain("marketing-screenshots");
+  const event = EVENT.pullRequest;
+  expect(
+    evaluateResult({ event, results: { "marketing-screenshots": "skipped" } }),
+  ).toBe(1);
+  expect(
+    evaluateResult({
+      event,
+      results: { "marketing-screenshots": "skipped" },
+      unplannedScopes: ["marketing_screenshots_required"],
+    }),
+  ).toBe(0);
+});
+
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   for (const job of fastRequired) {
@@ -1359,6 +1380,160 @@ test("a failed API image run annotates the failing lines, escaped", () => {
   expect(annotate({ build: "ERROR: failed to solve: pull failed\n" })).toEqual([
     "::error title=API image build (linux/arm64)::ERROR: failed to solve: pull failed",
   ]);
+});
+
+test("marketing screenshots are planned only for ready same-repository releases or release tags", () => {
+  const plan = v.parse(
+    v.object({
+      outputs: v.record(v.string(), v.string()),
+      steps: v.array(
+        v.object({ name: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["marketing_screenshots_required"]).toBe(
+    ["$", "{{ steps.marketing-release.outputs.required }}"].join(""),
+  );
+  const command = v.parse(
+    v.string(),
+    plan.steps.find(({ name }) => name === "Plan release marketing screenshots")
+      ?.run,
+  );
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "marketing-release-plan-"),
+  );
+  const output = nodePath.join(directory, "output");
+  const listing = [
+    {
+      number: 7,
+      title: "chore: release v1.2.3",
+      isDraft: false,
+      isCrossRepository: false,
+    },
+    {
+      number: 8,
+      title: "fix: ordinary",
+      isDraft: false,
+      isCrossRepository: false,
+    },
+    {
+      number: 9,
+      title: "chore: release v1.2.3",
+      isDraft: true,
+      isCrossRepository: false,
+    },
+    {
+      number: 10,
+      title: "chore: release v1.2.3",
+      isDraft: false,
+      isCrossRepository: true,
+    },
+  ];
+  writeFileSync(
+    nodePath.join(directory, "listing.json"),
+    JSON.stringify(listing),
+  );
+  writeFileSync(
+    nodePath.join(directory, "gh"),
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      '[[ "$*" == "pr list --repo stella/stella --state open --base main --limit 500 --json number,title,isDraft,isCrossRepository" ]] || exit 3',
+      'cat "$(dirname "$0")/listing.json"',
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  const cases = [
+    {
+      event: "pull_request",
+      number: "7",
+      ref: "refs/pull/7/merge",
+      head: "",
+      required: true,
+    },
+    {
+      event: "pull_request",
+      number: "8",
+      ref: "refs/pull/8/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "pull_request",
+      number: "9",
+      ref: "refs/pull/9/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "pull_request",
+      number: "10",
+      ref: "refs/pull/10/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "merge_group",
+      number: "",
+      ref: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      head: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      required: true,
+    },
+    {
+      event: "merge_group",
+      number: "",
+      ref: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      head: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      required: false,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/tags/v1.2.3",
+      head: "",
+      required: true,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/tags/ordinary",
+      head: "",
+      required: false,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/heads/main",
+      head: "",
+      required: false,
+    },
+  ];
+  try {
+    for (const { event, number, ref, head, required } of cases) {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["bash", "-eu", "-c", command], {
+        cwd: nodePath.resolve(import.meta.dir, ".."),
+        env: {
+          PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
+          EVENT_NAME: event,
+          PR_NUMBER: number,
+          GITHUB_REF: ref,
+          MERGE_GROUP_HEAD_REF: head,
+          REPOSITORY: "stella/stella",
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+      expect(readFileSync(output, "utf-8"), `${event} ${ref}`).toBe(
+        `required=${String(required)}\n`,
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
 });
 
 test("folded Docker suites keep their scopes and fail independently, including missing or cancelled verdicts", () => {
