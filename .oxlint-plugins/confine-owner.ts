@@ -20,7 +20,10 @@
 // `names` matches only a declaration that binds one of them, or a namespace
 // import, a star re-export, and a dynamic import, which reach every export; the
 // specifier's other exports stay open, so one package entry point can carry
-// an owned capability next to unrelated ones. A `global-member` row matches
+// an owned capability next to unrelated ones. A dynamic import counts as the
+// names it is destructured into (`const { a } = await import("m")`) or read
+// through (`(await import("m")).a`); held in any other shape, the module
+// object reaches every export. A `global-member` row matches
 // the full member chain `<object>.<path...>` on the global, including the
 // optional-chained form and the `window.` / `globalThis.` / `self.` prefixes,
 // so a sibling member of the same object (`navigator.clipboard.readText` next
@@ -37,11 +40,14 @@ import {
   canonicalModuleId,
   filenameForContext,
   getImportedName,
+  getPropertyName,
   isAstNode,
   isIdentifier,
   isMemberAccess,
   isStringLiteral,
+  memberPropertyName,
   repoRelativeFilename,
+  TRANSPARENT_WRAPPERS,
 } from "./utils.ts";
 
 const GLOBAL_ROOTS = ["window", "globalThis", "self"] as const;
@@ -235,6 +241,53 @@ const bindsOwnedName = (
     return name !== null && names.includes(name);
   });
 
+// The export names a dynamic import is destructured into or read through, or
+// null when the module object is held in a shape that reaches every export
+// (bound whole, passed on, a rest element or a computed key).
+const dynamicImportNames = (node: AstNode): readonly string[] | null => {
+  let current = node;
+  let parent = isAstNode(current.parent) ? current.parent : null;
+  while (
+    parent !== null &&
+    (parent.type === "AwaitExpression" || TRANSPARENT_WRAPPERS.has(parent.type))
+  ) {
+    current = parent;
+    parent = isAstNode(current.parent) ? current.parent : null;
+  }
+  if (parent === null) {
+    return null;
+  }
+  if (parent.type === "MemberExpression" && parent.object === current) {
+    const name = memberPropertyName(parent);
+    return name === null ? null : [name];
+  }
+  if (
+    parent.type !== "VariableDeclarator" ||
+    parent.init !== current ||
+    !isAstNode(parent.id) ||
+    parent.id.type !== "ObjectPattern" ||
+    !Array.isArray(parent.id.properties)
+  ) {
+    return null;
+  }
+  const names: string[] = [];
+  for (const property of parent.id.properties) {
+    if (
+      !isAstNode(property) ||
+      property.type !== "Property" ||
+      (property.computed === true && !isStringLiteral(property.key))
+    ) {
+      return null;
+    }
+    const name = getPropertyName(property.key);
+    if (name === null) {
+      return null;
+    }
+    names.push(name);
+  }
+  return names;
+};
+
 const isGlobalObject = (node: unknown, object: string): boolean =>
   isIdentifier(node, object) ||
   GLOBAL_ROOTS.some((root) => isMemberAccess(node, root, object));
@@ -299,12 +352,13 @@ export default eslintCompatPlugin({
         let importerPath = "";
         let activeMemberCalls: readonly MemberCallEntry[] = [];
 
-        // `specifiers` is `null` when the declaration reaches every export
-        // (a star re-export or a dynamic import), which matches any row.
+        // `takesOwnedName` is `null` when the declaration reaches every
+        // export (a star re-export, or a dynamic import held whole), which
+        // matches any row.
         const reportOwnedBinding = (
           node: NonNullable<Parameters<typeof context.report>[0]["node"]>,
           source: unknown,
-          specifiers: unknown,
+          takesOwnedName: ((names: readonly string[]) => boolean) | null,
         ) => {
           if (typeof source !== "string") {
             return;
@@ -316,8 +370,8 @@ export default eslintCompatPlugin({
             }
             if (
               entry.names !== null &&
-              specifiers !== null &&
-              !bindsOwnedName(specifiers, entry.names)
+              takesOwnedName !== null &&
+              !takesOwnedName(entry.names)
             ) {
               continue;
             }
@@ -355,7 +409,9 @@ export default eslintCompatPlugin({
             );
           },
           ImportDeclaration(node) {
-            reportOwnedBinding(node, node.source.value, node.specifiers);
+            reportOwnedBinding(node, node.source.value, (names) =>
+              bindsOwnedName(node.specifiers, names),
+            );
           },
           // `export { x } from "..."`; a re-export of a local binding has no
           // source and is out of scope.
@@ -363,7 +419,9 @@ export default eslintCompatPlugin({
             if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
               return;
             }
-            reportOwnedBinding(node, node.source.value, node.specifiers);
+            reportOwnedBinding(node, node.source.value, (names) =>
+              bindsOwnedName(node.specifiers, names),
+            );
           },
           // `export * from "..."` reaches every export, like a namespace import.
           ExportAllDeclaration(node) {
@@ -376,7 +434,14 @@ export default eslintCompatPlugin({
             if (!isAstNode(node.source) || !isStringLiteral(node.source)) {
               return;
             }
-            reportOwnedBinding(node, node.source.value, null);
+            const taken = dynamicImportNames(node);
+            reportOwnedBinding(
+              node,
+              node.source.value,
+              taken === null
+                ? null
+                : (names) => taken.some((name) => names.includes(name)),
+            );
           },
           CallExpression(node) {
             for (const entry of activeMemberCalls) {
