@@ -39,7 +39,7 @@ export const startManagedProviderChecks = async (
   schedule = startNonOverlappingInterval,
 ) => {
   if (!env.FEATURE_MANAGED_PROVIDER_CHECKS) {
-    return async () => undefined;
+    return async () => await Promise.resolve(undefined);
   }
   const intervalMs = env.MANAGED_PROVIDER_CHECK_INTERVAL_MS;
   const timeoutMs = env.MANAGED_PROVIDER_CHECK_TIMEOUT_MS;

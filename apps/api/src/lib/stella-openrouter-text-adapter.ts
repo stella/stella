@@ -181,8 +181,8 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
     });
   }
 
-  override structuredOutput(options: OpenRouterStructuredOptions) {
-    return super.structuredOutput({
+  override async structuredOutput(options: OpenRouterStructuredOptions) {
+    return await super.structuredOutput({
       ...options,
       chatOptions: {
         ...options.chatOptions,

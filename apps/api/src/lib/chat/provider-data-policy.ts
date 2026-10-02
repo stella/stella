@@ -36,7 +36,7 @@ const MANAGED_PROVIDER_ORIGINS = [
   MANAGED_US_ORIGIN,
 ] as const;
 
-export const fetchManagedProviderCatalog = (
+export const fetchManagedProviderCatalog = async (
   url: string,
   init: FetchWithTimeoutInit,
 ) => {
@@ -48,7 +48,7 @@ export const fetchManagedProviderCatalog = (
   if (target === null) {
     return panic("Managed catalog target is outside the provider policy.");
   }
-  return fetchWithTimeout(target, { ...init, redirect: "error" });
+  return await fetchWithTimeout(target, { ...init, redirect: "error" });
 };
 
 export const PROVIDER_DATA_POLICY = {
