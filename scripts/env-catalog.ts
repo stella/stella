@@ -55,12 +55,20 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
+  "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
   "ACTION_REQUEST_MAX_BYTES",
   "ACTION_RESPONSE_MAX_BYTES",
   "ACTION_PAGE_SIZE_MAX",
+  "MCP_READ_WINDOW_MS",
+  "MCP_READ_WINDOW_MAX_ENTRIES",
+  "MCP_READ_TENANT_ORG_BYTES",
+  "MCP_READ_TENANT_USER_BYTES",
+  "MCP_READ_PUBLIC_ORG_BYTES",
+  "MCP_READ_PUBLIC_USER_BYTES",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -90,11 +98,15 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CORPUS_MEMBER_LAYOUT",
   "CORPUS_STORAGE_ENABLED",
   "CORPUS_STORAGE_MODE",
+  "MANAGED_PROVIDER_CHECK_INTERVAL_MS",
+  "MANAGED_PROVIDER_CHECK_TIMEOUT_MS",
   "DATABASE_POOL_IDLE_TIMEOUT_S",
   "DATABASE_POOL_MAX_LIFETIME_S",
   "DATABASE_STATEMENT_TIMEOUT_MS",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
+  "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+  "DB_LOAD_GATE_EBS_SIGNAL",
   "DB_HOST",
   "DB_NAME",
   "DB_PORT",
@@ -121,8 +133,11 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
+  "FEATURE_MANAGED_PROVIDER_CHECKS",
   "FEATURE_MCP",
+  "FEATURE_MCP_READ_FENCE",
   "FEATURE_ORG_ACCESS_STATE",
+  "FEATURE_ORG_SERVICE_BUDGETS",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_KNOWLEDGE",
   "FEATURE_PUBLIC_TOOLS",
@@ -136,6 +151,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
   "HOSTED_USAGE_PROVIDER",
+  "HOSTED_USAGE_PROVIDER_API_VERSION",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "INBOUND_MAIL_DOMAIN",
@@ -205,6 +221,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
   FEEDBACK_GITHUB_REPO: "owner/repo",
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: "http://localhost:3000",
   GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
   GOTENBERG_PASSWORD: "gotenberg",
@@ -291,6 +308,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Corpus index read endpoint, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
+    "RDS instance whose EBS balances gate heavy maintenance. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
+  DB_LOAD_GATE_EBS_SIGNAL:
+    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.",
   DB_HOST:
     "Postgres hostname used with the component settings when DATABASE_URL is unset.",
   DB_NAME:
@@ -329,6 +350,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FILE_USAGE_LIMITS:
     "Enforce organization file byte reservations at storage writes.",
+  FEATURE_MANAGED_PROVIDER_CHECKS:
+    "Check regional model availability before managed requests. Requires AI_PROVIDER=openrouter, OPENROUTER_API_KEY, and explicit check interval/timeout settings.",
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS:
+    "Regional catalog refresh interval in milliseconds. Required when FEATURE_MANAGED_PROVIDER_CHECKS is enabled; must exceed the check timeout.",
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS:
+    "Regional catalog check deadline in milliseconds, at most 30000. Required when FEATURE_MANAGED_PROVIDER_CHECKS is enabled.",
   ORG_EVALUATION_PERIOD_DAYS:
     "Length in days of the evaluation period a new organization starts.",
   FEATURE_PUBLIC_TOOLS:
@@ -863,7 +890,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
+  "PROPERTY_TEST_PATH",
+  "PROPERTY_TEST_REDACT",
   "PROPERTY_TEST_SEED",
+  "PROPERTY_TEST_TIME_LIMIT_MS",
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
   "PROVIDER_REQUEST_COMBINATIONS",
   "PROVIDER_REQUEST_SHARD",
@@ -925,6 +955,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",
   "TURN_OUTCOME_SHARD",
+  "UPDATE_CHAT_PROMPT_BASELINE",
   "UPDATE_PROVIDER_REQUEST_PATHS",
   "WXT_STELLA_ORIGINS",
 ]);
@@ -943,6 +974,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "GH_TOKEN",
   "HOSTNAME",
   "NODE_ENV",
+  // Read by the provider SDK; managed request tests verify it cannot enable logging.
+  "OPENROUTER_DEBUG",
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
   "STELLA_LOCAL_DEV",

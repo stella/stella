@@ -24,6 +24,8 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -61,7 +63,7 @@ import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   applyResponseCachePolicy,
@@ -81,6 +83,7 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // import is erased at build time and never creates a runtime import cycle
 // (api-handlers must stay importable without pulling in the MCP graph).
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -245,12 +248,13 @@ export type McpInternalReason =
  *   and the approved permanent exclusions).
  */
 export type McpExposure =
-  | { type: "tool"; name: McpToolName }
-  | { type: "covered"; by: McpToolName }
+  | { type: "tool"; name: McpToolName; readClass?: McpReadClass }
+  | { type: "covered"; by: McpToolName; readClass?: McpReadClass }
   | {
       type: "capability";
       reason: McpCapabilityReason;
       consumesServices: ServiceClassification;
+      readClass?: McpReadClass;
     }
   | { type: "internal"; reason: McpInternalReason };
 
@@ -327,9 +331,16 @@ type CapabilityDescription = {
  * by inference — over-classifying a write is safe (it just requires write
  * consent), so writes need no affirmation.
  */
-type CapabilityAccess = {
-  access?: "read" | "write";
-};
+type CapabilityAccess =
+  | { access?: "write" }
+  | {
+      access: "read";
+      mcp:
+        | Exclude<McpExposure, { type: "capability" }>
+        | (Extract<McpExposure, { type: "capability" }> & {
+            readClass: McpReadClass;
+          });
+    };
 
 /**
  * How this capability's payload crosses the generic JSON transport (see
@@ -361,7 +372,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: { type: "handler"; actionKind: ActionKind };
+    actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     mcp: McpExposure;
   };
 
@@ -372,9 +383,11 @@ export type HandlerConfig = InputSchema &
  * route-level schema cannot shadow the segment the workspace macro resolves the
  * tenant from. `workspaceParams()` produces the shape.
  */
-export type WorkspaceHandlerConfig = Omit<HandlerConfig, "params"> & {
-  params?: WorkspaceParamsSchema;
-};
+type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
+  ? Omit<TConfig, "params"> & { params?: WorkspaceParamsSchema }
+  : never;
+
+export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
@@ -395,6 +408,7 @@ type SessionHandlerContext<
 > = Context<SessionConfigRouteSchema<TConfig>> & {
   user: {
     id: SafeId<"user">;
+    email: string;
   };
 };
 
@@ -402,6 +416,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   Context<ConfigRouteSchema<TConfig>> & {
     user: {
       id: SafeId<"user">;
+      email: string;
     };
     session: {
       activeOrganizationId: SafeId<"organization">;
@@ -818,7 +833,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: ActionKind };
+  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -826,11 +841,12 @@ type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
   session: { activeOrganizationId: SafeId<"organization"> };
+  scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
-  actionKind: ActionKind;
+  actionKind: PeriodActionKind;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;
@@ -849,6 +865,7 @@ const runAdmittedFiniteHandler = async function* <
     admit({
       organizationId: ctx.session.activeOrganizationId,
       userId: ctx.user.id,
+      organizationStateDb: ctx.scopedDb,
       periodIdentity: {
         actionKind,
         // These finite endpoints have no client idempotency key.
@@ -856,6 +873,16 @@ const runAdmittedFiniteHandler = async function* <
           getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
+        // A disconnected request may carry no reason after signal composition.
+        if (ctx.request.signal.aborted) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Request aborted",
+              cause: ctx.request.signal.reason,
+            }),
+          );
+        }
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
         ctx.actionSignal.throwIfAborted();
         const outcome = await Result.gen(() => handler(ctx));
@@ -922,6 +949,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
+  checkAccountOperation?: typeof checkDemoAccountOperation;
 };
 
 const createSafeScopedHandler = <
@@ -931,7 +959,10 @@ const createSafeScopedHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
-  { admit = withActionAdmission }: HandlerAdmissionDependencies = {},
+  {
+    admit = withActionAdmission,
+    checkAccountOperation = checkDemoAccountOperation,
+  }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
@@ -942,6 +973,15 @@ const createSafeScopedHandler = <
       });
     }
 
+    if (requiresStandardAccount(config.permissions)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
     // A handler that declares AI usage must not run when this request could
     // not read the org's stored config, or the org is barred from the
     // instance provider: `ctx.orgAIConfig` is null there, and resolving a

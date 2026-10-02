@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import type { JWTPayload } from "jose";
 
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
   classifyMcpTokenVerificationError,
   extractMcpSession,

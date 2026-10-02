@@ -131,6 +131,14 @@ export const SYNTHETIC_SCALE_PROFILE = {
       mostCommonFrequencies: [],
     },
     {
+      table: "case_law_decisions",
+      column: "docket_family_key",
+      nullFraction: 0.5,
+      distinctValues: -0.4,
+      mostCommonValues: [],
+      mostCommonFrequencies: [],
+    },
+    {
       table: "case_law_decision_identifiers",
       column: "normalized_value",
       nullFraction: 0,

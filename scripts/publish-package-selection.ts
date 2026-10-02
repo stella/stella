@@ -22,6 +22,7 @@ export const LIBRARY_PACKAGE_ORDER = [
   "time",
   "text-normalize",
   "agent-input",
+  "mcp-kit",
 ] as const;
 
 export const ALL_PACKAGE_ORDER = [...LIBRARY_PACKAGE_ORDER, "cli"] as const;

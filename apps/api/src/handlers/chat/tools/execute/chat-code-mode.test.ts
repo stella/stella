@@ -68,6 +68,7 @@ const buildProps = (scopedDb: ScopedDb) => {
       pinnedIds: [],
     }),
     userId: toSafeId<"user">(`user_${userCounter}`),
+    userEmail: `user_${userCounter}@example.test`,
     scriptCallTools: () => ({
       directTools: ["execute_typescript", "discover_tools", "save_playbook"],
       unavailableReasons: new Map<string, string>(),

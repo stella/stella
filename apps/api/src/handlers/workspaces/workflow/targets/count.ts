@@ -17,6 +17,7 @@ const config = {
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workflow_orchestration",
     consumesServices: false,
   },

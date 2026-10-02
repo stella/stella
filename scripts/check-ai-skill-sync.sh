@@ -6,7 +6,9 @@ base_ref="${2:-origin/main}"
 sync_script="$repo_root/.ai/shared/scripts/sync-ai-skills.sh"
 
 if [[ -f "$sync_script" && -d "$repo_root/.ai/shared/skills" ]]; then
-  exec bash "$sync_script" --check "$repo_root"
+  bash "$sync_script" --check "$repo_root" || exit $?
+  # Local overrides of shared skills must record the shared base they match.
+  exec bash "$(dirname -- "${BASH_SOURCE[0]}")/check-local-skill-overrides.sh" "$repo_root"
 fi
 
 if ! comparison_base="$(git -C "$repo_root" merge-base "$base_ref" HEAD)"; then

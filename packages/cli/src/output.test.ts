@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { TOOL_ANNOTATIONS } from "./annotations.js";
+import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import {
   buildRenderPlan,
   displayWidth,

@@ -60,11 +60,13 @@ import {
   isManagedProviderAvailable,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
+import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES } from "@/api/lib/limits";
 import {
+  createInstanceOpenRouterText,
   createManagedOpenRouterText,
   createStellaOpenRouterText,
 } from "@/api/lib/stella-openrouter-text-adapter";
@@ -80,6 +82,11 @@ type StellaOpenRouterTextModelOptions = Omit<
   // Supported by OpenRouter Chat Completions and its SDK, but currently
   // omitted from @tanstack/ai-openrouter's public model-options type.
   serviceTier?: "default" | "flex" | undefined;
+  // The request-level prompt-cache marker OpenRouter forwards to Anthropic
+  // models; the adapter spreads it into the SDK request, whose type has it.
+  cacheControl?:
+    | { ttl?: "5m" | "1h" | undefined; type: "ephemeral" }
+    | undefined;
   // Narrowed from the SDK's open enum: an effort must be proven
   // against the target model's declared capability
   // (`resolveReasoningEffort`) before it can be sent.
@@ -589,26 +596,36 @@ const createExtendedOpenRouterAdapter = ({
   apiKey,
   ...policy
 }: OpenRouterAdapterOptions): AnyTextAdapter => {
-  const openrouter = extendAdapter(
-    policy.keySource === "instance"
-      ? (
-          model: Parameters<typeof createStellaOpenRouterText>[0],
-          key: string,
-        ) =>
-          createManagedOpenRouterText({
-            model,
-            apiKey: key,
-            managedAIResidency: policy.managedAIResidency,
-          })
-      : createStellaOpenRouterText,
-    [
-      createModel(modelId, {
-        input: ["text", "image", "document"] as const,
-        features: ["structured_outputs"] as const,
-        modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
-      }),
-    ],
-  );
+  let createText;
+  switch (policy.keySource) {
+    case "instance":
+      createText = (
+        model: Parameters<typeof createStellaOpenRouterText>[0],
+        key: string,
+      ) =>
+        createManagedOpenRouterText({
+          model,
+          apiKey: key,
+          managedAIResidency: policy.managedAIResidency,
+        });
+      break;
+    case "public_corpus":
+      createText = createInstanceOpenRouterText;
+      break;
+    case "byok":
+      createText = createStellaOpenRouterText;
+      break;
+    default:
+      policy satisfies never;
+      return panic("Unknown OpenRouter key source.");
+  }
+  const openrouter = extendAdapter(createText, [
+    createModel(modelId, {
+      input: ["text", "image", "document"] as const,
+      features: ["structured_outputs"] as const,
+      modelOptions: OPENROUTER_CHAT_MODEL_OPTIONS,
+    }),
+  ]);
   return openrouter(modelId, apiKey);
 };
 
@@ -828,15 +845,19 @@ export const createTanStackTextAdapterFactory = (
       throw availability.error;
     }
   }
-  const factory = createProviderTextAdapterFactory(options);
-  return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
+  const provider = resolveTanStackTextProvider(options);
+  const factory = createProviderTextAdapterFactory({ ...options, provider });
+  return (modelId) =>
+    withProviderStreamContract(
+      withProviderImageInput(factory(modelId), provider),
+      stopReasons,
+    );
 };
 
 const createProviderTextAdapterFactory = (
-  options: TanStackModelFactoryOptions,
+  options: TanStackModelFactoryOptions & { provider: TanStackTextProvider },
 ): TanStackTextAdapterFactory => {
-  const { provider, apiKey, region } = options;
-  const supportedProvider = resolveTanStackTextProvider({ provider, region });
+  const { provider: supportedProvider, apiKey } = options;
 
   switch (supportedProvider) {
     case "google": {

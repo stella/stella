@@ -31,6 +31,7 @@ const config = {
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "template_authoring_ui",
     consumesServices: false,
   },
