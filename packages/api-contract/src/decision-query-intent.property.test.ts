@@ -2,12 +2,21 @@ import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
 import {
+  assertProperty,
   propertyConfig,
   propertySeed,
   propertyTestTimeout,
 } from "@stll/property-testing";
 
-import { parseDecisionQuery } from "./decision-query-intent";
+import { DECISION_DOCKET_GRAMMARS } from "./decision-docket-grammar";
+import {
+  ecliSheetOf,
+  isWholeEntryIdentifier,
+  namedDecisionsOf,
+  parseDecisionQuery,
+  resolveDecisionIdentity,
+  searchTextOfDecisionQuery,
+} from "./decision-query-intent";
 
 const canonicalDockets = [
   "22 Cdo 2653/2012",
@@ -97,3 +106,249 @@ describe("case-law query parser properties", () => {
     propertyTestTimeout(10_000),
   );
 });
+
+const scopedShapes = [
+  { jurisdiction: "CZE", render: (n: number, y: number) => `7 C ${n}/${y}` },
+  { jurisdiction: "CZE", render: (n: number, y: number) => `12 Co ${n}/${y}` },
+  { jurisdiction: "CZE", render: (n: number, y: number) => `3 Cmo ${n}/${y}` },
+  { jurisdiction: "CZE", render: (n: number, y: number) => `22 Cdo ${n}/${y}` },
+  {
+    jurisdiction: "CZE",
+    render: (n: number, y: number) => `29 NSČR ${n}/${y}`,
+  },
+  { jurisdiction: "CZE", render: (n: number, y: number) => `1 As ${n}/${y}` },
+  { jurisdiction: "CZE", render: (n: number, y: number) => `Nad ${n}/${y}` },
+  { jurisdiction: "CZE", render: (n: number, y: number) => `Konf ${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `7C/${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `12Co/${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `3Cob/${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `1Cdo/${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `4Sžf/${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `2Sžk/${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `1Svk/${n}/${y}` },
+  { jurisdiction: "SVK", render: (n: number, y: number) => `5Tdo/${n}/${y}` },
+] as const;
+
+test(
+  "scoped court references retain their jurisdiction and embedded search words",
+  () => {
+    assertProperty(
+      "scoped court references retain their jurisdiction and embedded search words",
+      fc.property(
+        fc.integer({ min: 1, max: 99_999 }),
+        fc.integer({ min: 1993, max: 2030 }),
+        (number, year) => {
+          for (const { jurisdiction, render } of scopedShapes) {
+            const options = { grammar: DECISION_DOCKET_GRAMMARS[jurisdiction] };
+            const docket = render(number, year);
+            const standalone = parseDecisionQuery(docket, options);
+            expect(standalone).toMatchObject({
+              type: "identifier",
+              kind: "docket",
+              jurisdiction,
+            });
+            expect(isWholeEntryIdentifier(standalone)).toBe(true);
+            if (standalone.type !== "identifier") {return;}
+            expect(parseDecisionQuery(standalone.value, options)).toEqual(
+              standalone,
+            );
+            for (const entry of [
+              `rozsudek podle ${docket} o náhradě škody`,
+              `uznesenie podľa ${docket} o náhrade škody`,
+              `nález ${docket.normalize("NFD")}`,
+            ]) {
+              const embedded = parseDecisionQuery(entry, options);
+              expect(embedded).toEqual({ ...standalone, embeddedIn: entry });
+              expect(isWholeEntryIdentifier(embedded)).toBe(false);
+              expect(searchTextOfDecisionQuery(embedded)).toBe(entry);
+            }
+          }
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
+  "constitutional references preserve senate and year width in each scope",
+  () => {
+    assertProperty(
+      "constitutional references preserve senate and year width in each scope",
+      fc.property(fc.integer({ min: 1, max: 9999 }), (number) => {
+        for (const jurisdiction of ["CZE", "SVK"] as const) {
+          const options = { grammar: DECISION_DOCKET_GRAMMARS[jurisdiction] };
+          for (const senate of ["I", "II", "III", "IV", "Pl"]) {
+            for (const year of ["04", "1998", "2024"]) {
+              const entry = `${senate}. ÚS ${number}/${year}`;
+              const intent = parseDecisionQuery(entry, options);
+              expect(intent).toMatchObject({
+                type: "identifier",
+                kind: "docket",
+                jurisdiction,
+                selector: { kind: "none" },
+              });
+              if (intent.type !== "identifier" || intent.kind !== "docket")
+                {return;}
+              expect(intent.family).toBe(
+                jurisdiction === "SVK"
+                  ? `${senate.toUpperCase()}. ÚS ${number}/${year}`
+                  : entry,
+              );
+              expect(parseDecisionQuery(intent.value, options)).toEqual(intent);
+              const siblingYear =
+                year.length === 2 ? `20${year}` : year.slice(-2);
+              const hit = {
+                caseNumber: `${senate}. ÚS ${number}/${siblingYear}`,
+                ecli: null,
+              };
+              expect(namedDecisionsOf(intent, [hit])).toEqual([]);
+            }
+          }
+        }
+      }),
+      { numRuns: 20 },
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
+  "embedded ECLI token limits include the boundary and preserve longer prose",
+  () => {
+    assertProperty(
+      "embedded ECLI token limits include the boundary and preserve longer prose",
+      fc.property(fc.integer({ min: 1, max: 9999 }), (ordinal) => {
+        const value = `ECLI:SK:NSSR:2024:${ordinal}`;
+        for (const tokens of [2, 31, 32, 33]) {
+          const text = `${"rozsudok ".repeat(tokens - 1)}${value}`;
+          expect(parseDecisionQuery(text)).toEqual(
+            tokens <= 32
+              ? { type: "identifier", kind: "ecli", value, embeddedIn: text }
+              : { type: "text", text },
+          );
+        }
+      }),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
+  "ECLI component bounds distinguish complete references from near misses",
+  () => {
+    assertProperty(
+      "ECLI component bounds distinguish complete references from near misses",
+      fc.property(fc.constantFrom("CZ", "SK"), (country) => {
+        for (const courtWidth of [1, 12, 13]) {
+          for (const ordinalWidth of [1, 64, 65]) {
+            const value = `ECLI:${country}:${"N".repeat(courtWidth)}:2024:${"1".repeat(ordinalWidth)}`;
+            expect(parseDecisionQuery(value)).toEqual(
+              courtWidth <= 12 && ordinalWidth <= 64
+                ? { type: "identifier", kind: "ecli", value }
+                : { type: "text", text: value },
+            );
+          }
+        }
+        for (const year of ["024", "20245", "20a4"]) {
+          const text = `ECLI:${country}:NS:${year}:1`;
+          expect(parseDecisionQuery(text)).toEqual({ type: "text", text });
+        }
+      }),
+      { numRuns: 10 },
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
+  "NSS sheet numbers ignore numeric padding and require the same file",
+  () => {
+    assertProperty(
+      "NSS sheet numbers ignore numeric padding and require the same file",
+      fc.property(
+        fc.integer({ min: 1, max: 99 }),
+        fc.integer({ min: 1, max: 9999 }),
+        fc.integer({ min: 1, max: 9999 }),
+        (senate, ordinal, sheet) => {
+          const family = `${senate}afs${ordinal}/2024`;
+          const ecli = `ecli:cz:nss:2024:0${senate}.AFS.00${ordinal}.02024.00${sheet}`;
+          expect(ecliSheetOf(ecli, family)).toBe(String(sheet));
+          expect(
+            ecliSheetOf(ecli, `${senate}afs${ordinal + 1}/2024`),
+          ).toBeNull();
+          expect(ecliSheetOf(ecli.replace(/\.00\d+$/u, ""), family)).toBeNull();
+          expect(ecliSheetOf(`${ecli}.x`, family)).toBeNull();
+          expect(ecliSheetOf(ecli.replace(":nss:", ":ns:"), family)).toBeNull();
+        },
+      ),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
+  "selectors from another file never select a member of the requested file",
+  () => {
+    assertProperty(
+      "selectors from another file never select a member of the requested file",
+      fc.property(fc.integer({ min: 1, max: 9999 }), (sheet) => {
+        for (const jurisdiction of ["CZE", "SVK"] as const) {
+          const options = { grammar: DECISION_DOCKET_GRAMMARS[jurisdiction] };
+          const family =
+            jurisdiction === "CZE" ? "1 As 12/2024" : "4Sžf/12/2024";
+          const other =
+            jurisdiction === "CZE" ? "1 As 13/2024" : "4Sžf/13/2024";
+          const intent = parseDecisionQuery(`${family}-${sheet}`, options);
+          expect(intent).toMatchObject({
+            type: "identifier",
+            kind: "docket",
+            selector: { kind: "sheet", value: String(sheet) },
+          });
+          if (intent.type !== "identifier") {return;}
+          const hit = {
+            caseNumber: family,
+            ecli: null,
+            publishedCaseNumber: `${other}-${sheet}`,
+            identifiers: [{ type: "case-number", value: `${other}-${sheet}` }],
+          };
+          expect(resolveDecisionIdentity(intent, [hit])).toEqual({
+            status: "ambiguous",
+            candidates: [hit],
+            reason: "selector_unmatched",
+          });
+          expect(namedDecisionsOf(intent, [hit])).toEqual([hit]);
+        }
+      }),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
+
+test(
+  "different selectors in repeated references leave the complete entry as text",
+  () => {
+    assertProperty(
+      "different selectors in repeated references leave the complete entry as text",
+      fc.property(fc.integer({ min: 1, max: 9998 }), (sheet) => {
+        for (const jurisdiction of ["CZE", "SVK"] as const) {
+          const options = { grammar: DECISION_DOCKET_GRAMMARS[jurisdiction] };
+          const family =
+            jurisdiction === "CZE" ? "1 As 12/2024" : "4Sžf/12/2024";
+          const text = `rozsudek ${family}-${sheet} a ${family}-${sheet + 1}`;
+          expect(parseDecisionQuery(text, options)).toEqual({
+            type: "text",
+            text,
+          });
+          const repeated = `rozsudek ${family}-${sheet} a ${family}-${sheet}`;
+          const intent = parseDecisionQuery(`${family}-${sheet}`, options);
+          expect(parseDecisionQuery(repeated, options)).toEqual({
+            ...intent,
+            embeddedIn: repeated,
+          });
+        }
+      }),
+    );
+  },
+  propertyTestTimeout(10_000),
+);
