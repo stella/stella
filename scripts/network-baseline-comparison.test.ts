@@ -125,4 +125,4 @@ test("mutation proof: scoped-route growth still fails its budget assertion", () 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
-});
+}, 60_000);

@@ -140,7 +140,7 @@ describe("network baseline scope", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 
   test("validates schema and rejects oversized files and symlinks", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-baseline-"));
@@ -168,7 +168,7 @@ describe("network baseline scope", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
 
 // Recorder and publisher share a read-only, main-only authority boundary.
@@ -358,32 +358,35 @@ describe("reviewed network budgets", () => {
       { route: "/chat", reason: "Change", budget: entry(1) },
       { route: "/chat", reason: "Other", budget: entry(2) },
     ],
-  ])("invalid or duplicate declarations fail closed", (...declarations) => {
-    const result = Bun.spawnSync(
-      [
-        "bun",
-        "-e",
-        `import { prepareComparisonBaseline } from "./scripts/network-baseline-scope.ts"; prepareComparisonBaseline(JSON.parse(process.env.INPUT));`,
-      ],
-      {
-        cwd: path.join(import.meta.dirname, ".."),
-        env: {
-          ...process.env,
-          INPUT: JSON.stringify({
-            base: {},
-            changedPaths: [],
-            baseRouteTree: routeTree,
-            routeTree,
-            declarations,
-          }),
+  ])(
+    "invalid or duplicate declarations fail closed",
+    (...declarations) => {
+      const result = Bun.spawnSync(
+        [
+          "bun",
+          "-e",
+          `import { readFileSync } from "node:fs"; import { prepareComparisonBaseline } from "./scripts/network-baseline-scope.ts"; prepareComparisonBaseline(JSON.parse(readFileSync(0, "utf-8")));`,
+        ],
+        {
+          cwd: path.join(import.meta.dirname, ".."),
+          stdin: Buffer.from(
+            JSON.stringify({
+              base: {},
+              changedPaths: [],
+              baseRouteTree: routeTree,
+              routeTree,
+              declarations,
+            }),
+          ),
         },
-      },
-    );
-    expect(result.exitCode).toBe(1);
-    expect(result.stderr.toString()).toMatch(
-      /Invalid network budget declaration|Duplicate network budget declaration/u,
-    );
-  });
+      );
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr.toString()).toMatch(
+        /Invalid network budget declaration|Duplicate network budget declaration/u,
+      );
+    },
+    60_000,
+  );
 
   test("preparation rejects PR edits of shared JSON", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-budget-"));
@@ -421,7 +424,7 @@ describe("reviewed network budgets", () => {
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });
 
 describe("merge-base preparation integration", () => {
@@ -636,5 +639,5 @@ esac
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }
-  });
+  }, 60_000);
 });

@@ -1077,7 +1077,10 @@ const readChangedRoutes = (): string[] => {
   const parsed: unknown = JSON.parse(readFileSync(file, "utf-8"));
   if (
     !Array.isArray(parsed) ||
-    !parsed.every((route) => typeof route === "string" && route.startsWith("/"))
+    !parsed.every(
+      (route: unknown): route is string =>
+        typeof route === "string" && route.startsWith("/"),
+    )
   ) {
     throw new Error("Invalid network baseline comparison context");
   }
