@@ -338,7 +338,9 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
       expect(await run()).toEqual({ type: "complete" });
       expect(priorities).toHaveLength(2);
       const namespace = priorities.at(0)?.at(0);
-      expect(typeof namespace).toBe("number");
+      if (typeof namespace !== "number") {
+        throw new TypeError("Missing advisory lock namespace");
+      }
       expect(priorities).toEqual([
         [namespace, 2],
         [namespace, 1],
