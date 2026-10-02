@@ -1,3 +1,4 @@
+// parser-output-unchanged: Page validation and item-level failure reporting reject invalid publisher input without transforming parsed decision content.
 import { Result, panic } from "better-result";
 
 import { classifyFailure } from "@stll/errors";
