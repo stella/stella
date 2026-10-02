@@ -752,12 +752,16 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         let secondTransactions = 0;
         const firstScope: ScopedDb = async (callback) =>
           await firstDb.transaction(async (tx) => {
-            if (firstTransactions++ === 0) {firstEntered.resolve(undefined);}
+            if (firstTransactions++ === 0) {
+              firstEntered.resolve(undefined);
+            }
             return await callback(asTestRaw<Transaction>(tx));
           });
         const secondScope: ScopedDb = async (callback) =>
           await secondDb.transaction(async (tx) => {
-            if (secondTransactions++ === 0) {secondEntered.resolve(undefined);}
+            if (secondTransactions++ === 0) {
+              secondEntered.resolve(undefined);
+            }
             return await callback(asTestRaw<Transaction>(tx));
           });
         const firstPid = (
