@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Kokkuvõte",
+      "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",

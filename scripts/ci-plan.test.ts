@@ -27,7 +27,7 @@ const selectorStart = workflow.indexOf(
   "          # Path scopes for the build/smoke jobs",
 );
 const selectorEnd = workflow.indexOf(
-  "          # The production e2e shards",
+  "          printf 'Changed files:",
   selectorStart,
 );
 expect(selectorStart).toBeGreaterThan(-1);
@@ -47,7 +47,7 @@ const runSelector = (
       "bash",
       "-e",
       "-c",
-      `changed_files=("$@"); e2e_core_required=false
+      `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 ${selector}
 printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
@@ -1534,6 +1534,82 @@ test("marketing screenshots are planned only for ready same-repository releases 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("spec-tree PRs plan production shards and their web build at fast depth", () => {
+  for (const file of [
+    "apps/web/e2e/specs/new.spec.ts",
+    "apps/web/e2e/helpers/test.ts",
+    "apps/web/e2e/fixtures/simple.docx",
+    "apps/web/e2e/playwright.config.ts",
+  ]) {
+    const planned = runSelector(
+      [file],
+      ["e2e_production_required", "web_build_required"],
+    );
+    expect(planned, file).toEqual(["true", "true"]);
+    expect(jobScopes["e2e-production-shard"]).toBe("e2e_production_required");
+    expect(jobIf(ciJobs["e2e-production-shard"])).toContain(
+      "needs.ci-plan.outputs.e2e_production_required == 'true'",
+    );
+    expect(fastRequired).toContain("e2e-production-shard");
+    expect(
+      evaluateResult({
+        event: EVENT.pullRequest,
+        results: { "e2e-production-shard": "skipped" },
+      }),
+    ).toBe(1);
+    expect(
+      evaluateResult({
+        event: EVENT.pullRequest,
+        results: { "e2e-production-shard": "failure" },
+      }),
+    ).toBe(1);
+  }
+});
+
+test("production shards keep full-depth core coverage and exclude unrelated fast PRs", () => {
+  for (const file of [
+    "apps/api/src/handlers/tasks/get.ts",
+    "apps/web/src/routes/index.tsx",
+    "packages/ui/src/button.tsx",
+  ]) {
+    expect(runSelector([file], ["e2e_production_required"])).toEqual(["false"]);
+    expect(
+      runSelector(
+        [file],
+        ["e2e_production_required"],
+        "full",
+        "false",
+        "merge_group",
+      ),
+    ).toEqual(["true"]);
+  }
+  for (const file of [
+    "README.md",
+    "apps/web/e2e/collab/room.spec.ts",
+    "apps/web/e2e/playwright.collab.config.ts",
+    "apps/web/e2e/marketing/product.spec.ts",
+    "apps/web/e2e/playwright.marketing.config.ts",
+  ]) {
+    expect(runSelector([file], ["e2e_production_required"])).toEqual(["false"]);
+  }
+  expect(
+    runSelector(
+      ["apps/web/e2e/specs/new.spec.ts"],
+      ["e2e_production_required"],
+      "fast",
+      "false",
+      "workflow_dispatch",
+    ),
+  ).toEqual(["false"]);
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "e2e-production-shard": "skipped" },
+      unplannedScopes: ["e2e_production_required"],
+    }),
+  ).toBe(0);
 });
 
 test("direct web compiler checks materialize ignored API contracts before checking", () => {

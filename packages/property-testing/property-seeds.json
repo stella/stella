@@ -1,0 +1,3 @@
+{
+  "$schema-note": "Keys are <repo-relative test file>::<explicit assertProperty id>. Pin a neutral note and ISO date after the fix merges."
+}
