@@ -1,0 +1,229 @@
+import { describe, expect, test } from "bun:test";
+
+import { initialBatchState } from "@stll/db-load-gate/health";
+
+import { createSafeId } from "@/api/lib/branded-types";
+
+import {
+  EuCompletionStop,
+  runEuCompletionTick,
+  type EuCompletionRowOutcome,
+  type EuCompletionRowOptions,
+  type RunEuCompletionTickOptions,
+} from "./eu-completion";
+import type { EuCompletionReceipt } from "./eu-completion-store";
+
+const sourceId = createSafeId<"caseLawSource">();
+const receipt = (id: string): EuCompletionReceipt => ({
+  id,
+  sourceId,
+  decisionId: createSafeId<"caseLawDecision">(),
+  mode: "dry-run",
+  parserVersion: 1,
+  status: "pending",
+  target: null,
+  claimedSourceHash: null,
+  claimedObservationOrder: null,
+  claimedFingerprint: null,
+  payload: null,
+  payloadHash: null,
+  provenance: null,
+  detail: null,
+  attempts: 0,
+  attemptState: "idle",
+  systemicFailures: 0,
+  systemicProgress: 0,
+  retryAt: null,
+  writtenAt: null,
+  writtenSourceHash: null,
+  writtenParserVersion: null,
+  writtenObservationOrder: null,
+  supersededAt: null,
+  createdAt: new Date(0),
+  updatedAt: new Date(0),
+  completedAt: null,
+});
+const fixture = () => {
+  const events: string[] = [];
+  let enabled = true;
+  let clock = 0;
+  let sourceHoldUntil: number | null = null;
+  let control: "on" | "off" = "on";
+  let ticks = 0;
+  let requests = 0;
+  const rows = [receipt("first"), receipt("second")];
+  const dependencies = {
+    store: {
+      loadControls: async () => ({ global: control, source: control }),
+      loadSourceGateState: async () => ({
+        ...initialBatchState(),
+        holdUntil: sourceHoldUntil,
+      }),
+      getApproval: async () => null,
+      readSweepCursor: async () => null,
+      reserve: async () => {
+        events.push("reserve");
+        return rows;
+      },
+      pickup: async (id: string) => {
+        events.push(`pickup:${id}`);
+        return "ready" as const;
+      },
+      recordFailure: async (row: EuCompletionReceipt) => {
+        events.push(`refund:${row.id}`);
+        return "retryable" as const;
+      },
+      recordTick: async () => ({
+        ticksWithoutProgress: ++ticks,
+        lastCompletedAt: null,
+      }),
+    },
+    isEnabled: async () => enabled,
+    readGate: async () => ({ kind: "normal" as const, signals: [] }),
+    fence: async () => {},
+    requestCount: () => requests,
+    runRow: async (
+      row: EuCompletionReceipt,
+      options: EuCompletionRowOptions,
+    ): Promise<EuCompletionRowOutcome> => {
+      await options.check();
+      events.push(`run:${row.id}`);
+      requests++;
+      return { type: "dry-run" };
+    },
+  } satisfies RunEuCompletionTickOptions["dependencies"];
+  const run = async (overrides: Partial<RunEuCompletionTickOptions> = {}) =>
+    await runEuCompletionTick({
+      sourceId,
+      mode: "dry-run",
+      parserVersion: 1,
+      maxRows: 2,
+      signal: new AbortController().signal,
+      now: () => clock,
+      dependencies,
+      ...overrides,
+    });
+  return {
+    events,
+    dependencies,
+    run,
+    rows,
+    disable: () => {
+      enabled = false;
+    },
+    setControl: (state: "on" | "off") => {
+      control = state;
+    },
+    setTime: (time: number) => {
+      clock = time;
+    },
+    hold: () => {
+      sourceHoldUntil = 1000;
+    },
+  };
+};
+
+describe("bounded EU completion orchestration", () => {
+  test.each(["env", "durable", "source-backoff"] as const)(
+    "%s admission stops before queue selection",
+    async (kind) => {
+      const state = fixture();
+      if (kind === "env") {
+        state.disable();
+      }
+      if (kind === "durable") {
+        state.setControl("off");
+      }
+      if (kind === "source-backoff") {
+        state.hold();
+      }
+      const report = await state.run();
+      expect(report.status).toBe(kind === "source-backoff" ? "held" : "off");
+      expect(state.events).toEqual([]);
+      expect(report.noProgress).toBe(1);
+    },
+  );
+  test("apply cannot infer supervised approval from enabled controls", async () => {
+    const state = fixture();
+    expect((await state.run({ mode: "apply" })).status).toBe(
+      "approval-required",
+    );
+    expect(state.events).toEqual([]);
+  });
+  test("pickup precedes every effect and the run reports actual request charges", async () => {
+    const state = fixture();
+    const report = await state.run();
+    expect(state.events).toEqual([
+      "reserve",
+      "pickup:first",
+      "run:first",
+      "pickup:second",
+      "run:second",
+    ]);
+    expect(report.attempted).toBe(2);
+    expect(report.requests).toBe(2);
+  });
+  test.each([
+    "applied",
+    "unchanged",
+    "review-required",
+    "failed",
+    "isolated",
+  ] as const)(
+    "row outcome %s continues to the adjacent receipt",
+    async (type) => {
+      const state = fixture();
+      state.dependencies.runRow = async (row) => {
+        state.events.push(`run:${row.id}`);
+        return { type };
+      };
+      const report = await state.run();
+      expect(report.status).toBe("completed");
+      expect(report.attempted).toBe(2);
+    },
+  );
+  test.each(["retryable", "publisher-refused"] as const)(
+    "%s stops the tick before a second pickup",
+    async (type) => {
+      const state = fixture();
+      state.dependencies.runRow = async () =>
+        type === "publisher-refused"
+          ? { type, retryAt: new Date(1000) }
+          : { type };
+      const report = await state.run();
+      expect(report.status).toBe(type === "retryable" ? "failed" : type);
+      expect(state.events).toEqual(["reserve", "pickup:first"]);
+    },
+  );
+  test("kill after pickup refunds its attempt and leaves following receipts untouched", async () => {
+    const state = fixture();
+    state.dependencies.runRow = async (_row, options) => {
+      state.disable();
+      await options.check();
+      return { type: "applied" };
+    };
+    const report = await state.run();
+    expect(report.status).toBe("off");
+    expect(state.events).toEqual(["reserve", "pickup:first", "refund:first"]);
+  });
+  test("soft deadline stops before the next pickup", async () => {
+    const state = fixture();
+    state.dependencies.runRow = async () => {
+      state.setTime(4 * 60_000);
+      return { type: "dry-run" };
+    };
+    expect((await state.run()).status).toBe("time-limit");
+    expect(state.events).toEqual(["reserve", "pickup:first"]);
+  });
+  test("hard cancellation during work is durably refunded", async () => {
+    const state = fixture();
+    state.dependencies.runRow = async () => {
+      throw new EuCompletionStop({
+        message: "fixture deadline",
+        reason: "cancelled",
+      });
+    };
+    expect((await state.run()).status).toBe("cancelled");
+    expect(state.events).toEqual(["reserve", "pickup:first", "refund:first"]);
+  });
+});

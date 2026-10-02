@@ -1,0 +1,236 @@
+import { Result } from "better-result";
+import { afterEach, describe, expect, mock, test } from "bun:test";
+
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { withPublisherRequestRateLimit } from "./publisher-policy";
+import {
+  fetchPublisher,
+  fetchWithRetry,
+  PublisherRateLimitRefusalError,
+} from "./retry";
+
+const originalFetch = globalThis.fetch;
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+const target = "https://publications.europa.eu/completion-fixture";
+const fixture = (failCooldown = false) => {
+  let clock = 0;
+  let slot = 0;
+  let cooldown = 0;
+  let charges = 0;
+  let enabled = true;
+  let refused: number | null = null;
+  const dependencies = {
+    redis: () => ({
+      send: (_command: string, args: string[]) => {
+        if (args.at(2)?.endsWith(":cooldown")) {
+          if (args.length === 5) {
+            if (failCooldown) {
+              throw new TypeError("fixture cooldown unavailable");
+            }
+            cooldown = Math.max(cooldown, clock + Number(args.at(3)));
+            return cooldown;
+          }
+          return Math.max(0, cooldown - clock);
+        }
+        const wait = Math.max(clock, slot, cooldown) - clock;
+        slot = clock + wait + Number(args.at(-1));
+        return wait;
+      },
+    }),
+    sleep: async (ms: number) => {
+      clock += ms;
+    },
+  };
+  const controls = {
+    retry: "durable" as const,
+    check: async () => {
+      if (refused !== null) {
+        throw new TypeError("fixture publisher refused");
+      }
+      if (!enabled) {
+        throw new TypeError("fixture disabled");
+      }
+    },
+    chargeRequest: async () => {
+      charges++;
+    },
+    onRefusal: (deadline: number) => {
+      refused = deadline;
+    },
+  };
+  return {
+    dependencies,
+    controls,
+    charges: () => charges,
+    refused: () => refused,
+    disable: () => {
+      enabled = false;
+    },
+    now: () => clock,
+  };
+};
+describe("completion request boundary", () => {
+  test("a refusal remains latched when cooldown persistence fails", async () => {
+    const state = fixture(true);
+    let requests = 0;
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requests++;
+        return new Response(null, {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        });
+      }),
+    );
+    await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 1,
+      dependencies: state.dependencies,
+      controls: state.controls,
+      operation: async () => {
+        const first = await Result.tryPromise(() =>
+          fetchPublisher(target, {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            timeoutMs: 1000,
+          }),
+        );
+        const second = await Result.tryPromise(() =>
+          fetchPublisher(target, {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            timeoutMs: 1000,
+          }),
+        );
+        expect(first.isErr()).toBe(true);
+        expect(second.isErr()).toBe(true);
+      },
+    });
+    expect(state.refused()).not.toBeNull();
+    expect(requests).toBe(1);
+    expect(state.charges()).toBe(1);
+  });
+  test("429 ends one request and retains a Retry-After longer than ordinary retry caps", async () => {
+    const state = fixture();
+    let requests = 0;
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requests++;
+        return new Response("refused", {
+          status: 429,
+          headers: { "Retry-After": "7200" },
+        });
+      }),
+    );
+    const result = await Result.tryPromise({
+      try: async () =>
+        await withPublisherRequestRateLimit({
+          gateId: "cellar-eu",
+          requestsPerSecond: 1,
+          dependencies: state.dependencies,
+          controls: state.controls,
+          operation: async () =>
+            await fetchPublisher(target, {
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              timeoutMs: 1000,
+            }),
+        }),
+      catch: (error) => error,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isOk()) {
+      return expect.unreachable();
+    }
+    expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
+    expect(requests).toBe(1);
+    expect(state.charges()).toBe(1);
+    expect(state.refused()).toBeGreaterThanOrEqual(7_200_000);
+  });
+  test("redirects consume separate paced and persisted requests", async () => {
+    const state = fixture();
+    const visited: number[] = [];
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        visited.push(state.now());
+        return visited.length === 1
+          ? new Response(null, {
+              status: 302,
+              headers: { Location: `${target}/final` },
+            })
+          : new Response("document");
+      }),
+    );
+    const response = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 1,
+      dependencies: state.dependencies,
+      controls: state.controls,
+      operation: async () =>
+        await fetchPublisher(target, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: 1000,
+        }),
+    });
+    expect(response.status).toBe(200);
+    expect(visited).toEqual([0, 1000]);
+    expect(state.charges()).toBe(2);
+  });
+  test("durable completion never loops a transient publisher answer", async () => {
+    const state = fixture();
+    let requests = 0;
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requests++;
+        return new Response("unavailable", { status: 503 });
+      }),
+    );
+    const response = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 1,
+      dependencies: state.dependencies,
+      controls: state.controls,
+      operation: async () =>
+        await fetchWithRetry(target, undefined, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          maxRetries: 5,
+        }),
+    });
+    expect(response.status).toBe(503);
+    expect(requests).toBe(1);
+    expect(state.charges()).toBe(1);
+  });
+  test("a kill after the first response prevents a redirected request", async () => {
+    const state = fixture();
+    let requests = 0;
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requests++;
+        state.disable();
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${target}/final` },
+        });
+      }),
+    );
+    const result = await Result.tryPromise({
+      try: async () =>
+        await withPublisherRequestRateLimit({
+          gateId: "cellar-eu",
+          requestsPerSecond: 1,
+          dependencies: state.dependencies,
+          controls: state.controls,
+          operation: async () =>
+            await fetchPublisher(target, {
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              timeoutMs: 1000,
+            }),
+        }),
+      catch: (error) => error,
+    });
+    expect(result.isErr()).toBe(true);
+    expect(requests).toBe(1);
+    expect(state.charges()).toBe(1);
+  });
+});

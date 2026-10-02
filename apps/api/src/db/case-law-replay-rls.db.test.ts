@@ -43,6 +43,34 @@ const receipts = [
     update:
       "UPDATE case_law_replay_audit_events SET resource_id = 'changed' RETURNING id",
   },
+  {
+    prepare: null,
+    table: "eu_completion_receipts",
+    insert: `INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status) VALUES ('completion', '${sourceId}', '${decisionId}', 'dry-run', 2, 'pending')`,
+    update: "UPDATE eu_completion_receipts SET detail = 'fixture' RETURNING id",
+  },
+  {
+    prepare: null,
+    table: "eu_completion_request_hours",
+    insert:
+      "INSERT INTO eu_completion_request_hours (hour, requests) VALUES ('2026-10-02T00:00:00Z', 1)",
+    update:
+      "UPDATE eu_completion_request_hours SET requests = 2 RETURNING hour",
+  },
+  {
+    prepare: `INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status) VALUES ('approval-evidence', '${sourceId}', '${decisionId}', 'dry-run', 2, 'dry-run')`,
+    table: "eu_completion_approvals",
+    insert: `INSERT INTO eu_completion_approvals (source_id, parser_version, supervised_receipt_id, evidence_ref, supervised_by, supervised_at, approved_by, approved_at) VALUES ('${sourceId}', 2, 'approval-evidence', 'fixture://evidence', 'fixture-supervisor', now(), 'fixture-operator', now())`,
+    update:
+      "UPDATE eu_completion_approvals SET evidence_ref = 'fixture://updated' RETURNING source_id",
+  },
+  {
+    prepare: null,
+    table: "eu_completion_controls",
+    insert: `INSERT INTO eu_completion_controls (key, source_id) VALUES ('source:${sourceId}', '${sourceId}')`,
+    update:
+      "UPDATE eu_completion_controls SET ticks_without_progress = 1 RETURNING key",
+  },
 ] as const;
 
 describe.skipIf(!enabled)("replay receipt row security", () => {
@@ -68,6 +96,12 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
           import.meta.url,
         ),
       ).text();
+      const completionMigration = await Bun.file(
+        new URL(
+          "../../drizzle/20261003123700_eu_completion_receipts/migration.sql",
+          import.meta.url,
+        ),
+      ).text();
       await client.unsafe("BEGIN");
       try {
         const version = await client.unsafe<{ version: number }[]>(
@@ -89,7 +123,7 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
         await client.unsafe(
           `INSERT INTO case_law_sources VALUES ('${sourceId}')`,
         );
-        for (const statement of `${migration}--> statement-breakpoint${recoveryMigration}`
+        for (const statement of `${migration}--> statement-breakpoint${recoveryMigration}--> statement-breakpoint${completionMigration}`
           .replaceAll(
             '"public"."case_law_sources"',
             () => `"${schema}"."case_law_sources"`,
@@ -98,6 +132,7 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
             "public.case_law_replay_",
             () => `${schema}.case_law_replay_`,
           )
+          .replaceAll("public.eu_completion_", () => `${schema}.eu_completion_`)
           .split("--> statement-breakpoint")) {
           if (statement.trim().length > 0) {
             await client.unsafe(statement);

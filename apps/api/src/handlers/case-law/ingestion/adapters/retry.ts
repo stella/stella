@@ -18,16 +18,19 @@ import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   deferPublisherGate,
-  reservePublisherSlot,
   reservePublisherGateSlot,
   type PublisherGateId,
+  publisherRunControls,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";
+import { publisherTarget } from "./publisher-target";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
+
+const MAX_DATE_EPOCH_MS = 8_640_000_000_000_000;
 
 export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** Whose publisher budget this request spends. */
@@ -58,13 +61,103 @@ export const fetchPublisher = async (
     isRateLimitRedirect: _isRateLimitRedirect,
     ...requestInit
   } = init;
-  if (publisherGate === undefined) {
-    await reservePublisherSlot(adapterKey, requestInit.signal);
-  } else {
-    await reservePublisherGateSlot(publisherGate, requestInit.signal);
-  }
-  // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
-  return await fetchWithTimeout(url, requestInit);
+  const gateId = publisherGate ?? ADAPTER_PUBLISHER_GATES[adapterKey];
+  const controls = publisherRunControls(gateId);
+  const fetchTarget = async (
+    requestedTarget: string,
+    redirects: number,
+  ): Promise<Response> => {
+    await controls?.check();
+    await reservePublisherGateSlot(gateId, requestInit.signal);
+    // Recheck after pacing: a switch/lease can change while the slot sleeps.
+    await controls?.check();
+    let target = requestedTarget;
+    if (controls !== undefined) {
+      const safeTarget = publisherTarget(adapterKey, requestedTarget);
+      if (safeTarget.isErr()) {
+        throw safeTarget.error;
+      }
+      target = String(safeTarget.value);
+      await controls.chargeRequest();
+    }
+    const fetched = await Result.tryPromise({
+      try: async () =>
+        // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- canonical publisher boundary; callers validate the target
+        await fetchWithTimeout(controls === undefined ? url : target, {
+          ...requestInit,
+          ...(controls === undefined ? {} : { redirect: "manual" as const }),
+        }),
+      catch: (error) => error,
+    });
+    if (fetched.isErr()) {
+      controls?.onFailure?.(fetched.error);
+      throw fetched.error;
+    }
+    const response = fetched.value;
+    if (controls === undefined) {
+      return response;
+    }
+    if (response.status === 429 || _isRateLimitRedirect?.(response)) {
+      const refusalNow = Temporal.Now.instant().epochMilliseconds;
+      const delay = Math.ceil(
+        publisherRetryDelay({
+          attempt: 0,
+          retryAfter: response.headers.get("Retry-After"),
+          now: refusalNow,
+          random: Math.random(),
+          retryAfterMaxMs: MAX_DATE_EPOCH_MS - refusalNow,
+        }),
+      );
+      controls.onRefusal?.(refusalNow + delay);
+      const cooldownUntilEpochMs = await deferPublisherGate(
+        gateId,
+        delay,
+        requestInit.signal,
+      );
+      controls.onRefusal?.(cooldownUntilEpochMs);
+      await response.body?.cancel();
+      throw new PublisherRateLimitRefusalError({
+        publisherKey: gateId,
+        status: response.status,
+        cooldownUntilEpochMs,
+        adapterKey,
+        cursor: null,
+      });
+    }
+    if (response.status >= 500 || response.status === 408) {
+      controls.onFailure?.(
+        new AdapterFetchError({
+          message: "Publisher completion request failed",
+          adapterKey,
+          cursor: null,
+          httpStatus: response.status,
+        }),
+      );
+    }
+    if (![301, 302, 303, 307, 308].includes(response.status)) {
+      return controls.limitResponse?.(response) ?? response;
+    }
+    const location = response.headers.get("location");
+    await response.body?.cancel();
+    if (location === null || redirects === 5) {
+      throw new AdapterFetchError({
+        message:
+          "Publisher redirect cannot be followed within the request budget",
+        adapterKey,
+        cursor: null,
+      });
+    }
+    // EU listing redirects must not silently replay a POST to another target.
+    if (requestInit.method !== undefined && requestInit.method !== "GET") {
+      throw new AdapterFetchError({
+        message: "Publisher redirected a non-GET completion request",
+        adapterKey,
+        cursor: null,
+      });
+    }
+    return await fetchTarget(new URL(location, target).href, redirects + 1);
+  };
+  return await fetchTarget(String(url), 0);
 };
 
 /**
@@ -163,7 +256,12 @@ export const fetchWithRetry = async (
         signal,
       });
 
-      if (!isRetryableStatus(response.status) || attempt >= maxRetries) {
+      if (
+        publisherRunControls(ADAPTER_PUBLISHER_GATES[adapterKey])?.retry ===
+          "durable" ||
+        !isRetryableStatus(response.status) ||
+        attempt >= maxRetries
+      ) {
         return response;
       }
 
@@ -185,7 +283,12 @@ export const fetchWithRetry = async (
       }
 
       // Per-request timeout: retry with backoff
-      if (isTimeoutError(error) && attempt < maxRetries) {
+      if (
+        publisherRunControls(ADAPTER_PUBLISHER_GATES[adapterKey]) ===
+          undefined &&
+        isTimeoutError(error) &&
+        attempt < maxRetries
+      ) {
         const delay = backoffMs(attempt, baseDelayMs, maxDelayMs);
         logger.warn("case_law.ingestion.fetch_timeout_retry", {
           adapterKey,
@@ -251,6 +354,7 @@ type PublisherRetryDelayOptions = {
   retryAfter: string | null;
   now: number;
   random: number;
+  retryAfterMaxMs?: number;
 };
 
 /** Full jitter, with the publisher's bounded Retry-After as a minimum. */
@@ -259,6 +363,7 @@ export const publisherRetryDelay = ({
   retryAfter,
   now,
   random,
+  retryAfterMaxMs = RETRY_AFTER_MAX_MS,
 }: PublisherRetryDelayOptions): number => {
   const jitter =
     random *
@@ -283,7 +388,7 @@ export const publisherRetryDelay = ({
   if (Number.isNaN(parsed)) {
     return jitter;
   }
-  return Math.max(jitter, Math.min(Math.max(0, parsed), RETRY_AFTER_MAX_MS));
+  return Math.max(jitter, Math.min(Math.max(0, parsed), retryAfterMaxMs));
 };
 
 const isPublisherTimeout = (cause: unknown): boolean =>
@@ -306,14 +411,11 @@ export const retryPublisherRequest = async (
   init: PublisherFetchInit,
   dependencies?: PublisherRetryDependencies,
 ): Promise<Response> => {
+  const gateId = init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey];
   const runtime = dependencies ?? {
     request: fetchPublisher,
     defer: async (durationMs: number, signal?: AbortSignal) =>
-      await deferPublisherGate(
-        init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey],
-        durationMs,
-        signal,
-      ),
+      await deferPublisherGate(gateId, durationMs, signal),
     sleep: abortableSleep,
     now: () => Temporal.Now.instant().epochMilliseconds,
     random: Math.random,
@@ -349,14 +451,19 @@ export const retryPublisherRequest = async (
           retryAfter: fetched.value.headers.get("Retry-After"),
           now: runtime.now(),
           random: runtime.random(),
+          ...(publisherRunControls(gateId) === undefined
+            ? {}
+            : { retryAfterMaxMs: MAX_DATE_EPOCH_MS - runtime.now() }),
         }),
       );
+      const controls = publisherRunControls(gateId);
+      controls?.onRefusal?.(runtime.now() + delay);
       const cooldownUntilEpochMs = await runtime.defer(delay, init.signal);
+      controls?.onRefusal?.(cooldownUntilEpochMs);
       await fetched.value.body?.cancel();
       throw new PublisherRateLimitRefusalError({
         cursor: null,
-        publisherKey:
-          init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey],
+        publisherKey: gateId,
         status: fetched.value.status,
         cooldownUntilEpochMs,
         adapterKey: init.adapterKey,
@@ -368,7 +475,10 @@ export const retryPublisherRequest = async (
     ) {
       return fetched.value;
     }
-    if (attempt === PUBLISHER_MAX_ATTEMPTS - 1) {
+    if (
+      publisherRunControls(gateId)?.retry === "durable" ||
+      attempt === PUBLISHER_MAX_ATTEMPTS - 1
+    ) {
       if (Result.isError(fetched)) {
         throw fetched.error;
       }

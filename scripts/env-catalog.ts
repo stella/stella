@@ -5,6 +5,7 @@ import {
   envBaseServerSchema,
 } from "../apps/api/src/env-base-schema";
 import { envDocumentProcessingWorkerServerSchema } from "../apps/api/src/env-document-processing-worker-schema";
+import { euCompletionTickServerSchema } from "../apps/api/src/env-eu-completion";
 import { replayTickServerSchema } from "../apps/api/src/env-replay";
 import { envApiServerSchema } from "../apps/api/src/env-schema";
 import { envCollabServerSchema } from "../apps/collab/src/env-schema";
@@ -92,6 +93,10 @@ const INTERNAL_SERVER_KEYS = new Set([
   "BETTER_AUTH_COOKIE_PREFIX",
   "BETTER_AUTH_URL",
   "CASE_LAW_DATABASE_POOL_MAX",
+  "CASE_LAW_EU_COMPLETION_ENABLED",
+  "CASE_LAW_EU_COMPLETION_KILL_SWITCH",
+  "CASE_LAW_EU_COMPLETION_MODE",
+  "CASE_LAW_EU_COMPLETION_MAX_ROWS",
   "CASE_LAW_REPLAY_ENABLED",
   "CASE_LAW_REPLAY_KILL_SWITCH",
   "CASE_LAW_REPLAY_DISABLED_SOURCES",
@@ -267,6 +272,14 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  CASE_LAW_EU_COMPLETION_ENABLED:
+    "Enable bounded EU case-law completion. Defaults to false.",
+  CASE_LAW_EU_COMPLETION_KILL_SWITCH:
+    "Stop EU case-law completion before the next publisher or database effect.",
+  CASE_LAW_EU_COMPLETION_MODE:
+    "Completion mode: dry-run by default; apply requires durable supervised approval.",
+  CASE_LAW_EU_COMPLETION_MAX_ROWS:
+    "Maximum completion documents per invocation, from 1 to 100. Defaults to 25.",
   CASE_LAW_REPLAY_ENABLED:
     "Enable bounded background case-law replay. Defaults to false.",
   CASE_LAW_REPLAY_KILL_SWITCH:
@@ -688,6 +701,10 @@ const createCatalogEntries = ({ owner, schema }: CreateCatalogEntriesOptions) =>
 export const ENV_CATALOG = [
   ...createCatalogEntries({
     owner: ENV_OWNER.apiBase,
+    schema: euCompletionTickServerSchema,
+  }),
+  ...createCatalogEntries({
+    owner: ENV_OWNER.apiBase,
     schema: replayTickServerSchema,
   }),
   ...createCatalogEntries({
@@ -714,6 +731,7 @@ export const ENV_CATALOG = [
 ];
 
 export const API_ENV_SCHEMA = {
+  ...euCompletionTickServerSchema,
   ...replayTickServerSchema,
   ...envBaseServerSchema,
   ...envDocumentProcessingWorkerServerSchema,
