@@ -9,6 +9,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
 import type { TranslationKey } from "@/i18n/types";
@@ -97,6 +98,8 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
 } as const;
 
 const CODE_ERROR_KEYS = {
+  [FILE_PROPERTY_TYPE_IMMUTABLE_CODE]:
+    "errors.apiCodes.filePropertyTypeImmutable",
   [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",

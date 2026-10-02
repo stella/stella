@@ -42,6 +42,8 @@ import { isPlaybookVerdictProperty } from "@/lib/workspaces/playbook-verdicts";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities";
 import { useGroupScope } from "@/routes/_protected.workspaces/$workspaceId/-components/table/group-scope";
 
+import { canEditPropertyViaComposer } from "./property-popover.logic";
+
 type PropertyPopoverProps = {
   property: WorkspaceProperty;
   header: TableHeader;
@@ -176,8 +178,10 @@ export const PropertyPopover = ({
   // a save from silently rewriting the file column as text/manual.
   // Verdict columns are system-computed (read-only), so they are not
   // editable via the composer either.
-  const canEditViaComposer =
-    property.content.type !== "file" && !isPlaybookVerdictProperty(property);
+  const canEditViaComposer = canEditPropertyViaComposer(
+    property.content,
+    isPlaybookVerdictProperty(property),
+  );
 
   // `useOptimistic` mirrors the server `dependencies` while a save is
   // in flight so rapid successive edits compose against the latest

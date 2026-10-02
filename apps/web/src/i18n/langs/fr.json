@@ -2243,6 +2243,7 @@
       "deeplKeyRejected": "La clé DeepL enregistrée a été refusée. Remplacez-la dans les paramètres de l’organisation.",
       "deeplQuotaExceeded": "Le quota de caractères DeepL de cette organisation est épuisé.",
       "disposableEmailNotAllowed": "Les adresses e-mail temporaires ne sont pas autorisées. Utilisez une adresse e-mail permanente.",
+      "filePropertyTypeImmutable": "Le type d’une propriété de fichier ne peut pas être modifié. Conservez le type actuel ; créez une propriété personnalisée pour les autres valeurs.",
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "internalServerError": "Une erreur s’est produite. Veuillez réessayer.",
       "legalSourceEntityLimitReached": "Ce dossier a atteint la limite d’éléments, le document n’a donc pas pu être créé.",

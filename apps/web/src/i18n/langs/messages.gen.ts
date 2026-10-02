@@ -2246,6 +2246,7 @@ type Messages = {
       "deeplKeyRejected": "The stored DeepL key was rejected. Replace it in organization settings.";
       "deeplQuotaExceeded": "The DeepL character quota for this organization has been used up.";
       "disposableEmailNotAllowed": "Temporary email addresses are not allowed. Use a permanent email address.";
+      "filePropertyTypeImmutable": "File property types cannot be changed. Keep the existing type; create a custom property for other values.";
       "forbidden": "You do not have permission to do this.";
       "internalServerError": "The server could not complete the action. Please try again.";
       "legalSourceEntityLimitReached": "This matter has reached its item limit, so the document could not be created.";

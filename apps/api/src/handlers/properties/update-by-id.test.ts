@@ -86,6 +86,7 @@ describe("updateProperty", () => {
 
     let deleteCalled = false;
     let auditedDependencies: unknown;
+    const updatePatches: unknown[] = [];
 
     let lockCallCount = 0;
     const { safeDb, scopedDb } = createScopedDbMock({
@@ -113,7 +114,10 @@ describe("updateProperty", () => {
         propertyDependencies: { findMany: async () => oldDependencies },
       },
       update: () => ({
-        set: () => ({ where: async () => undefined }),
+        set: (patch: unknown) => {
+          updatePatches.push(patch);
+          return { where: async () => undefined };
+        },
       }),
       delete: () => {
         deleteCalled = true;
@@ -140,6 +144,12 @@ describe("updateProperty", () => {
     expect(result).toEqual({});
     expect(lockCallCount).toBe(1);
     expect(deleteCalled).toBe(false);
+    expect(updatePatches).toEqual([
+      expect.objectContaining({
+        name: "New name",
+        content: { version: 1, type: "text" },
+      }),
+    ]);
     expect(auditedDependencies).toEqual({
       old: oldDependencies,
       new: oldDependencies,

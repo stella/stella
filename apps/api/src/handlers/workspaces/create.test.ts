@@ -1,8 +1,19 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  documentReferenceCounters,
+  matterCounters,
+  properties,
+  searchProjectionRepairQueue,
+  workspaceViews,
+} from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS } from "@/api/lib/matter-reference";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import createWorkspaces from "./create";
 
@@ -31,9 +42,92 @@ const createContext = ({
       activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
     user: { id: toSafeId<"user">("user_test123") },
+    recordAuditEvent: async () => {},
   });
 
 describe("createWorkspaces", () => {
+  test.each(["personal", "client"])(
+    "seeds a file column for a %s matter",
+    async (kind) => {
+      const insertedProperties: unknown[] = [];
+      const propertyId = toSafeId<"property">(Bun.randomUUIDv7());
+      const workspaceId = toSafeId<"workspace">(Bun.randomUUIDv7());
+      const clientId = toSafeId<"contact">(Bun.randomUUIDv7());
+      const { safeDb, scopedDb } = createScopedDbMock({
+        query: { organizationSettings: { findFirst: async () => null } },
+        select: (selected: Record<string, unknown>) => {
+          if (selected["reference"] === documentReferenceCounters.reference) {
+            return createSelectQueryMock([]);
+          }
+          if ("total" in selected) {
+            return createSelectQueryMock([{ total: 0 }]);
+          }
+          if ("id" in selected) {
+            return {
+              from: () => ({
+                where: () => ({
+                  for: () => ({ limit: async () => [{ id: clientId }] }),
+                }),
+              }),
+            };
+          }
+          return createSelectQueryMock([]);
+        },
+        insert: (table: unknown) => ({
+          select: () => ({ onConflictDoUpdate: async () => undefined }),
+          values: (value: unknown) => {
+            if (table === matterCounters) {
+              return {
+                onConflictDoUpdate: () => ({
+                  returning: async () => [
+                    { lastValue: MAX_MATTER_REFERENCE_ALLOCATION_ATTEMPTS },
+                  ],
+                }),
+              };
+            }
+            if (table === properties) {
+              insertedProperties.push(value);
+              return { returning: async () => [{ id: propertyId }] };
+            }
+            if (table === workspaceViews) {
+              return { returning: async () => [] };
+            }
+            expect(table).not.toBe(searchProjectionRepairQueue);
+            return undefined;
+          },
+        }),
+        update: () => ({ set: () => ({ where: async () => undefined }) }),
+      });
+
+      const result = await createWorkspaces.handler(
+        createContext({
+          safeDb,
+          scopedDb,
+          body: {
+            id: workspaceId,
+            ...(kind === "client" ? { clientId } : {}),
+            name: "Matter with documents",
+            filePropertyName: "Documents",
+          },
+        }),
+      );
+
+      expect(result).toEqual({ id: workspaceId });
+      expect(insertedProperties).toEqual([
+        [
+          expect.objectContaining({
+            workspaceId,
+            name: "Documents",
+            content: { type: "file", version: 1 },
+            tool: { version: 1, type: "manual-input" },
+            system: true,
+            kinds: ["document"],
+          }),
+        ],
+      ]);
+    },
+  );
+
   test("rejects teammate user IDs outside the active organization", async () => {
     const validTeamMemberId = "user_valid_member";
     const countSelect = {

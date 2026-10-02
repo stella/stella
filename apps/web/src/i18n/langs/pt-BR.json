@@ -2243,6 +2243,7 @@
       "deeplKeyRejected": "A chave do DeepL salva foi rejeitada. Substitua-a nas configurações da organização.",
       "deeplQuotaExceeded": "A cota de caracteres do DeepL desta organização foi esgotada.",
       "disposableEmailNotAllowed": "Endereços de e-mail temporários não são permitidos. Use um endereço de e-mail permanente.",
+      "filePropertyTypeImmutable": "Não é possível alterar o tipo de uma propriedade de arquivo. Mantenha o tipo atual; crie uma propriedade personalizada para outros valores.",
       "forbidden": "Você não tem permissão para fazer isso.",
       "internalServerError": "Algo deu errado. Tente novamente.",
       "legalSourceEntityLimitReached": "Este assunto atingiu o limite de itens, portanto não foi possível criar o documento.",

@@ -2243,6 +2243,7 @@
       "deeplKeyRejected": "A mentett DeepL-kulcsot a szolgáltató elutasította. Cserélje le a szervezet beállításaiban.",
       "deeplQuotaExceeded": "A szervezet DeepL-karakterkerete elfogyott.",
       "disposableEmailNotAllowed": "Az ideiglenes e-mail-címek nem engedélyezettek. Használjon állandó e-mail-címet.",
+      "filePropertyTypeImmutable": "A fájltulajdonság típusa nem módosítható. Tartsa meg a jelenlegi típust; más értékekhez hozzon létre egyéni tulajdonságot.",
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "internalServerError": "Hiba történt. Próbálja újra.",
       "legalSourceEntityLimitReached": "Ez az ügy elérte az elemek korlátját, ezért a dokumentum nem hozható létre.",

@@ -1,6 +1,8 @@
 import { Result } from "better-result";
 import { and, eq } from "drizzle-orm";
 
+import { isFileProperty } from "@stll/api-contract/property-policy";
+
 import { properties } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -71,7 +73,7 @@ const deleteProperty = createSafeHandler(
       }
 
       // File properties are system-managed until file-property creation exists.
-      if (property.content.type === "file") {
+      if (isFileProperty(property.content)) {
         return {
           ok: false as const,
           status: 400 as const,
