@@ -1783,9 +1783,8 @@ jobs:
     });
     expect(plan.isOk()).toBe(true);
     for (const output of outputs) {
-      expect(["true", "false"], output).toContain(
-        plan.isOk() ? plan.value.get(output) : undefined,
-      );
+      const value = plan.isOk() ? plan.value.get(output) : undefined;
+      expect(value === "true" || value === "false", output).toBe(true);
     }
   });
 
