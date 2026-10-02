@@ -1,6 +1,7 @@
 import type { PGlite } from "@electric-sql/pglite";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { DrizzleQueryError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
@@ -167,21 +168,32 @@ describe.skipIf(!runEngineTests)(
         adapterKey: "statutes-open",
         name: "Open contract fixture",
       });
-      await db.insert(legislationDocuments).values(
-        VERSIONS.map((version) => ({
-          id: version.id,
-          sourceId,
-          eli: version.eli,
-          title: version.title,
-          country: "CZE",
-          language: "cs",
-          documentType: "act",
-          status: "current",
-          versionValidFrom: version.validFrom,
-          versionValidTo: version.validTo,
-          contentHash: FINGERPRINT,
-        })),
+      const documentsSeeded = await Result.tryPromise(
+        async () =>
+          await db.insert(legislationDocuments).values(
+            VERSIONS.map((version) => ({
+              id: version.id,
+              sourceId,
+              eli: version.eli,
+              title: version.title,
+              country: "CZE",
+              language: "cs",
+              documentType: "act",
+              status: "current",
+              versionValidFrom: version.validFrom,
+              versionValidTo: version.validTo,
+              contentHash: FINGERPRINT,
+            })),
+          ),
       );
+      if (documentsSeeded.isErr()) {
+        const cause = documentsSeeded.error.cause;
+        // Surface the driver cause before the large fixture SQL can truncate it.
+        if (cause instanceof DrizzleQueryError && cause.cause !== undefined) {
+          throw cause.cause;
+        }
+        throw documentsSeeded.error;
+      }
       await db.insert(corpusIndexGenerations).values({
         family: "legislation",
         generation: MANIFEST.generation,
