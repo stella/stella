@@ -9,7 +9,10 @@ import {
 } from "bun:test";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
-import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+import {
+  CHAT_SEND_MODE,
+  CHAT_TRANSPORT_ERROR_CODE,
+} from "@stll/anonymize-chat";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
@@ -30,7 +33,10 @@ import {
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
 import { isRecord } from "@/api/lib/type-guards";
-import { createApprovalHarness } from "@/api/tests/helpers/chat-approval-harness";
+import {
+  createApprovalHarness,
+  HARNESS_CHAT_MODEL_ID,
+} from "@/api/tests/helpers/chat-approval-harness";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -139,6 +145,7 @@ describe("chat turn outcome metrics", () => {
     seededThreadIds.push(threadId);
     const client = await harness.openWebClient(threadId);
     const lines = collectMetricLines();
+    const exchanges = harness.recordThread(threadId);
     try {
       await client.sendUserMessage(Bun.randomUUIDv7(), "Hello", {
         sendMode: CHAT_SEND_MODE.anonymized,
@@ -148,8 +155,16 @@ describe("chat turn outcome metrics", () => {
       // The fixture reaches the fault: the page shows the turn failed and
       // its row says so.
       expect(client.runtimeState().hasError).toBe(true);
+      expect(exchanges).toHaveLength(1);
+      const response =
+        exchanges.at(0)?.response ?? panic("Expected a refusal response");
+      expect(response.status).toBe(500);
+      expect(JSON.parse(response.body)).toEqual({
+        code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
+        message: expect.any(String),
+      });
       expect(await turnStatusesOf(threadId)).toEqual([
-        { failureCode: "internal", status: "failed" },
+        { failureCode: "boundary-refusal", status: "failed" },
       ]);
 
       expect(
@@ -169,7 +184,7 @@ describe("chat turn outcome metrics", () => {
         ),
       ).toEqual([
         {
-          failure_code: "internal",
+          failure_code: "boundary-refusal",
           mode: "anonymized",
           outcome: "failed",
           // Refused before the model was resolved.
@@ -181,6 +196,62 @@ describe("chat turn outcome metrics", () => {
       await harness.close();
     }
   });
+
+  test.each([
+    {
+      failureCode: "provider-error",
+      turn: { type: "fail-before-output", message: "Provider unavailable" },
+    },
+    {
+      failureCode: "empty-response",
+      turn: { type: "text", text: "", finishReason: "stop" },
+    },
+  ] as const)(
+    "a $failureCode failure retains its own stored and metric code",
+    async ({ failureCode, turn }) => {
+      const harness = createApprovalHarness({
+        ids,
+        safeDb,
+        scopedDb,
+        testDb,
+        organizationAIConfig: {
+          providers: [{ provider: "openai", apiKey: "test-api-key" }],
+          overrideModels: {
+            chat: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
+            fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+            reasoning: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
+          },
+          decision: null,
+        },
+      });
+      const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      seededThreadIds.push(threadId);
+      const client = await harness.openWebClient(threadId);
+      const lines = collectMetricLines();
+      try {
+        harness.script(threadId, [turn]);
+        await client.sendUserMessage(Bun.randomUUIDv7(), "Hello", {
+          sendMode: CHAT_SEND_MODE.rawOverride,
+        });
+        await client.settle();
+        expect(await turnStatusesOf(threadId)).toEqual([
+          { failureCode, status: "failed" },
+        ]);
+        expect(recordsOf(lines, "AnonymizationRefusals")).toEqual([]);
+        expect(settlementsOf(lines)).toEqual([
+          {
+            failure_code: failureCode,
+            mode: "raw",
+            outcome: "failed",
+            provider: "openai",
+          },
+        ]);
+      } finally {
+        client.dispose();
+        await harness.close();
+      }
+    },
+  );
 
   test("a completed raw turn counts once, under its provider, with no refusal", async () => {
     const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
@@ -326,98 +397,109 @@ describe("a turn's settlement count", () => {
     }
   });
 
-  test("counts a preflight failure once, after the retry that stored it", async () => {
-    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
-    const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
-    seededThreadIds.push(threadId);
-    await testDb.insert(chatThreads).values({
-      id: threadId,
-      organizationId: ids.orgA,
-      title: "Settlement count test",
-      userId: ids.userA1,
-      workspaceId: ids.wsA1,
-    });
-    const acceptance = createChatTurnAcceptance({
-      organizationId: ids.orgA,
-      threadId,
-      userId: ids.userA1,
-      userMessageId,
-      workspaceId: ids.wsA1,
-    });
-    unwrap(
-      await safeDb(async (tx) => {
-        await tx.insert(chatMessages).values({
-          content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
-          id: userMessageId,
-          role: "user",
-          threadId,
-          userId: ids.userA1,
-          workspaceId: ids.wsA1,
-        });
-        await insertChatTurnAcceptanceOnTx({ acceptance, tx });
-      }),
-    );
-    const execution =
+  test.each([
+    { code: "provider-error", retryable: false },
+    { code: "boundary-refusal", retryable: true },
+  ] as const)(
+    "counts a preflight $code failure once, after the retry that stored it",
+    async ({ code, retryable }) => {
+      const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+      const userMessageId = toSafeId<"chatMessage">(Bun.randomUUIDv7());
+      seededThreadIds.push(threadId);
+      await testDb.insert(chatThreads).values({
+        id: threadId,
+        organizationId: ids.orgA,
+        title: "Settlement count test",
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      });
+      const acceptance = createChatTurnAcceptance({
+        organizationId: ids.orgA,
+        threadId,
+        userId: ids.userA1,
+        userMessageId,
+        workspaceId: ids.wsA1,
+      });
       unwrap(
-        await claimChatTurnForExecution({
-          acceptedTurnId: acceptance.id,
-          incomingMessageId: userMessageId,
-          incomingMessageRole: "user",
-          organizationId: ids.orgA,
-          safeDb,
-          threadId,
-          userId: ids.userA1,
-          workspaceId: ids.wsA1,
+        await safeDb(async (tx) => {
+          await tx.insert(chatMessages).values({
+            content: { data: [{ text: "Draft it", type: "text" }], version: 1 },
+            id: userMessageId,
+            role: "user",
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          });
+          await insertChatTurnAcceptanceOnTx({ acceptance, tx });
         }),
-      ) ?? panic("Expected the accepted turn to be claimed");
-    // The first settlement write fails, as a dropped connection would.
-    let failuresLeft = 1;
-    const flakyDb: SafeDb = async (work, retry) =>
-      await safeDb(async (tx) => {
-        if (failuresLeft > 0) {
-          failuresLeft -= 1;
-          throw new Error("connection reset");
-        }
-        return await work(tx);
-      }, retry);
-    const lifecycle = new ChatSendLifecycle({
-      externalMcpToolsLoader: createLazyExternalMcpToolsLoader(
-        async () => await Promise.reject(new Error("No connectors expected")),
-      ),
-      indexThread: async () => await Promise.resolve(undefined),
-      mode: "anonymized",
-      recordAuditEvent: async () => await Promise.resolve(undefined),
-      rollbackSideEffects: async () =>
-        await Promise.resolve(Result.ok(undefined)),
-      safeDb: flakyDb,
-      threadId,
-      userId: ids.userA1,
-      workspaceId: ids.wsA1,
-    });
-    lifecycle.claimTurn(execution, undefined);
-    const lines = collectMetricLines();
-
-    await lifecycle.failCurrentTurn("provider-error", true);
-    // The fixture reaches the fault: nothing is stored or counted yet.
-    expect(failuresLeft).toBe(0);
-    expect(await turnStatusesOf(threadId)).toEqual([
-      { failureCode: null, status: "running" },
-    ]);
-    expect(settlementsOf(lines)).toEqual([]);
-
-    await lifecycle.cleanup();
-
-    // The retry stored the failure, and the count matches the row.
-    expect(await turnStatusesOf(threadId)).toEqual([
-      { failureCode: "internal", status: "failed" },
-    ]);
-    expect(settlementsOf(lines)).toEqual([
-      {
-        failure_code: "internal",
+      );
+      const execution =
+        unwrap(
+          await claimChatTurnForExecution({
+            acceptedTurnId: acceptance.id,
+            incomingMessageId: userMessageId,
+            incomingMessageRole: "user",
+            organizationId: ids.orgA,
+            safeDb,
+            threadId,
+            userId: ids.userA1,
+            workspaceId: ids.wsA1,
+          }),
+        ) ?? panic("Expected the accepted turn to be claimed");
+      // The first settlement write fails, as a dropped connection would.
+      let failuresLeft = 1;
+      const flakyDb: SafeDb = async (work, retry) =>
+        await safeDb(async (tx) => {
+          if (failuresLeft > 0) {
+            failuresLeft -= 1;
+            throw new Error("connection reset");
+          }
+          return await work(tx);
+        }, retry);
+      const lifecycle = new ChatSendLifecycle({
+        externalMcpToolsLoader: createLazyExternalMcpToolsLoader(
+          async () => await Promise.reject(new Error("No connectors expected")),
+        ),
+        indexThread: async () => await Promise.resolve(undefined),
         mode: "anonymized",
-        outcome: "failed",
-        provider: "none",
-      },
-    ]);
-  });
+        recordAuditEvent: async () => await Promise.resolve(undefined),
+        rollbackSideEffects: async () =>
+          await Promise.resolve(Result.ok(undefined)),
+        safeDb: flakyDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: ids.wsA1,
+      });
+      lifecycle.claimTurn(execution, undefined);
+      const lines = collectMetricLines();
+
+      await lifecycle.failCurrentTurn(code, retryable);
+      // The fixture reaches the fault: nothing is stored or counted yet.
+      expect(failuresLeft).toBe(0);
+      expect(await turnStatusesOf(threadId)).toEqual([
+        { failureCode: null, status: "running" },
+      ]);
+      expect(settlementsOf(lines)).toEqual([]);
+
+      await lifecycle.cleanup();
+
+      // The retry stored the failure, and the count matches the row.
+      expect(await turnStatusesOf(threadId)).toEqual([
+        { failureCode: code, status: "failed" },
+      ]);
+      const [storedTurn] = await testDb
+        .select({ failureRetryable: chatTurns.failureRetryable })
+        .from(chatTurns)
+        .where(eq(chatTurns.threadId, threadId));
+      expect(storedTurn?.failureRetryable).toBe(retryable);
+      expect(settlementsOf(lines)).toEqual([
+        {
+          failure_code: code,
+          mode: "anonymized",
+          outcome: "failed",
+          provider: "none",
+        },
+      ]);
+    },
+  );
 });

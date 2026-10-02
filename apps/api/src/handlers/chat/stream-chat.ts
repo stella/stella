@@ -29,6 +29,7 @@ import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
 import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
@@ -68,6 +69,7 @@ import {
   findHandedOutInteraction,
 } from "@/api/handlers/chat/chat-turn-settlement";
 import type { CutShortOutcome } from "@/api/handlers/chat/chat-turn-settlement";
+import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { compactModelMessagesForModel } from "@/api/handlers/chat/compaction";
 import {
   createLoopRecoverySystemPrompt,
@@ -177,10 +179,7 @@ import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
 } from "@/api/lib/errors/tagged-errors";
-import type {
-  ChatTerminalError,
-  HandlerError,
-} from "@/api/lib/errors/tagged-errors";
+import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
@@ -340,9 +339,7 @@ export const prepareResumeForThirdParty = async ({
 }: {
   boundary: ChatThirdPartyBoundary;
   resume: RunAgentResumeItem[] | undefined;
-}): Promise<
-  Result<RunAgentResumeItem[] | undefined, HandlerError<422 | 500>>
-> => {
+}): Promise<Result<RunAgentResumeItem[] | undefined, AnonymizationRefusal>> => {
   if (resume === undefined || boundary.type === "raw") {
     return Result.ok(resume);
   }
@@ -509,23 +506,25 @@ export const streamChat = async ({
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
     // trigger for the "send without anonymization" retry, which cannot fix a
     // model that simply cannot read the attachment's format.
-    return new Response(
-      JSON.stringify({
+    return new ChatTurnFailureResponse({
+      failureCode: "unsupported-input",
+      payload: {
         message:
           "This model cannot read one of the attached documents. Remove the attachment or switch to a model that supports it.",
-      }),
-      { status: 422, headers: { "Content-Type": "application/json" } },
-    );
+      },
+      status: 422,
+    });
   }
 
   if (modelRejectsStreamingTools(primaryModel)) {
-    return new Response(
-      JSON.stringify({
+    return new ChatTurnFailureResponse({
+      failureCode: "unsupported-input",
+      payload: {
         message:
           "This model cannot use tools while streaming, so it cannot answer chat questions about your matter. Switch to a model that supports tool use.",
-      }),
-      { status: 422, headers: { "Content-Type": "application/json" } },
-    );
+      },
+      status: 422,
+    });
   }
 
   const resolvedFallbackModel =
@@ -678,16 +677,37 @@ export const streamChat = async ({
   return run.produce(output);
 };
 
-const thirdPartyBoundaryRefusalResponse = (
-  error: HandlerError<422 | 500>,
-): Response =>
-  new Response(
-    JSON.stringify(createThirdPartyBoundaryRefusalPayload(error.message)),
-    {
+/** A pre-stream rejection retains its settlement code alongside its HTTP body. */
+export class ChatTurnFailureResponse extends Response {
+  readonly failureCode: ChatTurnFailureCode;
+  readonly retryable: boolean;
+
+  constructor({
+    failureCode,
+    payload,
+    status,
+  }: {
+    failureCode: ChatTurnFailureCode;
+    payload: { code?: string; message: string };
+    status: 422 | 500;
+  }) {
+    super(JSON.stringify(payload), {
       headers: { "Content-Type": "application/json" },
-      status: error.status,
-    },
-  );
+      status,
+    });
+    this.failureCode = failureCode;
+    this.retryable = status >= 500;
+  }
+}
+
+const thirdPartyBoundaryRefusalResponse = (
+  error: AnonymizationRefusal,
+): ChatTurnFailureResponse =>
+  new ChatTurnFailureResponse({
+    failureCode: error.failureCode,
+    payload: createThirdPartyBoundaryRefusalPayload(error.message),
+    status: error.status,
+  });
 
 type ResolveAgentRunBoundaryErrorInput = {
   boundary: Pick<ChatThirdPartyBoundary, "type">;
@@ -697,7 +717,7 @@ type ResolveAgentRunBoundaryErrorInput = {
 export const resolveAgentRunBoundaryError = ({
   boundary,
   runMode,
-}: ResolveAgentRunBoundaryErrorInput): HandlerError<422> | null => {
+}: ResolveAgentRunBoundaryErrorInput): AnonymizationRefusal<422> | null => {
   if (
     runMode !== CHAT_RUN_MODE.agent ||
     boundary.type !== CHAT_SEND_MODE.anonymized
