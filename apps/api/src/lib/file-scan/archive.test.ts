@@ -192,7 +192,7 @@ describe("windowed rule set", () => {
 describe("createArchiveContentScanner", () => {
   test("windowed inspection reaches the same rules as scanning each entry whole", async () => {
     await assertProperty(
-      "windowed archive inspection equals whole-entry rule evaluation",
+      "windowed inspection reaches the same rules as scanning each entry whole",
       fc.asyncProperty(
         fc.record({
           entries: fc.array(entryArbitrary, { minLength: 1, maxLength: 4 }),
@@ -228,7 +228,10 @@ describe("createArchiveContentScanner", () => {
     "finds %s placed across every window boundary offset",
     async (_kind, marker, rule) => {
       const window = OVERLAP + STEP;
-      for (let at = window - marker.length - 2; at <= window + STEP; at++) {
+      // Window boundaries repeat every STEP bytes, so STEP + 1 consecutive
+      // start offsets place the marker at every alignment against them.
+      const first = window - marker.length - 2;
+      for (let at = first; at <= first + STEP; at++) {
         const content = Buffer.from(
           `${"x".repeat(at)}${marker}${"y".repeat(window)}`,
         );
@@ -287,8 +290,10 @@ const centralHeaderAt = (view: DataView, nth: number): number => {
 const firstDataAt = (view: DataView): number =>
   30 + view.getUint16(26, true) + view.getUint16(28, true);
 
+// A name without a folder: JSZip would otherwise write a "word/" folder
+// entry first, and the header patches below would land on it.
 const ONE_ENTRY: readonly Entry[] = [
-  { name: "word/document.xml", content: Buffer.from("x".repeat(2048)) },
+  { name: "document.xml", content: Buffer.from("x".repeat(2048)) },
 ];
 
 const patched = async (
@@ -437,7 +442,7 @@ describe("archives that cannot be inspected", () => {
 
   test("never accepts an archive carrying a refusal, whatever bytes it holds", async () => {
     await assertProperty(
-      "damaged archives are refused or inspected, never accepted half-read",
+      "never accepts an archive carrying a refusal, whatever bytes it holds",
       fc.asyncProperty(
         fc.record({
           entries: fc.array(entryArbitrary, { minLength: 1, maxLength: 3 }),

@@ -1,5 +1,6 @@
 import { compile } from "@litko/yara-x";
 import type { RuleMatch } from "@litko/yara-x";
+import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
@@ -86,31 +87,44 @@ export type WindowedRuleSet = {
 
 // YARA-X stops extending a match at 4096 bytes: a longer occurrence of an
 // unbounded or wide pattern is not reported even in a single-buffer scan.
-// yara.test.ts pins this against the engine.
+// archive.test.ts pins this against the engine.
 export const YARA_MAX_MATCH_BYTES = 4096;
 
-const RULE_BLOCK = /^rule\s+(\w+)[\s\S]*?^\}/gmu;
-const CONDITION = /condition:([\s\S]*?)(?=^\})/mu;
+const CONDITION_KEYWORD = "condition:";
 
-const ruleBlocks = [...ruleSource.matchAll(RULE_BLOCK)].map((m) => ({
-  name: m[1] ?? "",
-  block: m[0],
-}));
+// A rule opens with `rule <name>` and closes with `}`, both at the start of a
+// line, which is how every rule file here is written.
+const ruleBlocks = ruleSource.split(/^(?=rule\s)/mu).flatMap((chunk) => {
+  const name = /^rule\s+(\w+)/u.exec(chunk)?.[1];
+  if (name === undefined) {
+    return [];
+  }
+  const conditionAt = chunk.indexOf(CONDITION_KEYWORD);
+  const closeAt = chunk.indexOf("\n}", conditionAt);
+  if (conditionAt === -1 || closeAt === -1) {
+    return panic(`YARA rule ${name} has no condition block`);
+  }
+  return [
+    {
+      name,
+      strings: chunk.slice(0, conditionAt),
+      condition: chunk.slice(conditionAt + CONDITION_KEYWORD.length, closeAt),
+    },
+  ];
+});
 
 // Every rule keeps its strings and reports each occurrence of any of them.
 const occurrenceRules = compile(
   ruleBlocks
-    .map(({ block }) =>
-      block.replace(CONDITION, "condition:\n        any of them\n"),
-    )
+    .map(({ strings }) => `${strings}${CONDITION_KEYWORD} any of them\n}`)
     .join("\n"),
 );
 
 export const yaraWindowedRules: WindowedRuleSet = {
   maxMatchBytes: YARA_MAX_MATCH_BYTES,
   countingRules: new Set(
-    ruleBlocks.flatMap(({ name, block }) =>
-      /#\w/u.test(CONDITION.exec(block)?.[1] ?? "") ? [name] : [],
+    ruleBlocks.flatMap(({ name, condition }) =>
+      condition.includes("#") ? [name] : [],
     ),
   ),
   occurrences: (window) =>

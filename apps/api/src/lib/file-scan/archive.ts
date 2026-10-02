@@ -21,7 +21,6 @@ import { panic, Result } from "better-result";
 import { Readable } from "node:stream";
 import { createInflateRaw } from "node:zlib";
 
-import { captureError } from "@/api/lib/analytics/capture";
 import type { Match, Scanner } from "@/api/lib/file-scan/scanner";
 import type {
   PatternOccurrence,
@@ -29,6 +28,8 @@ import type {
 } from "@/api/lib/file-scan/yara";
 import { hasZipMagic, readZipIndex } from "@/api/lib/file-scan/zip";
 import type { ZipEntry } from "@/api/lib/file-scan/zip";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
 
 export type ArchiveInspectionBudget = {
@@ -381,6 +382,11 @@ const inspectArchive = async ({
     : Result.ok(evidence.evaluate());
 };
 
+const INSPECTION_FAILURE_SINK = failureSink({
+  event: "file_scan.archive_inspection_failed",
+  expected: [],
+});
+
 type ArchiveContentScannerOptions = {
   rules: WindowedRuleSet;
   budget: ArchiveInspectionBudget;
@@ -427,7 +433,10 @@ export const createArchiveContentScanner = ({
       if (isInflateError(inspected.error)) {
         return [ARCHIVE_REFUSAL.corrupt];
       }
-      captureError(inspected.error, { operation: "archive-inspection" });
+      observeFailure(inspected.error, {
+        sink: INSPECTION_FAILURE_SINK,
+        ctx: { feature: "file_scan.archive_inspection" },
+      });
       return [ARCHIVE_REFUSAL.failed];
     },
   };
