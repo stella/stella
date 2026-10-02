@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
+import { Buffer } from "node:buffer";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
 import { assertProperty } from "@stll/property-testing";
@@ -11,6 +12,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
   type CorpusIndexHit,
+  CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   getCorpusIndexClient,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -171,6 +173,37 @@ const decisionDocuments = (batch: number, slot: number) => {
     },
     revision: REVISION,
   });
+};
+
+const tiedDocuments = (serial: number) => {
+  const input = {
+    family: "case_law",
+    documentId: tiedDocumentId(serial),
+    sourceId:
+      serial < SMALL_TIED_DOCUMENT_COUNT ? SMALL_TIED_SOURCE_ID : SOURCE_ID,
+    jurisdiction: "CZE",
+    language: "cs",
+    documentType: null,
+    contentHash: null,
+    redistributionEligible: true,
+    redacted: false,
+    listingOnly: false,
+    caseNumber: "",
+    identifiers: [],
+    court: "",
+    courtId: null,
+    decisionDate: null,
+    ecli: null,
+    metadata: null,
+  } satisfies CaseLawProjectionInput;
+  const documents = buildCaseLawProjectionDocuments({
+    manifest: MANIFEST,
+    input,
+    payload: { text: "tie", ast: null },
+    revision: REVISION,
+  });
+  expect(documents).toHaveLength(1);
+  return documents;
 };
 
 /** The engine query the search handler builds for an entry, relevance order. */
@@ -338,10 +371,6 @@ describe.skipIf(!runEngineTests)(
           throw new Error(`ingest ${String(response.status)}`);
         }
       }
-      const template = decisionDocuments(0, 0).at(0);
-      if (template === undefined) {
-        panic("Expected a projection fixture");
-      }
       const tiedCreated = await client.createIndex(
         corpusIndexConfigFromManifest(MANIFEST, TIED_INDEX_ID),
         "unobserved",
@@ -351,26 +380,21 @@ describe.skipIf(!runEngineTests)(
       }
       // One isolated split gives every identical passage the same BM25 term
       // statistics; the ordinary multi-split fixtures must not affect them.
-      const tiedNdjson = Array.from(
+      const documents = Array.from(
         { length: TIED_DOCUMENT_COUNT },
-        (_, serial) =>
-          JSON.stringify({
-            ...template,
-            document_id: tiedDocumentId(serial),
-            jurisdiction: "CZE",
-            text: "tie",
-            source:
-              serial < SMALL_TIED_DOCUMENT_COUNT
-                ? SMALL_TIED_SOURCE_ID
-                : SOURCE_ID,
-          }),
-      ).join("\n");
+        (_, serial) => tiedDocuments(serial),
+      ).flat();
+      expect(documents).toHaveLength(TIED_DOCUMENT_COUNT);
+      const tiedNdjson = `${documents.map((document) => JSON.stringify(document)).join("\n")}\n`;
+      expect(Buffer.byteLength(tiedNdjson, "utf-8")).toBeLessThanOrEqual(
+        CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
+      );
       const tiedResponse = await fetch(
         `${String(mutationBase)}/api/v1/${TIED_INDEX_ID}/ingest?commit=force`,
         {
           method: "POST",
           headers: { "content-type": "application/x-ndjson" },
-          body: `${tiedNdjson}\n`,
+          body: tiedNdjson,
         },
       );
       if (!tiedResponse.ok) {
