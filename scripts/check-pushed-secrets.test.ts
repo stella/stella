@@ -48,7 +48,7 @@ for (const [key, value] of [
   ["user.email", "test@example.test"],
   ["user.name", "test"],
   ["commit.gpgsign", "false"],
-]) {
+] as const) {
   run(repo, ["git", "config", key, value]);
 }
 run(repo, ["git", "commit", "-q", "--allow-empty", "-m", "base"]);
