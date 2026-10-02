@@ -42,7 +42,7 @@ const restrictedRunner = (db: GatedTestDb, role: string, schema: string) => ({
     }),
 });
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
+describe.skipIf(!enabled)(
   "database load admission through bounded indicator function",
   () => {
     if (databaseUrl === undefined) {
