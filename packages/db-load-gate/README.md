@@ -16,7 +16,8 @@ All decisions carry the signal values, thresholds and effective configuration.
 `nextBatch` bounds each size step to 0.5–1.2, smooths duration, grows after stable
 batches and adjusts sleep. Holds preserve size and carry `heldSince` and
 `holdUntil`; consumers persist them. Optional `resumeFloor` keeps a held batch
-held until a fresh EBS reading reaches that floor; omitting it preserves degraded
+held by the load band until a fresh EBS reading reaches that floor; other holds
+resume when their cause clears, and disabled EBS does not apply hysteresis. Omitting it preserves degraded
 resumes. It must lie between `hardFloor` and `startFloor`. Deferrable backfills use
 65/75/80 for hard/resume/start floors. `isHeldTooLong` uses the first hold in a streak.
 `backfillHeartbeat` returns an EMF record for callers to emit every minute,
@@ -62,3 +63,13 @@ Targeted unit tests run through `bun run test src/health.test.ts` or
 
 Apache-2.0. Mechanisms are independently reimplemented; batch sizing credits
 GitLab's MIT optimizer.
+
+Intent keys remain stable across rolling deployments. Operator jobs use a new
+key and also register an index-build intent for older backfill processes. New
+priority probes distinguish that compatibility intent from an index build;
+each dedicated session owns one logical handle. Remove the compatibility
+intent once every process using the pre-operator priority protocol has drained.
+`holdCause` is persisted with the batch. Older checkpoints without that field
+have no recorded load cause and resume as other holds. Heartbeat yield/resume
+events occur only on transitions; `signalEvent` retains unknown-signal reporting
+on a transition tick.

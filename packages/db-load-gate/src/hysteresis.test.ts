@@ -82,16 +82,26 @@ test("resume requires a real fresh reading, including the exact fifteen minute b
     async () => {
       throw new TypeError("metric unavailable");
     },
-    async () => await new Promise<null>(() => {}),
   ]) {
     const signal = await ebsBalance({
       config,
       now: () => now,
       read: readValue,
-      timeout: () => ({ expired: Promise.resolve(), cancel: () => {} }),
+      timeout: () => ({
+        expired: new Promise<void>(() => {}),
+        cancel: () => {},
+      }),
     });
+    expect(signal.reason).toContain("Missing, failed");
     expect(step(held, combine([signal])).action).toBe("hold");
   }
+  const timeoutSignal = await ebsBalance({
+    config,
+    now: () => now,
+    read: async () => await new Promise<null>(() => {}),
+    timeout: () => ({ expired: Promise.resolve(), cancel: () => {} }),
+  });
+  expect(step(held, combine([timeoutSignal])).action).toBe("hold");
   expect(step(held, combine([])).action).toBe("hold");
   expect(
     step(
@@ -276,4 +286,197 @@ test("other holds override a healthy resume reading", async () => {
       ).action,
     ).toBe("hold");
   }
+});
+
+for (const indicator of ["busy_window", "long_transaction"] as const) {
+  test(`a ${indicator} hold can resume below the EBS resume floor`, async () => {
+    const healthy = await read(70);
+    for (const kind of ["stop", "unknown"] as const) {
+      const held = step(
+        initialBatchState(config),
+        combine([
+          ...healthy.signals,
+          {
+            indicator,
+            kind,
+            value: null,
+            threshold: null,
+            observedAt: null,
+            reason: "unavailable",
+          },
+        ]),
+      ).state;
+      expect(held.holdCause).toBe("other");
+      const resumed = step(held, healthy);
+      expect(resumed.action).toBe("run");
+      expect(resumed.state).toMatchObject({
+        holdCause: null,
+        heldSince: null,
+        holdUntil: null,
+        holdCount: 0,
+      });
+    }
+  });
+}
+
+test("disabled EBS never applies hysteresis to any prior hold", async () => {
+  const disabled = combine([
+    {
+      indicator: "ebs_balance",
+      kind: "not_configured",
+      value: null,
+      threshold: null,
+      observedAt: null,
+      reason: "operator disabled EBS",
+    },
+  ]);
+  for (const verdict of [await read(64), combine([])]) {
+    const held = step(initialBatchState(config), verdict).state;
+    expect(step(held, disabled).action).toBe("run");
+  }
+});
+
+for (const resumeFloor of [config.hardFloor, config.startFloor]) {
+  test(`resume floor ${resumeFloor} accepts equality with a configured boundary`, async () => {
+    const boundaryConfig = { ...config, resumeFloor };
+    validateConfig(boundaryConfig);
+    const held = step(initialBatchState(config), await read(64)).state;
+    const result = nextBatch({
+      state: held,
+      verdict: await read(resumeFloor),
+      config: boundaryConfig,
+      clock: () => now,
+      lastDurationMs: null,
+    });
+    expect(result.action).toBe("run");
+  });
+}
+
+test("heartbeat transitions are emitted once and unknown cannot hide them", async () => {
+  const heldSince = now - 60_000;
+  const verdict = await read(70);
+  const held = backfillHeartbeat({
+    name: "test",
+    state: { heldSince },
+    previousHeldSince: null,
+    verdict,
+    now,
+    config,
+  });
+  expect(held).toMatchObject({
+    event: "backfill.yielded",
+    BackfillYielded: 1,
+    heldTooLong: false,
+    band: "degraded",
+    class: "deferrable",
+    reason: "Minimum byte and IO balance",
+    heldSince,
+    verdict,
+  });
+  expect(
+    backfillHeartbeat({
+      name: "test",
+      state: { heldSince },
+      previousHeldSince: heldSince,
+      verdict,
+      now,
+      config,
+    }).event,
+  ).toBeNull();
+  for (const [state, previousHeldSince, event] of [
+    [{ heldSince }, null, "backfill.yielded"],
+    [{ heldSince: null }, heldSince, "backfill.resumed"],
+  ] as const) {
+    expect(
+      backfillHeartbeat({
+        name: "test",
+        state,
+        previousHeldSince,
+        verdict: combine([]),
+        now,
+        config,
+      }),
+    ).toMatchObject({ event, signalEvent: "backfill.signal_unknown" });
+  }
+  expect(
+    backfillHeartbeat({
+      name: "test",
+      state: { heldSince: now - config.maxHeldMs },
+      previousHeldSince: null,
+      verdict,
+      now,
+      config: {
+        ...config,
+        busyWindows: [{ start: "04:00", end: "05:00", timeZone: "UTC" }],
+      },
+    }).heldTooLong,
+  ).toBe(false);
+});
+
+test("changing clocks and signal ages preserve causal hysteresis and reset resume state", () => {
+  assertProperty(
+    "changing clocks and signal ages preserve causal hysteresis and reset resume state",
+    fc.property(
+      fc.array(
+        fc.record({
+          value: fc.integer({ min: 64, max: 80 }),
+          age: fc.integer({ min: -1, max: 900_001 }),
+          elapsed: fc.integer({ min: 1, max: 60_000 }),
+        }),
+        { minLength: 1, maxLength: 100 },
+      ),
+      (sequence) => {
+        let state = initialBatchState(config);
+        let instant = now;
+        let cause: "load" | "other" | null = null;
+        for (const { value, age, elapsed } of sequence) {
+          instant += elapsed;
+          const clockInstant = instant;
+          const fresh = age >= 0 && age <= config.maxStalenessMs;
+          if (!fresh) {
+            cause = cause === "load" ? "load" : "other";
+          } else if (value < config.hardFloor) {
+            cause = "load";
+          } else if (cause !== "load" || value >= config.resumeFloor) {
+            cause = null;
+          }
+          const kind = (() => {
+            if (!fresh) {
+              return "unknown";
+            }
+            if (value < config.hardFloor) {
+              return "stop";
+            }
+            return value < config.startFloor ? "degraded" : "normal";
+          })();
+          const result = nextBatch({
+            state,
+            verdict: combine([
+              {
+                indicator: "ebs_balance",
+                kind,
+                value: fresh ? value : null,
+                threshold: config.hardFloor,
+                observedAt: new Date(instant - age).toISOString(),
+                reason: "sequence",
+              },
+            ]),
+            config,
+            clock: () => clockInstant,
+            lastDurationMs: null,
+          });
+          expect(result.action).toBe(cause === null ? "run" : "hold");
+          expect(result.state.holdCause).toBe(cause);
+          if (result.action === "run") {
+            expect(result.state).toMatchObject({
+              holdCount: 0,
+              heldSince: null,
+              holdUntil: null,
+            });
+          }
+          state = result.state;
+        }
+      },
+    ),
+  );
 });

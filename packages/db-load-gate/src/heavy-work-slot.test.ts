@@ -58,3 +58,40 @@ test("a failed priority probe releases work and closing releases intent without 
   expect(workHeld).toBe(false);
   expect(intentHeld).toBe(false);
 });
+
+// The last release before operator jobs used this key; keep the rollout contract pinned.
+const OLD_BACKFILL_INTENT_KEY = 3;
+
+test("backfill keeps the deployed intent key while operator intent includes an old-reader alias", async () => {
+  for (const [kind, expectedKeys] of [
+    ["backfill_batch", [OLD_BACKFILL_INTENT_KEY]],
+    ["operator_job", [4, 2]],
+  ] as const) {
+    const registrations: number[] = [];
+    const releases: number[] = [];
+    const slot = createHeavyWorkSlot({
+      kind,
+      session: {
+        query: async (statement, parameters) => {
+          const key = parameters.at(1);
+          if (key === undefined) {
+            throw new TypeError("missing advisory key");
+          }
+          if (statement.includes("pg_try_advisory_lock_shared")) {
+            registrations.push(key);
+          }
+          if (statement.includes("pg_advisory_unlock_shared")) {
+            releases.push(key);
+          }
+          return [{ acquired: true }];
+        },
+      },
+    });
+    expect((await slot.tryAcquire()).unwrap()).toBe(true);
+    expect((await slot.tryAcquire()).unwrap()).toBe(true);
+    expect(registrations).toEqual(expectedKeys);
+    await slot.close();
+    await slot.close();
+    expect(releases).toEqual(expectedKeys.toReversed());
+  }
+});

@@ -7,6 +7,7 @@ import {
 } from "../../../../packages/db-load-gate/src/heavy-work-slot";
 import { withGatedTestClients } from "../tests/gated-test-database";
 
+const OLD_BACKFILL_INTENT_KEY = 3;
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const session = (connection: ReservedSQL) => ({
@@ -79,6 +80,107 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
       });
     }
   }
+  test("an operator yields to index intent arriving after its priority precheck", async () => {
+    if (databaseUrl === undefined) {
+      throw new TypeError("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const operatorConnection = await openClient().sql.reserve();
+      const indexConnection = await openClient().sql.reserve();
+      const index = createHeavyWorkSlot({
+        session: session(indexConnection),
+        kind: "index_build",
+      });
+      let raced = false;
+      const operator = createHeavyWorkSlot({
+        kind: "operator_job",
+        session: {
+          query: async (statement, parameters) => {
+            const result = await session(operatorConnection).query(
+              statement,
+              parameters,
+            );
+            if (!raced && statement.includes("pg_try_advisory_lock(")) {
+              expect(result.at(0)?.acquired).toBe(true);
+              expect((await index.tryAcquire()).unwrap()).toBe(false);
+              raced = true;
+            }
+            return result;
+          },
+        },
+      });
+      try {
+        expect((await operator.tryAcquire()).unwrap()).toBe(false);
+        expect(raced).toBe(true);
+        expect((await index.tryAcquire()).unwrap()).toBe(true);
+        await index.close();
+        expect((await operator.tryAcquire()).unwrap()).toBe(true);
+      } finally {
+        await operator.close();
+        await index.close();
+        operatorConnection.release();
+        indexConnection.release();
+      }
+    });
+  });
+
+  test("queued operators ignore peer compatibility aliases and serialize work", async () => {
+    if (databaseUrl === undefined) {
+      throw new TypeError("DATABASE_URL required");
+    }
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const backfillConnection = await openClient().sql.reserve();
+      const firstConnection = await openClient().sql.reserve();
+      const secondConnection = await openClient().sql.reserve();
+      const backfill = createHeavyWorkSlot({
+        session: session(backfillConnection),
+        kind: "backfill_batch",
+      });
+      const first = createHeavyWorkSlot({
+        session: session(firstConnection),
+        kind: "operator_job",
+      });
+      const second = createHeavyWorkSlot({
+        session: session(secondConnection),
+        kind: "operator_job",
+      });
+      try {
+        expect((await backfill.tryAcquire()).unwrap()).toBe(true);
+        expect((await first.tryAcquire()).unwrap()).toBe(false);
+        expect((await second.tryAcquire()).unwrap()).toBe(false);
+        // Exercise the pre-operator process's actual priority predicate.
+        const oldProbe = await backfillConnection.unsafe<
+          { acquired: boolean }[]
+        >(
+          `
+          SELECT NOT EXISTS (
+            SELECT 1 FROM pg_locks
+            WHERE locktype = 'advisory' AND granted AND mode = 'ShareLock'
+              AND database = (SELECT oid FROM pg_database WHERE datname = current_database())
+              AND classid = $1::oid AND objid > 0 AND objid < $2::oid AND objsubid = 2
+          ) AS acquired`,
+          [1_937_007_724, OLD_BACKFILL_INTENT_KEY],
+        );
+        expect(oldProbe.at(0)?.acquired).toBe(false);
+        await backfill.release();
+        expect((await first.tryAcquire()).unwrap()).toBe(true);
+        expect((await second.tryAcquire()).unwrap()).toBe(false);
+        await first.release();
+        expect((await second.tryAcquire()).unwrap()).toBe(true);
+        expect((await first.tryAcquire()).unwrap()).toBe(false);
+        await second.close();
+        expect((await first.tryAcquire()).unwrap()).toBe(true);
+      } finally {
+        await backfill.close();
+        await first.close();
+        await second.close();
+        backfillConnection.release();
+        firstConnection.release();
+        secondConnection.release();
+      }
+    });
+  });
+
   test("transactional batches serialize and yield to an index at their next commit", async () => {
     if (databaseUrl === undefined) {
       throw new TypeError("DATABASE_URL required");

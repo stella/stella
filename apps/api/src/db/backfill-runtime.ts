@@ -69,6 +69,7 @@ const decodeCheckpoint = (row: unknown) => {
   }
   const b = row["batch"];
   const cursor = row["cursor"];
+  const holdCause = b["holdCause"];
   if (
     !(cursor === null || typeof cursor === "string") ||
     typeof b["size"] !== "number" ||
@@ -80,7 +81,13 @@ const decodeCheckpoint = (row: unknown) => {
       typeof b["smoothedDurationMs"] === "number"
     ) ||
     !(b["heldSince"] === null || typeof b["heldSince"] === "number") ||
-    !(b["holdUntil"] === null || typeof b["holdUntil"] === "number")
+    !(b["holdUntil"] === null || typeof b["holdUntil"] === "number") ||
+    !(
+      holdCause === undefined ||
+      holdCause === null ||
+      holdCause === "load" ||
+      holdCause === "other"
+    )
   ) {
     return panic("Invalid backfill batch state");
   }
@@ -93,6 +100,8 @@ const decodeCheckpoint = (row: unknown) => {
       holdCount: b["holdCount"],
       smoothedDurationMs: b["smoothedDurationMs"],
       heldSince: b["heldSince"],
+      // Existing checkpoints predate causal hysteresis; no EBS cause was recorded.
+      holdCause: holdCause ?? (b["heldSince"] === null ? null : "other"),
       holdUntil: b["holdUntil"],
     },
   };
