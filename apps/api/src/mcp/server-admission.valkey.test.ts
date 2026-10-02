@@ -11,6 +11,7 @@ import {
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import { resolveActionPeriodBudget } from "@/api/lib/rate-limit/action-period-budget";
+import type { ActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { createRedisClient } from "@/api/lib/redis-client";
 import { coordinationKey } from "@/api/lib/redis-keys";
 import type { McpRequestContext } from "@/api/mcp/context";
@@ -19,6 +20,11 @@ import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions"
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
+const actionSizePolicy = {
+  requestBytes: 2048,
+  responseBytes: 2048,
+  pageSize: 7,
+} as const satisfies ActionSizePolicy;
 if (!runValkeyTests || !process.env["REDIS_URL"]) {
   describe.skip("MCP action admission (valkey)", () => {
     test("requires Valkey", () => {});
@@ -49,6 +55,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         content: [{ type: "text", text: "accepted" }],
       } as const satisfies CallToolResult;
       const handleRequest = createMcpHttpRequestHandler({
+        actionSizePolicy: () => Result.ok(actionSizePolicy),
         authenticateMcpRequest: async () =>
           Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
         captureError: (error) => {
@@ -143,9 +150,6 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
         ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
         ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
-        ACTION_REQUEST_MAX_BYTES: env.ACTION_REQUEST_MAX_BYTES,
-        ACTION_RESPONSE_MAX_BYTES: env.ACTION_RESPONSE_MAX_BYTES,
-        ACTION_PAGE_SIZE_MAX: env.ACTION_PAGE_SIZE_MAX,
       };
       const organizationId = toSafeId<"organization">(
         `mcp_period_${Bun.randomUUIDv7()}`,
@@ -161,6 +165,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         panic("Missing list_matters tool definition");
       }
       const handleRequest = createMcpHttpRequestHandler({
+        actionSizePolicy: () => Result.ok(actionSizePolicy),
         authenticateMcpRequest: async () =>
           Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
         captureError: (error) => {
@@ -187,9 +192,6 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         ACTION_ADMISSION_LEASE_MS: 120_000,
         ACTION_ADMISSION_PERIOD_MS: 86_400_000,
         ACTION_ADMISSION_PERIOD_ACTIONS: 2,
-        ACTION_REQUEST_MAX_BYTES: 2048,
-        ACTION_RESPONSE_MAX_BYTES: 2048,
-        ACTION_PAGE_SIZE_MAX: 7,
       });
       try {
         await client.connect();
