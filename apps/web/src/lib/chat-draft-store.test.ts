@@ -6,6 +6,7 @@ import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import type { ChatDraftAttachment } from "@/components/chat-editor-provider";
 import type { ChatMentionOption } from "@/components/chat-mention-extension";
 import {
+  appendInlineContentToDraftDoc,
   appendMentionToDraftDoc,
   areDraftDocsEqual,
   createChatDraftState,
@@ -62,6 +63,39 @@ describe("appendMentionToDraftDoc", () => {
           },
         ],
       },
+    ]);
+  });
+});
+
+describe("appendInlineContentToDraftDoc", () => {
+  const chip: JSONContent[] = [
+    {
+      type: "pastedText",
+      attrs: { label: "“a”", source: "paste", text: "“a”" },
+    },
+    { type: "text", text: " " },
+  ];
+
+  test("continues the draft's last paragraph after what is typed", () => {
+    expect(
+      appendInlineContentToDraftDoc(docWithText("See "), chip).content,
+    ).toEqual([
+      {
+        type: "paragraph",
+        content: [{ type: "text", text: "See " }, ...chip],
+      },
+    ]);
+  });
+
+  test("opens a paragraph when the draft ends in another block", () => {
+    const doc: JSONContent = {
+      type: "doc",
+      content: [{ type: "bulletList" }],
+    };
+
+    expect(appendInlineContentToDraftDoc(doc, chip).content).toEqual([
+      { type: "bulletList" },
+      { type: "paragraph", content: chip },
     ]);
   });
 });

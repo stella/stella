@@ -96,6 +96,8 @@ describe("icon module", () => {
     expect(names).toContain("AiActionIcon");
     expect(icons.SkillIcon).toBe(lucide.BookOpenIcon);
     expect(icons.AiActionIcon).toBe(lucide.WandSparklesIcon);
+    expect(icons.NewChatIcon).toBe(lucide.MessageSquarePlusIcon);
+    expect(icons.AddCommentIcon).toBe(lucide.MessageSquareQuoteIcon);
   });
 
   test("gives every semantic entry a reason and its own glyph unless shared on purpose", () => {

@@ -159,6 +159,7 @@ const expandCaseLawSearch = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     request,
@@ -199,6 +200,7 @@ const expandCaseLawSearch = createSafeRootHandler(
 
     // No AI for this organization means no expansion, not a failed search.
     const available = requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -229,6 +231,7 @@ const expandCaseLawSearch = createSafeRootHandler(
     }
 
     const analytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -246,11 +249,12 @@ const expandCaseLawSearch = createSafeRootHandler(
     const generated = await Result.tryPromise({
       try: async () =>
         await generateTanStackObjectForRole({
+          dataClass: "customer",
           role: "fast",
           serviceTier: "standard",
           orgAIConfig,
+          managedAIResidency,
           organizationId,
-          // Public law: no matter's data reaches the model.
           tenantWorkspaceIds: [],
           analytics,
           caching: resolveCaching({

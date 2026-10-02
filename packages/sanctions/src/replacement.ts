@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
-import { Temporal } from "temporal-polyfill/full";
+
+import { Temporal } from "@stll/time";
 
 import type { ParsedList, SanctionsSource } from "./entry";
 import { stampInstant } from "./values";

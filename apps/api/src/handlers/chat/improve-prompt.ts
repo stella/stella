@@ -37,6 +37,7 @@ const improvePrompt = createSafeRootHandler(
     actionSignal,
     body,
     orgAIConfig,
+    managedAIResidency,
     promptCachingEnabled,
     request,
     safeDb,
@@ -63,6 +64,7 @@ const improvePrompt = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -86,6 +88,7 @@ const improvePrompt = createSafeRootHandler(
             body.strategy,
           );
           return await generateTanStackTextForRole({
+            dataClass: "customer",
             abortSignal: AbortSignal.any([
               actionSignal ?? request.signal,
               AbortSignal.timeout(IMPROVE_PROMPT_TIMEOUT_MS),
@@ -101,6 +104,7 @@ const improvePrompt = createSafeRootHandler(
             maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
             organizationId: session.activeOrganizationId,
             orgAIConfig,
+            managedAIResidency,
             role: "fast",
             serviceTier: "standard",
             system: modelInput.system,

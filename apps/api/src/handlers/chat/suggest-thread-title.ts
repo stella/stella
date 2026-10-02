@@ -59,6 +59,7 @@ export const createSuggestThreadTitle = ({
     const {
       getWorkspaceAccess,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       params: { threadId },
       promptCachingEnabled,
@@ -136,6 +137,7 @@ export const createSuggestThreadTitle = ({
     }
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -163,6 +165,7 @@ export const createSuggestThreadTitle = ({
     }));
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -191,6 +194,7 @@ export const createSuggestThreadTitle = ({
               Result.tryPromise({
                 try: async () =>
                   await generateTextForRole({
+                    dataClass: "customer",
                     abortSignal: AbortSignal.any([
                       actionSignal ?? request.signal,
                       AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
@@ -205,6 +209,7 @@ export const createSuggestThreadTitle = ({
                     maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
                     organizationId: session.activeOrganizationId,
                     orgAIConfig,
+                    managedAIResidency,
                     prompt: buildThreadTitlePrompt(titleMessages),
                     role: "fast",
                     serviceTier: "standard",

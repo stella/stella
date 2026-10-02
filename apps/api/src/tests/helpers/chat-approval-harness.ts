@@ -1,5 +1,6 @@
 import { Value } from "@sinclair/typebox/value";
 import { toolDefinition } from "@tanstack/ai";
+import type { UIMessage } from "@tanstack/ai-client";
 import { panic, Result, TaggedError } from "better-result";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -71,12 +72,23 @@ import {
   findOfferedInteractions,
   findThreadInvariantViolations,
 } from "@/api/tests/helpers/chat-thread-invariants";
-import { createWebChatClient } from "@/api/tests/helpers/chat-web-client";
-import type { WebChatClient } from "@/api/tests/helpers/chat-web-client";
+import {
+  findLiveOutcomeViolations,
+  findTurnOutcomeViolations,
+} from "@/api/tests/helpers/chat-turn-outcome";
+import {
+  createWebChatClient,
+  loadWebChat,
+} from "@/api/tests/helpers/chat-web-client";
+import type {
+  WebChatClient,
+  WebChatContext,
+} from "@/api/tests/helpers/chat-web-client";
 import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
+import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
 // A real chat round trip: the production `send-message` handler and
 // `streamChat` pipeline, with a scripted model behind the adapter seam, one
@@ -255,6 +267,9 @@ export const createApprovalHarness = ({
   scopedDb: ScopedDb;
   testDb: TestDatabase;
 }) => {
+  // Every database access of a turn goes to the test database; one that
+  // reaches the shared pools escaped it, and fails the test at `close`.
+  const rootPoolConnectionsAtStart = rootPoolConnectionCount();
   const provider = model ?? installScriptedProvider();
   const executions: string[] = [];
   const approvalTool = toolDefinition({
@@ -380,6 +395,7 @@ export const createApprovalHarness = ({
       memberRole: { role: "owner" },
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu",
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),
@@ -628,6 +644,74 @@ export const createApprovalHarness = ({
   };
 
   /**
+   * The `chat.turn.*` findings for the turn a request started or continued,
+   * once it settled: its status against the parts its run added to the
+   * message it names (`before` is the thread as the request found it), the
+   * error a reload shows, and the chunks the page read.
+   */
+  const findSettledTurnViolations = async ({
+    before,
+    chunks,
+    ended,
+    threadId,
+    turnId,
+  }: {
+    before: readonly { id: string; parts: readonly ChatPart[] }[];
+    chunks: Parameters<typeof findTurnOutcomeViolations>[0]["chunks"];
+    ended: RecordedExchange["ended"];
+    threadId: SafeId<"chatThread">;
+    turnId: string | null;
+  }): Promise<OracleViolation[]> => {
+    // A streamed response names the turn it runs, and that turn is stored:
+    // without it none of the checks below could run.
+    if (turnId === null) {
+      return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
+        { missingTurnHeader: CHAT_TURN_ID_HEADER, threadId },
+      ]);
+    }
+    const turn = await testDb.query.chatTurns.findFirst({
+      columns: {
+        assistantMessageId: true,
+        failureCode: true,
+        failureRetryable: true,
+        id: true,
+        status: true,
+      },
+      where: { id: { eq: toSafeId<"chatTurn">(turnId) } },
+    });
+    if (turn === undefined) {
+      return violationsOf(CHAT_ORACLE.persistedRunIdentity, [
+        { unstoredTurnId: turnId, threadId },
+      ]);
+    }
+    const messageId = turn.assistantMessageId;
+    const [stored, reload, web] = await Promise.all([
+      readThreadMessages(threadId),
+      reloadView(threadId),
+      loadWebChat(),
+    ]);
+    const message =
+      messageId === null
+        ? undefined
+        : stored.find(({ id }) => id === messageId);
+    const reloaded =
+      messageId === null
+        ? undefined
+        : reload.find(({ id }) => id === messageId);
+    return findTurnOutcomeViolations({
+      after: message?.parts ?? null,
+      before: before.find(({ id }) => id === messageId)?.parts ?? [],
+      chunks,
+      ended,
+      reloadShowsError:
+        reloaded !== undefined &&
+        web.getChatAssistantTurnError(reloaded) !== undefined,
+      storedOutcome: message?.metadata?.turnOutcome,
+      turn,
+    });
+  };
+
+  /**
    * Sends `ctx` and reads the response to its end, so its terminal
    * persistence runs; then checks the chunks the browser would read and,
    * past the turn barrier, the stored thread.
@@ -640,6 +724,7 @@ export const createApprovalHarness = ({
       bodyByContext.get(ctx) ??
       panic("Send contexts come from this harness's sendContext");
     const threadId = body.threadId;
+    const before = await readThreadMessages(threadId);
     const result = await handle(ctx);
     if (!(result instanceof Response && result.ok)) {
       return { rejection: result, status: "rejected" } as const;
@@ -678,6 +763,13 @@ export const createApprovalHarness = ({
           served: await readAllMessages(threadId),
         }),
         ...(await findPersistedViolations(threadId)),
+        ...(await findSettledTurnViolations({
+          before,
+          chunks,
+          ended: "complete",
+          threadId,
+          turnId: result.headers.get(CHAT_TURN_ID_HEADER),
+        })),
         ...(await findUnstableRefs(threadId)),
         ...findTranscriptViolations(provider.takeRequests(threadId)),
       ],
@@ -824,6 +916,7 @@ export const createApprovalHarness = ({
 
   /** Checks a response the page has read to wherever it ended. */
   const afterResponse = async ({
+    before,
     ctx,
     ended,
     endRecord,
@@ -831,6 +924,8 @@ export const createApprovalHarness = ({
     text,
     turnId,
   }: {
+    /** The thread as the request found it. */
+    before: readonly { id: string; parts: readonly ChatPart[] }[];
     ctx: SendMessageCtx;
     endRecord: RecordEnd;
     ended: RecordedExchange["ended"];
@@ -856,6 +951,13 @@ export const createApprovalHarness = ({
         served: await readAllMessages(raw.threadId),
       }),
       ...(await findPersistedViolations(raw.threadId)),
+      ...(await findSettledTurnViolations({
+        before,
+        chunks,
+        ended,
+        threadId: raw.threadId,
+        turnId,
+      })),
       ...(await findUnstableRefs(raw.threadId)),
     );
     delivered.set(raw.threadId, deliveredInterrupts(chunks));
@@ -869,12 +971,14 @@ export const createApprovalHarness = ({
    * socket does.
    */
   const streamLive = ({
+    before,
     ctx,
     endRecord,
     raw,
     response,
     signal,
   }: {
+    before: readonly { id: string; parts: readonly ChatPart[] }[];
     ctx: SendMessageCtx;
     endRecord: RecordEnd;
     raw: SendBody;
@@ -898,6 +1002,7 @@ export const createApprovalHarness = ({
       openConnections.delete(raw.threadId);
       const stopped = stoppingThreads.delete(raw.threadId);
       await afterResponse({
+        before,
         ctx,
         endRecord,
         ended: ending === "complete" && stopped ? "stopped" : ending,
@@ -983,9 +1088,17 @@ export const createApprovalHarness = ({
     }
     if (liveThreads.has(raw.threadId)) {
       const ctx = contextFromBody(raw, signal);
+      const before = await readThreadMessages(raw.threadId);
       const result = await handle(ctx);
       if (result instanceof Response && result.ok) {
-        return streamLive({ ctx, endRecord, raw, response: result, signal });
+        return streamLive({
+          before,
+          ctx,
+          endRecord,
+          raw,
+          response: result,
+          signal,
+        });
       }
       return {
         done: Promise.resolve(),
@@ -1070,10 +1183,12 @@ export const createApprovalHarness = ({
   /** A browser tab that loads `threadId` now, as a page load does. */
   const openWebClient = async (
     threadId: SafeId<"chatThread">,
+    { context }: { context?: WebChatContext | undefined } = {},
   ): Promise<WebChatClient> => {
     provider.script(threadId);
     delivered.delete(threadId);
     return await createWebChatClient({
+      context,
       inFlight: () => inFlight,
       page: await reloadPage(threadId),
       reload: async () => await reloadPage(threadId),
@@ -1115,6 +1230,20 @@ export const createApprovalHarness = ({
     const errors = client.takeErrors().map((error) => Bun.inspect(error));
     const expectsError =
       expected.runFailure === true || expected.refusal === true;
+    const web = await loadWebChat();
+    const lastAnswer = (messages: readonly UIMessage[]) =>
+      messages.findLast(({ role }) => role === "assistant") ?? null;
+    const shown = findLiveOutcomeViolations({
+      live: {
+        error:
+          client.runtimeState().hasError ||
+          web.getChatAssistantTurnError(lastAnswer(client.messages())) !==
+            undefined,
+      },
+      reload: {
+        error: web.getChatAssistantTurnError(lastAnswer(reload)) !== undefined,
+      },
+    });
     return [
       ...(expected.refusal === true
         ? requests.filter((finding) => !refusals.includes(finding))
@@ -1148,6 +1277,8 @@ export const createApprovalHarness = ({
         offered,
         reload,
       }),
+      // A refused request's error is the request's, not a turn's.
+      ...(expected.refusal === true ? [] : shown),
     ];
   };
 
@@ -1268,6 +1399,12 @@ export const createApprovalHarness = ({
       } finally {
         globalThis.fetch = originalFetch;
         provider.restore();
+      }
+      const rootPoolConnections = rootPoolConnectionCount();
+      if (rootPoolConnections !== rootPoolConnectionsAtStart) {
+        panic(
+          "A chat turn connected to the shared database pools instead of the test database; inject that side path (as `indexThread` is) so it uses the test's database",
+        );
       }
     },
     /** Drops the connection of `threadId`'s response still streaming. */

@@ -212,15 +212,16 @@ const previewProperty = createSafeHandler(
       properties: [batchProperty],
     };
 
-    const { orgAIConfig, promptCachingEnabled } = yield* Result.await(
-      scopedDb(
-        async (tx) =>
-          await loadOrgAISettings(tx, {
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-          }),
-      ),
-    );
+    const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+      yield* Result.await(
+        scopedDb(
+          async (tx) =>
+            await loadOrgAISettings(tx, {
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            }),
+        ),
+      );
     const generateFn = getBatchGenerator();
 
     const generateResult = await generateFn({
@@ -234,6 +235,7 @@ const previewProperty = createSafeHandler(
       workspaceId,
       scopedDb,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       serviceTier: "standard",
       // Mirrors workflow-queue.ts's call to the same generator: without

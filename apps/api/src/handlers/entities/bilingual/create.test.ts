@@ -145,6 +145,7 @@ const createContext = (body: Partial<Ctx["body"]> = {}): Ctx =>
     getWorkspaceAccess: async () => null,
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: true,
     request: new Request("http://localhost/entities/test/bilingual"),
     route: "/entities/:workspaceId/bilingual",

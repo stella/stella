@@ -53,6 +53,7 @@ const rootHandlerContext = (safeDb: ReturnType<typeof createSafeDb>) => ({
   memberRole: { role: "owner" as const },
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   recordAuditEvent: noopAuditRecorder,
   request: new Request("https://example.test/document-reviews/passages"),

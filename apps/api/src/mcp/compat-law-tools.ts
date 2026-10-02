@@ -19,6 +19,7 @@ import {
 import {
   compatCorpusFetchResponse,
   compatSearchCursorError,
+  compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
@@ -132,6 +133,11 @@ const handleLawCompatSearchTool: McpToolHandler<
   const position = decodeCompatSearchCursor(cursor);
   if (position === null) {
     return compatSearchCursorError(cursor ?? "");
+  }
+
+  const pageLimitResult = compatSearchPageLimitResult("law");
+  if (pageLimitResult !== null) {
+    return pageLimitResult;
   }
 
   const corpus = await searchCompatCorpus({

@@ -21,6 +21,7 @@ import {
 } from "@/api/lib/entities/window-cursor";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { tViewSortSchema } from "@/api/lib/views-schema";
 
 const readKanbanGroupBodySchema = t.Object({
@@ -85,7 +86,9 @@ const readKanbanGroup = createSafeHandler(
       return Result.err(conditionResult.error);
     }
 
-    const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      body.limit ?? LIMITS.entitiesWindowSizeDefault,
+    );
     const result = yield* Result.await(
       queryEntities({
         safeDb,

@@ -348,7 +348,8 @@ const extractCandidates = async (
   if (Result.isError(settings)) {
     return Result.err(settings.error);
   }
-  const { orgAIConfig, promptCachingEnabled } = settings.value;
+  const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+    settings.value;
 
   let analytics:
     | ReturnType<typeof createTanStackAIAnalyticsCallbacks>
@@ -357,6 +358,7 @@ const extractCandidates = async (
   const result = await Result.tryPromise({
     try: async () => {
       analytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         feature: "memory.extractor",
         modelRole: "fast",
         orgAIConfig,
@@ -395,10 +397,12 @@ const extractCandidates = async (
       }
 
       return await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "batch",
         organizationId: compaction.threadOrganizationId,
         orgAIConfig,
+        managedAIResidency,
         tenantWorkspaceIds: compaction.threadDataWorkspaceIds,
         analytics,
         caching: resolveCaching({
