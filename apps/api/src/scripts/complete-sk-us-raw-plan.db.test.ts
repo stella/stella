@@ -168,7 +168,9 @@ test("source page walks partition tied microsecond rows without skips or duplica
     .toSorted((left, right) => {
       const leftKey = `${left.createdAt}/${left.id}`;
       const rightKey = `${right.createdAt}/${right.id}`;
-      if (leftKey === rightKey) {return 0;}
+      if (leftKey === rightKey) {
+        return 0;
+      }
       return leftKey < rightKey ? -1 : 1;
     })
     .map(({ id }) => id);
