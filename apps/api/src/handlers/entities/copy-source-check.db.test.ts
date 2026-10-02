@@ -26,6 +26,7 @@ import { createFileKey } from "@/api/lib/file-key";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -211,7 +212,7 @@ const seed = async (folder: boolean) => {
         workspaceId: sourceWorkspaceId,
         user: { id: userId, email: `${userId}@example.test` },
         session: { activeOrganizationId: organizationId },
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         body: {
           entityId: folder ? folderId : documentId,
           targetWorkspaceId,
