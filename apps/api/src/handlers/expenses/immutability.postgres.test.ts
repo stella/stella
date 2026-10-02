@@ -186,7 +186,7 @@ if (!databaseUrl || !runPostgresTests) {
             }
             expect(blocked).toBe(true);
             release.resolve(undefined);
-            expect(await attaching).toEqual({ totalAmount: 1000 });
+            expect(await attaching).toEqual({ totalAmount: cents(1000) });
             expect(await mutating).toMatchObject({ code: 400 });
             const stored = await setup.db.query.expenses.findFirst({
               where: { id: { eq: expenseId } },
