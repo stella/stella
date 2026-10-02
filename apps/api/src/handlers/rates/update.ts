@@ -66,35 +66,6 @@ const updateRateTable = createSafeHandler(
       updatedAt: new Date(),
     };
 
-    // Prevent unsetting isDefault if no other default exists
-    if (body.isDefault === false) {
-      const otherDefaultRows = yield* Result.await(
-        safeDb((tx) =>
-          tx
-            .select({ id: rateTables.id })
-            .from(rateTables)
-            .where(
-              and(
-                eq(rateTables.workspaceId, workspaceId),
-                eq(rateTables.isDefault, true),
-                ne(rateTables.id, body.id),
-              ),
-            )
-            .limit(1),
-        ),
-      );
-      const otherDefault = otherDefaultRows.at(0);
-
-      if (!otherDefault) {
-        return Result.err(
-          new HandlerError({
-            status: 400,
-            message: "Cannot unset default: no other default rate table exists",
-          }),
-        );
-      }
-    }
-
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
         await tx.execute(
@@ -125,6 +96,25 @@ const updateRateTable = createSafeHandler(
           return { status: "rate-not-found" as const };
         }
         const sourceCurrency = locked.currency;
+
+        // Read under the matter lock that creating and updating a table take,
+        // so a default seen here is not cleared before this write commits.
+        if (body.isDefault === false) {
+          const otherDefault = await tx
+            .select({ id: rateTables.id })
+            .from(rateTables)
+            .where(
+              and(
+                eq(rateTables.workspaceId, workspaceId),
+                eq(rateTables.isDefault, true),
+                ne(rateTables.id, body.id),
+              ),
+            )
+            .limit(1);
+          if (otherDefault.length === 0) {
+            return { status: "no-other-default" as const };
+          }
+        }
 
         const nextCurrency = changedFields.currency;
         const exponentShift =
@@ -247,6 +237,14 @@ const updateRateTable = createSafeHandler(
     if (outcome.status === "rate-not-found") {
       return Result.err(
         new HandlerError({ status: 404, message: "Rate table not found" }),
+      );
+    }
+    if (outcome.status === "no-other-default") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message: "Cannot unset default: no other default rate table exists",
+        }),
       );
     }
     if (outcome.status === "rate-out-of-range") {

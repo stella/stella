@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import { member, organization, user } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
@@ -51,7 +51,7 @@ if (!databaseUrl || !runPostgres) {
       expect(true).toBe(true));
   });
 } else {
-  test("concurrent first creates and default promotions preserve one default and both audits", async () => {
+  test("concurrent first creates, default promotions and default removals preserve one default and their audits", async () => {
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const { db: firstDb } = openClient({ max: 1 });
       const { db: secondDb } = openClient({ max: 1 });
@@ -150,13 +150,14 @@ if (!databaseUrl || !runPostgres) {
               ),
             ]);
             release.resolve(undefined);
-            const results = await Promise.all([firstTask, secondTask]);
-            for (const result of results) {
-              expect(result.isOk()).toBe(true);
-              if (result.isOk()) {
-                expect(result.value).toHaveProperty("id");
-              }
-            }
+            const [firstResult, secondResult] = await Promise.all([
+              firstTask,
+              secondTask,
+            ]);
+            return {
+              first: firstResult.unwrap(),
+              second: secondResult.unwrap(),
+            };
           } finally {
             reached.resolve(undefined);
             started.resolve(undefined);
@@ -182,10 +183,12 @@ if (!databaseUrl || !runPostgres) {
               body: { name, currency: "USD", isDefault: true },
             }),
           );
-        await compete(
+        const creations = await compete(
           async (gatedRecord) => await create(firstSafe, "First", gatedRecord),
           async () => await create(secondSafe, "Second", record),
         );
+        expect(creations.first).toHaveProperty("id");
+        expect(creations.second).toHaveProperty("id");
         const created = await firstDb
           .select()
           .from(rateTables)
@@ -216,9 +219,10 @@ if (!databaseUrl || !runPostgres) {
         ).toHaveLength(1);
 
         type UpdateContext = Parameters<typeof updateRateTable.handler>[0];
-        const promote = async (
+        const setDefault = async (
           safeDb: typeof firstSafe,
           id: typeof firstTable.id,
+          isDefault: boolean,
           recordAuditEvent: AuditRecorder,
         ) =>
           await updateRateTable.handler(
@@ -229,14 +233,17 @@ if (!databaseUrl || !runPostgres) {
               safeDb,
               recordAuditEvent,
               createAuditRecorder: () => recordAuditEvent,
-              body: { id, isDefault: true },
+              body: { id, isDefault },
             }),
           );
-        await compete(
+        const promotions = await compete(
           async (gatedRecord) =>
-            await promote(firstSafe, firstTable.id, gatedRecord),
-          async () => await promote(secondSafe, secondTable.id, record),
+            await setDefault(firstSafe, firstTable.id, true, gatedRecord),
+          async () =>
+            await setDefault(secondSafe, secondTable.id, true, record),
         );
+        expect(promotions.first).toHaveProperty("id");
+        expect(promotions.second).toHaveProperty("id");
         const promoted = await firstDb
           .select()
           .from(rateTables)
@@ -265,6 +272,66 @@ if (!databaseUrl || !runPostgres) {
             ]),
           );
         }
+
+        const defaultIds = async () => {
+          const rows = await firstDb
+            .select({ id: rateTables.id })
+            .from(rateTables)
+            .where(
+              and(
+                eq(rateTables.workspaceId, workspaceId),
+                eq(rateTables.isDefault, true),
+              ),
+            );
+          return rows.map((row) => row.id);
+        };
+        const auditCount = async () =>
+          await firstDb.$count(
+            auditLogs,
+            eq(auditLogs.workspaceId, workspaceId),
+          );
+        const refusal = {
+          code: 400,
+          response: {
+            message: "Cannot unset default: no other default rate table exists",
+          },
+        };
+
+        // The second table is the only default. Clearing the flag on the first
+        // one looks safe until the competing promotion of that same table
+        // commits and clears the second; the removal must see that outcome.
+        const beforePromotedRemoval = await auditCount();
+        const promotedRemoval = await compete(
+          async (gatedRecord) =>
+            await setDefault(firstSafe, firstTable.id, true, gatedRecord),
+          async () =>
+            await setDefault(secondSafe, firstTable.id, false, record),
+        );
+        expect(promotedRemoval.first).toEqual({ id: firstTable.id });
+        expect(promotedRemoval.second).toMatchObject(refusal);
+        expect(await defaultIds()).toEqual([firstTable.id]);
+        // Promotion writes one audit per table; the refused removal writes none.
+        expect(await auditCount()).toBe(beforePromotedRemoval + 2);
+
+        // Two defaults, as rows written before defaults were serialized can
+        // be. Each removal alone leaves the other table as the default; both
+        // together must not leave the matter without one.
+        await firstDb
+          .update(rateTables)
+          .set({ isDefault: true })
+          .where(eq(rateTables.workspaceId, workspaceId));
+        expect(await defaultIds()).toHaveLength(2);
+        const beforePairedRemoval = await auditCount();
+        const pairedRemoval = await compete(
+          async (gatedRecord) =>
+            await setDefault(firstSafe, firstTable.id, false, gatedRecord),
+          async () =>
+            await setDefault(secondSafe, secondTable.id, false, record),
+        );
+        expect(pairedRemoval.first).toEqual({ id: firstTable.id });
+        expect(pairedRemoval.second).toMatchObject(refusal);
+        expect(await defaultIds()).toEqual([secondTable.id]);
+        expect(await auditCount()).toBe(beforePairedRemoval + 1);
       } finally {
         await firstDb
           .delete(organization)
