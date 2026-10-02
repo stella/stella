@@ -262,7 +262,9 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
                 ? { ...replacement, status: "paused", current_period_end: null }
                 : replacement,
           });
-          if (type === "subscription.paused") {pauseId = eventId;}
+          if (type === "subscription.paused") {
+            pauseId = eventId;
+          }
         }
         const paused = await readState(tx, fixture.organizationId);
         expect(paused.entitlements).toHaveLength(1);
