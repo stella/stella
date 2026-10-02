@@ -28,7 +28,9 @@ import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
   DatabaseError,
@@ -60,11 +62,7 @@ import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
-import {
-  ActionAdmissionError,
-  actionAdmissionRefusal,
-  withActionAdmission,
-} from "@/api/lib/rate-limit/action-admission";
+import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
@@ -453,6 +451,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * `false` regardless of what call sites set.
      */
     promptCachingEnabled: boolean;
+    managedAIResidency: ManagedAIResidency;
     /**
      * Records an audit row in the supplied transaction. Identity
      * fields (org/user/IP/UA) are bound from the request context;
@@ -481,6 +480,7 @@ type WorkspaceHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   };
 
 type SafeHandlerError =
+  | ActionAdmissionError
   | DatabaseError
   | DatabaseRlsError
   | HandlerError
@@ -713,7 +713,10 @@ const runSafeHandler = async <
 
     const error = result.error;
 
-    const handlerError = resolveHandlerError(error);
+    const handlerError = resolveHandlerError(
+      error,
+      env.ACTION_LIMIT_CONTACT_URL,
+    );
     if (handlerError !== null) {
       const statusCode = handlerError.status;
 
@@ -781,7 +784,10 @@ const runSafeHandler = async <
     // an AI request hitting a role the org has not configured a
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
-    const handlerError = resolveHandlerError(error);
+    const handlerError = resolveHandlerError(
+      error,
+      env.ACTION_LIMIT_CONTACT_URL,
+    );
     if (handlerError !== null) {
       logAndCaptureSafeError({
         request: ctx.request,
@@ -875,13 +881,10 @@ const runAdmittedFiniteHandler = async function* <
       },
     }).then((admitted) =>
       Result.mapError(admitted, (error) => {
-        if (ActionAdmissionError.is(error)) {
-          return new HandlerError({
-            ...actionAdmissionRefusal(error),
-            cause: error,
-          });
-        }
-        const handlerError = resolveHandlerError(error);
+        const handlerError = resolveHandlerError(
+          error,
+          env.ACTION_LIMIT_CONTACT_URL,
+        );
         if (handlerError !== null) {
           return handlerError;
         }
@@ -1036,6 +1039,7 @@ export const resolveMeteringContext = ({
 }): ResolvedMeteringContext => {
   const modelRole = metering.modelRole ?? "chat";
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   const isByok = modelInfo.keySource === "byok";

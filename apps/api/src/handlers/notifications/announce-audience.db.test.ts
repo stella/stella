@@ -192,6 +192,7 @@ describe("announcement endpoint", () => {
         memberRole: { role: "member" },
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        managedAIResidency: "eu" as const,
         promptCachingEnabled: false,
         recordAuditEvent,
         request: new Request("https://example.test/v1/notifications/announce"),

@@ -927,6 +927,7 @@ const runTask = async ({
     organizationId: EVAL_ORGANIZATION_ID,
     workspaceId: EVAL_WORKSPACE_ID,
     orgAIConfig,
+    managedAIResidency: "eu",
     promptCachingEnabled: false,
     serviceTier: "standard",
   });

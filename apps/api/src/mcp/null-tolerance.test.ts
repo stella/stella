@@ -96,6 +96,7 @@ const createContext = (): McpRequestContext => {
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");

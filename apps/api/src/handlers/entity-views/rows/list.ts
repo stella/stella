@@ -28,6 +28,7 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import {
   canTriageSignals,
@@ -127,7 +128,9 @@ const listRows = createSafeRootHandler(
     if (Result.isError(groupCondition)) {
       return Result.err(groupCondition.error);
     }
-    const limit = body.limit ?? LIMITS.entitiesWindowSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      body.limit ?? LIMITS.entitiesWindowSizeDefault,
+    );
     const organizationId = session.activeOrganizationId;
     // One instant for the window and the signal hydration, so a snooze that
     // lapses between the two reads cannot drop a row from the page.

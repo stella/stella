@@ -98,6 +98,7 @@ const extractProcuracao = createSafeRootHandler(
     session,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     user,
     safeDb,
@@ -105,6 +106,7 @@ const extractProcuracao = createSafeRootHandler(
     const organizationId = session.activeOrganizationId;
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -256,6 +258,7 @@ const extractProcuracao = createSafeRootHandler(
       }
 
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId,
@@ -276,8 +279,10 @@ const extractProcuracao = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
+            dataClass: "customer",
             role: "fast",
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             tenantWorkspaceIds: [],
             analytics: aiAnalytics,

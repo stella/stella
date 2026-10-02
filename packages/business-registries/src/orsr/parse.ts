@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
   OrsrAddress,
@@ -252,10 +253,12 @@ const parseCourtFile = (
 
 const buildRegistryUrl = (file: OrsrCourtFile): string =>
   SLOVAK_REGISTRY_URL.replaceAll("{section}", () =>
-    encodeURIComponent(file.section),
+    encodeRegistryComponent(file.section),
   )
-    .replaceAll("{insertNumber}", () => encodeURIComponent(file.insertNumber))
-    .replaceAll("{court}", () => encodeURIComponent(file.court));
+    .replaceAll("{insertNumber}", () =>
+      encodeRegistryComponent(file.insertNumber),
+    )
+    .replaceAll("{court}", () => encodeRegistryComponent(file.court));
 
 const normalizeName = (raw: string | null | undefined): string | null => {
   if (!raw) {
@@ -461,7 +464,9 @@ const parseStakeholders = (
     const fallbackHeading = typeName
       ? typeName.charAt(0).toUpperCase() + typeName.slice(1)
       : typeCode;
-    const mapping = STAKEHOLDER_TYPE_MAPPING[typeCode];
+    const mapping = Object.hasOwn(STAKEHOLDER_TYPE_MAPPING, typeCode)
+      ? STAKEHOLDER_TYPE_MAPPING[typeCode]
+      : undefined;
     const [organName, position] = mapping ?? [fallbackHeading, fallbackHeading];
     const resolvedPosition = member.function ?? position;
     result.push({

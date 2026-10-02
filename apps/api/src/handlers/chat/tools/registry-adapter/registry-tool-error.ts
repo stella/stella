@@ -7,6 +7,7 @@ import type { InternalToolError } from "@/api/mcp/tool-types";
 
 const MCP_CODE_TO_CHAT_KIND = {
   validation_error: "invalid-input",
+  result_too_large: "invalid-input",
   missing_scope: "unavailable",
   feature_disabled: "unavailable",
   not_found: "not-found",

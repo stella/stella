@@ -1,4 +1,5 @@
 export {
+  BOE_SEARCH_PAGE_LIMITS,
   findRelatedLaws,
   getBormeSummary,
   getBoeSummary,

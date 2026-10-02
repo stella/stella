@@ -170,6 +170,7 @@ const buildChatToolsForScenario = ({
     memoryEnabled: true,
     organizationId,
     orgAIConfig,
+    managedAIResidency: "eu",
     // A matters scope registers both past-chat tools, so the approval-gated
     // wider search also runs through the provider matrix.
     pastChatScope: {

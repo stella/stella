@@ -47,6 +47,7 @@ const chatContext = (
   memberRole: "owner",
   organizationId,
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
   pinServerValidatedWorkspaceId: () => true,
   recordAuditEvent: noopAuditRecorder,

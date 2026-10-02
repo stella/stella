@@ -174,6 +174,7 @@ export const createPlaybookStore = (
           await Promise.resolve({
             orgAIConfig: null,
             orgAIConfigStatus: ORG_AI_CONFIG_STATUS.unreadable,
+            managedAIResidency: "eu",
             promptCachingEnabled: false,
           }),
       },

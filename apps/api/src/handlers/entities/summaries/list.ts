@@ -12,6 +12,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 const entityCreatedAtCursor = createTimestampIdCursorCodec({
@@ -55,8 +56,9 @@ const readEntitySummariesHandler = async function* ({
   safeDb,
   workspaceId,
   cursor,
-  limit,
+  limit: requestedLimit,
 }: ReadEntitySummariesHandlerProps) {
+  const limit = normalizeTenantPageLimit(requestedLimit);
   const cursorResult = parseSummaryCursor(cursor);
   if (Result.isError(cursorResult)) {
     return Result.err(cursorResult.error);

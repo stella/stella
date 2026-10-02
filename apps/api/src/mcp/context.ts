@@ -38,6 +38,7 @@ import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/wor
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
 import { resolveAgentAuditExecution } from "@/api/lib/agent-audit-principal";
 import type {
+  loadManagedAIResidency,
   loadOrgAIConfig,
   OrgAIConfigReader,
   OrgSettingsForAuth,
@@ -122,6 +123,9 @@ export type McpRequestContext = {
     loadOrgSettingsForAuth?: (
       reader: OrgAIConfigReader,
     ) => Promise<OrgSettingsForAuth>;
+    loadManagedAIResidency?: (
+      organizationId: SafeId<"organization">,
+    ) => ReturnType<typeof loadManagedAIResidency>;
     /** Replaces the scoped AI-config read, transaction included. */
     loadOrgAIConfig?: (
       reader: OrgAIConfigReader,

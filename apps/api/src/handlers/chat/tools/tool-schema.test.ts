@@ -283,6 +283,7 @@ const buildFullCoverageChatTools = (
 
   return getChatTools({
     orgAIConfig: null,
+    managedAIResidency: "eu" as const,
     memberRole: "owner",
     organizationId,
     requestWorkspaceId: workspaceId,
@@ -345,6 +346,7 @@ const autoApplyActiveFile = {
 
 const autoApplyBaseArgs = {
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   organizationId,
   requestWorkspaceId: workspaceId,
   thirdPartyBoundary: { type: "raw" },
@@ -819,6 +821,7 @@ describe("chat tool schemas", () => {
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -889,6 +892,7 @@ describe("chat tool schemas", () => {
   test("keeps historical remember calls schema-valid while memory is disabled", () => {
     const baseArgs = {
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner" as const,
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -928,6 +932,7 @@ describe("chat tool schemas", () => {
   test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {
     const baseArgs = {
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -1089,6 +1094,7 @@ describe("chat tool schemas", () => {
   test("only exposes current skill edit tools for editable active skill chats", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -1148,6 +1154,7 @@ describe("chat tool schemas", () => {
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -1193,6 +1200,7 @@ describe("chat tool schemas", () => {
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -2196,6 +2204,7 @@ describe("chat tool schemas", () => {
   describe("create_matter_document authorization", () => {
     const baseArgs = {
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2442,6 +2451,7 @@ describe("registry write tool approval policy", () => {
   const buildToolsWithWorkspace = () =>
     getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -2530,6 +2540,7 @@ describe("registry write tool approval policy", () => {
   test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,

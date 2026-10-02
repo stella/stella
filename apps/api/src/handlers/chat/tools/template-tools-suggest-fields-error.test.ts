@@ -61,6 +61,7 @@ describe("suggest_template_fields tool error handling", () => {
     const tools = createTemplateAuthoringTools({
       organizationId,
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       userId,
       thirdPartyBoundary: { type: "raw" },
