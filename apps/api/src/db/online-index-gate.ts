@@ -431,7 +431,7 @@ export const createOnlineIndexGate = ({
       }
       default:
         current satisfies never;
-        return panic("Unexpected online index hold state");
+        panic("Unexpected online index hold state");
     }
   };
   const attempt = async (
