@@ -236,7 +236,7 @@ describe("portal session outcomes", () => {
       });
       const first = await plTkAdapter.fetchPage(cursor, {});
       if (Result.isOk(first)) {
-        return panic("Expected an entry refusal");
+        throw new TypeError("Expected an entry refusal");
       }
       expect(first.error).toMatchObject({
         httpStatus: entryStatus,
@@ -250,7 +250,7 @@ describe("portal session outcomes", () => {
       for (let cycle = 0; cycle < 5; cycle++) {
         const parked = await plTkAdapter.fetchPage(cursor, {});
         if (Result.isOk(parked)) {
-          return panic("Expected a parked session entry");
+          throw new TypeError("Expected a parked session entry");
         }
         expect(parked.error.stopKind).toBe("publisher_refusal");
         expect(requests).toBe(1);
@@ -348,7 +348,7 @@ describe("portal session outcomes", () => {
     });
     for (const outcome of [await gate.read(cursor), await gate.park(cursor)]) {
       if (Result.isOk(outcome)) {
-        return panic("Expected the gate operation to fail");
+        throw new TypeError("Expected the gate operation to fail");
       }
       expect(outcome.error).toMatchObject({
         stopKind: "internal_error",
@@ -368,7 +368,7 @@ describe("portal session outcomes", () => {
     });
     const first = await plTkAdapter.fetchPage(cursor, {});
     if (Result.isOk(first)) {
-      return panic("Expected an entry refusal");
+      throw new TypeError("Expected an entry refusal");
     }
     expect(first.error).toMatchObject({
       httpStatus: 403,
@@ -382,7 +382,7 @@ describe("portal session outcomes", () => {
       setSystemTime(startedAt + cycle * 30 * 60 * 1000);
       const parked = await plTkAdapter.fetchPage(cursor, {});
       if (Result.isOk(parked)) {
-        return panic("Expected the session entry to stay paused");
+        throw new TypeError("Expected the session entry to stay paused");
       }
       expect(parked.error).toMatchObject({
         stopKind: "publisher_refusal",
@@ -399,7 +399,7 @@ describe("portal session outcomes", () => {
     setSystemTime(startedAt + PL_TK_SESSION_REFUSAL_COOLDOWN_MS);
     const retried = await plTkAdapter.fetchPage(cursor, {});
     if (Result.isOk(retried)) {
-      return panic("Expected the fresh entry attempt to be refused");
+      throw new TypeError("Expected the fresh entry attempt to be refused");
     }
     expect(retried.error.httpStatus).toBe(403);
     expect(requests).toBe(2);
@@ -418,7 +418,7 @@ describe("portal session outcomes", () => {
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
-      return panic("Expected the entry refusal to stop the page");
+      throw new TypeError("Expected the entry refusal to stop the page");
     }
     expect(result.error.stopKind).toBe("publisher_refusal");
     expect(result.error.httpStatus).toBe(403);
@@ -444,7 +444,7 @@ describe("portal session outcomes", () => {
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
-      return panic("Expected the search refusal to stop the page");
+      throw new TypeError("Expected the search refusal to stop the page");
     }
     expect(result.error.stopKind).toBe("publisher_refusal");
     expect(result.error.httpStatus).toBe(403);
@@ -467,7 +467,7 @@ describe("portal session outcomes", () => {
 
     const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
     if (Result.isOk(result)) {
-      return panic("Expected the transport failure to stop the page");
+      throw new TypeError("Expected the transport failure to stop the page");
     }
     expect(result.error.stopKind).toBe("source_unreachable");
     expect(result.error.httpStatus).toBeUndefined();

@@ -217,7 +217,7 @@ describe("a publisher's rate-limit refusal", () => {
     "stop-refusal",
   ] as const) {
     test.each([401, 403])(
-      `the real publisher-backoff path preserves status in mode ${refusalMode}`,
+      `the real publisher-backoff path preserves status in mode ${refusalMode ?? "default"}`,
       async (status) => {
         let requests = 0;
         globalThis.fetch = asFetchMock(
