@@ -20,6 +20,7 @@ import {
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   runOnlineMigrations,
+  type OnlineRepairOptions,
 } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
 import {
@@ -242,8 +243,9 @@ describe.skipIf(!enabled)(
           };
           const runnerOptions = {
             repairs: [repair],
+            indexGate: { ebs: { type: "disabled" } },
             log: (record: unknown) => events.push(record),
-          };
+          } satisfies OnlineRepairOptions;
           await runOnlineMigrations(pool, runnerOptions);
           const processed = (
             await client.unsafe<{ processed: number }[]>(

@@ -34,7 +34,7 @@ The production Compose contract contains exactly these services:
 
 Its generated environment template is `deploy/selfhost/.env.example`.
 
-Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.
+Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.
 <!-- END GENERATED SELF-HOST CONTRACT -->
 
 ```bash

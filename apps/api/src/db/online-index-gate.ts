@@ -19,10 +19,8 @@ import { Temporal } from "@stll/time";
 
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineIndexConfig } from "../env-online-index";
-import {
-  createEbsSignalReader,
-  resolveEbsConfiguration,
-} from "../lib/db/ebs-signal-reader";
+import { createEbsSignalReader } from "../lib/db/ebs-signal-reader";
+import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import { getPgErrorCode, PG_ERROR } from "../lib/pg-error";
 import { isRecord } from "../lib/type-guards";
 import { openOnlineIndexObserver } from "./online-index-observer";
@@ -45,11 +43,19 @@ export const createOnlineIndexHold = (): OnlineIndexHoldRef => ({
   current: { type: "clear" },
 });
 
+/**
+ * Where the gate reads disk health: a configuration resolved at the env
+ * boundary, which cannot be missing, or an injected reader.
+ */
+export type OnlineIndexEbsSource =
+  | ConfiguredEbsConfiguration
+  | { type: "reader"; read: () => Promise<Signal> };
+
 export type OnlineIndexGateOptions = {
+  ebs: OnlineIndexEbsSource;
   config?: OnlineIndexConfig;
   hold?: OnlineIndexHoldRef;
   clock?: () => number;
-  readEbs?: () => Promise<Signal>;
   wait?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
   log?: (record: unknown) => void;
   cancelBackend?: (pid: number) => Promise<boolean>;
@@ -370,25 +376,19 @@ export const createOnlineIndexGate = ({
   config = readOnlineIndexConfig(),
   hold = createOnlineIndexHold(),
   clock = () => Temporal.Now.instant().epochMilliseconds,
-  readEbs,
+  ebs,
   cancelBackend = cancelWithIndependentObserver,
   wait = waitForPoll,
   log = (record) => process.stderr.write(`${JSON.stringify(record)}\n`),
 }: CreateOnlineIndexGateOptions) => {
-  let configuredEbs: ReturnType<typeof createEbsSignalReader> | undefined;
   const readBalance =
-    readEbs ??
-    (async () => {
-      if (!configuredEbs) {
-        const { envDbLoadGate } = await import("../env-db-load-gate");
-        configuredEbs = createEbsSignalReader({
-          configuration: resolveEbsConfiguration(envDbLoadGate),
+    ebs.type === "reader"
+      ? ebs.read
+      : createEbsSignalReader({
+          configuration: ebs,
           clock,
           config: config.health,
         });
-      }
-      return await configuredEbs();
-    });
   const emit = (record: unknown) =>
     log({ event: "online_index_decision", name, record });
   let lifecycle: "active" | "terminated" = "active";

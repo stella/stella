@@ -15,6 +15,8 @@ import { envBaseServerSchema } from "../../env-base-schema";
 import { EbsBalanceReadError } from "./ebs-balance-reader";
 import {
   createEbsSignalReader,
+  EbsConfigurationMissingError,
+  requireEbsConfiguration,
   resolveEbsConfiguration,
   type EbsConfigurationEvent,
 } from "./ebs-signal-reader";
@@ -211,4 +213,34 @@ test("an adapter Err remains an unknown blocking signal", async () => {
   const signal = await read();
   expect(signal.kind).toBe("unknown");
   expect(decideStart(combine([signal]), "index_build").decision).toBe("wait");
+});
+
+test("the migrator requirement rejects only a missing configuration", () => {
+  const missing = requireEbsConfiguration(resolveEbsConfiguration({}));
+  expect(missing.isErr()).toBe(true);
+  if (missing.isOk()) {
+    throw new TypeError("A missing configuration must be rejected");
+  }
+  expect(missing.error).toBeInstanceOf(EbsConfigurationMissingError);
+  expect(missing.error.configurationKeys).toEqual([
+    "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+    "DB_LOAD_GATE_EBS_SIGNAL",
+  ]);
+  expect(missing.error.message).toContain(
+    "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+  );
+  expect(missing.error.message).toContain("DB_LOAD_GATE_EBS_SIGNAL=disabled");
+
+  expect(
+    requireEbsConfiguration(
+      resolveEbsConfiguration({ DB_LOAD_GATE_EBS_SIGNAL: "disabled" }),
+    ).unwrap(),
+  ).toEqual({ type: "disabled" });
+  expect(
+    requireEbsConfiguration(
+      resolveEbsConfiguration({
+        DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER: " test-instance ",
+      }),
+    ).unwrap(),
+  ).toEqual({ type: "enabled", instanceIdentifier: "test-instance" });
 });

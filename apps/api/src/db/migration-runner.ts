@@ -6,6 +6,7 @@ import { readMigrationFiles } from "drizzle-orm/migrator";
 import { getMigrationsToRun } from "drizzle-orm/migrator.utils";
 import { migrate as pgCoreMigrate } from "drizzle-orm/pg-core";
 
+import type { ConfiguredEbsConfiguration } from "../lib/db/ebs-signal-reader";
 import migrationAliasInventory from "../lib/db/migration-alias-inventory.json";
 import {
   assertMigrationHistory,
@@ -287,6 +288,8 @@ const preflightAndAdopt = async ({
 type RunMigrationsOptions = {
   connection: ReservedSQL;
   migrationsFolder: string;
+  /** Resolved before the migrator connects; a missing one never gets here. */
+  ebs: ConfiguredEbsConfiguration;
   migrationsSchema?: string;
   migrationsTable?: string;
   runOnline?: typeof runOnlineMigrations;
@@ -296,6 +299,7 @@ type RunMigrationsOptions = {
 export const runMigrations = async ({
   connection,
   migrationsFolder,
+  ebs,
   migrationsSchema = "drizzle",
   migrationsTable = "__drizzle_migrations",
   runOnline = runOnlineMigrations,
@@ -405,7 +409,7 @@ export const runMigrations = async ({
     };
     const online = await runOnline(
       { reserve: async () => await Promise.resolve(onlineConnection) },
-      { indexGate: { hold: onlineIndexHold } },
+      { indexGate: { ebs, hold: onlineIndexHold } },
     );
     const predictedNames = predicted.map(({ name }) => name);
     const insertedNames = inserted.map(({ name }) => name);

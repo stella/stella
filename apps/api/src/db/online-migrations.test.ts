@@ -13,6 +13,7 @@ import {
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations as runOnlineMigrationsWithGate,
+  type OnlineRepairOptions,
 } from "./online-migrations";
 
 const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
@@ -22,19 +23,22 @@ const healthyIndexGate = {
     health: { ...defaultConfig, busyWindows: [] },
   },
   clock: testClock,
-  readEbs: async () => ({
-    indicator: "ebs_balance",
-    kind: "normal",
-    value: 100,
-    threshold: 70,
-    observedAt: new Date(testClock()).toISOString(),
-    reason: "Injected balance",
-  }),
+  ebs: {
+    type: "reader",
+    read: async () => ({
+      indicator: "ebs_balance",
+      kind: "normal",
+      value: 100,
+      threshold: 70,
+      observedAt: new Date(testClock()).toISOString(),
+      reason: "Injected balance",
+    }),
+  },
   log: () => undefined,
 } satisfies OnlineIndexGateOptions;
-const runOnlineMigrations: typeof runOnlineMigrationsWithGate = async (
-  pool,
-  options,
+const runOnlineMigrations = async (
+  pool: Parameters<typeof runOnlineMigrationsWithGate>[0],
+  options: Partial<OnlineRepairOptions> = {},
 ) =>
   await runOnlineMigrationsWithGate(pool, {
     indexGate: healthyIndexGate,
@@ -149,14 +153,17 @@ describe("online migrations", () => {
     const held = await runOnlineMigrations(harness.pool, {
       indexGate: {
         ...healthyIndexGate,
-        readEbs: async () => ({
-          indicator: "ebs_balance",
-          kind: "unknown",
-          value: null,
-          threshold: 70,
-          observedAt: null,
-          reason: "Injected unavailable metric",
-        }),
+        ebs: {
+          type: "reader",
+          read: async () => ({
+            indicator: "ebs_balance",
+            kind: "unknown",
+            value: null,
+            threshold: 70,
+            observedAt: null,
+            reason: "Injected unavailable metric",
+          }),
+        },
         wait: async (milliseconds) => {
           waits.push(milliseconds);
         },

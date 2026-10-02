@@ -166,7 +166,7 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
           gate: {
             config,
             clock,
-            readEbs,
+            ebs: { type: "reader", read: readEbs },
             wait: waitForAbort,
             log: (record) => {
               records.push(record);
@@ -231,16 +231,19 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
         name: fixture.name,
         kind: "index_build",
         ...fixture.gate,
-        readEbs: async () => {
-          readings++;
-          return {
-            indicator: "ebs_balance",
-            kind: readings === 1 ? "normal" : "stop",
-            value: readings === 1 ? 100 : 1,
-            threshold: readings === 1 ? 70 : 40,
-            observedAt: new Date(fixture.gate.clock()).toISOString(),
-            reason: "injected fault",
-          };
+        ebs: {
+          type: "reader",
+          read: async () => {
+            readings++;
+            return {
+              indicator: "ebs_balance",
+              kind: readings === 1 ? "normal" : "stop",
+              value: readings === 1 ? 100 : 1,
+              threshold: readings === 1 ? 70 : 40,
+              observedAt: new Date(fixture.gate.clock()).toISOString(),
+              reason: "injected fault",
+            };
+          },
         },
         wait: async () => {
           await waitForPhase(fixture.observer, fixture.pid);
@@ -301,17 +304,20 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
           }),
           gate: {
             ...fixture.gate,
-            readEbs: async () => {
-              readings++;
-              const unhealthy = readings === 2 || readings === 3;
-              return {
-                indicator: "ebs_balance",
-                kind: unhealthy ? "stop" : "normal",
-                value: unhealthy ? 1 : 100,
-                threshold: unhealthy ? 40 : 70,
-                observedAt: new Date(fixture.gate.clock()).toISOString(),
-                reason: "injected retry sequence",
-              };
+            ebs: {
+              type: "reader",
+              read: async () => {
+                readings++;
+                const unhealthy = readings === 2 || readings === 3;
+                return {
+                  indicator: "ebs_balance",
+                  kind: unhealthy ? "stop" : "normal",
+                  value: unhealthy ? 1 : 100,
+                  threshold: unhealthy ? 40 : 70,
+                  observedAt: new Date(fixture.gate.clock()).toISOString(),
+                  reason: "injected retry sequence",
+                };
+              },
             },
             wait: async (milliseconds, signal) => {
               expect(milliseconds).toBe(fixture.gate.config.pollMs);

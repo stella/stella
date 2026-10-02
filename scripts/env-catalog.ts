@@ -308,9 +308,9 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
   DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
-    "RDS instance whose EBS balances gate heavy maintenance. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
+    "RDS instance whose EBS balances gate heavy maintenance and online index builds. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
   DB_LOAD_GATE_EBS_SIGNAL:
-    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.",
+    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, migrate fails before connecting, and background maintenance holds with an error event naming the missing configuration.",
   DB_LOAD_GATE_START_FLOOR:
     "EBS balance percentage required to start an online index build.",
   DB_LOAD_GATE_HARD_FLOOR:
@@ -524,6 +524,9 @@ const CONDITIONAL_REQUIREMENT_NOTES: Record<string, string> = {
   AGENT_SANDBOX_IMAGE: "AGENT_SANDBOX_RUNS_ENABLED is true",
   AGENT_SANDBOX_MCP_URL: "AGENT_SANDBOX_RUNS_ENABLED is true",
   CONTENT_ENCRYPTION_KEY: "the process runs without local development access",
+  DB_LOAD_GATE_EBS_SIGNAL: "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER is unset",
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
+    "the database is RDS and DB_LOAD_GATE_EBS_SIGNAL is unset",
   CORPUS_INDEX_Q09_ENDPOINT:
     "LEGAL_SEARCH_PROVIDER is corpus-index and CORPUS_INDEX_Q09_SEARCH_ENDPOINT is unset",
   CORPUS_PROJECTION_OWNER: "CORPUS_STORAGE_MODE is canonical",

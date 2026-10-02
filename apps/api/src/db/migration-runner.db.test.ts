@@ -24,6 +24,8 @@ import { runMigrations, runMigrationsUntilSettled } from "./migration-runner";
 import type { OnlineMigrationOutcome } from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
+// Scratch databases are not RDS; the migrator requires an explicit choice.
+const DISABLED_EBS = { type: "disabled" } as const;
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const A = "20260929000000_runner_a";
@@ -134,6 +136,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
                 return await runMigrations({
                   connection,
                   migrationsFolder: folder,
+                  ebs: DISABLED_EBS,
                   runOnline: async () => {
                     await onOnline?.();
                     return ONLINE_COMPLETE;
@@ -391,6 +394,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
           const firstRun = runMigrations({
             connection: first,
             migrationsFolder: folder,
+            ebs: DISABLED_EBS,
             runOnline: async () => {
               entered.resolve(undefined);
               await release.promise;
@@ -402,6 +406,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const secondRun = runMigrations({
               connection: second,
               migrationsFolder: folder,
+              ebs: DISABLED_EBS,
               runOnline: async () => ONLINE_COMPLETE,
             });
             await waitUntilBlocked(observer, pidRow.pid);
@@ -446,6 +451,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const single = await runMigrations({
               connection,
               migrationsFolder: folder,
+              ebs: DISABLED_EBS,
               runOnline: async () => {
                 expect(await laneOpenToWriters()).toBe(false);
                 return deferred;
@@ -468,8 +474,9 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const settled = await runMigrationsUntilSettled({
               connection,
               migrationsFolder: folder,
+              ebs: DISABLED_EBS,
               runOnline: async (_pool, options) => {
-                holds.add(options?.indexGate?.hold);
+                holds.add(options.indexGate.hold);
                 expect(await laneOpenToWriters()).toBe(false);
                 const outcome = outcomes.shift();
                 if (outcome === undefined) {
@@ -518,6 +525,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             const run = runMigrations({
               connection,
               migrationsFolder: folder,
+              ebs: DISABLED_EBS,
               runOnline: async (pool) => {
                 const { terminate } = await pool.reserve();
                 if (terminate === undefined) {
@@ -730,6 +738,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               await runMigrations({
                 connection: initialConnection,
                 migrationsFolder: corpusFolder,
+                ebs: DISABLED_EBS,
               }),
             );
             expect(initial.insertedNames).toHaveLength(corpusMigrations.length);
@@ -757,6 +766,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                   await runMigrations({
                     connection,
                     migrationsFolder: corpusFolder,
+                    ebs: DISABLED_EBS,
                     runOnline: async () => ONLINE_COMPLETE,
                   }),
                 );

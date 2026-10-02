@@ -64,14 +64,17 @@ test.skipIf(process.env["ONLINE_INDEX_TEST_TABLE"] === undefined)(
             maintenanceWorkMemMb: 16,
           },
           clock: () => now,
-          readEbs: async () => ({
-            indicator: "ebs_balance",
-            kind: "normal",
-            value: 100,
-            threshold: 70,
-            observedAt: new Date(now).toISOString(),
-            reason: "injected child metric",
-          }),
+          ebs: {
+            type: "reader",
+            read: async () => ({
+              indicator: "ebs_balance",
+              kind: "normal",
+              value: 100,
+              threshold: 70,
+              observedAt: new Date(now).toISOString(),
+              reason: "injected child metric",
+            }),
+          },
           wait: async (_milliseconds, signal) => {
             if (!signal.aborted) {
               await new Promise<void>((resolve) => {

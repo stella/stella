@@ -13,6 +13,7 @@ import { readOnlineIndexConfig } from "../env-online-index";
 import {
   createOnlineIndexGate,
   createOnlineIndexHold,
+  type OnlineIndexEbsSource,
   type OnlineIndexHoldRef,
 } from "./online-index-gate";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
@@ -60,6 +61,7 @@ type HarnessOptions = {
   cancelBackend?: (pid: number) => Promise<boolean>;
   onCancel?: () => void;
   hold?: OnlineIndexHoldRef;
+  ebsSource?: OnlineIndexEbsSource;
 };
 
 const makeHarness = ({
@@ -76,6 +78,7 @@ const makeHarness = ({
   cancelBackend,
   onCancel,
   hold = createOnlineIndexHold(),
+  ebsSource,
 }: HarnessOptions) => {
   let now = Date.parse("2026-10-02T12:00:00.000Z");
   let readingOffset = 0;
@@ -196,7 +199,7 @@ const makeHarness = ({
     config: gateConfig,
     hold,
     clock: () => now,
-    readEbs: async () => takeReading(),
+    ebs: ebsSource ?? { type: "reader", read: async () => takeReading() },
     wait: async (_milliseconds, signal) => {
       now += tickMs;
       if (polls >= finishAfterPolls && !signal.aborted) {
@@ -320,6 +323,26 @@ describe("online index gate", () => {
       );
       await harness.gate.close();
     }
+  });
+
+  test("builds on an explicitly disabled EBS signal without reading metrics", async () => {
+    const harness = makeHarness({
+      readings: [],
+      ebsSource: { type: "disabled" },
+    });
+
+    expect(
+      await harness.gate.attempt(
+        "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+      ),
+    ).toBe("done");
+    expect(harness.statements).toContain(
+      "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)",
+    );
+    expect(JSON.stringify(harness.records)).toContain(
+      '"kind":"not_configured"',
+    );
+    await harness.gate.close();
   });
 
   test("starts at the configured floor and logs the values and effective thresholds", async () => {

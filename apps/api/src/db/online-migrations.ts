@@ -372,11 +372,15 @@ type PresentIndexState = {
 
 type OnlineIndexState = { type: "missing" } | PresentIndexState;
 
-type OnlineMigrationOperation = "repair" | "validate";
+/** Only repair builds indexes, so only repair carries the index gate. */
+type OnlineMigrationMode =
+  | { operation: "repair"; indexGate: OnlineIndexGateOptions }
+  | { operation: "validate" };
+
+type OnlineMigrationOperation = OnlineMigrationMode["operation"];
 
 type OnlineMigrationOptions = {
   repairs?: readonly OnlineRepair[];
-  indexGate?: OnlineIndexGateOptions;
   reserveObserver?: () => Promise<OnlineMigrationConnection>;
   log?: (record: {
     event: "online_repair_pending";
@@ -397,17 +401,29 @@ export type OnlineMigrationOutcome =
 
 const COMPLETE = { type: "complete" } as const satisfies OnlineMigrationOutcome;
 
+export type OnlineRepairOptions = OnlineMigrationOptions & {
+  indexGate: OnlineIndexGateOptions;
+};
+
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  options: OnlineMigrationOptions = {},
+  { indexGate, ...options }: OnlineRepairOptions,
 ): Promise<OnlineMigrationOutcome> =>
-  await processOnlineMigrations(pool, "repair", options);
+  await processOnlineMigrations(
+    pool,
+    { operation: "repair", indexGate },
+    options,
+  );
 
 export const assertOnlineMigrationsApplied = async (
   pool: OnlineMigrationPool,
   options: OnlineMigrationOptions = {},
 ): Promise<void> => {
-  const outcome = await processOnlineMigrations(pool, "validate", options);
+  const outcome = await processOnlineMigrations(
+    pool,
+    { operation: "validate" },
+    options,
+  );
   if (outcome.type !== "complete") {
     panic("Online migration validation cannot defer");
   }
@@ -415,7 +431,7 @@ export const assertOnlineMigrationsApplied = async (
 
 const processOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  operation: OnlineMigrationOperation,
+  mode: OnlineMigrationMode,
   options: OnlineMigrationOptions,
 ): Promise<OnlineMigrationOutcome> => {
   const connection = await pool.reserve();
@@ -434,14 +450,14 @@ const processOnlineMigrations = async (
     await connection.execute(ONLINE_MIGRATIONS_LOCK_SQL);
     lockAcquired = true;
 
-    if (operation === "repair") {
+    if (mode.operation === "repair") {
       await connection.execute(ONLINE_MIGRATION_LOCK_TIMEOUT_SQL);
       await connection.execute("SET statement_timeout = '0'");
     }
 
     const indexes = await processOnlineIndexAt({
       connection,
-      operation,
+      mode,
       options,
     });
     if (indexes.type === "deferred") {
@@ -449,18 +465,18 @@ const processOnlineMigrations = async (
     }
     const cutovers = await processOnlineIndexCutoverAt({
       connection,
-      operation,
+      mode,
       options,
     });
     if (cutovers.type === "deferred") {
       return cutovers;
     }
-    if (operation === "repair") {
+    if (mode.operation === "repair") {
       await retireReplacedIndexAt(connection);
     }
     await processOnlineRepairAt({
       connection,
-      operation,
+      operation: mode.operation,
       repairs: options.repairs ?? ONLINE_MIGRATION_REPAIRS,
       log:
         options.log ??
@@ -480,14 +496,14 @@ const processOnlineMigrations = async (
 
 type OnlineIndexWalkOptions = {
   connection: OnlineMigrationConnection;
-  operation: OnlineMigrationOperation;
+  mode: OnlineMigrationMode;
   options: OnlineMigrationOptions;
   offset?: number;
 };
 
 const processOnlineIndexAt = async ({
   connection,
-  operation,
+  mode,
   options,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
@@ -496,11 +512,11 @@ const processOnlineIndexAt = async ({
     return COMPLETE;
   }
 
-  if (operation === "repair") {
+  if (mode.operation === "repair") {
     const outcome = await ensureOnlineIndexValid({
       connection,
       index,
-      gate: options.indexGate,
+      gate: mode.indexGate,
       reserveObserver: options.reserveObserver,
     });
     if (outcome.type === "deferred") {
@@ -511,7 +527,7 @@ const processOnlineIndexAt = async ({
   }
   return await processOnlineIndexAt({
     connection,
-    operation,
+    mode,
     options,
     offset: offset + 1,
   });
@@ -519,7 +535,7 @@ const processOnlineIndexAt = async ({
 
 const processOnlineIndexCutoverAt = async ({
   connection,
-  operation,
+  mode,
   options,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
@@ -528,10 +544,11 @@ const processOnlineIndexCutoverAt = async ({
     return COMPLETE;
   }
 
-  if (operation === "repair") {
+  if (mode.operation === "repair") {
     const outcome = await completeIndexCutover({
       connection,
       cutover,
+      gate: mode.indexGate,
       options,
     });
     if (outcome.type === "deferred") {
@@ -542,7 +559,7 @@ const processOnlineIndexCutoverAt = async ({
   }
   return await processOnlineIndexCutoverAt({
     connection,
-    operation,
+    mode,
     options,
     offset: offset + 1,
   });
@@ -808,7 +825,7 @@ const assertIndexReady = async (
 type EnsureOnlineIndexOptions = {
   connection: OnlineMigrationConnection;
   index: OnlineIndex;
-  gate?: OnlineIndexGateOptions | undefined;
+  gate: OnlineIndexGateOptions;
   reserveObserver?: (() => Promise<OnlineMigrationConnection>) | undefined;
 };
 
@@ -894,12 +911,14 @@ export const ensureOnlineIndexValid = async ({
 type CompleteIndexCutoverOptions = {
   connection: OnlineMigrationConnection;
   cutover: OnlineIndexCutover;
+  gate: OnlineIndexGateOptions;
   options: OnlineMigrationOptions;
 };
 
 const completeIndexCutover = async ({
   connection,
   cutover: { final, staged },
+  gate,
   options,
 }: CompleteIndexCutoverOptions): Promise<OnlineMigrationOutcome> => {
   const finalState = await readIndexState(connection, final);
@@ -927,7 +946,7 @@ const completeIndexCutover = async ({
   const stagedOutcome = await ensureOnlineIndexValid({
     connection,
     index: staged,
-    gate: options.indexGate,
+    gate,
     reserveObserver: options.reserveObserver,
   });
   if (stagedOutcome.type === "deferred") {
