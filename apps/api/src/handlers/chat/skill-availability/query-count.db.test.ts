@@ -10,6 +10,7 @@ import {
 } from "bun:test";
 
 import { chatRoute } from "@/api/handlers/chat/routes";
+import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   queryCountLogger,
   runWithQueryCounter,
@@ -52,7 +53,7 @@ afterAll(async () => {
   await releaseAgentAuthTestDb();
 });
 
-const countQueries = async (headers: HeadersInit) =>
+const countQueries = async (headers: Record<string, string>) =>
   await runWithQueryCounter(async (counter) => {
     const response = await chatRoute.handle(
       new Request("http://localhost/chat/skill-availability", {
@@ -123,8 +124,10 @@ describe("skill availability runs a fixed query plan", () => {
       orgSlugPrefix: "skill-queries",
     });
     const credential =
-      getSessionCookie(new Headers({ cookie: cookieHeader })) ??
-      panic("Session fixture missing");
+      // The app names its cookies with its own prefix, not better-auth's default.
+      getSessionCookie(new Headers({ cookie: cookieHeader }), {
+        cookiePrefix: authCookiePolicy().cookiePrefix,
+      }) ?? panic("Session fixture missing");
     const headers = { authorization: `Bearer ${credential}` };
     expect(await countQueries(headers)).toBe(
       WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
