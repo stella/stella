@@ -21,7 +21,12 @@ const config = {
     "layouts. A pure read: default views are seeded when the matter is " +
     "created, so listing never mints one.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

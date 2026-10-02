@@ -20,7 +20,7 @@ const config = {
   description:
     "Update an active VAT rate validity period without overlapping another period for its code.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: vatRateParams,
   body: updateVatRateBody,
 } satisfies HandlerConfig;

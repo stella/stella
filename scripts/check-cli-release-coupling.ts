@@ -388,7 +388,7 @@ export type CliReleaseVerdict =
   | { readonly status: "blocked"; readonly message: string };
 
 const REMEDY_PENDING =
-  "Merge the pending Version Packages pull request first (or revert the changeset), then re-run tag-on-version-bump from the Actions tab.";
+  "Merge the pending Version Packages pull request first (or revert the changeset), then dispatch release-tag with the verified commit from the Actions tab.";
 
 export const verdictFromClassification = (
   classification: CliReleaseClassification,
@@ -525,7 +525,7 @@ const readSurface = (
     readFileSync(path.join(root, locate(part)), "utf-8"),
   );
 
-const readHeadSurface = (root: string): CliContractSurface =>
+export const readHeadSurface = (root: string): CliContractSurface =>
   readSurface(path.join(root, CLI_DIRECTORY), (part) => part);
 
 /** Downloads the published tarball and reads the same surface parts from it. */

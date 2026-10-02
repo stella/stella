@@ -22,7 +22,11 @@ const config = {
     "number of lists. Add structure afterwards with lists.sections.create " +
     "and lists.columns.create.",
   permissions: { view: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

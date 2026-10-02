@@ -297,6 +297,7 @@ export type CompareDocumentsOutput = v.InferInput<
 >;
 
 export const COMPARE_DOCUMENTS_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   annotations: {
     title: "Compare document versions",
     destructiveHint: false,

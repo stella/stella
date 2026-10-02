@@ -183,7 +183,11 @@ const createInvoiceLine = createSafeHandler(
       "entry and marks the entry billed. Every line carries a VAT rate in " +
       "basis points and a VAT treatment. Only draft invoices accept lines.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: lineParamsSchema,
     body: createLineBodySchema,
   },

@@ -24,9 +24,13 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
+import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
 import {
   DatabaseError,
@@ -58,10 +62,13 @@ import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
+import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
+import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
-  ActionAdmissionError,
-  withActionAdmission,
-} from "@/api/lib/rate-limit/action-admission";
+  applyResponseCachePolicy,
+  type CachePolicy,
+} from "@/api/lib/security-headers";
 import {
   getTanStackTextModelInfoForRole,
   resolveEffectiveServiceTierForProvider,
@@ -76,6 +83,7 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // import is erased at build time and never creates a runtime import cycle
 // (api-handlers must stay importable without pulling in the MCP graph).
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -240,9 +248,14 @@ export type McpInternalReason =
  *   and the approved permanent exclusions).
  */
 export type McpExposure =
-  | { type: "tool"; name: McpToolName }
-  | { type: "covered"; by: McpToolName }
-  | { type: "capability"; reason: McpCapabilityReason }
+  | { type: "tool"; name: McpToolName; readClass?: McpReadClass }
+  | { type: "covered"; by: McpToolName; readClass?: McpReadClass }
+  | {
+      type: "capability";
+      reason: McpCapabilityReason;
+      consumesServices: ServiceClassification;
+      readClass?: McpReadClass;
+    }
   | { type: "internal"; reason: McpInternalReason };
 
 /**
@@ -318,9 +331,16 @@ type CapabilityDescription = {
  * by inference — over-classifying a write is safe (it just requires write
  * consent), so writes need no affirmation.
  */
-type CapabilityAccess = {
-  access?: "read" | "write";
-};
+type CapabilityAccess =
+  | { access?: "write" }
+  | {
+      access: "read";
+      mcp:
+        | Exclude<McpExposure, { type: "capability" }>
+        | (Extract<McpExposure, { type: "capability" }> & {
+            readClass: McpReadClass;
+          });
+    };
 
 /**
  * How this capability's payload crosses the generic JSON transport (see
@@ -352,7 +372,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: "handler";
+    actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     mcp: McpExposure;
   };
 
@@ -363,9 +383,11 @@ export type HandlerConfig = InputSchema &
  * route-level schema cannot shadow the segment the workspace macro resolves the
  * tenant from. `workspaceParams()` produces the shape.
  */
-export type WorkspaceHandlerConfig = Omit<HandlerConfig, "params"> & {
-  params?: WorkspaceParamsSchema;
-};
+type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
+  ? Omit<TConfig, "params"> & { params?: WorkspaceParamsSchema }
+  : never;
+
+export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
@@ -386,6 +408,7 @@ type SessionHandlerContext<
 > = Context<SessionConfigRouteSchema<TConfig>> & {
   user: {
     id: SafeId<"user">;
+    email: string;
   };
 };
 
@@ -393,6 +416,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   Context<ConfigRouteSchema<TConfig>> & {
     user: {
       id: SafeId<"user">;
+      email: string;
     };
     session: {
       activeOrganizationId: SafeId<"organization">;
@@ -438,6 +462,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * `false` regardless of what call sites set.
      */
     promptCachingEnabled: boolean;
+    managedAIResidency: ManagedAIResidency;
     /**
      * Records an audit row in the supplied transaction. Identity
      * fields (org/user/IP/UA) are bound from the request context;
@@ -466,6 +491,7 @@ type WorkspaceHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   };
 
 type SafeHandlerError =
+  | ActionAdmissionError
   | DatabaseError
   | DatabaseRlsError
   | HandlerError
@@ -476,6 +502,8 @@ type SafeErrorBody = {
   message: string;
   /** Corrective next step for programmatic clients. */
   hint?: string;
+  contactUrl?: string;
+  retryable?: boolean;
   /** Field-scoped reasons the request was rejected. */
   issues?: HandlerErrorValidationIssue[];
   /**
@@ -696,7 +724,10 @@ const runSafeHandler = async <
 
     const error = result.error;
 
-    const handlerError = resolveHandlerError(error);
+    const handlerError = resolveHandlerError(
+      error,
+      env.ACTION_LIMIT_CONTACT_URL,
+    );
     if (handlerError !== null) {
       const statusCode = handlerError.status;
 
@@ -764,7 +795,10 @@ const runSafeHandler = async <
     // an AI request hitting a role the org has not configured a
     // BYOK key for) gets reported to the user as "Internal
     // server error" with no actionable detail.
-    const handlerError = resolveHandlerError(error);
+    const handlerError = resolveHandlerError(
+      error,
+      env.ACTION_LIMIT_CONTACT_URL,
+    );
     if (handlerError !== null) {
       logAndCaptureSafeError({
         request: ctx.request,
@@ -799,7 +833,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: "handler";
+  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -807,10 +841,12 @@ type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
   session: { activeOrganizationId: SafeId<"organization"> };
+  scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
+  actionKind: PeriodActionKind;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;
@@ -822,17 +858,34 @@ const runAdmittedFiniteHandler = async function* <
 >({
   ctx,
   handler,
+  actionKind,
   admit = withActionAdmission,
 }: FiniteActionOptions<TContext, TResult>): SafeHandlerGenerator<TResult> {
   return yield* Result.await(
     admit({
       organizationId: ctx.session.activeOrganizationId,
       userId: ctx.user.id,
+      organizationStateDb: ctx.scopedDb,
+      periodIdentity: {
+        actionKind,
+        // These finite endpoints have no client idempotency key.
+        logicalPhaseId:
+          getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
+      },
       run: async (signal) => {
+        // A disconnected request may carry no reason after signal composition.
+        if (ctx.request.signal.aborted) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Request aborted",
+              cause: ctx.request.signal.reason,
+            }),
+          );
+        }
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
         ctx.actionSignal.throwIfAborted();
         const outcome = await Result.gen(() => handler(ctx));
-        ctx.actionSignal.throwIfAborted();
         if (Result.isOk(outcome) && outcome.value instanceof Response) {
           // Cancel the producer too: a rejected stream must not keep running after release.
           await outcome.value.body?.cancel();
@@ -851,19 +904,10 @@ const runAdmittedFiniteHandler = async function* <
       },
     }).then((admitted) =>
       Result.mapError(admitted, (error) => {
-        if (ActionAdmissionError.is(error)) {
-          return new HandlerError({
-            status: error.reason === "busy" ? 429 : 503,
-            code:
-              error.reason === "busy" ? "rate_limited" : "service_unavailable",
-            message:
-              error.reason === "busy"
-                ? "Concurrent action limit reached"
-                : "Action admission is unavailable",
-            cause: error,
-          });
-        }
-        const handlerError = resolveHandlerError(error);
+        const handlerError = resolveHandlerError(
+          error,
+          env.ACTION_LIMIT_CONTACT_URL,
+        );
         if (handlerError !== null) {
           return handlerError;
         }
@@ -887,14 +931,16 @@ export const admitFiniteAction = async function* <
   ctx,
   handler,
   admit,
+  actionKind,
 }: FiniteActionOptions<TContext, TResult> & {
   handler: SafeHandlerFn<TContext, TResult> &
     NoInfer<FiniteHandlerGuard<TResult>>;
 }): SafeHandlerGenerator<TResult> {
-  if (!env.FEATURE_ACTION_ADMISSION) {
+  if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
     return yield* handler(ctx);
   }
   return yield* runAdmittedFiniteHandler({
+    actionKind,
     ctx,
     handler,
     ...(admit === undefined ? {} : { admit }),
@@ -903,6 +949,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
+  checkAccountOperation?: typeof checkDemoAccountOperation;
 };
 
 const createSafeScopedHandler = <
@@ -912,7 +959,10 @@ const createSafeScopedHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
-  { admit = withActionAdmission }: HandlerAdmissionDependencies = {},
+  {
+    admit = withActionAdmission,
+    checkAccountOperation = checkDemoAccountOperation,
+  }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
@@ -923,6 +973,15 @@ const createSafeScopedHandler = <
       });
     }
 
+    if (requiresStandardAccount(config.permissions)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
     // A handler that declares AI usage must not run when this request could
     // not read the org's stored config, or the org is barred from the
     // instance provider: `ctx.orgAIConfig` is null there, and resolving a
@@ -958,12 +1017,21 @@ const createSafeScopedHandler = <
       ctx.usageLane = preflight.lane;
     }
 
-    if (config.actionAdmission !== "handler" || !env.FEATURE_ACTION_ADMISSION) {
+    const admission = config.actionAdmission;
+    if (
+      admission === undefined ||
+      (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS)
+    ) {
       return await runSafeHandler(ctx, handler);
     }
 
     return await runSafeHandler(ctx, (input) =>
-      runAdmittedFiniteHandler({ ctx: input, handler, admit }),
+      runAdmittedFiniteHandler({
+        ctx: input,
+        handler,
+        admit,
+        actionKind: admission.actionKind,
+      }),
     );
   },
 });
@@ -994,6 +1062,7 @@ export const resolveMeteringContext = ({
 }): ResolvedMeteringContext => {
   const modelRole = metering.modelRole ?? "chat";
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   const isByok = modelInfo.keySource === "byok";
@@ -1323,6 +1392,8 @@ const safeErrorBody = (error: HandlerError): SafeErrorBody => ({
   ...(error.code ? { code: error.code } : {}),
   message: error.message,
   ...(error.hint ? { hint: error.hint } : {}),
+  ...(error.contactUrl ? { contactUrl: error.contactUrl } : {}),
+  ...(error.retryable === undefined ? {} : { retryable: error.retryable }),
   ...(error.issues ? { issues: error.issues } : {}),
   // Usage-limit 402s carry structured fields so the frontend renders the
   // "x of y units left" modal without parsing the message (see SafeErrorBody).
@@ -1433,6 +1504,7 @@ export const createSafeTokenHandler = <
 export type PublicHandlerConfig = InputSchema &
   CapabilityDescription &
   CapabilityAccess & {
+    cache: CachePolicy;
     mcp: McpExposure;
   };
 
@@ -1445,7 +1517,10 @@ export type PublicHandlerContext<
  * mounted handler is in here, which a naming convention cannot guarantee:
  * a raw function passed to `.get()` reads the same at the call site.
  */
-const safePublicHandlers = new WeakSet<object>();
+const safePublicHandlers = new WeakMap<object, CachePolicy>();
+
+export const getPublicHandlerCachePolicy = (handler: unknown) =>
+  typeof handler === "function" ? safePublicHandlers.get(handler) : undefined;
 
 /** Whether a mounted route handler came out of `createSafePublicHandler`. */
 export const isSafePublicHandler = (handler: unknown): boolean =>
@@ -1463,8 +1538,19 @@ export const createSafePublicHandler = <
   config: TConfig,
   handler: SafeHandlerFn<PublicHandlerContext<TConfig>, TResult>,
 ): SafeHandlerDefinition<TConfig, PublicHandlerContext<TConfig>, TResult> => {
-  const definition = createSafeDirectHandler(config, handler);
-  safePublicHandlers.add(definition.handler);
+  const definition = {
+    config,
+    handler: async (ctx: PublicHandlerContext<TConfig>) => {
+      const response = await runSafeHandler(ctx, handler);
+      applyResponseCachePolicy({
+        cache: config.cache,
+        response,
+        set: ctx.set,
+      });
+      return response;
+    },
+  };
+  safePublicHandlers.set(definition.handler, config.cache);
   return definition;
 };
 

@@ -1,18 +1,15 @@
 import { Fragment, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ComponentProps, ReactNode, RefObject } from "react";
 
-import { Result } from "better-result";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
 import { isThirdPartyBoundaryRefusalError } from "@stll/anonymize-chat";
 import type { AIErrorKind } from "@stll/api-contract";
-import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import {
   ChevronRightIcon,
   ClockIcon,
-  CopyIcon,
   FileTextIcon,
   Loader2Icon,
   PaperclipIcon,
@@ -22,6 +19,7 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { ActionAdmissionOutcome } from "@/components/action-admission-outcome";
 import {
   Message,
   MessageContent,
@@ -42,6 +40,8 @@ import {
   isRichChatPart,
 } from "@/components/chat/chat-rich-message-part";
 import type { RichChatPart } from "@/components/chat/chat-rich-message-part";
+import type { ChatBranchSource } from "@/components/chat/chat-selection-branch.logic";
+import { ChatSelectionToolbar } from "@/components/chat/chat-selection-toolbar";
 import {
   assistantMessageFallbackText,
   buildMessageTurns,
@@ -85,6 +85,7 @@ import { StreamdownMentionLink } from "@/components/chat/streamdown-mention-link
 import { ToolApprovalCard } from "@/components/chat/tool-approval-card";
 import { ToolCallCard } from "@/components/chat/tool-call-card";
 import { WebSearchSources } from "@/components/chat/web-search-sources";
+import { CopyActionButton } from "@/components/copy-action-button";
 import type { QueuedChatMessage } from "@/features/chat/hooks/use-chat-session";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -94,6 +95,7 @@ import { getAnalytics } from "@/lib/analytics/provider";
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { dedupeById } from "@/lib/dedupe-by-id";
 import { detached } from "@/lib/detached";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { sanitizeHref } from "@/lib/sanitize-href";
 import {
   getUserFileContentUrl,
@@ -105,6 +107,7 @@ export const ChatThreadMessages = ({
   activeFileName,
   assistantTextDensity = "default",
   approvalPendingMessageId,
+  branchSource,
   error,
   hasOlderMessages = false,
   isGenerating = false,
@@ -261,6 +264,7 @@ export const ChatThreadMessages = ({
       )}
       from={message.role}
       key={message.id}
+      data-chat-message-id={message.id}
     >
       <MessageContent>
         {message.role === "assistant" ? (
@@ -307,6 +311,7 @@ export const ChatThreadMessages = ({
                 messageId: message.id,
                 messages,
               })}
+              contextMatterIds={branchSource?.contextMatterIds}
               message={message}
               onResend={onResend}
               threadRef={threadRef}
@@ -345,6 +350,9 @@ export const ChatThreadMessages = ({
 
   return (
     <>
+      {branchSource !== undefined && scrollRef !== null && (
+        <ChatSelectionToolbar rootRef={scrollRef} source={branchSource} />
+      )}
       {canLoadOlder && (
         <LoadOlderSentinel
           isLoadingOlder={isLoadingOlder}
@@ -591,6 +599,7 @@ const StickyUserTurn = ({
               "group-data-[stuck=true]/sticky:[&_button]:pointer-events-auto",
             )}
             from="user"
+            data-chat-message-id={headerMessage.id}
           >
             <MessageContent>
               <div className="group-data-[stuck=true]/sticky:hidden">
@@ -936,6 +945,26 @@ export const ChatErrorMessage = ({
     onSendWithoutAnonymization !== undefined &&
     isThirdPartyBoundaryRefusalError(error);
 
+  if (actionAdmissionOutcome(error)) {
+    return (
+      <Message from="assistant">
+        <MessageContent>
+          <ActionAdmissionOutcome
+            disabled={isGenerating}
+            error={error}
+            onRetry={
+              onResend
+                ? () => {
+                    detached(onResend(), "chat-thread-messages.resend");
+                  }
+                : undefined
+            }
+          />
+        </MessageContent>
+      </Message>
+    );
+  }
+
   return (
     <Message from="assistant">
       <MessageContent className="bg-destructive/10 border-destructive/20 text-destructive max-w-md rounded-lg border px-3 py-2">
@@ -1038,6 +1067,7 @@ const getMessageText = (message: PersistedChatMessage) => {
 const AssistantMessageActions = ({
   canFork: forkOffered,
   canRetry: retryOffered,
+  contextMatterIds,
   exportArtifact,
   message,
   onResend,
@@ -1047,6 +1077,8 @@ const AssistantMessageActions = ({
   canFork: boolean;
   /** `canRetryAssistantMessage`. */
   canRetry: boolean;
+  /** The chat's matter scope, which a fork opened in the inspector keeps. */
+  contextMatterIds?: readonly string[] | undefined;
   exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   onResend?:
@@ -1065,31 +1097,15 @@ const AssistantMessageActions = ({
     return null;
   }
 
-  const handleCopy = async () => {
-    const copied = await copyToClipboard(text);
-    if (Result.isError(copied)) {
-      getAnalytics().captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
-      return;
-    }
-    stellaToast.add({ title: t("common.copied"), type: "success" });
-  };
-
   return (
     <div className="flex items-center gap-1">
       {text && (
-        <Button
-          aria-label={t("common.copy")}
+        <CopyActionButton
           className="text-muted-foreground h-6 px-1.5"
-          onClick={() => {
-            detached(handleCopy(), "chat-thread-messages.copy");
-          }}
           size="xs"
+          text={text}
           variant="ghost"
-        >
-          <CopyIcon className="size-3.5" />
-          {t("common.copy")}
-        </Button>
+        />
       )}
       {canRetry && (
         <Button
@@ -1112,6 +1128,7 @@ const AssistantMessageActions = ({
         <ChatMessageActionsMenu
           canExport={Boolean(text)}
           canFork={canFork}
+          contextMatterIds={contextMatterIds}
           exportArtifact={exportArtifact}
           message={message}
           threadRef={threadRef}
@@ -1144,6 +1161,13 @@ type ChatThreadMessagesProps = {
   /** Compact prose is reserved for constrained overlays over a document. */
   assistantTextDensity?: "compact" | "default" | undefined;
   approvalPendingMessageId: string | null;
+  /**
+   * The chat this transcript is, for branching from a selection: when
+   * present, words selected in a message can be asked about in a new
+   * inspector chat or quoted into this chat's composer. Surfaces with their
+   * own composer flow (file-chat overlay, Template Studio) omit it.
+   */
+  branchSource?: ChatBranchSource | undefined;
   error?: Error | undefined;
   /** Whether an older page exists to load above the current top. */
   hasOlderMessages?: boolean | undefined;
@@ -1533,6 +1557,9 @@ const AssistantMessageParts = ({
     }
 
     if (part.type === "text") {
+      if (!part.content.trim()) {
+        return null;
+      }
       return (
         <AssistantTextPart
           className={cn(

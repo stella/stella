@@ -19,6 +19,7 @@ import {
 import {
   compatCorpusFetchResponse,
   compatSearchCursorError,
+  compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
@@ -79,6 +80,7 @@ const lawCompatFetchArgsSchema = nullAsAbsent(
 
 const LAW_COMPAT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Search",
       destructiveHint: false,
@@ -86,6 +88,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Search the public legal corpus (case-law decisions and statutes) using " +
@@ -98,6 +101,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
     scope: "stella:search",
   }),
   defineValibotMcpTool({
+    consumesServices: true,
     annotations: {
       title: "Fetch",
       destructiveHint: false,
@@ -105,6 +109,7 @@ const LAW_COMPAT_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     description:
       "Fetch one public-corpus document by id using the OpenAI-compatible fetch " +
@@ -130,6 +135,11 @@ const handleLawCompatSearchTool: McpToolHandler<
   const position = decodeCompatSearchCursor(cursor);
   if (position === null) {
     return compatSearchCursorError(cursor ?? "");
+  }
+
+  const pageLimitResult = compatSearchPageLimitResult("law");
+  if (pageLimitResult !== null) {
+    return pageLimitResult;
   }
 
   const corpus = await searchCompatCorpus({

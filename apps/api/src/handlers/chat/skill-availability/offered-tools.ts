@@ -29,6 +29,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryDispatch } from "@/api/lib/business-registries/credentials";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -43,9 +44,11 @@ export type ChatSkillAvailabilityContext = {
   memberRole: { role: keyof typeof roles };
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
+  userEmail: string;
 };
 
 /**
@@ -197,6 +200,7 @@ const chatContextToolNames = (
     memberRole: context.memberRole.role,
     organizationId: context.organizationId,
     orgAIConfig: context.orgAIConfig,
+    managedAIResidency: context.managedAIResidency,
     pastChatScope: resolvePastChatScope({
       contextMatterIds: chatContext.contextMatterIds,
       threadWorkspaceId: chatContext.workspaceId,
@@ -227,6 +231,7 @@ const chatContextToolNames = (
       pinnedIds: chatContext.contextMatterIds,
     }),
     userId: context.userId,
+    userEmail: context.userEmail,
     webSearchEnabled: chatContext.webSearch,
     webSearchProviders: inputs.webSearchProviders,
     workspaceId: chatContext.workspaceId,

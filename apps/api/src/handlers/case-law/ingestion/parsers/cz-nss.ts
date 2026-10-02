@@ -469,6 +469,12 @@ const extractChunks = ($: cheerio.CheerioAPI): PChunk[] => {
     }
 
     if (tag === "table") {
+      $el.children("caption").each((_caption, caption) => {
+        const chunk = styledBlockChunk($, $(caption));
+        if (chunk !== null) {
+          chunks.push(chunk);
+        }
+      });
       // Extract each row as a paragraph. Cell values are
       // joined with " | " to preserve tabular structure
       // in plain text (e.g., cost breakdowns, fee summaries).

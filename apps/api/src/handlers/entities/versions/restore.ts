@@ -28,7 +28,11 @@ const config = {
   description:
     "Restore a historical document version by copying it into a new current version; the prior history remains intact.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   params: paramsSchema,
 } satisfies WorkspaceHandlerConfig;
 

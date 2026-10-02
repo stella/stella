@@ -53,6 +53,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
 /** `<number>/<year>` as a collection prints it: `89/2012`. */
@@ -341,10 +342,15 @@ export const listStatutesHandler = async (
   const countryRead = readPublicLawCountry(query.country, {
     admitted: PUBLIC_LEGISLATION_COUNTRIES,
   });
+  if (countryRead.kind === "unavailable") {
+    return status(503, countryRead.response);
+  }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }
-  const limit = query.limit ?? LIMITS.legislationListPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.legislationListPageSizeDefault,
+  );
   const cursor =
     query.cursor === undefined ? null : decodeListCursor(query.cursor);
   if (query.cursor !== undefined && cursor === null) {

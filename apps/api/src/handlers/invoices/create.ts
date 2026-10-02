@@ -386,7 +386,11 @@ const createInvoice = createSafeHandler(
       "Pass empty timeEntryIds for a draft with manual lines. Expenses are added " +
       "afterwards with invoices.entries.add.",
     permissions: { invoice: ["create"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     body: createInvoiceBodySchema,
   },
   async function* ({

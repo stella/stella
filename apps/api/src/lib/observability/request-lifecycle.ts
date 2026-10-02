@@ -8,6 +8,7 @@
  */
 
 import type { Context } from "elysia";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import { getServerAnalytics } from "@/api/lib/analytics/client";
@@ -223,6 +224,28 @@ type RequestCompletionContext = {
   set: Context["set"];
 };
 
+const finalResponseCompletion = new AsyncLocalStorage<{
+  context: RequestCompletionContext | undefined;
+}>();
+
+// Defer logging and flushing until outer response policies have settled.
+export const withFinalResponseCompletion = async (
+  request: Request,
+  run: () => Response | Promise<Response>,
+): Promise<Response> => {
+  const state: { context: RequestCompletionContext | undefined } = {
+    context: undefined,
+  };
+  const response = await finalResponseCompletion.run(state, run);
+  await completeRequest({
+    request,
+    route: state.context?.route,
+    set: state.context?.set ?? { headers: {} },
+    responseValue: response,
+  });
+  return response;
+};
+
 // The completion record grades its answer by the failure the request
 // observed. A 5xx with none observed (a handler that returned the status
 // itself) is counted as such, at the severity it always had.
@@ -239,6 +262,12 @@ export const completeRequest = async ({
 }: RequestCompletionContext) => {
   delete set.headers["X-Powered-By"];
   setDbQueryCountHeader(set);
+
+  const deferred = finalResponseCompletion.getStore();
+  if (deferred !== undefined) {
+    deferred.context = { request, responseValue, route, set };
+    return;
+  }
 
   const path = getRequestPath(request);
   const reqCtx = getRequestContext(request);

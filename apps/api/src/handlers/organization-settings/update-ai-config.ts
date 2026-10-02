@@ -6,7 +6,8 @@ import { TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
 import { organizationSettings } from "@/api/db/schema";
 import {
   DECISION_MODEL_PROVIDERS,
-  normalizeProviderRegion,
+  supportsRegion,
+  type DataRegion,
   type OrgAIConfig,
   type OrgAIModelSelection,
   type OrgAIProviderConfig,
@@ -40,7 +41,9 @@ const BYOK_PROVIDER_VALUES = TANSTACK_AI_PROVIDERS;
 const providerBody = t.Object({
   provider: t.UnionEnum(BYOK_PROVIDER_VALUES),
   apiKey: t.Optional(t.String({ minLength: 1 })),
-  region: t.Optional(t.Literal("global")),
+  region: t.Optional(
+    t.Union([t.Literal("global"), t.Literal("eu"), t.Literal("ch")]),
+  ),
 });
 
 const modelSelectionBody = t.Object({
@@ -294,7 +297,7 @@ type ValidationResult = ProviderProbeResult;
 type ProviderConfigInput = {
   provider: BYOKProvider;
   apiKey?: string | undefined;
-  region?: "global" | undefined;
+  region?: DataRegion | undefined;
 };
 
 type TanStackBYOKProviderConfig = OrgAIProviderConfig & {
@@ -352,13 +355,18 @@ const resolveProviderConfigs = (
         ? existingProvider.region
         : undefined;
 
+    const region = providerInput.region ?? existingRegion ?? "global";
+    if (region !== "global" && !supportsRegion(providerInput.provider)) {
+      return {
+        valid: false,
+        error: `The selected endpoint setting is not supported by ${providerInput.provider}. Use global.`,
+      };
+    }
+
     resolvedProviders.push({
       provider: providerInput.provider,
       apiKey,
-      region: normalizeProviderRegion(
-        providerInput.provider,
-        providerInput.region ?? existingRegion,
-      ),
+      region,
     });
   }
 

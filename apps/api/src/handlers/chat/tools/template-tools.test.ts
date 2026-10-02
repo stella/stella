@@ -1,7 +1,12 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
+
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { createChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toSafeId } from "@/api/lib/branded-types";
+import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   createTemplateAuthoringTools,
@@ -51,10 +56,12 @@ describe("createTemplateTools", () => {
   test("registers list, describe and fill template tools", () => {
     const tools = createTemplateTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     expect(tools[LIST_TEMPLATES_TOOL_NAME]).toBeDefined();
     expect(tools[DESCRIBE_TEMPLATE_TOOL_NAME]).toBeDefined();
@@ -67,10 +74,12 @@ describe("createTemplateTools", () => {
   test("does not register the authoring-only suggest tool", () => {
     const tools = createTemplateTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     expect(SUGGEST_TEMPLATE_FIELDS_TOOL_NAME in tools).toBe(false);
   });
@@ -83,12 +92,14 @@ describe("createTemplateTools", () => {
     let findManyOptions: unknown;
     const tools = createTemplateTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       scopedDb: stubScopedDb(rows, (options) => {
         findManyOptions = options;
       }),
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     // SAFETY: invoke the tool's execute directly with a stub call context.
     // oxlint-disable-next-line typescript/no-unsafe-type-assertion
@@ -109,10 +120,73 @@ describe("createTemplateAuthoringTools", () => {
   test("registers the suggest-fields authoring tool", () => {
     const tools = createTemplateAuthoringTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
+      thirdPartyBoundary: { type: "raw" },
     });
     expect(tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME]).toBeDefined();
+  });
+
+  test("prepares the nested request for the send mode and restores its suggestions", async () => {
+    const anonymizeFields = async ({ fields }: { fields: string[] }) => {
+      const redactionMap = new Map<string, string>();
+      const anonymized = fields.map((field) => {
+        if (!field.includes("Dana Novotná")) {
+          return field;
+        }
+        redactionMap.set("[PERSON_1]", "Dana Novotná");
+        return field.replaceAll("Dana Novotná", "[PERSON_1]");
+      });
+      return Result.ok({
+        entityCount: redactionMap.size,
+        fields: anonymized,
+        redactionMap,
+      });
+    };
+    const thirdPartyBoundary = createChatThirdPartyBoundary({
+      anonymizeFields,
+      anonymizationScopeId: "workspace-A",
+      organizationId: orgId,
+      scopedDb: createScopedDbMock({}).scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
+    });
+    const sentTexts: string[] = [];
+    const tools = createTemplateAuthoringTools({
+      orgAIConfig: null,
+      managedAIResidency: "eu" as const,
+      safeDb: stubSafeDb,
+      organizationId: orgId,
+      userId,
+      thirdPartyBoundary,
+      dependencies: {
+        suggestTemplateFields: async ({ documentText }) => {
+          sentTexts.push(documentText);
+          return [
+            { fieldPath: "party.name", literalText: "[PERSON_1]" },
+            // A placeholder the turn never sent matches nothing in the
+            // document.
+            { fieldPath: "witness.name", literalText: "[PERSON_4]" },
+          ];
+        },
+      },
+    });
+    const execute: unknown = tools[SUGGEST_TEMPLATE_FIELDS_TOOL_NAME].execute;
+    if (typeof execute !== "function") {
+      throw new TypeError("Expected a server tool");
+    }
+
+    const result: unknown = await Reflect.apply(execute, undefined, [
+      { instructions: null, text: "Signed by Dana Novotná." },
+      {},
+    ]);
+
+    expect(sentTexts).toEqual(["Signed by [PERSON_1]."]);
+    expect(result).toEqual({
+      suggestions: [{ fieldPath: "party.name", literalText: "Dana Novotná" }],
+      unrestoredFields: ["witness.name"],
+    });
   });
 });

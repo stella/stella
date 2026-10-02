@@ -9,6 +9,7 @@ import {
   parseNsDecisionHtml,
 } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
 import type { ParseNsDecisionInput } from "@/api/handlers/case-law/ingestion/parsers/cz-ns";
+import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -180,6 +181,37 @@ describe("extractRawChunks", () => {
       (c) => c.kind === "inlines" && c.centered,
     );
     expect(centeredChunks.length).toBeGreaterThan(0);
+  });
+});
+
+describe("list text", () => {
+  test("keeps bare text in ordered and unordered lists in source order", () => {
+    const input = baseInput(`
+      ${metaTableHtml}
+      <ul>before unordered <li>first item</li>between unordered<li>second item</li>after unordered</ul>
+      <ol>before ordered <li>third item</li>between ordered<li>fourth item</li>after ordered</ol>
+    `);
+
+    const { fulltext } = parseNsDecisionHtml(input);
+
+    const expectedOrder = [
+      "before unordered",
+      "first item",
+      "between unordered",
+      "second item",
+      "after unordered",
+      "before ordered",
+      "third item",
+      "between ordered",
+      "fourth item",
+      "after ordered",
+    ];
+    const positions = expectedOrder.map((text) => fulltext.indexOf(text));
+
+    expect(positions.every((position) => position >= 0)).toBe(true);
+    expect(positions).toEqual(
+      positions.toSorted((left, right) => left - right),
+    );
   });
 });
 
@@ -395,6 +427,68 @@ describe("parseNsDecisionHtml", () => {
   });
 
   describe("related proceedings table", () => {
+    test.each([
+      { copies: 1, headerTag: "td" },
+      { copies: 2, headerTag: "td" },
+      { copies: 4, headerTag: "td" },
+      { copies: 1, headerTag: "th" },
+      { copies: 2, headerTag: "th" },
+      { copies: 4, headerTag: "th" },
+    ])(
+      "normalizes repeated complaint values while preserving source text ($copies copies, $headerTag headers)",
+      ({ copies, headerTag }) => {
+        const date = Array.from({ length: copies }, () => "05/25/2022").join(
+          "<br><br>",
+        );
+        const docket = Array.from(
+          { length: copies },
+          () => "IV.ÚS 1381/22",
+        ).join("<br><br>");
+        const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
+        <table><tr><${headerTag}>datum podání</${headerTag}><${headerTag}>spisová značka</${headerTag}></tr>
+        <tr><td>${date}</td><td>${docket}</td></tr></table></td></tr></table>`;
+        const { source } = extractNsMetadata(cheerio.load(html));
+        const row = source.ustavniStiznost?.at(0);
+        expect(row?.["datum podání"]).toEqual({
+          type: "date",
+          value: "2022-05-25",
+          sourceValue: Array.from({ length: copies }, () => "05/25/2022").join(
+            "\n\n",
+          ),
+          defects:
+            copies > 1
+              ? ["duplicated-value", "embedded-newlines", "us-date-format"]
+              : ["us-date-format"],
+        });
+        expect(row?.["spisová značka"]).toMatchObject({
+          type: "text",
+          value: "IV.ÚS 1381/22",
+        });
+      },
+    );
+
+    test.each([
+      { date: "02/30/2022", defects: ["us-date-format", "invalid-date"] },
+      {
+        date: "05/25/2022<br>05/26/2022",
+        defects: ["embedded-newlines", "us-date-format", "conflicting-values"],
+      },
+      { date: "unknown", defects: ["invalid-date"] },
+    ])(
+      "leaves an unresolved source date intact: $date",
+      ({ date, defects }) => {
+        const html = `<table id="box-table-a"><tr><td colspan="2">Podána ústavní stížnost
+        <table><tr><td>datum podání</td></tr><tr><td>${date}</td></tr></table>
+        </td></tr><tr><td>Datum rozhodnutí:</td><td>05/27/2022</td></tr></table>`;
+        const { source } = extractNsMetadata(cheerio.load(html));
+        expect(source.ustavniStiznost?.at(0)?.["datum podání"]).toEqual({
+          type: "unresolved-date",
+          sourceValue: date.replace("<br>", "\n"),
+          defects,
+        });
+      },
+    );
+
     test("extracts ústavní stížnost table", () => {
       const html = `<html><body>
         <table id="box-table-a"><tbody>
@@ -422,7 +516,7 @@ describe("parseNsDecisionHtml", () => {
       expect(tableBlocks.length).toBeGreaterThan(0);
 
       // Source metadata should contain parsed ústavní stížnost
-      expect(sourceMetadata["ustavniStiznost"]).toBeDefined();
+      expect(sourceMetadata.ustavniStiznost).toBeDefined();
     });
   });
 
@@ -493,6 +587,95 @@ describe("parseNsDecisionHtml", () => {
 });
 
 describe("source table text retention", () => {
+  test("preserves breaks in unknown, additional and recognized metadata cells", () => {
+    for (const separator of [
+      "<br>",
+      "<br/>",
+      "<BR />",
+      "&lt;br&gt;",
+      "&lt;br/&gt;",
+      "&lt;BR /&gt;",
+    ]) {
+      const { canonical, source } = extractNsMetadata(
+        cheerio.load(`<table id="box-table-a">
+          <tr><th>Unknown${separator}label</th>
+            <td>${separator}<b>foo${separator}bar</b>${separator}baz</td>
+            <td>extra${separator}value</td></tr>
+          <tr><td>Kategorie rozhodnutí:</td><td>foo${separator}bar</td></tr>
+          <tr><td>Heslo:</td><td>${separator}foo${separator}bar</td></tr>
+          <tr><td>Dotčené předpisy:</td><td>${separator}foo${separator}bar</td></tr>
+          <tr><th>Standalone${separator}header</th></tr>
+        </table>`),
+      );
+      expect(source["metadataTable"]).toEqual({
+        captions: [],
+        rows: [
+          [
+            { type: "header", text: "Unknown\nlabel" },
+            { type: "data", text: "foo\nbar\nbaz" },
+            { type: "data", text: "extra\nvalue" },
+          ],
+          [
+            { type: "data", text: "Kategorie rozhodnutí:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [
+            { type: "data", text: "Heslo:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [
+            { type: "data", text: "Dotčené předpisy:" },
+            { type: "data", text: "foo\nbar" },
+          ],
+          [{ type: "header", text: "Standalone\nheader" }],
+        ],
+      });
+      expect(source["kategorieRozhodnuti"]).toBe("foo\nbar");
+      expect(canonical.keywords).toEqual(["foo", "bar"]);
+      expect(canonical.statutes).toEqual(canonical.keywords);
+    }
+  });
+
+  test("escaped metadata breaks retain ordered values like HTML breaks", () => {
+    const values = [
+      "odmítnuto pro zjevnou neopodstatněnost",
+      "odmítnuto pro neoprávněnost navrhovatele",
+      "odmítnuto pro nepříslušnost",
+    ];
+    const fixture = (separator: string) => `<html><body>
+      <table id="box-table-a">
+        <tr><td>Senátní značka:</td><td>29 ICdo 37/2013</td></tr>
+        <tr><td>Heslo:</td><td>${separator}${values.join(separator)}</td></tr>
+        <tr><td colspan="2">Podána ústavní stížnost
+          <table><tr><td>Výsledek</td></tr>
+            <tr><td><font>${separator}${values.join(separator)}</font></td></tr>
+          </table>
+        </td></tr>
+      </table>
+      <p>Text rozhodnutí zůstává zachován.</p>
+    </body></html>`;
+    const expected = parseNsDecisionHtml(baseInput(fixture("<br/>")));
+    for (const separator of ["&lt;br&gt;", "&lt;br/&gt;", "&lt;BR /&gt;"]) {
+      const result = parseNsDecisionHtml(baseInput(fixture(separator)));
+      expect(JSON.stringify(result)).toBe(JSON.stringify(expected));
+      expect(result.metadata.caseNumber).toBe("29 ICdo 37/2013");
+      expect(result.metadata.keywords).toEqual(values);
+      expect(
+        result.sourceMetadata.ustavniStiznost?.at(0)?.["výsledek"],
+      ).toMatchObject({
+        type: "text",
+        value: values.join("\n"),
+      });
+      expect(
+        result.documentAst.blocks.every(
+          (block) => markupResidueIn(block.plainText) === undefined,
+        ),
+      ).toBe(true);
+      expect(result.fulltext).toContain(values.join("\n"));
+      expect(result.fulltext).toContain("Text rozhodnutí zůstává zachován.");
+    }
+  });
+
   test("keeps every metadata cell and caption without inferring labels", () => {
     const { source } = extractNsMetadata(
       cheerio.load(`<table id="box-table-a">

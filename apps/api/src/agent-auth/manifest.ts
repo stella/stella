@@ -7,7 +7,7 @@ import {
   getAgentAuthUrl,
 } from "@/api/agent-auth/constants";
 import { env } from "@/api/env";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
   getMcpProtectedResourceMetadataUrl,
   MCP_ANONYMIZED_RESOURCE_SCOPES,
@@ -65,3 +65,9 @@ receives a scoped, revocable OAuth access token.
 - events: \`${getAgentAuthUrl(AGENT_AUTH_EVENTS_PATH)}\`
 `;
 };
+
+export const AGENT_AUTH_MANIFEST_HEADERS = {
+  "Content-Type": "text/markdown; charset=utf-8",
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+} as const;

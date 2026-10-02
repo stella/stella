@@ -14,6 +14,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
 
 const listMyTimeTimers = createSafeRootHandler(
@@ -22,7 +23,12 @@ const listMyTimeTimers = createSafeRootHandler(
       "List your running and paused timers in the active organization. Use each returned timer ID to update, pause, resume, confirm or discard it. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["read"] },
     access: "read",
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     query: t.Object({
       limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
       cursor: t.Optional(tPaginationCursor()),
@@ -41,7 +47,9 @@ const listMyTimeTimers = createSafeRootHandler(
         }),
       );
     }
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx

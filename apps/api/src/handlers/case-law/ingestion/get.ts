@@ -517,7 +517,12 @@ const config = {
   // REST route and the generic `invoke_capability` path, so neither bypasses the
   // gate. Keep this as the single source of the role check for this endpoint.
   permissions: { auditLog: ["read"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "public",
+    reason: "legal_corpus_admin",
+    consumesServices: true,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

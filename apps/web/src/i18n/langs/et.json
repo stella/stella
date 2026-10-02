@@ -27,6 +27,16 @@
     "errorNotFound": "Selle koodi jaoks ei leidnud me ootel olevat päringut. Kontrollige koodi ja proovige uuesti.",
     "title": "Ühenda oma agent"
   },
+  "agentSetup": {
+    "addressLabel": "Assistent küsib seda aadressi",
+    "copiedToast": "Juhised kopeeritud. Kleebi need vestlusesse oma assistendiga.",
+    "copy": "Kopeeri talle juhised",
+    "description": "Küsi Claude’ilt või ChatGPT-lt oma toimikute ja dokumentide kohta. Vali oma assistent, et avada lühike juhend; see võtab umbes minuti.",
+    "instructions": "Ühenda mind stellaga, minu õigusalase tööruumiga. Järgi aadressil {guideUrl} jaotist „Instructions for AI agents“ ja kasuta seda serveri aadressi: {mcpUrl}",
+    "openGuide": "Ava juhend: {assistant}",
+    "selfSetupHint": "Kasutad Claude Code’i või Codexit?",
+    "title": "Kasuta stellat oma AI-assistendis"
+  },
   "ai": {
     "chooseRewriteInstruction": "Ümberkirjutamise valikud",
     "editWithAI": "Muuda AI-ga",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Taimeri käivitamine ebaõnnestus",
     "failedToStopTimer": "Taimeri peatamine ebaõnnestus",
     "filterStatus": "Filtreeri oleku järgi",
+    "globalTimer": {
+      "confirm": "Kinnita aeg",
+      "discard": "Loobu taimerist",
+      "matterInaccessible": "Valige toimik, millele teil on juurdepääs.",
+      "narrativeRequired": "Enne aja kinnitamist lisage kirjeldus.",
+      "pause": "Peata",
+      "periodLocked": "See kuu on lukustatud. Paluge administraatoril see avada.",
+      "resume": "Jätka",
+      "timerUnavailable": "See taimer pole enam saadaval. Värskendage loendit.",
+      "title": "Taimerid"
+    },
     "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
     "invoiceNarrative": "Arve selgitus",
@@ -567,6 +588,26 @@
     "selectMatter": "Valige toimik...",
     "selectMatterToStart": "Ajastuse alustamiseks valige toimik",
     "selectedCount": "{count, plural, one {# valitud} other {# valitud}}",
+    "sellerProfiles": {
+      "add": "Lisa müüja profiil",
+      "archiveConfirm": "Kas arhiveerida see müüja profiil? Seda ei saa enam uute arvete jaoks kasutada.",
+      "bic": "BIC / SWIFT-kood",
+      "default": "Vaikimisi müüja",
+      "defaultCurrency": "Vaikevaluuta",
+      "description": "Hallake arvete väljastamiseks kasutatavaid andmeid.",
+      "edit": "Muuda müüja profiili",
+      "empty": "Müüja profiile pole.",
+      "footerNotes": "Jaluse märkused",
+      "invalidBic": "Sisestage kehtiv BIC.",
+      "invalidCurrency": "Sisestage kolmetäheline valuutakood.",
+      "invalidIban": "Sisestage kehtiv IBAN.",
+      "legalName": "Ametlik nimi",
+      "registrationId": "Registrikood",
+      "setDefault": "Määra vaikimisi",
+      "title": "Müüja profiilid",
+      "vatId": "Käibemaksukohustuslase number"
+    },
+    "settingsTitle": "Arveldus",
     "split": {
       "addSplit": "Lisa jagamine",
       "percentValue": "{value}%",
@@ -595,6 +636,27 @@
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
+    "vatRates": {
+      "add": "Lisa käibemaksumäär",
+      "archiveConfirm": "Kas arhiveerida see käibemaksumäär? Seda ei saa enam uute dokumentide jaoks kasutada.",
+      "code": "Määra kood",
+      "current": "Praegune määr",
+      "description": "Hallake määrasid ja nende kehtivusaegu.",
+      "edit": "Muuda käibemaksumäära",
+      "empty": "Käibemaksumäärasid pole.",
+      "future": "Tulevane määr",
+      "invalidPeriod": "Valige kehtivad kuupäevad, mille lõpp on pärast algust.",
+      "invalidRate": "Sisestage mittenegatiivne protsent kuni kahe komakohaga.",
+      "name": "Määra nimetus",
+      "openEnded": "Lõppkuupäev puudub",
+      "overlap": "Sama määra koodi kehtivusajad ei tohi kattuda.",
+      "past": "Varasem määr",
+      "periodHelp": "Alguskuupäev on kaasatud; lõppkuupäev ei ole kaasatud. Jätke lõppkuupäev tühjaks, kui periood on avatud.",
+      "rate": "Käibemaksuprotsent",
+      "title": "Käibemaksumäärad",
+      "validFrom": "Kehtib alates",
+      "validTo": "Kehtib kuni"
+    },
     "writeOff": "Mahakandmine"
   },
   "caseLaw": {
@@ -828,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Kokkuvõte",
+      "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
@@ -851,6 +914,7 @@
         "publishedOnWeb": "Veebis avaldatud"
       },
       "statutes": "Kohaldatavad õigusaktid",
+      "textNotYetAvailable": "Kohus ei ole lahendi teksti avaldanud või ei ole see siin veel kättesaadav.",
       "textPending": "Lahendi teksti alles hangitakse",
       "textReadFailed": "Lahendi teksti ei õnnestunud laadida",
       "textUnavailable": "Selle lahendi teksti ei ole saadaval"
@@ -947,6 +1011,7 @@
         "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
         "modeReads": "Lehtede lugemine toimub selle seansi lõpuni küsimata.",
         "question": "Kas lubada see brauseritoiming?",
+        "realValues": "See veebisait saab allpool näidatud tegelikud väärtused. Anonüümitud režiim kehtib ainult selle kohta, mida AI näeb.",
         "within": "Asukoht"
       },
       "denied": "Keelatud",
@@ -1051,6 +1116,7 @@
     "focusSuggestion": "Fookusta soovitus: {topic}",
     "folioCitationFallback": "lk {n}",
     "forkFromHere": "Alusta siit uut vestlust",
+    "forkInSidePanel": "Alusta siit uut vestlust külgpaneelis",
     "forkedFrom": "Loodud vestlusest <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Loodud vestlusest, mis pole enam saadaval",
     "forkedThread": "Teisest vestlusest",
@@ -1058,6 +1124,10 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
+    },
     "improvePrompt": "Täiusta viipa",
     "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
     "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",
@@ -1110,6 +1180,7 @@
       "viaProvider": "teenuse {provider} kaudu"
     },
     "newChat": "Uus vestlus",
+    "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -1157,6 +1228,12 @@
     "richContentLoading": "Interaktiivse sisu laadimine…",
     "richContentTitle": "Interaktiivne sisu",
     "richContentUnavailable": "Seda sisu ei saa turvaliselt kuvada.",
+    "selection": {
+      "askInNewChat": "Küsi uues vestluses",
+      "quoteInReply": "Tsiteeri vastuses",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Valitud tekst"
+    },
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
@@ -1310,7 +1387,8 @@
       "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
-      "toggleDetails": "Üksikasjade lülitamine"
+      "toggleDetails": "Üksikasjade lülitamine",
+      "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
@@ -1554,6 +1632,7 @@
     },
     "fact": "Fakt",
     "failed": "Ebaõnnestus",
+    "files": "Failid",
     "filter": "Filter",
     "filters": "Filtrid",
     "find": "Leia",
@@ -2104,6 +2183,13 @@
     "unnamedAttachment": "Nimetu manus"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
+      "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
+      "contact": "Võtke meiega ühendust",
+      "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
+      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
+    },
     "actionFailed": "Toiming ebaõnnestus",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
@@ -2111,6 +2197,7 @@
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
+      "publicCountryUnavailable": "Selle riigi õigusaktid ja kohtupraktika ei ole saadaval. Valige teine riik.",
       "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
       "server": "Midagi läks valesti. Proovige uuesti.",
       "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",
@@ -2272,7 +2359,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Dokumendiosa eksisteerib ainult sihtmärgis",
       "missingInTarget": "Dokumendiosa eksisteerib ainult baasis",
-      "notEditable": "Dokumendi osa ei ole redigeeritav"
+      "notEditable": "Dokumendi osa ei ole redigeeritav",
+      "unsupportedContent": "See versioon sisaldab sisu, mida ei saa veel võrrelda."
     },
     "compareUnverified": "Kontrollimata võrdlus",
     "compareVerificationFailures": "{count, plural, one {Üks edasi-tagasi kontroll ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.} other {# edasi-tagasi kontrolli ebaõnnestus. Vaadake võrdlus enne sellele tuginemist üle.}}",
@@ -3210,7 +3298,6 @@
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
-      "filesHeading": "Failid",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
       "importFailureIntegrity": "Oskuse allikas muutus pärast avastamist. Vaata see uuesti üle.",
@@ -3690,7 +3777,6 @@
     "aiTitle": "Ühendage oma AI teenusepakkuja",
     "appsSubtitle": "stella töötab ka väljaspool brauserit: teie töölaual ja teie AI-assistendis. Selle seadistuse juurde saate alati hiljem tagasi tulla.",
     "appsTitle": "Hankige stella igale poole",
-    "assistantDocsLink": "Kuidas assistenti ühendada",
     "catalogueAlwaysOn": "Alati sees",
     "catalogueClearSearch": "Tühjenda otsing",
     "catalogueCommunityHeading": "Muud",
@@ -4217,31 +4303,40 @@
       "wordEditShortcutPlaceholder": "nt JK"
     },
     "connections": {
+      "accessTitle": "{clientName} saab",
+      "browseIntegrations": "Lisa teenus",
       "cliDescription": "Installige stella käsurea klient ja logige sisse, et skriptida toimikuid, dokumente ja malle terminalist.",
-      "cliHelpHint": "Käivitage „stella --help“, et näha kõiki käske.",
       "cliInstallLabel": "Installimine",
       "cliLoginLabel": "Sisselogimine",
       "cliTitle": "Käsurea liides",
-      "connectedAppsDescription": "Rakendused ja tööriistad, millele olete lubanud juurdepääsu oma kontole.",
-      "connectedAppsEmpty": "Rakendused, mida lubate, näiteks Claude või stella käsurea tööriist, kuvatakse siin.",
-      "connectedAppsTitle": "Ühendatud rakendused",
-      "connectedColumn": "Ühendatud",
-      "description": "Ühendage MCP-kliendid ja käsurea liides oma kontoga.",
+      "connected": "Ühendatud",
+      "connectedAgo": "Ühendatud {time}",
+      "connectedAppsDescription": "Rakendused, kuhu oled stella kontoga sisse loginud. Katkesta ühendus nendega, mida enam ei kasuta.",
+      "connectedAppsEmpty": "Veel mitte midagi. Seadista ülal Claude või ChatGPT ja see ilmub siia.",
+      "connectedAppsTitle": "Juurdepääsuga rakendused",
+      "description": "Kasuta stellat oma AI-assistendist ja vaata, millel on juurdepääs sinu kontole.",
+      "developerDescription": "Serveriaadressid ja käsureatööriist tehniliseks seadistamiseks.",
+      "developerTitle": "Arendaja juurdepääs",
       "disconnectConfirmDescription": "See tühistab rakenduse {clientName} juurdepääsu teie kontole ja kõik selle väljastatud load. Saate igal ajal uuesti ühenduse luua.",
       "disconnectConfirmTitle": "Katkestada ühendus rakendusega {clientName}?",
       "disconnectSuccess": "Ühendus rakendusega {clientName} katkestatud",
+      "integrationsDescription": "Välised teenused, mida AI saab sinu eest kasutada, näiteks dokumendihoidla.",
+      "integrationsEmpty": "Lisa esimene teenus",
+      "integrationsTitle": "Ühendatud teenused",
       "mcpAnonymizedLabel": "Anonüümitud lõpp-punkt",
-      "mcpAnonymizedNote": "Saadaval on ka anonüümitud lõpp-punkt; see pakub samu tööriistu peidetud isikuandmetega.",
-      "mcpDescription": "Ühendage MCP-ga ühilduv klient, näiteks Claude või Cursor, selle serveri URL-i abil oma stella kontoga.",
+      "mcpAnonymizedShortNote": "Samad tööriistad, isikuandmed maskitud.",
+      "mcpFullNote": "Täielik juurdepääs sinu toimikutele ja dokumentidele.",
       "mcpLawLabel": "Õigusallikate lõpp-punkt",
-      "mcpLawNote": "Saadaval on ka õigusallikate lõpp-punkt; see pakub ainult avalikku kohtupraktikat ja õigusakte ning ei pääse toimikute andmetele ligi.",
-      "mcpStep1": "Lisage ülaltoodud URL oma kliendis kohandatud liidesena või MCP-serverina.",
-      "mcpStep2": "Logige sisse, kui brauser seda küsib.",
-      "mcpStep3": "Kinnitage juurdepääs nõusoleku ekraanil.",
+      "mcpLawShortNote": "Ainult avalik kohtupraktika ja õigusaktid, ilma toimikute andmeteta.",
+      "mcpSetupHint": "Lisa URL kohandatud konnektorina Claude'is, Cursoris või muus MCP-kliendis, seejärel logi sisse ja kinnita juurdepääs.",
       "mcpTitle": "MCP-server",
       "mcpUrlLabel": "Serveri URL",
-      "scopesLabel": "Juurdepääs",
-      "title": "Ühendused"
+      "noMatches": "Päringule „{query}“ ei vasta ükski ühendus",
+      "notConnected": "Ühendamata",
+      "permissionCount": "{count, plural, one {# õigus} other {# õigust}}",
+      "searchPlaceholder": "Otsi ühendusi",
+      "title": "Ühendused",
+      "turnedOff": "Välja lülitatud"
     },
     "organization": {
       "activeMembers": "Aktiivsed liikmed",
@@ -5927,7 +6022,8 @@
         "openReport": "Ava aruanne",
         "submit": "Ekspordi aruanne",
         "templateLabel": "Aruandemall",
-        "title": "Ekspordi aruanne"
+        "title": "Ekspordi aruanne",
+        "withoutAiSummaries": "Ekspordi ilma AI kokkuvõteteta"
       },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",

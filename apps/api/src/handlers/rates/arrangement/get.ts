@@ -48,7 +48,12 @@ const readBillingArrangement = createSafeHandler(
     description:
       "Read the matter's current hourly or flat-fee billing arrangement. The arrangement field is null for the existing hourly rate-table behavior; call rates.arrangement.update to configure it. Issued invoices retain their own snapshots.",
     permissions: { rate: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
   },
   async function* ({ safeDb, workspaceId }) {

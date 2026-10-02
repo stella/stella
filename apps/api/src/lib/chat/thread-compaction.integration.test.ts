@@ -269,6 +269,7 @@ const runCompaction = async ({
     dataWorkspaceIds: [ids.wsA1],
     extractionFeatureEnabled,
     orgAIConfig: null,
+    managedAIResidency: "eu",
     organizationId: ids.orgA,
     preserveTokens,
     safeDb: countedSafeDb(),
@@ -747,6 +748,7 @@ describe("chat thread compaction retry semantics", () => {
       dataWorkspaceIds: [ids.wsA1],
       extractionFeatureEnabled: true,
       orgAIConfig: null,
+      managedAIResidency: "eu",
       organizationId: ids.orgA,
       preserveTokens: 1,
       safeDb: countedSafeDb(),
@@ -930,5 +932,41 @@ describe("chat thread compaction invalidation guard", () => {
     const after = await readChain(threadId);
     expect(after).toHaveLength(before.length);
     expect(after.every((row) => row.status === "stale")).toBe(true);
+  });
+});
+
+describe("chat thread compaction send mode", () => {
+  const markThreadAnonymized = async (threadId: SafeId<"chatThread">) => {
+    await testDb
+      .update(chatThreads)
+      .set({ usedAnonymization: true })
+      .where(eq(chatThreads.id, threadId));
+  };
+
+  test("reads the send mode again before sending the delta", async () => {
+    // Claimed while raw; an anonymized turn landed before the run read it.
+    const threadId = await seedThread({ messageCount: 6 });
+    await markThreadAnonymized(threadId);
+
+    const run = await runCompaction({ threadId });
+
+    expect(run.outcome.type).toBe("anonymized");
+    expect(run.prompts).toEqual([]);
+    expect(await readChain(threadId)).toEqual([]);
+  });
+
+  test("keeps no checkpoint when the thread switches while summarizing", async () => {
+    const threadId = await seedThread({ messageCount: 6 });
+
+    const run = await runCompaction({
+      threadId,
+      onSummarize: async () => {
+        await markThreadAnonymized(threadId);
+      },
+    });
+
+    expect(run.prompts).toHaveLength(1);
+    expect(run.outcome.type).toBe("anonymized");
+    expect(await readChain(threadId)).toEqual([]);
   });
 });

@@ -19,7 +19,7 @@ on:
 
 concurrency:
   group: cancel-stale-merge-groups
-  cancel-in-progress: true
+  cancel-in-progress: false
 
 permissions: {}
 

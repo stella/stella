@@ -28,6 +28,7 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -313,6 +314,28 @@ describe("return and reapproval lifecycle", () => {
 });
 
 describe("approval queue pages", () => {
+  test("bounds default and requested pages while retaining a continuation cursor", async () => {
+    await seedEntry();
+    await seedEntry();
+    for (const limit of [undefined, 4]) {
+      const page = await withTenantActionSizePolicy(
+        { requestBytes: 512, responseBytes: 512, pageSize: 1 },
+        async () =>
+          await listFor({
+            from: DAY,
+            to: DAY,
+            ...(limit === undefined ? {} : { limit }),
+          }),
+      );
+      expect(page).toHaveProperty("items");
+      if (!("items" in page)) {
+        return;
+      }
+      expect(page.items).toHaveLength(1);
+      expect(page.nextCursor).not.toBeNull();
+    }
+  });
+
   test("filters assigned drafts by date, member, and matter while preserving logged and billed minutes", async () => {
     const first = await seedEntry();
     const second = await seedEntry();

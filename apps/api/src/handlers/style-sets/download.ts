@@ -19,7 +19,12 @@ const config = {
     "that is unknown or already deleted is a 404.",
   permissions: { styleSet: ["use"] },
   access: "read",
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: paramsSchema,
 } satisfies HandlerConfig;
 

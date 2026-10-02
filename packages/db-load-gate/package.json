@@ -1,0 +1,34 @@
+{
+  "name": "@stll/db-load-gate",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Health decisions and adaptive throttling for database maintenance",
+  "license": "Apache-2.0",
+  "type": "module",
+  "sideEffects": false,
+  "exports": {
+    "./health": "./src/health.ts",
+    "./backfill-pass": "./src/backfill-pass.ts",
+    "./indicators": "./src/indicators.ts",
+    "./slot": "./src/heavy-work-slot.ts"
+  },
+  "scripts": {
+    "clean": "git clean -xdf .cache .turbo node_modules",
+    "test": "bun test",
+    "test:property": "bun test --preload @stll/property-testing/preload $(grep -rlE 'fc\\.assert|assertProperty' src --include='*.test.ts')",
+    "typecheck": "bun ../../packages/scripts/src/tsc-native.ts --noEmit",
+    "lint": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --report-unused-disable-directives-severity=error --type-aware --type-check packages/db-load-gate",
+    "lint:fix": "cd ../.. && bun --bun oxlint -c oxlint.config.ts --type-aware --fix packages/db-load-gate",
+    "format": "bun ../../scripts/run-oxfmt.ts ."
+  },
+  "dependencies": {
+    "@stll/time": "workspace:*",
+    "better-result": "catalog:"
+  },
+  "devDependencies": {
+    "@stll/property-testing": "workspace:*",
+    "@stll/typescript-config": "workspace:*",
+    "bun-types": "catalog:",
+    "fast-check": "catalog:"
+  }
+}

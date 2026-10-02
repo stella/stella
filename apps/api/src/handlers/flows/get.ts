@@ -9,7 +9,12 @@ const config = {
     "enabled flag. Use flows.list to browse the organization's flows and " +
     "flows.runs.get to read a run of one.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   params: flowDefinitionParamsSchema,
 } satisfies HandlerConfig;

@@ -1,5 +1,10 @@
-import { isRecord } from "../shared/guards.js";
+import {
+  hasOptionalString,
+  isRecord,
+  isOptionalArrayOf,
+} from "../shared/guards.js";
 import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
+import type { RegistryClientOptions } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import { PrhAPIError, PrhRequestError, PrhValidationError } from "./errors.js";
 import { parseCompany, parseSearchEntry } from "./parse.js";
@@ -19,34 +24,66 @@ const DEFAULT_SEARCH_LIMIT = 50;
 // dispatch layer can pass through any limit safely.
 const MAX_SEARCH_LIMIT = 100;
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
-
-const isOptionalRecordArray = (value: unknown): boolean =>
-  value === undefined || (Array.isArray(value) && value.every(isRecord));
-
 const isPrhSourcedValue = (value: unknown): boolean =>
   isRecord(value) && typeof value["value"] === "string";
 
 const isPrhRawName = (value: unknown): boolean =>
   isRecord(value) &&
   typeof value["name"] === "string" &&
-  typeof value["type"] === "string";
+  typeof value["type"] === "string" &&
+  hasOptionalString(value, "endDate");
+
+const isPrhDescription = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["languageCode"] === "string" &&
+  typeof value["description"] === "string";
+
+const isPrhCompanyForm = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "type") &&
+  hasOptionalString(value, "endDate") &&
+  isOptionalArrayOf(value["descriptions"], isPrhDescription);
+
+const isPrhBusinessLine = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "type") &&
+    isOptionalArrayOf(value["descriptions"], isPrhDescription));
+
+const isPrhPostOffice = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["languageCode"] === "string" &&
+  typeof value["city"] === "string";
 
 const isPrhAddress = (value: unknown): boolean =>
-  isRecord(value) && typeof value["type"] === "number";
+  isRecord(value) &&
+  typeof value["type"] === "number" &&
+  [
+    "street",
+    "postCode",
+    "postOfficeBox",
+    "buildingNumber",
+    "entrance",
+    "apartmentNumber",
+    "apartmentIdSuffix",
+    "co",
+    "country",
+    "freeAddressLine",
+    "endDate",
+  ].every((key) => hasOptionalString(value, key)) &&
+  isOptionalArrayOf(value["postOffices"], isPrhPostOffice);
 
 const isPrhRawCompany = (value: unknown): boolean =>
   isRecord(value) &&
   isPrhSourcedValue(value["businessId"]) &&
-  (value["names"] === undefined ||
-    (Array.isArray(value["names"]) && value["names"].every(isPrhRawName))) &&
-  isOptionalRecord(value["mainBusinessLine"]) &&
-  isOptionalRecordArray(value["companyForms"]) &&
-  isOptionalRecordArray(value["companySituations"]) &&
-  (value["addresses"] === undefined ||
-    (Array.isArray(value["addresses"]) &&
-      value["addresses"].every(isPrhAddress)));
+  isOptionalArrayOf(value["names"], isPrhRawName) &&
+  isPrhBusinessLine(value["mainBusinessLine"]) &&
+  isOptionalArrayOf(value["companyForms"], isPrhCompanyForm) &&
+  isOptionalArrayOf(value["companySituations"], isRecord) &&
+  isOptionalArrayOf(value["addresses"], isPrhAddress) &&
+  ["status", "tradeRegisterStatus", "registrationDate", "endDate"].every(
+    (key) => hasOptionalString(value, key),
+  );
 
 const isPrhCompaniesResponse = (
   value: unknown,
@@ -73,9 +110,14 @@ const parseErrorBody = (value: unknown): PrhErrorResponse => {
   return result;
 };
 
-const prhGet = async (url: string): Promise<PrhCompaniesResponse> => {
+const prhGet = async (
+  url: string,
+  options: RegistryClientOptions,
+): Promise<PrhCompaniesResponse> => {
   const response = await performRegistryRequest({
     url,
+    observer: options.observer,
+    signal: options.signal,
     init: { headers: { Accept: "application/json" } },
     wrapRequestError: (cause) =>
       new PrhRequestError(url, "PRH request failed", { cause }),
@@ -123,18 +165,19 @@ const prhGet = async (url: string): Promise<PrhCompaniesResponse> => {
  */
 export const lookupByBusinessId = async (
   businessId: string,
+  options: RegistryClientOptions,
 ): Promise<PrhCompany | null> => {
   const normalized = normalizeBusinessId(businessId);
   if (!validateBusinessId(normalized)) {
     throw new PrhValidationError(`Invalid Y-tunnus: ${businessId}`);
   }
   const params = new URLSearchParams({ businessId: normalized });
-  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`);
+  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`, options);
   const hit = data.companies.at(0);
   return hit ? parseCompany(hit) : null;
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /** Maximum number of results. PRH caps each page at 100. @default 50 */
   limit?: number;
 };
@@ -151,19 +194,19 @@ export type SearchOptions = {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<PrhSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     throw new PrhValidationError("Search name must not be empty");
   }
-  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options.limit ?? DEFAULT_SEARCH_LIMIT;
   const limit = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const params = new URLSearchParams({
     name: trimmed,
     maxResults: limit.toString(),
   });
-  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`);
+  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`, options);
   // Slice defensively in case PRH returns more than the requested
   // maxResults; callers should still get exactly the clamped limit.
   return data.companies.slice(0, limit).map(parseSearchEntry);

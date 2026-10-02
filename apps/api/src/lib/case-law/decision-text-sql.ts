@@ -3,14 +3,8 @@ import type { SQL, SQLWrapper } from "drizzle-orm";
 
 import {
   DECISION_TEXT_ABSENCE_METADATA_KEY,
-  DECISION_TEXT_FIELD_KEYS,
-  TEXT_ABSENCE_REASON,
   TEXT_ABSENCE_REASONS,
 } from "@stll/api-contract/case-law-text-field";
-
-const STORED_TEXT_ABSENCE_REASONS = TEXT_ABSENCE_REASONS.filter(
-  (reason) => reason !== TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-);
 
 const jsonKey = (key: string): SQL => sql.raw(`'${key.replaceAll("'", "''")}'`);
 
@@ -53,11 +47,8 @@ export const storedDecisionTextAbsenceValidSql = (
            OR NOT (absence_item.entry ? 'reason')
            OR jsonb_typeof(absence_item.entry -> 'field') <> 'string'
            OR jsonb_typeof(absence_item.entry -> 'reason') <> 'string'
-           OR absence_item.entry ->> 'field' NOT IN (
-             ${sqlTextList(DECISION_TEXT_FIELD_KEYS)}
-           )
            OR absence_item.entry ->> 'reason' NOT IN (
-             ${sqlTextList(STORED_TEXT_ABSENCE_REASONS)}
+             ${sqlTextList(TEXT_ABSENCE_REASONS)}
            )
          ELSE true
        END

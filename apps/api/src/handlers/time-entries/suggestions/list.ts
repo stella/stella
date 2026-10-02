@@ -25,7 +25,12 @@ const listTimeSuggestions = createSafeHandler(
       "Accept one with time-entries.suggestions.accept or hide it with " +
       "time-entries.suggestions.dismiss.",
     permissions: { timeEntry: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     query: listTimeSuggestionsQuerySchema,
   },

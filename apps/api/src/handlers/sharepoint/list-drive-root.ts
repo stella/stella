@@ -12,6 +12,7 @@ import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_PAGE_SIZE = 50;
@@ -96,7 +97,7 @@ const listSharepointDriveRoot = createSafeRootHandler(
       listDriveRootChildren({
         accessToken,
         cursor: input.cursor ?? null,
-        limit: input.limit ?? DEFAULT_PAGE_SIZE,
+        limit: normalizeTenantPageLimit(input.limit ?? DEFAULT_PAGE_SIZE),
       }),
     );
 

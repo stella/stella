@@ -10,6 +10,10 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import {
+  rulingGroupKeys,
+  rulingKeysOf,
+} from "@stll/api-contract/decision-ruling-identity";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import {
@@ -62,6 +66,18 @@ const snRowKeys = async (row: Record<string, unknown>): Promise<string[]> => {
     : storedRulingKeys(built.decision.metadata);
 };
 
+const snRowDecision = async (row: Record<string, unknown>) => {
+  const built = await assemblePlSnDecision({
+    item: normalizePlSnListingItem(row),
+    detail: null,
+    documentBytes: undefined,
+    rawParts: { listing: JSON.stringify(row) },
+  });
+  return built.type === "unkeyable"
+    ? panic("the listing row built no decision")
+    : built.decision;
+};
+
 const saosChamberDetail = async (): Promise<Record<string, unknown>> => {
   const payload: unknown = JSON.parse(
     new TextDecoder().decode(
@@ -93,6 +109,10 @@ describe("one ruling stored by both sources", () => {
     const saosKeys = storedRulingKeys(saos.metadata);
     expect(saosKeys).toEqual(["sn|IIIKK195/16|2016-06-22|wyrok"]);
     expect(await snRowKeys(snRow)).toEqual(saosKeys);
+    const sn = await snRowDecision(snRow);
+    const groups = rulingGroupKeys(rulingKeysOf(saos));
+    expect(groups).toHaveLength(1);
+    expect(rulingGroupKeys(rulingKeysOf(sn))).toEqual(groups);
   });
 
   // Real pairs: each SAOS record's id, type, date and docket, and the court's
@@ -162,6 +182,15 @@ describe("one ruling stored by both sources", () => {
 
       expect(snKeys).toHaveLength(1);
       expect(storedRulingKeys(saos.metadata)).toEqual(snKeys);
+      const sn = await snRowDecision({
+        sygnatura_sprawy: docket,
+        data_wydania: date,
+        forma_orzeczenia: form,
+        id: snId,
+      });
+      const groups = rulingGroupKeys(rulingKeysOf(saos));
+      expect(groups).toHaveLength(1);
+      expect(rulingGroupKeys(rulingKeysOf(sn))).toEqual(groups);
     },
   );
 

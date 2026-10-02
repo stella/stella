@@ -27,6 +27,16 @@
     "errorNotFound": "Nie znaleźliśmy oczekującego żądania dla tego kodu. Sprawdź kod i spróbuj ponownie.",
     "title": "Połącz swojego agenta"
   },
+  "agentSetup": {
+    "addressLabel": "Asystent poprosi o ten adres",
+    "copiedToast": "Instrukcje skopiowane. Wklej je do czatu z asystentem.",
+    "copy": "Skopiuj mu instrukcje",
+    "description": "Pytaj Claude lub ChatGPT o swoje sprawy i dokumenty. Wybierz asystenta, aby otworzyć krótką instrukcję; zajmie to około minuty.",
+    "instructions": "Połącz mnie ze stellą, moim prawniczym obszarem roboczym. Postępuj zgodnie z sekcją „Instructions for AI agents” na {guideUrl} i użyj tego adresu serwera: {mcpUrl}",
+    "openGuide": "Otwórz instrukcję dla {assistant}",
+    "selfSetupHint": "Korzystasz z Claude Code lub Codexa?",
+    "title": "Korzystaj ze stelli w swoim asystencie AI"
+  },
   "ai": {
     "chooseRewriteInstruction": "Opcje przeredagowania",
     "editWithAI": "Edytuj z AI",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Nie udało się uruchomić stopera",
     "failedToStopTimer": "Nie udało się zatrzymać stopera",
     "filterStatus": "Filtruj według statusu",
+    "globalTimer": {
+      "confirm": "Potwierdź czas",
+      "discard": "Odrzuć stoper",
+      "matterInaccessible": "Wybierz sprawę, do której masz dostęp.",
+      "narrativeRequired": "Dodaj opis przed potwierdzeniem czasu.",
+      "pause": "Wstrzymaj",
+      "periodLocked": "Ten miesiąc jest zablokowany. Poproś administratora o jego odblokowanie.",
+      "resume": "Wznów",
+      "timerUnavailable": "Ten stoper nie jest już dostępny. Odśwież listę.",
+      "title": "Stopery"
+    },
     "hourlyRateMustBeNonNegative": "Stawka godzinowa nie może być ujemna",
     "hours": "Godziny",
     "invoiceNarrative": "Opis na fakturze",
@@ -567,6 +588,26 @@
     "selectMatter": "Wybierz sprawę...",
     "selectMatterToStart": "Wybierz sprawę, aby rozpocząć mierzenie czasu",
     "selectedCount": "{count, plural, one {# zaznaczony} few {# zaznaczone} many {# zaznaczonych} other {# zaznaczonego}}",
+    "sellerProfiles": {
+      "add": "Dodaj profil sprzedawcy",
+      "archiveConfirm": "Zarchiwizować ten profil sprzedawcy? Nie będzie już dostępny dla nowych faktur.",
+      "bic": "Kod BIC / SWIFT",
+      "default": "Domyślny sprzedawca",
+      "defaultCurrency": "Domyślna waluta",
+      "description": "Zarządzaj danymi używanymi do wystawiania faktur.",
+      "edit": "Edytuj profil sprzedawcy",
+      "empty": "Brak profili sprzedawcy.",
+      "footerNotes": "Uwagi w stopce",
+      "invalidBic": "Wprowadź prawidłowy BIC.",
+      "invalidCurrency": "Wprowadź trzyliterowy kod waluty.",
+      "invalidIban": "Wprowadź prawidłowy IBAN.",
+      "legalName": "Nazwa prawna",
+      "registrationId": "Numer rejestracyjny",
+      "setDefault": "Ustaw jako domyślny",
+      "title": "Profile sprzedawcy",
+      "vatId": "Numer VAT"
+    },
+    "settingsTitle": "Rozliczenia",
     "split": {
       "addSplit": "Dodaj podział",
       "percentValue": "{value}%",
@@ -595,6 +636,27 @@
     "timerActive": "Timer uruchomiony",
     "timesheets": "Karta czasu pracy",
     "total": "Razem",
+    "vatRates": {
+      "add": "Dodaj stawkę VAT",
+      "archiveConfirm": "Zarchiwizować tę stawkę VAT? Nie będzie już dostępna dla nowych dokumentów.",
+      "code": "Kod stawki",
+      "current": "Bieżąca stawka",
+      "description": "Zarządzaj stawkami i okresami ich obowiązywania.",
+      "edit": "Edytuj stawkę VAT",
+      "empty": "Brak stawek VAT.",
+      "future": "Przyszła stawka",
+      "invalidPeriod": "Wybierz prawidłowe daty z końcem późniejszym niż początek.",
+      "invalidRate": "Wprowadź nieujemną wartość procentową z najwyżej dwoma miejscami po przecinku.",
+      "name": "Etykieta stawki",
+      "openEnded": "Bez daty końcowej",
+      "overlap": "Okresy obowiązywania tego samego kodu stawki nie mogą się nakładać.",
+      "past": "Poprzednia stawka",
+      "periodHelp": "Data początkowa jest włączona; data końcowa jest wyłączona. Pozostaw datę końcową pustą, aby okres był otwarty.",
+      "rate": "Procent VAT",
+      "title": "Stawki VAT",
+      "validFrom": "Obowiązuje od",
+      "validTo": "Obowiązuje do"
+    },
     "writeOff": "Umorz"
   },
   "caseLaw": {
@@ -828,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Streszczenie",
+      "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
       "citedBy": "Cytowane przez",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
@@ -851,6 +914,7 @@
         "publishedOnWeb": "Opublikowano w sieci"
       },
       "statutes": "Powołane przepisy",
+      "textNotYetAvailable": "Sąd nie opublikował treści orzeczenia lub nie jest ona jeszcze tutaj dostępna.",
       "textPending": "Tekst orzeczenia jest wciąż pobierany",
       "textReadFailed": "Nie udało się wczytać tekstu orzeczenia",
       "textUnavailable": "Do tego orzeczenia nie ma dostępnego tekstu"
@@ -947,6 +1011,7 @@
         "description": "Dokładnie sprawdź witrynę i cel. Zawartość strony jest niezaufana i nie może zatwierdzić kolejnego działania.",
         "modeReads": "Do końca tej sesji odczyt stron wykonuje się bez pytania.",
         "question": "Zezwolić na to działanie w przeglądarce?",
+        "realValues": "Ta witryna otrzyma prawdziwe wartości pokazane poniżej. Tryb anonimizacji dotyczy tylko tego, co widzi AI.",
         "within": "W obrębie"
       },
       "denied": "Odrzucono",
@@ -1051,6 +1116,7 @@
     "focusSuggestion": "Ustaw fokus na sugestii: {topic}",
     "folioCitationFallback": "s. {n}",
     "forkFromHere": "Utwórz stąd nowy czat",
+    "forkInSidePanel": "Utwórz stąd nowy czat w panelu bocznym",
     "forkedFrom": "Utworzono na podstawie <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Utworzono na podstawie czatu, który nie jest już dostępny",
     "forkedThread": "Z innego czatu",
@@ -1058,6 +1124,10 @@
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
+    },
     "improvePrompt": "Ulepsz prompt",
     "improvePromptDraftChanged": "Wersja robocza się zmieniła, więc ulepszenie nie zostało zastosowane.",
     "improvePromptPlainTextOnly": "Ulepszanie promptu jest dostępne tylko dla zwykłego tekstu.",
@@ -1110,6 +1180,7 @@
       "viaProvider": "przez {provider}"
     },
     "newChat": "Nowy czat",
+    "newChatInSidePanel": "Nowy czat jest dostępny w panelu bocznym",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
@@ -1157,6 +1228,12 @@
     "richContentLoading": "Wczytywanie interaktywnej treści…",
     "richContentTitle": "Treść interaktywna",
     "richContentUnavailable": "Nie można bezpiecznie wyświetlić tej treści.",
+    "selection": {
+      "askInNewChat": "Zapytaj w nowym czacie",
+      "quoteInReply": "Zacytuj w odpowiedzi",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Zaznaczony tekst"
+    },
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
@@ -1310,7 +1387,8 @@
       "interrupted": "Przerwano przed ukończeniem",
       "output": "Wynik",
       "sourceCode": "Kod źródłowy",
-      "toggleDetails": "Przełącz szczegóły"
+      "toggleDetails": "Przełącz szczegóły",
+      "unrestoredFields": "W trybie anonimizacji nie udało się wypełnić prawdziwymi wartościami {count, plural, one {# pola} few {# pól} many {# pól} other {# pola}}. Sprawdź: {fields}"
     },
     "unsupportedFileType": "Nieobsługiwany typ pliku",
     "uploadFailed": "Przetwarzanie pliku nie powiodło się",
@@ -1554,6 +1632,7 @@
     },
     "fact": "Fakt",
     "failed": "Niepowodzenie",
+    "files": "Pliki",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Znajdź",
@@ -2104,6 +2183,13 @@
     "unnamedAttachment": "Nienazwany załącznik"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Ta czynność jest tymczasowo wstrzymana. Spróbuj ponownie za chwilę.",
+      "concurrencyBusy": "Trwają inne operacje. Spróbuj ponownie za chwilę.",
+      "contact": "Skontaktuj się z nami",
+      "notEnabled": "Ta czynność nie jest włączona dla Twojej organizacji.",
+      "periodExhausted": "Ta czynność jest wstrzymana dla Twojej organizacji."
+    },
     "actionFailed": "Akcja nie powiodła się",
     "api": {
       "badRequest": "Nie udało się wykonać żądania.",
@@ -2111,6 +2197,7 @@
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "notFound": "Nie udało się znaleźć żądanego elementu.",
       "payloadTooLarge": "Żądanie jest zbyt duże.",
+      "publicCountryUnavailable": "Przepisy i orzecznictwo tego kraju nie są dostępne. Wybierz inny kraj.",
       "rateLimited": "Zbyt wiele żądań. Spróbuj ponownie później.",
       "server": "Coś poszło nie tak. Spróbuj ponownie.",
       "serviceUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie.",
@@ -2272,7 +2359,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Część dokumentu istnieje tylko w miejscu docelowym",
       "missingInTarget": "Część dokumentu istnieje tylko w bazie",
-      "notEditable": "Część dokumentu nie podlega edycji"
+      "notEditable": "Część dokumentu nie podlega edycji",
+      "unsupportedContent": "Ta wersja zawiera treść, której nie można jeszcze porównać."
     },
     "compareUnverified": "Niesprawdzone porównanie",
     "compareVerificationFailures": "{count, plural, one {Jedna kontrola dwukierunkowa nie powiodła się. Sprawdź porównanie, zanim na nim polegasz.} few {# kontrole dwukierunkowe nie powiodły się. Sprawdź porównanie, zanim na nim polegasz.} many {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.} other {# kontroli dwukierunkowych nie powiodło się. Sprawdź porównanie, zanim na nim polegasz.}}",
@@ -3210,7 +3298,6 @@
       "editSkill": "Edytuj umiejętność",
       "enableSkill": "Włącz umiejętność",
       "fileExists": "Plik o tej ścieżce już istnieje",
-      "filesHeading": "Pliki",
       "howItRuns": "Jak działa",
       "importFailureFetch": "Nie udało się wczytać źródła umiejętności.",
       "importFailureIntegrity": "Źródło umiejętności zmieniło się po jego wykryciu. Przejrzyj je ponownie.",
@@ -3690,7 +3777,6 @@
     "aiTitle": "Połącz swojego dostawcę AI",
     "appsSubtitle": "stella działa też poza przeglądarką: na komputerze i w asystencie AI. Do tej konfiguracji możesz wrócić w dowolnym momencie.",
     "appsTitle": "Korzystaj ze stelli wszędzie",
-    "assistantDocsLink": "Jak podłączyć asystenta",
     "catalogueAlwaysOn": "Zawsze włączone",
     "catalogueClearSearch": "Wyczyść wyszukiwanie",
     "catalogueCommunityHeading": "Pozostałe",
@@ -4217,31 +4303,40 @@
       "wordEditShortcutPlaceholder": "np. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} może",
+      "browseIntegrations": "Dodaj usługę",
       "cliDescription": "Zainstaluj klienta wiersza poleceń stella i zaloguj się, aby skryptować sprawy, dokumenty i szablony z terminala.",
-      "cliHelpHint": "Uruchom „stella --help”, aby zobaczyć pełną listę poleceń.",
       "cliInstallLabel": "Instalacja",
       "cliLoginLabel": "Logowanie",
       "cliTitle": "Interfejs wiersza poleceń",
-      "connectedAppsDescription": "Aplikacje i narzędzia, którym zezwolono na dostęp do konta.",
-      "connectedAppsEmpty": "Aplikacje, które autoryzujesz, na przykład Claude lub CLI stella, pojawią się tutaj.",
-      "connectedAppsTitle": "Połączone aplikacje",
-      "connectedColumn": "Połączono",
-      "description": "Połącz klientów MCP i interfejs wiersza poleceń z kontem.",
+      "connected": "Połączone",
+      "connectedAgo": "Połączono {time}",
+      "connectedAppsDescription": "Aplikacje, w których zalogowano się kontem stella. Odłącz te, których już nie używasz.",
+      "connectedAppsEmpty": "Jeszcze nic. Skonfiguruj powyżej Claude lub ChatGPT, a pojawi się tutaj.",
+      "connectedAppsTitle": "Aplikacje z dostępem",
+      "description": "Korzystaj ze stelli w asystencie AI i sprawdzaj, co ma dostęp do Twojego konta.",
+      "developerDescription": "Adresy serwera i narzędzie wiersza poleceń do konfiguracji technicznych.",
+      "developerTitle": "Dostęp dla programistów",
       "disconnectConfirmDescription": "Spowoduje to cofnięcie dostępu aplikacji {clientName} do Twojego konta oraz unieważnienie wszystkich wydanych przez nią tokenów. W każdej chwili możesz połączyć się ponownie.",
       "disconnectConfirmTitle": "Rozłączyć {clientName}?",
       "disconnectSuccess": "Rozłączono {clientName}",
+      "integrationsDescription": "Zewnętrzne usługi, z których AI może korzystać w Twoim imieniu, np. repozytorium dokumentów.",
+      "integrationsEmpty": "Dodaj pierwszą usługę",
+      "integrationsTitle": "Połączone usługi",
       "mcpAnonymizedLabel": "Zanonimizowany punkt końcowy",
-      "mcpAnonymizedNote": "Dostępny jest również zanonimizowany punkt końcowy; udostępnia te same narzędzia z zamaskowanymi danymi osobowymi.",
-      "mcpDescription": "Połącz klienta zgodnego z MCP, na przykład Claude lub Cursor, z kontem stella za pomocą tego adresu URL serwera.",
+      "mcpAnonymizedShortNote": "Te same narzędzia, dane osobowe zamaskowane.",
+      "mcpFullNote": "Pełny dostęp do Twoich spraw i dokumentów.",
       "mcpLawLabel": "Punkt końcowy korpusu prawnego",
-      "mcpLawNote": "Dostępny jest również punkt końcowy korpusu prawnego; udostępnia wyłącznie publiczne orzecznictwo i przepisy prawa i nie ma dostępu do danych spraw.",
-      "mcpStep1": "Dodaj powyższy adres URL jako niestandardowy konektor lub serwer MCP w swoim kliencie.",
-      "mcpStep2": "Zaloguj się, gdy przeglądarka o to poprosi.",
-      "mcpStep3": "Zatwierdź dostęp na ekranie zgody.",
+      "mcpLawShortNote": "Tylko publiczne orzecznictwo i przepisy, bez danych spraw.",
+      "mcpSetupHint": "Dodaj adres jako własny konektor w Claude, Cursorze lub innym kliencie MCP, a następnie zaloguj się i zatwierdź dostęp.",
       "mcpTitle": "Serwer MCP",
       "mcpUrlLabel": "Adres URL serwera",
-      "scopesLabel": "Dostęp",
-      "title": "Połączenia"
+      "noMatches": "Żadne połączenie nie pasuje do „{query}”",
+      "notConnected": "Niepołączone",
+      "permissionCount": "{count, plural, one {# uprawnienie} few {# uprawnienia} many {# uprawnień} other {# uprawnienia}}",
+      "searchPlaceholder": "Szukaj połączeń",
+      "title": "Połączenia",
+      "turnedOff": "Wyłączone"
     },
     "organization": {
       "activeMembers": "Aktywni członkowie",
@@ -5927,7 +6022,8 @@
         "openReport": "Otwórz raport",
         "submit": "Eksportuj raport",
         "templateLabel": "Szablon raportu",
-        "title": "Eksportuj raport"
+        "title": "Eksportuj raport",
+        "withoutAiSummaries": "Eksportuj bez podsumowań AI"
       },
       "saveAsTemplate": "Zapisz jako ustawienie wstępne…",
       "selectProperty": "Wybierz właściwość",

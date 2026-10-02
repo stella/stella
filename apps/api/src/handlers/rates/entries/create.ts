@@ -56,7 +56,11 @@ const createRateEntry = createSafeHandler(
       "Refused when dates overlap a line for the same selector or userId is not an organization member, " +
       "or when the table is at its line limit.",
     permissions: { rate: ["create"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: rateEntryParamsSchema,
     body: createRateEntryBodySchema,
   },

@@ -1,5 +1,5 @@
+import type { Transaction } from "@tiptap/pm/state";
 import type { JSONContent } from "@tiptap/react";
-import type { Transaction } from "prosemirror-state";
 
 import { diffWordSegments } from "@stll/folio-react";
 import { Temporal } from "@stll/time";

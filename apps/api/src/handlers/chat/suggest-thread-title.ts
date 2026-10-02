@@ -22,6 +22,7 @@ import {
   createSafeRootHandler,
 } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
@@ -58,6 +59,7 @@ export const createSuggestThreadTitle = ({
     const {
       getWorkspaceAccess,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       params: { threadId },
       promptCachingEnabled,
@@ -113,6 +115,17 @@ export const createSuggestThreadTitle = ({
     const messageWindow = yield* Result.await(
       loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
     );
+    // Re-read with the messages: the thread may have switched since the
+    // check above.
+    if (messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
+      return Result.err(
+        new HandlerError({
+          status: 403,
+          message:
+            "Title suggestion is unavailable for anonymized conversations",
+        }),
+      );
+    }
 
     if (messageWindow.messages.length === 0) {
       return Result.err(
@@ -124,6 +137,7 @@ export const createSuggestThreadTitle = ({
     }
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -151,6 +165,7 @@ export const createSuggestThreadTitle = ({
     }));
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -171,6 +186,7 @@ export const createSuggestThreadTitle = ({
     const text = yield* Result.await(
       Result.gen(() =>
         admitFiniteAction({
+          actionKind: "chat.suggest-thread-title",
           ctx,
           ...(admit === undefined ? {} : { admit }),
           async *handler({ actionSignal }) {
@@ -178,6 +194,7 @@ export const createSuggestThreadTitle = ({
               Result.tryPromise({
                 try: async () =>
                   await generateTextForRole({
+                    dataClass: "customer",
                     abortSignal: AbortSignal.any([
                       actionSignal ?? request.signal,
                       AbortSignal.timeout(SUGGEST_TITLE_TIMEOUT_MS),
@@ -192,6 +209,7 @@ export const createSuggestThreadTitle = ({
                     maxOutputTokens: TITLE_MAX_OUTPUT_TOKENS,
                     organizationId: session.activeOrganizationId,
                     orgAIConfig,
+                    managedAIResidency,
                     prompt: buildThreadTitlePrompt(titleMessages),
                     role: "fast",
                     serviceTier: "standard",

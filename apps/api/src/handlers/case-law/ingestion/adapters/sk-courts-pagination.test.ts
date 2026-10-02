@@ -43,6 +43,17 @@ const mockListEndpoint = (): Endpoint => {
   globalThis.fetch = asFetchMock(
     (input: string | URL | Request): Promise<Response> => {
       const url = new URL(input instanceof Request ? input.url : String(input));
+      if (url.pathname.includes("/v1/sud/")) {
+        return Promise.resolve(
+          new Response(
+            JSON.stringify({
+              registreGuid: "court-guid",
+              nazov: "Mestský súd Bratislava I",
+              typSudu: "Mestský súd",
+            }),
+          ),
+        );
+      }
       const page = url.searchParams.get("page");
       if (page === null) {
         // A per-decision detail request; the crawl asks for one per item.

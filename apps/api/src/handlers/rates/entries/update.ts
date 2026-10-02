@@ -34,7 +34,11 @@ const updateRateEntry = createSafeHandler(
       "lines for the same person, role, or table default and is refused on a conflict; the selector a line " +
       "applies to cannot be changed here.",
     permissions: { rate: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: rateEntryParamsSchema,
     body: updateRateEntryBodySchema,
   },

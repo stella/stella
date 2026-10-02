@@ -16,6 +16,7 @@ import type { ScopedDb } from "@/api/db/safe-db";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
+  caseLawSources,
 } from "@/api/db/schema";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -33,20 +34,23 @@ import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestio
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 import { composeWithStoredSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
-import {
-  corpusCarriesDocument,
-  payloadCarriesDocument,
-} from "@/api/handlers/case-law/stored-payload";
 import { withdrawCaseLawDecisionDocument } from "@/api/handlers/case-law/withdraw-document";
 import type { WithdrawCaseLawDecisionDocumentOutcome } from "@/api/handlers/case-law/withdraw-document";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  corpusCarriesDocument,
+  payloadCarriesDocument,
+} from "@/api/lib/case-law/stored-payload";
 import type { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { corpusContentHash } from "@/api/lib/legal-search/corpus-storage";
 import type { CorpusPayload } from "@/api/lib/legal-search/corpus-storage";
 import { decisionReplayIdentity } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import { storedCaseNumberOf } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  sanitizeResult,
+  storedCaseNumberOf,
+} from "@/api/lib/legal-search/ingestion-normalization";
 
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
@@ -94,7 +98,7 @@ import { storedCaseNumberOf } from "@/api/lib/legal-search/ingestion-normalizati
  */
 
 export const REPLAY_ROW_OUTCOME = {
-  /** The pipeline applied the re-parsed result. */
+  /** The replay applied the re-parsed payload or stamped its parser version. */
   APPLIED: "applied",
   /** Re-parsing reproduced the stored result; nothing to write. */
   UNCHANGED: "unchanged",
@@ -142,6 +146,8 @@ export type ReplayDecisionRow = {
    */
   contentHash: string | null;
   parserVersion: number | null;
+  /** Exact PostgreSQL timestamp for the stamp's compare-and-set, without Date truncation. */
+  updateToken: string;
   sourceRawS3Key: string;
   sourceRawContentType: string | null;
   corpusMirrorStatus: (typeof CASE_LAW_CORPUS_MIRROR_STATUS)[keyof typeof CASE_LAW_CORPUS_MIRROR_STATUS];
@@ -300,6 +306,7 @@ export const selectReplayPage = async ({
         sourceHash: caseLawDecisions.sourceHash,
         contentHash: caseLawDecisions.contentHash,
         parserVersion: caseLawDecisions.parserVersion,
+        updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
         sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
         sourceRawContentType: caseLawDecisions.sourceRawContentType,
         corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
@@ -675,28 +682,60 @@ const storedPayloadMatches = async ({
 };
 
 /**
+ * Whether the write would change a described column the row holds.
+ *
+ * Read as the write stores them: an unstated field leaves the column as it
+ * is, and a stated date the sanitizer rejects clears it.
+ */
+const describedColumnsChanged = ({
+  input,
+  result,
+  row,
+}: {
+  input: IngestionResult;
+  result: IngestionResult;
+  row: ReplayDecisionRow;
+}): boolean => {
+  const decisionDate =
+    result.decisionDate === undefined && input.decisionDate !== undefined
+      ? null
+      : result.decisionDate;
+  const described = [
+    [row.court, result.court],
+    [row.ecli, result.ecli],
+    [row.decisionDate, decisionDate],
+    [row.decisionType, result.decisionType],
+    [row.sourceUrl, result.sourceUrl],
+    [row.documentUrl, result.documentUrl],
+  ] as const;
+  return described.some(
+    ([stored, incoming]) => incoming !== undefined && incoming !== stored,
+  );
+};
+
+/**
  * Whether replaying this result would change what the row holds.
  *
- * Three questions, because a parser change can move any of them
- * independently:
+ * The source-side refresh check and sanitized canonical payload are compared
+ * independently. A parser-version difference is handled separately so an
+ * identical payload can be stamped without running the ingestion pipeline.
  *
  * - the source-side refresh check the pipeline itself applies, which covers
  *   the publisher's hash and the ingestion metadata (keywords included);
  * - the canonical payload's content hash, which is what a restructure moves
  *   while the flattened text stays identical — the case a source-hash
  *   comparison alone would report as unchanged and never apply;
- * - the parser version recorded on the row, so a version the row never
- *   caught up with is not left behind.
  */
 const replayWouldChangeRow = async ({
   row,
-  result,
+  result: input,
   scopedDb,
 }: {
   row: ReplayDecisionRow;
   result: IngestionResult;
   scopedDb: ScopedDb;
 }): Promise<boolean> => {
+  const result = sanitizeResult(input);
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return true;
   }
@@ -709,6 +748,9 @@ const replayWouldChangeRow = async ({
   ) {
     return true;
   }
+  if (describedColumnsChanged({ input, result, row })) {
+    return true;
+  }
   const sourceChanged = !shouldSkipRefresh({
     existingMetadata: row.metadata,
     existingSourceHash: row.sourceHash,
@@ -716,9 +758,6 @@ const replayWouldChangeRow = async ({
     incomingRawHash: result.rawHash,
   });
   if (sourceChanged) {
-    return true;
-  }
-  if ((row.parserVersion ?? 0) !== (result.parserVersion ?? 0)) {
     return true;
   }
   return !(await storedPayloadMatches({
@@ -776,8 +815,15 @@ const replayRow = async ({
     });
   }
 
+  // A legacy spelling the adapter vouched for stands in for the regenerated
+  // docket, and only on a row the write locates by publisher document: one
+  // keyed by its docket would be inserted again under the new spelling.
+  const identityCaseNumber =
+    reparsed.legacyCaseNumber !== undefined && reparsed.result.sourceDocumentId
+      ? reparsed.legacyCaseNumber
+      : reparsed.result.caseNumber;
   const regeneratedIdentity = decisionReplayIdentity(row.country, {
-    caseNumber: reparsed.result.caseNumber,
+    caseNumber: identityCaseNumber,
     country: reparsed.result.country,
     language: reparsed.result.language,
     sourceDocumentId: reparsed.result.sourceDocumentId ?? null,
@@ -805,13 +851,55 @@ const replayRow = async ({
     scopedDb,
   });
 
+  const versionChanged =
+    (row.parserVersion ?? 0) !== (reparsed.result.parserVersion ?? 0);
   if (sourceLease === null) {
     return {
       ...base,
-      outcome: changed
-        ? REPLAY_ROW_OUTCOME.WOULD_APPLY
-        : REPLAY_ROW_OUTCOME.UNCHANGED,
+      outcome:
+        changed || versionChanged
+          ? REPLAY_ROW_OUTCOME.WOULD_APPLY
+          : REPLAY_ROW_OUTCOME.UNCHANGED,
     };
+  }
+
+  if (!changed && versionChanged) {
+    await sourceLease.beforeDatabaseMark();
+    const stamped = await scopedDb(
+      async (tx) =>
+        // audit: skip — stamps parser provenance for a public corpus row; no document change
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            parserVersion: reparsed.result.parserVersion ?? null,
+            updatedAt: sql`${caseLawDecisions.updatedAt}`,
+          })
+          .where(
+            and(
+              eq(caseLawDecisions.id, row.id),
+              eq(caseLawDecisions.sourceId, sourceId),
+              isNull(caseLawDecisions.redactedAt),
+              sql`${caseLawDecisions.updatedAt} = ${row.updateToken}::timestamptz`,
+              sql`${caseLawDecisions.parserVersion} IS NOT DISTINCT FROM ${row.parserVersion}::integer`,
+              sql`EXISTS (
+            SELECT 1 FROM ${caseLawSources}
+            WHERE ${caseLawSources.id} = ${sourceId}
+              AND ${caseLawSources.ingestionLeaseToken} = ${sourceLease.leaseToken}
+              AND ${caseLawSources.ingestionLeaseExpiresAt} > now()
+          )`,
+            ),
+          )
+          .returning({ id: caseLawDecisions.id }),
+    );
+    if (stamped.length === 0) {
+      return {
+        ...base,
+        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+        detail:
+          "decision or source lease changed before its parser version could be stamped",
+      };
+    }
+    return { ...base, outcome: REPLAY_ROW_OUTCOME.APPLIED };
   }
 
   // Ordered on the source's own counter, under its lease: the row guards
@@ -1012,6 +1100,14 @@ export type ReplayCaseLawSourceOptions = {
   rejectionPolicy?: ReplayRejectionPolicy;
   /** Test seam; production withdraws through the canonical stores. */
   withdraw?: WithdrawDocument;
+  /**
+   * Receives every visited row's report, in walk order. The report's
+   * problem listing is a sample; this sees every row. A failure stops the
+   * run after that row: an applying run has already written it, so its
+   * report goes into the halt reason instead of being lost to a resume that
+   * would see the row as already done.
+   */
+  recordRow?: ((row: ReplayRowReport) => Promise<void>) | undefined;
 };
 
 export type ReplayRun =
@@ -1083,6 +1179,7 @@ export const replayCaseLawSource = async ({
   scope,
   rejectionPolicy = REPLAY_REJECTION_POLICY.REPORT,
   withdraw = withdrawCaseLawDecisionDocument,
+  recordRow,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
   const capability = replayCapability(adapter);
   if (capability.type === "unsupported") {
@@ -1175,11 +1272,25 @@ export const replayCaseLawSource = async ({
     }
     cursor = row.id;
 
+    const recorded =
+      recordRow === undefined
+        ? Result.ok()
+        : await Result.tryPromise({
+            try: async () => {
+              await recordRow(rowReport);
+            },
+            catch: (cause) => cause,
+          });
+
     if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
       haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
       return false;
     }
     resumeAfter = row.id;
+    if (Result.isError(recorded)) {
+      haltReason = `result of ${row.caseNumber} (${row.language}) could not be recorded (${failureDetail(recorded.error)}): ${JSON.stringify(rowReport)}`;
+      return false;
+    }
     return await replayPage(page, index + 1);
   };
 

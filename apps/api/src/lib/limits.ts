@@ -339,9 +339,6 @@ export const LIMITS = {
   matterActivityPageSizeMax: 50,
   matterActivityActorPageSizeDefault: 50,
   matterActivityActorPageSizeMax: 100,
-  /** Page sizes for the operator recent-registrations listing. */
-  operatorRegistrationsPageSizeDefault: 50,
-  operatorRegistrationsPageSizeMax: 200,
   contactsCount: 10_000,
   contactsPageSizeDefault: 50,
   contactsPageSizeMax: 100,
@@ -355,6 +352,8 @@ export const LIMITS = {
   /** Better Auth organization member cap and full-org read bound. */
   organizationMembersCount: BETTER_AUTH_ORGANIZATION_OPTIONS.membershipLimit,
   workspaceMembersCount: 500,
+  workspaceMemberPreviewBatchMax: 10,
+  workspaceMemberPreviewMembersMax: 4,
   /** Max governed obligations synchronously unassigned during member removal. */
   workspaceMemberRemovalWorkObligationsMax: 500,
   practiceJurisdictionsPerOrganization: 12,

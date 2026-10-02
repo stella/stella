@@ -100,7 +100,11 @@ const removeEntries = createSafeHandler(
       "be changed, and ids that are not on this invoice are skipped without " +
       "an error.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: invoiceParamsSchema,
     body: removeEntriesBodySchema,
   },

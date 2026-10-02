@@ -27,7 +27,11 @@ const config = {
   // docx), so it needs `template: ["create"]` like `/create`, not bare workspace
   // read; this also keeps a read-only role from spending org AI here.
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: true,
+  },
   transport: {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },
@@ -50,7 +54,14 @@ const config = {
  */
 const prepareTemplate = createSafeRootHandler(
   config,
-  async function* ({ session, body, safeDb, orgAIConfig, user }) {
+  async function* ({
+    session,
+    body,
+    safeDb,
+    orgAIConfig,
+    managedAIResidency,
+    user,
+  }) {
     const organizationId = session.activeOrganizationId;
     const { file } = body;
     if (file.type !== DOCX_MIME_TYPE) {
@@ -63,6 +74,7 @@ const prepareTemplate = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -93,6 +105,7 @@ const prepareTemplate = createSafeRootHandler(
               await suggestTemplateFieldsOrEmpty({
                 documentText,
                 orgAIConfig,
+                managedAIResidency,
                 organizationId,
                 aiAnalytics,
               }),

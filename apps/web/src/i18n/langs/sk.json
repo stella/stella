@@ -27,6 +27,16 @@
     "errorNotFound": "Pre tento kód sme nenašli žiadnu čakajúcu požiadavku. Skontrolujte kód a skúste to znova.",
     "title": "Pripojte svojho agenta"
   },
+  "agentSetup": {
+    "addressLabel": "Asistent si vyžiada túto adresu",
+    "copiedToast": "Pokyny skopírované. Vložte ich do chatu so svojím asistentom.",
+    "copy": "Skopírujte mu pokyny",
+    "description": "Pýtajte sa Claude alebo ChatGPT na svoje spisy a dokumenty. Vyberte svojho asistenta a otvorí sa krátky návod; zaberie asi minútu.",
+    "instructions": "Pripoj ma k stelle, môjmu právnemu pracovnému priestoru. Postupuj podľa časti „Instructions for AI agents“ na {guideUrl} a použi túto adresu servera: {mcpUrl}",
+    "openGuide": "Otvoriť návod pre {assistant}",
+    "selfSetupHint": "Používate Claude Code alebo Codex?",
+    "title": "Používajte stellu vo svojom AI asistentovi"
+  },
   "ai": {
     "chooseRewriteInstruction": "Možnosti úpravy",
     "editWithAI": "Upraviť pomocou AI",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Nepodarilo sa spustiť časovač",
     "failedToStopTimer": "Nepodarilo sa zastaviť časovač",
     "filterStatus": "Filtrovať podľa stavu",
+    "globalTimer": {
+      "confirm": "Potvrdiť čas",
+      "discard": "Zahodiť časovač",
+      "matterInaccessible": "Vyberte spis, ku ktorému máte prístup.",
+      "narrativeRequired": "Pred potvrdením času pridajte popis.",
+      "pause": "Pozastaviť",
+      "periodLocked": "Tento mesiac je uzamknutý. Požiadajte správcu o jeho odomknutie.",
+      "resume": "Pokračovať",
+      "timerUnavailable": "Tento časovač už nie je dostupný. Obnovte zoznam.",
+      "title": "Časovače"
+    },
     "hourlyRateMustBeNonNegative": "Hodinová sadzba nesmie byť záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktúry",
@@ -567,6 +588,26 @@
     "selectMatter": "Vyberte spis...",
     "selectMatterToStart": "Vyberte spis na spustenie merania",
     "selectedCount": "{count, plural, one {# vybraný} few {# vybrané} other {# vybraných}}",
+    "sellerProfiles": {
+      "add": "Pridať profil dodávateľa",
+      "archiveConfirm": "Archivovať tento profil dodávateľa? Nebude už dostupný pre nové faktúry.",
+      "bic": "Kód BIC / SWIFT",
+      "default": "Predvolený dodávateľ",
+      "defaultCurrency": "Predvolená mena",
+      "description": "Spravujte údaje používané pri vystavovaní faktúr.",
+      "edit": "Upraviť profil dodávateľa",
+      "empty": "Žiadne profily dodávateľov.",
+      "footerNotes": "Poznámky v päte",
+      "invalidBic": "Zadajte platný BIC.",
+      "invalidCurrency": "Zadajte trojpísmenový kód meny.",
+      "invalidIban": "Zadajte platný IBAN.",
+      "legalName": "Oficiálny názov",
+      "registrationId": "Registračné číslo",
+      "setDefault": "Nastaviť ako predvolený",
+      "title": "Profily dodávateľov",
+      "vatId": "IČ DPH"
+    },
+    "settingsTitle": "Fakturácia",
     "split": {
       "addSplit": "Pridať rozdelenie",
       "percentValue": "{value} %",
@@ -595,6 +636,27 @@
     "timerActive": "Časovač beží",
     "timesheets": "Výkaz práce",
     "total": "Celkom",
+    "vatRates": {
+      "add": "Pridať sadzbu DPH",
+      "archiveConfirm": "Archivovať túto sadzbu DPH? Nebude už dostupná pre nové doklady.",
+      "code": "Kód sadzby",
+      "current": "Aktuálna sadzba",
+      "description": "Spravujte sadzby a obdobia ich platnosti.",
+      "edit": "Upraviť sadzbu DPH",
+      "empty": "Žiadne sadzby DPH.",
+      "future": "Budúca sadzba",
+      "invalidPeriod": "Vyberte platné dátumy s koncom po začiatku.",
+      "invalidRate": "Zadajte nezápornú percentuálnu sadzbu s najviac dvoma desatinnými miestami.",
+      "name": "Označenie sadzby",
+      "openEnded": "Bez koncového dátumu",
+      "overlap": "Obdobia platnosti pre rovnaký kód sadzby sa nesmú prekrývať.",
+      "past": "Predchádzajúca sadzba",
+      "periodHelp": "Počiatočný dátum je zahrnutý; koncový dátum nie je zahrnutý. Pre obdobie bez konca ponechajte koncový dátum prázdny.",
+      "rate": "Percentuálna sadzba DPH",
+      "title": "Sadzby DPH",
+      "validFrom": "Platí od",
+      "validTo": "Platí do"
+    },
     "writeOff": "Odpísať"
   },
   "caseLaw": {
@@ -828,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
@@ -851,6 +914,7 @@
         "publishedOnWeb": "Zverejnené na webe"
       },
       "statutes": "Aplikované predpisy",
+      "textNotYetAvailable": "Súd text rozhodnutia nezverejnil alebo tu zatiaľ nie je dostupný.",
       "textPending": "Text rozhodnutia sa stále načítava",
       "textReadFailed": "Text rozhodnutia sa nepodarilo načítať",
       "textUnavailable": "K tomuto rozhodnutiu nie je k dispozícii text"
@@ -947,6 +1011,7 @@
         "description": "Dôkladne skontrolujte web a cieľ. Obsah stránky nie je dôveryhodný a nemôže schváliť ďalšiu akciu.",
         "modeReads": "Čítanie stránok sa do konca tejto relácie vykonáva bez opýtania.",
         "question": "Povoliť túto akciu v prehliadači?",
+        "realValues": "Táto webová stránka dostane skutočné hodnoty uvedené nižšie. Anonymizovaný režim sa vzťahuje len na to, čo vidí AI.",
         "within": "V rámci"
       },
       "denied": "Zamietnuté",
@@ -1051,6 +1116,7 @@
     "focusSuggestion": "Zamerať návrh: {topic}",
     "folioCitationFallback": "str. {n}",
     "forkFromHere": "Vytvoriť odtiaľto nový chat",
+    "forkInSidePanel": "Vytvoriť odtiaľto nový chat v bočnom paneli",
     "forkedFrom": "Vytvorené z chatu: <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Vytvorené z chatu, ktorý už nie je dostupný",
     "forkedThread": "Z iného chatu",
@@ -1058,6 +1124,10 @@
     "greeting": "Na čom chcete pracovať?",
     "greetingSubtitle": "Začnite spisom, dokumentom alebo obyčajnou otázkou.",
     "hideThread": "Skryť konverzáciu",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {a # ďalší} few {a # ďalšie} other {a # ďalších}}"
+    },
     "improvePrompt": "Vylepšiť zadanie",
     "improvePromptDraftChanged": "Zadanie sa zmenilo, preto vylepšenie nebolo použité.",
     "improvePromptPlainTextOnly": "Vylepšenie zadania je dostupné iba pre obyčajný text.",
@@ -1110,6 +1180,7 @@
       "viaProvider": "cez {provider}"
     },
     "newChat": "Nový chat",
+    "newChatInSidePanel": "Nový chat je dostupný v bočnom paneli",
     "noPromptPresetOnly": "Bez správy, iba predvoľba",
     "noThreads": "Zatiaľ žiadne konverzácie",
     "officeCitationUnavailable": "Táto citácia už nie je dostupná.",
@@ -1157,6 +1228,12 @@
     "richContentLoading": "Načítava sa interaktívny obsah…",
     "richContentTitle": "Interaktívny obsah",
     "richContentUnavailable": "Tento obsah nemožno bezpečne zobraziť.",
+    "selection": {
+      "askInNewChat": "Opýtať sa v novom chate",
+      "quoteInReply": "Citovať v odpovedi",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Vybraný text"
+    },
     "sendError": "Pri odosielaní správy nastal problém. Ak chyba pretrváva, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovať jednu prílohu, takže sa nič neodoslalo. Odstráňte súbor alebo odošlite správu bez anonymizácie.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnu odpoveď. Skúste to znova alebo správu preformulujte.",
@@ -1310,7 +1387,8 @@
       "interrupted": "Prerušené pred dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
-      "toggleDetails": "Prepnúť podrobnosti"
+      "toggleDetails": "Prepnúť podrobnosti",
+      "unrestoredFields": "{count, plural, one {# pole sa nepodarilo} few {# polia sa nepodarilo} many {# poľa sa nepodarilo} other {# polí sa nepodarilo}} v anonymizovanom režime vyplniť skutočnými hodnotami. Skontrolujte: {fields}"
     },
     "unsupportedFileType": "Nepodporovaný typ súboru",
     "uploadFailed": "Spracovanie súboru zlyhalo",
@@ -1554,6 +1632,7 @@
     },
     "fact": "Fakt",
     "failed": "Zlyhalo",
+    "files": "Súbory",
     "filter": "Filtrovať",
     "filters": "Filtre",
     "find": "Nájsť",
@@ -2104,6 +2183,13 @@
     "unnamedAttachment": "Nepomenovaná príloha"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Táto akcia je dočasne pozastavená. Skúste to prosím o chvíľu.",
+      "concurrencyBusy": "Prebieha iná práca. Skúste to prosím o chvíľu.",
+      "contact": "Kontaktujte nás",
+      "notEnabled": "Táto akcia nie je pre vašu organizáciu povolená.",
+      "periodExhausted": "Táto akcia je pre vašu organizáciu pozastavená."
+    },
     "actionFailed": "Akcia zlyhala",
     "api": {
       "badRequest": "Požiadavku sa nepodarilo dokončiť.",
@@ -2111,6 +2197,7 @@
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "notFound": "Požadovanú položku sa nepodarilo nájsť.",
       "payloadTooLarge": "Požiadavka je príliš veľká.",
+      "publicCountryUnavailable": "Právne predpisy a judikatúra tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
       "rateLimited": "Príliš veľa požiadaviek. Skúste to prosím neskôr.",
       "server": "Niečo sa pokazilo. Skúste to prosím znova.",
       "serviceUnavailable": "Služba je dočasne nedostupná. Skúste to prosím znova.",
@@ -2272,7 +2359,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "Časť dokumentu existuje iba v cieli",
       "missingInTarget": "Časť dokumentu existuje iba v základni",
-      "notEditable": "Časť dokumentu nie je možné upravovať"
+      "notEditable": "Časť dokumentu nie je možné upravovať",
+      "unsupportedContent": "Táto verzia obsahuje obsah, ktorý zatiaľ nemožno porovnať."
     },
     "compareUnverified": "Neoverené porovnanie",
     "compareVerificationFailures": "{count, plural, one {Jedna obojsmerná kontrola zlyhala. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} few {# obojsmerné kontroly zlyhali. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.} other {# obojsmerných kontrol zlyhalo. Skontrolujte porovnanie skôr, ako sa naň spoľahnete.}}",
@@ -3210,7 +3298,6 @@
       "editSkill": "Upraviť zručnosť",
       "enableSkill": "Zapnúť zručnosť",
       "fileExists": "Súbor s touto cestou už existuje",
-      "filesHeading": "Súbory",
       "howItRuns": "Ako sa spúšťa",
       "importFailureFetch": "Zdroj zručnosti sa nepodarilo načítať.",
       "importFailureIntegrity": "Zdroj zručnosti sa po nájdení zmenil. Skontrolujte ho znova.",
@@ -3690,7 +3777,6 @@
     "aiTitle": "Pripojte svojho poskytovateľa AI",
     "appsSubtitle": "stella funguje aj mimo prehliadača: v aplikácii pre počítač a vo vašom AI asistentovi. K tomuto nastaveniu sa môžete kedykoľvek neskôr vrátiť.",
     "appsTitle": "Získajte stellu všade",
-    "assistantDocsLink": "Ako pripojiť svojho asistenta",
     "catalogueAlwaysOn": "Vždy zapnuté",
     "catalogueClearSearch": "Vymazať hľadanie",
     "catalogueCommunityHeading": "Ostatné",
@@ -4217,31 +4303,40 @@
       "wordEditShortcutPlaceholder": "napr. JK"
     },
     "connections": {
+      "accessTitle": "{clientName} môže",
+      "browseIntegrations": "Pridať službu",
       "cliDescription": "Nainštalujte si príkazový riadok stella a prihláste sa, aby ste mohli z terminálu skriptovať spisy, dokumenty a vzory.",
-      "cliHelpHint": "Spustením „stella --help“ zobrazíte úplný zoznam príkazov.",
       "cliInstallLabel": "Inštalácia",
       "cliLoginLabel": "Prihlásenie",
       "cliTitle": "Príkazový riadok",
-      "connectedAppsDescription": "Aplikácie a nástroje, ktorým ste povolili prístup k účtu.",
-      "connectedAppsEmpty": "Aplikácie, ktoré autorizujete, napríklad Claude alebo CLI stella, sa zobrazia tu.",
-      "connectedAppsTitle": "Pripojené aplikácie",
-      "connectedColumn": "Pripojené",
-      "description": "Pripojte MCP klientov a príkazový riadok k svojmu účtu.",
+      "connected": "Pripojené",
+      "connectedAgo": "Pripojené {time}",
+      "connectedAppsDescription": "Aplikácie, do ktorých ste sa prihlásili účtom stella. Tie, ktoré už nepoužívate, odpojte.",
+      "connectedAppsEmpty": "Zatiaľ nič. Nastavte vyššie Claude alebo ChatGPT a objaví sa tu.",
+      "connectedAppsTitle": "Aplikácie s prístupom",
+      "description": "Používajte stellu zo svojho AI asistenta a majte prehľad, čo má prístup k vášmu účtu.",
+      "developerDescription": "Adresy servera a nástroj pre príkazový riadok na technické nastavenia.",
+      "developerTitle": "Prístup pre vývojárov",
       "disconnectConfirmDescription": "Tým zrušíte prístup aplikácie {clientName} k vášmu účtu aj všetky tokeny, ktoré vydala. Kedykoľvek sa môžete znova pripojiť.",
       "disconnectConfirmTitle": "Odpojiť aplikáciu {clientName}?",
       "disconnectSuccess": "Aplikácia {clientName} bola odpojená",
+      "integrationsDescription": "Externé služby, ktoré za vás AI môže používať, napríklad úložisko dokumentov.",
+      "integrationsEmpty": "Pridajte prvú službu",
+      "integrationsTitle": "Pripojené služby",
       "mcpAnonymizedLabel": "Anonymizovaný koncový bod",
-      "mcpAnonymizedNote": "K dispozícii je aj anonymizovaný koncový bod; ponúka rovnaké nástroje so skrytými osobnými údajmi.",
-      "mcpDescription": "Pomocou tejto adresy URL servera pripojte k svojmu účtu stella klienta kompatibilného s MCP, napríklad Claude alebo Cursor.",
+      "mcpAnonymizedShortNote": "Rovnaké nástroje, osobné údaje sú skryté.",
+      "mcpFullNote": "Plný prístup k vašim spisom a dokumentom.",
       "mcpLawLabel": "Koncový bod právneho korpusu",
-      "mcpLawNote": "K dispozícii je aj koncový bod právneho korpusu; ponúka len verejnú judikatúru a právne predpisy a nedostane sa k údajom v spisoch.",
-      "mcpStep1": "Pridajte adresu URL vyššie ako vlastný konektor alebo server MCP vo svojom klientovi.",
-      "mcpStep2": "Prihláste sa, keď vás na to prehliadač vyzve.",
-      "mcpStep3": "Na obrazovke súhlasu schváľte prístup.",
+      "mcpLawShortNote": "Len verejná judikatúra a legislatíva, bez údajov zo spisov.",
+      "mcpSetupHint": "Pridajte adresu ako vlastný konektor v Claude, Cursore alebo inom MCP klientovi, potom sa prihláste a schváľte prístup.",
       "mcpTitle": "Server MCP",
       "mcpUrlLabel": "Adresa URL servera",
-      "scopesLabel": "Prístup",
-      "title": "Pripojenia"
+      "noMatches": "Výrazu „{query}“ nezodpovedá žiadne pripojenie",
+      "notConnected": "Nepripojené",
+      "permissionCount": "{count, plural, one {# oprávnenie} few {# oprávnenia} many {# oprávnenia} other {# oprávnení}}",
+      "searchPlaceholder": "Hľadať pripojenia",
+      "title": "Pripojenia",
+      "turnedOff": "Vypnuté"
     },
     "organization": {
       "activeMembers": "Aktívni členovia",
@@ -5927,7 +6022,8 @@
         "openReport": "Otvoriť správu",
         "submit": "Exportovať správu",
         "templateLabel": "Vzor správy",
-        "title": "Exportovať správu"
+        "title": "Exportovať správu",
+        "withoutAiSummaries": "Exportovať bez zhrnutí pomocou AI"
       },
       "saveAsTemplate": "Uložiť ako predvoľbu…",
       "selectProperty": "Vybrať vlastnosť",

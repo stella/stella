@@ -384,11 +384,13 @@ const createAIContext = async (
   if (Result.isError(settings)) {
     return Result.err(settings.error);
   }
-  const { orgAIConfig, promptCachingEnabled } = settings.value;
+  const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+    settings.value;
   return Result.ok({
     organizationId: actor.organizationId,
     workspaceId: actor.workspaceId,
     orgAIConfig,
+    managedAIResidency,
     promptCachingEnabled,
     abortSignal: AbortSignal.timeout(RUN_TIMEOUT_MS),
     scopeKey: run.entityVersionId,

@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { Elysia } from "elysia";
+
+import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
 import { env } from "@/api/env";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
@@ -7,7 +10,14 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
+import {
+  currentActionCostIdentity,
+  type ActionCostObservation,
+} from "@/api/lib/usage/action-costs/context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const context = (signal?: AbortSignal) => ({
@@ -20,10 +30,11 @@ const context = (signal?: AbortSignal) => ({
   memberRole: { role: "owner" },
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
 });
 
 const config = {
-  actionAdmission: "handler",
+  actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
 } satisfies HandlerConfig;
@@ -81,6 +92,151 @@ const withFeature = async (enabled: boolean, run: () => Promise<void>) => {
 };
 
 describe("finite HTTP action admission", () => {
+  test("each refusal preserves response headers and exposes only its curated contract", async () => {
+    await withFeature(true, async () => {
+      const previousContact = env.ACTION_LIMIT_CONTACT_URL;
+      env.ACTION_LIMIT_CONTACT_URL = "https://example.test/contact";
+      const reasons = [
+        "busy",
+        "period_exhausted",
+        "not_enabled",
+        "unavailable",
+      ] as const;
+      try {
+        for (const reason of reasons) {
+          const refusal = new ActionAdmissionError({
+            reason,
+            message: "private implementation detail",
+          });
+          const metadata = ACTION_ADMISSION_REFUSALS[refusal.code];
+          let calls = 0;
+          const endpoint = createSafeRootHandler(
+            config,
+            async function* () {
+              calls += 1;
+              return Result.ok({ ok: true });
+            },
+            { admit: async () => Result.err(refusal) },
+          );
+          const app = new Elysia().post("/action", async ({ set }) => {
+            set.headers["access-control-allow-origin"] = "https://example.test";
+            set.headers["x-content-type-options"] = "nosniff";
+            set.headers["x-request-id"] = "request_example";
+            return await endpoint.handler(asTestRaw({ ...context(), set }));
+          });
+          const response = await app.handle(
+            new Request("http://localhost/action", { method: "POST" }),
+          );
+          expect(response.status).toBe(metadata.status);
+          expect(response.headers.get("access-control-allow-origin")).toBe(
+            "https://example.test",
+          );
+          expect(response.headers.get("x-content-type-options")).toBe(
+            "nosniff",
+          );
+          expect(response.headers.get("x-request-id")).toBe("request_example");
+          expect(response.headers.get("retry-after")).toBeNull();
+          const body = await response.json();
+          expect(body).toMatchObject({
+            code: refusal.code,
+            message: metadata.message,
+            retryable: metadata.retryable,
+          });
+          expect(JSON.stringify(body)).not.toContain(
+            "private implementation detail",
+          );
+          if (reason === "period_exhausted" || reason === "not_enabled") {
+            expect(body).toMatchObject({
+              contactUrl: env.ACTION_LIMIT_CONTACT_URL,
+            });
+          } else {
+            expect(body).not.toHaveProperty("contactUrl");
+          }
+          expect(calls).toBe(0);
+        }
+      } finally {
+        env.ACTION_LIMIT_CONTACT_URL = previousContact;
+      }
+    });
+  });
+
+  test("admitted finite HTTP requests supply their canonical kind and distinct request identities", async () => {
+    await withFeature(true, async () => {
+      const identities: unknown[] = [];
+      const endpoint = createSafeRootHandler(
+        config,
+        async function* () {
+          return Result.ok({ ok: true });
+        },
+        {
+          admit: async (options) => {
+            identities.push(options.periodIdentity);
+            return Result.ok(
+              await options.run(new AbortController().signal, {
+                reservePeriod: async () => Result.ok(undefined),
+              }),
+            );
+          },
+        },
+      );
+      await endpoint.handler(asTestRaw(context()));
+      await endpoint.handler(asTestRaw(context()));
+      expect(identities).toHaveLength(2);
+      for (const identity of identities) {
+        expect(identity).toMatchObject({
+          actionKind: config.actionAdmission.actionKind,
+          logicalPhaseId: expect.any(String),
+        });
+      }
+      expect(identities.at(0)).not.toEqual(identities.at(1));
+    });
+  });
+
+  test("observation-only HTTP execution keeps identity without coordination", async () => {
+    const previous = env.FEATURE_ACTION_COST_RECORDS;
+    env.FEATURE_ACTION_COST_RECORDS = true;
+    try {
+      await withFeature(false, async () => {
+        const rows: ActionCostObservation[] = [];
+        const endpoint = createSafeRootHandler(
+          config,
+          async function* (ctx) {
+            expect(
+              currentActionCostIdentity(ctx.session.activeOrganizationId),
+            ).toMatchObject({
+              actionKind: config.actionAdmission.actionKind,
+            });
+            return Result.ok({ ok: true });
+          },
+          {
+            admit: async (options) =>
+              await withActionAdmission({
+                ...options,
+                costRecorder: {
+                  enqueue: (row) => {
+                    rows.push(row);
+                  },
+                  estimate: () => null,
+                  callRate: () => null,
+                },
+                redis: {
+                  send: async () => {
+                    throw new TypeError("Unexpected coordination");
+                  },
+                },
+              }),
+          },
+        );
+        expect(await endpoint.handler(asTestRaw(context()))).toEqual({
+          ok: true,
+        });
+        expect(rows.map((row) => row.type)).toEqual(["action", "action"]);
+      });
+    } finally {
+      env.FEATURE_ACTION_COST_RECORDS = previous;
+    }
+  });
+
   test("flag off preserves payload, typed errors and request signal without coordination", async () => {
     await withFeature(false, async () => {
       const deps = dependencies(0);
@@ -161,6 +317,29 @@ describe("finite HTTP action admission", () => {
     });
   });
 
+  test("completed and charged finite work survives client abort during settlement", async () => {
+    await withFeature(true, async () => {
+      const deps = dependencies();
+      const controller = new AbortController();
+      let charges = 0;
+      const payload = { value: "charged" };
+      const endpoint = createSafeRootHandler(
+        config,
+        async function* () {
+          charges += 1;
+          controller.abort();
+          return Result.ok(payload);
+        },
+        deps,
+      );
+      expect(
+        await endpoint.handler(asTestRaw(context(controller.signal))),
+      ).toBe(payload);
+      expect(charges).toBe(1);
+      expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
+    });
+  });
+
   test("finite admission rejects a dynamically widened Response and cancels its producer", async () => {
     await withFeature(true, async () => {
       const deps = dependencies();
@@ -227,7 +406,7 @@ describe("finite HTTP action admission", () => {
       );
       expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
         code: 429,
-        response: { code: "rate_limited" },
+        response: { code: "action_concurrency_busy" },
       });
       expect(calls).toBe(0);
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 0 });
@@ -264,7 +443,7 @@ describe("finite HTTP action admission", () => {
       );
       expect(await endpoint.handler(asTestRaw(context()))).toMatchObject({
         code: 503,
-        response: { code: "service_unavailable" },
+        response: { code: "action_admission_unavailable" },
       });
       expect(calls).toBe(0);
     });
@@ -312,4 +491,36 @@ describe("finite HTTP action admission", () => {
       expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
     });
   });
+
+  // A disconnect usually aborts with the platform's default reason, or none
+  // that survives signal composition; only the HandlerError case above was
+  // ever mapped to a client error.
+  test.each([
+    ["the default abort reason", undefined],
+    ["a plain error", new Error("socket closed")],
+    ["a non-error reason", "client went away"],
+  ])(
+    "a client disconnected with %s does no work and releases its admitted slot",
+    async (_label, reason) => {
+      await withFeature(true, async () => {
+        const deps = dependencies();
+        const controller = new AbortController();
+        controller.abort(reason);
+        let calls = 0;
+        const endpoint = createSafeRootHandler(
+          config,
+          async function* () {
+            calls += 1;
+            return Result.ok({ ok: true });
+          },
+          deps,
+        );
+        expect(
+          await endpoint.handler(asTestRaw(context(controller.signal))),
+        ).toMatchObject({ code: 400 });
+        expect(calls).toBe(0);
+        expect(deps.counts()).toEqual({ acquisitions: 1, releases: 1 });
+      });
+    },
+  );
 });

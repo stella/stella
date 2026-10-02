@@ -400,6 +400,29 @@ describe("openChat", () => {
   });
 });
 
+describe("flashTab", () => {
+  test("holds the request until the rail entry has flashed", () => {
+    const store = useInspectorTabsStore.getState();
+    store.flashTab("thread-1");
+    store.clearTabFlash("thread-2");
+    expect(useInspectorTabsStore.getState().flashTabId).toBe("thread-1");
+
+    store.clearTabFlash("thread-1");
+    expect(useInspectorTabsStore.getState().flashTabId).toBeNull();
+  });
+
+  test("asking again for the same tab is a fresh request", () => {
+    const store = useInspectorTabsStore.getState();
+    store.flashTab("thread-1");
+    store.clearTabFlash("thread-1");
+    store.flashTab("thread-1");
+    expect(useInspectorTabsStore.getState()).toMatchObject({
+      flashSeq: 2,
+      flashTabId: "thread-1",
+    });
+  });
+});
+
 describe("openExternal", () => {
   test("preserves the source connector icon on the external tab", () => {
     useInspectorTabsStore.getState().openExternal({

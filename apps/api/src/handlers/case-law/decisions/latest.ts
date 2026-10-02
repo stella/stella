@@ -295,6 +295,9 @@ export const listLatestDecisionsHandler = async (
   const countryRead = readPublicLawCountry(country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
   });
+  if (countryRead.kind === "unavailable") {
+    return status(503, countryRead.response);
+  }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }

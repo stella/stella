@@ -1,0 +1,8 @@
+[
+  {
+    "message": "Canceling since a higher priority waiting request for CI Checks-ci-dispatch-refs/heads/ci/result-cancellation-signal-proof exists"
+  },
+  {
+    "message": "The operation was canceled."
+  }
+]

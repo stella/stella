@@ -38,7 +38,11 @@ const config = {
     "afterwards. Refused when that slug is already installed at the same " +
     "scope, or when the scope's skill limit is reached.",
   permissions: { agentSkill: ["create"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   body: installSkillBody,
 } satisfies HandlerConfig;
 

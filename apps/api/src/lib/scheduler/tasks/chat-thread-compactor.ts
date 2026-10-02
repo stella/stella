@@ -13,7 +13,7 @@
  */
 import { panic, Result } from "better-result";
 
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { resolveChatCompactionBudget } from "@/api/lib/chat/compaction-budget";
@@ -52,6 +52,7 @@ export const compactChatThreads: SchedulerTask = async ({
   let upToDate = 0;
   let superseded = 0;
   let noSummary = 0;
+  let anonymized = 0;
   let failed = 0;
 
   // Sequential recursion rather than a loop: one thread in flight at a time
@@ -107,6 +108,10 @@ export const compactChatThreads: SchedulerTask = async ({
         superseded += 1;
         break;
       }
+      case "anonymized": {
+        anonymized += 1;
+        break;
+      }
       default: {
         outcome.value satisfies never;
         return panic(`Unhandled value: ${String(outcome.value)}`);
@@ -135,6 +140,7 @@ export const compactChatThreads: SchedulerTask = async ({
 
   logger.info("scheduler.chat_compactor", {
     "thread.advanced": advanced,
+    "thread.anonymized": anonymized,
     "thread.claimed": claim.threads.length,
     "thread.failed": failed,
     "thread.no_summary": noSummary,
@@ -162,6 +168,8 @@ export const compactChatThreads: SchedulerTask = async ({
  *    invalidates the chain from inside a send that re-marks the thread due in
  *    the same request. Requeueing instead would spend a provider call per tick
  *    for as long as a user kept editing, to reach the same state.
+ *  - `anonymized` drains: the thread's content no longer leaves for this
+ *    request, and the claim never selects it again.
  */
 export const settlementForOutcome = (
   outcome: ChatCompactionOutcome,
@@ -179,6 +187,9 @@ export const settlementForOutcome = (
       return CHAT_COMPACTION_SETTLEMENT.FAILED;
     }
     case "superseded": {
+      return CHAT_COMPACTION_SETTLEMENT.DRAINED;
+    }
+    case "anonymized": {
       return CHAT_COMPACTION_SETTLEMENT.DRAINED;
     }
     default: {
@@ -199,7 +210,7 @@ const compactThread = async ({
   signal,
   thread,
 }: CompactThreadOptions): ReturnType<typeof runChatThreadCompaction> => {
-  // `loadOrgAIConfig` throws on a corrupt encrypted configuration, which is a
+  // `loadOrgAISettings` throws on a corrupt encrypted configuration, which is a
   // property of one organization. Outside the per-thread boundary that
   // rejection would escape before this thread is settled, leaving the rest of
   // the claimed batch leased until expiry and letting the same poison thread
@@ -214,7 +225,7 @@ const compactThread = async ({
     await Result.tryPromise({
       try: async () =>
         (
-          await loadOrgAIConfig(db, {
+          await loadOrgAISettings(db, {
             organizationId: thread.organizationId,
             userId: thread.userId,
           })
@@ -225,7 +236,7 @@ const compactThread = async ({
   if (Result.isError(configResult)) {
     return configResult;
   }
-  const orgAIConfig = configResult.value;
+  const { orgAIConfig, managedAIResidency } = configResult.value;
 
   const { preserveTokens, triggerTokens } = resolveChatCompactionBudget({
     chatModelOverride: thread.chatModel ?? undefined,
@@ -245,6 +256,7 @@ const compactThread = async ({
       signal,
     ]),
     analytics: createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       feature: "chat.thread_compaction",
       modelRole: "chat",
       orgAIConfig,
@@ -263,6 +275,7 @@ const compactThread = async ({
     dataWorkspaceIds: thread.dataWorkspaceIds,
     modelId: thread.chatModel ?? undefined,
     orgAIConfig,
+    managedAIResidency,
     organizationId: thread.organizationId,
     preserveTokens,
     safeDb,

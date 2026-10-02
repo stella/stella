@@ -11,7 +11,12 @@ const readMatterBillingSummary = createSafeHandler(
     description:
       "Read matter time billing usage: non-void invoice time-line net reservations (including drafts) plus approved unbilled client time, in one currency. Amounts are exact decimal minor-unit strings. Currency mismatch makes cap status unavailable; the summary field is null when no arrangement exists; configure one with rates.arrangement.update. remainingInvoiceCapAmount excludes approved unbilled work; remainingWipCapAmount includes it. No events are emitted by reads.",
     permissions: { rate: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      readClass: "tenant",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
   },
   async function* ({ safeDb, workspaceId }) {

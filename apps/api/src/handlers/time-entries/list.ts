@@ -34,6 +34,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
@@ -167,7 +168,9 @@ const readTimeEntries = createSafeHandler(
     workspaceId,
     query,
   }) {
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const canReviewMatterEntries = canApproveTimeEntries(memberRole);
 
     const conditions = [eq(timeEntries.workspaceId, workspaceId)];

@@ -39,7 +39,12 @@ const config = {
     "columns, filters, and ordering the view defines. Returns the file " +
     "bytes; views.list describes a view but never its rows.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   access: "read",
   transport: {
     type: "file-response",

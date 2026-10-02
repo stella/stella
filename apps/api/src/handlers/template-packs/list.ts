@@ -21,6 +21,7 @@ import {
   encodePaginationCursor,
   type Page,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import {
   canInstallTemplatePacks,
@@ -60,7 +61,12 @@ const config = {
     "many of its templates are already installed. Also reports whether the " +
     "organization hides pack offers and whether the caller may install.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   access: "read",
   query: listTemplatePacksQuerySchema,
 } satisfies HandlerConfig;
@@ -96,7 +102,9 @@ export const listTemplatePacksHandler = async function* ({
   memberRole,
   query,
 }: ListTemplatePacksProps): SafeHandlerGenerator<TemplatePackListResult> {
-  const limit = query.limit ?? LIMITS.templatePacksPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.templatePacksPageSizeDefault,
+  );
   const start = query.cursor ? decodeIndexCursor(query.cursor) : 0;
   if (start === null) {
     return Result.err(

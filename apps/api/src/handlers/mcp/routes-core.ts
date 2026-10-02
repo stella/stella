@@ -1,5 +1,11 @@
 import Elysia from "elysia";
 
+import {
+  readAnonymizedMetadata,
+  readDefaultMetadata,
+  readDocumentsMetadata,
+  readLawMetadata,
+} from "@/api/handlers/mcp/read-discovery-metadata";
 import { resolveRateLimitClientAddress } from "@/api/lib/client-ip";
 import {
   MCP_ANONYMIZED_DISCOVERY_PATH,
@@ -17,7 +23,6 @@ import {
   createMcpDiscoveryPreflightHeaders,
   createMcpMetadataHeaders,
   createMcpPreflightHeaders,
-  getMcpProtectedResourceMetadata,
 } from "@/api/mcp/metadata";
 
 type HandleMcpHttpRequest = (
@@ -109,16 +114,6 @@ const discoveryOptionsHandler = ({ set }: { set: RouteSet }) => {
   return "";
 };
 
-const discoveryHandler =
-  (mode?: McpMode) =>
-  ({ set }: { set: RouteSet }) => {
-    applyHeaders({
-      headers: createMcpMetadataHeaders(),
-      set,
-    });
-    return getMcpProtectedResourceMetadata(mode);
-  };
-
 export const createMcpRoute = ({
   handleMcpHttpRequest,
 }: {
@@ -147,15 +142,15 @@ export const createMcpRoute = ({
 
   return new Elysia()
     .options(ROOT_MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(ROOT_MCP_DISCOVERY_PATH, discoveryHandler())
+    .get(ROOT_MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
     .options(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_ANONYMIZED_DISCOVERY_PATH, discoveryHandler("anonymized"))
+    .get(MCP_ANONYMIZED_DISCOVERY_PATH, readAnonymizedMetadata.handler)
     .options(MCP_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DISCOVERY_PATH, discoveryHandler())
+    .get(MCP_DISCOVERY_PATH, readDefaultMetadata.handler)
     .options(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_DOCUMENTS_DISCOVERY_PATH, discoveryHandler("documents"))
+    .get(MCP_DOCUMENTS_DISCOVERY_PATH, readDocumentsMetadata.handler)
     .options(MCP_LAW_DISCOVERY_PATH, discoveryOptionsHandler)
-    .get(MCP_LAW_DISCOVERY_PATH, discoveryHandler("law"))
+    .get(MCP_LAW_DISCOVERY_PATH, readLawMetadata.handler)
     .all(
       MCP_HTTP_PATH,
       async ({ request, server, set }) =>

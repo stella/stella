@@ -1,6 +1,6 @@
 {
   "name": "@stll/chat",
-  "version": "0.1.29",
+  "version": "0.1.34",
   "description": "Typed React chat composer, message stream, model selector, and transport runtime primitives.",
   "keywords": [
     "ai",
@@ -49,23 +49,17 @@
   "dependencies": {
     "@stll/ai-catalog": "workspace:^",
     "@stll/ui": "workspace:^",
-    "better-result": "catalog:",
-    "lucide-react": "catalog:"
+    "better-result": "catalog:"
   },
   "devDependencies": {
     "@stll/typescript-config": "workspace:*",
     "@types/react": "catalog:react19",
-    "@types/react-dom": "catalog:react19",
     "bun-types": "catalog:",
     "react": "catalog:react19",
-    "react-dom": "catalog:react19",
-    "tailwindcss": "catalog:",
     "tsdown": "catalog:"
   },
   "peerDependencies": {
     "@base-ui/react": "^1.7.0",
-    "react": ">=19",
-    "react-dom": ">=19",
-    "tailwindcss": "^4.3.0"
+    "react": ">=19"
   }
 }

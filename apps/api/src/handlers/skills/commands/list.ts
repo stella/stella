@@ -23,7 +23,12 @@ const config = {
     "paginated; use skills.list for the whole catalogue.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
 } satisfies HandlerConfig;
 
 const MAX_COMMAND_SKILLS = 250;

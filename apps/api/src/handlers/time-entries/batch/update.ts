@@ -155,7 +155,11 @@ const batchUpdate = createSafeHandler(
       "no rate; mark_billable re-resolves each entry's rate and is refused " +
       "when one of them has no effective rate.",
     permissions: { timeEntry: ["approve"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "write",
     body: batchUpdateBodySchema,
   },

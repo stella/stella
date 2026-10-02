@@ -21,9 +21,14 @@ export const dbTestBatchSize = (propertyOnly: boolean) =>
  * neighbours. Each runs in a process of its own, whatever its class (see
  * `splitSoloTests`).
  */
-export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set(
-  Object.values(RECORDED_CONVERSATION_SUITES),
-);
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
+  ...Object.values(RECORDED_CONVERSATION_SUITES),
+  // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
+  // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
+  "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
+  // Keep this suite's retained database graph in its own process.
+  "src/handlers/chat/thread-durable-refs.integration.test.ts",
+]);
 
 /**
  * Move each solo file out of its composed batch into a batch of its own. The
@@ -41,6 +46,50 @@ export const splitSoloTests = (
       .map((testPath) => [testPath]);
     return shared.length > 0 ? [shared, ...solo] : solo;
   });
+
+// Estimates guide composition; the runtime RSS guard remains authoritative.
+export const DEFAULT_TEST_PEAK_RSS_MB = 128;
+export const TEST_BATCH_RSS_HEADROOM_RATIO = 0.7;
+
+type SplitMemoryBoundedBatchesOptions = {
+  batches: readonly string[][];
+  peakRssMb: Readonly<Record<string, number>>;
+  budgetMb: number;
+};
+
+/** Split existing batches without introducing new process neighbours. */
+export const splitMemoryBoundedBatches = ({
+  batches,
+  peakRssMb,
+  budgetMb,
+}: SplitMemoryBoundedBatchesOptions): string[][] => {
+  if (!Number.isFinite(budgetMb) || budgetMb <= 0) {
+    panic("test batch memory budget must be positive and finite");
+  }
+  const result: string[][] = [];
+  for (const batch of batches) {
+    let current: string[] = [];
+    let totalMb = 0;
+    for (const file of batch) {
+      const weight = peakRssMb[file] ?? DEFAULT_TEST_PEAK_RSS_MB;
+      if (!Number.isFinite(weight) || weight <= 0) {
+        panic(`Invalid peak RSS for ${file}`);
+      }
+      if (current.length > 0 && totalMb + weight > budgetMb) {
+        result.push(current);
+        current = [];
+        totalMb = 0;
+      }
+      current.push(file);
+      totalMb += weight;
+    }
+    // A file above the composition budget runs alone; its runtime cap is unchanged.
+    if (current.length > 0) {
+      result.push(current);
+    }
+  }
+  return result;
+};
 
 export const TEST_BATCH_KIND = {
   db: "db",

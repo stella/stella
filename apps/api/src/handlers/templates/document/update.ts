@@ -25,7 +25,11 @@ const config = {
     "carries, and the previous version stays in history. Refused once the " +
     "template holds its maximum number of versions.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   transport: {
     type: "file-input",
     input: { field: "file", required: true, mediaTypes: [DOCX_MIME_TYPE] },

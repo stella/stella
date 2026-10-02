@@ -26,7 +26,11 @@ const deleteInvoice = createSafeHandler(
       "approved, unbilled status so they can be invoiced again. Only draft " +
       "invoices can be deleted: a sent, paid, or void invoice is refused.",
     permissions: { invoice: ["delete"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: invoiceParamsSchema,
   },
   async function* ({ safeDb, user, workspaceId, params, recordAuditEvent }) {

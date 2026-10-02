@@ -13,14 +13,16 @@
  * local account id has already been mapped to an organisation.
  */
 
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
 
-import { member } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   usagePolicies,
   usageEntitlements,
+  CLOSED_USAGE_ENTITLEMENT_STATUSES,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
@@ -30,7 +32,14 @@ import type {
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
+import {
+  polarEntitlementStatusSchema,
+  type PolarEntitlementStatus,
+} from "@/api/lib/hosted-usage-provider/polar/contract";
 import { recordWebhookAuditEvent } from "@/api/lib/hosted-usage-provider/webhook-store";
+import { failureSink } from "@/api/lib/observability/failure";
+import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { parseAuthProviderId } from "@/api/lib/safe-id-boundaries";
 import {
   lockAssignmentCapacity,
@@ -75,6 +84,10 @@ type ExistingEntitlement = {
   source: "hosted" | "manual";
   usagePolicyId: SafeId<"usagePolicy">;
   hostedLastEventAt: Date | null;
+  hostedEntitlementCreatedAt: Date | null;
+  hostedEntitlementExternalId: string | null;
+  status: UsageEntitlementStatus;
+  cancelAtPeriodEnd: boolean;
   seats: number;
   hostedPeakSeats: number | null;
   currentPeriodStart: Date;
@@ -118,21 +131,100 @@ const parseOccurredAt = (payload: {
   return Number.isNaN(parsed.getTime()) ? null : parsed;
 };
 
-/**
- * A delivery is stale when it is strictly older than the last applied
- * event. Retries invert ordering (each event backs off independently),
- * and applying an old `active` after a newer `revoked` would resurrect
- * a terminated entitlement. Equal or missing timestamps apply as
- * before: idempotent updates are harmless and providers without the
- * field keep delivery-order semantics.
- */
-const isStaleProviderEvent = (
-  existing: ExistingEntitlement,
-  occurredAt: Date | null,
-): boolean =>
-  occurredAt !== null &&
-  existing.hostedLastEventAt !== null &&
-  occurredAt < existing.hostedLastEventAt;
+class HostedEventOrderingConflict extends TaggedError(
+  "HostedEventOrderingConflict",
+)<{
+  message: string;
+}> {}
+
+const orderingConflict = failureSink({
+  event: "usage_provider.webhook.ordering_conflict",
+  expected: [],
+});
+
+const TERMINAL_PROVIDER_STATUSES = new Set([
+  "canceled",
+  "unpaid",
+  "incomplete_expired",
+]);
+
+type StaleProviderEventParams = {
+  existing: ExistingEntitlement;
+  payload: HostedUsageEntitlementPayload;
+  occurredAt: Date | null;
+};
+
+const isStaleProviderEvent = ({
+  existing,
+  payload,
+  occurredAt,
+}: StaleProviderEventParams): boolean => {
+  // Creation identifies an external generation; modification time orders
+  // only the events inside that generation.
+  if (payload.id !== existing.hostedEntitlementExternalId) {
+    const createdAt =
+      payload.created_at === undefined ? null : new Date(payload.created_at);
+    if (
+      createdAt !== null &&
+      existing.hostedEntitlementCreatedAt !== null &&
+      createdAt.getTime() !== existing.hostedEntitlementCreatedAt.getTime()
+    ) {
+      return createdAt < existing.hostedEntitlementCreatedAt;
+    }
+    if (
+      createdAt !== null &&
+      existing.hostedEntitlementCreatedAt === null &&
+      occurredAt !== null &&
+      existing.hostedLastEventAt !== null &&
+      occurredAt.getTime() !== existing.hostedLastEventAt.getTime()
+    ) {
+      return occurredAt < existing.hostedLastEventAt;
+    }
+    observeFailure(
+      new HostedEventOrderingConflict({
+        message:
+          "Hosted event generation is ambiguous; operator reconciliation required",
+      }),
+      {
+        sink: orderingConflict,
+        ctx: {
+          source: "usage_provider.webhook.ordering",
+          entityId: existing.id,
+        },
+      },
+    );
+    // An unversioned incoming generation cannot displace a known one.
+    // Existing unversioned rows retain their event-clock fallback only when
+    // that clock distinguishes the events.
+    return (
+      existing.hostedEntitlementCreatedAt !== null ||
+      occurredAt === null ||
+      existing.hostedLastEventAt === null ||
+      occurredAt.getTime() === existing.hostedLastEventAt.getTime() ||
+      occurredAt < existing.hostedLastEventAt
+    );
+  }
+  if (occurredAt === null || existing.hostedLastEventAt === null) {
+    return false;
+  }
+  const eventTime = occurredAt.getTime();
+  const lastTime = existing.hostedLastEventAt.getTime();
+  if (eventTime !== lastTime) {
+    return eventTime < lastTime;
+  }
+  // At equal versions, terminal/cancellation facts dominate an active replay.
+  return (
+    (existing.status === "paused" &&
+      payload.status !== "paused" &&
+      !TERMINAL_PROVIDER_STATUSES.has(payload.status)) ||
+    (existing.status === "cancelled" &&
+      (payload.status !== "canceled" ||
+        payload.cancel_at_period_end === true)) ||
+    (existing.cancelAtPeriodEnd &&
+      payload.cancel_at_period_end !== true &&
+      payload.status !== "canceled")
+  );
+};
 
 const lastEventPatch = (
   existing: ExistingEntitlement,
@@ -155,6 +247,11 @@ const findEntitlementByHostedExternalId = async (
       source: usageEntitlements.source,
       usagePolicyId: usageEntitlements.usagePolicyId,
       hostedLastEventAt: usageEntitlements.hostedLastEventAt,
+      hostedEntitlementCreatedAt: usageEntitlements.hostedEntitlementCreatedAt,
+      hostedEntitlementExternalId:
+        usageEntitlements.hostedEntitlementExternalId,
+      status: usageEntitlements.status,
+      cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
       seats: usageEntitlements.seats,
       hostedPeakSeats: usageEntitlements.hostedPeakSeats,
       currentPeriodStart: usageEntitlements.currentPeriodStart,
@@ -207,6 +304,11 @@ const findEntitlementByHostedAccountRef = async (
       source: usageEntitlements.source,
       usagePolicyId: usageEntitlements.usagePolicyId,
       hostedLastEventAt: usageEntitlements.hostedLastEventAt,
+      hostedEntitlementCreatedAt: usageEntitlements.hostedEntitlementCreatedAt,
+      hostedEntitlementExternalId:
+        usageEntitlements.hostedEntitlementExternalId,
+      status: usageEntitlements.status,
+      cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
       seats: usageEntitlements.seats,
       hostedPeakSeats: usageEntitlements.hostedPeakSeats,
       currentPeriodStart: usageEntitlements.currentPeriodStart,
@@ -219,21 +321,132 @@ const findEntitlementByHostedAccountRef = async (
   return rows.at(0) ?? null;
 };
 
-const HOSTED_PROVIDER_STATUS_MAP: Record<string, UsageEntitlementStatus> = {
+const HOSTED_PROVIDER_STATUS_MAP = {
   trialing: "trialing",
   active: "active",
   past_due: "past_due",
   canceled: "cancelled",
   unpaid: "past_due",
-  incomplete: "trialing",
+  incomplete: "past_due",
   incomplete_expired: "cancelled",
   paused: "paused",
-};
+} as const satisfies Record<PolarEntitlementStatus, UsageEntitlementStatus>;
+
+class HostedProviderUnknownStatus extends TaggedError(
+  "HostedProviderUnknownStatus",
+)<{ message: string }> {}
+
+const unknownProviderStatus = failureSink({
+  event: "usage_provider.webhook.unknown_status",
+  expected: [],
+});
 
 const mapHostedProviderStatus = (
   providerStatus: string,
-): UsageEntitlementStatus =>
-  HOSTED_PROVIDER_STATUS_MAP[providerStatus] ?? "past_due";
+): UsageEntitlementStatus | null => {
+  const parsed = v.safeParse(polarEntitlementStatusSchema, providerStatus);
+  if (parsed.success) {
+    return HOSTED_PROVIDER_STATUS_MAP[parsed.output];
+  }
+  observeFailure(
+    new HostedProviderUnknownStatus({
+      message: "Unrecognized provider status",
+    }),
+    {
+      sink: unknownProviderStatus,
+      ctx: {
+        source: "usage_provider.webhook",
+        step: "mapHostedProviderStatus",
+      },
+    },
+  );
+  return null;
+};
+
+type HostedEntitlementReconciliationParams = {
+  tx: Transaction;
+  payload: HostedUsageEntitlementPayload;
+  eventId: string;
+  reason: "provider_migration" | "unrecognized_status";
+};
+
+export const handleHostedEntitlementReconciliation = async ({
+  tx,
+  payload,
+  eventId,
+  reason,
+}: HostedEntitlementReconciliationParams): Promise<DispatchOutcome> => {
+  const existing =
+    (await findEntitlementByHostedExternalId(tx, payload.id)) ??
+    (await findEntitlementByHostedAccountRef(tx, payload.account_ref));
+  const organizationId =
+    existing?.organizationId ??
+    parseAuthProviderId<"organization">(
+      payload.metadata?.organization_id ?? "",
+    );
+  if (organizationId === null) {
+    return {
+      kind: "ignored",
+      reason: "cannot resolve reconciliation audit owner",
+    };
+  }
+  if (!existing) {
+    const owners = await tx
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, organizationId))
+      .limit(1);
+    if (owners.length === 0) {
+      return {
+        kind: "ignored",
+        reason: "reconciliation organization does not exist",
+      };
+    }
+  }
+  await recordWebhookAuditEvent({
+    tx,
+    organizationId,
+    eventId,
+    action: AUDIT_ACTION.REVIEW,
+    resourceType: existing
+      ? AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT
+      : AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: existing?.id ?? organizationId,
+    changes: { reconciliation: { old: null, new: reason } },
+  });
+  return { kind: "ignored", reason };
+};
+
+const closedEntitlementStatuses: ReadonlySet<UsageEntitlementStatus> = new Set(
+  CLOSED_USAGE_ENTITLEMENT_STATUSES,
+);
+
+const readHostedPeriod = (
+  payload: HostedUsageEntitlementPayload,
+  status: UsageEntitlementStatus,
+) => {
+  const closedPeriod = closedEntitlementStatuses.has(status);
+  if (payload.current_period_end === null && !closedPeriod) {
+    return null;
+  }
+  const start = new Date(payload.current_period_start);
+  // Polar current_period_end is null on a suspended snapshot. Use
+  // current_period_start as its equal bound to fence older activation
+  // without inventing an end or allocating capacity.
+  const end = new Date(
+    payload.current_period_end ?? payload.current_period_start,
+  );
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    (closedPeriod ? end < start : end <= start)
+  ) {
+    return null;
+  }
+  return closedPeriod
+    ? { type: "closed" as const, start, end }
+    : { type: "open" as const, start, end };
+};
 
 type HostedEntitlementUpsertParams = {
   tx: Transaction;
@@ -246,11 +459,28 @@ export const handleHostedEntitlementUpsert = async ({
   payload,
   eventId,
 }: HostedEntitlementUpsertParams): Promise<DispatchOutcome> => {
+  const status = mapHostedProviderStatus(payload.status);
+  if (status === null) {
+    return await handleHostedEntitlementReconciliation({
+      tx,
+      payload,
+      eventId,
+      reason: "unrecognized_status",
+    });
+  }
+  const period = readHostedPeriod(payload, status);
+  if (period === null) {
+    return { kind: "ignored", reason: "invalid period dates" };
+  }
+  const { start: periodStart, end: periodEnd } = period;
   // metadata.organization_id (which we set at hosted setup creation) is
   // authoritative only before a local mapping exists. Once an entitlement is
   // mapped, the local row owns the org id, so a renewal/update that arrives
   // without metadata must still apply — requiring it up front would silently
   // drop the new period and skip the periodic allocation.
+  if (payload.created_at === undefined) {
+    logger.warn("usage_provider.webhook.missing_generation", { eventId });
+  }
   const metadataOrganizationId = payload.metadata?.organization_id ?? null;
 
   const policy = await resolvePolicyByHostedPolicyRef(
@@ -263,17 +493,6 @@ export const handleHostedEntitlementUpsert = async ({
       kind: "ignored",
       reason: `no subscription usage_policy matches hosted policy reference ${payload.policy_ref}`,
     };
-  }
-
-  const status = mapHostedProviderStatus(payload.status);
-  const periodStart = new Date(payload.current_period_start);
-  const periodEnd = new Date(payload.current_period_end);
-  if (
-    Number.isNaN(periodStart.getTime()) ||
-    Number.isNaN(periodEnd.getTime()) ||
-    periodEnd <= periodStart
-  ) {
-    return { kind: "ignored", reason: "invalid period dates" };
   }
 
   const seats = payload.quantity ?? 1;
@@ -303,10 +522,16 @@ export const handleHostedEntitlementUpsert = async ({
         reason: "matching entitlement is manually managed",
       };
     }
-    if (isStaleProviderEvent(existingByProvider, occurredAt)) {
+    if (
+      isStaleProviderEvent({
+        existing: existingByProvider,
+        payload,
+        occurredAt,
+      })
+    ) {
       return {
         kind: "ignored",
-        reason: "stale provider event (older than last applied event)",
+        reason: "stale provider event (does not supersede current state)",
       };
     }
     if (
@@ -349,6 +574,10 @@ export const handleHostedEntitlementUpsert = async ({
         currentPeriodEnd: periodEnd,
         hostedAccountRef: payload.account_ref,
         hostedEntitlementExternalId: payload.id,
+        hostedEntitlementCreatedAt:
+          payload.created_at === undefined
+            ? existingByProvider.hostedEntitlementCreatedAt
+            : new Date(payload.created_at),
         cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
         ...lastEventPatch(existingByProvider, occurredAt),
       })
@@ -386,12 +615,36 @@ export const handleHostedEntitlementUpsert = async ({
           reason: "metadata organization_id mismatches local account mapping",
         };
       }
-      if (isStaleProviderEvent(existingByAccountRef, occurredAt)) {
+      const replacesExternalId =
+        payload.id !== existingByAccountRef.hostedEntitlementExternalId;
+      if (
+        replacesExternalId &&
+        TERMINAL_PROVIDER_STATUSES.has(payload.status)
+      ) {
+        logger.info("usage_provider.webhook.superseded", {
+          entityId: existingByAccountRef.id,
+          eventId,
+        });
         return {
           kind: "ignored",
-          reason: "stale provider event (older than last applied event)",
+          reason: "terminal event for a superseded external entitlement",
         };
       }
+      if (
+        isStaleProviderEvent({
+          existing: existingByAccountRef,
+          payload,
+          occurredAt,
+        })
+      ) {
+        return {
+          kind: "ignored",
+          reason: "stale provider event (does not supersede current state)",
+        };
+      }
+      const previousCreatedAt = replacesExternalId
+        ? null
+        : existingByAccountRef.hostedEntitlementCreatedAt;
       ownerOrganizationId = existingByAccountRef.organizationId;
       previousRow = existingByAccountRef;
       await tx
@@ -409,8 +662,16 @@ export const handleHostedEntitlementUpsert = async ({
           currentPeriodEnd: periodEnd,
           hostedAccountRef: payload.account_ref,
           hostedEntitlementExternalId: payload.id,
+          hostedEntitlementCreatedAt:
+            payload.created_at === undefined
+              ? previousCreatedAt
+              : new Date(payload.created_at),
           cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
-          ...lastEventPatch(existingByAccountRef, occurredAt),
+          // A replacement owns its own event clock, even when the previous
+          // generation was modified more recently.
+          ...(replacesExternalId
+            ? { hostedLastEventAt: occurredAt }
+            : lastEventPatch(existingByAccountRef, occurredAt)),
         })
         .where(eq(usageEntitlements.id, existingByAccountRef.id));
       await recordWebhookAuditEvent({
@@ -448,6 +709,10 @@ export const handleHostedEntitlementUpsert = async ({
           currentPeriodEnd: periodEnd,
           hostedAccountRef: payload.account_ref,
           hostedEntitlementExternalId: payload.id,
+          hostedEntitlementCreatedAt:
+            payload.created_at === undefined
+              ? null
+              : new Date(payload.created_at),
           cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
           hostedLastEventAt: occurredAt,
           source: "hosted",
@@ -514,6 +779,10 @@ export const handleHostedEntitlementUpsert = async ({
         seats: { old: null, new: seats },
       },
     });
+  }
+
+  if (period.type === "closed") {
+    return { kind: "applied", entitlementId };
   }
 
   // Allocate the period's usage units. Idempotent per entitlement period,
@@ -625,9 +894,74 @@ export const handleUsageEntitlementStatusChange = async ({
   eventId,
   eventKind,
 }: UsageEntitlementStatusUpdateParams): Promise<DispatchOutcome> => {
-  const existing = await findEntitlementByHostedExternalId(tx, payload.id);
+  // Revocation denies access independently of the reported snapshot status.
+  const mappedStatus =
+    eventKind === "revoked"
+      ? "cancelled"
+      : mapHostedProviderStatus(payload.status);
+  if (eventKind === "revoked") {
+    // Retain unknown-status detection without letting it veto a denial.
+    mapHostedProviderStatus(payload.status);
+  }
+  if (mappedStatus === null) {
+    return await handleHostedEntitlementReconciliation({
+      tx,
+      payload,
+      eventId,
+      reason: "unrecognized_status",
+    });
+  }
+  const transition = {
+    canceled: {
+      status: mappedStatus,
+      providerStatus: payload.status,
+      cancelAtPeriodEnd: true,
+    },
+    revoked: {
+      status: "cancelled",
+      providerStatus: "canceled",
+      cancelAtPeriodEnd: false,
+    },
+  } as const satisfies Record<
+    UsageEntitlementStatusUpdateParams["eventKind"],
+    {
+      status: UsageEntitlementStatus;
+      providerStatus: string;
+      cancelAtPeriodEnd: boolean;
+    }
+  >;
+  const { providerStatus, ...update } = transition[eventKind];
+  let existing = await findEntitlementByHostedExternalId(tx, payload.id);
   if (!existing) {
-    return { kind: "ignored", reason: "no matching entitlement row" };
+    const current = await findEntitlementByHostedAccountRef(
+      tx,
+      payload.account_ref,
+    );
+    if (current && current.hostedEntitlementExternalId !== payload.id) {
+      logger.info("usage_provider.webhook.superseded", {
+        entityId: current.id,
+        eventId,
+      });
+      return {
+        kind: "ignored",
+        reason: "terminal event for a superseded external entitlement",
+      };
+    }
+    if (!current) {
+      return await handleHostedEntitlementUpsert({
+        tx,
+        eventId,
+        payload: {
+          ...payload,
+          status: providerStatus,
+          cancel_at_period_end: eventKind === "canceled",
+        },
+      });
+    }
+    existing = current;
+  }
+  if (payload.created_at === undefined) {
+    logger.warn("usage_provider.webhook.missing_generation", { eventId });
   }
   if (existing.source !== "hosted") {
     return {
@@ -636,22 +970,29 @@ export const handleUsageEntitlementStatusChange = async ({
     };
   }
   const occurredAt = parseOccurredAt(payload);
-  if (isStaleProviderEvent(existing, occurredAt)) {
+  const orderingPayload = {
+    ...payload,
+    status: providerStatus,
+    cancel_at_period_end: eventKind === "canceled",
+  };
+  if (
+    isStaleProviderEvent({ existing, payload: orderingPayload, occurredAt })
+  ) {
     return {
       kind: "ignored",
-      reason: "stale provider event (older than last applied event)",
+      reason: "stale provider event (does not supersede current state)",
     };
   }
-  const update =
-    eventKind === "canceled"
-      ? {
-          status: mapHostedProviderStatus(payload.status),
-          cancelAtPeriodEnd: true,
-        }
-      : { status: "cancelled" as const, cancelAtPeriodEnd: false };
   await tx
     .update(usageEntitlements)
-    .set({ ...update, ...lastEventPatch(existing, occurredAt) })
+    .set({
+      ...update,
+      ...lastEventPatch(existing, occurredAt),
+      hostedEntitlementCreatedAt:
+        payload.created_at === undefined
+          ? existing.hostedEntitlementCreatedAt
+          : new Date(payload.created_at),
+    })
     .where(eq(usageEntitlements.id, existing.id));
   await recordWebhookAuditEvent({
     tx,

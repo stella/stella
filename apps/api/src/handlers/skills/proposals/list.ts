@@ -23,7 +23,12 @@ const config = {
     "revision.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: listSkillProposalsParamsSchema,
 } satisfies HandlerConfig;
 

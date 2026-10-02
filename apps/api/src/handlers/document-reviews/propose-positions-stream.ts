@@ -51,6 +51,7 @@ const proposePositionsStream = createSafeHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     request,
@@ -81,6 +82,7 @@ const proposePositionsStream = createSafeHandler(
       organizationId,
       workspaceId,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       serviceTier,
       usageMetering: {

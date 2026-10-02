@@ -25,7 +25,11 @@ const config = {
     "status other than unverified records who set it and when; setting it " +
     "back to unverified clears both.",
   permissions: { entity: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: bodySchema,
 } satisfies WorkspaceHandlerConfig;
 

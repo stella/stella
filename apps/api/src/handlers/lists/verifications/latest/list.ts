@@ -37,7 +37,12 @@ const config = {
     "runs are in lists.verifications.list.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   body: t.Object({
     documents: t.Array(
       t.Object(

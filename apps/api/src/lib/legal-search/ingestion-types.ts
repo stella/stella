@@ -1,3 +1,4 @@
+// parser-output-unchanged: replay outcome type gains an optional legacy docket; no parser output changes.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -6,6 +7,7 @@ import type {
   DecisionTextFieldKey,
   ReadDecisionTextFields,
 } from "@stll/api-contract/case-law-text-field";
+import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
@@ -24,6 +26,7 @@ import {
   ADAPTER_KEYS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { SkCollectionConnector } from "@/api/lib/legal-search/sk-collection-enrichment";
 import { isRecord } from "@/api/lib/type-guards";
 
 export { EMPTY_AST };
@@ -167,6 +170,8 @@ export type IngestionResult = {
   language: string;
   decisionDate?: string | undefined;
   decisionType?: string | undefined;
+  /** Declared publisher enum only; omission means unknown, never ruling. */
+  documentRole?: DecisionDocumentRole | undefined;
   fulltext?: string | undefined;
   sourceUrl?: string | undefined;
   documentUrl?: string | undefined;
@@ -735,7 +740,18 @@ export type StoredRawReparseRejection =
   (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
 
 export type StoredRawReparseOutcome =
-  | { type: "parsed"; result: IngestionResult }
+  | {
+      type: "parsed";
+      result: IngestionResult;
+      /**
+       * The docket the selected row is stored under, where the adapter proved
+       * it is an older spelling of `result.caseNumber` (for example one an
+       * earlier parser stored before decoding it). A replay compares identity
+       * under it and writes the new spelling over the row; absent, the docket
+       * must match exactly.
+       */
+      legacyCaseNumber?: string | undefined;
+    }
   /**
    * The payload is a supplement to another decision. A replay does not write
    * it over the row it was read from; the supplement fold does.
@@ -1018,6 +1034,18 @@ type HeldRecheck = {
   readonly values: readonly [string, ...string[]];
 };
 
+/** A held listing-only row whose detail can become available without a new listing version. */
+type TextlessHeldRecheck = {
+  readonly metadataKey: string;
+  readonly values: readonly [string, ...string[]];
+  readonly minimumAgeDays: number;
+  readonly perWorkUnitLimit: number;
+  readonly buildDecisionFromStored: (
+    stored: StoredRawReparseInput,
+    signal?: AbortSignal,
+  ) => Promise<ReconciliationBuildOutcome>;
+};
+
 /** The row-level rules that decide whether a stored row counts as held. */
 export type HeldRowRules = {
   readonly withoutDocument?: HeldWithoutDocument | undefined;
@@ -1082,6 +1110,8 @@ export type SourceReconciliation = SourceSliceWalk & {
    * once its build no longer states it.
    */
   recheckHeld?: HeldRecheck | undefined;
+  /** Opt-in for bounded, durable re-reads of older textless listing-only rows. */
+  textlessHeldRecheck?: TextlessHeldRecheck | undefined;
   listSlicePage: (
     options: ReconciliationSlicePageOptions,
   ) => Promise<ReconciliationSlicePage>;
@@ -1089,6 +1119,10 @@ export type SourceReconciliation = SourceSliceWalk & {
     payload: unknown,
     signal?: AbortSignal,
   ) => Promise<ReconciliationBuildOutcome>;
+  /** Creates a reader owned by one slice walk or one slice's bounded retry batch. */
+  createSliceBuildDecision?:
+    | (() => SourceReconciliation["buildDecision"])
+    | undefined;
 };
 
 /**
@@ -1370,6 +1404,8 @@ export type SourceFieldInventory = {
  */
 export type SourceAdapter = {
   key: AdapterKey;
+  /** An opt-in annotation source; never a second decision-producing adapter. */
+  collectionEnrichment?: SkCollectionConnector | undefined;
   name: string;
   /**
    * The jurisdiction this source publishes for. Typed rather than free text:

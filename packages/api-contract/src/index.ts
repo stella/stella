@@ -900,3 +900,15 @@ export const buildVersionedApiUrl = (
   path: `/${string}`,
 ): string =>
   `${origin.endsWith("/") ? origin.slice(0, -1) : origin}${STELLA_API_VERSION_PREFIX}${path}`;
+
+export {
+  RULING_IDENTITY_VERSION,
+  foldRulingIdentity,
+  rulingKeysOf,
+  rulingGroupKeys,
+} from "./decision-ruling-identity";
+export type {
+  RulingIdentityInput,
+  RulingIdentityKeys,
+  RulingIdentityDefect,
+} from "./decision-ruling-identity";

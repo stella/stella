@@ -76,11 +76,14 @@ const emptyCatalogsByWorkspace = async ({
   );
 
 const anonymizeTextFieldsMock = mock(
-  async ({ fields }: AnonymizeTextFieldsInput) => ({
-    entityCount: fields.length,
-    fields: fields.map((_field, index) => `[ANON_${index}]`),
-    redactionMap: new Map<string, string>(),
-  }),
+  async ({ fields }: AnonymizeTextFieldsInput) =>
+    await Promise.resolve(
+      Result.ok({
+        entityCount: fields.length,
+        fields: fields.map((_field, index) => `[ANON_${index}]`),
+        redactionMap: new Map<string, string>(),
+      }),
+    ),
 );
 
 type SearchProviderHit = {
@@ -280,6 +283,7 @@ const buildContext = ({
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 

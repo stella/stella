@@ -60,7 +60,11 @@ const batchDelete = createSafeHandler(
       "without an error and there is no per-entry ownership check, so the " +
       "returned count is the only report of what happened.",
     permissions: { timeEntry: ["approve"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "write",
     body: batchDeleteBodySchema,
   },

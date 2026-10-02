@@ -1324,6 +1324,17 @@ export const skCourtsFixture = (): EnrolledAdapterFixture => ({
       assembleSkCourtsDecision({
         item: { ...SK_COURTS_LISTING_ROW },
         detail: { ...SK_COURTS_DETAIL_RECORD },
+        courtRegistry: {
+          status: "available",
+          record: {
+            registreGuid: "sud_105",
+            nazov: "Mestský súd Bratislava IV",
+            typSudu: "Mestský súd",
+            nadriadenySudId: "101",
+            ukonceny_string: "false",
+            skratka_string: "MSBA4",
+          },
+        },
       }) ?? panic("sk-courts fixture did not build"),
     ),
 });
@@ -1472,31 +1483,50 @@ const SK_US_DECISION_ID = "sk-us-inventory-fixture-decision";
  */
 export const skUsFixture = (): EnrolledAdapterFixture => ({
   buildDecision: async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      const body = ((): string | Uint8Array => {
-        if (url.pathname === "/o/v1/dms/content") {
-          return JSON.stringify({
-            content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
-          });
-        }
-        if (url.pathname === "/o/v1/dms/search") {
-          return SK_US_FACETS;
-        }
-        if (url.pathname.startsWith("/o/v1/dms/file/")) {
-          return SK_US_COURT_FILE;
-        }
-        if (url.pathname === "/o/v1/codelist/decision") {
-          return SK_US_CODELIST;
-        }
-        return SK_US_DOCUMENT_FILE;
-      })();
-      return await Promise.resolve(
-        new Response(body, {
-          headers: { "Content-Type": "application/json" },
-        }),
-      );
-    });
+    globalThis.fetch = asFetchMock(
+      async (input: string | URL | Request, init?: RequestInit) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        const body = ((): string | Uint8Array => {
+          if (url.pathname === "/o/v1/dms/content") {
+            return JSON.stringify({
+              content: Buffer.from(SK_US_DOCUMENT_XHTML).toString("base64"),
+            });
+          }
+          if (url.pathname === "/o/v1/dms/search") {
+            const request: unknown = JSON.parse(
+              typeof init?.body === "string" ? init.body : "{}",
+            );
+            if (isRecord(request) && request["docType"] === "USSR_ZNAU") {
+              return JSON.stringify({
+                numFound: 1,
+                documents: [
+                  {
+                    ...SK_US_LISTING_ROW,
+                    docType: "USSR_ZNAU",
+                    documentId: "aaaaaaaa-2222-4333-8444-555555555555",
+                  },
+                ],
+              });
+            }
+            return SK_US_FACETS;
+          }
+          if (url.pathname.startsWith("/o/v1/dms/file/")) {
+            return SK_US_COURT_FILE;
+          }
+          if (url.pathname === "/o/v1/codelist/decision") {
+            return SK_US_CODELIST;
+          }
+          return SK_US_DOCUMENT_FILE;
+        })();
+        return await Promise.resolve(
+          new Response(body, {
+            headers: { "Content-Type": "application/json" },
+          }),
+        );
+      },
+    );
 
     const built = await buildSkUsDecision({ ...SK_US_LISTING_ROW });
     if (built.type !== "built") {

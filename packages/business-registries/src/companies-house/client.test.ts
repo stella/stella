@@ -74,15 +74,18 @@ const captureThrown = async (promise: Promise<unknown>): Promise<unknown> => {
 };
 
 describe("lookupByCompanyNumber validation", () => {
-  const config = { apiKey: TEST_API_KEY };
+  const config = { observer: "unobserved", apiKey: TEST_API_KEY } as const;
 
   test("rejects empty API key", async () => {
     const error = await captureThrown(
-      lookupByCompanyNumber("00445790", { apiKey: "" }),
+      lookupByCompanyNumber("00445790", { observer: "unobserved", apiKey: "" }),
     );
     expect(error).toBeInstanceOf(CompaniesHouseAuthError);
     const whitespace = await captureThrown(
-      lookupByCompanyNumber("00445790", { apiKey: "   " }),
+      lookupByCompanyNumber("00445790", {
+        observer: "unobserved",
+        apiKey: "   ",
+      }),
     );
     expect(whitespace).toBeInstanceOf(CompaniesHouseAuthError);
   });
@@ -125,6 +128,7 @@ describe("lookupByCompanyNumber mocked", () => {
     restore = ctx.restore;
 
     const result = await lookupByCompanyNumber("445790", {
+      observer: "unobserved",
       apiKey: TEST_API_KEY,
     });
     expect(result).not.toBeNull();
@@ -145,6 +149,7 @@ describe("lookupByCompanyNumber mocked", () => {
     restore = ctx.restore;
 
     const result = await lookupByCompanyNumber("99999999", {
+      observer: "unobserved",
       apiKey: TEST_API_KEY,
     });
     expect(result).toBeNull();
@@ -155,7 +160,10 @@ describe("lookupByCompanyNumber mocked", () => {
     restore = ctx.restore;
 
     const error = await captureThrown(
-      lookupByCompanyNumber("00445790", { apiKey: TEST_API_KEY }),
+      lookupByCompanyNumber("00445790", {
+        observer: "unobserved",
+        apiKey: TEST_API_KEY,
+      }),
     );
     expect(error).toBeInstanceOf(CompaniesHouseAuthError);
   });
@@ -165,7 +173,10 @@ describe("lookupByCompanyNumber mocked", () => {
     restore = ctx.restore;
 
     const error = await captureThrown(
-      lookupByCompanyNumber("00445790", { apiKey: TEST_API_KEY }),
+      lookupByCompanyNumber("00445790", {
+        observer: "unobserved",
+        apiKey: TEST_API_KEY,
+      }),
     );
     expect(error).toBeInstanceOf(CompaniesHouseAuthError);
   });
@@ -175,7 +186,10 @@ describe("lookupByCompanyNumber mocked", () => {
     restore = ctx.restore;
 
     const error = await captureThrown(
-      lookupByCompanyNumber("00445790", { apiKey: TEST_API_KEY }),
+      lookupByCompanyNumber("00445790", {
+        observer: "unobserved",
+        apiKey: TEST_API_KEY,
+      }),
     );
     expect(error).toBeInstanceOf(CompaniesHouseAPIError);
     expect(error).toMatchObject({ httpStatus: 502 });
@@ -192,7 +206,10 @@ describe("searchByName mocked", () => {
     const ctx = captureRequest(200, JSON.stringify(searchFixture));
     restore = ctx.restore;
 
-    const results = await searchByName("Tesco", { apiKey: TEST_API_KEY });
+    const results = await searchByName("Tesco", {
+      observer: "unobserved",
+      apiKey: TEST_API_KEY,
+    });
     expect(results).toHaveLength(5);
     expect(results[0]?.name).toBe("TESCO PLC");
     expect(ctx.captured.url).toContain("/search/companies?q=Tesco");
@@ -203,13 +220,17 @@ describe("searchByName mocked", () => {
     const ctx = captureRequest(200, JSON.stringify(searchFixture));
     restore = ctx.restore;
 
-    await searchByName("Tesco", { apiKey: TEST_API_KEY }, { limit: 500 });
+    await searchByName(
+      "Tesco",
+      { observer: "unobserved", apiKey: TEST_API_KEY },
+      { limit: 500 },
+    );
     expect(ctx.captured.url).toContain("items_per_page=100");
   });
 
   test("rejects empty search query", async () => {
     const error = await captureThrown(
-      searchByName("   ", { apiKey: TEST_API_KEY }),
+      searchByName("   ", { observer: "unobserved", apiKey: TEST_API_KEY }),
     );
     expect(error).toBeInstanceOf(CompaniesHouseValidationError);
   });
@@ -226,6 +247,7 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
     restore = ctx.restore;
 
     const result = await lookupOfficersByCompanyNumber("00445790", {
+      observer: "unobserved",
       apiKey: TEST_API_KEY,
     });
     // Fixture is a captured live slice; we only assert the path
@@ -245,6 +267,7 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
     restore = ctx.restore;
 
     const result = await lookupOfficersByCompanyNumber("99999999", {
+      observer: "unobserved",
       apiKey: TEST_API_KEY,
     });
     expect(result).toEqual([]);
@@ -286,6 +309,7 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
     };
 
     const result = await lookupOfficersByCompanyNumber("00000001", {
+      observer: "unobserved",
       apiKey: TEST_API_KEY,
     });
     expect(result).toHaveLength(215);
@@ -331,6 +355,7 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
     };
 
     const result = await lookupOfficersByCompanyNumber("00000001", {
+      observer: "unobserved",
       apiKey: TEST_API_KEY,
     });
     expect(result).toHaveLength(1500);
@@ -365,7 +390,7 @@ describe("lookupOfficersByCompanyNumber mocked", () => {
 
     const result = await lookupOfficersByCompanyNumber(
       "00000001",
-      { apiKey: TEST_API_KEY },
+      { observer: "unobserved", apiKey: TEST_API_KEY },
       { limit: 50 },
     );
     expect(result).toHaveLength(50);

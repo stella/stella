@@ -283,6 +283,7 @@ const buildFullCoverageChatTools = (
 
   return getChatTools({
     orgAIConfig: null,
+    managedAIResidency: "eu" as const,
     memberRole: "owner",
     organizationId,
     requestWorkspaceId: workspaceId,
@@ -295,6 +296,7 @@ const buildFullCoverageChatTools = (
     pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
     workspaceId: null,
     userId,
+    userEmail: "standard@example.test",
     toolWorkspaceIds: resolveToolWorkspaceIds({
       pinnedIds: [],
       accessibleWorkspaceIds: [workspaceId],
@@ -344,6 +346,7 @@ const autoApplyActiveFile = {
 
 const autoApplyBaseArgs = {
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   organizationId,
   requestWorkspaceId: workspaceId,
   thirdPartyBoundary: { type: "raw" },
@@ -354,6 +357,7 @@ const autoApplyBaseArgs = {
   threadId,
   pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
   userId,
+  userEmail: "standard@example.test",
   webSearchEnabled: false,
   webSearchProviders: { webSearchProvider: null, urlFetcher: null },
   hasActiveDocxEditClient: false,
@@ -817,6 +821,7 @@ describe("chat tool schemas", () => {
   test("chat tools expose readonly data through the stella API", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -829,6 +834,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -886,6 +892,7 @@ describe("chat tool schemas", () => {
   test("keeps historical remember calls schema-valid while memory is disabled", () => {
     const baseArgs = {
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner" as const,
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -898,6 +905,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -924,6 +932,7 @@ describe("chat tool schemas", () => {
   test("registers the folio-agents read_document/find_text tools only when the file-overlay docx client is active", () => {
     const baseArgs = {
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -936,6 +945,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -1084,6 +1094,7 @@ describe("chat tool schemas", () => {
   test("only exposes current skill edit tools for editable active skill chats", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -1096,6 +1107,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -1142,6 +1154,7 @@ describe("chat tool schemas", () => {
   test("does not expose full body replacement for truncated active skill bodies", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -1154,6 +1167,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -1186,6 +1200,7 @@ describe("chat tool schemas", () => {
   test("applies approval and anonymization policies by tool risk", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -1198,6 +1213,7 @@ describe("chat tool schemas", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -2188,6 +2204,7 @@ describe("chat tool schemas", () => {
   describe("create_matter_document authorization", () => {
     const baseArgs = {
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       organizationId,
       requestWorkspaceId: workspaceId,
       thirdPartyBoundary: { type: "raw" },
@@ -2198,6 +2215,7 @@ describe("chat tool schemas", () => {
       threadId,
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       userId,
+      userEmail: "standard@example.test",
       webSearchEnabled: false,
       webSearchProviders: { webSearchProvider: null, urlFetcher: null },
       hasActiveDocxEditClient: false,
@@ -2433,6 +2451,7 @@ describe("registry write tool approval policy", () => {
   const buildToolsWithWorkspace = () =>
     getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -2445,6 +2464,7 @@ describe("registry write tool approval policy", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [workspaceId],
@@ -2520,6 +2540,7 @@ describe("registry write tool approval policy", () => {
   test("every write tool is registered behind approval before the first matter exists", () => {
     const tools = getChatTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       memberRole: "owner",
       organizationId,
       requestWorkspaceId: workspaceId,
@@ -2532,6 +2553,7 @@ describe("registry write tool approval policy", () => {
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       workspaceId: null,
       userId,
+      userEmail: "standard@example.test",
       toolWorkspaceIds: resolveToolWorkspaceIds({
         pinnedIds: [],
         accessibleWorkspaceIds: [],
