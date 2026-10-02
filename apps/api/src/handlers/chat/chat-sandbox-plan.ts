@@ -1,7 +1,11 @@
+import { Result } from "better-result";
+
 import type { StellaSandboxRunInput } from "@stll/agent-engine";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { checkManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { logger } from "@/api/lib/observability/logger";
 import { mintAgentRunToken } from "@/api/mcp/agent-run-token";
@@ -12,6 +16,8 @@ const SANDBOX_INSTRUCTIONS =
   "You are running as a stella agent. Use the stella MCP server (registered in this workspace) for all workspace actions — reading and writing matters, documents, and knowledge. Do not attempt network access outside those tools.";
 
 type ChatSandboxContext = {
+  dataClass: "customer";
+  managedAIResidency: ManagedAIResidency;
   userId: SafeId<"user">;
   organizationId: SafeId<"organization">;
   runId: string;
@@ -35,6 +41,14 @@ export const resolveChatSandboxPlan = async (
       status: 422,
       message: "Agent sandbox runs are not enabled for this deployment.",
     });
+  }
+
+  const availability = checkManagedProviderAvailable(
+    "agent_sandbox",
+    context.dataClass,
+  );
+  if (Result.isError(availability)) {
+    throw availability.error;
   }
 
   const image = env.AGENT_SANDBOX_IMAGE;

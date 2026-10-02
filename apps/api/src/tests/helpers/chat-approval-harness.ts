@@ -395,6 +395,7 @@ export const createApprovalHarness = ({
       memberRole: { role: "owner" },
       orgAIConfig: organizationAIConfig,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu",
       pinServerValidatedWorkspaceId: () => false,
       promptCachingEnabled,
       recordAuditEvent: async () => await Promise.resolve(),

@@ -18,12 +18,17 @@ import { describe, expect, test } from "bun:test";
 
 import {
   classifyAIError,
+  classifyAIBoundaryFailure,
   isAnticipatedAIFailure,
   isUnanticipatedAIFailure,
   providerStatusCode,
   providerStatusFields,
 } from "@/api/lib/ai-error";
 import type { AIErrorKind } from "@/api/lib/ai-error";
+import {
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+  managedProviderUnavailable,
+} from "@/api/lib/chat/provider-data-policy";
 import {
   AIGenerationCancelledError,
   ChatEmptyCompletionError,
@@ -34,6 +39,8 @@ import type {
   ChatTerminalError,
   HandlerErrorStatusCode,
 } from "@/api/lib/errors/tagged-errors";
+import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
 const apiCallError = (statusCode: number) =>
   ({
@@ -73,6 +80,25 @@ const providerErrorBody = (code: number, status: string) =>
   }) satisfies Record<string, unknown>;
 
 describe("classifyAIError", () => {
+  test("classifies configured provider availability errors consistently", () => {
+    const error = managedProviderUnavailable("openrouter");
+    for (const input of [
+      error,
+      { code: MANAGED_PROVIDER_UNAVAILABLE_CODE },
+      new Error(error.message, { cause: error }),
+    ]) {
+      expect(classifyAIError(input)).toBe("model_unavailable");
+      expect(isAnticipatedAIFailure(input, classifyAIError(input))).toBe(true);
+      expect(classifyAIBoundaryFailure(input)).toBe("model_unavailable");
+      expect(
+        gradeFailure(
+          readEvidence(input),
+          failureSink({ event: "background-generation", expected: [] }),
+        ).grade,
+      ).toBe("anticipated");
+    }
+  });
+
   test("maps chat loop stops to a stable stream error kind", () => {
     const error = new ChatLoopDetectedError({
       message:

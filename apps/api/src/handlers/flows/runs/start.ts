@@ -95,7 +95,7 @@ const startFlowRunHandler = createSafeHandler(
           const stepModel = getTanStackTextModelInfoForRole(
             "chat",
             orgAIConfig,
-            { organizationId },
+            { dataClass: "customer", organizationId },
           );
           return await assertRunSizeConfirmedForHandler({
             metering: { actionType: "background", modelRole: "chat" },

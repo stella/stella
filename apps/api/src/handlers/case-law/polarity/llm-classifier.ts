@@ -70,6 +70,7 @@ export const classifyWithLLM = async ({
   Result<ClassificationResult, WorkflowIntegrationError>
 > => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "public_corpus",
     feature: "case-law.polarity",
     modelRole: "fast",
     properties: {
@@ -81,6 +82,7 @@ export const classifyWithLLM = async ({
   return await Result.tryPromise({
     try: async () => {
       const output = await generateTanStackObjectForRole({
+        dataClass: "public_corpus",
         role: "fast",
         serviceTier: "flex",
         orgAIConfig: null,

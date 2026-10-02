@@ -1688,7 +1688,8 @@ const processOneBatch = async ({
     if (Result.isError(settings)) {
       throw settings.error;
     }
-    const { orgAIConfig, promptCachingEnabled } = settings.value;
+    const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+      settings.value;
     const generateFn = getBatchGenerator();
 
     // Dispatch on tool type: ai-model columns run the LLM extraction; verdict
@@ -1741,6 +1742,7 @@ const processOneBatch = async ({
             workspaceId,
             scopedDb,
             orgAIConfig,
+            managedAIResidency,
             promptCachingEnabled,
             serviceTier,
             usageMetering,
@@ -1794,6 +1796,7 @@ const processOneBatch = async ({
         verdictProperties,
         inputPropertyIds: batch.inputs,
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier,
         usageMetering,

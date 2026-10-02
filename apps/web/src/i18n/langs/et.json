@@ -1102,6 +1102,10 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
+    },
     "improvePrompt": "Täiusta viipa",
     "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
     "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",
@@ -1606,6 +1610,7 @@
     },
     "fact": "Fakt",
     "failed": "Ebaõnnestus",
+    "files": "Failid",
     "filter": "Filter",
     "filters": "Filtrid",
     "find": "Leia",
@@ -3270,7 +3275,6 @@
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
-      "filesHeading": "Failid",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
       "importFailureIntegrity": "Oskuse allikas muutus pärast avastamist. Vaata see uuesti üle.",

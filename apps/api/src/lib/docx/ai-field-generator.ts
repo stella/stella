@@ -1,3 +1,4 @@
+import { maxIterations } from "@tanstack/ai";
 /**
  * Model-backed generator for AI-fillable template fields (FieldMeta.aiPrompt).
  *
@@ -8,8 +9,6 @@
  * template is filled. Returns `undefined` when the org has no usable AI config,
  * so callers leave AI fields unfilled rather than erroring.
  */
-
-import { maxIterations } from "@tanstack/ai";
 import type { ModelMessage } from "@tanstack/ai";
 import { panic, Result } from "better-result";
 import * as v from "valibot";
@@ -18,6 +17,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { resolveCaching } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   chatToolMapToArray,
   type ChatToolMap,
@@ -197,6 +197,7 @@ type FieldChatInput = {
   aiAnalytics: AiFieldAnalytics | undefined;
   maxOutputTokens: number;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   prompt: string;
   skillTools: ChatToolMap | undefined;
@@ -220,6 +221,7 @@ type ResolvedFieldChat = {
 const resolveFieldChat = ({
   abortSignal,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   prompt,
   resolveTextModel,
@@ -237,8 +239,10 @@ const resolveFieldChat = ({
     workspaceIds: tenantWorkspaceIds,
   }),
   model: resolveTextModel({
+    dataClass: "customer",
     role: "fast",
     orgAIConfig,
+    managedAIResidency,
     organizationId,
   }),
   system:
@@ -319,6 +323,7 @@ const SKILL_CATALOG_LOAD_SINK = failureSink({
 
 export const buildAiFieldGenerator = ({
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   tenantWorkspaceIds,
   skillContext,
@@ -327,6 +332,7 @@ export const buildAiFieldGenerator = ({
   resolveTextModel = resolveTanStackTextModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -373,6 +379,7 @@ export const buildAiFieldGenerator = ({
       const request = {
         aiAnalytics,
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         prompt: `You are drafting a single field of a legal document. Instruction: ${prompt}
 ${itemSection}${documentSection}
@@ -437,6 +444,7 @@ const conditionDecisionSchema = v.strictObject({
  */
 export const buildAiConditionDecider = ({
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   tenantWorkspaceIds,
   skillContext,
@@ -446,6 +454,7 @@ export const buildAiConditionDecider = ({
   decisionModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -465,7 +474,7 @@ export const buildAiConditionDecider = ({
   if (
     !orgAIConfig &&
     !hasTanStackInstanceProvider() &&
-    !hasInstanceDecisionModel()
+    !hasInstanceDecisionModel("customer")
   ) {
     return undefined;
   }
@@ -484,6 +493,7 @@ export const buildAiConditionDecider = ({
       // the decision model settles first.
       if (skillTools === undefined) {
         const decided = await decide({
+          dataClass: "customer",
           id: CONDITION_DECISION_ID,
           orgAIConfig,
           state: conditionState({ prompt, values }),
@@ -511,6 +521,7 @@ export const buildAiConditionDecider = ({
         aiAnalytics,
         maxOutputTokens: AI_CONDITION_MAX_TOKENS,
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         outputMode: "generative",
         outputSchema: conditionDecisionSchema,
@@ -611,6 +622,7 @@ ${contexts}`;
  */
 export const buildAiOccurrenceAdapter = ({
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   tenantWorkspaceIds,
   documentLanguages = [],
@@ -620,6 +632,7 @@ export const buildAiOccurrenceAdapter = ({
   resolveTextModel = resolveTanStackTextModel,
 }: {
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   /** Tenant set for the model-ingress guard on every field generation. */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
@@ -662,6 +675,7 @@ export const buildAiOccurrenceAdapter = ({
           stubLength: input.stub.length,
         }),
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         outputSchema: occurrenceRenderingsSchema,
         prompt: buildAdaptPrompt(input, documentLanguages),

@@ -22,6 +22,7 @@ import {
 } from "@/api/lib/ai-error";
 import { captureError as captureTelemetryError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
 import {
   finishReasonOf,
   type TanStackTextFinishReason,
@@ -96,6 +97,7 @@ export type TanStackAIUsageMetering = {
 export type AIUsageMetering = TanStackAIUsageMetering;
 
 type TanStackAIAnalyticsProps = {
+  dataClass: AIDataClass;
   feature: string;
   traceId: string;
   sessionId?: string;
@@ -397,8 +399,10 @@ export const createTanStackAIAnalyticsCallbacks = ({
                 selectedModelId,
                 config.orgAIConfig,
                 modelRole,
+                config.dataClass,
               )
             : getTanStackTextModelInfoForRole(modelRole, config.orgAIConfig, {
+                dataClass: config.dataClass,
                 organizationId: analyticsOrganizationId,
               }),
         catch: (error) => error,
