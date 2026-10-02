@@ -71,9 +71,16 @@ const readBaseline = (source: v.InferOutput<typeof workflowSchema>["jobs"]) => {
 const baseline = readBaseline(baseJobs);
 
 type Step = v.InferOutput<typeof jobSchema>["steps"][number];
+// A pinned action's ref is version metadata that dependency updates bump; the
+// action path itself, and everything else about the step, must stay intact.
+const withoutActionRef = (step: Step): Step =>
+  typeof step["uses"] === "string"
+    ? { ...step, uses: step["uses"].replace(/@[^@]*$/u, "") }
+    : step;
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(withoutActionRef)
     .toSorted((left, right) => left.name.localeCompare(right.name));
 
 type CoverageOptions = {
@@ -213,6 +220,36 @@ test("CI coverage accepts a new check alongside every merge-base check", () => {
   );
   expect(() =>
     expectCoverage({ current: renamed, base: baseSteps, removed: [] }),
+  ).toThrow("toEqual");
+});
+
+test("CI coverage accepts an action version bump but not a different action", () => {
+  const step = ownedSteps(baseSteps).find(
+    (current) => typeof current["uses"] === "string",
+  );
+  if (!step) {
+    panic("Merge-base CI checks contain no action step");
+  }
+  const original = baseSteps.find(({ name }) => name === step.name);
+  if (typeof original?.["uses"] !== "string") {
+    panic("Merge-base action step lost its action");
+  }
+  const action = original["uses"].replace(/@[^@]*$/u, "");
+  const withUses = (uses: string) =>
+    baseSteps.map((current) =>
+      current.name === step.name ? { ...current, uses } : current,
+    );
+  expectCoverage({
+    current: withUses(`${action}@${"0".repeat(40)}`),
+    base: baseSteps,
+    removed: [],
+  });
+  expect(() =>
+    expectCoverage({
+      current: withUses(`${action}-other@${"0".repeat(40)}`),
+      base: baseSteps,
+      removed: [],
+    }),
   ).toThrow("toEqual");
 });
 
