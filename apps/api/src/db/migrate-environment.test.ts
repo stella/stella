@@ -83,3 +83,50 @@ test("the migrate entrypoint needs no variable beyond the database", async () =>
   // unrelated reason: the entrypoint reached the database connection.
   expect(output).toContain("ERR_POSTGRES_CONNECTION_REFUSED");
 });
+
+for (const scenario of [
+  { name: "defaults", environment: {}, expected: ["9000ms", "8000ms"] },
+  {
+    name: "configured pool cap",
+    environment: {
+      DATABASE_POOL_IDLE_TIMEOUT_S: "10",
+      DATABASE_STATEMENT_TIMEOUT_MS: "6000",
+    },
+    expected: ["5000ms", "5000ms"],
+  },
+]) {
+  test(`database-only timeout queries honor ${scenario.name} without load-gate or API settings`, async () => {
+    await Bun.write(EMPTY_ENV_FILE, "");
+    const modulePath = nodePath.join(
+      import.meta.dir,
+      "shared-pool-timeouts.ts",
+    );
+    const child = Bun.spawn({
+      cmd: [
+        "bun",
+        `--env-file=${EMPTY_ENV_FILE}`,
+        "--eval",
+        `const { setSharedQueryTimeouts } = await import(${JSON.stringify(modulePath)});
+         await setSharedQueryTimeouts(async (_statement, parameters) => {
+           await Bun.write(Bun.stdout, JSON.stringify(parameters));
+         }, { statementTimeoutMs: 9000, lockTimeoutMs: 8000 });`,
+      ],
+      env: {
+        HOME: "/tmp",
+        NODE_ENV: "test",
+        PATH: process.env["PATH"] ?? "",
+        ...scenario.environment,
+      },
+      stderr: "pipe",
+      stdout: "pipe",
+    });
+    const [stderr, stdout, exitCode] = await Promise.all([
+      new Response(child.stderr).text(),
+      new Response(child.stdout).text(),
+      child.exited,
+    ]);
+    expect(stderr).toBe("");
+    expect(exitCode).toBe(0);
+    expect(JSON.parse(stdout)).toEqual(scenario.expected);
+  });
+}

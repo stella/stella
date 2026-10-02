@@ -3478,6 +3478,8 @@ export default defineConfig({
               // Side-effect-free schema modules are the API's environment
               // boundary. Runtime wrappers import them and instantiate env.
               "apps/api/src/env-base-schema.ts",
+              "apps/api/src/env-db-load-gate.ts",
+              "apps/api/src/env-db-timeouts.ts",
               "apps/api/src/env-schema.ts",
               "apps/api/src/env-document-processing-worker.ts",
               "apps/api/src/db-url.ts",
