@@ -148,7 +148,7 @@ export class SoftLawIngestionError extends TaggedError(
 )<{ message: string; cause?: unknown }> {}
 export class SoftLawItemError extends TaggedError("SoftLawItemError")<{
   message: string;
-  tag: (typeof SOFT_LAW_ITEM_TAGS)[number];
+  tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
 }> {}
 export class SoftLawListingIncompleteError extends TaggedError(
   "SoftLawListingIncompleteError",

@@ -1,7 +1,8 @@
 import { panic, Result } from "better-result";
-import { expect, test } from "bun:test";
+import { expect, expectTypeOf, test } from "bun:test";
 
 import { softLawIdentityKey, softLawContentHash } from "./soft-law-fingerprint";
+import type { SoftLawAttempt } from "./soft-law-ingestion-store";
 import { SoftLawItemError } from "./soft-law-types";
 import type { SoftLawMetadata, SoftLawDocumentInput } from "./soft-law-types";
 
@@ -25,6 +26,22 @@ const document: SoftLawDocumentInput = {
   extractionQuality: "html",
   sourceDates: {},
 };
+
+test("item errors exclude identity collisions and collision receipts require a computed identity", () => {
+  expectTypeOf<"identity_collision">().not.toExtend<SoftLawItemError["tag"]>();
+  expectTypeOf<
+    Extract<SoftLawAttempt, { tag: "identity_collision" }>
+  >().toExtend<{
+    status: "rejected";
+    identityKey: string;
+  }>();
+  expectTypeOf<{
+    entry: SoftLawAttempt["entry"];
+    count: number;
+    status: "rejected";
+    tag: "identity_collision";
+  }>().not.toExtend<SoftLawAttempt>();
+});
 
 test("soft-law contracts depend only on library owners", async () => {
   const source = await Bun.file(
