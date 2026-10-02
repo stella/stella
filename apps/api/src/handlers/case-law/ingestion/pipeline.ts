@@ -82,6 +82,8 @@ type PipelineInput = {
    */
   maxPages?: number;
   maxDecisions?: number;
+  /** May lower the per-batch record bound; defaults to the production limit. */
+  batchRecordLimit?: number;
   /**
    * Optional concurrency limiter for DB-heavy operations.
    * When provided, the pipeline acquires a slot before
@@ -204,6 +206,7 @@ export const runIngestionPipeline = async ({
   cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
+  batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
 }: PipelineInput): Promise<PipelineResult> => {
@@ -407,7 +410,7 @@ export const runIngestionPipeline = async ({
     decisions: SyncPage["decisions"];
     observation: { order: bigint; observedAt: Date };
   }): Promise<string | null> => {
-    for (const batch of admitPageDecisions(decisions)) {
+    for (const batch of admitPageDecisions(decisions, batchRecordLimit)) {
       if (batch.admission === DECISION_ADMISSION.OVERSIZED_RECORD) {
         // A page's records are applied whatever their size; one over the
         // byte bound goes alone, and is reported.

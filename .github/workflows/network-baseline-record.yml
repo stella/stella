@@ -150,7 +150,7 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_NETWORK_BASELINE: write
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
-        run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts
 
       - name: Limit baseline changes to new or edited routes
         env:

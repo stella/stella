@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { trimToNull } from "../shared/strings.js";
 import type {
   CompaniesHouseAccounts,
@@ -203,7 +204,7 @@ const parsePreviousName = (
 });
 
 const profileUrl = (companyNumber: string): string =>
-  `${COMPANIES_HOUSE_PROFILE_URL}${encodeURIComponent(companyNumber)}`;
+  `${COMPANIES_HOUSE_PROFILE_URL}${encodeRegistryComponent(companyNumber)}`;
 
 export const parseCompanyProfile = (
   raw: CompaniesHouseRawCompanyProfile,

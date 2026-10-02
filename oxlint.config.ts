@@ -203,6 +203,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-offset-pagination.fixture.ts", [
     "no-offset-pagination/no-offset-pagination",
   ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.ts", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
     "no-optional-mutation-command/no-optional-mutation-command",
   ]),
@@ -892,6 +898,7 @@ export default defineConfig({
     "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
     "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
       "error",
+    "require-tenant-page-limit/require-tenant-page-limit": "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
@@ -1281,6 +1288,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
     "./.oxlint-plugins/legislation-window.ts",
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
+    "./.oxlint-plugins/require-tenant-page-limit.ts",
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",
@@ -4619,6 +4627,28 @@ export default defineConfig({
             name: "Bun",
             message:
               "@stll/cli is published to npm and must run under plain Node; use node:* APIs (node:fs/promises, node:crypto, node:http, node:child_process) instead of the Bun global.",
+          },
+        ],
+      },
+    },
+    {
+      files: ["packages/business-registries/src/**/*.ts"],
+      excludeFiles: [
+        "packages/business-registries/src/**/*.test.ts",
+        "packages/business-registries/src/shared/encode-registry-component.ts",
+      ],
+      rules: {
+        "no-restricted-globals": [
+          "error",
+          {
+            globals: [
+              {
+                name: "encodeURIComponent",
+                message:
+                  "Use encodeRegistryComponent from shared/encode-registry-component.js for registry URL components.",
+              },
+            ],
+            checkGlobalObject: true,
           },
         ],
       },

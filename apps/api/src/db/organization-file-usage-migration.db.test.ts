@@ -1,5 +1,5 @@
 import { PGlite } from "@electric-sql/pglite";
-import { expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 import { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/bun-sql";
 import { getTableConfig, PgDialect } from "drizzle-orm/pg-core";
@@ -15,6 +15,7 @@ import {
   organizationFileReservationCandidatesQuery,
 } from "@/api/lib/files/organization-file-usage-queries";
 import { brandPersistedOrganizationId } from "@/api/lib/safe-id-boundaries";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 const MIGRATION_PATH = nodePath.resolve(
   import.meta.dir,
@@ -34,12 +35,21 @@ const PRE_MIGRATION_SQL = `
   INSERT INTO usage_policies VALUES ('fixture-policy');
 `;
 
-const migratedDatabase = async () => {
+const buildMigratedDatabase = async () => {
   const database = new PGlite();
   await database.exec(PRE_MIGRATION_SQL);
   await database.exec(migrationSql);
   return database;
 };
+
+let migratedSnapshot: Blob;
+
+beforeAll(async () => {
+  await using template = await buildMigratedDatabase();
+  migratedSnapshot = await template.dumpDataDir();
+});
+
+const migratedDatabase = async () => await createTestPglite(migratedSnapshot);
 
 const normalizePredicate = (predicate: string | null) =>
   (predicate ?? "")

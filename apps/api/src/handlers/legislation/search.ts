@@ -100,6 +100,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { encodeCursor } from "@/api/lib/search/cursor";
 import {
   escapeAndHighlight,
@@ -766,7 +767,9 @@ const pgSearch = async (
   legislationDb: LegislationReadDb,
   dependencies: SearchLegislationDependencies,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const configs = await dependencies.loadSearchConfigs();
   const requestFilters = legislationRequestFilters(body);
   const read = await legislationDb(async (tx) => {
@@ -883,7 +886,9 @@ const corpusIndexSearch = async (
   parsedCursor: SearchCursor | null,
   legislationDb: LegislationReadDb,
 ): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const serving = await legislationDb(
     async (tx) => await readServingCorpusIndexGenerationTx(tx, "legislation"),
   );

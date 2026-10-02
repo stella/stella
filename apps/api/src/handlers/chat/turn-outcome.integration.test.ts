@@ -403,6 +403,7 @@ const prepareThread = async (
         abortSignal: AbortSignal.timeout(TURN_TIMEOUT_MS),
         dataWorkspaceIds: [],
         orgAIConfig: orgConfigOf(provider, { fallback: false }),
+        managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
         preserveTokens: 1,
         safeDb,
@@ -698,6 +699,7 @@ const SURFACE_SHOWS = {
     const threadId = await seedThread();
     const [first, second] = chatMessagesOf(TRANSCRIPT);
     await generateThreadTitle({
+      indexThread: async () => await Promise.resolve(),
       initialTitle: INITIAL_TITLE,
       messages: [
         first ?? panic("The transcript opens with a user message"),
@@ -705,6 +707,7 @@ const SURFACE_SHOWS = {
       ],
       organizationId: ids.orgA,
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       recordAuditEvent: async () => await Promise.resolve(),
       safeDb: safeDbOf(),
@@ -723,6 +726,7 @@ const SURFACE_SHOWS = {
       messages: chatMessagesOf(TRANSCRIPT),
       organizationId: ids.orgA,
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       threadId: await seedThread(),
       workspaceId: null,
@@ -736,6 +740,7 @@ const SURFACE_SHOWS = {
           memberRole: { role: "owner" },
           orgAIConfig,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+          managedAIResidency: "eu" as const,
           params: { threadId: await seedThread() },
           promptCachingEnabled: false,
           query: {},
@@ -767,6 +772,7 @@ const SURFACE_SHOWS = {
       },
       organizationId: ids.orgA,
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       role: "fast",
       systemSafe: "Answer briefly.",
       systemUntrusted: "Return the clause text.",

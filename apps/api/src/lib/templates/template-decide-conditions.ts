@@ -167,6 +167,7 @@ export const decideTemplateConditions = async ({
   }
 
   const { decisions, model } = await decideMany({
+    dataClass: "customer",
     id: CONDITION_DECISION_ID,
     orgAIConfig,
     // The fill hides source-bound values from the model (they are resolved

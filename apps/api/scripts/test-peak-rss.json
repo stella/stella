@@ -1,0 +1,5 @@
+{
+  "src/handlers/chat/thread-durable-refs.integration.test.ts": 1796,
+  "src/handlers/document-reviews/list-runs.integration.test.ts": 951,
+  "src/handlers/docx-suggestions/create-pending-cap.test.ts": 909
+}

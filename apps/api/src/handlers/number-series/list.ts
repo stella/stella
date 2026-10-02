@@ -14,6 +14,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedNumberSeriesId } from "@/api/lib/safe-id-boundaries";
 
 type NumberSeriesRow = typeof numberSeries.$inferSelect;
@@ -71,7 +72,9 @@ const cursorCodec = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session }) {
-    const limit = query.limit ?? LIMITS.numberSeriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.numberSeriesPageSizeDefault,
+    );
     const conditions = [
       eq(numberSeries.organizationId, session.activeOrganizationId),
       isNull(numberSeries.archivedAt),

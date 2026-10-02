@@ -338,6 +338,7 @@ describe("outputFromSystemOneOutcomes", () => {
       questions,
     });
     const { decisions } = await decideMany({
+      dataClass: "customer",
       id: "workflow.table-batch",
       orgAIConfig: null,
       state: plan.state,

@@ -7,6 +7,7 @@ import { entityKindSchema } from "@/api/db/schema-validators";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { searchGlobal } from "@/api/lib/search/index-global";
 import { parseGlobalSearchCursor } from "@/api/lib/search/pagination";
 import { getSearchPreviewLocatorCandidates } from "@/api/lib/search/query";
@@ -179,7 +180,9 @@ export const searchHandler = async ({
       updatedFrom: body.updatedFrom,
       updatedTo: body.updatedTo,
       cursor: body.cursor,
-      limit: body.limit ?? LIMITS.searchPageSizeDefault,
+      limit: normalizeTenantPageLimit(
+        body.limit ?? LIMITS.searchPageSizeDefault,
+      ),
     },
     { scopedDb },
   );

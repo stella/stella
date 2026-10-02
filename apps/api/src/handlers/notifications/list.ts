@@ -10,6 +10,7 @@ import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import {
   notificationCursor,
@@ -40,7 +41,9 @@ const listNotifications = createSafeRootHandler(
     session,
     user,
   }) {
-    const limit = requestedLimit ?? LIMITS.notificationsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      requestedLimit ?? LIMITS.notificationsPageSizeDefault,
+    );
 
     const cursor = encodedCursor
       ? notificationCursor.decode(encodedCursor)

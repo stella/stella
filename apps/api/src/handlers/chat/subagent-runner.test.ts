@@ -1,5 +1,6 @@
 import { toolDefinition } from "@tanstack/ai";
 import type { AnyTextAdapter } from "@tanstack/ai";
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import * as v from "valibot";
 
@@ -7,6 +8,7 @@ import { createPipelineContext } from "@stll/anonymize";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { createScopedDb } from "@/api/db/scoped";
+import { deanonymizeFromBoundary } from "@/api/handlers/chat/third-party-boundary";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import {
@@ -14,8 +16,15 @@ import {
   CHAT_TOOL_POLICY_KIND,
 } from "@/api/handlers/chat/tools/tool-policy";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
+import { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
+import {
+  createRewritingAnonymizeDependencies,
+  replaceFirstFieldDelimiterToken,
+} from "@/api/tests/helpers/anonymize-pipeline-fakes";
 import { createScriptedTextAdapter } from "@/api/tests/helpers/chat-round-trip";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -126,6 +135,7 @@ const runScriptedSubagent = async (
       },
       organizationId: ids.orgA,
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       role: "fast",
       systemSafe: overrides.systemSafe ?? "Answer briefly.",
       systemUntrusted: overrides.systemUntrusted ?? "",
@@ -162,14 +172,15 @@ describe("a subagent run under an anonymizing boundary", () => {
     const systemUntrusted = "Return output matching: Jan Novak";
     const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
       anonymizationScopeId: "workspace-A",
-      anonymizeFields: async ({ fields }) => ({
-        entityCount: fields.filter((field) => field.includes("Jan Novak"))
-          .length,
-        fields: fields.map((field) =>
-          field.replaceAll("Jan Novak", "[PERSON_1]"),
-        ),
-        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
-      }),
+      anonymizeFields: async ({ fields }) =>
+        Result.ok({
+          entityCount: fields.filter((field) => field.includes("Jan Novak"))
+            .length,
+          fields: fields.map((field) =>
+            field.replaceAll("Jan Novak", "[PERSON_1]"),
+          ),
+          redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+        }),
       excludedCanonicals: Promise.resolve([]),
       gazetteerEntries: Promise.resolve([]),
       literalPlaceholderAliases: new Map<string, string>(),
@@ -203,6 +214,125 @@ describe("a subagent run under an anonymizing boundary", () => {
     expect(receivedSystemPrompts).toEqual([
       [`${systemSafe}\n\nReturn output matching: [PERSON_1]`],
     ]);
+  });
+});
+
+describe("a subagent run whose anonymization output lost its field structure", () => {
+  test("fails before any provider request", async () => {
+    const dependencies = createRewritingAnonymizeDependencies((text) =>
+      replaceFirstFieldDelimiterToken(text, "[ORGANIZATION_1]"),
+    );
+    const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
+      anonymizationScopeId: "workspace-A",
+      anonymizeFields: async (input) =>
+        await anonymizeTextFieldsWithDependencies({ ...input, dependencies }),
+      excludedCanonicals: Promise.resolve([]),
+      gazetteerEntries: Promise.resolve([]),
+      literalPlaceholderAliases: new Map<string, string>(),
+      historicalRedactionMap: new Map<string, string>(),
+      organizationId: ids.orgA,
+      pipelineContext: createPipelineContext(),
+      placeholderOffsets: new Map<string, number>(),
+      redactionMap: new Map<string, string>(),
+      sourcePlaceholders: new Set<string>(),
+      type: "anonymized",
+    };
+    let providerRequests = 0;
+
+    const run = runScriptedSubagent(
+      [{ finishReason: "stop", text: "done", type: "text" }],
+      {
+        systemUntrusted: "Return output matching: Jan Novak",
+        thirdPartyBoundary: boundary,
+        wrapAdapter: (adapter) => ({
+          ...adapter,
+          chatStream: (options) => {
+            providerRequests += 1;
+            return adapter.chatStream(options);
+          },
+        }),
+      },
+    );
+
+    const failure = await run.then(
+      () => null,
+      (error: unknown) => error,
+    );
+    expect(failure).toBeInstanceOf(HandlerError);
+    if (!(failure instanceof HandlerError)) {
+      return;
+    }
+    expect(failure.status).toBe(500);
+    expect(failure.cause).toBeInstanceOf(AnonymizedFieldBoundaryError);
+    expect(providerRequests).toBe(0);
+  });
+});
+
+describe("a subagent request through the real anonymizer", () => {
+  // Short organization names in the deny-list are matched approximately, so
+  // identifier-like runs of letters and digits can be recognized as one. The
+  // request must still be built, with every field intact.
+  test("is built with every field restorable when identifiers sit at field edges", async () => {
+    const gazetteerEntry = (canonical: string) => ({
+      canonical,
+      createdAt: 0,
+      id: `entry-${canonical}`,
+      label: "organization",
+      source: "manual" as const,
+      variants: [],
+      workspaceId: "workspace-A",
+    });
+    const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
+      anonymizationScopeId: "workspace-A",
+      excludedCanonicals: Promise.resolve([]),
+      gazetteerEntries: Promise.resolve([
+        gazetteerEntry("Acme"),
+        gazetteerEntry("Acme A"),
+      ]),
+      literalPlaceholderAliases: new Map<string, string>(),
+      historicalRedactionMap: new Map<string, string>(),
+      organizationId: ids.orgA,
+      pipelineContext: createPipelineContext(),
+      placeholderOffsets: new Map<string, number>(),
+      redactionMap: new Map<string, string>(),
+      sourcePlaceholders: new Set<string>(),
+      type: "anonymized",
+    };
+    const systemSafe = "Answer briefly.";
+    const systemUntrusted =
+      "Return the clause text for matter 9b57-eacfeca0f10b";
+    const sent: { messages: string; systemPrompts: string }[] = [];
+
+    const { result } = await runScriptedSubagent(
+      [{ finishReason: "stop", text: "done", type: "text" }],
+      {
+        systemSafe,
+        systemUntrusted,
+        thirdPartyBoundary: boundary,
+        wrapAdapter: (adapter) => ({
+          ...adapter,
+          chatStream: (options) => {
+            sent.push({
+              messages: JSON.stringify(options.messages),
+              systemPrompts: JSON.stringify(options.systemPrompts),
+            });
+            return adapter.chatStream(options);
+          },
+        }),
+      },
+    );
+
+    expect(result.outcome).toBe("completed");
+    expect(sent).toHaveLength(1);
+    const [request] = sent;
+    // The fixture must reach the recognizers, or restoring would be trivial.
+    expect(boundary.redactionMap.size).toBeGreaterThan(0);
+    expect(
+      deanonymizeFromBoundary({ boundary, text: request?.systemPrompts ?? "" }),
+    ).toBe(JSON.stringify([`${systemSafe}\n\n${systemUntrusted}`]));
+    expect(
+      deanonymizeFromBoundary({ boundary, text: request?.messages ?? "" }),
+    ).toContain("Find the termination clause");
   });
 });
 

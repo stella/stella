@@ -2,8 +2,10 @@ import { Result } from "better-result";
 
 import {
   hasOptionalNumber,
+  hasOptionalNullableString,
   hasOptionalString,
   isRecord,
+  isOptionalArrayOf,
 } from "../shared/guards.js";
 import {
   DEFAULT_REGISTRY_TIMEOUT_MS,
@@ -63,24 +65,182 @@ const DEFAULT_SEARCH_LIMIT = 50;
 // cannot ask for thousands of rows on the chat path.
 const MAX_SEARCH_LIMIT = 100;
 
+const isOrsrOptionalArrayOf = (
+  value: unknown,
+  isEntry: (entry: unknown) => boolean,
+): boolean => value === null || isOptionalArrayOf(value, isEntry);
+
+const isOrsrCodelistItem = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) &&
+    hasOptionalNullableString(value, "itemCode") &&
+    hasOptionalNullableString(value, "itemName"));
+
+const isOrsrCodelistRef = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) && isOrsrCodelistItem(value["codelistItem"]));
+
+const isOrsrWrappedCode = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) &&
+    (typeof value["item"] === "string" ||
+      (value["item"] !== null && isOrsrCodelistRef(value["item"]))));
+
+const isOrsrTemporal = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalNullableString(value, "effectiveFrom") &&
+  hasOptionalNullableString(value, "effectiveTo") &&
+  (value["current"] === undefined || typeof value["current"] === "boolean");
+
+const isOrsrDelivery = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) && hasOptionalNullableString(value, "postalCode"));
+
+const isOrsrAddress = (value: unknown): boolean =>
+  isOrsrTemporal(value) &&
+  isRecord(value) &&
+  ["streetName", "buildingNumber", "propertyRegistrationNumber"].every((key) =>
+    hasOptionalNullableString(value, key),
+  ) &&
+  isOrsrWrappedCode(value["country"]) &&
+  isOrsrWrappedCode(value["municipality"]) &&
+  isOrsrDelivery(value["deliveryAddress"]);
+
+const isOrsrIdentifier = (value: unknown): boolean =>
+  isOrsrTemporal(value) &&
+  isRecord(value) &&
+  hasOptionalNullableString(value, "identifierValue") &&
+  isOrsrWrappedCode(value["identifierType"]);
+
+const isOrsrValue = (value: unknown): boolean =>
+  isOrsrTemporal(value) &&
+  isRecord(value) &&
+  hasOptionalNullableString(value, "value");
+
+const isOrsrLegalForm = (value: unknown): boolean =>
+  isOrsrTemporal(value) && isRecord(value) && isOrsrCodelistRef(value["item"]);
+
+const isOrsrEquity = (value: unknown): boolean =>
+  isOrsrTemporal(value) &&
+  isRecord(value) &&
+  hasOptionalNumber(value, "equityValue") &&
+  hasOptionalNumber(value, "equityValuePaid") &&
+  isOrsrWrappedCode(value["currency"]) &&
+  ["equityValueSpecified", "equityValuePaidSpecified"].every(
+    (key) => value[key] === undefined || typeof value[key] === "boolean",
+  );
+
+const isOrsrDeposit = (value: unknown): boolean =>
+  isOrsrTemporal(value) &&
+  isRecord(value) &&
+  (value["depositValue"] === null ||
+    hasOptionalNumber(value, "depositValue")) &&
+  (value["depositPayedValue"] === null ||
+    hasOptionalNumber(value, "depositPayedValue")) &&
+  isOrsrWrappedCode(value["currency"]) &&
+  isOrsrOptionalArrayOf(value["stakeholder"], isOrsrValue);
+
+const isOrsrPersonName = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) && hasOptionalNullableString(value, "formattedName"));
+
+const isOrsrPhysicalPerson = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) && isOrsrPersonName(value["personName"]));
+
+const isOrsrCorporatePerson = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) &&
+    hasOptionalNullableString(value, "corporateBodyFullName"));
+
+const isOrsrPersonData = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) &&
+    (value["physicalPerson"] === null ||
+      isOrsrPhysicalPerson(value["physicalPerson"])) &&
+    (value["corporateBody"] === null ||
+      isOrsrCorporatePerson(value["corporateBody"])) &&
+    isOrsrOptionalArrayOf(value["physicalAddress"], isOrsrAddress) &&
+    isOrsrOptionalArrayOf(value["id"], isOrsrIdentifier));
+
+const isOrsrMember = (value: unknown): boolean =>
+  isOrsrTemporal(value) &&
+  isRecord(value) &&
+  ["function", "functionCreationDate", "functionTerminationDate"].every((key) =>
+    hasOptionalNullableString(value, key),
+  ) &&
+  isOrsrPersonData(value["personData"]) &&
+  isOrsrWrappedCode(value["stakeholderType"]);
+
+const isOrsrLegalStatus = (value: unknown): boolean =>
+  isOrsrTemporal(value) &&
+  isRecord(value) &&
+  hasOptionalNullableString(value, "text");
+
+const isOrsrCorporateBody = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) &&
+    hasOptionalNullableString(value, "establishment") &&
+    (value["termination"] === null ||
+      hasOptionalNullableString(value, "termination")) &&
+    isOrsrOptionalArrayOf(value["corporateBodyFullName"], isOrsrValue) &&
+    isOrsrOptionalArrayOf(value["legalForm"], isOrsrLegalForm) &&
+    isOrsrOptionalArrayOf(value["equity"], isOrsrEquity) &&
+    isOrsrOptionalArrayOf(value["deposits"], isOrsrDeposit) &&
+    isOrsrOptionalArrayOf(value["statutoryBodyType"], isOrsrValue) &&
+    isOrsrOptionalArrayOf(value["statutoryBody"], isOrsrMember) &&
+    isOrsrOptionalArrayOf(value["authorizationToExecute"], isOrsrValue) &&
+    isOrsrOptionalArrayOf(value["stakeholder"], isOrsrMember) &&
+    isOrsrOptionalArrayOf(value["legalStatusEvents"], isOrsrLegalStatus));
+
+const isOrsrLegalPerson = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) &&
+    isOrsrCorporateBody(value["corporateBody"]) &&
+    isOrsrOptionalArrayOf(value["physicalAddress"], isOrsrAddress) &&
+    isOrsrOptionalArrayOf(value["id"], isOrsrIdentifier));
+
+const isOrsrFileReference = (value: unknown): boolean =>
+  value === undefined ||
+  value === null ||
+  (isRecord(value) &&
+    hasOptionalNullableString(value, "section") &&
+    hasOptionalNullableString(value, "court") &&
+    (value["insertNumber"] === undefined ||
+      typeof value["insertNumber"] === "string" ||
+      typeof value["insertNumber"] === "number"));
+
 const isOrsrSearchHit = (value: unknown): value is OrsrRawSearchHit =>
-  isRecord(value) && typeof value["id"] === "number";
+  isRecord(value) &&
+  typeof value["id"] === "number" &&
+  hasOptionalNullableString(value, "corporateBodyFullName") &&
+  hasOptionalNullableString(value, "registrationNumber") &&
+  hasOptionalNullableString(value, "physicalAddressLine1") &&
+  hasOptionalNullableString(value, "physicalAddressLine2") &&
+  isOrsrFileReference(value["fileReference"]);
 
 const isOrsrSearchResponse = (value: unknown): value is OrsrRawSearchResponse =>
   isRecord(value) &&
-  (value["filteredCount"] === undefined ||
-    typeof value["filteredCount"] === "number") &&
-  (value["data"] === undefined ||
-    (Array.isArray(value["data"]) && value["data"].every(isOrsrSearchHit)));
+  hasOptionalNumber(value, "filteredCount") &&
+  isOrsrOptionalArrayOf(value["data"], isOrsrSearchHit);
 
 const isOrsrExtractResponse = (
   value: unknown,
 ): value is OrsrRawExtractResponse =>
   isRecord(value) &&
-  (value["fileReference"] === undefined || isRecord(value["fileReference"])) &&
-  (value["courtName"] === undefined ||
-    typeof value["courtName"] === "string") &&
-  (value["legalPerson"] === undefined || isRecord(value["legalPerson"]));
+  hasOptionalString(value, "courtName") &&
+  isOrsrFileReference(value["fileReference"]) &&
+  isOrsrLegalPerson(value["legalPerson"]);
 
 const isOrsrDocumentList = (value: unknown): value is OrsrRawDocument[] =>
   Array.isArray(value) &&
@@ -104,7 +264,7 @@ const isOrsrRelatedHit = (item: unknown): boolean =>
   hasOptionalString(item, "physicalAddressLine2") &&
   (item["relatedPersonName"] === null ||
     hasOptionalString(item, "relatedPersonName")) &&
-  (item["fileReference"] === undefined || isRecord(item["fileReference"]));
+  isOrsrFileReference(item["fileReference"]);
 
 const isOrsrRelatedResponse = (
   value: unknown,

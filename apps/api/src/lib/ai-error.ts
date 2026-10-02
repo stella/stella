@@ -12,6 +12,7 @@ import { AI_ERROR_KINDS, type AIErrorKind } from "@stll/api-contract";
 import { classifyFailure } from "@stll/errors";
 import type { FailureReason } from "@stll/errors";
 
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { INCOMPLETE_STREAM_CODE } from "@/api/lib/chat/provider-stream-contract";
 import {
   AIGenerationCancelledError,
@@ -181,6 +182,10 @@ const classifyAIErrorInternal = (
       return "unknown";
     }
     seen.add(error);
+  }
+
+  if (isRecord(error) && error["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
+    return "model_unavailable";
   }
 
   if (ChatLoopDetectedError.is(error)) {
@@ -378,7 +383,7 @@ type AIHandlerErrorFallback = {
 
 // The failure reason each named kind is observed as. Total over the named
 // kinds, so a new kind cannot ship without deciding how a sink grades it.
-const AI_ERROR_KIND_FAILURE_REASON = {
+export const AI_ERROR_KIND_FAILURE_REASON = {
   quota_exhausted: "quota_exhausted",
   provider_billing: "provider_billing",
   provider_credentials_rejected: "provider_credentials_rejected",
