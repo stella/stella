@@ -190,6 +190,7 @@ test("the generated-output guards run when their inputs change", () => {
     "bunfig.toml",
     "package.json",
     ".github/workflows/ci.yml",
+    ".npmrc",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "true"]);
   }
@@ -198,6 +199,7 @@ test("the generated-output guards run when their inputs change", () => {
     "apps/api/tsconfig.json",
     "apps/web/package.json",
     "apps/web/src/generated/api-routes.gen.ts",
+    "apps/web/src/routes/index.tsx",
     "types/wasm.d.ts",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "false"]);
@@ -207,7 +209,6 @@ test("the generated-output guards run when their inputs change", () => {
     "scripts/prepare-publish.ts",
     "scripts/publish-manifest.ts",
     "scripts/published-export-guards.ts",
-    ".npmrc",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["false", "true"]);
   }
@@ -215,7 +216,6 @@ test("the generated-output guards run when their inputs change", () => {
 
 test("the generated-output guards skip unrelated pull requests but never full depth", () => {
   for (const file of [
-    "apps/web/src/routes/index.tsx",
     "apps/landing/src/pages/index.astro",
     "scripts/typecheck-baseline.json",
     "docs/changelog/x.md",
@@ -1300,7 +1300,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
     ciJobs["ci-checks-generated"],
   ).steps;
   for (const [name, scope] of [
-    ["Web API types drift guard", "web_api_types_required"],
+    ["Web API types determinism guard", "web_api_types_required"],
     ["Route tree drift guard", "route_tree_required"],
     ["Published export map guard", "published_exports_required"],
   ] as const) {
@@ -1642,6 +1642,108 @@ test("marketing screenshots are planned only for ready same-repository releases 
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+
+test("direct web compiler checks materialize ignored API contracts before checking", () => {
+  const nightly = workflowJobs(
+    readFileSync(
+      new URL("../.github/workflows/nightly-typecheck.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const directCompiler =
+    /bun (?:run check:query-cache-types|scripts\/typecheck-coverage\.ts|scripts\/typecheck-baseline\.ts --(?:check(?:-delta)?|measure))/u;
+  let consumers = 0;
+  for (const [workflowName, jobs] of [
+    ["ci", ciJobs],
+    ["nightly", nightly],
+  ] as const) {
+    for (const [job, body] of Object.entries(jobs)) {
+      const steps = v.parse(
+        v.object({
+          steps: v.optional(
+            v.array(
+              v.object({
+                run: v.optional(v.string()),
+              }),
+            ),
+            [],
+          ),
+        }),
+        body,
+      ).steps;
+      let precedingCommands = "";
+      for (const step of steps) {
+        const commands = step.run ?? "";
+        const consumer = directCompiler.exec(commands);
+        if (consumer !== null) {
+          consumers += 1;
+          const beforeCheck =
+            precedingCommands + commands.slice(0, consumer.index);
+          expect(
+            beforeCheck,
+            `${workflowName}/${job} generates before direct compiler checks`,
+          ).toContain("bun run generate");
+          if (commands.includes("--measure")) {
+            expect(
+              commands.slice(0, consumer.index),
+              `${job} generates in the base checkout`,
+            ).toContain("bun --filter @stll/api gen:web-api-types");
+          }
+        }
+        precedingCommands += `${commands}\n`;
+      }
+    }
+  }
+  expect(consumers).toBeGreaterThan(0);
+});
+
+test("direct web compiler package scripts generate before inspecting types", () => {
+  const { tasks } = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.object({
+          dependsOn: v.optional(v.array(v.string()), []),
+        }),
+      ),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
+  );
+  const directCompiler =
+    /(?:tsc-native\.ts|code-check-affected\.ts|lint-changed\.ts|query-cache-types\.ts|result-consumption\.ts|oxlint\b.*--type-aware)/u;
+  let consumers = 0;
+  for (const manifest of ["../package.json", "../apps/web/package.json"]) {
+    const { name: owner, scripts } = v.parse(
+      v.object({ name: v.string(), scripts: v.record(v.string(), v.string()) }),
+      JSON.parse(readFileSync(new URL(manifest, import.meta.url), "utf-8")),
+    );
+    for (const [name, command] of Object.entries(scripts)) {
+      const consumer = directCompiler.exec(command);
+      if (consumer === null) {
+        continue;
+      }
+      consumers += 1;
+      expect(
+        command.slice(0, consumer.index),
+        `${manifest} ${name} materializes the API contract`,
+      ).toMatch(/bun(?: --cwd \.\.\/\.\.)? run generate/u);
+      if (command.includes("$TURBO_HASH")) {
+        const task = `${manifest === "../package.json" ? "//" : owner}#${name}`;
+        expect(
+          tasks[task]?.dependsOn,
+          `${task} prepares API types before skipping the nested cache restore`,
+        ).toContain(
+          manifest === "../package.json"
+            ? "@stll/web#generate:api-types"
+            : "generate:api-types",
+        );
+      }
+    }
+  }
+  expect(consumers).toBeGreaterThan(0);
 });
 
 test("folded Docker suites keep their scopes and fail independently, including missing or cancelled verdicts", () => {

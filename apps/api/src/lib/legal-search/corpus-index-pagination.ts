@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
@@ -110,6 +112,7 @@ const CORPUS_INDEX_SCAN_PASSAGE_FIELDS = [
 ] as const;
 
 type CorpusIndexSearchPageInput<TContext> = {
+  observer: RegistryRequestObservation;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -292,6 +295,7 @@ const passageClause = (hit: CorpusIndexHit): string | null => {
 };
 
 type ReadPageSnippetsOptions = {
+  observer: RegistryRequestObservation;
   clauses: readonly string[];
   cluster: QuickwitCluster;
   extractId: (hit: CorpusIndexHit) => string | null;
@@ -320,6 +324,7 @@ type PageSnippets = {
  * snippet, matching how the scan chose the document's passage.
  */
 const readPageSnippets = async ({
+  observer,
   clauses,
   cluster,
   extractId,
@@ -335,6 +340,7 @@ const readPageSnippets = async ({
 
   const startedAt = performance.now();
   const result = await getCorpusIndexClient(cluster).search({
+    observer,
     indexId,
     query: `(${query}) AND (${clauses.join(" OR ")})`,
     maxHits: clauses.length * HIGHLIGHT_COPIES_PER_PASSAGE,
@@ -410,6 +416,7 @@ type ScanRound = {
 };
 
 type ReadScanRoundOptions = {
+  observer: RegistryRequestObservation;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -425,6 +432,7 @@ type ReadScanRoundOptions = {
  * rank-based position score would be meaningless.
  */
 const readScanRound = async ({
+  observer,
   cluster,
   indexId,
   query,
@@ -436,6 +444,7 @@ const readScanRound = async ({
   switch (transport.type) {
     case "native": {
       const result = await getCorpusIndexClient(cluster).search({
+        observer,
         indexId,
         query,
         maxHits,
@@ -456,6 +465,7 @@ const readScanRound = async ({
         panic("A scored scan reads relevance order only");
       }
       const result = await readScoredScanRound({
+        observer,
         cluster,
         indexId,
         query,
@@ -515,6 +525,7 @@ const scanScoreRecorder = () => {
 };
 
 type ReadScoredScanRoundOptions = {
+  observer: RegistryRequestObservation;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -529,6 +540,7 @@ type ReadScoredScanRoundOptions = {
  * fields plus the passage fields the scan reads.
  */
 const readScoredScanRound = async ({
+  observer,
   cluster,
   indexId,
   query,
@@ -537,6 +549,7 @@ const readScoredScanRound = async ({
   size,
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
   const result = await getCorpusIndexClient(cluster).scoredSearch({
+    observer,
     indexId,
     query,
     from,
@@ -679,6 +692,7 @@ const resolveCorpusSearchCursor = ({
 };
 
 export const readCorpusIndexSearchPage = async <TContext>({
+  observer,
   cluster,
   indexId,
   query,
@@ -762,6 +776,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     // these hits.
     const roundStartedAt = performance.now();
     const round = await readScanRound({
+      observer,
       cluster,
       indexId,
       query,
@@ -863,6 +878,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
   });
 
   const snippets = await readPageSnippets({
+    observer,
     clauses: pageRanked.flatMap((hit) => passageClauseById.get(hit.id) ?? []),
     cluster,
     extractId,

@@ -1,4 +1,6 @@
 import { describe, expect, test } from "bun:test";
+import { mkdirSync, mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 import {
@@ -178,4 +180,36 @@ describe("API test batch planning", () => {
       expect(hasModuleScopeProcessEnvMutation(testPath, source)).toBe(false);
     }
   });
+});
+
+test("property selection includes both assertion APIs and excludes ordinary tests", async () => {
+  const apiRoot = mkdtempSync(path.join(tmpdir(), "api-property-selectors-"));
+  const legacyPath = "src/legacy.test.ts";
+  const sharedPath = "src/shared.test.ts";
+  const expectedPaths = [legacyPath, sharedPath];
+  const ordinaryPath = "src/ordinary.test.ts";
+  try {
+    mkdirSync(path.join(apiRoot, "src"));
+    await Promise.all([
+      Bun.write(path.join(apiRoot, legacyPath), "fc.assert(property);"),
+      Bun.write(
+        path.join(apiRoot, sharedPath),
+        'assertProperty("shared", property);',
+      ),
+      Bun.write(
+        path.join(apiRoot, ordinaryPath),
+        'test("ordinary", () => {});',
+      ),
+    ]);
+    const batches = await planApiTestBatches({
+      apiRoot,
+      propertyOnly: true,
+      testPaths: [...expectedPaths, ordinaryPath],
+    });
+    expect(
+      batches.flatMap(({ testBatches }) => testBatches.flat()).toSorted(),
+    ).toEqual(expectedPaths);
+  } finally {
+    rmSync(apiRoot, { recursive: true, force: true });
+  }
 });

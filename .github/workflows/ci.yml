@@ -486,14 +486,10 @@ jobs:
                 web_image_smoke_required=true
                 ;;
             esac
-            # The web API types drift guard compiles the API program from
-            # apps/api/tsconfig.json (API sources, the workspace packages
-            # they import, the root ambient types, installed type
-            # packages) and compares the printout with the committed file
-            # under apps/web/src/generated, importing by name the packages
-            # apps/web/package.json lists.
+            # The web API types determinism guard compiles the API and wire
+            # programs; mirror the complete cached generator input contract.
             case "$file" in
-              apps/api/*|apps/web/package.json|apps/web/src/generated/*|packages/*|patches/*|types/*|bun.lock|bunfig.toml|package.json|.github/workflows/ci.yml)
+              apps/api/*|apps/web/src/*|apps/web/package.json|apps/web/tsconfig*.json|packages/*|patches/*|types/*|tsconfig*.json|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 web_api_types_required=true
                 ;;
             esac
@@ -829,8 +825,8 @@ jobs:
       needs.ci-plan.outputs.trusted == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 25m, matching code-quality.
-    timeout-minutes: 25
+    # Include uncached API generation and its two-pass determinism check.
+    timeout-minutes: 60
     permissions:
       actions: write
       contents: read
@@ -862,6 +858,10 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Generate web sources
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun run generate
 
       - name: Prepare environment
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -912,15 +912,12 @@ jobs:
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 
-      - name: Web API types drift guard
+      - name: Web API types determinism guard
         if: >-
           needs.ci-plan.outputs.package_checks_required == 'true'
           && needs.ci-plan.outputs.web_api_types_required == 'true'
-        # apps/web type-checks against API types printed from the API's own
-        # inference instead of compiling the API. `--check` fails when the
-        # committed file is stale and asserts each printed type is identical
-        # to the inferred one. Regenerate: `bun --filter @stll/api
-        # gen:web-api-types`.
+        # Generate twice without Turbo caching, compare bytes, and retain the
+        # compiler identity assertion against the inferred API contract.
         run: bun --filter @stll/api gen:web-api-types --check
 
       - name: Route tree drift guard
@@ -1265,6 +1262,10 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Generate web compiler sources
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun run generate
 
       - name: Workspace hygiene
         # Restored from the bun postinstall lifecycle, which is bypassed
@@ -2377,6 +2378,9 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Generate web sources
+        run: bun run generate
+
       - name: Prepare environment
         run: |
           cd ./apps/api
@@ -2451,6 +2455,9 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Generate web sources
+        run: bun run generate
 
       - name: Install the docs MCP server
         # tsconfig.tooling.json typechecks .claude/mcp against the packages
@@ -2892,7 +2899,7 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     permissions:
       actions: write
       contents: read
@@ -2911,6 +2918,9 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Turbo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
@@ -2921,7 +2931,9 @@ jobs:
       - name: Generate types
         # The guard calls tsc directly (no turbo), so the generated inputs
         # that turbo's typecheck pipeline would produce must exist first.
-        run: bun run typegen
+        run: |
+          bun run generate
+          bun run typegen
 
       - name: Measure merge base
         run: |
@@ -2931,11 +2943,53 @@ jobs:
           (
             cd "$base_dir"
             bash scripts/retry.sh bun ci --ignore-scripts
+            # Older bases commit the snapshot. Generate only when the base
+            # owns an untracked output, using its cached producer if present.
+            if [[ ! -f apps/web/src/generated/api-routes.gen.ts ]]; then
+              if bun -e 'process.exit("generate" in require("./package.json").scripts ? 0 : 1)'; then
+                bun run generate
+              else
+                bun --filter @stll/api gen:web-api-types
+              fi
+            fi
             bun run typegen
           )
           bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
         env:
           NPM_TOKEN: ""
+
+      - name: Generated API type review diff
+        # Reuse the measured base checkout and its installed dependencies.
+        # Both files were generated from their own revision above.
+        run: |
+          patch="$RUNNER_TEMP/web-api-types.patch"
+          base_types="$RUNNER_TEMP/typecheck-base/apps/web/src/generated/api-routes.gen.ts"
+          head_types="apps/web/src/generated/api-routes.gen.ts"
+          test -f "$base_types"
+          test -f "$head_types"
+          status=0
+          diff -u --label base/api-routes.gen.ts --label head/api-routes.gen.ts \
+            "$base_types" "$head_types" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated web API type diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated API types are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated API type review diff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-web-api-types-diff
+          path: ${{ runner.temp }}/web-api-types.patch
+          retention-days: 14
 
       - name: Typecheck-cost baseline guard
         # The --self-test run first proves the parser and comparison logic,

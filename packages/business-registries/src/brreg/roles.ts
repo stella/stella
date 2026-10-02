@@ -17,7 +17,7 @@ import { Temporal } from "temporal-polyfill/full";
 // the role group's `sistEndret` as the change date.
 
 import { isRecord } from "../shared/guards.js";
-import { registryFetch } from "../shared/http.js";
+import { type RegistryClientOptions, registryFetch } from "../shared/http.js";
 import {
   BrregAPIError,
   BrregRequestError,
@@ -286,9 +286,12 @@ const parseUpstreamMessage = (value: unknown): string | null => {
 
 const brregGetRoles = async (
   url: string,
+  options: RegistryClientOptions,
 ): Promise<BrregRawRolesResponse | null> =>
   await registryFetch({
     url,
+    observer: options.observer,
+    signal: options.signal,
     init: { headers: { Accept: "application/json" } },
     isExpectedShape: isRawRolesResponse,
     wrapRequestError: (cause) =>
@@ -347,12 +350,16 @@ const brregGetRoles = async (
  */
 export const lookupOfficersByOrgnr = async (
   orgnr: string,
+  options: RegistryClientOptions,
 ): Promise<BrregOfficer[]> => {
   const normalized = normalizeOrgnr(orgnr);
   if (!validateOrgnr(normalized)) {
     throw new BrregValidationError(`Invalid orgnr: ${orgnr}`);
   }
-  const data = await brregGetRoles(`${BASE}/enheter/${normalized}/roller`);
+  const data = await brregGetRoles(
+    `${BASE}/enheter/${normalized}/roller`,
+    options,
+  );
   if (!data) {
     return [];
   }
