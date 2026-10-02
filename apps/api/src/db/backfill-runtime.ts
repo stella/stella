@@ -309,30 +309,40 @@ const drizzleQuery =
     return executedRows(await tx.execute(sql.join(parts, sql``)));
   };
 
-/** Bounded shared health indicators for work with its own admission budget. */
-export const createDatabaseLoadVerdictReader = (
-  db: { transaction: IngestionTransactionRunner<Transaction> },
-  tableName: string,
-) => {
+type DatabaseLoadVerdictReaderOptions = {
+  db: { transaction: IngestionTransactionRunner<Transaction> };
+  tableName: string;
+  config?: HealthConfig;
+  clock?: () => number;
+};
+
+/** The database owns the aggregate indicator boundary; unavailable reads hold. */
+export const createDatabaseLoadVerdictReader = ({
+  db,
+  tableName,
+  config = defaultConfig,
+  clock = () => Temporal.Now.instant().epochMilliseconds,
+}: DatabaseLoadVerdictReaderOptions) => {
   const indicators = createBoundedIndicatorQuery({
     runInTransaction: db.transaction.bind(db),
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
-    readTimeoutMs: defaultConfig.readTimeoutMs,
-  });
-  const read = createVerdictReader({
-    query: indicators.query,
-    tableName,
-    clock: () => Temporal.Now.instant().epochMilliseconds,
-    config: defaultConfig,
+    readTimeoutMs: config.readTimeoutMs,
   });
   return async () => {
     const result = await Result.tryPromise(async () => {
-      const visibility = (
-        await indicators.query(
-          "SELECT pg_has_role(current_user, 'pg_read_all_stats', 'USAGE') OR EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND rolsuper) AS visible",
-        )
-      ).at(0);
-      if (!isRecord(visibility) || visibility["visible"] !== true) {
+      const snapshot = await indicators.query(
+        `SELECT transaction_age_ms AS "ageMs", vacuum_active AS active,
+          pg_catalog.to_char(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "observedAt"
+         FROM public.stella_database_load_indicators($1::regclass)`,
+        [tableName.includes(".") ? tableName : `public.${tableName}`],
+      );
+      const row = snapshot.at(0);
+      if (
+        !isRecord(row) ||
+        typeof row["ageMs"] !== "number" ||
+        typeof row["active"] !== "boolean" ||
+        typeof row["observedAt"] !== "string"
+      ) {
         return {
           kind: "unknown",
           signals: [
@@ -342,16 +352,34 @@ export const createDatabaseLoadVerdictReader = (
               value: null,
               threshold: null,
               observedAt: null,
-              reason: "Statistics visibility is unavailable",
+              reason: "Database indicators are unavailable",
             },
           ],
         } as const satisfies Verdict;
       }
+      const read = createVerdictReader({
+        query: async () => snapshot,
+        tableName,
+        clock,
+        config,
+      });
       return await read();
     });
     await indicators.settle();
     if (Result.isError(result)) {
-      throw result.error;
+      return {
+        kind: "unknown",
+        signals: [
+          {
+            indicator: "long_transaction",
+            kind: "unknown",
+            value: null,
+            threshold: null,
+            observedAt: null,
+            reason: "Database indicators are unavailable",
+          },
+        ],
+      } as const satisfies Verdict;
     }
     return result.value;
   };

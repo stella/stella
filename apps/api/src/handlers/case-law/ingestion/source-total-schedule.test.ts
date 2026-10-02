@@ -11,7 +11,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 
 test("source phases stay stable across time and bound the next refresh", () => {
   assertProperty(
-    "stored-total-source-phase-stability",
+    "source phases stay stable across time and bound the next refresh",
     fc.property(
       fc.uuid(),
       fc.integer({ min: 0, max: 2_000_000_000_000 }),
@@ -56,7 +56,7 @@ test("a hundred fixed sources do not cluster more than five counts into one minu
 
 test("a successful slot's next future phase has a gap of at most one day", () => {
   assertProperty(
-    "stored-total-success-next-slot-gap",
+    "a successful slot's next future phase has a gap of at most one day",
     fc.property(
       fc.uuid(),
       fc.integer({ min: 0, max: 2_000_000_000_000 }),

@@ -329,7 +329,7 @@ const scopedDb: ScopedDb = async (callback) => {
     update: (table: unknown) => ({
       set: (values: { syncCursor?: string | null }) => {
         events.push("row-update");
-        if (table === caseLawSources) {
+        if (table === caseLawSources && values.syncCursor !== undefined) {
           persistedCursor = values.syncCursor;
         } else if (table === caseLawDecisions) {
           updatedDecisionRows.push(values);

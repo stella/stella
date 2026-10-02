@@ -695,28 +695,30 @@ const drizzleSourceCount = (
   const joining = node.expression.name.text.endsWith("Join");
   const dollarCount = node.expression.name.text === "$count";
   const countTable = dollarCount ? node.arguments.at(0) : undefined;
-  let corpus =
-    countTable !== undefined &&
-    (isCorpusColumn(`${countTable.getText(file)}.sourceId`, bindings) ||
-      isCorpusColumn(
-        `${resolve(countTable, bindings).getText(file)}.sourceId`,
-        bindings,
-      ));
-  let count = dollarCount;
-  let source = false;
+  const state = {
+    corpus:
+      countTable !== undefined &&
+      (isCorpusColumn(`${countTable.getText(file)}.sourceId`, bindings) ||
+        isCorpusColumn(
+          `${resolve(countTable, bindings).getText(file)}.sourceId`,
+          bindings,
+        )),
+    count: dollarCount,
+    source: false,
+  };
   const inspect = (child: ts.Node) => {
     if (ts.isExpression(child)) {
       const value = resolve(child, bindings);
       if (ts.isCallExpression(value)) {
         const name = drizzleCallName(value, imports);
         if (name === "count") {
-          count = true;
+          state.count = true;
         }
         const argument = value.arguments.at(0);
         const operand =
           argument === undefined ? undefined : resolve(argument, bindings);
         if (name === "sum" && operand !== undefined) {
-          count ||=
+          state.count ||=
             (ts.isNumericLiteral(operand) && operand.text === "1") ||
             (ts.isTaggedTemplateExpression(operand) &&
               isSqlTag(operand) &&
@@ -730,7 +732,7 @@ const drizzleSourceCount = (
         ) {
           const table = value.arguments.at(0);
           if (table !== undefined) {
-            corpus ||=
+            state.corpus ||=
               isCorpusColumn(`${table.getText(file)}.sourceId`, bindings) ||
               isCorpusColumn(
                 `${resolve(table, bindings).getText(file)}.sourceId`,
@@ -740,7 +742,7 @@ const drizzleSourceCount = (
         }
       }
       if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
-        count ||= FULL_COUNT.test(
+        state.count ||= FULL_COUNT.test(
           sqlWithoutLiterals(
             expandedSql({ ...sqlParts(file, value.template), bindings, file }),
           ),
@@ -772,7 +774,7 @@ const drizzleSourceCount = (
             other !== undefined &&
             !ts.isPropertyAccessExpression(resolve(other, bindings))
           ) {
-            source ||= isSourceRestrictionColumn(column, context);
+            state.source ||= isSourceRestrictionColumn(column, context);
           }
         }
       }
@@ -783,7 +785,7 @@ const drizzleSourceCount = (
           value.name.text === "adapterKey" ||
           value.name.text === "id")
       ) {
-        source ||= isSourceRestrictionColumn(value, context);
+        state.source ||= isSourceRestrictionColumn(value, context);
       }
       if (value !== child) {
         ts.forEachChild(value, inspectSource);
@@ -796,7 +798,7 @@ const drizzleSourceCount = (
     inspectSource(argument);
   }
   inspect(node);
-  return corpus && count && source;
+  return state.corpus && state.count && state.source;
 };
 
 const comparisonColumn = (

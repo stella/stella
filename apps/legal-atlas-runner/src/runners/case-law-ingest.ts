@@ -672,10 +672,10 @@ const runOneCycle = async (
       sourceLease,
       scopedDb: ingestionDb,
       acquireStoredTotalAdmission: createSourceStoredTotalAdmission({
-        readVerdict: createDatabaseLoadVerdictReader(
-          { transaction: ingestionDb },
-          "case_law_decisions",
-        ),
+        readVerdict: createDatabaseLoadVerdictReader({
+          db: { transaction: ingestionDb },
+          tableName: "case_law_decisions",
+        }),
       }),
       dbSlot: dbWriteSemaphore,
       cycle: {
