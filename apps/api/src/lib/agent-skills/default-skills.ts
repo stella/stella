@@ -62,7 +62,7 @@ export const seedDefaultSkills = async ({
     organizationId,
     userId,
     scope: "private" as const,
-    origin: "authored" as const,
+    origin: "default" as const,
     slug: `${skill.command}-default`,
     name: skill.name,
     description: skill.description,

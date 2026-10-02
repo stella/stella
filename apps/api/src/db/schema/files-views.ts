@@ -123,10 +123,12 @@ export type AgentSkillScope = (typeof AGENT_SKILL_SCOPES)[number];
 
 // `authored` covers skills the user composes directly in the editor
 // (no uploaded bundle, no URL import). Migrated `prompt_shortcuts`
-// rows also use this origin.
+// rows also use this origin. `default` marks the starter skills stella
+// installs for every new membership; members may edit and delete them.
 export const AGENT_SKILL_ORIGINS = [
   "authored",
   "bundled",
+  "default",
   "upload",
   "url",
 ] as const;

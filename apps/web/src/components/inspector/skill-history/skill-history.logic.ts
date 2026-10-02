@@ -57,6 +57,7 @@ export const isOpenProposalStatus = (status: SkillProposalStatus): boolean =>
 const PROPOSABLE_BY_ORIGIN = {
   authored: true,
   bundled: false,
+  default: true,
   upload: true,
   url: true,
 } as const satisfies Record<SkillResourceOrigin, boolean>;

@@ -109,6 +109,7 @@ export type SkillResourceOrigin = Awaited<
 const SKILL_RESOURCE_ORIGINS = {
   authored: true,
   bundled: true,
+  default: true,
   upload: true,
   url: true,
 } as const satisfies Record<SkillResourceOrigin, true>;
