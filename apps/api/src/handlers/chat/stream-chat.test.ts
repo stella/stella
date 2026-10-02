@@ -1187,6 +1187,7 @@ describe("native interrupt boundary persistence", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       safeDb,
       userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
       workspaceId: null,

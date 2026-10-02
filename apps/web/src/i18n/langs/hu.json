@@ -1102,6 +1102,10 @@
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {és még #} other {és még #}}"
+    },
     "improvePrompt": "Prompt javítása",
     "improvePromptDraftChanged": "A piszkozat megváltozott, ezért a javítás nem lett alkalmazva.",
     "improvePromptPlainTextOnly": "A prompt javítása csak egyszerű szövegnél érhető el.",
@@ -1606,6 +1610,7 @@
     },
     "fact": "Tény",
     "failed": "Sikertelen",
+    "files": "Fájlok",
     "filter": "Szűrő",
     "filters": "Szűrők",
     "find": "Keresés",
@@ -3270,7 +3275,6 @@
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
-      "filesHeading": "Fájlok",
       "howItRuns": "Működés",
       "importFailureFetch": "A készség forrását nem sikerült betölteni.",
       "importFailureIntegrity": "A készség forrása a felderítés után megváltozott. Ellenőrizze újra.",

@@ -1102,6 +1102,10 @@
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "hideThread": "Skrýt konverzaci",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
+    },
     "improvePrompt": "Vylepšit zadání",
     "improvePromptDraftChanged": "Zadání se změnilo, takže vylepšení nebylo použito.",
     "improvePromptPlainTextOnly": "Vylepšení zadání je dostupné pouze pro prostý text.",
@@ -1606,6 +1610,7 @@
     },
     "fact": "Fakt",
     "failed": "Selhalo",
+    "files": "Soubory",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Najít",
@@ -3270,7 +3275,6 @@
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
       "fileExists": "Soubor s touto cestou již existuje",
-      "filesHeading": "Soubory",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
       "importFailureIntegrity": "Zdroj dovednosti se po nalezení změnil. Zkontrolujte ho znovu.",

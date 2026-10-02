@@ -12,6 +12,7 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { searchGlobalFacet } from "@/api/lib/search/index-global";
 import { GLOBAL_SEARCH_RESULT_TYPES } from "@/api/lib/search/types";
 
@@ -96,7 +97,7 @@ export const searchFacetsHandler = async ({
       mimeTypes: body.mimeTypes,
       updatedFrom: body.updatedFrom,
       updatedTo: body.updatedTo,
-      limit: body.limit ?? FACET_BUCKET_LIMIT_DEFAULT,
+      limit: normalizeTenantPageLimit(body.limit ?? FACET_BUCKET_LIMIT_DEFAULT),
     },
     scopedDb,
   );

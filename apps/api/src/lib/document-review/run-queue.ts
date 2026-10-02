@@ -34,6 +34,7 @@ import { createBullMqJobId } from "@/api/lib/bullmq-job-id";
 import { createLazyBullMqQueue } from "@/api/lib/bullmq-queue";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { RequeueableQueue } from "@/api/lib/bullmq-requeue";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import {
   buildDocumentReviewFindingRow,
@@ -554,6 +555,7 @@ type PassDeps = {
   abortSignal: AbortSignal;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   promptCachingEnabled: boolean;
   serviceTier: typeof SERVICE_TIER;
@@ -625,15 +627,17 @@ const executeRun = async (
       if (Result.isError(settings)) {
         return Result.err(settings.error);
       }
-      const { orgAIConfig, promptCachingEnabled } = settings.value;
+      const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+        settings.value;
       return Result.ok({
         orgAIConfig,
+        managedAIResidency,
         // Resolved here, where a role without a provider is already an
         // `ai_unavailable` run rather than a failure mid-grading.
         graderModel: getTanStackTextModelInfoForRole(
           REFERENCE_GRADE_ROLE,
           orgAIConfig,
-          { organizationId: actor.organizationId },
+          { dataClass: "customer", organizationId: actor.organizationId },
         ),
         promptCachingEnabled,
       });
@@ -663,6 +667,7 @@ const executeRun = async (
     abortSignal: AbortSignal.timeout(REVIEW_TIMEOUT_MS),
     entityVersionId: run.entityVersionId,
     orgAIConfig: config.value.orgAIConfig,
+    managedAIResidency: config.value.managedAIResidency,
     organizationId: actor.organizationId,
     promptCachingEnabled: config.value.promptCachingEnabled,
     serviceTier: SERVICE_TIER,
