@@ -957,7 +957,7 @@
       "apps/api/src/handlers/playbooks/applicable/run.ts": 1,
       "apps/api/src/handlers/reports/report-export-queue.ts": 1,
       "apps/api/src/handlers/search/ai.ts": 1,
-      "apps/api/src/handlers/soft-law/ingestion.ts": 3,
+      "apps/api/src/handlers/soft-law/ingestion.ts": 4,
       "apps/api/src/lib/account-deletion-steps.ts": 1,
       "apps/api/src/lib/case-law/research-answer-runner.ts": 1,
       "apps/api/src/lib/case-law/sitemap-shard-refresh.ts": 1,
