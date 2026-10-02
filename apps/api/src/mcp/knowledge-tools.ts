@@ -1724,8 +1724,12 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     if (merged.issues.length > 0 && merged.written.length === 0) {
       return savePlaybookRefusedResult(merged.issues);
     }
-    const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-      await loadOrgSettings();
+    const {
+      orgAIConfig,
+      orgAIConfigStatus,
+      promptCachingEnabled,
+      managedAIResidency,
+    } = await loadOrgSettings();
     const scope = toPlaybookScope({ stored: null, input: input.scope });
     const created = await Result.gen(() =>
       createPlaybookDefinitionHandler({
@@ -1734,6 +1738,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
         orgAIConfig,
         orgAIConfigStatus,
         promptCachingEnabled,
+        managedAIResidency,
         recordAuditEvent: context.recordAuditEvent,
         body: {
           name,
@@ -1829,8 +1834,12 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
     } satisfies v.InferInput<typeof SAVE_PLAYBOOK_PROJECTION>);
   }
 
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } =
-    await loadOrgSettings();
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = await loadOrgSettings();
   const updated = await Result.gen(() =>
     updatePlaybookDefinitionHandler({
       safeDb: context.safeDb,
@@ -1839,6 +1848,7 @@ const handleSavePlaybookTool: TypedMcpToolHandler<
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,
+      managedAIResidency,
       recordAuditEvent: context.recordAuditEvent,
       body: {
         name,

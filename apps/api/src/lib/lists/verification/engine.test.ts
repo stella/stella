@@ -42,6 +42,7 @@ const deps: VerificationModelDeps = {
   workspaceId,
   entityVersionId: toSafeId<"entityVersion">("version-fixture"),
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   serviceTier: "standard",
   usageMetering: {

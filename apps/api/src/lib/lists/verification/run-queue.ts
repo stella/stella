@@ -409,13 +409,15 @@ const executeRun = async (
       if (Result.isError(settings)) {
         return Result.err(settings.error);
       }
-      const { orgAIConfig, promptCachingEnabled } = settings.value;
+      const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+        settings.value;
       return Result.ok({
         orgAIConfig,
+        managedAIResidency,
         model: getTanStackTextModelInfoForRole(
           VERIFICATION_MODEL_ROLE,
           orgAIConfig,
-          { organizationId: actor.organizationId },
+          { dataClass: "customer", organizationId: actor.organizationId },
         ),
         promptCachingEnabled,
       });
@@ -449,6 +451,7 @@ const executeRun = async (
     workspaceId: actor.workspaceId,
     entityVersionId: run.entityVersionId,
     orgAIConfig: config.value.orgAIConfig,
+    managedAIResidency: config.value.managedAIResidency,
     promptCachingEnabled: config.value.promptCachingEnabled,
     serviceTier: SERVICE_TIER,
     usageMetering: {

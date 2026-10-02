@@ -308,6 +308,7 @@ const createContext = ({
     memberRole: { role: "owner" },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     params: { workspaceId: ids.wsA1, invoiceId },
     promptCachingEnabled: false,
     recordAuditEvent,

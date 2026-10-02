@@ -63,6 +63,7 @@ const suggestPrompt = createSafeHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     promptCachingEnabled,
     request,
     safeDb,
@@ -82,6 +83,7 @@ const suggestPrompt = createSafeHandler(
       organizationId: session.activeOrganizationId,
       userId: user.id,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       safeDb,
       abortSignal: request.signal,

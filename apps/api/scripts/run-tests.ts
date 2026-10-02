@@ -22,6 +22,8 @@ import {
   snapshotKey,
   SnapshotBuildError,
 } from "./test-db-snapshot-cache";
+import durations from "./test-durations.json";
+import { API_TEST_SHARD_ENV, selectApiTestFiles } from "./test-file-shards";
 import {
   deriveTestLaneCount,
   laneRunExitCode,
@@ -43,7 +45,17 @@ const forwardedArguments = runnerArguments.filter(
   (argument) => argument !== PROPERTY_FLAG,
 );
 
-const testPaths = listApiTestPaths(apiRoot);
+const allTestPaths = listApiTestPaths(apiRoot);
+const { testPaths, shard } = selectApiTestFiles({
+  files: allTestPaths,
+  durations,
+  shardValue: process.env[API_TEST_SHARD_ENV],
+});
+if (shard !== null) {
+  console.log(
+    `API test shard ${shard.index}/${shard.count}: ${testPaths.length}/${allTestPaths.length} files`,
+  );
+}
 
 // Hidden directories are tool caches; `node_modules` is third-party code. A
 // test file colocated with a package-root module (`drizzle.config.test.ts`

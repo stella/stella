@@ -56,6 +56,7 @@ const props = {
     throw new Error("unexpected database access");
   }),
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   serviceTier: "standard",
 } as const satisfies GenerateBatchProps;

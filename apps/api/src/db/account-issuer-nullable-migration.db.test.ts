@@ -1,7 +1,9 @@
 import { PGlite } from "@electric-sql/pglite";
-import { expect, test } from "bun:test";
+import { beforeAll, expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
+
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 /**
  * Relaxing `account.issuer`, applied to a database in its pre-migration shape.
@@ -74,13 +76,23 @@ const rollbackSql = forPglite(readFileSync(ROLLBACK_PATH, "utf-8"));
 // index; the online phase owns that, so the end state needs both.
 const RETIRE_LEGACY_INDEX_SQL = `DROP INDEX IF EXISTS public."${LEGACY_INDEX}"`;
 
-const createMigratedDatabase = async (): Promise<PGlite> => {
+const buildMigratedDatabase = async (): Promise<PGlite> => {
   const database = new PGlite();
   await database.exec(PRE_MIGRATION_SCHEMA);
   await database.exec(PRE_MIGRATION_ROWS);
   await database.exec(migrationSql);
   return database;
 };
+
+let migratedSnapshot: Blob;
+
+beforeAll(async () => {
+  await using template = await buildMigratedDatabase();
+  migratedSnapshot = await template.dumpDataDir();
+});
+
+const createMigratedDatabase = async () =>
+  await createTestPglite(migratedSnapshot);
 
 const isNullable = async (database: PGlite): Promise<boolean> => {
   const result = await database.query<{ is_nullable: string }>(
