@@ -350,7 +350,7 @@ test("a survivor goes back to cleanup, and the new delete settles", async () => 
   expect(next.deleteOpstamp).toBe(57);
   const verified = await verifyOne(next, 0);
   if (verified.status !== "verified") {
-    throw new Error("Expected the re-issued delete to settle");
+    panic("Expected the re-issued delete to settle");
   }
   expect(
     await inTx(
@@ -386,7 +386,7 @@ test("a survivor-shaped verdict inside the maturation period re-issues nothing",
   );
 
   if (result.status !== "pending" || result.reason !== "survivor_unconfirmed") {
-    throw new Error("Expected an unconfirmed survivor");
+    panic("Expected an unconfirmed survivor");
   }
   // Confirmable once the index's maturation period has passed since the task.
   expect(result.confirmableAt).toEqual(
