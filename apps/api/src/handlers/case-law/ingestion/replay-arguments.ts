@@ -49,7 +49,12 @@ export const REPLAY_USAGE = `Usage: bun run src/scripts/replay-case-law-source.t
   --lease-wait <minutes>
                     How long an --apply run waits for the source's ingestion
                     lease before giving up (default ${DEFAULT_LEASE_WAIT_MINUTES}).
-                    0 attempts once and exits if the lease is held.`;
+                    0 attempts once and exits if the lease is held.
+  --results-out <path>
+                    Append one JSON line per visited decision (id, docket,
+                    language, outcome, rejection, detail) to this file. The
+                    summary lists only a sample of problem rows; this file
+                    lists every row. Must not exist yet.`;
 
 export class ReplayArgumentsError extends TaggedError("ReplayArgumentsError")<{
   message: string;
@@ -63,6 +68,8 @@ export type ReplayArguments = {
   leaseWaitMinutes: number;
   pageSize: number;
   rejectionPolicy: ReplayRejectionPolicy;
+  /** Where every row's result is written, or null for the summary only. */
+  resultsOut: string | null;
   scope: CaseLawReplayScope;
 };
 
@@ -250,6 +257,13 @@ export const parseReplayArguments = (
   if (Result.isError(after)) {
     return after;
   }
+  const resultsOut = readValue(argv, "results-out");
+  if (Result.isError(resultsOut)) {
+    return resultsOut;
+  }
+  if (resultsOut.value?.length === 0) {
+    return invalid("--results-out requires a non-empty value");
+  }
 
   return Result.ok({
     adapterKey: adapterKey.value,
@@ -264,6 +278,7 @@ export const parseReplayArguments = (
     rejectionPolicy: hasFlag(argv, "withdraw-rejected")
       ? REPLAY_REJECTION_POLICY.WITHDRAW_NO_DOCUMENT
       : REPLAY_REJECTION_POLICY.REPORT,
+    resultsOut: resultsOut.value ?? null,
     scope: scope.value,
   });
 };

@@ -98,6 +98,8 @@ const APPROVED_PROCEDURAL_STATEMENTS = new Set([
   // The same tiered retry around adding the primary reference type column
   // and its NOT VALID check.
   "20261003121000_case_law_decision_case_number_type/migration.sql:83fc403c99c6f705c47e3b4d029ad695bae40385a43a0ae817425992b0547627",
+  // The same tiered retry around adding the nullable case-file key column.
+  "20261003123300_case_law_decision_docket_family_key/migration.sql:7b46b61397d41a9d56b74a1076485cc682123ff373c8d9893b2b87918c4c8b48",
   // Acquires the two hot corpus tables in writer order before installing the
   // citation-count triggers. The static body retries only lock_not_available
   // under a bounded statement budget and changes no rows.
