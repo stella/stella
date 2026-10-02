@@ -210,9 +210,9 @@ are omitted here. Input union keys are required unless marked `?`.
   - optional: --clause-id, --title, --category-id, --language, --description, --usage-notes, --snapshot-version
   - via `--input` only: body, metadata
 - `stella contact check-counterparty`
-  - `--check` — Source to screen against. cz-insolvency: the Czech insolvency register (ISIR), pending and ended proceedings; takes a company or a person. cz-vat-reliability: the Czech VAT register, unreliable-payer status and published bank accounts; takes a tax ID, or a company ID sent as CZ + IČO and marked derived. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability)
+  - `--check` — cz-insolvency: ISIR proceedings, company ID or person with full birth date. cz-vat-reliability: unreliable payer and bank accounts, tax ID or derived CZ+IČO. sanctions: all EU, UN and national lists; company ID, organization name, or person with any known birth date and nationalities. Use an advertised value; case and surrounding whitespace are normalized. (enum: cz-insolvency, cz-vat-reliability, sanctions)
   - via `--input` only: subject
-  - subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, birth_date:string. Example: `--input '{"subject":{"type":"company-id","company_id":"x"}}'`
+  - subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, date_of_birth?:{precision="year"|"month"|"day"}, nationality_codes?:string[]; type="organization": name:string. Example: `--input '{"subject":{"type":"company-id","company_id":"x"}}'`
 - `stella contact delete`
   - `--contact-id` — Contact ID to delete (string)
 - `stella contact list`
@@ -392,7 +392,7 @@ code (no envelope) still maps to 5; anything else falls to 4.
 
 ## Capability commands (full surface)
 
-Beyond the curated commands above, the CLI generates 396
+Beyond the curated commands above, the CLI generates 398
 capability commands from the server's capability catalog: every safe handler
 that is not a curated tool, reached through the generic `invoke_capability`
 path. Every generated command lives at `stella capability <domain> <action>`;

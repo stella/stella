@@ -41,13 +41,13 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { validatePublisherPage } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
   hashContent,
   isNullishArrayOf,
-  isNullishOneOrArrayOf,
   isNullishString,
   isNullishValue,
   parseCeDate,
@@ -69,6 +69,11 @@ import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
+
+const itemBuildFailed = failureSink({
+  event: "case_law.ingestion.item_build_failed",
+  expected: [],
+});
 
 const COMMON_HEADERS = {
   "User-Agent": INGESTION_USER_AGENT,
@@ -149,7 +154,7 @@ type DominoViewEntry = {
 
 type DominoViewResponse = {
   "@toplevelentries"?: string | null;
-  viewentry?: DominoViewEntry | DominoViewEntry[] | null;
+  viewentry?: unknown;
 };
 
 const isDominoText = (
@@ -176,17 +181,22 @@ const isDominoViewEntry = (value: unknown): value is DominoViewEntry =>
 const isDominoViewResponse = (value: unknown): value is DominoViewResponse =>
   isRecord(value) &&
   isNullishString(value["@toplevelentries"]) &&
-  isNullishOneOrArrayOf(value["viewentry"], isDominoViewEntry);
+  (value["viewentry"] === undefined ||
+    value["viewentry"] === null ||
+    Array.isArray(value["viewentry"]) ||
+    isRecord(value["viewentry"]));
 
 const normalizeViewEntries = (
   viewentry: DominoViewResponse["viewentry"],
-): DominoViewEntry[] =>
+): unknown[] =>
   (() => {
     if (viewentry === undefined || viewentry === null) {
       return [];
     }
     if (Array.isArray(viewentry)) {
-      return viewentry;
+      // Array.isArray narrows the publisher shape to any[]; keep it unknown.
+      const entries: unknown[] = viewentry;
+      return entries;
     }
     return [viewentry];
   })();
@@ -1389,7 +1399,27 @@ export const czNsAdapter = defineSourceAdapter({
           });
         }
 
-        const json = await listResponse.json();
+        const validatedPage = validatePublisherPage({
+          adapterKey: ADAPTER_KEYS.CZ_NS,
+          cursor,
+          headers: listResponse.headers,
+          body: await listResponse.text(),
+          expectation: {
+            kind: "json",
+            minBytes: 2,
+            shape: (value) =>
+              isDominoViewResponse(value) &&
+              typeof value["@toplevelentries"] === "string" &&
+              /^\d+$/u.test(value["@toplevelentries"]) &&
+              (Number(value["@toplevelentries"]) === 0 ||
+                start > Number(value["@toplevelentries"]) ||
+                normalizeViewEntries(value.viewentry).length > 0),
+          },
+        });
+        if (validatedPage.isErr()) {
+          throw validatedPage.error;
+        }
+        const json = validatedPage.value;
         if (!isDominoViewResponse(json)) {
           throw new AdapterFetchError({
             message: "CZ Supreme Court list returned an invalid payload",
@@ -1400,10 +1430,29 @@ export const czNsAdapter = defineSourceAdapter({
         const entries = normalizeViewEntries(json.viewentry);
 
         const decisions: IngestionResult[] = [];
+        let refused = 0;
 
         for (let i = 0; i < entries.length; i++) {
           const entry = entries.at(i);
-          if (!entry) {
+          if (!isDominoViewEntry(entry)) {
+            refused += 1;
+            observeFailure(
+              classifyFailure(
+                new AdapterFetchError({
+                  adapterKey: ADAPTER_KEYS.CZ_NS,
+                  cursor,
+                  message: "invalid-listing-member",
+                }),
+                "upstream_unavailable",
+              ),
+              {
+                sink: itemBuildFailed,
+                ctx: {
+                  adapterKey: ADAPTER_KEYS.CZ_NS,
+                  documentId: String(start + i),
+                },
+              },
+            );
             continue;
           }
           const unid = entry["@unid"] ?? "";
@@ -1426,8 +1475,24 @@ export const czNsAdapter = defineSourceAdapter({
                 break;
               }
               case "unkeyable": {
-                // The view entry names no document or no docket: there is
-                // nothing to fetch and nothing the pipeline could key.
+                refused += 1;
+                observeFailure(
+                  classifyFailure(
+                    new AdapterFetchError({
+                      adapterKey: ADAPTER_KEYS.CZ_NS,
+                      cursor,
+                      message: "unkeyable-listing-member",
+                    }),
+                    "upstream_unavailable",
+                  ),
+                  {
+                    sink: itemBuildFailed,
+                    ctx: {
+                      adapterKey: ADAPTER_KEYS.CZ_NS,
+                      documentId: String(start + i),
+                    },
+                  },
+                );
                 break;
               }
               default: {
@@ -1442,6 +1507,10 @@ export const czNsAdapter = defineSourceAdapter({
             if (error instanceof DOMException && error.name === "AbortError") {
               return {
                 decisions,
+                itemBuildFailures: {
+                  type: "item_build_failed",
+                  count: refused,
+                },
                 nextCursor: String(start + i),
                 sourceUrl: listUrl,
               };
@@ -1455,6 +1524,10 @@ export const czNsAdapter = defineSourceAdapter({
               if (signal?.aborted) {
                 return {
                   decisions,
+                  itemBuildFailures: {
+                    type: "item_build_failed",
+                    count: refused,
+                  },
                   nextCursor: String(start + i),
                   sourceUrl: listUrl,
                 };
@@ -1484,7 +1557,12 @@ export const czNsAdapter = defineSourceAdapter({
         // Never null — that restarts the full scan from position 1.
         const nextCursor = String(start + entries.length);
 
-        return { decisions, nextCursor, sourceUrl: listUrl };
+        return {
+          decisions,
+          nextCursor,
+          sourceUrl: listUrl,
+          itemBuildFailures: { type: "item_build_failed", count: refused },
+        };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_NS, cursor),
     });

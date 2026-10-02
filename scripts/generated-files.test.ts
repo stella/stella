@@ -192,9 +192,9 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     generatorsForFiles(["apps/web/src/routes/law/index.tsx"]).map(
       ({ id }) => id,
     ),
-  ).toEqual(["ratchet-improvements", "module-ownership", "route-tree"]);
+  ).toEqual(["module-ownership", "route-tree"]);
   expect(generatorsForFiles(["docs/unrelated.md"]).map(({ id }) => id)).toEqual(
-    ["ratchet-improvements"],
+    [],
   );
   for (const file of [
     "apps/api/src/lib/format.ts",
@@ -381,18 +381,9 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
 
 test("the plan alone never authorizes the ratchet baseline", () => {
   const selected = generatorsForFiles(["apps/web/src/example.ts"]);
-  expect(selected.some(({ id }) => id === "ratchet-improvements")).toBe(true);
   expect(allowedOutputs(selected)).not.toContain(
     "scripts/ratchet-baseline.json",
   );
-  expect(
-    allowedOutputs([
-      {
-        ...generator("ratchet-improvements"),
-        outputs: ["scripts/**", "scripts/ratchet-baseline.json"],
-      },
-    ]),
-  ).not.toContain("scripts/ratchet-baseline.json");
 });
 
 test("autofix refuses an empty selected-generator handoff", () => {

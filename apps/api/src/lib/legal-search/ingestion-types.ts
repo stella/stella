@@ -369,6 +369,8 @@ export type SliceCoverage = {
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
   decisions: IngestionResult[];
+  /** Failed item builds retained as listing-only rows for reconciliation. */
+  itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
   /**
    * Supplements read off the same page. The pipeline processes them after
    * the page's decisions, so a judgment and the reasons listed beside it are

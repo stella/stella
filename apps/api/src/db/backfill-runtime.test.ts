@@ -2,8 +2,50 @@ import { expect, test } from "bun:test";
 
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 
-import { createBackfillRuntime } from "./backfill-runtime";
+import { createBackfillRuntime, decodeCheckpoint } from "./backfill-runtime";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+
+test.each([undefined, null, "unknown", {}, 4])(
+  "an unrecognized checkpoint cause %p uses the legacy hold policy",
+  (holdCause) => {
+    const batch = { ...initialBatchState(defaultConfig), holdCause };
+    expect(
+      decodeCheckpoint({ cursor: "cursor", batch }).batch.holdCause,
+    ).toBeNull();
+    expect(
+      decodeCheckpoint({ cursor: null, batch: { ...batch, heldSince: 10 } })
+        .batch.holdCause,
+    ).toBe("other");
+  },
+);
+
+test.each([undefined, {}, 4, false])(
+  "an invalid checkpoint cursor %p is rejected at the boundary",
+  (cursor) => {
+    expect(() =>
+      decodeCheckpoint({ cursor, batch: initialBatchState(defaultConfig) }),
+    ).toThrow("Invalid backfill checkpoint cursor");
+  },
+);
+
+test.each(["load", "other"] as const)(
+  "a recognized checkpoint cause %s is preserved",
+  (holdCause) => {
+    expect(
+      decodeCheckpoint({
+        cursor: "cursor",
+        batch: {
+          ...initialBatchState(defaultConfig),
+          heldSince: 10,
+          holdCause,
+        },
+      }),
+    ).toMatchObject({
+      cursor: "cursor",
+      batch: { holdCause },
+    });
+  },
+);
 
 test.each([
   { size: 1, sleepMs: 1, expectedSize: 2, expectedSleepMs: 10 },

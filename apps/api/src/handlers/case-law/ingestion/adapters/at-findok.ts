@@ -1,6 +1,7 @@
 // parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
+import { classifyFailure } from "@stll/errors";
 import { Temporal, parsePlainDate } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
@@ -35,6 +36,10 @@ import {
   fetchAtFindokWithRetry,
   FINDOK_REQUEST_INTERVAL_MS,
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok-throttle";
+import {
+  PublisherPageError,
+  validatePublisherPage,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import type { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
@@ -53,11 +58,18 @@ import {
   sourceTextField,
 } from "@/api/lib/case-law/decision-text";
 import type { DecisionTextFields } from "@/api/lib/case-law/decision-text";
-import { loadDocxArchive } from "@/api/lib/docx-archive";
+import { DocxArchiveError, loadDocxArchive } from "@/api/lib/docx-archive";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isRecord } from "@/api/lib/type-guards";
+
+const itemBuildFailed = failureSink({
+  event: "case_law.ingestion.item_build_failed",
+  expected: [],
+});
 
 const FINDOK_ORIGIN = "https://findok.bmf.gv.at";
 const IWG_ROOT = `${FINDOK_ORIGIN}/findok/iwg`;
@@ -98,7 +110,8 @@ const COLLECTIONS = {
 
 type FindokCollection = keyof typeof COLLECTIONS;
 
-type FindokManifestItem = {
+type FindokDocumentItem = {
+  type: "document";
   appdat: string;
   behoerde: string;
   dokumentId: string;
@@ -114,6 +127,16 @@ type FindokManifestItem = {
   stammNr: number;
   titel: string | undefined;
 };
+
+type FindokQuarantinedItem = {
+  type: "quarantine";
+  dokumentId: string;
+  raw: unknown;
+  year: number;
+  reason: "invalid-listing-member" | "duplicate-document-id";
+};
+
+type FindokManifestItem = FindokDocumentItem | FindokQuarantinedItem;
 
 type FindokManifest = {
   collection: FindokCollection;
@@ -183,7 +206,7 @@ const parseDate = (value: string): string | undefined => {
   )?.toString();
 };
 
-const manifestItem = (value: unknown): FindokManifestItem | undefined => {
+const manifestItem = (value: unknown): FindokDocumentItem | undefined => {
   if (!isRecord(value)) {
     return undefined;
   }
@@ -243,6 +266,7 @@ const manifestItem = (value: unknown): FindokManifestItem | undefined => {
       ? item.dokumentId
       : undefined;
   return {
+    type: "document",
     appdat: item.appdat,
     behoerde: item.behoerde,
     dokumentId: publisherId ?? quarantineId,
@@ -318,29 +342,48 @@ export const parseFindokManifest = (
       message: "Findok manifest has no generation timestamp",
     });
   }
+  const generatedDate = parseDate(generatedAt.slice(0, 10));
+  if (generatedDate === undefined) {
+    throw new FindokResponseError({
+      message: "Findok manifest has an invalid generation timestamp",
+    });
+  }
   const items: FindokManifestItem[] = [];
   const identities = new Set<string>();
-  for (const [index, raw] of value["data"].entries()) {
+  // The manifest's rows are publisher data: keep them unknown until checked.
+  const rows: unknown[] = value["data"];
+  for (const raw of rows) {
     // Rows the publisher explicitly marks invalid are outside its active
     // inventory, even when their optional document fields are incomplete.
     if (isRecord(raw) && raw["gueltig"] === false) {
       continue;
     }
     const item = manifestItem(raw);
-    if (item === undefined) {
-      throw new FindokResponseError({
-        message: `Findok manifest contains an invalid item at ${index}`,
-      });
-    }
-    if (identities.has(item.dokumentId)) {
-      throw new FindokResponseError({
-        message: "Findok manifest contains a duplicate document ID",
-      });
+    if (item === undefined || identities.has(item.dokumentId)) {
+      const reason =
+        item === undefined ? "invalid-listing-member" : "duplicate-document-id";
+      const date = isRecord(raw) ? optionalString(raw["appdat"]) : undefined;
+      const isoDate =
+        (date === undefined ? undefined : parseDate(date)) ?? generatedDate;
+      const dokumentId = `${QUARANTINE_ID_PREFIX}${hashContent(JSON.stringify({ collection, reason, raw }))}`;
+      if (!identities.has(dokumentId)) {
+        identities.add(dokumentId);
+        const collectionDefinition = COLLECTIONS[collection];
+        const year = Math.max(
+          collectionDefinition.firstYear,
+          Math.min(
+            Number(isoDate.slice(0, 4)),
+            "lastYear" in collectionDefinition
+              ? collectionDefinition.lastYear
+              : Number(isoDate.slice(0, 4)),
+          ),
+        );
+        items.push({ type: "quarantine", dokumentId, raw, reason, year });
+      }
+      continue;
     }
     identities.add(item.dokumentId);
-    if (item.gueltig) {
-      items.push(item);
-    }
+    items.push(item);
   }
   items.sort((left, right) => {
     if (left.dokumentId === right.dokumentId) {
@@ -403,10 +446,36 @@ const createManifestLoader = (
       MAX_MANIFEST_BYTES,
     );
     const bytes = await decompressGzipIfNeeded(responseBytes);
-    const manifest = parseFindokManifest(
-      collection,
-      new TextDecoder().decode(bytes),
-    );
+    const text = new TextDecoder().decode(bytes);
+    const pageHeaders = new Headers(response.headers);
+    // Compression describes the transport, not the decoded page contract.
+    const mime = pageHeaders
+      .get("content-type")
+      ?.split(";")
+      .at(0)
+      ?.trim()
+      .toLowerCase();
+    if (mime === "application/gzip" || mime === "application/x-gzip") {
+      pageHeaders.delete("content-type");
+    }
+    const validatedPage = validatePublisherPage({
+      body: text,
+      headers: pageHeaders,
+      adapterKey: ADAPTER_KEYS.AT_FINDOK,
+      cursor: null,
+      expectation: {
+        kind: "json",
+        minBytes: 2,
+        shape: (value) =>
+          isRecord(value) &&
+          Array.isArray(value["data"]) &&
+          optionalString(value["generierungsdatum"]) !== undefined,
+      },
+    });
+    if (validatedPage.isErr()) {
+      throw validatedPage.error;
+    }
+    const manifest = parseFindokManifest(collection, text);
     cache.set(collection, {
       checkedAt: dependencies.now().getTime(),
       manifest,
@@ -477,7 +546,9 @@ const itemsForSlice = (
   year: number,
 ): FindokManifestItem[] =>
   manifest.items.filter((item) =>
-    parseDate(item.appdat)?.startsWith(`${year}-`),
+    item.type === "quarantine"
+      ? item.year === year
+      : parseDate(item.appdat)?.startsWith(`${year}-`),
   );
 
 const cursorForSlice = (slice: string): CrawlCursor => ({
@@ -576,7 +647,7 @@ const storedRaw = ({
   sourceRaw: encodeSourceRawEnvelope({
     // The manifest row verbatim, not the adapter's own wrapper around it: a
     // reader of a stored row can then tell which response it is holding.
-    [FINDOK_PART.LISTING]: JSON.stringify(item.raw),
+    [FINDOK_PART.LISTING]: JSON.stringify(item.raw ?? null),
     ...(documentXml === undefined
       ? {}
       : { [FINDOK_PART.DOCUMENT_XML]: documentXml }),
@@ -593,6 +664,35 @@ const buildListingOnly = (
   rawXml?: string,
 ): IngestionResult => {
   const { item, collection } = payload;
+  if (item.type === "quarantine") {
+    const raw = storedRaw({ item });
+    const caseNumber = isRecord(item.raw)
+      ? optionalString(item.raw["gz"])
+      : undefined;
+    const court =
+      (isRecord(item.raw) ? optionalString(item.raw["behoerde"]) : undefined) ??
+      "";
+    return {
+      sourceDocumentId: item.dokumentId,
+      caseNumber: caseNumber ?? item.dokumentId,
+      caseNumberIsPlaceholder: caseNumber === undefined,
+      court,
+      isListingOnly: true,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.AT_FINDOK].country,
+      language: LANGUAGE,
+      sourceUrl: COLLECTIONS[collection].manifestUrl,
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: {
+        collection,
+        detailStatus: "item_build_failed",
+        listingFailure: item.reason,
+      },
+      rawHash: hashContent(raw.sourceRaw),
+      documentAst: EMPTY_AST,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.AT_FINDOK],
+      ...raw,
+    };
+  }
   const decisionDate = parseDate(item.appdat);
   const raw = storedRaw({ item, documentXml: rawXml });
   return {
@@ -671,6 +771,9 @@ const buildDecision = async ({
   signal,
 }: BuildDecisionOptions): Promise<IngestionResult> => {
   const { item } = payload;
+  if (item.type === "quarantine") {
+    return buildListingOnly(payload, "item_build_failed");
+  }
   if (item.sourceDocumentIdRepairAliases === undefined) {
     return buildListingOnly(payload, "publisher-id-unavailable");
   }
@@ -698,6 +801,16 @@ const buildDecision = async ({
     });
   }
   const compressed = await readStreamBounded(response.body, MAX_ARCHIVE_BYTES);
+  const validatedPage = validatePublisherPage({
+    body: compressed,
+    headers: response.headers,
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    cursor,
+    expectation: { kind: "zip", minBytes: 22 },
+  });
+  if (validatedPage.isErr()) {
+    throw validatedPage.error;
+  }
   const archive = await loadDocxArchive(compressed, {
     maxEntries: 20,
     maxEntryBytes: MAX_XML_BYTES,
@@ -706,11 +819,25 @@ const buildDecision = async ({
   const entryPath = `Gesamt/${item.stammNr}.Entscheidungstext.xml`;
   const xml = await archive.readEntryString(entryPath);
   if (xml === null) {
-    throw new AdapterFetchError({
-      message: "Findok detail archive has no decision XML",
+    throw new PublisherPageError({
+      reason: "invalid-shape",
       adapterKey: ADAPTER_KEYS.AT_FINDOK,
       cursor,
     });
+  }
+  const validatedXml = validatePublisherPage({
+    body: xml,
+    adapterKey: ADAPTER_KEYS.AT_FINDOK,
+    cursor,
+    expectation: {
+      kind: "xml",
+      minBytes: 3,
+      shape: (value) =>
+        typeof value === "string" && /<Segmente(?:\s|>)/u.test(value),
+    },
+  });
+  if (validatedXml.isErr()) {
+    throw validatedXml.error;
   }
   // The same archive carries the decision's headnotes as a second entry. It
   // is already paid for by the request above, and its element names are not
@@ -743,6 +870,9 @@ export const assembleAtFindokDecision = (
   { documentXml, headnoteXml }: AtFindokDecisionPayloads,
 ): IngestionResult => {
   const { item, collection } = payload;
+  if (item.type === "quarantine") {
+    return buildListingOnly(payload, "item_build_failed");
+  }
   const decisionDate = parseDate(item.appdat);
   if (decisionDate === undefined) {
     panic("validated Findok manifest date became invalid");
@@ -851,10 +981,38 @@ const parseListingPayload = (
     return undefined;
   }
   const collection = value["collection"];
-  const item = manifestItem(value["item"]);
-  return (collection === "bfg" || collection === "ufs") && item !== undefined
-    ? { collection, item }
-    : undefined;
+  if (collection !== "bfg" && collection !== "ufs") {
+    return undefined;
+  }
+  const candidate = value["item"];
+  if (isRecord(candidate) && candidate["type"] === "quarantine") {
+    const dokumentId = candidate["dokumentId"];
+    const reason = candidate["reason"];
+    const year = candidate["year"];
+    if (
+      typeof dokumentId !== "string" ||
+      !dokumentId.startsWith(QUARANTINE_ID_PREFIX) ||
+      !isPersistableSourceDocumentId(dokumentId) ||
+      typeof year !== "number" ||
+      !Number.isSafeInteger(year) ||
+      (reason !== "invalid-listing-member" &&
+        reason !== "duplicate-document-id")
+    ) {
+      return undefined;
+    }
+    return {
+      collection,
+      item: {
+        type: "quarantine",
+        dokumentId,
+        reason,
+        year,
+        raw: candidate["raw"],
+      },
+    };
+  }
+  const item = manifestItem(candidate);
+  return item === undefined ? undefined : { collection, item };
 };
 
 /**
@@ -1116,6 +1274,71 @@ const listFindokSourceFields = (parts: SourceRawParts): readonly string[] => {
   return [...names];
 };
 
+type BuildFindokPageItemsOptions = {
+  collection: FindokCollection;
+  cursor: string | null;
+  dependencies: AtFindokDependencies;
+  pageItems: readonly FindokManifestItem[];
+  signal?: AbortSignal | undefined;
+};
+
+const buildFindokPageItems = async ({
+  collection,
+  cursor,
+  dependencies,
+  pageItems,
+  signal,
+}: BuildFindokPageItemsOptions) => {
+  const decisions: IngestionResult[] = [];
+  let refused = 0;
+  for (const item of pageItems) {
+    const payload = { collection, item };
+    const attempt = await Result.tryPromise({
+      try: async () =>
+        await buildDecision({
+          cursor,
+          dependencies,
+          payload,
+          signal,
+        }),
+      catch: (cause) => cause,
+    });
+    signal?.throwIfAborted();
+    if (attempt.isErr()) {
+      if (
+        !(attempt.error instanceof PublisherPageError) &&
+        !(attempt.error instanceof DocxArchiveError) &&
+        !(attempt.error instanceof FindokResponseError)
+      ) {
+        throw attempt.error;
+      }
+      refused += 1;
+      observeFailure(classifyFailure(attempt.error, "upstream_unavailable"), {
+        sink: itemBuildFailed,
+        ctx: {
+          adapterKey: ADAPTER_KEYS.AT_FINDOK,
+          documentId: item.dokumentId,
+        },
+      });
+      decisions.push(buildListingOnly(payload, "item_build_failed"));
+      continue;
+    }
+    const decision = attempt.value;
+    if (
+      decision.metadata["detailStatus"] === "detail-xml-unparseable" ||
+      item.type === "quarantine"
+    ) {
+      refused += 1;
+    }
+    decisions.push(decision);
+  }
+  const itemBuildFailures = {
+    type: "item_build_failed",
+    count: refused,
+  } as const;
+  return { decisions, itemBuildFailures };
+};
+
 export const createAtFindokAdapter = (
   dependencyOverrides: Partial<AtFindokDependencies> = {},
 ): SourceAdapter & { readonly key: typeof ADAPTER_KEYS.AT_FINDOK } => {
@@ -1152,7 +1375,10 @@ export const createAtFindokAdapter = (
         if (payload === undefined) {
           return { type: "unkeyable" };
         }
-        if (payload.item.sourceDocumentIdRepairAliases === undefined) {
+        if (
+          payload.item.type === "quarantine" ||
+          payload.item.sourceDocumentIdRepairAliases === undefined
+        ) {
           return { type: "detail-unavailable" };
         }
         const decision = await buildDecision({
@@ -1270,20 +1496,18 @@ export const createAtFindokAdapter = (
             };
           }
 
-          const decisions = await Array.fromAsync(
+          const { decisions, itemBuildFailures } = await buildFindokPageItems({
+            collection: parts.collection,
+            cursor,
+            dependencies,
             pageItems,
-            async (item) =>
-              await buildDecision({
-                cursor,
-                dependencies,
-                payload: { collection: parts.collection, item },
-                signal,
-              }),
-          );
+            signal,
+          });
           const collected = state.collected + decisions.length;
           if (state.page + 1 < totalPages) {
             return {
               decisions,
+              itemBuildFailures,
               nextCursor: encodeCursor({
                 ...state,
                 collected,
@@ -1296,6 +1520,7 @@ export const createAtFindokAdapter = (
           }
           return {
             decisions,
+            itemBuildFailures,
             nextCursor: encodeCursor({
               collected,
               digest: START_DIGEST,

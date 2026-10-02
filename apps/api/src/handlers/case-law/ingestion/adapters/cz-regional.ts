@@ -43,6 +43,10 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
 import {
+  PublisherPageError,
+  validatePublisherPage,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
+import {
   fetchPublisher,
   fetchWithRetry,
 } from "@/api/handlers/case-law/ingestion/adapters/retry";
@@ -97,6 +101,21 @@ import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
  * Cursor format: "YYYY-MM-DD:page" (e.g. "2026-03-01:0").
  * Pages are 0-indexed. A null cursor starts from 30 days ago.
  */
+
+const itemBuildFailed = failureSink({
+  event: "case_law.ingestion.item_build_failed",
+  expected: [],
+});
+
+const observeItemBuildFailure = (error: object, documentId?: string): void => {
+  observeFailure(classifyFailure(error, "upstream_unavailable"), {
+    sink: itemBuildFailed,
+    ctx: {
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      ...(documentId === undefined ? {} : { documentId }),
+    },
+  });
+};
 
 const BASE_URL = "https://rozhodnuti.justice.cz/api";
 
@@ -242,7 +261,7 @@ export type CzRegionalApiItem = {
 
 /** Paginated response from /api/opendata/{y}/{m}/{d}. */
 type CzRegionalPageResponse = {
-  items?: CzRegionalApiItem[] | null;
+  items: unknown[];
   totalPages?: number | null;
   pageNumber?: number | null;
 };
@@ -405,9 +424,29 @@ const isCzRegionalPageResponse = (
   value: unknown,
 ): value is CzRegionalPageResponse =>
   isRecord(value) &&
-  isNullishArrayOf(value["items"], isCzRegionalApiItem) &&
+  Array.isArray(value["items"]) &&
   isNullishNumber(value["totalPages"]) &&
   isNullishNumber(value["pageNumber"]);
+
+const readCzRegionalListingItems = (rows: unknown[]) => {
+  const items: CzRegionalApiItem[] = [];
+  let failures = 0;
+  for (const row of rows) {
+    if (isCzRegionalApiItem(row)) {
+      items.push(row);
+      continue;
+    }
+    failures += 1;
+    observeItemBuildFailure(
+      new AdapterFetchError({
+        adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+        cursor: null,
+        message: "Invalid listing member",
+      }),
+    );
+  }
+  return { items, failures };
+};
 
 /**
  * One decision's document payload, as served and as read.
@@ -466,11 +505,8 @@ const documentReadFailed = failureSink({
 /**
  * Fetch the document payload from /api/finaldoc/{uuid}.
  *
- * Returns the bytes and the validated shape separately, so the caller stores
- * the response it was served rather than whatever the validator could make of
- * it. `null` means nothing came back at all, which is the one case the caller
- * has to tell apart: a listed decision whose document was never read must not
- * be stored as held.
+ * Keeps a valid response's original bytes. A missing document is listing-only;
+ * an invalid page fails the crawl instead of being stored as a document.
  */
 const fetchFinaldoc = async (
   docUrl: string,
@@ -502,26 +538,48 @@ const fetchFinaldoc = async (
     );
 
     if (!response.ok) {
-      return null;
-    }
-
-    const payload = readCzRegionalDocument(
-      JSON.stringify(await response.json()),
-    );
-    if (payload.parsed === null) {
-      // Per-document publisher-side shape drift is operational: the raw
-      // response is preserved for re-parsing, so the miss is logged rather
-      // than captured per document.
-      logger.warn("case_law.ingestion.finaldoc_validation_failed", {
+      if (response.status === 404 || response.status === 410) {
+        return null;
+      }
+      throw new AdapterFetchError({
+        message: `CZ Regional document request failed: ${response.status}`,
         adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-        caseNumber,
-        docUrl: target.toString(),
+        cursor: null,
+        httpStatus: response.status,
       });
     }
-    return payload;
+
+    const raw = await response.text();
+    const validatedPage = validatePublisherPage({
+      body: raw,
+      headers: response.headers,
+      adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+      cursor: null,
+      expectation: {
+        kind: "json",
+        minBytes: 2,
+        shape: (value) =>
+          isCzRegionalFinaldoc(value) &&
+          [
+            "uuid",
+            "verdictText",
+            "justificationText",
+            "header",
+            "verdict",
+            "justification",
+            "information",
+            "styles",
+            "metadata",
+          ].some((field) => Object.hasOwn(value, field)),
+      },
+    });
+    if (validatedPage.isErr()) {
+      throw validatedPage.error;
+    }
+    return readCzRegionalDocument(raw);
   } catch (error) {
     // The caller's cancellation ends the page.
-    if (signal?.aborted) {
+    if (signal?.aborted || error instanceof AdapterFetchError) {
       throw error;
     }
     // The row is held listing-only for a later read, and the failed read is
@@ -1299,7 +1357,17 @@ export const listCzRegionalDayPage = async ({
     });
   }
 
-  const json = await response.json();
+  const validatedPage = validatePublisherPage({
+    body: await response.text(),
+    headers: response.headers,
+    adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+    cursor,
+    expectation: { kind: "json", minBytes: 2, shape: isCzRegionalPageResponse },
+  });
+  if (validatedPage.isErr()) {
+    throw validatedPage.error;
+  }
+  const json = validatedPage.value;
   if (!isCzRegionalPageResponse(json)) {
     throw new AdapterFetchError({
       message: "CZ Regional API returned an invalid payload",
@@ -1308,7 +1376,7 @@ export const listCzRegionalDayPage = async ({
     });
   }
   return {
-    items: arrayOrEmpty(json.items),
+    items: readCzRegionalListingItems(json.items).items,
     totalPages: json.totalPages ?? 1,
   };
 };
@@ -1819,6 +1887,31 @@ const CZ_REGIONAL_SOURCE_SURFACES = {
   >,
 } as const satisfies SourceSurfaceCensus;
 
+type NextCzRegionalListingCursorOptions = {
+  state: CursorState;
+  totalPages: number;
+  hasResults: boolean;
+};
+
+const nextCzRegionalListingCursor = ({
+  state,
+  totalPages,
+  hasResults,
+}: NextCzRegionalListingCursorOptions): string => {
+  // The requested page owns progress; a stale publisher echo cannot pin it.
+  if (state.page + 1 < totalPages) {
+    return makeCursor({ date: state.date, page: state.page + 1, emptyDays: 0 });
+  }
+  // Refused rows still make this a populated day, so they cannot trigger a gap skip.
+  const today = todayIso();
+  const empty = hasResults ? 0 : state.emptyDays + 1;
+  const skip = hasResults ? 1 : gapSkipDays(empty);
+  const next = advanceDate(state.date, skip);
+  return next <= today
+    ? makeCursor({ date: next, page: 0, emptyDays: empty })
+    : makeCursor({ date: today, page: 0, emptyDays: 0 });
+};
+
 export const czRegionalAdapter = defineSourceAdapter({
   documentStage: "inline",
   key: ADAPTER_KEYS.CZ_REGIONAL,
@@ -1981,7 +2074,21 @@ export const czRegionalAdapter = defineSourceAdapter({
           });
         }
 
-        const json = await response.json();
+        const validatedPage = validatePublisherPage({
+          body: await response.text(),
+          headers: response.headers,
+          adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+          cursor,
+          expectation: {
+            kind: "json",
+            minBytes: 2,
+            shape: isCzRegionalPageResponse,
+          },
+        });
+        if (validatedPage.isErr()) {
+          throw validatedPage.error;
+        }
+        const json = validatedPage.value;
         if (!isCzRegionalPageResponse(json)) {
           throw new AdapterFetchError({
             message: "CZ Regional API returned an invalid payload",
@@ -1989,7 +2096,8 @@ export const czRegionalAdapter = defineSourceAdapter({
             cursor,
           });
         }
-        const items = arrayOrEmpty(json.items);
+        const { items, failures } = readCzRegionalListingItems(json.items);
+        let refused = failures;
 
         // One document fetch per listed row, in batches of
         // FINALDOC_CONCURRENCY, then the row and its document are assembled
@@ -2001,17 +2109,29 @@ export const czRegionalAdapter = defineSourceAdapter({
         // stored listing-only with no request, the reconciliation asks for
         // their documents, and the cursor moves on.
         const decisions: IngestionResult[] = [];
-        let refused = 0;
         let deferred = 0;
+        const recordUnkeyableRow = (item: CzRegionalApiItem): void => {
+          refused += 1;
+          observeItemBuildFailure(
+            new AdapterFetchError({
+              adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
+              cursor,
+              message: "Listing row has no decision identity",
+            }),
+            item.jednaciCislo ?? undefined,
+          );
+        };
         const pushListingRow = (item: CzRegionalApiItem): void => {
           const listed = assembleCzRegionalDecision({
             item,
             document: null,
             chain: null,
           });
-          if (listed.type !== "unkeyable") {
-            decisions.push(listed.decision);
+          if (listed.type === "unkeyable") {
+            recordUnkeyableRow(item);
+            return;
           }
+          decisions.push(listed.decision);
         };
         for (let i = 0; i < items.length; i += FINALDOC_CONCURRENCY) {
           const batch = items.slice(i, i + FINALDOC_CONCURRENCY);
@@ -2033,7 +2153,10 @@ export const czRegionalAdapter = defineSourceAdapter({
                 // the page as a cancelled listing request does, and any other
                 // failure halts the page.
                 catch: (cause) => {
-                  if (cause instanceof UnpersistableDecisionFieldError) {
+                  if (
+                    cause instanceof UnpersistableDecisionFieldError ||
+                    cause instanceof AdapterFetchError
+                  ) {
                     return cause;
                   }
                   if (effectiveSignal.aborted) {
@@ -2055,16 +2178,21 @@ export const czRegionalAdapter = defineSourceAdapter({
               continue;
             }
             if (Result.isError(attempt)) {
+              if (
+                attempt.error instanceof AdapterFetchError &&
+                !(attempt.error instanceof PublisherPageError)
+              ) {
+                throw attempt.error;
+              }
               // One row the adapter refuses must not fail the page and pin the
               // cursor on it. The listing is stored as a listing-only row, so
               // the identity is held and the reconciliation asks for the
               // document again (and parks the refusal) instead of losing it.
               refused += 1;
-              logger.warn("case_law.ingestion.item_build_failed", {
-                adapterKey: ADAPTER_KEYS.CZ_REGIONAL,
-                ...(item.jednaciCislo ? { caseNumber: item.jednaciCislo } : {}),
-                "error.type": errorTag(attempt.error),
-              });
+              observeItemBuildFailure(
+                attempt.error,
+                item.jednaciCislo ?? undefined,
+              );
               pushListingRow(item);
               continue;
             }
@@ -2072,9 +2200,11 @@ export const czRegionalAdapter = defineSourceAdapter({
             // A crawl keeps a listed row whose document did not answer: the
             // observation is durable and `isListingOnly` keeps the document
             // in what a later reconciliation asks for again.
-            if (outcome.type !== "unkeyable") {
-              decisions.push(outcome.decision);
+            if (outcome.type === "unkeyable") {
+              recordUnkeyableRow(item);
+              continue;
             }
+            decisions.push(outcome.decision);
           }
         }
         if (deferred > 0) {
@@ -2097,42 +2227,14 @@ export const czRegionalAdapter = defineSourceAdapter({
           totalMs: fetchMs,
         });
 
-        const totalPages = json.totalPages ?? 1;
-
-        // Use state.page (what we requested) instead of
-        // json.pageNumber (what the API echoed back) to
-        // avoid an infinite loop if the API ever returns
-        // a stale or incorrect pageNumber.
-        const currentPage = state.page;
-
-        // Found results: reset empty counter. A refused row is a listed
-        // decision, so a day of them is not an empty day to gap-skip past.
-        const hasResults = decisions.length > 0 || refused > 0;
-
-        // More pages for this day: advance page (0-indexed)
-        if (currentPage + 1 < totalPages) {
-          return {
-            decisions,
-            nextCursor: makeCursor({
-              date: state.date,
-              page: currentPage + 1,
-              emptyDays: 0,
-            }),
-          };
-        }
-
-        // Day exhausted: advance to next day
-        const today = todayIso();
-        const empty = hasResults ? 0 : state.emptyDays + 1;
-        const skip = hasResults ? 1 : gapSkipDays(empty);
-        const next = advanceDate(state.date, skip);
-
         return {
           decisions,
-          nextCursor:
-            next <= today
-              ? makeCursor({ date: next, page: 0, emptyDays: empty })
-              : makeCursor({ date: today, page: 0, emptyDays: 0 }),
+          itemBuildFailures: { type: "item_build_failed", count: refused },
+          nextCursor: nextCzRegionalListingCursor({
+            state,
+            totalPages: json.totalPages ?? 1,
+            hasResults: json.items.length > 0,
+          }),
         };
       },
       catch: adapterCatch(ADAPTER_KEYS.CZ_REGIONAL, cursor),
