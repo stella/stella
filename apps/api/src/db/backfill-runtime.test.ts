@@ -120,3 +120,67 @@ test.each([
     }
   },
 );
+
+test("observed completion clears a durable hold without reading load or running another batch", async () => {
+  const config = { ...defaultConfig, minSize: 1, maxSize: 1, busyWindows: [] };
+  const checkpoint = {
+    cursor: "finished",
+    batch: {
+      ...initialBatchState(config),
+      heldSince: 0,
+      holdUntil: 30_000,
+      holdCount: 1,
+      holdCause: "load" as const,
+    },
+  };
+  let persisted: unknown;
+  const records: unknown[] = [];
+  const runtime = createBackfillRuntime({
+    name: "completed",
+    tableName: "rows",
+    initialSize: 1,
+    config,
+    clock: () => 60_000,
+    readVerdict: async () => {
+      throw new TypeError("completed work must not read load");
+    },
+    log: () => {},
+    observeStatus: (record) => {
+      records.push(record);
+    },
+    connection: {
+      execute: async () => {},
+      query: async (statement, parameters = []) => {
+        if (statement.startsWith("SELECT cursor, batch")) {
+          return [checkpoint];
+        }
+        if (statement.startsWith("UPDATE database_backfill_states")) {
+          persisted = {
+            cursor: parameters.at(1),
+            batch: JSON.parse(String(parameters.at(2))),
+          };
+        }
+        if (statement.includes("pg_try_advisory")) {
+          throw new TypeError("completed work must not acquire a heavy slot");
+        }
+        return [];
+      },
+    },
+  });
+  try {
+    await runtime.recordCompletion();
+    expect(persisted).toEqual({
+      cursor: null,
+      batch: initialBatchState(config),
+    });
+    expect(records).toContainEqual(
+      expect.objectContaining({
+        event: "backfill.resumed",
+        BackfillYielded: 0,
+        heldSince: null,
+      }),
+    );
+  } finally {
+    await runtime.close();
+  }
+});

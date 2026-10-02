@@ -1,18 +1,24 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { and, asc, eq, exists, gt, isNull, lte, not, sql } from "drizzle-orm";
 import { alias } from "drizzle-orm/pg-core";
 
+import type { Verdict } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
 import { isUuid } from "@stll/uuid-codec";
 
-import type { Transaction } from "@/api/db/root";
 import {
-  legislationDocuments,
-  legislationSources,
-  schedulerJobs,
-} from "@/api/db/schema";
+  BackfillHeldError,
+  createScriptBackfillRuntime,
+} from "@/api/db/backfill-runtime";
+import type { Transaction } from "@/api/db/root";
+import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import {
+  SCHEDULER_BACKFILL_CONFIG,
+  SCHEDULER_BACKFILL_IDS,
+  logSchedulerBackfillStatus,
+} from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK =
@@ -20,10 +26,16 @@ export const BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK =
 
 type BackfillBounds = {
   /** Rows one run walks, in id order, in one transaction. */
-  pageRows: number;
+  pageRows?: number;
+  readVerdict?: () => Promise<Verdict>;
+  clock?: () => number;
+  observeStatus?: typeof logSchedulerBackfillStatus;
 };
 
-const DEFAULT_BOUNDS: BackfillBounds = { pageRows: 1000 };
+const DEFAULT_PAGE_ROWS = 1000;
+const DEFAULT_BOUNDS = {
+  pageRows: DEFAULT_PAGE_ROWS,
+} as const satisfies BackfillBounds;
 
 /** A page that left more of the table behind it; the next follows at once. */
 const CONTINUATION_DELAY_MS = 1000;
@@ -286,32 +298,59 @@ const claimExpressionIdPageTx = async (
  * ids left), not from this task.
  */
 export const createLegislationExpressionIdBackfill =
-  ({ pageRows }: BackfillBounds = DEFAULT_BOUNDS): SchedulerTask =>
+  ({
+    pageRows = DEFAULT_PAGE_ROWS,
+    readVerdict,
+    clock = () => Temporal.Now.instant().epochMilliseconds,
+    observeStatus = logSchedulerBackfillStatus,
+  }: BackfillBounds = DEFAULT_BOUNDS): SchedulerTask =>
   async ({ db, job, logger, scheduleContinuation, signal }) => {
     signal.throwIfAborted();
-    const leaseToken =
-      job.lockedBy ??
-      panic("Legislation expression id backfill requires a scheduler lease");
-    const cursor = backfillCursor(job.payload);
-    const page = await db.transaction(async (tx) => {
-      const claimedPage = await claimExpressionIdPageTx(tx, cursor, pageRows);
-      // Checkpoint in the page's own transaction: a crash replays the page,
-      // which claims nothing twice, and never skips it.
-      await tx
-        .update(schedulerJobs)
-        .set({
-          payload: {
-            cursor: claimedPage.type === "page" ? claimedPage.last : null,
-          },
-        })
-        .where(
-          and(
-            eq(schedulerJobs.id, job.id),
-            eq(schedulerJobs.lockedBy, leaseToken),
-          ),
-        );
-      return claimedPage;
+    const runtime = createScriptBackfillRuntime({
+      db,
+      name: SCHEDULER_BACKFILL_IDS.expressionIds,
+      tableName: "legislation_documents",
+      initialSize: pageRows,
+      initialCursor: backfillCursor(job.payload),
+      config: {
+        ...SCHEDULER_BACKFILL_CONFIG,
+        minSize: Math.min(100, pageRows),
+        maxSize: pageRows,
+      },
+      clock,
+      readVerdict,
+      observeStatus,
     });
+    const settled = await Result.tryPromise(async () => {
+      try {
+        return await runtime.step(async ({ tx, cursor, size }) => {
+          signal.throwIfAborted();
+          const claimedPage = await claimExpressionIdPageTx(
+            tx,
+            backfillCursor({ cursor }),
+            size,
+          );
+          return {
+            cursor: claimedPage.type === "page" ? claimedPage.last : null,
+            done: claimedPage.type === "cycle-complete",
+            value: claimedPage,
+          };
+        });
+      } finally {
+        await runtime.close();
+      }
+    });
+    if (settled.isErr()) {
+      if (settled.error instanceof BackfillHeldError) {
+        logger.info("scheduler.legislation_expression_ids_held", {
+          holdUntil: settled.error.holdUntil,
+          heldSince: settled.error.heldSince,
+        });
+        return;
+      }
+      throw settled.error;
+    }
+    const page = settled.value.value;
 
     const skipped = page.type === "page" ? page.skipped : [];
     for (const reason of EXPRESSION_ID_SKIP_REASONS) {
@@ -347,7 +386,7 @@ export const createLegislationExpressionIdBackfill =
     if (page.type === "page" && !signal.aborted) {
       scheduleContinuation(
         new Date(
-          Temporal.Now.instant().epochMilliseconds + CONTINUATION_DELAY_MS,
+          clock() + Math.max(CONTINUATION_DELAY_MS, settled.value.sleepMs),
         ),
       );
     }

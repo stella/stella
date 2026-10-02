@@ -97,6 +97,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
             log({ action: "hold", ...checkpoint.batch, verdict, config });
             return {
               status: "held" as const,
+              verdict,
               checkpoint,
               scanned: 0,
               written: 0,
@@ -134,6 +135,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
             await persistCheckpoint(tx, held);
             return {
               status: "held" as const,
+              verdict: effectiveVerdict,
               checkpoint: held,
               scanned: 0,
               written: 0,
@@ -175,6 +177,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
           });
           return {
             status: page.done ? ("done" as const) : ("advanced" as const),
+            verdict,
             checkpoint: committed,
             scanned: page.items.length,
             written: items.length,
@@ -204,6 +207,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
       await persistCheckpoint(tx, held);
       return {
         status: "retry" as const,
+        verdict,
         checkpoint: held,
         scanned: 0,
         written: 0,
