@@ -17,10 +17,13 @@
 import { panic } from "better-result";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
+import type { ProvisionRef } from "@stll/api-contract/provision-key";
 import type {
   ProvisionReference,
   ProvisionUnit,
 } from "@stll/legal-ast/provision-reference";
+
+import { CZ_STATUTE_COLLECTION } from "./cz-provision-citation-profile";
 
 export type StatuteAbbreviationEntry = {
   canonicalAbbreviation: string;
@@ -503,7 +506,8 @@ export const PROVISION_CITATION_GRAMMARS = {
     gazette: {
       eli: ({ number, year }) =>
         `https://www.e-sbirka.cz/eli/cz/sb/${year}/${String(Number(number))}`,
-      identifier: ({ number, year }) => `${String(Number(number))}/${year} Sb.`,
+      identifier: ({ number, year }) =>
+        `${String(Number(number))}/${year} ${CZ_STATUTE_COLLECTION.canonical}`,
       // Reporters (`Sb. NSS`, `Sb. rozh.`) and the treaty collection
       // (`Sb. m. s.`) share the gazette's suffix and are not statutes.
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|NSS|rozh\.))`,
@@ -557,3 +561,46 @@ export const locateGazetteCitations = (
   text: string,
 ): LocatedGazetteCitation[] =>
   SUPPORTED_GRAMMARS.flatMap((grammar) => grammar.locateGazetteCitations(text));
+
+type ProvisionRefOfOptions = {
+  jurisdiction: CaseLawJurisdiction;
+  workIdentifier: string;
+  reference: ProvisionReference;
+};
+
+type ProvisionRefOfResult =
+  | { status: "resolved"; provision: ProvisionRef }
+  | { status: "unsupported" }
+  | { status: "invalid_work_identifier" };
+
+/** Derive identity and citation metadata together; callers supply no anchor or ELI. */
+export const provisionRefOf = ({
+  jurisdiction,
+  workIdentifier,
+  reference,
+}: ProvisionRefOfOptions): ProvisionRefOfResult => {
+  const grammar = PROVISION_CITATION_GRAMMARS[jurisdiction];
+  switch (grammar.status) {
+    case "unsupported":
+      return { status: "unsupported" };
+    case "supported": {
+      const work = grammar.gazette.parse(workIdentifier);
+      if (work === null) {
+        return { status: "invalid_work_identifier" };
+      }
+      return {
+        status: "resolved",
+        provision: {
+          jurisdiction,
+          workIdentifier: work.identifier,
+          workEli: work.eli,
+          reference: { ...reference },
+          anchor: grammar.anchor(reference),
+        },
+      };
+    }
+    default:
+      grammar satisfies never;
+      return panic("Unknown provision citation grammar status");
+  }
+};

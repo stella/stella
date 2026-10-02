@@ -7,12 +7,18 @@ import {
   formatProvisionKey,
   parseProvisionKey,
 } from "@stll/api-contract/provision-key";
-import type { ProvisionRef } from "@stll/api-contract/provision-key";
 import { assertProperty } from "@stll/property-testing";
 
 import fixture from "./__fixtures__/cz-esbirka-500-2004-par-64.json" with { type: "json" };
 import provenance from "./__fixtures__/cz-esbirka-500-2004-par-64.json.provenance.json" with { type: "json" };
-import { PROVISION_CITATION_GRAMMARS } from "./provision-citation-grammars";
+import {
+  CZ_PROFILE,
+  CZ_STATUTE_COLLECTION,
+} from "./cz-provision-citation-profile";
+import {
+  PROVISION_CITATION_GRAMMARS,
+  provisionRefOf,
+} from "./provision-citation-grammars";
 
 const grammar = PROVISION_CITATION_GRAMMARS.CZE;
 const reference = fc.record({
@@ -56,13 +62,17 @@ describe("provision identity construction", () => {
           if (work === null) {
             return;
           }
-          const provision = {
+          const constructed = provisionRefOf({
             jurisdiction: grammar.jurisdiction,
-            workIdentifier: work.identifier,
-            workEli: work.eli,
+            workIdentifier: `${number}/${year} Sb.`,
             reference: ref,
-            anchor: grammar.anchor(ref),
-          } satisfies ProvisionRef;
+          });
+          expect(constructed.status).toBe("resolved");
+          if (constructed.status !== "resolved") {return;}
+          const { provision } = constructed;
+          expect(provision.reference).toEqual(ref);
+          expect(provision.anchor).toBe(parsed.at(0)?.anchor);
+          expect(provision.workEli).toBe(work.eli);
           expect(parseProvisionKey(formatProvisionKey(provision))).toEqual({
             jurisdiction: provision.jurisdiction,
             workIdentifier: work.identifier,
@@ -146,6 +156,59 @@ describe("provision identity construction", () => {
     expect(grammar.anchor(ref)).toBe("par_1-odst_2-pism_a-bod_3");
     expect(grammar.anchor({ ...ref, sentence: "2", openEnded: true })).toBe(
       grammar.anchor(ref),
+    );
+  });
+
+  test("reference construction normalizes the work and rejects unavailable grammars or identifiers", () => {
+    const ref = {
+      unit: "section",
+      section: 5,
+      sectionSuffix: null,
+      subsection: "2",
+      letter: null,
+      point: null,
+      sentence: null,
+      openEnded: false,
+    } as const;
+    expect(
+      provisionRefOf({
+        jurisdiction: "CZE",
+        workIdentifier: "č. 00089/2012 Sb.",
+        reference: ref,
+      }),
+    ).toEqual({
+      status: "resolved",
+      provision: {
+        jurisdiction: "CZE",
+        workIdentifier: "89/2012 Sb.",
+        workEli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+        reference: ref,
+        anchor: "par_5-odst_2",
+      },
+    });
+    expect(
+      provisionRefOf({
+        jurisdiction: "CZE",
+        workIdentifier: "bad",
+        reference: ref,
+      }),
+    ).toEqual({ status: "invalid_work_identifier" });
+    for (const jurisdiction of CASE_LAW_JURISDICTIONS) {
+      if (jurisdiction === "CZE") {continue;}
+      expect(
+        provisionRefOf({
+          jurisdiction,
+          workIdentifier: "89/2012 Sb.",
+          reference: ref,
+        }),
+      ).toEqual({ status: "unsupported" });
+    }
+  });
+
+  test("the profile and grammar share the statute collection declaration", () => {
+    expect(CZ_PROFILE.collections).toContain(CZ_STATUTE_COLLECTION);
+    expect(grammar.gazette.parse("89/2012 Sb.")?.identifier).toBe(
+      `89/2012 ${CZ_STATUTE_COLLECTION.canonical}`,
     );
   });
 

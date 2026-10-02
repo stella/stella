@@ -15,11 +15,17 @@
 import { priorWindowed, succession } from "./provision-citation-profile";
 import type {
   ActTitleSpec,
+  CollectionSpec,
   JurisdictionProfile,
   WorkIdentifier,
 } from "./provision-citation-profile";
 
-const SB = "Sb.";
+export const CZ_STATUTE_COLLECTION = {
+  canonical: "Sb.",
+  spellings: ["Sb.", "Sb", "sb.", "SB.", "SB"],
+} as const satisfies CollectionSpec;
+
+const SB = CZ_STATUTE_COLLECTION.canonical;
 
 const sb = (number: number, year: number): WorkIdentifier => ({
   number,
@@ -225,7 +231,7 @@ export const CZ_PROFILE = {
 
   collections: [
     { canonical: "Sb. m. s.", spellings: ["Sb. m. s.", "Sb.m.s."] },
-    { canonical: "Sb.", spellings: ["Sb.", "Sb", "sb.", "SB.", "SB"] },
+    CZ_STATUTE_COLLECTION,
     { canonical: "Ú. l.", spellings: ["Ú. l.", "Ú.l."] },
   ],
 
