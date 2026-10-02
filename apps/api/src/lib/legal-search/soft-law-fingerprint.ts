@@ -1,3 +1,5 @@
+import { Result } from "better-result";
+
 import { SoftLawItemError } from "./soft-law-types";
 import type { SoftLawDocumentInput, SoftLawMetadata } from "./soft-law-types";
 
@@ -16,12 +18,14 @@ const compareCanonicalKeys = (left: string, right: string) => {
 export const softLawIdentityKey = (
   authority: string,
   metadata: SoftLawMetadata,
-): string => {
+): Result<string, SoftLawItemError> => {
   if (!metadata.title.trim()) {
-    throw new SoftLawItemError({
-      message: "Document title is empty",
-      tag: "invalid_document",
-    });
+    return Result.err(
+      new SoftLawItemError({
+        message: "Document title is empty",
+        tag: "invalid_document",
+      }),
+    );
   }
   if (metadata.issuedOn.state === "stated") {
     const iso = metadata.issuedOn.value;
@@ -31,31 +35,39 @@ export const softLawIdentityKey = (
       !Number.isFinite(date.getTime()) ||
       date.toISOString().slice(0, 10) !== iso
     ) {
-      throw new SoftLawItemError({
-        message: "Issue date is not a valid ISO date",
-        tag: "invalid_document",
-      });
+      return Result.err(
+        new SoftLawItemError({
+          message: "Issue date is not a valid ISO date",
+          tag: "invalid_document",
+        }),
+      );
     }
   }
   if (metadata.statedReference.state === "stated") {
     if (!metadata.statedReference.value.trim()) {
-      throw new SoftLawItemError({
-        message: "Document reference is empty",
-        tag: "invalid_document",
-      });
+      return Result.err(
+        new SoftLawItemError({
+          message: "Document reference is empty",
+          tag: "invalid_document",
+        }),
+      );
     }
-    return JSON.stringify([
-      authority,
-      "reference",
-      normalizeReference(metadata.statedReference.value),
-    ]);
+    return Result.ok(
+      JSON.stringify([
+        authority,
+        "reference",
+        normalizeReference(metadata.statedReference.value),
+      ]),
+    );
   }
-  return JSON.stringify([
-    authority,
-    "title",
-    normalizeTitle(metadata.title),
-    metadata.issuedOn.state === "stated" ? metadata.issuedOn.value : null,
-  ]);
+  return Result.ok(
+    JSON.stringify([
+      authority,
+      "title",
+      normalizeTitle(metadata.title),
+      metadata.issuedOn.state === "stated" ? metadata.issuedOn.value : null,
+    ]),
+  );
 };
 
 /** Explicit field order keeps equivalent metadata independent of object insertion order. */

@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, eq, inArray, or, sql } from "drizzle-orm";
 
@@ -65,15 +65,19 @@ const claimSoftLawSource = async ({
         .limit(1)
     ).at(0);
     if (!row) {
-      throw new SoftLawIngestionError({ message: "Source does not exist" });
+      return Result.err(
+        new SoftLawIngestionError({ message: "Source does not exist" }),
+      );
     }
     if (row.adapterKey !== adapter.key) {
-      throw new SoftLawIngestionError({
-        message: "Source adapter does not match",
-      });
+      return Result.err(
+        new SoftLawIngestionError({
+          message: "Source adapter does not match",
+        }),
+      );
     }
     if (row.runState === "blocked") {
-      return {
+      return Result.ok({
         type: "blocked" as const,
         reason:
           row.failureTag === "forbidden" ||
@@ -81,7 +85,7 @@ const claimSoftLawSource = async ({
           row.failureTag === "challenge"
             ? row.failureTag
             : panic("Blocked source has no block reason"),
-      };
+      });
     }
     const restart = row.runState === "listing_incomplete";
     const listed =
@@ -123,9 +127,11 @@ const claimSoftLawSource = async ({
         )
         .returning()
     ).at(0);
-    return claimed
-      ? { type: "claimed" as const, row: claimed }
-      : { type: "busy" as const };
+    return Result.ok(
+      claimed
+        ? { type: "claimed" as const, row: claimed }
+        : { type: "busy" as const },
+    );
   });
 const renewSoftLawLease = async ({
   scopedDb,
@@ -142,10 +148,13 @@ const renewSoftLawLease = async ({
         .returning({ id: softLawSources.id }),
   );
   if (!renewed.at(0)) {
-    throw new SoftLawIngestionError({
-      message: "Ingestion lease was superseded",
-    });
+    return Result.err(
+      new SoftLawIngestionError({
+        message: "Ingestion lease was superseded",
+      }),
+    );
   }
+  return Result.ok();
 };
 export type SoftLawAttempt = {
   entry: SoftLawEntry;
@@ -438,6 +447,46 @@ const persistRejectedSoftLawListings = async (
       );
   }
 };
+type ReadSoftLawListingCountsOptions = {
+  sourceId: SafeId<"softLawSource">;
+  runId: string;
+};
+const readSoftLawListingCounts = async (
+  tx: Transaction,
+  { sourceId, runId }: ReadSoftLawListingCountsOptions,
+) => {
+  const source =
+    (
+      await tx
+        .select({
+          baseline: softLawSources.listingBaseline,
+          listingSeen: softLawSources.listingSeen,
+        })
+        .from(softLawSources)
+        .where(eq(softLawSources.id, sourceId))
+        .limit(1)
+    ).at(0) ?? panic("Source vanished");
+  const totals = (
+    await tx
+      .select({
+        count: sql<number>`count(*)::integer`,
+        retryable: sql<number>`count(*) FILTER (WHERE status = 'retryable')::integer`,
+      })
+      .from(softLawIngestionAttempts)
+      .where(
+        and(
+          eq(softLawIngestionAttempts.sourceId, sourceId),
+          eq(softLawIngestionAttempts.runId, runId),
+        ),
+      )
+  ).at(0);
+  return {
+    baseline: source.baseline,
+    listingSeen: source.listingSeen,
+    seen: totals?.count ?? 0,
+    retryable: totals?.retryable ?? 0,
+  };
+};
 const persistSoftLawPage = async (
   { sourceId, scopedDb, adapter, leaseToken, ownsLease }: SoftLawStoreContext,
   {
@@ -449,8 +498,10 @@ const persistSoftLawPage = async (
     expectedTotal,
     pendingRetries,
   }: PersistSoftLawPageOptions,
-): Promise<SoftLawPageResult> => {
-  let result: SoftLawPageResult = { status: "persisted" };
+): Promise<Result<SoftLawPageResult, SoftLawIngestionError>> => {
+  let result: Result<SoftLawPageResult, SoftLawIngestionError> = Result.ok({
+    status: "persisted",
+  });
   await commitReplaySafeIngestionBatch({
     items: observations,
     checkpoint: nextCursor,
@@ -460,14 +511,23 @@ const persistSoftLawPage = async (
         await tx
           .select({ id: softLawSources.id, now: sql<Date>`now()` })
           .from(softLawSources)
-          .where(ownsLease)
+          .where(
+            and(
+              ownsLease,
+              eq(softLawSources.runId, runId),
+              sql`${softLawSources.syncCursor} IS NOT DISTINCT FROM ${expectedCursor}`,
+            ),
+          )
           .for("update")
           .limit(1)
       ).at(0);
       if (!locked) {
-        throw new SoftLawIngestionError({
-          message: "Ingestion lease was superseded",
-        });
+        result = Result.err(
+          new SoftLawIngestionError({
+            message: "Ingestion lease was superseded",
+          }),
+        );
+        return;
       }
       const observedAt = locked.now;
       await persistSoftLawRows(tx, {
@@ -516,40 +576,16 @@ const persistSoftLawPage = async (
       }
     },
     persistCheckpoint: async (tx, checkpointCursor) => {
-      if (pendingRetries) {
+      if (Result.isError(result) || pendingRetries) {
         return;
       }
       if (checkpointCursor === null) {
-        const source =
-          (
-            await tx
-              .select({
-                baseline: softLawSources.listingBaseline,
-                listingSeen: softLawSources.listingSeen,
-              })
-              .from(softLawSources)
-              .where(eq(softLawSources.id, sourceId))
-              .limit(1)
-          ).at(0) ?? panic("Source vanished");
-        const totals = (
-          await tx
-            .select({
-              count: sql<number>`count(*)::integer`,
-              retryable: sql<number>`count(*) FILTER (WHERE status = 'retryable')::integer`,
-            })
-            .from(softLawIngestionAttempts)
-            .where(
-              and(
-                eq(softLawIngestionAttempts.sourceId, sourceId),
-                eq(softLawIngestionAttempts.runId, runId),
-              ),
-            )
-        ).at(0);
-        const seen = totals?.count ?? 0;
+        const { baseline, listingSeen, seen, retryable } =
+          await readSoftLawListingCounts(tx, { sourceId, runId });
         if (
-          totals?.retryable ||
-          source.listingSeen !== null ||
-          seen < Math.ceil(source.baseline * MINIMUM_LISTING_FRACTION) ||
+          retryable ||
+          listingSeen !== null ||
+          seen < Math.ceil(baseline * MINIMUM_LISTING_FRACTION) ||
           (expectedTotal !== null && seen < expectedTotal)
         ) {
           const checkpoint = await advanceCorpusIngestionCheckpoint({
@@ -563,9 +599,9 @@ const persistSoftLawPage = async (
             nextCursor: null,
           });
           if (checkpoint.status !== INGESTION_CHECKPOINT_STATUS.ADVANCED) {
-            throw new SoftLawIngestionError({
-              message: "Checkpoint was superseded",
-            });
+            return panic(
+              "Locked source checkpoint changed inside its transaction",
+            );
           }
           await tx
             .update(softLawSources)
@@ -578,12 +614,12 @@ const persistSoftLawPage = async (
               leaseExpiresAt: null,
             })
             .where(ownsLease);
-          result = {
+          result = Result.ok({
             status: "listing_incomplete",
             seen,
-            baseline: source.baseline,
+            baseline,
             expectedTotal,
-          };
+          });
           return;
         }
       }
@@ -594,9 +630,7 @@ const persistSoftLawPage = async (
         nextCursor: checkpointCursor,
       });
       if (checkpointResult.status !== INGESTION_CHECKPOINT_STATUS.ADVANCED) {
-        throw new SoftLawIngestionError({
-          message: "Checkpoint was superseded",
-        });
+        return panic("Locked source checkpoint changed inside its transaction");
       }
       if (checkpointCursor !== null) {
         return;
@@ -686,6 +720,19 @@ const settleSoftLawSource = async (
         return panic("Unknown ingestion settlement");
     }
   });
+const storeResult = async <Value>(
+  work: () => Promise<Result<Value, SoftLawIngestionError>>,
+) => {
+  const attempted = await Result.tryPromise({
+    try: work,
+    catch: (cause) =>
+      new SoftLawIngestionError({
+        message: "Guidance persistence failed",
+        cause,
+      }),
+  });
+  return attempted.andThen((result) => result);
+};
 /** A per-source capability; every write is fenced by this run's lease. */
 export const createSoftLawIngestionStore = (
   options: SoftLawIngestionStoreOptions,
@@ -698,8 +745,10 @@ export const createSoftLawIngestionStore = (
   );
   const context = { ...options, leaseToken, ownsLease };
   return {
-    claim: async () => await claimSoftLawSource(context),
-    renew: async () => await renewSoftLawLease(context),
+    claim: async () =>
+      await storeResult(async () => await claimSoftLawSource(context)),
+    renew: async () =>
+      await storeResult(async () => await renewSoftLawLease(context)),
     loadAttempts: async (query: {
       runId: string;
       entries: readonly SoftLawEntry[];
@@ -707,7 +756,7 @@ export const createSoftLawIngestionStore = (
     loadMatches: async (query: LoadSoftLawMatchesOptions) =>
       await loadSoftLawMatches(context, query),
     persistPage: async (page: PersistSoftLawPageOptions) =>
-      await persistSoftLawPage(context, page),
+      await storeResult(async () => await persistSoftLawPage(context, page)),
     settle: async (state: SoftLawSettlement) =>
       await settleSoftLawSource(context, state),
   };

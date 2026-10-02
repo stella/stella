@@ -25,6 +25,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
 import { rawSourcePayloadKey } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
+import { SoftLawAccessError } from "@/api/lib/legal-search/soft-law-access-types";
 import { createSoftLawIngestionStore } from "@/api/lib/legal-search/soft-law-ingestion-store";
 import type {
   SoftLawSourceAdapter,
@@ -36,7 +37,6 @@ import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 
 import { runSoftLawIngestion } from "./ingestion";
-import { SoftLawAccessError } from "./publisher-access";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -100,7 +100,7 @@ const adapter = (entries: readonly SoftLawEntry[], content = "original") =>
       window: { type: "any_time" },
     },
     discover: async () => ({ entries, nextCursor: null }),
-    fetchDocument: async (item) => document(item, content),
+    fetchDocument: async (item) => Result.ok(document(item, content)),
     getTotalCount: async () => ({ type: "no-count-endpoint" }),
     sliceWalk: { type: "unsupported", reason: "Complete listing" },
     sourceFields: {
@@ -559,7 +559,7 @@ if (!databaseUrl || !enabled) {
           fetchDocument: async (item: SoftLawEntry) => {
             entered();
             await wait;
-            return document(item, "stale");
+            return Result.ok(document(item, "stale"));
           },
         };
         const stale = run(slow);
@@ -655,12 +655,14 @@ if (!databaseUrl || !enabled) {
           fetchDocument: async (item: SoftLawEntry) => {
             if (item.url === poison.url) {
               poisonCalls++;
-              throw new SoftLawAccessError({
-                message: "Transient publisher failure",
-              });
+              return Result.err(
+                new SoftLawAccessError({
+                  message: "Transient publisher failure",
+                }),
+              );
             }
             laterCalls++;
-            return document(item);
+            return Result.ok(document(item));
           },
         };
         expect(await run(sourceAdapter)).toEqual({ status: "paused" });
@@ -711,9 +713,11 @@ if (!databaseUrl || !enabled) {
           fetchDocument: async (item: SoftLawEntry) => {
             if (item.url === poison.url) {
               poisonCalls++;
-              throw new SoftLawAccessError({ message: "Unavailable item" });
+              return Result.err(
+                new SoftLawAccessError({ message: "Unavailable item" }),
+              );
             }
-            return document(item);
+            return Result.ok(document(item));
           },
         };
         expect(await run(sourceAdapter)).toEqual({ status: "paused" });
@@ -744,18 +748,20 @@ if (!databaseUrl || !enabled) {
           ...adapter([oversized, later]),
           fetchDocument: async (item: SoftLawEntry) => {
             const input = document(item);
-            return item.url === oversized.url
-              ? {
-                  ...input,
-                  raw: [
-                    {
-                      role: "page",
-                      bytes: new Uint8Array(64 * 1024 * 1024 + 1),
-                      contentType: "text/html",
-                    },
-                  ],
-                }
-              : input;
+            return Result.ok(
+              item.url === oversized.url
+                ? {
+                    ...input,
+                    raw: [
+                      {
+                        role: "page",
+                        bytes: new Uint8Array(64 * 1024 * 1024 + 1),
+                        contentType: "text/html",
+                      },
+                    ],
+                  }
+                : input,
+            );
           },
         };
         expect(
@@ -946,16 +952,17 @@ if (!databaseUrl || !enabled) {
         expect(
           await run({
             ...adapter([item]),
-            fetchDocument: async () => ({
-              ...document(item),
-              text: "improved extraction",
-              extractionQuality: "text_layer",
-              raw: document(item).raw.map((part) => ({
-                role: part.role,
-                bytes: part.bytes,
-                contentType: "application/pdf",
-              })),
-            }),
+            fetchDocument: async () =>
+              Result.ok({
+                ...document(item),
+                text: "improved extraction",
+                extractionQuality: "text_layer",
+                raw: document(item).raw.map((part) => ({
+                  role: part.role,
+                  bytes: part.bytes,
+                  contentType: "application/pdf",
+                })),
+              } satisfies SoftLawDocumentInput),
           }),
         ).toEqual({ status: "complete" });
         const versions = await db
@@ -982,10 +989,13 @@ if (!databaseUrl || !enabled) {
             value: SoftLawEntry,
             { fetch }: Parameters<SoftLawSourceAdapter["fetchDocument"]>[1],
           ) => {
-            await fetch(value.url, {
+            const fetched = await fetch(value.url, {
               expectedContentTypes: ["application/pdf"],
             });
-            return document(value);
+            if (Result.isError(fetched)) {
+              return fetched;
+            }
+            return Result.ok(document(value));
           },
         };
         const request = async () => {
@@ -1046,7 +1056,7 @@ if (!databaseUrl || !enabled) {
                   leaseExpiresAt: sql`${softLawSources.leaseExpiresAt} - interval '120 seconds'`,
                 })
                 .where(eq(softLawSources.id, sourceId));
-              return document(item);
+              return Result.ok(document(item));
             },
           }),
         ).toEqual({ status: "complete" });
@@ -1059,7 +1069,7 @@ if (!databaseUrl || !enabled) {
         ).toHaveLength(5);
       }));
 
-    test("lease loss between document requests stops access even if the adapter catches the error", async () =>
+    test("lease loss between document requests stops access even if the adapter ignores the error", async () =>
       await withSource(databaseUrl, async ({ db, sourceId, run }) => {
         let requests = 0;
         const result = await run(
@@ -1071,9 +1081,9 @@ if (!databaseUrl || !enabled) {
                 .update(softLawSources)
                 .set({ leaseToken: createSafeId<"softLawIngestionLease">() })
                 .where(eq(softLawSources.id, sourceId));
-              const refused = await Result.tryPromise(() => fetch(item.url));
+              const refused = await fetch(item.url);
               expect(Result.isError(refused)).toBe(true);
-              return document(item);
+              return Result.ok(document(item));
             },
           },
           {
@@ -1100,7 +1110,7 @@ if (!databaseUrl || !enabled) {
             ...adapter([entry()]),
             fetchDocument: async (item, { fetch }) => {
               await fetch(item.url);
-              return document(item);
+              return Result.ok(document(item));
             },
           },
           {
@@ -1146,17 +1156,19 @@ if (!databaseUrl || !enabled) {
               item: SoftLawEntry,
               { fetch }: Parameters<SoftLawSourceAdapter["fetchDocument"]>[1],
             ) => {
-              const first = await Result.tryPromise(() => fetch(item.url));
-              const second = await Result.tryPromise(() => fetch(item.url));
+              const first = await fetch(item.url);
+              const second = await fetch(item.url);
               if (Result.isError(second)) {
                 refused++;
               }
               if (mode === "wrapped" && Result.isError(first)) {
-                throw new SoftLawIngestionError({
-                  message: "Wrapped publisher failure",
-                });
+                return Result.err(
+                  new SoftLawIngestionError({
+                    message: "Wrapped publisher failure",
+                  }),
+                );
               }
-              return document(item);
+              return Result.ok(document(item));
             },
           };
           expect(
@@ -1229,7 +1241,7 @@ if (!databaseUrl || !enabled) {
           adapter: { ...adapter([]), key: `soft-law-test-${sourceId}` },
           scopedDb: async (work) => await db.transaction(work),
         });
-        expect((await store.claim()).type).toBe("claimed");
+        expect((await store.claim()).unwrap().type).toBe("claimed");
         expect(await run(adapter([entry()]))).toEqual({ status: "busy" });
         const old = new Date("2020-01-01T00:00:00Z");
         await db
@@ -1385,11 +1397,13 @@ if (!databaseUrl || !enabled) {
               const sourceAdapter = {
                 ...adapter(items),
                 fetchDocument: async (item: SoftLawEntry) =>
-                  document(
-                    item,
-                    (item.url.endsWith("/a")
-                      ? contents.at(0)
-                      : contents.at(1)) ?? panic("Generator omitted content"),
+                  Result.ok(
+                    document(
+                      item,
+                      (item.url.endsWith("/a")
+                        ? contents.at(0)
+                        : contents.at(1)) ?? panic("Generator omitted content"),
+                    ),
                   ),
               };
               for (let round = 0; round < 2; round++) {

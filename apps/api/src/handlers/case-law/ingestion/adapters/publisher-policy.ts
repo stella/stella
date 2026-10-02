@@ -1,4 +1,4 @@
-// parser-output-unchanged: publisher scheduling only; response parsing is unchanged.
+// parser-output-unchanged: gate definitions moved to their shared owner; request pacing and response parsing are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *

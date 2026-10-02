@@ -1,4 +1,4 @@
-import { TaggedError, Result } from "better-result";
+import { panic, Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
@@ -9,25 +9,81 @@ import {
 import type {
   SoftLawFetch,
   SoftLawBlockReason,
+  SoftLawResponse,
+  SoftLawFetchError,
+} from "@/api/lib/legal-search/soft-law-access-types";
+import {
+  SoftLawAccessError,
+  SoftLawBlockedError,
+  SoftLawContentTypeMismatchError,
 } from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 export const SOFT_LAW_RESPONSE_MAX_BYTES = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
-export class SoftLawBlockedError extends TaggedError("SoftLawBlockedError")<{
-  message: string;
-  reason: SoftLawBlockReason;
-}> {}
-export class SoftLawAccessError extends TaggedError("SoftLawAccessError")<{
-  message: string;
-}> {}
-export class SoftLawContentTypeMismatchError extends TaggedError(
-  "SoftLawContentTypeMismatchError",
-)<{
-  message: string;
-  contentType: string;
-}> {}
+
+const readPublisherBytes = async (
+  reader: ReadableStreamDefaultReader<Uint8Array>,
+) => {
+  const chunks: Uint8Array[] = [];
+  let size = 0;
+  while (true) {
+    const next = await reader.read();
+    if (next.done) {break;}
+    size += next.value.byteLength;
+    if (size > SOFT_LAW_RESPONSE_MAX_BYTES) {
+      return Result.err(
+        new SoftLawAccessError({
+          message: "Publisher response exceeds the byte limit",
+        }),
+      );
+    }
+    chunks.push(next.value);
+  }
+  const bytes = new Uint8Array(size);
+  let offset = 0;
+  for (const chunk of chunks) {
+    bytes.set(chunk, offset);
+    offset += chunk.byteLength;
+  }
+  return Result.ok(bytes);
+};
+
+type ReadPublisherBodyOptions = {
+  reader: ReadableStreamDefaultReader<Uint8Array>;
+  signal: AbortSignal;
+  read: () => Promise<Result<SoftLawResponse, SoftLawFetchError>>;
+};
+const readPublisherBody = async ({
+  reader,
+  signal,
+  read,
+}: ReadPublisherBodyOptions) => {
+  const bodySignal = AbortSignal.any([
+    signal,
+    AbortSignal.timeout(REQUEST_TIMEOUT_MS),
+  ]);
+  let rejectRead!: () => void;
+  const aborted = new Promise<Result<never, SoftLawAccessError>>((resolve) => {
+    rejectRead = () =>
+      resolve(
+        Result.err(
+          new SoftLawAccessError({
+            message: "Publisher response body read was aborted",
+          }),
+        ),
+      );
+  });
+  bodySignal.addEventListener("abort", rejectRead, { once: true });
+  try {
+    bodySignal.throwIfAborted();
+    return await Promise.race([read(), aborted]);
+  } finally {
+    bodySignal.removeEventListener("abort", rejectRead);
+    await reader.cancel();
+  }
+};
 
 export const detectSoftLawBlock = (status: number, body: string) => {
   if (status === 403) {
@@ -61,9 +117,7 @@ export const softLawAccessWindowOpen = (
     ) ||
     startHour === endHour
   ) {
-    throw new SoftLawAccessError({
-      message: "Invalid publisher access window",
-    });
+    return panic("Invalid publisher access window");
   }
   const hour = Number(
     new Intl.DateTimeFormat("en", {
@@ -83,7 +137,7 @@ type CreateSoftLawFetchOptions = {
   now?: () => Date;
   request?: typeof fetchWithTimeout;
   reserve?: typeof reservePublisherGateSlot;
-  beforeRequest?: () => Promise<void>;
+  beforeRequest?: () => Promise<void | Result<void, unknown>>;
 };
 
 /** Every response is inspected before the adapter receives it; no retries. */
@@ -98,23 +152,24 @@ export const createSoftLawFetch = ({
   let blocked: SoftLawBlockReason | null = null;
   let windowState: "open" | "deferred_window" = "open";
   let leaseState: "active" | "lost" = "active";
-  const assertLeaseActive = () => {
-    if (leaseState === "lost") {
-      throw new SoftLawAccessError({ message: "Ingestion lease was lost" });
-    }
-  };
-  const stop = (reason: SoftLawBlockReason): never => {
+  const stop = (reason: SoftLawBlockReason) => {
     blocked = reason;
-    throw new SoftLawBlockedError({
-      message: "Publisher blocked this source",
-      reason,
-    });
+    return Result.err(
+      new SoftLawBlockedError({
+        message: "Publisher blocked this source",
+        reason,
+      }),
+    );
   };
-  const fetch = async (
+  const fetchInternal = async (
     rawUrl: string,
     options?: { expectedContentTypes: readonly string[] },
   ) => {
-    assertLeaseActive();
+    if (leaseState === "lost") {
+      return Result.err(
+        new SoftLawAccessError({ message: "Ingestion lease was lost" }),
+      );
+    }
     if (blocked) {
       return stop(blocked);
     }
@@ -123,9 +178,11 @@ export const createSoftLawFetch = ({
       gate.intervalMs < 1000 ||
       !/^Stella\/[^\s]+ \(\+https:\/\/[^\s)]+\)$/u.test(policy.userAgent)
     ) {
-      throw new SoftLawAccessError({
-        message: "Publisher access requires pacing and a contact user agent",
-      });
+      return Result.err(
+        new SoftLawAccessError({
+          message: "Publisher access requires pacing and a contact user agent",
+        }),
+      );
     }
     const url = restrictOutboundUrl({
       rawUrl,
@@ -135,30 +192,44 @@ export const createSoftLawFetch = ({
       },
     });
     if (!url) {
-      throw new SoftLawAccessError({
-        message: "URL is outside the publisher policy",
-      });
+      return Result.err(
+        new SoftLawAccessError({
+          message: "URL is outside the publisher policy",
+        }),
+      );
     }
     await reserve(policy.publisherGate, signal);
     if (!softLawAccessWindowOpen(policy, now())) {
       windowState = "deferred_window";
-      throw new SoftLawAccessError({
-        message: "Publisher access window is closed",
-      });
+      return Result.err(
+        new SoftLawAccessError({
+          message: "Publisher access window is closed",
+        }),
+      );
     }
     signal.throwIfAborted();
     if (blocked) {
       return stop(blocked);
     }
-    const lease = await Result.tryPromise(async () => {
-      await beforeRequest?.();
-    });
-    if (Result.isError(lease)) {
+    const lease = await Result.tryPromise(async () => await beforeRequest?.());
+    if (
+      Result.isError(lease) ||
+      (lease.value !== undefined && Result.isError(lease.value))
+    ) {
       leaseState = "lost";
-      throw lease.error.cause;
+      return Result.err(
+        new SoftLawAccessError({
+          message: "Ingestion lease was lost",
+          cause: Result.isError(lease) ? lease.error.cause : lease.value,
+        }),
+      );
     }
     signal.throwIfAborted();
-    assertLeaseActive();
+    if (leaseState === "lost") {
+      return Result.err(
+        new SoftLawAccessError({ message: "Ingestion lease was lost" }),
+      );
+    }
     if (blocked) {
       return stop(blocked);
     }
@@ -170,6 +241,7 @@ export const createSoftLawFetch = ({
     });
     const statusBlock = detectSoftLawBlock(response.status, "");
     if (statusBlock) {
+      blocked = statusBlock;
       await response.body?.cancel();
       return stop(statusBlock);
     }
@@ -180,39 +252,24 @@ export const createSoftLawFetch = ({
       location &&
       /challenge|captcha|cdn-cgi|access-denied/iu.test(location)
     ) {
+      blocked = "challenge";
       await response.body?.cancel();
       return stop("challenge");
     }
     const reader = response.body?.getReader();
     if (!reader) {
-      throw new SoftLawAccessError({
-        message: response.ok
-          ? "Publisher returned no response body"
-          : `Publisher returned HTTP ${response.status}`,
-      });
+      return Result.err(
+        new SoftLawAccessError({
+          message: response.ok
+            ? "Publisher returned no response body"
+            : `Publisher returned HTTP ${response.status}`,
+        }),
+      );
     }
-    const chunks: Uint8Array[] = [];
-    let size = 0;
     const bodyRead = async () => {
-      while (true) {
-        const next = await reader.read();
-        if (next.done) {
-          break;
-        }
-        size += next.value.byteLength;
-        if (size > SOFT_LAW_RESPONSE_MAX_BYTES) {
-          throw new SoftLawAccessError({
-            message: "Publisher response exceeds the byte limit",
-          });
-        }
-        chunks.push(next.value);
-      }
-      const bytes = new Uint8Array(size);
-      let offset = 0;
-      for (const chunk of chunks) {
-        bytes.set(chunk, offset);
-        offset += chunk.byteLength;
-      }
+      const read = await readPublisherBytes(reader);
+      if (Result.isError(read)) {return read;}
+      const bytes = read.value;
       const contentType =
         response.headers.get("content-type") ?? "application/octet-stream";
       const inspectText =
@@ -227,51 +284,50 @@ export const createSoftLawFetch = ({
         return stop(block);
       }
       if (!response.ok) {
-        throw new SoftLawAccessError({
-          message: `Publisher returned HTTP ${response.status}`,
-        });
+        return Result.err(
+          new SoftLawAccessError({
+            message: `Publisher returned HTTP ${response.status}`,
+          }),
+        );
       }
       const mime = contentType.split(";").at(0)?.trim().toLowerCase();
       if (options && !options.expectedContentTypes.includes(mime ?? "")) {
-        throw new SoftLawContentTypeMismatchError({
-          message:
-            "Publisher response content type does not match the requested surface",
-          contentType,
-        });
-      }
-      return {
-        bytes,
-        contentType,
-      };
-    };
-    // Keep a deadline on streamed bodies as well as response headers.
-    const bodySignal = AbortSignal.any([
-      signal,
-      AbortSignal.timeout(REQUEST_TIMEOUT_MS),
-    ]);
-    let rejectRead!: () => void;
-    const aborted = new Promise<never>((_resolve, reject) => {
-      rejectRead = () =>
-        reject(
-          new SoftLawAccessError({
-            message: "Publisher response body read was aborted",
+        return Result.err(
+          new SoftLawContentTypeMismatchError({
+            message:
+              "Publisher response content type does not match the requested surface",
+            contentType,
           }),
         );
-    });
-    bodySignal.addEventListener("abort", rejectRead, { once: true });
-    try {
-      bodySignal.throwIfAborted();
-      return await Promise.race([bodyRead(), aborted]);
-    } finally {
-      bodySignal.removeEventListener("abort", rejectRead);
-      await reader.cancel();
-    }
+      }
+      return Result.ok({
+        bytes,
+        contentType,
+      });
+    };
+    // Keep a deadline on streamed bodies as well as response headers.
+    return await readPublisherBody({ reader, signal, read: bodyRead });
   };
-  return Object.freeze(
-    Object.assign(fetch, {
+  const fetch: SoftLawFetch = Object.assign(
+    async (
+      rawUrl: string,
+      options?: { expectedContentTypes: readonly string[] },
+    ) => {
+      const result = await Result.tryPromise({
+        try: async () => await fetchInternal(rawUrl, options),
+        catch: (cause) =>
+          new SoftLawAccessError({
+            message: "Publisher request failed",
+            cause,
+          }),
+      });
+      return result.andThen((response) => response);
+    },
+    {
       getBlockReason: () => blocked,
       getWindowState: () => windowState,
       getLeaseState: () => leaseState,
-    }),
+    },
   );
+  return Object.freeze(fetch);
 };

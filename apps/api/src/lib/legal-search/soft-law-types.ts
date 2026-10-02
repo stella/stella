@@ -1,4 +1,5 @@
 import { TaggedError } from "better-result";
+import type { Result } from "better-result";
 
 import type {
   SourceFieldInventory,
@@ -9,6 +10,7 @@ import type {
 import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 
 import {
+  type SoftLawFetchError,
   SOFT_LAW_BLOCK_REASONS,
   type SoftLawFetch,
 } from "./soft-law-access-types";
@@ -126,7 +128,12 @@ export type SoftLawSourceAdapter = {
   fetchDocument: (
     entry: SoftLawEntry,
     context: { signal: AbortSignal; fetch: SoftLawFetch },
-  ) => Promise<SoftLawDocumentInput>;
+  ) => Promise<
+    Result<
+      SoftLawDocumentInput,
+      SoftLawIngestionError | SoftLawItemError | SoftLawFetchError
+    >
+  >;
   getTotalCount: (context: {
     signal: AbortSignal;
     fetch: SoftLawFetch;
@@ -138,7 +145,7 @@ export type SoftLawSourceAdapter = {
 
 export class SoftLawIngestionError extends TaggedError(
   "SoftLawIngestionError",
-)<{ message: string }> {}
+)<{ message: string; cause?: unknown }> {}
 export class SoftLawItemError extends TaggedError("SoftLawItemError")<{
   message: string;
   tag: (typeof SOFT_LAW_ITEM_TAGS)[number];

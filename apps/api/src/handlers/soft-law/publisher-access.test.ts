@@ -1,16 +1,29 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
+import {
+  SoftLawBlockedError,
+  SoftLawAccessError,
+  SoftLawContentTypeMismatchError,
+} from "@/api/lib/legal-search/soft-law-access-types";
+import type {
+  SoftLawFetchError,
+  SoftLawResponse,
+} from "@/api/lib/legal-search/soft-law-access-types";
 import type { SoftLawAccessPolicy } from "@/api/lib/legal-search/soft-law-types";
 
 import {
   createSoftLawFetch,
   detectSoftLawBlock,
-  SoftLawBlockedError,
-  SoftLawAccessError,
-  SoftLawContentTypeMismatchError,
   softLawAccessWindowOpen,
 } from "./publisher-access";
+
+const fetchError = (result: Result<SoftLawResponse, SoftLawFetchError>) => {
+  if (!Result.isError(result)) {
+    return panic("Expected a classified fetch failure");
+  }
+  return result.error;
+};
 
 const policy = {
   publisherGate: "uoou-cz",
@@ -50,12 +63,64 @@ test("blocked responses are never retried or exposed to parsers", async () => {
       reserve: async () => {},
       request: async () => {
         calls++;
-        return new Response(body, { status });
+        return new Response(body, {
+          status,
+          headers: { "content-type": "text/html" },
+        });
       },
     });
-    await expect(fetch("https://uoou.gov.cz/document")).rejects.toBeInstanceOf(
-      SoftLawBlockedError,
+    expect(
+      fetchError(await fetch("https://uoou.gov.cz/document")),
+    ).toBeInstanceOf(SoftLawBlockedError);
+    expect(calls).toBe(1);
+  }
+});
+
+test("network failures return a classified access error without rejecting the fetch promise", async () => {
+  const cause = new TypeError("Network unavailable");
+  const fetch = createSoftLawFetch({
+    policy,
+    signal: new AbortController().signal,
+    reserve: async () => {},
+    request: async () => {
+      throw cause;
+    },
+  });
+  const result = await fetch("https://uoou.gov.cz/document");
+  const error = fetchError(result);
+  expect(error).toBeInstanceOf(SoftLawAccessError);
+  expect(error).toMatchObject({ cause });
+  expect(fetch.getBlockReason()).toBeNull();
+});
+
+test("blocked status and redirects latch before failing body cleanup", async () => {
+  for (const [status, reason] of [
+    [403, "forbidden"],
+    [429, "rate_limited"],
+    [302, "challenge"],
+  ] as const) {
+    let calls = 0;
+    const fetch = createSoftLawFetch({
+      policy,
+      signal: new AbortController().signal,
+      reserve: async () => {},
+      request: async () => {
+        calls++;
+        return new Response(
+          new ReadableStream({
+            cancel: () => Promise.reject(new TypeError("Cleanup failed")),
+          }),
+          { status, headers: { location: "/cdn-cgi/challenge" } },
+        );
+      },
+    });
+    expect(Result.isError(await fetch("https://uoou.gov.cz/document"))).toBe(
+      true,
     );
+    expect(fetch.getBlockReason()).toBe(reason);
+    expect(fetchError(await fetch("https://uoou.gov.cz/other"))).toMatchObject({
+      reason,
+    });
     expect(calls).toBe(1);
   }
 });
@@ -74,13 +139,13 @@ test("publisher fetch applies the contact user agent, rejects redirects and fore
   });
   expect(
     new TextDecoder().decode(
-      (await fetch("https://uoou.gov.cz/document")).bytes,
+      (await fetch("https://uoou.gov.cz/document")).unwrap().bytes,
     ),
   ).toBe("document");
   expect(seen).toEqual([policy.userAgent]);
-  await expect(fetch("https://example.test/document")).rejects.toBeInstanceOf(
-    SoftLawAccessError,
-  );
+  expect(
+    fetchError(await fetch("https://example.test/document")),
+  ).toBeInstanceOf(SoftLawAccessError);
   expect(seen).toHaveLength(1);
   const redirect = createSoftLawFetch({
     policy,
@@ -92,9 +157,9 @@ test("publisher fetch applies the contact user agent, rejects redirects and fore
         headers: { location: "https://example.test/" },
       }),
   });
-  await expect(redirect("https://uoou.gov.cz/document")).rejects.toBeInstanceOf(
-    SoftLawAccessError,
-  );
+  expect(
+    fetchError(await redirect("https://uoou.gov.cz/document")),
+  ).toBeInstanceOf(SoftLawAccessError);
 });
 
 test("off-peak windows use the declared zone across midnight", () => {
@@ -141,9 +206,9 @@ test("closed access windows refuse the request after reservation", async () => {
       return new Response("body");
     },
   });
-  await expect(fetch("https://uoou.gov.cz/document")).rejects.toBeInstanceOf(
-    SoftLawAccessError,
-  );
+  expect(
+    fetchError(await fetch("https://uoou.gov.cz/document")),
+  ).toBeInstanceOf(SoftLawAccessError);
   expect(calls).toBe(0);
   expect(fetch.getWindowState()).toBe("deferred_window");
 });
@@ -166,7 +231,9 @@ test("the recorded CMS newsletter CAPTCHA is not a challenge shell", async () =>
     request: async () =>
       new Response(html, { headers: { "content-type": "text/html" } }),
   });
-  expect((await fetch("https://uoou.gov.cz/listing")).bytes).toEqual(bytes);
+  expect((await fetch("https://uoou.gov.cz/listing")).unwrap().bytes).toEqual(
+    bytes,
+  );
 });
 
 test("binary response bytes cannot trigger a text challenge", async () => {
@@ -183,7 +250,7 @@ test("binary response bytes cannot trigger a text challenge", async () => {
           headers: { "content-type": contentType },
         }),
     });
-    expect((await fetch(url)).bytes.byteLength).toBeGreaterThan(0);
+    expect((await fetch(url)).unwrap().bytes.byteLength).toBeGreaterThan(0);
     expect(fetch.getBlockReason()).toBeNull();
   }
 });
@@ -202,7 +269,7 @@ test("HTML challenge responses block even at attachment URLs", async () => {
           headers: { "content-type": "text/html" },
         }),
     });
-    await expect(fetch(url)).rejects.toBeInstanceOf(SoftLawBlockedError);
+    expect(fetchError(await fetch(url))).toBeInstanceOf(SoftLawBlockedError);
     expect(fetch.getBlockReason()).toBe("challenge");
   }
 });
@@ -217,11 +284,13 @@ test("an expected binary surface answering ordinary HTML is a retryable content-
         headers: { "content-type": "text/html" },
       }),
   });
-  await expect(
-    fetch("https://uoou.gov.cz/media/document.pdf", {
-      expectedContentTypes: ["application/pdf"],
-    }),
-  ).rejects.toBeInstanceOf(SoftLawContentTypeMismatchError);
+  expect(
+    fetchError(
+      await fetch("https://uoou.gov.cz/media/document.pdf", {
+        expectedContentTypes: ["application/pdf"],
+      }),
+    ),
+  ).toBeInstanceOf(SoftLawContentTypeMismatchError);
   expect(fetch.getBlockReason()).toBeNull();
 });
 
@@ -236,19 +305,20 @@ test("lease loss during pacing prevents every later request", async () => {
     },
     beforeRequest: async () => {
       if (!ownsLease) {
-        throw new SoftLawAccessError({ message: "Lease lost" });
+        return Result.err(new SoftLawAccessError({ message: "Lease lost" }));
       }
+      return Result.ok(undefined);
     },
     request: async () => {
       requests++;
       return new Response("body");
     },
   });
-  await expect(fetch("https://uoou.gov.cz/page")).rejects.toBeInstanceOf(
+  expect(fetchError(await fetch("https://uoou.gov.cz/page"))).toBeInstanceOf(
     SoftLawAccessError,
   );
   ownsLease = true;
-  await expect(fetch("https://uoou.gov.cz/page")).rejects.toBeInstanceOf(
+  expect(fetchError(await fetch("https://uoou.gov.cz/page"))).toBeInstanceOf(
     SoftLawAccessError,
   );
   expect(requests).toBe(0);
@@ -276,16 +346,17 @@ test("a block arriving during another request's lease check prevents that reques
         entered();
         await pending;
       }
+      return Result.ok(undefined);
     },
     request: async () => {
       requests++;
       return new Response("blocked", { status: 429 });
     },
   });
-  const slow = Result.tryPromise(() => fetch("https://uoou.gov.cz/slow"));
+  const slow = fetch("https://uoou.gov.cz/slow");
   await checking;
   try {
-    await expect(fetch("https://uoou.gov.cz/fast")).rejects.toBeInstanceOf(
+    expect(fetchError(await fetch("https://uoou.gov.cz/fast"))).toBeInstanceOf(
       SoftLawBlockedError,
     );
   } finally {
@@ -310,7 +381,7 @@ test("a challenge redirect latches and all later requests are refused", async ()
     },
   });
   for (let attempt = 0; attempt < 3; attempt++) {
-    await expect(fetch("https://uoou.gov.cz/page")).rejects.toBeInstanceOf(
+    expect(fetchError(await fetch("https://uoou.gov.cz/page"))).toBeInstanceOf(
       SoftLawBlockedError,
     );
   }

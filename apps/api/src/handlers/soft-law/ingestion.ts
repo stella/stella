@@ -9,6 +9,7 @@ import {
 } from "@/api/lib/legal-search/raw-source-storage";
 import type { WriteRawSourcePayload } from "@/api/lib/legal-search/raw-source-storage";
 import type { SoftLawFetch } from "@/api/lib/legal-search/soft-law-access-types";
+import { SoftLawBlockedError } from "@/api/lib/legal-search/soft-law-access-types";
 import {
   softLawIdentityKey,
   softLawContentHash,
@@ -30,7 +31,7 @@ import type {
   SoftLawDocumentInput,
 } from "@/api/lib/legal-search/soft-law-types";
 
-import { createSoftLawFetch, SoftLawBlockedError } from "./publisher-access";
+import { createSoftLawFetch } from "./publisher-access";
 
 const PAGE_BUDGET = 20;
 const PAGE_RAW_BYTE_LIMIT = 64 * 1024 * 1024;
@@ -62,18 +63,25 @@ export type SoftLawRunResult =
 
 const assertPublisherAvailable = (fetch: SoftLawFetch) => {
   if (fetch.getLeaseState() === "lost") {
-    throw new SoftLawIngestionError({ message: "Ingestion lease was lost" });
+    return Result.err(
+      new SoftLawIngestionError({ message: "Ingestion lease was lost" }),
+    );
   }
   const reason = fetch.getBlockReason();
   if (reason) {
-    throw new SoftLawBlockedError({
-      message: "Publisher blocked this source",
-      reason,
-    });
+    return Result.err(
+      new SoftLawBlockedError({
+        message: "Publisher blocked this source",
+        reason,
+      }),
+    );
   }
   if (fetch.getWindowState() === "deferred_window") {
-    throw new SoftLawIngestionError({ message: "Publisher window is closed" });
+    return Result.err(
+      new SoftLawIngestionError({ message: "Publisher window is closed" }),
+    );
   }
+  return Result.ok();
 };
 type PrepareSoftLawPageOptions = {
   entries: readonly SoftLawEntry[];
@@ -105,36 +113,48 @@ const fetchSoftLawItem = async ({
   count,
   maxRawBytes,
 }: FetchSoftLawItemOptions) => {
-  const input = await adapter.fetchDocument(entry, { signal, fetch });
-  const identityKey = softLawIdentityKey(adapter.authority, input.metadata);
+  const fetched = await adapter.fetchDocument(entry, { signal, fetch });
+  if (Result.isError(fetched)) {
+    return fetched;
+  }
+  const input = fetched.value;
+  const identity = softLawIdentityKey(adapter.authority, input.metadata);
+  if (Result.isError(identity)) {
+    return identity;
+  }
+  const identityKey = identity.value;
   if (
     !input.raw.length ||
     input.raw.length > DOCUMENT_RAW_PART_LIMIT ||
     new Set(input.raw.map((part) => part.role)).size !== input.raw.length
   ) {
-    throw new SoftLawItemError({
-      message: "Document raw parts are missing or ambiguous",
-      tag: "invalid_document",
-    });
+    return Result.err(
+      new SoftLawItemError({
+        message: "Document raw parts are missing or ambiguous",
+        tag: "invalid_document",
+      }),
+    );
   }
   const rawByteLength = input.raw.reduce(
     (total, part) => total + part.bytes.byteLength,
     0,
   );
   if (rawByteLength > maxRawBytes) {
-    throw new SoftLawItemError({
-      message: "Page raw byte limit exceeded",
-      tag: "invalid_document",
-    });
+    return Result.err(
+      new SoftLawItemError({
+        message: "Page raw byte limit exceeded",
+        tag: "invalid_document",
+      }),
+    );
   }
-  return {
+  return Result.ok({
     entry,
     input,
     identityKey,
     contentHash: softLawContentHash(input),
     count,
     rawByteLength,
-  };
+  });
 };
 const rejectedAttempt = (
   entry: SoftLawEntry,
@@ -183,25 +203,38 @@ const fetchSoftLawPage = async ({
     }
     const count = (previous?.count ?? 0) + 1;
     // db-await-in-loop: Renew the lease before each potentially slow document so an expired writer stops before fetching.
-    await store.renew();
+    const renewed = await store.renew();
+    if (Result.isError(renewed)) {
+      return renewed;
+    }
     const maxRawBytes = PAGE_RAW_BYTE_LIMIT - retainedRawBytes;
-    const result = await Result.tryPromise(() =>
+    const attempted = await Result.tryPromise(() =>
       fetchSoftLawItem({ entry, adapter, signal, fetch, count, maxRawBytes }),
     );
-    assertPublisherAvailable(fetch);
+    const result = Result.isError(attempted)
+      ? Result.err(attempted.error.cause)
+      : attempted.value;
+    const available = assertPublisherAvailable(fetch);
+    if (Result.isError(available)) {
+      return available;
+    }
     signal.throwIfAborted();
     if (Result.isError(result)) {
-      attempts.push(rejectedAttempt(entry, result.error.cause, count));
+      attempts.push(rejectedAttempt(entry, result.error, count));
       continue;
     }
     retainedRawBytes += result.value.rawByteLength;
     fetched.push(result.value);
   }
-  return { attempts, fetched };
+  return Result.ok({ attempts, fetched });
 };
 const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
   const { store, sourceId, writeRaw } = options;
-  const { attempts, fetched } = await fetchSoftLawPage(options);
+  const page = await fetchSoftLawPage(options);
+  if (Result.isError(page)) {
+    return page;
+  }
+  const { attempts, fetched } = page.value;
   const known = fetched.length
     ? await store.loadMatches({
         entries: fetched.map((item) => item.entry),
@@ -290,7 +323,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       tag: null,
     });
   }
-  return { observations, attempts };
+  return Result.ok({ observations, attempts });
 };
 
 /** Only the ingestion database capability may mutate this global corpus. */
@@ -303,7 +336,11 @@ export const runSoftLawIngestion = async ({
   accessDependencies,
 }: RunSoftLawIngestionOptions): Promise<SoftLawRunResult> => {
   const store = createSoftLawIngestionStore({ sourceId, adapter, scopedDb });
-  const source = await store.claim();
+  const claimed = await store.claim();
+  if (Result.isError(claimed)) {
+    return { status: "failed", error: claimed.error };
+  }
+  const source = claimed.value;
   switch (source.type) {
     case "busy":
       return { status: "busy" };
@@ -323,39 +360,54 @@ export const runSoftLawIngestion = async ({
     beforeRequest: store.renew,
   });
   let cursor = source.row.syncCursor;
-  const outcome = await Result.tryPromise(
-    async (): Promise<SoftLawRunResult> => {
+  const attemptedOutcome = await Result.tryPromise(
+    async (): Promise<Result<SoftLawRunResult, unknown>> => {
       const total = await adapter.getTotalCount({ signal, fetch });
-      assertPublisherAvailable(fetch);
+      const available = assertPublisherAvailable(fetch);
+      if (Result.isError(available)) {
+        return available;
+      }
       if (total.type === "probe-failed") {
-        throw new SoftLawListingIncompleteError({
-          message: "Source listing size probe failed",
-        });
+        return Result.err(
+          new SoftLawListingIncompleteError({
+            message: "Source listing size probe failed",
+          }),
+        );
       }
       const expectedTotal = total.type === "count" ? total.total : null;
       if (
         expectedTotal !== null &&
         (!Number.isSafeInteger(expectedTotal) || expectedTotal < 0)
       ) {
-        throw new SoftLawListingIncompleteError({
-          message: "Invalid declared listing size",
-        });
+        return Result.err(
+          new SoftLawListingIncompleteError({
+            message: "Invalid declared listing size",
+          }),
+        );
       }
       for (let pageNumber = 0; pageNumber < PAGE_BUDGET; pageNumber++) {
         signal.throwIfAborted();
         // db-await-in-loop: Cursor pages depend on the previous checkpoint; renew before each discovery request.
-        await store.renew();
+        const renewed = await store.renew();
+        if (Result.isError(renewed)) {
+          return renewed;
+        }
         const page = await adapter.discover({ cursor, signal, fetch });
-        assertPublisherAvailable(fetch);
+        const pageAvailable = assertPublisherAvailable(fetch);
+        if (Result.isError(pageAvailable)) {
+          return pageAvailable;
+        }
         if (
           page.entries.length > SOFT_LAW_BATCH_LIMIT ||
           new Set(page.entries.map((entry) => entry.url)).size !==
             page.entries.length ||
           (page.nextCursor !== null && page.nextCursor === cursor)
         ) {
-          throw new SoftLawIngestionError({
-            message: "Invalid discovery batch or cursor",
-          });
+          return Result.err(
+            new SoftLawIngestionError({
+              message: "Invalid discovery batch or cursor",
+            }),
+          );
         }
         const prepared = await prepareSoftLawPage({
           entries: page.entries,
@@ -367,32 +419,41 @@ export const runSoftLawIngestion = async ({
           fetch,
           writeRaw,
         });
-        const retryable = prepared.attempts.some(
+        if (Result.isError(prepared)) {
+          return prepared;
+        }
+        const retryable = prepared.value.attempts.some(
           (attempt) => attempt.status === "retryable",
         );
         // db-await-in-loop: Commit this page and checkpoint atomically before walking the next cursor.
         const persisted = await store.persistPage({
-          ...prepared,
+          ...prepared.value,
           expectedCursor: cursor,
           nextCursor: retryable ? cursor : page.nextCursor,
           runId,
           expectedTotal,
           pendingRetries: retryable,
         });
-        if (persisted.status === "listing_incomplete") {
+        if (Result.isError(persisted)) {
           return persisted;
         }
+        if (persisted.value.status === "listing_incomplete") {
+          return Result.ok(persisted.value);
+        }
         if (retryable) {
-          return { status: "paused" };
+          return Result.ok({ status: "paused" });
         }
         cursor = page.nextCursor;
         if (cursor === null) {
-          return { status: "complete" };
+          return Result.ok({ status: "complete" });
         }
       }
-      return { status: "paused" };
+      return Result.ok({ status: "paused" });
     },
   );
+  const outcome = Result.isError(attemptedOutcome)
+    ? Result.err(attemptedOutcome.error.cause)
+    : attemptedOutcome.value;
   const blocked = fetch.getBlockReason();
   if (blocked) {
     await store.settle({ status: "blocked", reason: blocked });
@@ -410,7 +471,7 @@ export const runSoftLawIngestion = async ({
   }
   await store.settle({
     status: "failed",
-    reason: SoftLawListingIncompleteError.is(outcome.error.cause)
+    reason: SoftLawListingIncompleteError.is(outcome.error)
       ? "listing_incomplete"
       : "ingestion_failed",
   });

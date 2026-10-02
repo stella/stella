@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { softLawIdentityKey, softLawContentHash } from "./soft-law-fingerprint";
@@ -98,19 +99,48 @@ test("canonical metadata changes create a new fingerprint, including withdrawal 
 
 test("issue dates are validated before storage and reference keys use NFKC without changing text", () => {
   for (const value of ["2024-1-1", "2024-02-30", "", "2024-01-01T00:00:00Z"]) {
-    expect(() =>
-      softLawIdentityKey("cz-uoou", {
-        ...metadata,
-        issuedOn: { state: "stated", value },
-      }),
-    ).toThrow(SoftLawItemError);
+    const result = softLawIdentityKey("cz-uoou", {
+      ...metadata,
+      issuedOn: { state: "stated", value },
+    });
+    if (!Result.isError(result)) {
+      return panic("Invalid issue date was accepted");
+    }
+    expect(result.error).toBeInstanceOf(SoftLawItemError);
+    expect(result.error).toMatchObject({
+      tag: "invalid_document",
+      message: "Issue date is not a valid ISO date",
+    });
   }
   const fullwidth = {
     ...metadata,
     statedReference: { state: "stated", value: "０２/２０２４" },
   } as const;
-  expect(softLawIdentityKey("cz-uoou", fullwidth)).toBe(
-    softLawIdentityKey("cz-uoou", metadata),
+  expect(softLawIdentityKey("cz-uoou", fullwidth).unwrap()).toBe(
+    softLawIdentityKey("cz-uoou", metadata).unwrap(),
   );
   expect(fullwidth.statedReference.value).toBe("０２/２０２４");
+});
+
+test("missing stated identity fields return classified errors", () => {
+  const invalidMetadata = [
+    { ...metadata, title: " \t" },
+    { ...metadata, statedReference: { state: "stated", value: " \n" } },
+  ] as const satisfies readonly SoftLawMetadata[];
+  for (const value of invalidMetadata) {
+    const result = softLawIdentityKey("cz-uoou", value);
+    if (!Result.isError(result)) {
+      return panic("Empty identity field was accepted");
+    }
+    expect(result.error).toBeInstanceOf(SoftLawItemError);
+    expect(result.error.tag).toBe("invalid_document");
+  }
+  expect(
+    softLawIdentityKey("cz-uoou", {
+      ...metadata,
+      title: "  Guidance  ",
+      statedReference: { state: "not_stated" },
+      issuedOn: { state: "stated", value: "2024-02-29" },
+    }).unwrap(),
+  ).toBe(JSON.stringify(["cz-uoou", "title", "guidance", "2024-02-29"]));
 });
