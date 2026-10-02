@@ -1,0 +1,40 @@
+name: Merge queue cancellation proof
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  failing:
+    runs-on: ubuntu-latest
+    permissions:
+      actions: write
+    steps:
+      - name: Allow sibling to start
+        run: sleep 30
+      - name: Fail deliberately
+        run: exit 1
+      - name: Cancel this run after failure
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+  sibling:
+    runs-on: ubuntu-latest
+    steps:
+      - run: sleep 180
+  ci-result:
+    if: always()
+    needs: [failing, sibling]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Report dependency failure
+        env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: |
+          echo "$NEEDS"
+          if jq -e 'any(.[]; .result == "failure")' <<< "$NEEDS"; then
+            exit 1
+          fi
+          exit 2
