@@ -168,7 +168,9 @@ describe("clause body publication", () => {
   test("publication is one atomic request with the live body", async () => {
     const save = mountSave();
     await save.change(B);
-    const { outcome } = await save.start(() => save.result.current.snapshot());
+    const { outcome } = await save.start(async () =>
+      save.result.current.snapshot(),
+    );
     expect((await save.whenStarted(0)).write).toEqual({
       body: B,
       expectedBody: A,
@@ -185,7 +187,9 @@ describe("clause body publication", () => {
   test("an atomic publication refusal changes neither head nor version", async () => {
     const save = mountSave();
     await save.change(B);
-    const { outcome } = await save.start(() => save.result.current.snapshot());
+    const { outcome } = await save.start(async () =>
+      save.result.current.snapshot(),
+    );
     expect((await save.whenStarted(0)).write.snapshotVersion).toBe(true);
     await save.settle(0, outcome, WRITE_FAILED);
     expect(await outcome).toBe(false);
@@ -201,7 +205,7 @@ describe("clause body publication", () => {
       await save.change(B);
       await save.tick();
       await save.whenStarted(0);
-      const { outcome } = await save.start(() =>
+      const { outcome } = await save.start(async () =>
         save.result.current.snapshot(),
       );
       expect(save.requests).toHaveLength(1);
@@ -247,7 +251,7 @@ describe("clause body publication", () => {
             if (!captured) {
               throw new Error("Expected a preceding publication revision");
             }
-            const { outcome } = await save.start(() =>
+            const { outcome } = await save.start(async () =>
               save.result.current.snapshot(),
             );
             expect((await save.whenStarted(0)).write).toEqual({
@@ -290,10 +294,10 @@ describe("clause body publication", () => {
   test("a new publication proceeds after an earlier successful publication refuses leaving", async () => {
     const save = mountSave();
     await save.change(B);
-    const first = await save.start(() => save.result.current.snapshot());
+    const first = await save.start(async () => save.result.current.snapshot());
     await save.whenStarted(0);
     await save.change(C);
-    const second = await save.start(() => save.result.current.snapshot());
+    const second = await save.start(async () => save.result.current.snapshot());
     expect(save.requests).toHaveLength(1);
     await save.settle(0, first.outcome);
     expect(await first.outcome).toBe(false);
@@ -325,7 +329,7 @@ describe("clause body publication", () => {
     const restored = Promise.withResolvers<ClauseParagraph[]>();
     const called = Promise.withResolvers<ClauseParagraph[]>();
     await save.change(B);
-    const { outcome } = await save.start(() =>
+    const { outcome } = await save.start(async () =>
       save.result.current.sequenceHead(async (expectedBody) => {
         called.resolve(expectedBody);
         return restored.promise;
@@ -355,7 +359,7 @@ describe("clause body publication", () => {
   });
   test("echoing an adopted body creates neither an unsaved revision nor another write", async () => {
     const save = mountSave();
-    const { outcome } = await save.start(() =>
+    const { outcome } = await save.start(async () =>
       save.result.current.sequenceHead(async () => HISTORY),
     );
     await act(async () => {
@@ -370,11 +374,15 @@ describe("clause body publication", () => {
   });
   test("clean refetches update the displayed head and next precondition", async () => {
     const save = mountSave();
-    await act(() => save.rerender({ initialBody: REMOTE }));
+    act(() => {
+      save.rerender({ initialBody: REMOTE });
+    });
     expect(save.result.current.body).toEqual(REMOTE);
     expect(save.result.current.conflict.status).toBe("none");
     await save.change(B);
-    const { outcome } = await save.start(() => save.result.current.flush());
+    const { outcome } = await save.start(async () =>
+      save.result.current.flush(),
+    );
     expect((await save.whenStarted(0)).write).toEqual({
       body: B,
       expectedBody: REMOTE,
@@ -386,21 +394,25 @@ describe("clause body publication", () => {
     async (choice) => {
       const save = mountSave();
       await save.change(B);
-      await act(() => save.rerender({ initialBody: REMOTE }));
+      act(() => {
+        save.rerender({ initialBody: REMOTE });
+      });
       expect(save.result.current.body).toEqual(B);
       expect(save.result.current.conflict).toEqual({
         status: "choice",
         head: REMOTE,
       });
       if (choice === "take theirs") {
-        await act(() => save.result.current.takeTheirs());
+        act(() => {
+          save.result.current.takeTheirs();
+        });
         expect(save.result.current.body).toEqual(REMOTE);
         expect(save.result.current.dirty).toBe(false);
         await save.tick();
         expect(save.requests).toHaveLength(0);
         return;
       }
-      const { outcome } = await save.start(() =>
+      const { outcome } = await save.start(async () =>
         save.result.current.keepMine(),
       );
       expect((await save.whenStarted(0)).write).toEqual({
@@ -423,7 +435,9 @@ describe("clause body publication", () => {
       },
     });
     await save.change(B);
-    const { outcome } = await save.start(() => save.result.current.flush());
+    const { outcome } = await save.start(async () =>
+      save.result.current.flush(),
+    );
     await save.settle(0, undefined, CONFLICT);
     await reading.promise;
     await act(async () => {
@@ -436,7 +450,7 @@ describe("clause body publication", () => {
       status: "choice",
       head: REMOTE,
     });
-    const retry = await save.start(() => save.result.current.keepMine());
+    const retry = await save.start(async () => save.result.current.keepMine());
     expect((await save.whenStarted(1)).write).toEqual({
       body: B,
       expectedBody: REMOTE,
@@ -446,11 +460,13 @@ describe("clause body publication", () => {
   test("recovering a committed head after a lost response does not discard local text", async () => {
     const save = mountSave({ readHead: async () => B });
     await save.change(B);
-    const { outcome } = await save.start(() => save.result.current.flush());
+    const { outcome } = await save.start(async () =>
+      save.result.current.flush(),
+    );
     await save.settle(0, outcome, CONFLICT);
     expect(save.result.current.conflict.status).toBe("none");
     expect(save.result.current.body).toEqual(B);
-    const retry = await save.start(() => save.result.current.snapshot());
+    const retry = await save.start(async () => save.result.current.snapshot());
     expect((await save.whenStarted(1)).write).toEqual({
       body: B,
       expectedBody: B,
@@ -477,7 +493,7 @@ describe("clause body publication", () => {
             : undefined,
       });
       if (fault === "head operation") {
-        const failed = await save.start(() =>
+        const failed = await save.start(async () =>
           save.result.current.sequenceHead(async () => {
             throw WRITE_FAILED;
           }),
@@ -488,7 +504,7 @@ describe("clause body publication", () => {
         expect(await failed.outcome).toBe(false);
       } else {
         await save.change(B);
-        const first = await save.start(() => save.result.current.flush());
+        const first = await save.start(async () => save.result.current.flush());
         await save.settle(
           0,
           first.outcome,
@@ -496,7 +512,9 @@ describe("clause body publication", () => {
         );
       }
       await save.change(C);
-      const retried = await save.start(() => save.result.current.snapshot());
+      const retried = await save.start(async () =>
+        save.result.current.snapshot(),
+      );
       await save.settle(fault === "head operation" ? 0 : 1, retried.outcome);
       expect(await retried.outcome).toBe(true);
       expect(save.result.current.body).toEqual(C);
@@ -506,8 +524,10 @@ describe("clause body publication", () => {
     "failed review persistence stays gated until a successful %s retry",
     async (retry) => {
       const save = mountSave();
-      await act(() => save.result.current.onReviewStatusChange("pending"));
-      const reviewed = await save.start(() =>
+      act(() => {
+        save.result.current.onReviewStatusChange("pending");
+      });
+      const reviewed = await save.start(async () =>
         save.result.current.resolveReview(B),
       );
       expect(save.result.current.reviewStatus).toBe("persisting");
@@ -518,7 +538,9 @@ describe("clause body publication", () => {
         await save.tick();
         await save.settle(1);
       } else {
-        const flushed = await save.start(() => save.result.current.flush());
+        const flushed = await save.start(async () =>
+          save.result.current.flush(),
+        );
         await save.settle(1, flushed.outcome);
       }
       expect(save.result.current.reviewStatus).toBe("resolved");
@@ -526,37 +548,51 @@ describe("clause body publication", () => {
   );
   test("an older review settlement cannot resolve a newer pending review", async () => {
     const save = mountSave();
-    await act(() => save.result.current.onReviewStatusChange("pending"));
-    const reviewed = await save.start(() =>
+    act(() => {
+      save.result.current.onReviewStatusChange("pending");
+    });
+    const reviewed = await save.start(async () =>
       save.result.current.resolveReview(B),
     );
     await save.whenStarted(0);
-    await act(() => save.result.current.onReviewStatusChange("pending"));
+    act(() => {
+      save.result.current.onReviewStatusChange("pending");
+    });
     await save.settle(0, reviewed.outcome);
     expect(save.result.current.reviewStatus).toBe("pending");
   });
   test("fully rejecting a second review cannot resolve an unpersisted earlier acceptance", async () => {
     const save = mountSave();
-    await act(() => save.result.current.onReviewStatusChange("pending"));
-    const reviewed = await save.start(() =>
+    act(() => {
+      save.result.current.onReviewStatusChange("pending");
+    });
+    const reviewed = await save.start(async () =>
       save.result.current.resolveReview(B),
     );
     await save.settle(0, reviewed.outcome, WRITE_FAILED);
-    await act(() => save.result.current.onReviewStatusChange("pending"));
-    await act(() => save.result.current.onReviewStatusChange("resolved"));
+    act(() => {
+      save.result.current.onReviewStatusChange("pending");
+    });
+    act(() => {
+      save.result.current.onReviewStatusChange("resolved");
+    });
     expect(save.result.current.reviewStatus).toBe("persisting");
-    const retried = await save.start(() => save.result.current.flush());
+    const retried = await save.start(async () => save.result.current.flush());
     await save.settle(1, retried.outcome);
     expect(save.result.current.reviewStatus).toBe("resolved");
   });
   test("an own intermediate cache acknowledgement cannot become a conflict after a later queued write", async () => {
     const save = mountSave();
     await save.change(B);
-    const first = await save.start(() => save.result.current.flush());
+    const first = await save.start(async () => save.result.current.flush());
     await save.whenStarted(0);
     await save.change(C);
-    const published = await save.start(() => save.result.current.snapshot());
-    await act(() => save.rerender({ initialBody: B }));
+    const published = await save.start(async () =>
+      save.result.current.snapshot(),
+    );
+    act(() => {
+      save.rerender({ initialBody: B });
+    });
     await save.change([{ text: "Newest edit" }]);
     await save.settle(0, first.outcome);
     expect((await save.whenStarted(1)).write).toEqual({

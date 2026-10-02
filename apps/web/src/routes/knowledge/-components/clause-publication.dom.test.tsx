@@ -148,11 +148,11 @@ const mountDetail = () => {
     return deferred.promise;
   };
   const transport = {
-    save: (write) => request({ type: "save", write }),
+    save: async (write) => request({ type: "save", write }),
     read: async () => head.body,
-    restore: (versionId, expectedBody) =>
+    restore: async (versionId, expectedBody) =>
       request({ type: "restore", versionId, expectedBody }),
-    promote: (body, expectedBody) =>
+    promote: async (body, expectedBody) =>
       request({ type: "promote", body, expectedBody }),
     rewrite: async () => {
       const deferred = Promise.withResolvers<ClauseParagraph[]>();
@@ -740,8 +740,8 @@ describe("clause detail with the real editor", () => {
     const response = Promise.withResolvers<typeof DETAIL>();
     const reading = Promise.withResolvers<undefined>();
     const aborted = Promise.withResolvers<undefined>();
-    const refetch = Result.tryPromise(() =>
-      save.queryClient.fetchQuery({
+    const refetch = Result.tryPromise(async () =>
+      save.queryClient.query({
         queryKey: save.key,
         staleTime: 0,
         queryFn: async ({ signal }) => {
@@ -765,7 +765,9 @@ describe("clause detail with the real editor", () => {
       await response.promise;
     });
     expect(save.queryClient.getQueryData(save.key)).toMatchObject({ body: B });
-    await act(() => save.reopen());
+    act(() => {
+      save.reopen();
+    });
     expect(save.editor().getText()).toBe("Edited clause");
     await save.edit(C);
     await save.click(save.saveButton());

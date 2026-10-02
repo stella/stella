@@ -117,12 +117,12 @@ const useClauseBodyQueue = ({
     reconcile(initialBody);
   }, [initialBody, reconcile]);
 
-  const enqueue = (
+  const enqueue = async (
     operation: (previousSucceeded: boolean) => Promise<boolean>,
   ) => {
     pending.current += 1;
     const settled = tail.current.then(async (previousSucceeded) => {
-      const result = await Result.tryPromise(() =>
+      const result = await Result.tryPromise(async () =>
         operation(previousSucceeded),
       );
       pending.current -= 1;
@@ -202,7 +202,7 @@ const useClauseBodyTransport = ({
       if (hasConflict()) {
         return false;
       }
-      const result = await Result.tryPromise(() =>
+      const result = await Result.tryPromise(async () =>
         mutation.mutateAsync({
           body: next,
           expectedBody: getPersisted(),
@@ -211,7 +211,8 @@ const useClauseBodyTransport = ({
       );
       if (result.isErr()) {
         const error = result.error.cause;
-        if (APIError.is(error) && error.status === 409 && readHead) {
+        const isConflict = APIError.is(error) && error.status === 409;
+        if (isConflict && readHead !== undefined) {
           await recoverConflict();
           return false;
         }
@@ -298,7 +299,7 @@ export const useClauseBodySave = ({
     reconcile,
     report,
   });
-  const flush = useLatestCallback(() => {
+  const flush = useLatestCallback(async () => {
     const captured = live.current.body;
     return enqueue(async () => {
       if (conflictRef.current.status === "choice") {
@@ -328,9 +329,9 @@ export const useClauseBodySave = ({
       debouncedSave();
     }
   };
-  const snapshot = () => {
+  const snapshot = async () => {
     if (review.isBlocked()) {
-      return Promise.resolve(false);
+      return false;
     }
     debouncedSave.cancel();
     const captured = live.current;
@@ -349,7 +350,7 @@ export const useClauseBodySave = ({
       (saved) => saved && bodyKey(live.current.body) === bodyKey(captured.body),
     );
   };
-  const sequenceHead = (
+  const sequenceHead = async (
     operation: (expectedBody: ClauseParagraph[]) => Promise<ClauseParagraph[]>,
   ) => {
     debouncedSave.cancel();
@@ -368,12 +369,13 @@ export const useClauseBodySave = ({
       ) {
         return false;
       }
-      const result = await Result.tryPromise(() =>
+      const result = await Result.tryPromise(async () =>
         operation(persisted.current),
       );
       if (result.isErr()) {
         const error = result.error.cause;
-        if (APIError.is(error) && error.status === 409 && readHead) {
+        const isConflict = APIError.is(error) && error.status === 409;
+        if (isConflict && readHead !== undefined) {
           await recoverConflict();
         } else {
           report(error);
@@ -396,9 +398,9 @@ export const useClauseBodySave = ({
     debouncedSave.cancel();
     return flush();
   };
-  const keepMine = () => {
+  const keepMine = async () => {
     if (conflictRef.current.status !== "choice") {
-      return Promise.resolve(true);
+      return true;
     }
     persisted.current = conflictRef.current.head;
     clearConflict();

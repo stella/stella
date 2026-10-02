@@ -408,7 +408,7 @@ export const ClauseEditor = ({
     if (isUsableEditor(editor)) {
       editor.setEditable(false, false);
     }
-    const rewrittenResult = await Result.tryPromise(() =>
+    const rewrittenResult = await Result.tryPromise(async () =>
       rewrite({
         // The request body schema wants a mutable array; `baseline` stays
         // `readonly` everywhere else in this module (it's never mutated,

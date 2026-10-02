@@ -338,6 +338,28 @@ export const DetailContent = ({
     return false;
   };
 
+  const promoteBody = async (body: ClauseParagraph[]) => {
+    if (!bodyActionAllowed()) {
+      return false;
+    }
+    return bodySave.sequenceHead(async (expectedBody) => {
+      const head = await resolvedTransport.promote(body, expectedBody);
+      await cacheHead(head);
+      return head.body;
+    });
+  };
+
+  const restoreBody = async (versionId: string) => {
+    if (!bodyActionAllowed()) {
+      return false;
+    }
+    return bodySave.sequenceHead(async (expectedBody) => {
+      const head = await resolvedTransport.restore(versionId, expectedBody);
+      await cacheHead(head);
+      return head.body;
+    });
+  };
+
   return (
     <div className="mx-auto w-full max-w-2xl p-6">
       <ClauseHeader
@@ -430,19 +452,7 @@ export const DetailContent = ({
           <VariantsTab
             clauseId={clauseId}
             onRefresh={onRefresh}
-            onPromote={(body) => {
-              if (!bodyActionAllowed()) {
-                return Promise.resolve(false);
-              }
-              return bodySave.sequenceHead(async (expectedBody) => {
-                const head = await resolvedTransport.promote(
-                  body,
-                  expectedBody,
-                );
-                await cacheHead(head);
-                return head.body;
-              });
-            }}
+            onPromote={promoteBody}
             variants={detail.variants}
           />
         </TabsPanel>
@@ -451,19 +461,7 @@ export const DetailContent = ({
           <HistoryTab
             clauseId={clauseId}
             currentBody={bodySave.body}
-            onRestore={(versionId) => {
-              if (!bodyActionAllowed()) {
-                return Promise.resolve(false);
-              }
-              return bodySave.sequenceHead(async (expectedBody) => {
-                const head = await resolvedTransport.restore(
-                  versionId,
-                  expectedBody,
-                );
-                await cacheHead(head);
-                return head.body;
-              });
-            }}
+            onRestore={restoreBody}
             versions={detail.versions}
           />
         </TabsPanel>
