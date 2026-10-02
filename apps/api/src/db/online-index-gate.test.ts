@@ -57,6 +57,7 @@ type HarnessOptions = {
   deferBuild?: boolean;
   observerFailure?: Error;
   observerDatabase?: string;
+  autovacuumActive?: boolean;
   onObserverFailure?: () => void;
   cancelBackend?: (pid: number) => Promise<boolean>;
   onCancel?: () => void;
@@ -74,6 +75,7 @@ const makeHarness = ({
   deferBuild = true,
   observerFailure,
   observerDatabase = "test",
+  autovacuumActive = false,
   onObserverFailure,
   cancelBackend,
   onCancel,
@@ -155,13 +157,18 @@ const makeHarness = ({
   };
   const observer: OnlineMigrationConnection = {
     execute: async () => undefined,
-    query: async (statement) => {
+    query: async (statement, parameters = []) => {
       observerQueries.push(statement);
       if (statement === LONG_TRANSACTION_SQL) {
         return [{ ageMs: 0, observedAt: new Date(now).toISOString() }];
       }
       if (statement === AUTOVACUUM_SQL) {
-        return [{ active: false, observedAt: new Date(now).toISOString() }];
+        return [
+          {
+            active: autovacuumActive && parameters.at(0) === "test_table",
+            observedAt: new Date(now).toISOString(),
+          },
+        ];
       }
       if (statement.includes("pg_backend_pid")) {
         return [{ pid: 202, database: observerDatabase }];
@@ -326,6 +333,38 @@ describe("online index gate", () => {
         '"decision":"wait"',
       );
       await harness.gate.close();
+    }
+  });
+
+  test("active target autovacuum prevents a healthy disk from starting an index", async () => {
+    const statement =
+      "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)";
+    for (const autovacuumActive of [true, false]) {
+      const harness = makeHarness({
+        readings: [ebs(90)],
+        autovacuumActive,
+      });
+      try {
+        expect(await harness.gate.attempt(statement)).toBe(
+          autovacuumActive ? "wait" : "done",
+        );
+        expect(harness.statements.includes(statement)).toBe(!autovacuumActive);
+        expect(loggedRecords(harness.records)).toContainEqual(
+          expect.objectContaining({
+            decision: autovacuumActive ? "wait" : "start",
+            verdict: expect.objectContaining({
+              signals: expect.arrayContaining([
+                expect.objectContaining({
+                  indicator: "autovacuum_on_target",
+                  kind: autovacuumActive ? "stop" : "normal",
+                }),
+              ]),
+            }),
+          }),
+        );
+      } finally {
+        await harness.gate.close();
+      }
     }
   });
 
