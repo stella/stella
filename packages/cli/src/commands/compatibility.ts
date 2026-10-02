@@ -2,6 +2,7 @@ import { buildCommand, buildRouteMap } from "@stricli/core";
 import type { RouteMap } from "@stricli/core";
 import { panic, Result } from "better-result";
 
+import { actionAdmissionRefusalLines } from "../action-admission-refusal.js";
 import { resolveServerUrl } from "../auth/server-resolution.js";
 import { CliCommandError } from "../cli-exit-code.js";
 import {
@@ -9,7 +10,7 @@ import {
   type CompatibilityReport,
 } from "../compatibility.js";
 import type { Context } from "../context.js";
-import { EXIT_CODES } from "../mcp-constants.js";
+import { EXIT_CODES, resolveMcpErrorCodeExit } from "../mcp-constants.js";
 import { buildServerFlag } from "../output-flags.js";
 
 type CheckFlags = {
@@ -35,6 +36,13 @@ const checkCommand = buildCommand<CheckFlags, [], Context>({
     }
     const result = await checkServerCompatibility(serverUrl.value);
     if (Result.isError(result)) {
+      if (result.error.admission !== undefined) {
+        return new CliCommandError(
+          actionAdmissionRefusalLines(result.error.admission).join("\n"),
+          resolveMcpErrorCodeExit(result.error.admission.code) ??
+            EXIT_CODES.server,
+        );
+      }
       // An incompatible or unreachable server is a server-class failure.
       return new CliCommandError(result.error.message, EXIT_CODES.server);
     }

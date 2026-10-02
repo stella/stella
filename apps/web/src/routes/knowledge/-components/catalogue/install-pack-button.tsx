@@ -7,12 +7,12 @@ import { LoaderIcon } from "@stll/ui/icons";
 import { stellaToast } from "@stll/ui/toast";
 
 import { detached } from "@/lib/detached";
+import type { CatalogueDisplayEntry } from "@/lib/knowledge/catalogue-types";
 
-import type { CatalogueEntry } from "./catalogue-types";
 import { useInstallEntry } from "./use-install-entry";
 
 type InstallPackButtonProps = {
-  entries: readonly CatalogueEntry[];
+  entries: readonly CatalogueDisplayEntry[];
   organizationId: string;
 };
 

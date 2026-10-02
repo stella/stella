@@ -4,6 +4,7 @@ import { describe, expect, test } from "bun:test";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { ActionAdmissionError, withActionAdmission } from "./action-admission";
+import type { AdmittedActionIdentity } from "./action-kinds";
 
 const organizationId = toSafeId<"organization">("budget_org");
 const userId = toSafeId<"user">("budget_user");
@@ -13,9 +14,9 @@ const policy = {
   leaseMs: 120_000,
 };
 const periodIdentity = {
-  actionKind: "chat.send",
+  actionKind: "chat.improve-prompt",
   logicalPhaseId: "message:phase",
-};
+} as const satisfies AdmittedActionIdentity;
 const periodPolicy = { periodMs: 86_400_000, limit: 2 };
 
 const expectUnavailable = (result: Result<unknown, unknown>) => {
@@ -72,8 +73,10 @@ describe("period admission boundary", () => {
   test("nested invalid identities fail closed before inherited lease reuse", async () => {
     for (const identity of [
       undefined,
-      { actionKind: " ", logicalPhaseId: "phase" },
-      { actionKind: "chat.send", logicalPhaseId: " " },
+      {
+        actionKind: "chat.improve-prompt",
+        logicalPhaseId: " ",
+      } as const satisfies AdmittedActionIdentity,
     ]) {
       let acquisitions = 0;
       let nestedRan = false;
@@ -218,7 +221,7 @@ describe("period admission boundary", () => {
           periodPolicy,
           redis,
           periodIdentity: {
-            actionKind: "nested.finite",
+            actionKind: "chat.suggest-thread-title",
             logicalPhaseId: "nested-request",
           },
           run: async () => "completed",
@@ -228,7 +231,7 @@ describe("period admission boundary", () => {
     expect(acquisitions).toBe(1);
   });
 
-  test("period exhaustion returns busy without executing the action", async () => {
+  test("period exhaustion refuses without executing the action", async () => {
     let ran = false;
     const result = await withActionAdmission({
       organizationId,
@@ -254,7 +257,8 @@ describe("period admission boundary", () => {
     }
     expect(ActionAdmissionError.is(result.error)).toBe(true);
     if (ActionAdmissionError.is(result.error)) {
-      expect(result.error.reason).toBe("busy");
+      expect(result.error.reason).toBe("period_exhausted");
+      expect(result.error.code).toBe("action_period_exhausted");
     }
     expect(ran).toBe(false);
   });

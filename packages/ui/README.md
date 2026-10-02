@@ -11,7 +11,7 @@ cannot reach into product code by accident. Lint enforces that boundary; the
 export map below is what "part of the design system" means.
 
 Peer dependencies: `react`, `react-dom`, `@base-ui/react`, `tailwindcss` (v4),
-`@dnd-kit/core`, `@dnd-kit/sortable`, and `@tanstack/react-virtual`.
+and `@tanstack/react-virtual`.
 
 ## Import
 
@@ -101,56 +101,11 @@ unavailable state.
 minor. They will be removed after that; the export guard checks that both
 spellings land on the same module for as long as they both exist.
 
-## Sortable boards
+## Kanban boards
 
 `@stll/ui/kanban` provides board matrices, subgroup swimlanes, bounded virtual
-cells, and input/accessibility primitives. The caller keeps domain identifiers,
-card rendering, permissions, and persisted mutations. Wrap sortable boards in
-`KanbanSortableBoard`, render items through `useKanbanSortable`, and attach the
-returned bindings to `KanbanDragHandle`.
-
-```tsx
-import {
-  KanbanDragHandle,
-  KanbanSortableBoard,
-  KanbanSortableList,
-  useKanbanSortable,
-} from "@stll/ui/kanban";
-
-const Card = ({ id }: { id: string }) => {
-  const { activator, setNodeRef } = useKanbanSortable({
-    activation: { type: "handle" },
-    id,
-  });
-  if (activator.type !== "handle") {
-    return null;
-  }
-  return (
-    <article ref={setNodeRef}>
-      <KanbanDragHandle bindings={activator.bindings} label="Move card" />
-    </article>
-  );
-};
-
-<KanbanSortableBoard onDragEnd={handleDragEnd}>
-  <KanbanSortableList items={cardIds}>
-    {cardIds.map((id) => (
-      <Card id={id} key={id} />
-    ))}
-  </KanbanSortableList>
-</KanbanSortableBoard>;
-```
-
-The default sensors are mouse (8px movement), touch (150ms delay with 8px
-tolerance), and keyboard. Scroll containers retain `touch-action: auto`; only
-`KanbanDragHandle` disables touch panning. `KanbanSortableBoard` also accepts
-custom `sensors`, `accessibility`, collision detection, keyboard coordinates,
-auto-scroll options, and an `overlay` render function.
-
-`getKanbanHorizontalEdge` takes `input: "pointer"` with a current client-x and
-`direction: "ltr" | "rtl"` for mouse and touch input. Keyboard calls use
-`input: "keyboard"` and require source and target indices, so every move has a
-logical edge without relying on ambiguous geometry.
+cells, and column bands. The caller owns card rendering, permissions, and
+persisted mutations.
 
 For Group/Sub-group boards, build one canonical matrix and render it with the
 installable layout and virtual cell:
@@ -186,32 +141,6 @@ const matrix = buildKanbanBoardMatrix({
   )}
 />;
 ```
-
-When rows inside a virtual cell are sortable, give the cell a unique drop target
-and its ordered matrix position. The cell registers its actual scroll element,
-including when `rows` is empty, and owns the matching `SortableContext`.
-
-```tsx
-<KanbanVirtualCell
-  getRowKey={(row) => row.id}
-  pagination={{ type: "none" }}
-  renderRow={(row) => <Card row={row} />}
-  rows={cell.rows}
-  sortable={{
-    dropTarget: {
-      id: cellId,
-      position: { column: columnIndex, lane: laneIndex },
-    },
-    getRowId: (row) => row.id,
-  }}
-/>
-```
-
-The default keyboard coordinates move through items in their cell before
-crossing into adjacent columns or subgroup lanes; empty cells remain reachable.
-Pointer and touch drops outside registered board targets cancel. Choose an
-explicit `{ type: "handle" }` activation for the 44px handle, or `{ type:
-"item" }` when the whole item is the intended activation surface.
 
 ### Column bands
 
@@ -272,6 +201,42 @@ renderCollapsedBandCell={({ band, cells, count }) => (
   </FoldedDropTarget>
 )}
 ```
+
+## Grouped lists and search
+
+`@stll/ui/list` renders inventories of named things (connections, sessions,
+keys) as titled groups of hairline-divided rows. Rows truncate their content
+column and keep their trailing column, so they never scroll sideways.
+
+```tsx
+<ListGroup aria-labelledby="apps">
+  <ListGroupHeader>
+    <ListGroupHeading>
+      <ListGroupTitle id="apps">
+        Apps with access<ListGroupCount>3</ListGroupCount>
+      </ListGroupTitle>
+      <ListGroupDescription>Apps you authorized.</ListGroupDescription>
+    </ListGroupHeading>
+  </ListGroupHeader>
+  <List>
+    <ListItem>
+      <ListItemMedia>C</ListItemMedia>
+      <ListItemContent>
+        <ListItemTitle>Claude</ListItemTitle>
+        <ListItemDescription>Connected 3 days ago</ListItemDescription>
+      </ListItemContent>
+      <ListItemActions>
+        <ListItemStatus tone="success">Connected</ListItemStatus>
+      </ListItemActions>
+    </ListItem>
+  </List>
+</ListGroup>
+```
+
+Pass `render={<a href="…" />}` to `ListItem` to make the whole row a link.
+`@stll/ui/search-field` is the matching filter box: leading magnifier, clear
+button, and Escape clears the query. The caller owns the query and the
+matching.
 
 ## Styles
 

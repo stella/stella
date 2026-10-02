@@ -16,6 +16,8 @@ import type {
   SafeOutboundAddress,
   SafeOutboundFetchResponse,
 } from "@/api/lib/safe-outbound-fetch";
+import { sanitizeFilename } from "@/api/lib/sanitize-filename";
+import { secureDocumentResponse } from "@/api/lib/secure-document-response";
 
 const PREVIEW_TIMEOUT_MS = 8000;
 const MAX_URL_LENGTH = 2048;
@@ -163,16 +165,11 @@ export const previewExternalFile = createSafeRootHandler(
     }
 
     return Result.ok(
-      new Response(body, {
-        headers: {
-          "Cache-Control": "private, max-age=600",
-          "Content-Disposition": "inline",
-          "Content-Security-Policy":
-            "default-src 'none'; object-src 'none'; base-uri 'none'",
-          "Content-Type": "application/pdf",
-          "Referrer-Policy": "no-referrer",
-          "X-Content-Type-Options": "nosniff",
-        },
+      secureDocumentResponse({
+        body,
+        contentType: "application/pdf",
+        disposition: "inline",
+        fileName: sanitizeFilename("preview.pdf"),
       }),
     );
   },

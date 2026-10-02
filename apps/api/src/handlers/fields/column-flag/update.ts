@@ -64,7 +64,11 @@ const config = {
   permissions: {
     entity: ["update"],
   },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: t.Object({
     propertyId: tSafeId("property"),
     flag: t.UnionEnum([

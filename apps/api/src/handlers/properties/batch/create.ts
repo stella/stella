@@ -29,7 +29,11 @@ const config = {
     "dependency must be a property of this matter, and at most one " +
     "document-type classifier may exist. Returns the new property ids.",
   permissions: { property: ["create"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   body: t.Object({
     items: t.Array(createPropertyBodySchema, { minItems: 1, maxItems: 10 }),
   }),

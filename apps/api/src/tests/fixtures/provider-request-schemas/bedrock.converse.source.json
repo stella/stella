@@ -1,0 +1,16 @@
+{
+  "extractedBy": "apps/api/scripts/provider-request-schemas.ts",
+  "label": "bedrock converse",
+  "notes": [
+    "Translated from the AWS service model (botocore). Only body members are kept; a union accepts exactly one member; a blob is its base64 string."
+  ],
+  "selection": {
+    "format": "aws-service-model",
+    "operation": "Converse"
+  },
+  "source": {
+    "retrievedAt": "2026-09-30",
+    "sha256": "82950c1f37c57431bb26588b855b848d1384750df6b130f189ee769a1121a499",
+    "url": "https://raw.githubusercontent.com/boto/botocore/develop/botocore/data/bedrock-runtime/2023-09-30/service-2.json"
+  }
+}

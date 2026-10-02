@@ -73,6 +73,7 @@ const resolveChatModelId = ({
 
   try {
     return getTanStackTextModelInfoForRole("chat", orgAIConfig, {
+      dataClass: "customer",
       organizationId,
     }).modelId;
   } catch {

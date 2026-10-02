@@ -1,3 +1,5 @@
+import * as slimdom from "slimdom";
+
 /**
  * Escape a string for safe use inside a double-quoted XML attribute value.
  * Order matters: `&` must be escaped first so it does not double-escape the
@@ -10,17 +12,31 @@ const escapeXmlAttribute = (value: string): string =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+const relationshipIds = (relsXml: string): Set<string> => {
+  const document = slimdom.parseXmlDocument(relsXml);
+  const ids = new Set<string>();
+  for (const element of document.getElementsByTagNameNS("*", "Relationship")) {
+    const id = element.getAttribute("Id");
+    if (id !== null) {
+      ids.add(id);
+    }
+  }
+  return ids;
+};
+
 /** Find the next available rId in a relationships XML string */
 export const findNextRId = (relsXml: string): string => {
-  const matches = relsXml.matchAll(/Id="rId(?<num>\d+)"/gu);
-  let max = 0;
-  for (const m of matches) {
-    const n = Number.parseInt(m.groups?.["num"] ?? "0", 10);
+  let max = 0n;
+  for (const id of relationshipIds(relsXml)) {
+    if (!/^rId\d+$/u.test(id)) {
+      continue;
+    }
+    const n = BigInt(id.slice(3));
     if (n > max) {
       max = n;
     }
   }
-  return `rId${max + 1}`;
+  return `rId${max + 1n}`;
 };
 
 /** Ensure a content type entry exists in [Content_Types].xml */
@@ -45,7 +61,7 @@ export const ensureRelationship = (
   target: string,
 ): string => {
   const escapedRId = escapeXmlAttribute(rId);
-  if (relsXml.includes(`Id="${escapedRId}"`)) {
+  if (relationshipIds(relsXml).has(rId)) {
     return relsXml;
   }
   const rel = `<Relationship Id="${escapedRId}" Type="${escapeXmlAttribute(type)}" Target="${escapeXmlAttribute(target)}"/>`;

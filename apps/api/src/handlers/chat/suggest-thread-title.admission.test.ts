@@ -36,6 +36,7 @@ const runDeniedTitle = async ({
   let threadReads = 0;
   let messageReads = 0;
   let entitlementReads = 0;
+  let sendModeReads = 0;
   const db = createScopedDbMock({
     query: {
       chatThreads: {
@@ -79,7 +80,12 @@ const runDeniedTitle = async ({
         },
       },
     },
-    select: () => {
+    select: (fields: Record<string, unknown>) => {
+      // The message window reads the thread's send mode after its messages.
+      if ("usedAnonymization" in fields) {
+        sendModeReads += 1;
+        return createSelectQueryMock([{ usedAnonymization: false }]);
+      }
       entitlementReads += 1;
       return createSelectQueryMock([]);
     },
@@ -119,14 +125,14 @@ const runDeniedTitle = async ({
     FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
     USAGE_ENFORCEMENT_ENABLED: env.USAGE_ENFORCEMENT_ENABLED,
     AI_PROVIDER: env.AI_PROVIDER,
-    OPENAI_API_KEY: env.OPENAI_API_KEY,
+    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
     REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
   };
   Object.assign(env, {
     FEATURE_ACTION_ADMISSION: enabled,
     USAGE_ENFORCEMENT_ENABLED: true,
-    AI_PROVIDER: "openai",
-    OPENAI_API_KEY: "fixture-instance-key",
+    AI_PROVIDER: "openrouter",
+    OPENROUTER_API_KEY: "fixture-instance-key",
     REQUIRE_PERSONAL_AI_KEY: false,
   });
   try {
@@ -143,6 +149,7 @@ const runDeniedTitle = async ({
         memberRole: { role: "owner" },
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        managedAIResidency: "eu" as const,
         params: { threadId },
         promptCachingEnabled: false,
         query: { workspaceId },
@@ -158,10 +165,12 @@ const runDeniedTitle = async ({
     if (denial === "workspace") {
       expect(threadReads).toBe(0);
       expect(messageReads).toBe(0);
+      expect(sendModeReads).toBe(0);
       expect(entitlementReads).toBe(0);
     } else {
       expect(threadReads).toBe(1);
       expect(messageReads).toBe(2);
+      expect(sendModeReads).toBe(1);
       expect(entitlementReads).toBe(1);
     }
     return result;

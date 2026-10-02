@@ -17,6 +17,10 @@ import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/ent
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 // A tuple of literals keeps each option in the route types; `satisfies` fails
 // when the vocabulary changes.
@@ -171,9 +175,14 @@ const businessRegistriesCheck = createSafeRootHandler(
     body: bodySchema,
   },
   async function* ({ body, request, scopedDb, session }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const subject = yield* subjectFromBody(body);
     const result = yield* Result.await(
       runEntityCheckShared({
+        observer,
         check: body.check,
         subject,
         signal: request.signal,

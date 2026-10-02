@@ -22,6 +22,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -106,6 +107,7 @@ type OrganizeSuggestionsHandlerProps = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   body: OrganizeSuggestionsBody;
@@ -174,12 +176,14 @@ const organizeSuggestionsHandler = async function* ({
   workspaceId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   body,
   userId,
 }: OrganizeSuggestionsHandlerProps) {
   yield* requireTanStackAIAvailableForRole({
+    dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",
@@ -211,6 +215,7 @@ const organizeSuggestionsHandler = async function* ({
       organizationId,
       workspaceId,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       safeDb,
       userId,
@@ -250,6 +255,7 @@ const organizeSuggestionsHandler = async function* ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -275,9 +281,11 @@ const organizeSuggestionsHandler = async function* ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "flex",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
@@ -703,6 +711,7 @@ type GenerateMissingSummariesOptions = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
   userId: SafeId<"user">;
@@ -713,6 +722,7 @@ const generateMissingSummaries = async ({
   organizationId,
   workspaceId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   safeDb,
   userId,
@@ -720,6 +730,7 @@ const generateMissingSummaries = async ({
   Result<GeneratedSummary[], HandlerError>
 > => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -742,9 +753,11 @@ const generateMissingSummaries = async ({
   const result = await Result.tryPromise({
     try: async () =>
       await generateTanStackObjectForRole({
+        dataClass: "customer",
         role: "fast",
         serviceTier: "flex",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,
@@ -990,6 +1003,7 @@ const persistGeneratedSummaries = async ({
   contexts,
 }: PersistGeneratedSummariesOptions) => {
   const modelInfo = getTanStackTextModelInfoForRole("fast", orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   const values = contexts.flatMap((context) => {
@@ -1075,7 +1089,11 @@ const config = {
     "and entities.rename. Per-document summaries are generated and cached " +
     "where missing, and the call consumes AI usage.",
   permissions: { workspace: ["read"], chat: ["create"] },
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   access: "write",
   body: organizeSuggestionsBodySchema,
   // Folder-organisation is queued / "background"-shaped from the
@@ -1094,6 +1112,7 @@ const organizeSuggestions = createSafeHandler(
     workspaceId,
     session,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     body,
@@ -1104,6 +1123,7 @@ const organizeSuggestions = createSafeHandler(
       workspaceId,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       body,

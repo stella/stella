@@ -22,7 +22,11 @@ const config = {
     "the assignment by passing null. The clause, its pinned version, and its " +
     "variant are untouched: only which slot the link fills changes.",
   permissions: { template: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: updateClauseSlotParamsSchema,
   body: updateClauseSlotBodySchema,
 } satisfies HandlerConfig;

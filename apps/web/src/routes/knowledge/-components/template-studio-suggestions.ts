@@ -11,8 +11,8 @@
  * range.
  */
 
+import type { Node as PMNode } from "@tiptap/pm/model";
 import { panic } from "better-result";
-import type { Node as PMNode } from "prosemirror-model";
 
 import type {
   FolioAIEditOperation,

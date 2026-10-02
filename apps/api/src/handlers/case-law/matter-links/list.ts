@@ -131,7 +131,11 @@ const config = {
     "versions, date, type, citation count and headnote preview. Returns the " +
     "whole set up to the per-matter link cap; there is no pagination.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "legal_corpus_admin" },
+  mcp: {
+    type: "capability",
+    reason: "legal_corpus_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

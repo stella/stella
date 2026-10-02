@@ -5,6 +5,7 @@ import * as v from "valibot";
 import type { runEntityCheck } from "@stll/business-registries/entity-checks";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import { toRegistryChatToolError } from "@/api/handlers/chat/tools/registry-adapter/registry-tool-error";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
@@ -14,6 +15,10 @@ import type { CounterpartyCheckResult } from "@/api/lib/business-registries/enti
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import {
   agentInputValidationError,
   normalizeObjectInputAtBoundary,
@@ -25,7 +30,8 @@ import {
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { validationErrorResult } from "@/api/mcp/tool-utils";
 
-export const COUNTERPARTY_CHECK_TOOL_NAME = "counterparty_check" as const;
+export const COUNTERPARTY_CHECK_TOOL_NAME =
+  "counterparty_check" as const satisfies RawModeOnlyChatToolName;
 
 const MCP_TOOL_NAME = "check_counterparty";
 
@@ -104,10 +110,15 @@ export const createCounterpartyCheckTools = ({
         );
       }
       const { check, subject } = parsed.output;
+      const observer = actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      );
       const result = (
         await Result.gen(async function* () {
           const checked = yield* toCounterpartyCheckSubject(subject);
           return await runEntityCheckShared({
+            observer,
             check,
             subject: checked,
             runCheck,

@@ -3,7 +3,9 @@ import { describe, expect, test } from "bun:test";
 import {
   classifyPublicKnowledgeWebProbe,
   isMemberOnlySmokeRequest,
+  publicKnowledgeVisitorSkipReason,
 } from "../helpers/public-knowledge-smoke.logic";
+import { parseStagingState } from "../helpers/staging-state";
 
 describe("public visitor request access", () => {
   test("allows public knowledge calls on both API mounts", () => {
@@ -117,6 +119,38 @@ describe("public knowledge root-head marker", () => {
           `<head><meta name="public-knowledge" ${content}></head>`,
         ),
       ).toBe("unexpected");
+    }
+  });
+});
+
+describe("public visitor route prerequisites", () => {
+  test("skips only disabled routes or explicitly declared pending web routes", () => {
+    for (const raw of [
+      undefined,
+      '{"rollout":"on"}',
+      '{"rollout":"knowledge-web-pending"}',
+    ]) {
+      const state = parseStagingState(raw);
+      for (const apiEnabled of [false, true]) {
+        for (const webEnabled of [false, true]) {
+          const reason = publicKnowledgeVisitorSkipReason({
+            apiEnabled,
+            webEnabled,
+            state,
+          });
+          if (!apiEnabled && !webEnabled) {
+            expect(reason).toBe("Public Knowledge is disabled on API and web");
+            continue;
+          }
+          if (!webEnabled && state.rollout === "knowledge-web-pending") {
+            expect(reason).toBe(
+              "Public Knowledge web routes unavailable: declared rollout=knowledge-web-pending",
+            );
+            continue;
+          }
+          expect(reason).toBeUndefined();
+        }
+      }
     }
   });
 });

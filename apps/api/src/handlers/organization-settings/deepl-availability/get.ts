@@ -13,7 +13,11 @@ const config = {
   // (even masked) lives behind organizationSettings:update — see
   // read-deepl-config.
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

@@ -1,3 +1,4 @@
+import type { ModelMessage, TextPart } from "@tanstack/ai";
 /**
  * One structured model call for a verification pass.
  *
@@ -7,8 +8,6 @@
  * carries the cache breakpoint, so later calls and the repair round read it
  * from the prompt cache.
  */
-
-import type { ModelMessage, TextPart } from "@tanstack/ai";
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
 import type * as v from "valibot";
 
@@ -19,6 +18,7 @@ import {
   type AIUsageMetering,
 } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { VerificationBlock } from "@/api/lib/lists/verification/document-text";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -32,6 +32,7 @@ export type VerificationModelDeps = {
   workspaceId: SafeId<"workspace">;
   entityVersionId: SafeId<"entityVersion">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   serviceTier: AIRequestServiceTier;
   usageMetering: AIUsageMetering;
@@ -73,6 +74,7 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
     scopeKey: `list-verification:${deps.entityVersionId}`,
   });
   const analytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature,
     modelRole: VERIFICATION_MODEL_ROLE,
     orgAIConfig: deps.orgAIConfig,
@@ -101,8 +103,10 @@ export const createVerificationCall = <TSchema extends v.GenericSchema>({
     }),
     generate: async (messages) =>
       await generate({
+        dataClass: "customer",
         role: VERIFICATION_MODEL_ROLE,
         orgAIConfig: deps.orgAIConfig,
+        managedAIResidency: deps.managedAIResidency,
         organizationId: deps.organizationId,
         analytics,
         caching,

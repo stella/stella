@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import JSZip from "jszip";
+import type JSZip from "jszip";
 
 import {
   getSkillResourceKind,
@@ -16,6 +16,7 @@ import { Temporal } from "@stll/time";
 
 import { hashSkillPackageContent } from "@/api/lib/agent-skills/content-hash";
 import { validateSkillRequiredTools } from "@/api/lib/agent-skills/required-tools-validation";
+import { loadDocx } from "@/api/lib/docx-archive";
 import { HandlerError, unreachable } from "@/api/lib/errors/tagged-errors";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -497,11 +498,16 @@ const classifyPackageFilePath = ({
   return { type: "resource" };
 };
 
+export const SKILL_ARCHIVE_OPTIONS = {
+  maxEntries: SKILL_PACKAGE_LIMITS.archiveFilesMax,
+  maxEntryBytes: SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes,
+  maxTotalBytes: SKILL_PACKAGE_LIMITS.archiveUncompressedMaxBytes,
+} as const;
+
 const parseZipSkillPackage = async (
   buffer: ArrayBuffer,
 ): Promise<Result<ImportedSkillPackage, HandlerError>> => {
-  // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const zip = await JSZip.loadAsync(buffer);
+  const zip = await loadDocx(buffer, SKILL_ARCHIVE_OPTIONS);
   const entries = Object.values(zip.files);
   if (entries.length > LIMITS.agentSkillArchiveFilesMax) {
     return rejectSkillPackage("Skill pack has too many files");

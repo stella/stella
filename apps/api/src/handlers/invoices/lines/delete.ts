@@ -36,7 +36,11 @@ const deleteInvoiceLine = createSafeHandler(
       "entry or expense line returns its entry to approved, unbilled status, " +
       "so it can be billed again. Only draft invoices can be edited.",
     permissions: { invoice: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: lineParamsSchema,
   },
   async function* ({

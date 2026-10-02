@@ -10,6 +10,7 @@ import {
   conditionHasFormula,
   conditionNodeSchema,
 } from "@stll/conditions";
+import { MAX_CONDITION_NESTING } from "@stll/template-conditions";
 
 const legacyConditionSchema = v.variant("type", [
   v.strictObject({
@@ -33,12 +34,49 @@ export type ParsedStoredCondition =
   | { status: "valid"; condition: ConditionNode | null }
   | { status: "invalid" };
 
+const exceedsStoredDepth = (value: unknown): boolean => {
+  const pending = [{ value, depth: 0 }];
+  const visited = new WeakMap<object, number>();
+  while (pending.length > 0) {
+    const current = pending.pop();
+    if (
+      !current ||
+      current.value === null ||
+      typeof current.value !== "object"
+    ) {
+      continue;
+    }
+    const node = current.value;
+    if (!("type" in node) || node.type !== "group") {
+      continue;
+    }
+    if (current.depth >= MAX_CONDITION_NESTING) {
+      return true;
+    }
+    const previousDepth = visited.get(node);
+    if (previousDepth !== undefined && previousDepth >= current.depth) {
+      continue;
+    }
+    visited.set(node, current.depth);
+    if (!("children" in node) || !Array.isArray(node.children)) {
+      continue;
+    }
+    for (const child of node.children) {
+      pending.push({ value: child, depth: current.depth + 1 });
+    }
+  }
+  return false;
+};
+
 export const parseStoredCondition = (
   value: unknown,
   dependsOnPropertyId: string,
 ): ParsedStoredCondition => {
   if (value === null || value === undefined) {
     return { status: "valid", condition: null };
+  }
+  if (exceedsStoredDepth(value)) {
+    return { status: "invalid" };
   }
   if (v.is(conditionNodeSchema, value) && !conditionHasFormula(value)) {
     return { status: "valid", condition: value };

@@ -95,6 +95,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     params,
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     recordAuditEvent,
   }) {
@@ -139,6 +140,7 @@ const fillTemplateToWorkspace = createSafeHandler(
     // defers this, so a deterministic fill opens no metered trace.
     const aiCollaborators = () => {
       const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId,
@@ -155,6 +157,7 @@ const fillTemplateToWorkspace = createSafeHandler(
       });
       const shared = {
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         skillContext: { organizationId, safeDb, userId: user.id },
         aiAnalytics,

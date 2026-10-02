@@ -14,7 +14,7 @@ import type { CapabilityLeafSpec } from "./route-types.js";
 import {
   composeInputFromFlags,
   confirmDestructive,
-  mapClientErrorExit,
+  renderClientError,
   maybeConfirmAndRetry,
   parseInputObject,
   readOutputFormat,
@@ -217,8 +217,7 @@ export const runCapabilityCommand = async ({
       : { timeoutMs: spec.requestTimeoutMs }),
   });
   if (Result.isError(call)) {
-    writers.stderr(`${call.error.message}\n`);
-    setExit(context, mapClientErrorExit(call.error));
+    renderClientError({ context, error: call.error, writers, format });
     return;
   }
 

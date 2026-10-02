@@ -20,7 +20,11 @@ const config = {
     "to the built-in stella preset, with no DOCX involved. Returns the new " +
     "style set's id, name, and updatedAt.",
   permissions: { styleSet: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: createStyleSetFromEditorSchema,
 } satisfies HandlerConfig;
 

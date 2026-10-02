@@ -8,6 +8,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
   description:
@@ -16,7 +17,11 @@ const config = {
     "by whom. A version is only written when a playbook is approved, so the " +
     "list is capped rather than cursor-paginated.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
   params: playbookDefinitionParamsSchema,
   query: t.Object({
@@ -61,7 +66,9 @@ const listPlaybookVersions = createSafeRootHandler(
       );
     }
 
-    const limit = query.limit ?? LIMITS.playbookDefinitionVersionsPerPlaybook;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.playbookDefinitionVersionsPerPlaybook,
+    );
 
     const rows = yield* Result.await(
       safeDb((tx) =>

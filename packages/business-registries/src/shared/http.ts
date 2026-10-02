@@ -17,17 +17,22 @@ import { Temporal } from "temporal-polyfill/full";
 // through `init`.
 
 import { RegistryRateLimitedError } from "./errors.js";
+import {
+  observeRegistryRequest,
+  type RegistryRequestObservation,
+} from "./request-observer.js";
 
 /** Default per-request timeout. Every adapter used 10s. */
 export const DEFAULT_REGISTRY_TIMEOUT_MS = 10_000;
 
 /** Request controls shared by public registry lookup and search options. */
 export type RegistryClientOptions = {
+  observer: RegistryRequestObservation;
   /** Cancel the in-flight request without disabling its timeout. */
   signal?: AbortSignal | undefined;
 };
 
-export type RegistryRequestOptions = {
+export type RegistryRequestOptions = RegistryClientOptions & {
   url: string;
   /**
    * Extra fetch options (method, body, headers, and Bun-only `tls`). The
@@ -76,6 +81,8 @@ export const performRegistryRequest = async (
     options.timeoutMs ?? DEFAULT_REGISTRY_TIMEOUT_MS,
   );
   try {
+    options.signal?.throwIfAborted();
+    observeRegistryRequest(options.observer);
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- shared request helper; each registry client builds the URL from its fixed registry API base
     return await fetch(options.url, {
       ...options.init,

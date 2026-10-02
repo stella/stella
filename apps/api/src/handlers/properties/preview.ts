@@ -60,7 +60,11 @@ const config = {
   // A model call runs even though nothing is persisted: an AI generation
   // kickoff is a write by the same rule as any other (see CapabilityAccess).
   access: "write",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: true,
+  },
   body: previewBodySchema,
   requiresUsage: { actionType: "chat", modelRole: "fast" },
 } satisfies WorkspaceHandlerConfig;
@@ -208,15 +212,16 @@ const previewProperty = createSafeHandler(
       properties: [batchProperty],
     };
 
-    const { orgAIConfig, promptCachingEnabled } = yield* Result.await(
-      scopedDb(
-        async (tx) =>
-          await loadOrgAISettings(tx, {
-            organizationId: session.activeOrganizationId,
-            userId: user.id,
-          }),
-      ),
-    );
+    const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+      yield* Result.await(
+        scopedDb(
+          async (tx) =>
+            await loadOrgAISettings(tx, {
+              organizationId: session.activeOrganizationId,
+              userId: user.id,
+            }),
+        ),
+      );
     const generateFn = getBatchGenerator();
 
     const generateResult = await generateFn({
@@ -230,6 +235,7 @@ const previewProperty = createSafeHandler(
       workspaceId,
       scopedDb,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       serviceTier: "standard",
       // Mirrors workflow-queue.ts's call to the same generator: without

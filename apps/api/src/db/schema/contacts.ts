@@ -688,6 +688,9 @@ export const schedulerJobs = p.pgTable(
     schedule: jsonb().$type<SchedulerSchedule>().notNull(),
     payload: jsonb().$type<SchedulerPayload | null>(),
     enabled: p.boolean().notNull().default(true),
+    pausedBy: p.text("paused_by"),
+    pausedUntil: timestamptz("paused_until"),
+    pauseReason: p.text("pause_reason"),
     nextRunAt: timestamptz("next_run_at").notNull(),
     lastRunAt: timestamptz("last_run_at"),
     lastSuccessAt: timestamptz("last_success_at"),
@@ -708,6 +711,10 @@ export const schedulerJobs = p.pgTable(
       .on(table.enabled, table.nextRunAt),
     p.index("scheduler_jobs_task_idx").on(table.task),
     p.index("scheduler_jobs_locked_until_idx").on(table.lockedUntil),
+    p.check(
+      "scheduler_jobs_pause_attribution_check",
+      sql`${table.pausedUntil} IS NULL OR (${table.pausedBy} IS NOT NULL AND length(btrim(${table.pausedBy})) > 0 AND ${table.pauseReason} IS NOT NULL AND length(btrim(${table.pauseReason})) >= 8)`,
+    ),
     p.pgPolicy("scheduler_jobs_no_stella_access", {
       for: "all",
       to: stella,

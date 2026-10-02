@@ -34,7 +34,11 @@ const config = {
     "Start a background document translation and save only the completed output as a new document.",
   permissions: { entity: ["create"] },
   access: "write",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    reason: "document_processing",
+    consumesServices: true,
+  },
   params: workspaceParams({}),
   body: createDocumentTranslationRunBodySchema,
 } satisfies WorkspaceHandlerConfig;

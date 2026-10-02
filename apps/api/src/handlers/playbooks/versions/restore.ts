@@ -22,7 +22,11 @@ const config = {
     "so it must be approved again before runs pick it up, and the stored " +
     "version itself is left untouched.",
   permissions: { playbook: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: restorePlaybookVersionParamsSchema,
 } satisfies HandlerConfig;
 

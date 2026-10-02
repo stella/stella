@@ -9,7 +9,7 @@ const config = {
   description:
     "Resume your paused timer and automatically pause your other running timer. Resuming an already running timer leaves its elapsed time unchanged.",
   permissions: { timeEntry: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: timerParams,
 } satisfies HandlerConfig;
 

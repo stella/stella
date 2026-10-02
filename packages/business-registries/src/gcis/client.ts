@@ -4,6 +4,7 @@ import {
   isRecord,
 } from "../shared/guards.js";
 import { performRegistryRequest } from "../shared/http.js";
+import type { RegistryClientOptions } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   GcisAPIError,
@@ -67,13 +68,18 @@ const buildUrl = (
   return `${GCIS_API_BASE}/${datasetId}?${search.toString()}`;
 };
 
-const gcisGet = async (url: string): Promise<GcisResponse> => {
+const gcisGet = async (
+  url: string,
+  options: RegistryClientOptions,
+): Promise<GcisResponse> => {
   // GCIS serves text/HTML sentinels (empty body = no match, a Chinese
   // "system busy" HTML page on 200) so the body is decoded as text
   // below rather than via the shared JSON reader; only the request +
   // timeout + RequestError wrapping is shared.
   const response = await performRegistryRequest({
     url,
+    observer: options.observer,
+    signal: options.signal,
     init: { headers: { Accept: "application/json" } },
     timeoutMs: TIMEOUT_MS,
     wrapRequestError: (cause) =>
@@ -200,6 +206,7 @@ const buildSearchUrl = ({
  */
 export const lookupByTaxId = async (
   taxId: string,
+  options: RegistryClientOptions,
 ): Promise<GcisCompany | null> => {
   const normalized = normalizeTaxId(taxId);
   if (!validateTaxId(normalized)) {
@@ -211,12 +218,12 @@ export const lookupByTaxId = async (
     $skip: "0",
     $top: "1",
   });
-  const rows = await gcisGet(url);
+  const rows = await gcisGet(url, options);
   const hit = rows.at(0);
   return hit ? parseCompany(hit) : null;
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /** Maximum number of results. @default 50 */
   limit?: number;
   /**
@@ -240,23 +247,29 @@ export type SearchOptions = {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<GcisSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     throw new GcisValidationError("Search name must not be empty");
   }
-  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options.limit ?? DEFAULT_SEARCH_LIMIT;
   const top = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
-  const activeOnly = options?.activeOnly ?? true;
+  const activeOnly = options.activeOnly ?? true;
   if (!activeOnly) {
-    const rows = await gcisGet(buildSearchUrl({ name: trimmed, limit: top }));
+    const rows = await gcisGet(
+      buildSearchUrl({ name: trimmed, limit: top }),
+      options,
+    );
     return rows.map((row) => parseSearchEntry(row));
   }
   const pagePromises: Promise<GcisResponse>[] = [];
   for (const statusCode of ACTIVE_STATUS_CODES) {
     pagePromises.push(
-      gcisGet(buildSearchUrl({ name: trimmed, limit: top, statusCode })),
+      gcisGet(
+        buildSearchUrl({ name: trimmed, limit: top, statusCode }),
+        options,
+      ),
     );
   }
   const pages = await Promise.all(pagePromises);

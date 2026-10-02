@@ -31,6 +31,7 @@ const suggestResearchColumnPrompt = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     promptCachingEnabled,
     request,
     safeDb,
@@ -86,6 +87,7 @@ const suggestResearchColumnPrompt = createSafeRootHandler(
       organizationId: session.activeOrganizationId,
       userId: user.id,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       safeDb,
       abortSignal: request.signal,

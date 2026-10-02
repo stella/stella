@@ -11,6 +11,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 
 // ── Cursor helpers ───────────────────────────────────
@@ -76,7 +77,9 @@ export const listClausesHandler = async function* ({
   organizationId,
   query,
 }: ListClausesProps) {
-  const limit = query.limit ?? LIMITS.clausesPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.clausesPageSizeDefault,
+  );
 
   const conditions = [eq(clauses.organizationId, organizationId)];
 

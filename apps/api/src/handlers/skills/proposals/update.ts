@@ -44,7 +44,11 @@ const config = {
     "proposal is decided.",
   permissions: { agentSkill: ["propose"] },
   access: "write",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: updateSkillProposalParamsSchema,
   body: updateSkillProposalBodySchema,
 } satisfies HandlerConfig;
