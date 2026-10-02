@@ -13,10 +13,10 @@ import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
 import {
   buildChatCodeMode,
-  CHAT_READ_SCRIPT_POLICY,
   chatScriptCallCatalog,
   chatScriptReadToolNames,
 } from "./chat-code-mode";
+import { CHAT_READ_SCRIPT_POLICY } from "./chat-read-script-policy";
 import { classifyScriptName } from "./script-call-guide";
 
 // Drives the real QuickJS sandbox through execute_typescript: share the sandbox
@@ -381,8 +381,8 @@ describe("the chat read script policy", () => {
       "search_boe_legislation",
       "lookup_business_registry",
     ]);
-    expect(chatScriptReadToolNames().toSorted()).toEqual(
-      scriptReads.toSorted(),
+    expect(new Set<string>(chatScriptReadToolNames())).toEqual(
+      new Set(scriptReads),
     );
   });
 
