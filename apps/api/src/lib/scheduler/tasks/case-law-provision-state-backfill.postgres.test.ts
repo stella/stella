@@ -188,103 +188,93 @@ const withFixture = async (
   });
 };
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
-  "provision task on PostgreSQL",
-  () => {
-    test("a real statement timeout fails the scheduled unit and preserves its cursor", async () => {
-      await withFixture(async ({ createTask, operator, schema }) => {
-        const task = createTask({
-          statementTimeoutMs: 30,
-          beforeQuery: async (statement, session) => {
-            if (statement.includes("ORDER BY case_law_decisions.id LIMIT")) {
-              await session.unsafe("SELECT pg_sleep(1)");
-            }
-          },
-        });
-        await task.run();
-        expect(task.events).toEqual([]);
-        expect(task.failures).toHaveLength(1);
-        expect(task.failures.at(0)?.at(1)).toMatchObject({
-          sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
-        });
-        expect(
-          await operator.unsafe(
-            `SELECT name FROM ${schema}.case_law_provision_repair_cursors`,
-          ),
-        ).toHaveLength(0);
-        const resumed = createTask();
-        await resumed.run();
-        expect(resumed.failures).toEqual([]);
-        expect(
-          await operator.unsafe(
-            `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
-          ),
-        ).toHaveLength(2);
+describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
+  test("a real statement timeout fails the scheduled unit and preserves its cursor", async () => {
+    await withFixture(async ({ createTask, operator, schema }) => {
+      const task = createTask({
+        statementTimeoutMs: 30,
+        beforeQuery: async (statement, session) => {
+          if (statement.includes("ORDER BY case_law_decisions.id LIMIT")) {
+            await session.unsafe("SELECT pg_sleep(1)");
+          }
+        },
       });
+      await task.run();
+      expect(task.events).toEqual([]);
+      expect(task.failures).toHaveLength(1);
+      expect(task.failures.at(0)?.at(1)).toMatchObject({
+        sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
+      });
+      expect(
+        await operator.unsafe(
+          `SELECT name FROM ${schema}.case_law_provision_repair_cursors`,
+        ),
+      ).toHaveLength(0);
+      const resumed = createTask();
+      await resumed.run();
+      expect(resumed.failures).toEqual([]);
+      expect(
+        await operator.unsafe(
+          `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+        ),
+      ).toHaveLength(2);
     });
+  });
 
-    test("two workers finishing the real provision steps converge on completion", async () => {
-      await withFixture(
-        async ({ createTask, operator, schema, checkpoint }) => {
-          const first = createTask();
-          const second = createTask();
-          await Promise.all([first.run(), second.run()]);
-          // A worker refused the shared slot may leave a durable hold. A later
-          // completed run must safely settle the same checkpoint under its lock.
-          const resumed = createTask();
-          await resumed.run();
-          expect([
-            ...first.failures,
-            ...second.failures,
-            ...resumed.failures,
-          ]).toEqual([]);
-          expect(
-            await operator.unsafe(
-              `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
-            ),
-          ).toHaveLength(2);
-          expect((await checkpoint()).batch.stableBatches).toBe(0);
-        },
-      );
+  test("two workers finishing the real provision steps converge on completion", async () => {
+    await withFixture(async ({ createTask, operator, schema, checkpoint }) => {
+      const first = createTask();
+      const second = createTask();
+      await Promise.all([first.run(), second.run()]);
+      // A worker refused the shared slot may leave a durable hold. A later
+      // completed run must safely settle the same checkpoint under its lock.
+      const resumed = createTask();
+      await resumed.run();
+      expect([
+        ...first.failures,
+        ...second.failures,
+        ...resumed.failures,
+      ]).toEqual([]);
+      expect(
+        await operator.unsafe(
+          `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+        ),
+      ).toHaveLength(2);
+      expect((await checkpoint()).batch.stableBatches).toBe(0);
     });
+  });
 
-    test("a killed worker after the last page resumes completion without replaying pages", async () => {
-      await withFixture(
-        async ({ createTask, operator, schema, checkpoint }) => {
-          let reads = 0;
-          const killed = createTask({
-            beforeQuery: async (statement, session) => {
-              if (
-                !statement.includes("SELECT cursor, batch") ||
-                ++reads !== 3
-              ) {
-                return;
-              }
-              const pid = (
-                await session.unsafe<{ pid: number }[]>(
-                  "SELECT pg_backend_pid() AS pid",
-                )
-              ).at(0)?.pid;
-              if (pid === undefined) {
-                return panic("missing worker pid");
-              }
-              await operator.unsafe("SELECT pg_terminate_backend($1)", [pid]);
-            },
-          });
-          await killed.run();
-          expect(killed.failures).toHaveLength(1);
-          expect(
-            await operator.unsafe(
-              `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
-            ),
-          ).toHaveLength(2);
-          expect((await checkpoint()).batch.stableBatches).toBe(2);
-          const resumed = createTask();
-          await resumed.run();
-          expect(resumed.failures).toEqual([]);
-          expect((await checkpoint()).batch.stableBatches).toBe(0);
+  test("a killed worker after the last page resumes completion without replaying pages", async () => {
+    await withFixture(async ({ createTask, operator, schema, checkpoint }) => {
+      let reads = 0;
+      const killed = createTask({
+        beforeQuery: async (statement, session) => {
+          if (!statement.includes("SELECT cursor, batch") || ++reads !== 3) {
+            return;
+          }
+          const pid = (
+            await session.unsafe<{ pid: number }[]>(
+              "SELECT pg_backend_pid() AS pid",
+            )
+          ).at(0)?.pid;
+          if (pid === undefined) {
+            return panic("missing worker pid");
+          }
+          await operator.unsafe("SELECT pg_terminate_backend($1)", [pid]);
         },
-      );
+      });
+      await killed.run();
+      expect(killed.failures).toHaveLength(1);
+      expect(
+        await operator.unsafe(
+          `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
+        ),
+      ).toHaveLength(2);
+      expect((await checkpoint()).batch.stableBatches).toBe(2);
+      const resumed = createTask();
+      await resumed.run();
+      expect(resumed.failures).toEqual([]);
+      expect((await checkpoint()).batch.stableBatches).toBe(0);
     });
-  },
-);
+  });
+});

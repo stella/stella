@@ -209,7 +209,7 @@ const withFixture = async (
   });
 };
 
-describe.skipIf(!enabled || databaseUrl === undefined)(
+describe.skipIf(!enabled)(
   "raw scheduler backfill runtime on PostgreSQL 18",
   () => {
     test("64 holds durably across restart, 74 stays held, and 75 resumes the exact cursor", async () => {
