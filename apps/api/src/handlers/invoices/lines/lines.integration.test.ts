@@ -11,6 +11,7 @@ import { Elysia } from "elysia";
 
 import { calculateDocumentTotals } from "@stll/invoicing";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import {
   BILLING_STATUS,
   expenses,
@@ -525,13 +526,19 @@ describe("invoice lines", () => {
           line.grossAmount,
         ]),
       ).toEqual([
-        [0, 0, 0],
-        [20_000, 20_000, path === "line" ? 24_200 : 20_000],
+        [cents(0), cents(0), cents(0)],
+        [
+          cents(20_000),
+          cents(20_000),
+          cents(path === "line" ? 24_200 : 20_000),
+        ],
       ]);
       const exportContext = {
         organizationId: ids.orgA,
         workspaceId: ids.wsA1,
-        scopedDb: createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+        scopedDb: asTestRaw<ScopedDb>(
+          createScopedDb(testDb, [ids.wsA1], ids.orgA, ids.userA1),
+        ),
         query: {
           workItemId: ids.entityA1,
           dateFrom: dateWorked,

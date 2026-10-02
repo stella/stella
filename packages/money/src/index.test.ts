@@ -397,7 +397,7 @@ describe("recorded time charges", () => {
       ]) {
         expect(
           timeEntryAmount({ billedMinutes, rateAtEntry, noCharge: true }),
-        ).toBe(0);
+        ).toBe(cents(0));
         expect(
           timeEntryAmount({ billedMinutes, rateAtEntry, noCharge: false }),
         ).toBe(
