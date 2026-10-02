@@ -1,5 +1,4 @@
-import type { Page } from "@playwright/test";
-import { panic } from "better-result";
+import type { Browser } from "@playwright/test";
 import * as v from "valibot";
 
 import { assertSsrDocument } from "@stll/ssr-testkit";
@@ -23,18 +22,33 @@ const organizationSchema = v.object({
   name: identityValue,
 });
 
-// A streamed Suspense segment arrives hidden and React reveals it in place
-// later, batching reveals for up to a few seconds. Compare a document only
-// once nothing is still waiting and a page heading is shown.
-async function expectDocumentSettled(page: Page) {
-  await expect(page.locator('[id^="S:"]')).toHaveCount(0);
-  const main = page.locator("main:not(:has(main))");
-  await expect(main.getByRole("heading", { level: 1 }).first()).toBeVisible();
+// Renders a server document on its own, with every request refused, so only
+// React's inline stream scripts run: they reveal each streamed Suspense
+// segment in place, and the app never hydrates. Client-only parts (e.g. the
+// install button) legitimately differ by session and are absent here, so
+// the text compared is exactly what the server sent.
+async function renderServerDocument(browser: Browser, html: string) {
+  const isolated = await browser.newContext();
+  try {
+    await isolated.route("**/*", (route) => route.abort());
+    const page = await isolated.newPage();
+    await page.setContent(html, { waitUntil: "domcontentloaded" });
+    await expect(page.locator('[id^="S:"], template[id^="B:"]')).toHaveCount(0);
+    const main = page.locator("main:not(:has(main))");
+    await expect(main).toHaveCount(1);
+    const [content] = v.parse(
+      v.tuple([identityValue]),
+      await main.allInnerTexts(),
+    );
+    return content;
+  } finally {
+    await isolated.close();
+  }
 }
 
 test("public tools render the same document content for both session states", async ({
+  browser,
   context,
-  page,
 }) => {
   const session = await context.request.get(
     `${E2E_API_ORIGIN}/api/auth/get-session`,
@@ -63,14 +77,9 @@ test("public tools render the same document content for both session states", as
   };
 
   for (const path of ["/tools", "/tools/contract-review"]) {
-    const signedIn = await page.goto(path, {
+    const signedIn = await context.request.get(path, {
       timeout: PUBLIC_SSR_TIMEOUT_MS,
-      waitUntil: "domcontentloaded",
     });
-    expect(signedIn).not.toBeNull();
-    if (!signedIn) {
-      panic("Expected document response");
-    }
     const signedInHtml = await signedIn.text();
     for (const [field, value] of Object.entries(identity)) {
       expect(signedInHtml, `${path}: ${field}`).not.toContain(value);
@@ -81,13 +90,6 @@ test("public tools render the same document content for both session states", as
       requiredContent: ["<main", "Contract Review"],
       status: signedIn.status(),
     });
-    const main = page.locator("main:not(:has(main))");
-    await expect(main).toHaveCount(1);
-    await expectDocumentSettled(page);
-    const [signedInContent] = v.parse(
-      v.tuple([identityValue]),
-      await main.allInnerTexts(),
-    );
     const cookies = await context.cookies();
     expect(cookies.length).toBeGreaterThan(0);
     await context.clearCookies();
@@ -96,14 +98,9 @@ test("public tools render the same document content for both session states", as
     );
     expect(anonymousSession.ok()).toBe(true);
     expect(await anonymousSession.json()).toBeNull();
-    const anonymous = await page.goto(path, {
+    const anonymous = await context.request.get(path, {
       timeout: PUBLIC_SSR_TIMEOUT_MS,
-      waitUntil: "domcontentloaded",
     });
-    expect(anonymous).not.toBeNull();
-    if (!anonymous) {
-      panic("Expected document response");
-    }
     const anonymousHtml = await anonymous.text();
     assertSsrDocument({
       contentType: anonymous.headers()["content-type"] ?? null,
@@ -111,14 +108,15 @@ test("public tools render the same document content for both session states", as
       requiredContent: ["<main", "Contract Review"],
       status: anonymous.status(),
     });
-    await expectDocumentSettled(page);
-    await expect(main).toHaveText(signedInContent, { useInnerText: true });
+    await context.addCookies(cookies);
+    expect(await renderServerDocument(browser, anonymousHtml), path).toBe(
+      await renderServerDocument(browser, signedInHtml),
+    );
     expect(signedIn.headers()["cache-control"]).toBe("private, no-store");
     expect(anonymous.headers()["cache-control"]).toBe("private, no-store");
     expect(signedIn.headers()["x-robots-tag"]).toBe(
       anonymous.headers()["x-robots-tag"],
     );
-    await context.addCookies(cookies);
   }
 });
 
