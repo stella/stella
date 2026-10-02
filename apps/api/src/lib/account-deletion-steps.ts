@@ -11,6 +11,7 @@ import {
 } from "drizzle-orm";
 import type { PgTable } from "drizzle-orm/pg-core";
 
+import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   account,
   apikey,
@@ -47,6 +48,8 @@ import {
   pendingUploads,
   PENDING_UPLOAD_RECOVERABLE_STATUSES,
   rateEntries,
+  sharepointConnections,
+  sharepointOAuthState,
   taskAssignees,
   userFiles,
   WORK_OBLIGATION_EVENT_TYPE,
@@ -255,15 +258,20 @@ export const revokeOAuthTokensAndGrants = async (
   await tx.delete(oauthClient).where(eq(oauthClient.userId, currentUserId));
 };
 
-export const DELETE_MCP_CREDENTIALS_TABLES = [
+export const DELETE_CONNECTED_CREDENTIALS_TABLES = [
   mcpUserConnections,
   mcpOAuthState,
+  sharepointConnections,
+  sharepointOAuthState,
+  agentRegistration,
+  agentDelegation,
 ] as const satisfies readonly PgTable[];
 
 /**
- * 3. MCP credentials and in-flight OAuth state (schema.ts, cascade on user.id).
+ * 3. Connected credentials and in-flight OAuth state. These records are
+ * removed explicitly because account deletion soft-deletes the user row.
  */
-export const deleteMcpCredentialsAndOAuthState = async (
+export const deleteConnectedCredentialsAndOAuthState = async (
   tx: Transaction,
   currentUserId: string,
 ): Promise<void> => {
@@ -271,6 +279,18 @@ export const deleteMcpCredentialsAndOAuthState = async (
     .delete(mcpUserConnections)
     .where(eq(mcpUserConnections.userId, currentUserId));
   await tx.delete(mcpOAuthState).where(eq(mcpOAuthState.userId, currentUserId));
+  await tx
+    .delete(sharepointConnections)
+    .where(eq(sharepointConnections.userId, currentUserId));
+  await tx
+    .delete(sharepointOAuthState)
+    .where(eq(sharepointOAuthState.userId, currentUserId));
+  await tx
+    .delete(agentRegistration)
+    .where(eq(agentRegistration.boundUserId, currentUserId));
+  await tx
+    .delete(agentDelegation)
+    .where(eq(agentDelegation.userId, currentUserId));
 };
 
 export const CLEAR_WORKSPACE_LEAD_ROLE_TABLES = [
@@ -1255,7 +1275,7 @@ export const recordAccountDeletionRequest = async ({
 export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...REVOKE_AUTH_CREDENTIALS_TABLES,
   ...REVOKE_OAUTH_TOKENS_TABLES,
-  ...DELETE_MCP_CREDENTIALS_TABLES,
+  ...DELETE_CONNECTED_CREDENTIALS_TABLES,
   ...CLEAR_WORKSPACE_LEAD_ROLE_TABLES,
   ...REASSIGN_ACTIVE_TASKS_TABLES,
   ...RESET_FOLIO_COLLAB_USER_STATE_TABLES,
