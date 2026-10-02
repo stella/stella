@@ -9,14 +9,16 @@
 // An entry with either term also lapses once `bun audit` stops reporting its
 // advisory (the dependency was bumped or dropped), so a temporary acceptance
 // is removed in the change that resolves it instead of lingering.
-// Anything that cannot be evaluated fails closed: a malformed date, an
-// advisory without a vulnerable range, or a registry lookup that failed.
+// Anything that cannot be evaluated fails closed: a date that is not a real
+// calendar day, a non-boolean `untilPatched`, an advisory without a
+// vulnerable range, or a registry lookup that failed.
 
 export type AcceptanceTerms = {
   id: string;
   package: string;
   expiresOn?: string;
-  untilPatched?: boolean;
+  /** Read from a hand-edited file, so anything but a boolean fails closed. */
+  untilPatched?: unknown;
 };
 
 export type CurrentAdvisory = {
@@ -41,6 +43,18 @@ type LapsedAcceptancesOptions = {
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
 
+// The shape alone admits "2026-13-45", which would compare as a later date
+// and extend the acceptance; a real day survives a UTC round trip unchanged.
+const isCalendarDate = (value: string): boolean => {
+  if (!ISO_DATE.test(value)) {
+    return false;
+  }
+  const time = Date.parse(`${value}T00:00:00Z`);
+  return (
+    !Number.isNaN(time) && new Date(time).toISOString().slice(0, 10) === value
+  );
+};
+
 export const lapsedAcceptances = ({
   accepted,
   current,
@@ -54,12 +68,21 @@ export const lapsedAcceptances = ({
   for (const entry of accepted) {
     const lapse = (reason: string) =>
       lapsed.push({ id: entry.id, package: entry.package, reason });
+    if (
+      entry.untilPatched !== undefined &&
+      typeof entry.untilPatched !== "boolean"
+    ) {
+      lapse("untilPatched must be true or false");
+      continue;
+    }
     if (entry.expiresOn === undefined && entry.untilPatched !== true) {
       continue;
     }
     if (entry.expiresOn !== undefined) {
-      if (!ISO_DATE.test(entry.expiresOn)) {
-        lapse(`expiresOn "${entry.expiresOn}" is not a YYYY-MM-DD date`);
+      if (!isCalendarDate(entry.expiresOn)) {
+        lapse(
+          `expiresOn "${entry.expiresOn}" is not a YYYY-MM-DD calendar date`,
+        );
         continue;
       }
       if (today > entry.expiresOn) {

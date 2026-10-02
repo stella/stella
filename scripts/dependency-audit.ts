@@ -48,7 +48,7 @@ type Advisory = {
 type BaselineEntry = Omit<Advisory, "vulnerableVersions"> & {
   reason: string;
   expiresOn?: string;
-  untilPatched?: boolean;
+  untilPatched?: unknown;
 };
 
 type Baseline = {
@@ -91,10 +91,10 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
     package: asText(value["package"]),
     title: asText(value["title"]),
     reason: asText(value["reason"]),
-    // A present but non-string date stays a (malformed) string, so the entry
-    // lapses instead of silently becoming permanent.
+    // Present but malformed terms are kept as read, so the entry lapses
+    // instead of silently becoming permanent.
     ...(expiresOn === undefined ? {} : { expiresOn: asText(expiresOn) }),
-    ...(untilPatched === true ? { untilPatched } : {}),
+    ...(untilPatched === undefined ? {} : { untilPatched }),
   };
 };
 
@@ -270,7 +270,9 @@ const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
         title,
         reason: kept?.reason ?? "TODO: document why this is accepted.",
         ...(kept?.expiresOn === undefined ? {} : { expiresOn: kept.expiresOn }),
-        ...(kept?.untilPatched === true ? { untilPatched: true } : {}),
+        ...(kept?.untilPatched === undefined
+          ? {}
+          : { untilPatched: kept.untilPatched }),
       };
     }),
   };
@@ -298,7 +300,7 @@ const diffAgainstBaseline = (
 // lookup fails; an `untilPatched` acceptance then lapses (fail closed).
 const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
   const response = await Result.tryPromise(async () =>
-    fetch(`https://registry.npmjs.org/${pkg.replace("/", "%2f")}/latest`, {
+    fetch(`https://registry.npmjs.org/${pkg.replaceAll("/", "%2f")}/latest`, {
       signal: AbortSignal.timeout(15_000),
     }),
   );

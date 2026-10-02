@@ -41,17 +41,41 @@ describe("audit acceptance expiry", () => {
     ).toEqual(["the acceptance expired on 2026-11-01"]);
   });
 
-  test("a malformed expiry date fails closed", () => {
+  test("a malformed or impossible expiry date fails closed", () => {
+    for (const expiresOn of ["1 Nov 2026", "2026-13-45", "2026-02-30", ""]) {
+      expect(
+        lapsedAcceptances({
+          accepted: [{ id: advisory.id, package: "pkg", expiresOn }],
+          current: [advisory],
+          today: "2026-10-02",
+          latestVersion: latest("1.4.0"),
+        }),
+        expiresOn,
+      ).toHaveLength(1);
+    }
     expect(
       lapsedAcceptances({
         accepted: [
-          { id: advisory.id, package: "pkg", expiresOn: "1 Nov 2026" },
+          { id: advisory.id, package: "pkg", expiresOn: "2028-02-29" },
         ],
         current: [advisory],
         today: "2026-10-02",
         latestVersion: latest("1.4.0"),
       }),
-    ).toHaveLength(1);
+    ).toEqual([]);
+  });
+
+  test("a non-boolean untilPatched fails closed", () => {
+    for (const untilPatched of ["true", 1, null]) {
+      expect(
+        lapsedAcceptances({
+          accepted: [{ id: advisory.id, package: "pkg", untilPatched }],
+          current: [advisory],
+          today: "2026-10-02",
+          latestVersion: latest("1.4.0"),
+        }).map(({ reason }) => reason),
+      ).toEqual(["untilPatched must be true or false"]);
+    }
   });
 
   test("untilPatched lapses once the latest release is outside the vulnerable range", () => {
