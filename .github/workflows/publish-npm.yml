@@ -41,6 +41,7 @@ on:
       - packages/time/CHANGELOG.md
       - packages/text-normalize/CHANGELOG.md
       - packages/agent-input/CHANGELOG.md
+      - packages/mcp-kit/CHANGELOG.md
   workflow_run: # zizmor: ignore[dangerous-triggers] the release tag and SHA are revalidated before the release job receives id-token
     workflows: ["Release Artifacts"]
     types: [completed]
@@ -72,6 +73,7 @@ on:
           - time
           - text-normalize
           - agent-input
+          - mcp-kit
           - cli
         default: all
       publish:
@@ -280,6 +282,9 @@ jobs:
 
           for package in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${package}"
+            if [[ "$package" == cli ]]; then
+              (cd packages/cli && bun run codegen:runtime)
+            fi
             (cd "packages/${package}" && bun run build)
             bun scripts/prepare-publish.ts "packages/${package}"
             destination="release-artifacts/${package}"
@@ -471,6 +476,15 @@ jobs:
         with:
           name: npm-tarball-agent-input
           path: release-artifacts/agent-input/
+          retention-days: 1
+          if-no-files-found: error
+
+      - name: Upload mcp-kit tarball
+        if: contains(fromJSON(steps.pack.outputs.packages), 'mcp-kit')
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: npm-tarball-mcp-kit
+          path: release-artifacts/mcp-kit/
           retention-days: 1
           if-no-files-found: error
 

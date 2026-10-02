@@ -51,8 +51,8 @@ jobs:
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
-      # services, other platforms). Every heavy job gates on
-      # `suite_depth == 'full'`.
+      # services, other platforms). Production E2E also runs on PRs
+      # that change its spec tree.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -63,6 +63,7 @@ jobs:
       collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
+      e2e_production_required: ${{ steps.changed-files.outputs.e2e_production_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
@@ -259,8 +260,10 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" ]]; then
             # e2e-landing runs, and builds the landing site, at full depth only.
             landing_build_required=true
+            e2e_production_required=false
             if [[ "$SUITE_DEPTH" == "full" ]]; then
               landing_build_required=false
+              e2e_production_required=true
             fi
             route_smoke_required=false
             if [[ "$EVENT_NAME" == "pull_request" ]]; then
@@ -276,6 +279,7 @@ jobs:
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
+              echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
@@ -308,6 +312,7 @@ jobs:
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
+              echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
@@ -495,14 +500,10 @@ jobs:
                 web_image_smoke_required=true
                 ;;
             esac
-            # The web API types drift guard compiles the API program from
-            # apps/api/tsconfig.json (API sources, the workspace packages
-            # they import, the root ambient types, installed type
-            # packages) and compares the printout with the committed file
-            # under apps/web/src/generated, importing by name the packages
-            # apps/web/package.json lists.
+            # The web API types determinism guard compiles the API and wire
+            # programs; mirror the complete cached generator input contract.
             case "$file" in
-              apps/api/*|apps/web/package.json|apps/web/src/generated/*|packages/*|patches/*|types/*|bun.lock|bunfig.toml|package.json|.github/workflows/ci.yml)
+              apps/api/*|apps/web/src/*|apps/web/package.json|apps/web/tsconfig*.json|packages/*|patches/*|types/*|tsconfig*.json|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|.github/workflows/ci.yml)
                 web_api_types_required=true
                 ;;
             esac
@@ -538,6 +539,15 @@ jobs:
             landing_build_required=false
           fi
 
+          # Production shards run at full depth for core changes, and on
+          # fast PRs only when their spec/fixture/config tree changes.
+          e2e_production_required=false
+          if [[ "$SUITE_DEPTH" == "full" && "$e2e_core_required" == "true" ]]; then
+            e2e_production_required=true
+          elif [[ "$EVENT_NAME" == "pull_request" ]]; then
+            e2e_production_required=$(bash scripts/detect-e2e-changes.sh pr-core "${changed_files[@]}")
+          fi
+
           docker_checks_required=false
           if [[ "$agent_sandbox_docker_required" == "true" || "$api_image_deps_required" == "true" ]]; then
             docker_checks_required=true
@@ -560,6 +570,7 @@ jobs:
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
+            echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
             echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
@@ -816,8 +827,8 @@ jobs:
       needs.ci-plan.outputs.trusted == 'true'
       || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
-    # 25m, matching code-quality.
-    timeout-minutes: 25
+    # Include uncached API generation and its two-pass determinism check.
+    timeout-minutes: 60
     permissions:
       contents: read
       # Release PR state for the release CLI changeset hold.
@@ -849,6 +860,10 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Generate web sources
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun run generate
+
       - name: Prepare environment
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # `cp`, not `mv`: renaming the tracked .env.example dirties the
@@ -863,7 +878,7 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: CLI registry snapshot guard
+      - name: CLI committed registry and derived runtime guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The CLI and shared chat-policy projections must match the live MCP
         # registry: regenerate all of them and fail on any diff so a registry
@@ -871,11 +886,19 @@ jobs:
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
           (cd packages/cli && bun run codegen)
+          (cd packages/cli && bun run codegen:runtime)
           git diff --exit-code -- \
+            packages/cli/src/generated/api-contract.ts \
+            packages/cli/src/generated/cli-version.ts \
+            packages/cli/src/generated/document-version-upload-transport.ts \
+            packages/cli/src/generated/mcp-contract.ts \
+            packages/cli/src/generated/registry-snapshot.json \
+            packages/cli/src/generated/resource-tree.ts \
+            packages/cli/src/generated/resources-snapshot.json \
+            packages/cli/skills \
             chatgpt-app-submission.json \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
-            packages/cli/src/generated \
-            packages/cli/skills
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
+          bun scripts/check-cli-runtime-generation.ts
 
       - name: MCP App bundle guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -898,15 +921,12 @@ jobs:
         run: |
           bun apps/api/scripts/export-capability-catalog.ts --check
 
-      - name: Web API types drift guard
+      - name: Web API types determinism guard
         if: >-
           needs.ci-plan.outputs.package_checks_required == 'true'
           && needs.ci-plan.outputs.web_api_types_required == 'true'
-        # apps/web type-checks against API types printed from the API's own
-        # inference instead of compiling the API. `--check` fails when the
-        # committed file is stale and asserts each printed type is identical
-        # to the inferred one. Regenerate: `bun --filter @stll/api
-        # gen:web-api-types`.
+        # Generate twice without Turbo caching, compare bytes, and retain the
+        # compiler identity assertion against the inferred API contract.
         run: bun --filter @stll/api gen:web-api-types --check
 
       - name: Route tree drift guard
@@ -942,6 +962,12 @@ jobs:
           bun scripts/check-published-exports.ts packages/time
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
+
+      - name: MCP kit published export map guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.published_exports_required == 'true'
+        run: bun scripts/check-published-exports.ts packages/mcp-kit
 
   ci-checks-policy:
     needs: ci-plan
@@ -1235,6 +1261,10 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Generate web compiler sources
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun run generate
 
       - name: Workspace hygiene
         # Restored from the bun postinstall lifecycle, which is bypassed
@@ -1813,6 +1843,10 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-cli-release-coupling.test.ts
 
+      - name: Test CLI runtime package parity
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
+
       - name: Test CLI contract changeset guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-cli-contract-changeset.test.ts
@@ -2318,6 +2352,9 @@ jobs:
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
 
+      - name: Generate web sources
+        run: bun run generate
+
       - name: Prepare environment
         run: |
           cd ./apps/api
@@ -2384,6 +2421,9 @@ jobs:
           # .npmrc references NPM_TOKEN, but PR installs must not expose
           # the real npm token to dependency lifecycle scripts.
           NPM_TOKEN: ""
+
+      - name: Generate web sources
+        run: bun run generate
 
       - name: Install the docs MCP server
         # tsconfig.tooling.json typechecks .claude/mcp against the packages
@@ -2786,7 +2826,7 @@ jobs:
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 45
     permissions:
       contents: read
 
@@ -2804,6 +2844,9 @@ jobs:
         with:
           save: ${{ github.ref == 'refs/heads/main' }}
 
+      - name: Turbo remote cache
+        uses: rharkor/caching-for-turbo@2238fae6eb9a9936f92356f54cb3660200d105e7 # v2.5.1
+
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
@@ -2814,7 +2857,9 @@ jobs:
       - name: Generate types
         # The guard calls tsc directly (no turbo), so the generated inputs
         # that turbo's typecheck pipeline would produce must exist first.
-        run: bun run typegen
+        run: |
+          bun run generate
+          bun run typegen
 
       - name: Measure merge base
         run: |
@@ -2824,11 +2869,53 @@ jobs:
           (
             cd "$base_dir"
             bash scripts/retry.sh bun ci --ignore-scripts
+            # Older bases commit the snapshot. Generate only when the base
+            # owns an untracked output, using its cached producer if present.
+            if [[ ! -f apps/web/src/generated/api-routes.gen.ts ]]; then
+              if bun -e 'process.exit("generate" in require("./package.json").scripts ? 0 : 1)'; then
+                bun run generate
+              else
+                bun --filter @stll/api gen:web-api-types
+              fi
+            fi
             bun run typegen
           )
           bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
         env:
           NPM_TOKEN: ""
+
+      - name: Generated API type review diff
+        # Reuse the measured base checkout and its installed dependencies.
+        # Both files were generated from their own revision above.
+        run: |
+          patch="$RUNNER_TEMP/web-api-types.patch"
+          base_types="$RUNNER_TEMP/typecheck-base/apps/web/src/generated/api-routes.gen.ts"
+          head_types="apps/web/src/generated/api-routes.gen.ts"
+          test -f "$base_types"
+          test -f "$head_types"
+          status=0
+          diff -u --label base/api-routes.gen.ts --label head/api-routes.gen.ts \
+            "$base_types" "$head_types" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated web API type diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated API types are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated API type review diff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-web-api-types-diff
+          path: ${{ runner.temp }}/web-api-types.patch
+          retention-days: 14
 
       - name: Typecheck-cost baseline guard
         # The --self-test run first proves the parser and comparison logic,
@@ -3143,11 +3230,11 @@ jobs:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && needs.ci-plan.outputs.e2e_production_required == 'true'
       && needs.web-build.result == 'success'
-      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -3411,10 +3498,10 @@ jobs:
         if: steps.e2e-stack.outputs.status == 'ready'
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
 
-      # Own output dir, not uploaded: the blob reporter clears its directory
+      # Own output dir: the blob reporter clears its directory
       # per invocation, so sharing it would drop the canary blob, and a collab
       # blob (testDir e2e/collab) breaks the merged specs report. Its failures
-      # are read from this job's log.
+      # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
@@ -3456,6 +3543,14 @@ jobs:
         with:
           name: playwright-blob-vite-canary
           path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
+      - name: Upload collaboration failure artifacts
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-collab-vite-canary
+          path: apps/web/e2e/test-results-collab/
           retention-days: 7
 
       - name: Upload server logs
@@ -3559,6 +3654,7 @@ jobs:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
@@ -3963,6 +4059,73 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+  # Merge groups only: once any job has failed, cancel the rest of the run so
+  # ci-result (which runs under always()) reports the failure at once instead
+  # of after every other job. This job alone may cancel the run: it checks out
+  # no repository code and installs nothing, so no pull request code ever runs
+  # with the write token. It cancels nothing unless a job already failed, and
+  # it never retries anything. It never fails or holds the group: ci-result
+  # does not need it, and any API error or its own deadline just ends it.
+  # The repository token's API budget is shared by every workflow, so it polls
+  # with conditional requests (an unchanged 304 answer is free) and stops as
+  # soon as every other job is done.
+  merge-group-fail-fast:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel the run once a job fails
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLL_SECONDS: "30"
+          DEADLINE_SECONDS: "2400"
+        run: |
+          set -euo pipefail
+          url="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100"
+          headers="$RUNNER_TEMP/fail-fast-headers"
+          body="$RUNNER_TEMP/fail-fast-body"
+          etag=""
+          states=""
+          stop() {
+            echo "::warning::$1; this run finishes normally."
+            exit 0
+          }
+          while ((SECONDS < DEADLINE_SECONDS)); do
+            conditional=()
+            if [[ -n "$etag" ]]; then
+              conditional=(-H "If-None-Match: $etag")
+            fi
+            if ! status=$(curl -sS -o "$body" -D "$headers" -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              ${conditional[@]+"${conditional[@]}"} "$url"); then
+              stop "Could not read this run's jobs"
+            fi
+            case "$status" in
+              200)
+                etag=$(grep -i '^etag:' "$headers" | head -n 1 | cut -d' ' -f2- | tr -d '\r' || true)
+                # A run with more jobs than one page cannot be watched whole.
+                if ! states=$(jq -er 'if .total_count > (.jobs | length) then error("more jobs than one page") else .jobs[] | select(.name != "merge-group-fail-fast") | [.status, (.conclusion // "")] | @tsv end' "$body"); then
+                  stop "Could not read this run's jobs"
+                fi
+                ;;
+              304) ;;
+              *) stop "Reading this run's jobs returned HTTP $status" ;;
+            esac
+            if grep -Eq $'\t(failure|timed_out)$' <<< "$states"; then
+              echo "A job failed; cancelling the rest of this merge group run."
+              gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" || stop "Could not cancel the run"
+              exit 0
+            fi
+            if [[ -n "$states" ]] && ! grep -qv '^completed' <<< "$states"; then
+              exit 0
+            fi
+            sleep "$POLL_SECONDS"
+          done
+          stop "Stopped watching at the deadline"
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
@@ -4044,7 +4207,7 @@ jobs:
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
             "route-smoke": "route_smoke_required",
-            "e2e-production-shard": "e2e_core_required",
+            "e2e-production-shard": "e2e_production_required",
             "e2e-vite-canary": "e2e_core_required",
             "fix-tests-on-base": "fix_tests_on_base_required",
             "landing-build": "landing_build_required",
@@ -4066,7 +4229,7 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "route-smoke", "web-image-smoke"]
+            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "route-smoke", "web-image-smoke", "e2e-production-shard"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled

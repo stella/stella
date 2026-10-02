@@ -24,7 +24,7 @@ import {
 } from "@stll/api-contract/case-law-decision-route";
 import {
   type DecisionQueryIntent,
-  exactDecisionMatches,
+  namedDecisionsOf,
 } from "@stll/api-contract/decision-query-intent";
 import {
   DEFAULT_SEARCH_EXCERPT,
@@ -768,10 +768,10 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
   });
   const decisions: readonly Decision[] =
     data?.pages.at(pager.currentPage - 1)?.decisions ?? EMPTY_DECISIONS;
-  // The named decision first, when the entry named one; the same docket at
-  // several courts stays several rows the reader chooses between.
-  const exact =
-    intent.type === "identifier" ? exactDecisionMatches(intent, decisions) : [];
+  // The named decision first, when the entry named one; the decisions of one
+  // file, or the same docket at several courts, stay several rows the reader
+  // chooses between.
+  const exact = namedDecisionsOf(intent, decisions);
   const exactIds = new Set(exact.map((decision) => decision.id));
   const ordered =
     exact.length === 0

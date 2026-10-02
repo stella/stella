@@ -1,5 +1,23 @@
 # @stll/business-registries
 
+## 0.12.0
+
+### Minor Changes
+
+- [#4421](https://github.com/stella/stella/pull/4421) [`e4ed6de`](https://github.com/stella/stella/commit/e4ed6de96a0cea113bc37ce1435f04d819138be2) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Registry lookup, search and entity-check calls now require an `observer` in their options or client configuration. Set `observer` to `"unobserved"`, or `{ onRequest, onError }`: `onRequest` runs once before each outbound request, and `onError` receives anything `onRequest` throws (the request still proceeds). The type is `RegistryRequestObservation` from `@stll/business-registries/shared/request-observer`. The global `observeRegistryRequests` and `notifyRegistryRequest` exports are removed.
+
+## 0.11.1
+
+### Patch Changes
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry input handling.
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry record handling.
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry response handling.
+
+- [#4374](https://github.com/stella/stella/pull/4374) [`25469b9`](https://github.com/stella/stella/commit/25469b99a7280321e0665d81e48a5b81ed62d2ad) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Tighten registry submission handling.
+
 ## 0.11.0
 
 ### Minor Changes
