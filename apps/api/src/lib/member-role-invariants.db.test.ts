@@ -20,6 +20,14 @@ afterAll(async () => {
   await client.close();
 });
 
+const observeFailure = async (operation: Promise<unknown>) =>
+  (
+    await Result.tryPromise({
+      try: () => operation,
+      catch: (error) => error,
+    })
+  ).match({ ok: () => undefined, err: (error) => error });
+
 const fixture = async () => {
   const organizationId = Bun.randomUUIDv7();
   const userId = Bun.randomUUIDv7();
@@ -55,9 +63,9 @@ describe("membership role database invariants", () => {
         `DELETE FROM member WHERE id = $1`,
         `UPDATE member SET role = 'member' WHERE id = $1`,
       ]) {
-        await expect(
-          client.query(statement, [data.userId]),
-        ).rejects.toMatchObject({
+        expect(
+          await observeFailure(client.query(statement, [data.userId])),
+        ).toMatchObject({
           code: "23514",
           constraint: "member_organization_owner_required",
         });
@@ -75,9 +83,11 @@ describe("membership role database invariants", () => {
   test("organization teardown cascades its last owner but user teardown is refused", async () => {
     const data = await fixture();
     try {
-      await expect(
-        client.query(`DELETE FROM "user" WHERE id = $1`, [data.userId]),
-      ).rejects.toMatchObject({
+      expect(
+        await observeFailure(
+          client.query(`DELETE FROM "user" WHERE id = $1`, [data.userId]),
+        ),
+      ).toMatchObject({
         code: "23514",
         constraint: "member_organization_owner_required",
       });
@@ -98,12 +108,14 @@ describe("membership role database invariants", () => {
     const source = await fixture();
     const destination = await fixture();
     try {
-      await expect(
-        client.query(`UPDATE member SET organization_id = $1 WHERE id = $2`, [
-          destination.organizationId,
-          source.userId,
-        ]),
-      ).rejects.toMatchObject({
+      expect(
+        await observeFailure(
+          client.query(`UPDATE member SET organization_id = $1 WHERE id = $2`, [
+            destination.organizationId,
+            source.userId,
+          ]),
+        ),
+      ).toMatchObject({
         code: "23514",
         constraint: "member_organization_owner_required",
       });
@@ -143,14 +155,17 @@ describe("membership role database invariants", () => {
           );
           expect(rows).toEqual([{ role: "owner" }]);
         });
-        await expect(
-          client.transaction(async (tx) => {
-            await tx.query(`SET TRANSACTION ISOLATION LEVEL ${isolation}`);
-            await tx.query(`UPDATE member SET role = 'member' WHERE id = $1`, [
-              data.userId,
-            ]);
-          }),
-        ).rejects.toMatchObject({
+        expect(
+          await observeFailure(
+            client.transaction(async (tx) => {
+              await tx.query(`SET TRANSACTION ISOLATION LEVEL ${isolation}`);
+              await tx.query(
+                `UPDATE member SET role = 'member' WHERE id = $1`,
+                [data.userId],
+              );
+            }),
+          ),
+        ).toMatchObject({
           code: "23514",
           constraint: "member_organization_owner_read_committed",
         });
@@ -288,17 +303,19 @@ describe("membership role database invariants", () => {
           );
           expect(rows).toEqual([{ role }]);
         } else {
-          await expect(write).rejects.toMatchObject({
+          expect(await observeFailure(write)).toMatchObject({
             code: "23514",
             constraint: "invitation_single_product_role",
           });
           if (role !== null) {
-            await expect(
-              client.query(`UPDATE member SET role = $1 WHERE id = $2`, [
-                role,
-                data.userId,
-              ]),
-            ).rejects.toMatchObject({
+            expect(
+              await observeFailure(
+                client.query(`UPDATE member SET role = $1 WHERE id = $2`, [
+                  role,
+                  data.userId,
+                ]),
+              ),
+            ).toMatchObject({
               code: "23514",
               constraint: "member_single_product_role",
             });

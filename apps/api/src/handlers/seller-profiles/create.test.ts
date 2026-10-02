@@ -5,6 +5,7 @@ import type { Transaction } from "@/api/db/root";
 import type { SafeDb } from "@/api/db/safe-db";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import createSellerProfile from "./create";
@@ -30,7 +31,7 @@ const createContext = ({
     route: "/v1/seller-profiles",
     safeDb,
     session: { activeOrganizationId: organizationId },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     user: { id: toSafeId<"user">("user_test") },
     recordAuditEvent,
   });

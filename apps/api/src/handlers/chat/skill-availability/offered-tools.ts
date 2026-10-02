@@ -10,7 +10,6 @@ import {
   type ChatSkillContextNeed,
   type ChatSkillDocument,
 } from "@stll/api-contract";
-import type { roles } from "@stll/permissions";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { resolveBrowserClientCapability } from "@/api/handlers/chat/chat-schema";
@@ -34,6 +33,7 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { getDisabledNativeToolSlugsFromSettingsRow } from "@/api/lib/mcp-connectors/catalog-metadata";
+import type { MemberRole } from "@/api/lib/member-roles";
 import type { loadWebSearchProvidersForOrg } from "@/api/lib/web-search/load-org-keys";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 
@@ -41,7 +41,7 @@ export type ChatSkillAvailabilityContext = {
   getAccessibleWorkspaces: () => Promise<AccessibleWorkspace[]>;
   /** The loader a send uses (`createSendMessage`'s dependency). */
   loadWebSearchProviders: typeof loadWebSearchProvidersForOrg;
-  memberRole: { role: keyof typeof roles };
+  memberRole: { role: MemberRole };
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
   managedAIResidency: ManagedAIResidency;

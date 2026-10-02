@@ -141,6 +141,7 @@ import {
 import {
   hasMemberPermission,
   readAuthorizedMemberRole,
+  sessionMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import { createOtpAccountLimitPlugin } from "@/api/lib/rate-limit/otp-account-budget";
@@ -2341,7 +2342,7 @@ const resolveValidateAuth = async (
     return { ok: false as const, statusCode: 401 as const };
   }
   const { role } = authorization;
-  const memberRole = { role };
+  const memberRole = sessionMemberRole(role);
   const activeOrganizationId = toSafeId<"organization">(rawOrgId);
   const userId = toSafeId<"user">(user.id);
 
