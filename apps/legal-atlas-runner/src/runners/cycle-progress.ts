@@ -8,12 +8,11 @@
 
 import { panic } from "better-result";
 
-import { DAY_IN_MS } from "@stll/time";
-
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
-} from "@/api/lib/legal-search/ingestion-stop-kind";
+} from "@stll/legal-atlas/ingestion-cycle";
+import { DAY_IN_MS } from "@stll/time";
 
 export const CYCLE_OUTCOME = {
   COMPLETED: "completed",

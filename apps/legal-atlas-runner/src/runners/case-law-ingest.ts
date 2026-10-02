@@ -19,6 +19,7 @@
 
 import { panic } from "better-result";
 
+import type { IngestionStopKind } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
@@ -63,7 +64,6 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { backfillSearchIndex } from "@/api/lib/legal-search/case-law-search-index";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import type { IngestionStopKind } from "@/api/lib/legal-search/ingestion-stop-kind";
 import {
   DOCUMENT_FETCH_BUDGET_MS,
   fetchDecisionDocument,
@@ -665,6 +665,10 @@ const runOneCycle = async (
     const adapter = getAdapter(adapterKey);
     execution = await executeIngestionCycle({
       cursorBefore,
+      describeFailure: (error) => ({
+        stopKind: ingestionStopKindOf(error),
+        message: `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`,
+      }),
       recordPages: (pages) => {
         pagesSinceStart += pages;
       },

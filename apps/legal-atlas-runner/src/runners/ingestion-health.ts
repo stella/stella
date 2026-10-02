@@ -1,7 +1,7 @@
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
-} from "@/api/lib/legal-search/ingestion-stop-kind";
+} from "@stll/legal-atlas/ingestion-cycle";
 
 export const INGESTION_HEALTH_MESSAGE = "case_law.ingestion.heartbeat";
 

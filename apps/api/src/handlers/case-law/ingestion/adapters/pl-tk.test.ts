@@ -411,7 +411,7 @@ describe("portal session outcomes", () => {
       new URL("pl-tk-entry-refused.html", ADAPTER_FIXTURES),
     ).text();
     const seen: string[] = [];
-    globalThis.fetch = asFetchMock(async (input) => {
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
       seen.push(requestUrl(input));
       return new Response(body, { status: 403 });
     });

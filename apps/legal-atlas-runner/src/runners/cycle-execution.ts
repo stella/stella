@@ -1,22 +1,26 @@
 import { Result } from "better-result";
 
-import type { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
-import { ingestionStopKindOf } from "@/api/lib/errors/tagged-errors";
-import { errorTag } from "@/api/lib/errors/utils";
-import { CYCLE_HALT_REASON } from "@/api/lib/legal-search/cycle-deadline";
-import { INGESTION_STOP_KIND } from "@/api/lib/legal-search/ingestion-stop-kind";
+import {
+  CYCLE_HALT_REASON,
+  INGESTION_STOP_KIND,
+  type IngestionPipelineResult,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import { CYCLE_OUTCOME, type CycleResult } from "./cycle-progress";
 
-type PipelineResult = Awaited<ReturnType<typeof runIngestionPipeline>>;
 type ExecuteIngestionCycleOptions = {
-  runPipeline: () => Promise<PipelineResult>;
+  runPipeline: () => Promise<IngestionPipelineResult>;
   cursorBefore: string | null;
   recordPages: (pages: number) => void;
+  describeFailure: (cause: unknown) => {
+    stopKind: IngestionStopKind;
+    message: string;
+  };
 };
 
 type CycleExecution = {
-  result: PipelineResult | null;
+  result: IngestionPipelineResult | null;
   errorMessage: string | null;
   cycle: CycleResult;
 };
@@ -26,23 +30,20 @@ export const executeIngestionCycle = async ({
   runPipeline,
   cursorBefore,
   recordPages,
+  describeFailure,
 }: ExecuteIngestionCycleOptions): Promise<CycleExecution> => {
   const execution = await Result.tryPromise({
     try: runPipeline,
     catch: (cause) => cause,
   });
   if (Result.isError(execution)) {
-    const { error } = execution;
+    const failure = describeFailure(execution.error);
     return {
       result: null,
-      errorMessage:
-        `[${errorTag(error)}] ${error instanceof Error ? error.message : String(error)}`.slice(
-          0,
-          2048,
-        ),
+      errorMessage: failure.message.slice(0, 2048),
       cycle: {
         outcome: CYCLE_OUTCOME.FAILED,
-        stopKind: ingestionStopKindOf(error),
+        stopKind: failure.stopKind,
         inserted: 0,
         skipped: 0,
         pagesProcessed: 0,

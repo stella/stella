@@ -46,6 +46,7 @@ import * as cheerio from "cheerio";
 import type { AnyNode } from "domhandler";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { readCappedBytes } from "@stll/skills/streaming";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
@@ -118,7 +119,6 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { INGESTION_STOP_KIND } from "@/api/lib/legal-search/ingestion-stop-kind";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";

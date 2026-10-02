@@ -5,11 +5,10 @@ import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission
 import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
 import { isConnectionFailure } from "@stll/fetch";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
-
 import {
   INGESTION_STOP_KIND,
   type IngestionStopKind,
-} from "@/api/lib/legal-search/ingestion-stop-kind";
+} from "@stll/legal-atlas/ingestion-cycle";
 
 export { FetchBoundaryError } from "@stll/errors";
 
@@ -639,7 +638,7 @@ const adapterFetchStopKind = ({
 export class AdapterFetchError extends TaggedError(
   "AdapterFetchError",
 )<AdapterFetchErrorOptions> {
-  readonly stopKind: IngestionStopKind;
+  override readonly stopKind: IngestionStopKind;
 
   constructor(options: AdapterFetchErrorOptions) {
     super(options);

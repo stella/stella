@@ -1,5 +1,12 @@
 import { Result, panic } from "better-result";
 
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+  type IngestionPipelineResult,
+  CYCLE_HALT_REASON,
+} from "@stll/legal-atlas/ingestion-cycle";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { caseLawSources } from "@/api/db/schema";
 import {
@@ -52,15 +59,10 @@ import { errorSystemFields, errorTag } from "@/api/lib/errors/utils";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   canStartCyclePage,
-  CYCLE_HALT_REASON,
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
-import {
-  INGESTION_STOP_KIND,
-  type IngestionStopKind,
-} from "@/api/lib/legal-search/ingestion-stop-kind";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -102,25 +104,6 @@ type PipelineInput = {
   dbSlot?: DbSlot;
   corpus?: CaseLawCorpusDependencies;
 };
-
-type PipelineResult = {
-  inserted: number;
-  skipped: number;
-  searchVectorFailures: number;
-  s3UploadFailures: number;
-  pagesProcessed: number;
-  nextCursor: string | null;
-  /** Non-null if the adapter was halted early due to repeated failures. */
-  haltReason: string | null;
-  stopKind?: IngestionStopKind;
-};
-
-/**
- * Halt reasons the operator loop classifies on. The runner reads the timeout
- * one to separate a cycle that ran out of budget from one that failed, so the
- * text is a shared constant rather than a literal on both sides.
- */
-export { CYCLE_HALT_REASON } from "@/api/lib/legal-search/cycle-deadline";
 
 const databaseTimeoutHaltReason = (error: TimeoutError): string =>
   `Database timeout; cursor held for retry: ${error.message.slice(0, 200)}`;
@@ -234,7 +217,7 @@ export const runIngestionPipeline = async ({
   batchRecordLimit = CASE_LAW_INGESTION_BATCH_LIMITS.records,
   dbSlot,
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
-}: PipelineInput): Promise<PipelineResult> => {
+}: PipelineInput): Promise<IngestionPipelineResult> => {
   const adapter = getAdapter(source.adapterKey);
 
   if (!adapter) {
@@ -747,6 +730,6 @@ export const runIngestionPipeline = async ({
     pagesProcessed,
     nextCursor: cursor,
     haltReason,
-    stopKind,
+    ...(stopKind === undefined ? {} : { stopKind }),
   };
 };

@@ -12,6 +12,7 @@
 import { Result, panic } from "better-result";
 
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 import { Temporal } from "@stll/time";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
@@ -24,7 +25,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-import { INGESTION_STOP_KIND } from "@/api/lib/legal-search/ingestion-stop-kind";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";

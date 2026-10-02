@@ -9,6 +9,10 @@ import {
 } from "@stll/api-contract/decision-document-role";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
+import {
+  CYCLE_HALT_REASON,
+  INGESTION_STOP_KIND,
+} from "@stll/legal-atlas/ingestion-cycle";
 
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -31,10 +35,7 @@ import {
   bareCitationKey,
   decisionIdentifiersFromStoredMetadata,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
-import {
-  CYCLE_HALT_REASON,
-  runIngestionPipeline,
-} from "@/api/handlers/case-law/ingestion/pipeline";
+import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { wrappedErrorDetail } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -61,7 +62,6 @@ import {
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
 import type { ObservedDocket } from "@/api/lib/legal-search/ingestion-normalization";
-import { INGESTION_STOP_KIND } from "@/api/lib/legal-search/ingestion-stop-kind";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";

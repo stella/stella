@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
 import { FetchBoundaryError } from "@stll/errors";
+import type { IngestionStopKind } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
   AdapterFetchError,
@@ -21,7 +22,7 @@ describe("ingestion failure kinds", () => {
     401, 403, 429, 408, 500, 502, 503, 504, 200, 400, 404,
   ]) {
     test(`classifies HTTP ${httpStatus} at the ingestion boundary`, () => {
-      let expected = "adapter_error";
+      let expected: IngestionStopKind = "adapter_error";
       if (httpStatus >= 500 || httpStatus === 408) {
         expected = "source_unreachable";
       } else if ([401, 403, 429].includes(httpStatus)) {

@@ -1,6 +1,6 @@
 import { describe, expect, test } from "bun:test";
 
-import { INGESTION_STOP_KIND } from "@/api/lib/legal-search/ingestion-stop-kind";
+import { INGESTION_STOP_KIND } from "@stll/legal-atlas/ingestion-cycle";
 
 import {
   INGESTION_HEALTH_MESSAGE,

@@ -58,6 +58,10 @@
     "./sk-document-fetch-diagnostics": {
       "types": "./src/sk-document-fetch-diagnostics.ts",
       "import": "./src/sk-document-fetch-diagnostics.ts"
+    },
+    "./ingestion-cycle": {
+      "types": "./src/ingestion-cycle.ts",
+      "import": "./src/ingestion-cycle.ts"
     }
   },
   "scripts": {

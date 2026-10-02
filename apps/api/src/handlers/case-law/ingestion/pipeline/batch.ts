@@ -1,6 +1,11 @@
 import { Result, panic } from "better-result";
 import { isNotNull } from "drizzle-orm";
 
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@stll/legal-atlas/ingestion-cycle";
+
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawIngestionFailures } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
@@ -43,10 +48,6 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
-import {
-  INGESTION_STOP_KIND,
-  type IngestionStopKind,
-} from "@/api/lib/legal-search/ingestion-stop-kind";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
