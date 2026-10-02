@@ -28,9 +28,9 @@ type BodyConflict =
 type ClauseBodySaveOptions = {
   initialBody: ClauseParagraph[];
   persist: (write: ClauseBodyWrite) => Promise<unknown>;
-  readHead?: () => Promise<ClauseParagraph[]>;
+  readHead?: (() => Promise<ClauseParagraph[]>) | undefined;
   onError: (error: unknown) => void;
-  onPersisted?: (body: ClauseParagraph[]) => void;
+  onPersisted?: ((body: ClauseParagraph[]) => void) | undefined;
 };
 
 const useClauseReviewGate = (getBodyKey: () => string) => {

@@ -13,8 +13,10 @@ import { createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import type { ClauseBody } from "@/api/lib/clauses/types";
+import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { isRecord } from "@/api/lib/type-guards";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -95,7 +97,7 @@ describe("clause body preconditions", () => {
           params: { clauseId, versionId },
           body: { expectedBody },
           recordAuditEvent: async (_tx, event) => {
-            audits.push(event);
+            audits.push(...(Array.isArray(event) ? event : [event]));
           },
         }),
       );
@@ -211,7 +213,9 @@ describe("clause body preconditions", () => {
             }),
           );
           if (Result.isError(result)) {
-            set.status = result.error.status;
+            set.status = HandlerError.is(result.error)
+              ? result.error.status
+              : 500;
             return { message: result.error.message };
           }
           return result.value;
@@ -223,7 +227,10 @@ describe("clause body preconditions", () => {
     );
     expect(readResponse.status).toBe(200);
     const read = await readResponse.json();
-    expect(read.body).toEqual([
+    if (!isRecord(read) || !isClauseBody(read["body"])) {
+      throw new Error("Expected a clause body in the HTTP response");
+    }
+    expect(read["body"]).toEqual([
       { text: "List text", listKind: "bullet", listLevel: 1 },
       {
         text: "{% if party %}",
@@ -248,7 +255,10 @@ describe("clause body preconditions", () => {
       new Request("http://localhost/clause", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: importedBody, expectedBody: read.body }),
+        body: JSON.stringify({
+          body: importedBody,
+          expectedBody: read["body"],
+        }),
       }),
     );
     expect(invalidBodyResponse.status).toBe(422);
@@ -256,7 +266,7 @@ describe("clause body preconditions", () => {
       new Request("http://localhost/clause", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ body: nextBody, expectedBody: read.body }),
+        body: JSON.stringify({ body: nextBody, expectedBody: read["body"] }),
       }),
     );
     expect(savedResponse.status).toBe(200);

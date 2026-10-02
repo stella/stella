@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, mock, test } from "bun:test";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
-import { isClauseBody } from "@/api/lib/clauses/types";
+import { type ClauseBody, isClauseBody } from "@/api/lib/clauses/types";
 import { isRecord } from "@/api/lib/type-guards";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
@@ -481,7 +481,7 @@ describe("MCP knowledge tools", () => {
           directiveKind: "if",
           directiveExpression: "party",
         },
-      ],
+      ] satisfies ClauseBody,
       metadata: null,
       currentVersion: 1,
       createdBy: "user_1",
@@ -517,7 +517,7 @@ describe("MCP knowledge tools", () => {
     });
     if (
       !isMcpEgressPlan(read) ||
-      !isRecord(read.payload) ||
+      !("clause" in read.payload) ||
       !isRecord(read.payload["clause"]) ||
       !isClauseBody(read.payload["clause"]["body"])
     ) {

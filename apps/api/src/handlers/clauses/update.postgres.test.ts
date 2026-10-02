@@ -103,7 +103,7 @@ if (!databaseUrl || !runPostgresTests) {
               const rows = await tx.execute(
                 sql`SELECT current_setting('stella_test.blocked') = 'true' AS blocked`,
               );
-              probed.resolve(rows.at(0)?.blocked === true);
+              probed.resolve(rows.at(0)?.["blocked"] === true);
             };
             let firstCalls = 0;
             let secondCalls = 0;

@@ -38,9 +38,9 @@ afterEach(() => {
 afterAll(async () => GlobalRegistrator.unregister());
 
 type MountOptions = {
-  readHead?: () => Promise<ClauseParagraph[]>;
-  reportError?: (error: unknown) => void;
-  onPersisted?: (body: ClauseParagraph[]) => void;
+  readHead?: (() => Promise<ClauseParagraph[]>) | undefined;
+  reportError?: ((error: unknown) => void) | undefined;
+  onPersisted?: ((body: ClauseParagraph[]) => void) | undefined;
 };
 const mountSave = ({
   readHead,
@@ -244,6 +244,9 @@ describe("clause body publication", () => {
               await save.change(next);
             }
             const captured = preceding.at(-1);
+            if (!captured) {
+              throw new Error("Expected a preceding publication revision");
+            }
             const { outcome } = await save.start(() =>
               save.result.current.snapshot(),
             );
@@ -264,6 +267,9 @@ describe("clause body publication", () => {
             }
             await save.tick();
             const latest = following.at(-1);
+            if (!latest) {
+              throw new Error("Expected a later edit");
+            }
             expect((await save.whenStarted(1)).write).toEqual({
               body: latest,
               expectedBody: captured,

@@ -142,7 +142,7 @@ type ClauseEditorProps = {
    * whether that's this call's own success or a later retry through the
    * normal autosave path.
    */
-  onReviewResolved?: (body: ClauseParagraph[]) => Promise<void>;
+  onReviewResolved?: (body: ClauseParagraph[]) => Promise<unknown>;
   rewrite?: ClauseRewrite;
 };
 

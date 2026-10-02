@@ -861,9 +861,7 @@ const ClauseBodyEditor = ({
           detached(bodySave.flush(), "clause-detail.save-body");
         }}
         onChange={bodySave.change}
-        onReviewResolved={async (body) => {
-          await bodySave.resolveReview(body);
-        }}
+        onReviewResolved={bodySave.resolveReview}
         onReviewStatusChange={bodySave.onReviewStatusChange}
         rewrite={rewrite}
         title={detail.title}
