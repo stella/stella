@@ -1,5 +1,11 @@
 # @stll/ai-catalog
 
+## 0.4.0
+
+### Minor Changes
+
+- [#4464](https://github.com/stella/stella/pull/4464) [`e3a70d4`](https://github.com/stella/stella/commit/e3a70d437b3332129691e62eedd406df59781dfa) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add image-input capability metadata and a typed accessor.
+
 ## 0.3.2
 
 ### Patch Changes

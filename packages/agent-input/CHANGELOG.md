@@ -1,5 +1,11 @@
 # @stll/agent-input
 
+## 0.1.2
+
+### Patch Changes
+
+- [#4343](https://github.com/stella/stella/pull/4343) [`d6c8112`](https://github.com/stella/stella/commit/d6c81123f0935108e79ba61e24f6d71fb0222824) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Preserve prototype-named JSON properties during object input normalization.
+
 ## 0.1.1
 
 ### Patch Changes
