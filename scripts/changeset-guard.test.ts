@@ -912,7 +912,9 @@ describe("workflow and pre-push read the same policy", () => {
       "",
     );
     expect(changed).not.toBe(gate);
-    expect(() => expectChangesetConditions(changed, stepCount)).toThrow("toBe");
+    expect(() => expectChangesetConditions(changed, stepCount)).toThrow(
+      "Load release policy",
+    );
   });
 
   test("pre-push runs the guard", () => {

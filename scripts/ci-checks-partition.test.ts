@@ -138,7 +138,7 @@ const withoutContinuation = (step: Step): Step => {
       ? [" }}"]
       : [` && steps.${dependency}.outcome == 'success' }}`];
   if (step.name === "Install dependencies") {
-    suffixes.push(`${SAFETY_SUFFIX} }}`);
+    suffixes.unshift(`${SAFETY_SUFFIX} }}`);
   }
   for (const continuation of Object.values(CONTINUATION_PREFIXES)) {
     for (const suffix of suffixes) {
@@ -528,6 +528,25 @@ test("CI coverage strips only canonical continuation wrappers and preserves cond
   }
 });
 
+test("installation normalization preserves scope and strips only the exact complete safety suffix", () => {
+  const original = {
+    name: "Install dependencies",
+    if: "needs.ci-plan.outputs.package_checks_required == 'true'",
+    run: "bun ci --ignore-scripts",
+  };
+  const condition = `${CONTINUATION_PREFIXES.checkout} && (${original.if})${SAFETY_SUFFIX} }}`;
+  expect(withoutContinuation({ ...original, if: condition })).toEqual(original);
+  expect(
+    withoutContinuation({
+      ...original,
+      if: condition.replace(
+        "steps.standalone_lockfiles.outcome == 'success'",
+        "steps.standalone_lockfiles.outcome != 'failure'",
+      ),
+    }),
+  ).not.toEqual(original);
+});
+
 test("continuation invariant rejects missing prerequisite gates and masked guard failures", () => {
   const leg = partitions.at(0);
   if (leg === undefined) {
@@ -546,7 +565,7 @@ test("continuation invariant rejects missing prerequisite gates and masked guard
         leg.steps.map((step) => (step === guard ? changed : step)),
         "ci-checks-generated",
       ),
-    ).toThrow("expect(");
+    ).toThrow(guard.name);
   }
 });
 
