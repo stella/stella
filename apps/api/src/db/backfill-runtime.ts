@@ -28,7 +28,6 @@ import {
   resolveEbsConfiguration,
 } from "../lib/db/ebs-signal-reader";
 import { executedRows } from "../lib/db/executed-rows";
-import { logger } from "../lib/observability/logger-core";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
@@ -332,11 +331,27 @@ type IndicatorFailureCause =
   | "ebs_signal_unconfigured"
   | "read_error";
 
-const warnIndicatorFailure = (
-  failureCause: IndicatorFailureCause,
-  now: number,
-  sqlState?: string,
-) => {
+type IndicatorWarningReporter = (
+  event: "database_load_gate.indicators_unavailable",
+  attributes: { failureCause: IndicatorFailureCause; sqlState?: string },
+) => void;
+
+type IndicatorWarningOptions = {
+  failureCause: IndicatorFailureCause;
+  now: number;
+  sqlState?: string;
+  warn: IndicatorWarningReporter | undefined;
+};
+
+const warnIndicatorFailure = ({
+  failureCause,
+  now,
+  sqlState,
+  warn,
+}: IndicatorWarningOptions) => {
+  if (warn === undefined) {
+    return;
+  }
   const previous = indicatorWarnings.get(failureCause);
   if (
     previous !== undefined &&
@@ -345,7 +360,7 @@ const warnIndicatorFailure = (
     return;
   }
   indicatorWarnings.set(failureCause, now);
-  logger.warn("database_load_gate.indicators_unavailable", {
+  warn("database_load_gate.indicators_unavailable", {
     failureCause,
     ...(sqlState === undefined ? {} : { sqlState }),
   });
@@ -383,6 +398,7 @@ type DatabaseLoadVerdictReaderOptions = {
   config?: HealthConfig;
   clock?: () => number;
   readEbsSignal?: () => Promise<Signal>;
+  warn?: IndicatorWarningReporter;
 };
 
 /** The database owns the aggregate indicator boundary; unavailable reads hold. */
@@ -392,6 +408,7 @@ export const createDatabaseLoadVerdictReader = ({
   config = defaultConfig,
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readEbsSignal,
+  warn,
 }: DatabaseLoadVerdictReaderOptions) => {
   const sharedReadEbsSignal =
     readEbsSignal ?? createCachedEbsSignalReader({ clock, config });
@@ -417,7 +434,11 @@ export const createDatabaseLoadVerdictReader = ({
         typeof row["active"] !== "boolean" ||
         typeof row["observedAt"] !== "string"
       ) {
-        warnIndicatorFailure("read_error", clock());
+        warnIndicatorFailure({
+          failureCause: "read_error",
+          now: clock(),
+          warn,
+        });
         return {
           kind: "unknown",
           signals: [
@@ -447,17 +468,23 @@ export const createDatabaseLoadVerdictReader = ({
             indicator === "ebs_balance" && kind === "unknown",
         ) && resolveEbsConfiguration(envDbLoadGate).type === "missing";
       if (missingEbs) {
-        warnIndicatorFailure("ebs_signal_unconfigured", clock());
+        warnIndicatorFailure({
+          failureCause: "ebs_signal_unconfigured",
+          now: clock(),
+          warn,
+        });
       }
       return verdict;
     });
     await indicators.settle();
     if (Result.isError(result)) {
-      warnIndicatorFailure(
-        indicatorFailureCause(result.error),
-        clock(),
-        getPgErrorCode(result.error),
-      );
+      const sqlState = getPgErrorCode(result.error);
+      warnIndicatorFailure({
+        failureCause: indicatorFailureCause(result.error),
+        now: clock(),
+        ...(sqlState === undefined ? {} : { sqlState }),
+        warn,
+      });
       return {
         kind: "unknown",
         signals: [

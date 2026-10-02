@@ -83,6 +83,50 @@ const FLUSHES_ITS_OWN_SEARCH_MARKS =
 // the baseline; it moves one out of it, and review of the row is the gate.
 export const ROOT_CONNECTION_DOORS = [
   {
+    id: "desktop-account-bootstrap",
+    capability: "Claiming desktop connection and document handoff requests",
+    owner: [
+      "apps/api/src/lib/auth.ts",
+      "apps/api/src/lib/business-registries/desktop/link-grants.ts",
+      "apps/api/src/lib/business-registries/desktop/link-grant-store.ts",
+      "apps/api/src/lib/desktop-edit-handoffs.ts",
+    ],
+    summary:
+      "Connection verification rows deny application-role access. These owners " +
+      "claim short-lived requests atomically, bind their stored account to the " +
+      "request, and bootstrap live member scope before document access.",
+    enforcement: {
+      kind: "import",
+      specifiers: [
+        "@/api/lib/business-registries/desktop/link-grants",
+        "@/api/lib/business-registries/desktop/link-grant-store",
+        "@/api/lib/desktop-edit-handoffs",
+      ],
+      allowed: [
+        {
+          path: "apps/api/src/handlers/desktop-registry/grant.ts",
+          reason: "Creates the authenticated browser connection request.",
+        },
+        {
+          path: "apps/api/src/handlers/desktop-registry/redeem-link.ts",
+          reason: "Claims the native connection request.",
+        },
+        {
+          path: "apps/api/src/handlers/entities/desktop-edit-handoffs.ts",
+          reason: "Creates and claims document handoffs.",
+        },
+        {
+          path: "apps/api/src/lib/business-registries/desktop/link-grants.test.ts",
+          reason: "Exercises connection claims.",
+        },
+        {
+          path: "apps/api/src/lib/desktop-edit-handoffs.integration.test.ts",
+          reason: "Exercises document handoff claims.",
+        },
+      ],
+    },
+  },
+  {
     id: "root-connection-worker-hosts",
     capability:
       "Handing the owner connection to the queue workers a process hosts",
@@ -1385,8 +1429,6 @@ export const OWNERSHIP = [
       "apps/api/src/lib/observability/failure.ts",
       "apps/api/src/lib/observability/observe-failure.ts",
       "apps/api/src/lib/observability/failure-shadow.ts",
-      "apps/api/src/lib/observability/logger-core.ts",
-      "apps/api/src/lib/observability/logger.ts",
     ],
     summary:
       "One bounded, read-once evidence snapshot per error feeds every failure " +
@@ -1396,9 +1438,7 @@ export const OWNERSHIP = [
       "rather than a property a foreign error could carry. observeFailure " +
       "composes the record, owned fields last, and owns severity, capture and " +
       "the transient metric. The direct-failure-sinks ratchet counts the " +
-      "emissions still outside it, per file. Structured logging keeps " +
-      "environment-free emission in logger-core; the application logger " +
-      "initializes optional export and re-exports the same logging owner.",
+      "emissions still outside it, per file.",
     enforcement: { kind: "none" },
   },
   ...ROOT_CONNECTION_DOORS,

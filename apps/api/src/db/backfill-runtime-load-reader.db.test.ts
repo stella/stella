@@ -1,5 +1,5 @@
 import { panic, Result } from "better-result";
-import { beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { beforeAll, describe, expect, test } from "bun:test";
 import { sql, TransactionRollbackError } from "drizzle-orm";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
@@ -10,7 +10,6 @@ import {
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
-import { logger } from "@/api/lib/observability/logger-core";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
 import {
@@ -296,38 +295,38 @@ describe.skipIf(!enabled)(
         executable: true,
         superuser: false,
       });
-      const warn = spyOn(logger, "warn").mockImplementation(() => {});
-      try {
-        const read = createDatabaseLoadVerdictReader({
-          db: restrictedRunner(db, "stella_ingestion", schema),
-          tableName: deniedTarget,
-          config,
-          clock: () => Date.now() + 48 * 60 * 60_000,
-        });
-        for (let attempt = 0; attempt < 2; attempt += 1) {
-          // db-await-in-loop: repeat failure serially to verify the warning is rate-limited.
-          const verdict = await read();
-          expect(verdict.kind).toBe("unknown");
-          expect(verdict.signals).toEqual([
-            {
-              indicator: "long_transaction",
-              kind: "unknown",
-              value: null,
-              threshold: null,
-              observedAt: null,
-              reason: "Database indicators are unavailable",
-            },
-          ]);
-        }
-        expect(warn.mock.calls).toEqual([
-          [
-            "database_load_gate.indicators_unavailable",
-            { failureCause: "target_access_denied", sqlState: "42501" },
-          ],
+      const warnings: unknown[][] = [];
+      const warn = (...record: unknown[]) => {
+        warnings.push(record);
+      };
+      const read = createDatabaseLoadVerdictReader({
+        db: restrictedRunner(db, "stella_ingestion", schema),
+        tableName: deniedTarget,
+        config,
+        warn,
+        clock: () => Date.now() + 48 * 60 * 60_000,
+      });
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        // db-await-in-loop: repeat failure serially to verify the warning is rate-limited.
+        const verdict = await read();
+        expect(verdict.kind).toBe("unknown");
+        expect(verdict.signals).toEqual([
+          {
+            indicator: "long_transaction",
+            kind: "unknown",
+            value: null,
+            threshold: null,
+            observedAt: null,
+            reason: "Database indicators are unavailable",
+          },
         ]);
-      } finally {
-        warn.mockRestore();
       }
+      expect(warnings).toEqual([
+        [
+          "database_load_gate.indicators_unavailable",
+          { failureCause: "target_access_denied", sqlState: "42501" },
+        ],
+      ]);
     });
 
     for (const failure of [
@@ -335,68 +334,68 @@ describe.skipIf(!enabled)(
       "owner lacks statistics visibility",
     ] as const) {
       test(`${failure} holds and warns with a bounded cause`, async () => {
-        const warn = spyOn(logger, "warn").mockImplementation(() => {});
-        try {
-          const outcome = await Result.tryPromise(
-            async () =>
-              await db.transaction(async (tx) => {
-                if (failure === "function missing") {
-                  await tx.execute(
-                    sql.raw(
-                      `ALTER FUNCTION public.stella_database_load_indicators(regclass) RENAME TO load_indicators_${suffix}`,
-                    ),
-                  );
-                } else {
-                  const visible = (
-                    await tx.execute(
-                      sql`SELECT pg_has_role(${blindOwner}, 'pg_read_all_stats', 'USAGE') AS visible`,
-                    )
-                  ).at(0);
-                  expect(visible?.["visible"]).toBe(false);
-                  await tx.execute(
-                    sql.raw(
-                      `ALTER FUNCTION public.stella_database_load_indicators(regclass) OWNER TO ${blindOwner}`,
-                    ),
-                  );
-                }
-                const verdict = await createDatabaseLoadVerdictReader({
-                  db: {
-                    transaction: async (fn) =>
-                      await fn(asTestRaw<Transaction>(tx)),
-                  },
-                  tableName: target,
-                  config,
-                  clock: () => Date.now() + 24 * 60 * 60_000,
-                })();
-                expect(verdict.kind).toBe("unknown");
-                expect(verdict.signals.at(0)?.reason).toBe(
-                  "Database indicators are unavailable",
+        const warnings: unknown[][] = [];
+        const warn = (...record: unknown[]) => {
+          warnings.push(record);
+        };
+        const outcome = await Result.tryPromise(
+          async () =>
+            await db.transaction(async (tx) => {
+              if (failure === "function missing") {
+                await tx.execute(
+                  sql.raw(
+                    `ALTER FUNCTION public.stella_database_load_indicators(regclass) RENAME TO load_indicators_${suffix}`,
+                  ),
                 );
-                expect(warn.mock.calls).toEqual([
-                  [
-                    "database_load_gate.indicators_unavailable",
-                    {
-                      failureCause:
-                        failure === "function missing"
-                          ? "function_missing"
-                          : "owner_lacks_visibility",
-                      sqlState:
-                        failure === "function missing" ? "42883" : "42501",
-                    },
-                  ],
-                ]);
-                // Restore the shared function atomically, including on failed assertions.
-                tx.rollback();
-              }),
-          );
-          if (Result.isOk(outcome)) {
-            panic("Expected explicit fixture rollback");
-          }
-          if (!(outcome.error instanceof TransactionRollbackError)) {
-            throw outcome.error;
-          }
-        } finally {
-          warn.mockRestore();
+              } else {
+                const visible = (
+                  await tx.execute(
+                    sql`SELECT pg_has_role(${blindOwner}, 'pg_read_all_stats', 'USAGE') AS visible`,
+                  )
+                ).at(0);
+                expect(visible?.["visible"]).toBe(false);
+                await tx.execute(
+                  sql.raw(
+                    `ALTER FUNCTION public.stella_database_load_indicators(regclass) OWNER TO ${blindOwner}`,
+                  ),
+                );
+              }
+              const verdict = await createDatabaseLoadVerdictReader({
+                db: {
+                  transaction: async (fn) =>
+                    await fn(asTestRaw<Transaction>(tx)),
+                },
+                tableName: target,
+                config,
+                warn,
+                clock: () => Date.now() + 24 * 60 * 60_000,
+              })();
+              expect(verdict.kind).toBe("unknown");
+              expect(verdict.signals.at(0)?.reason).toBe(
+                "Database indicators are unavailable",
+              );
+              expect(warnings).toEqual([
+                [
+                  "database_load_gate.indicators_unavailable",
+                  {
+                    failureCause:
+                      failure === "function missing"
+                        ? "function_missing"
+                        : "owner_lacks_visibility",
+                    sqlState:
+                      failure === "function missing" ? "42883" : "42501",
+                  },
+                ],
+              ]);
+              // Restore the shared function atomically, including on failed assertions.
+              tx.rollback();
+            }),
+        );
+        if (Result.isOk(outcome)) {
+          panic("Expected explicit fixture rollback");
+        }
+        if (!(outcome.error instanceof TransactionRollbackError)) {
+          throw outcome.error;
         }
       });
     }

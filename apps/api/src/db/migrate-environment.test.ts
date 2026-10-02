@@ -135,7 +135,7 @@ for (const failure of [
   { sqlState: "42883", failureCause: "function_missing" },
   { sqlState: "42501", failureCause: "execute_denied" },
 ]) {
-  test(`database-only indicator ${failure.failureCause} emits its structured warning without application settings`, async () => {
+  test(`database-only indicator ${failure.failureCause} records its structured warning without application settings`, async () => {
     await Bun.write(EMPTY_ENV_FILE, "");
     const runtimePath = nodePath.join(import.meta.dir, "backfill-runtime.ts");
     const child = Bun.spawn({
@@ -146,6 +146,7 @@ for (const failure of [
         `const { createDatabaseLoadVerdictReader } = await import(${JSON.stringify(runtimePath)});
          const { PgDialect } = await import('drizzle-orm/pg-core');
          const dialect = new PgDialect();
+         const warnings = [];
          const read = createDatabaseLoadVerdictReader({
            db: { transaction: async (work) => await work({
              execute: async (statement) => {
@@ -155,8 +156,10 @@ for (const failure of [
            }) },
            tableName: 'case_law_decisions',
            clock: () => 1000,
+           warn: (...record) => { warnings.push(record); },
          });
-         await Bun.write(Bun.stdout, JSON.stringify(await read()));`,
+         const verdict = await read();
+         await Bun.write(Bun.stdout, JSON.stringify({ verdict, warnings }));`,
       ],
       env: {
         HOME: "/tmp",
@@ -173,13 +176,16 @@ for (const failure of [
     ]);
     expect(stderr).not.toContain(ENVIRONMENT_VALIDATION_MESSAGE);
     expect(exitCode).toBe(0);
-    expect(JSON.parse(stdout)).toMatchObject({ kind: "unknown" });
-    expect(JSON.parse(stderr.trim())).toEqual({
-      severity: "WARN",
-      message: "database_load_gate.indicators_unavailable",
-      failureCause: failure.failureCause,
-      sqlState: failure.sqlState,
+    expect(JSON.parse(stdout)).toEqual({
+      verdict: expect.objectContaining({ kind: "unknown" }),
+      warnings: [
+        [
+          "database_load_gate.indicators_unavailable",
+          { failureCause: failure.failureCause, sqlState: failure.sqlState },
+        ],
+      ],
     });
     expect(stderr).not.toContain("private diagnostic payload");
+    expect(stdout).not.toContain("private diagnostic payload");
   });
 }

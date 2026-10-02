@@ -766,6 +766,7 @@ export const createSourceStoredTotalMaintenanceRuntime = (
     tableName: "case_law_decisions",
     clock,
     config,
+    warn: logger.warn,
     ...(readEbsSignal === undefined ? {} : { readEbsSignal }),
   });
   const acquireAdmission = createSourceStoredTotalAdmission({

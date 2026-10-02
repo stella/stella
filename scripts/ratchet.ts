@@ -1795,10 +1795,7 @@ const FAILURE_SINK_MODULES = {
   capture: "apps/api/src/lib/analytics/capture",
   errorTag: "apps/api/src/lib/errors/error-tag",
   errorUtils: "apps/api/src/lib/errors/utils",
-  logger: new Set([
-    "apps/api/src/lib/observability/logger",
-    "apps/api/src/lib/observability/logger-core",
-  ]),
+  logger: "apps/api/src/lib/observability/logger",
   pgError: "apps/api/src/lib/pg-error",
   aiError: "apps/api/src/lib/ai-error",
   documentProcessingFields:
@@ -1897,10 +1894,7 @@ const importedFailureBindings = (
       if (FOLDED_HELPER_EXPORTS[modulePath]?.has(imported) === true) {
         helpers.add(local);
       }
-      if (
-        FAILURE_SINK_MODULES.logger.has(modulePath) &&
-        imported === "logger"
-      ) {
+      if (modulePath === FAILURE_SINK_MODULES.logger && imported === "logger") {
         loggers.add(local);
       }
     }
@@ -5286,7 +5280,6 @@ const FAILURE_SINK_FIXTURE_LINES = [
   'import { documentProcessingFailureFields } from "@/api/lib/document-processing-failure-fields";',
   'import { failureSink } from "@/api/lib/observability/failure";',
   'import { logger } from "@/api/lib/observability/logger";',
-  'import { logger as databaseLogger } from "./lib/observability/logger-core";',
   'import { observeFailure } from "@/api/lib/observability/observe-failure";',
   "const { warn: warnLog } = logger;",
   "const pinned = failureSink({",
@@ -5308,7 +5301,6 @@ const FAILURE_SINK_FIXTURE_LINES = [
   // A wrapper composing the helpers is the helpers.
   '  logger.warn("document.failed", documentProcessingFailureFields(error));',
   '  logger.error("worker.failed", { "error.code": "X" });',
-  '  databaseLogger.warn("database.failed", { "error.code": "X" });',
   '  logger.request({ message: "request.failed", errorType: errorTag(error) });',
   // Computed and destructured logger access.
   '  logger["warn"]("computed", { "error.type": "x" });',
@@ -5336,7 +5328,7 @@ const SELF_TEST_RUNNER_FAILURE_SINKS = [
   'logError("[daemon] retrying");',
   "",
 ].join("\n");
-const EXPECTED_DIRECT_FAILURE_SINKS = 16;
+const EXPECTED_DIRECT_FAILURE_SINKS = 15;
 const EXPECTED_ANALYTICS_CALLBACK_SEAMS = 2;
 const EXPECTED_FAILURE_SINK_EXPECTATIONS = 1;
 const EXPECTED_FAILURE_LEGACY_OUTPUT_PINS = 1;
