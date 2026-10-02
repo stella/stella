@@ -106,6 +106,29 @@ export const QUERY_PLAN_REGISTRY = [
     contract: planContracts["case-law.ecli-identity"],
   },
   {
+    // A docket reads its whole case file: every stored spelling a member can
+    // carry, as one membership test on the citation key and the identifier
+    // rows, never a pattern.
+    id: "case-law.docket-family-identity",
+    class: "point",
+    role: "public-law-reader",
+    build: (tx) =>
+      decisionIdsByIdentityQuery({
+        country: QUERY_PLAN_SAMPLE.caseLaw.country,
+        identity: {
+          type: "identifier",
+          kind: "docket",
+          jurisdiction: "CZE",
+          value: "12 Cdo 3456/2021-7",
+          family: "12 Cdo 3456/2021",
+          selector: { kind: "sheet", value: "7" },
+        },
+        tx,
+      }),
+    seed: "case-law",
+    contract: planContracts["case-law.docket-family-identity"],
+  },
+  {
     id: "case-law.sitemap-refresh",
     class: "page",
     role: "root",

@@ -418,7 +418,7 @@ test("autofix refuses an empty selected-generator handoff", () => {
   );
 });
 
-test("lint selection derives generated outputs from the manifest", () => {
+test("lint selection derives committed generated outputs from the manifest", () => {
   expect(isChangedLintPath("apps/web/src/routeTree.gen.ts")).toBe(false);
   expect(isChangedLintPath("packages/skills/src/blueprints.gen.ts")).toBe(
     false,
@@ -444,18 +444,6 @@ const casePatternsAfter = (marker: string) => {
   return (match?.[1] ?? "").split("|");
 };
 
-test("CI path cases stay pinned to the manifest", () => {
-  for (const [id, marker] of [
-    ["web-api-types", "# The web API types drift guard"],
-    ["model-rates", "# The committed rate and capability snapshots"],
-  ] as const) {
-    const inputs = generator(id).inputs.map((glob) =>
-      glob.replace(/\/\*\*$/u, "/*"),
-    );
-    expect(casePatternsAfter(marker).toSorted(), id).toEqual(inputs.toSorted());
-  }
-});
-
 test("route-tree CI scope covers every manifest input and output", () => {
   const routeTree = generator("route-tree");
   const paths = [...routeTree.inputs, ...routeTree.outputs].map((glob) =>
@@ -466,6 +454,65 @@ test("route-tree CI scope covers every manifest input and output", () => {
       "# The route-tree generator reads the web package script",
     ).toSorted(),
   ).toEqual(paths.toSorted());
+});
+
+test("CI rate snapshot scope stays pinned to the manifest", () => {
+  const inputs = generator("model-rates").inputs.map((glob) =>
+    glob.replace(/\/\*\*$/u, "/*"),
+  );
+  expect(
+    casePatternsAfter(
+      "# The committed rate and capability snapshots",
+    ).toSorted(),
+  ).toEqual(inputs.toSorted());
+});
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+const generationInputs = (name: string) => {
+  const config: unknown = Bun.JSONC.parse(
+    readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+  );
+  if (!isRecord(config) || !isRecord(config["tasks"])) {
+    panic("Turbo configuration has no tasks");
+  }
+  const task = config["tasks"][`@stll/web#${name}`];
+  if (!isRecord(task) || !Array.isArray(task["inputs"])) {
+    panic(`Missing generation task inputs for ${name}`);
+  }
+  return task["inputs"]
+    .map((input: unknown) => {
+      if (typeof input !== "string") {
+        panic("Generation task input must be a glob");
+      }
+      return input;
+    })
+    .filter((input) => !input.startsWith("!"));
+};
+
+test("CI determinism selectors cover the cached generators' input contracts", () => {
+  for (const [name, marker] of [
+    ["generate:api-types", "# The web API types"],
+  ] as const) {
+    const selectors = casePatternsAfter(marker);
+    for (const glob of generationInputs(name)) {
+      const rooted = glob.startsWith("$TURBO_ROOT$/")
+        ? glob.replace("$TURBO_ROOT$/", "")
+        : `apps/web/${glob}`;
+      // Shell case * crosses directory separators, unlike Bun.Glob's *.
+      const sample = rooted
+        .replace(/\*\*/gu, "nested")
+        .replace(/\*/gu, "fixture")
+        .replace(/\?/gu, "x");
+      expect(
+        selectors.some((selector) =>
+          new Bun.Glob(selector.replace(/\*+/gu, "**")).match(sample),
+        ),
+        `${name} CI selector covers ${rooted}`,
+      ).toBe(true);
+    }
+  }
 });
 
 test("CI diff path guards stay pinned to manifest outputs", () => {

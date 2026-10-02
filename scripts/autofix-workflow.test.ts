@@ -271,7 +271,6 @@ describe("changed-file autofix boundary", () => {
         "capability-runtime",
         "cli-registry",
         "mcp-app-bundles",
-        "web-api-types",
         "mcp-surface",
         "module-ownership",
         "design-tokens",

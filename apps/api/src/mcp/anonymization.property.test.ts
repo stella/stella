@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import type { GazetteerEntry } from "@stll/anonymize";
 import {
   propertyConfig,
   propertySeed,
@@ -88,6 +89,119 @@ const field = fc
   .map(([parts, joiner]) => parts.join(joiner));
 
 const fields = fc.array(field, { minLength: 1, maxLength: 5 });
+
+/**
+ * Short deny-list names, some of them pieces of common words ("clause",
+ * "marker", "nováček"), where approximate matching is most likely to reach
+ * past a word into the text around it. Each list prepares its own native
+ * pipeline, so the property draws from a fixed handful of lists and keeps the
+ * randomness in the fields around them.
+ */
+const SHORT_ENTRY_DENY_LISTS = [
+  ["Zeta", "Acme"],
+  ["Acme A", "Orbis", "Nova"],
+  ["Clau", "Mark", "Data", "Kora"],
+  ["Orbit", "Lexa", "Zeta", "Tusko", "Ambero"],
+] as const;
+
+const shortEntries = fc.constantFrom(...SHORT_ENTRY_DENY_LISTS).map((names) =>
+  names.map((canonical, index): GazetteerEntry => ({
+    id: `short-entry-${String(index)}`,
+    canonical,
+    label: index % 2 === 0 ? "organization" : "person",
+    variants: [],
+    workspaceId: "00000000-0000-4000-8000-000000000001",
+    createdAt: 0,
+    source: "manual",
+  })),
+);
+
+/**
+ * Field text built around the entries: each name on its own, glued to digits
+ * or hex ("zeta9", "acme0a1b"), inside marker-like wrappers, and next to
+ * ordinary words that share letters with it.
+ */
+const shortEntryFields = (entries: readonly GazetteerEntry[]) => {
+  const names = entries.map((entry) => entry.canonical);
+  const nameFragment = fc.oneof(
+    fc.constantFrom(...names),
+    fc
+      .tuple(fc.constantFrom(...names), fc.nat({ max: 99 }))
+      .map(([name, digits]) => `${name.toLowerCase()}${String(digits)}`),
+    fc
+      .tuple(fc.constantFrom(...names), hexRun(6))
+      .map(([name, hex]) => `${name.toLowerCase()}${hex}`),
+    fc
+      .tuple(fc.constantFrom(...names), fc.nat({ max: 9 }))
+      .map(
+        ([name, digit]) => `<<marker:${name.toLowerCase()}${String(digit)}>>`,
+      ),
+  );
+  const shortFragment = fc.oneof(
+    nameFragment,
+    fc.constantFrom(
+      "clause",
+      "marker",
+      "came",
+      "acre",
+      "Nováček",
+      "orbitu",
+      "data room",
+      "signed",
+      "\n",
+      " ",
+      "",
+    ),
+    uuidLike,
+    hexRun(12),
+    delimiterPlaneCharacter,
+  );
+  const shortField = fc
+    .tuple(
+      fc.array(shortFragment, { maxLength: 6 }),
+      fc.constantFrom("", " ", "\n", ", "),
+    )
+    .map(([parts, joiner]) => parts.join(joiner));
+  return fc.array(shortField, { minLength: 1, maxLength: 5 });
+};
+
+/**
+ * A deny-list case with one entry placed at a chosen field edge: first or
+ * last in a chosen field, either touching the field boundary or separated
+ * from it by whitespace, and separated from the rest of the field so it
+ * stands as its own word.
+ */
+const shortEntryAtFieldEdge = shortEntries.chain((entries) =>
+  fc
+    .record({
+      fields: shortEntryFields(entries),
+      name: fc.constantFrom(...entries.map((entry) => entry.canonical)),
+      fieldPick: fc.nat(),
+      edge: fc.constantFrom("leading", "trailing"),
+      spacing: fc.constantFrom("", " ", "\n"),
+      separator: fc.constantFrom(" ", "\n", ", "),
+    })
+    .map(({ edge, fieldPick, fields: input, name, separator, spacing }) => {
+      const fieldIndex = fieldPick % input.length;
+      const rest = input[fieldIndex] ?? "";
+      const placed =
+        edge === "leading"
+          ? `${spacing}${name}${separator}${rest}`
+          : `${rest}${separator}${name}${spacing}`;
+      return {
+        edge,
+        entries,
+        fieldIndex,
+        input: input.map((value, index) =>
+          index === fieldIndex ? placed : value,
+        ),
+        name,
+        spacing,
+      };
+    }),
+);
+
+const PLACEHOLDER_SOURCE = String.raw`\[[A-Z][A-Z0-9_]*_\d+\]`;
 
 const PLACEHOLDER = /\[[A-Z][A-Z0-9_]*_\d+\]/gu;
 
@@ -200,5 +314,49 @@ describe("anonymizing several fields through the pipeline", () => {
       expect(redactedRuns).toBeGreaterThan(0);
     },
     propertyTestTimeout(30_000),
+  );
+
+  test(
+    "redacts a short deny-list name at a field edge and keeps every boundary",
+    async () => {
+      await fc.assert(
+        fc.asyncProperty(
+          shortEntryAtFieldEdge,
+          async ({ edge, entries, fieldIndex, input, name, spacing }) => {
+            const anonymized = await anonymizeTextFields({
+              catalogs: {
+                type: "preloaded",
+                excludedCanonicals: [],
+                gazetteerEntries: entries,
+              },
+              fields: input,
+              organizationId: toSafeId<"organization">("org_test"),
+              workspaceId: "00000000-0000-4000-8000-000000000001",
+            });
+            if (Result.isError(anonymized)) {
+              throw anonymized.error;
+            }
+            const result = anonymized.value;
+
+            expect(result.fields).toHaveLength(input.length);
+            for (const [index, value] of result.fields.entries()) {
+              expect(isRedactionOf(value, input[index] ?? "")).toBe(true);
+            }
+            const target = result.fields[fieldIndex] ?? "";
+            const edgePattern =
+              edge === "leading"
+                ? new RegExp(`^${spacing}${PLACEHOLDER_SOURCE}`, "u")
+                : new RegExp(`${PLACEHOLDER_SOURCE}${spacing}$`, "u");
+            expect({ name, edge, target }).toEqual({
+              name,
+              edge,
+              target: expect.stringMatching(edgePattern),
+            });
+          },
+        ),
+        propertyConfig({ numRuns: 100, seed: propertySeed() }),
+      );
+    },
+    propertyTestTimeout(60_000),
   );
 });

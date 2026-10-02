@@ -14,5 +14,9 @@
   {
     "name": "CLI registry snapshot guard",
     "reason": "Replaced by CLI sharded registry snapshot guard: derives the API capability runtime from committed shards before exporting the CLI registry."
+  },
+  {
+    "name": "Web API types drift guard",
+    "reason": "Replaced by the determinism guard; the generated API types file is no longer committed"
   }
 ]

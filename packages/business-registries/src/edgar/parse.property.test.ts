@@ -213,6 +213,7 @@ test("submission response mutations retain typed nested filings or registry fail
         const original = { ...raw, cik: "0000320193" };
         const operation = async () =>
           lookupByCik("320193", {
+            observer: "unobserved",
             userAgent: "Property Tests property@example.test",
           });
         expect(await expectRegistryResponse(original, operation)).toMatchObject(
@@ -272,6 +273,7 @@ test("every consumed response field supports missing, null and wrong-type mutati
   } satisfies EdgarRawSubmission;
   const operation = async () =>
     lookupByCik("320193", {
+      observer: "unobserved",
       userAgent: "Property Tests property@example.test",
     });
   expect(await expectRegistryResponse(original, operation)).toMatchObject({
