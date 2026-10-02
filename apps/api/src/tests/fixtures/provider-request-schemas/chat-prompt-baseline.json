@@ -8,6 +8,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 33312
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33543
       }
     ],
     "anthropic/extended": [
@@ -18,6 +22,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 33801
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34034
       }
     ],
     "bedrock/default": [
@@ -28,6 +36,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 33545
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33776
       }
     ],
     "bedrock/extended": [
@@ -38,6 +50,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 34033
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34266
       }
     ],
     "google/default": [
@@ -48,6 +64,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 32481
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 32712
       }
     ],
     "google/extended": [
@@ -58,6 +78,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 32958
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 33191
       }
     ],
     "mistral/default": [
@@ -68,6 +92,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 34906
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35137
       }
     ],
     "mistral/extended": [
@@ -78,6 +106,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 35431
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35664
       }
     ],
     "openai/default": [
@@ -88,6 +120,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 34520
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34751
       }
     ],
     "openai/extended": [
@@ -98,6 +134,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 35035
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35267
       }
     ],
     "openrouter-anthropic/default": [
@@ -108,6 +148,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 34383
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34622
       }
     ],
     "openrouter-anthropic/extended": [
@@ -118,6 +162,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 34881
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35121
       }
     ],
     "openrouter/default": [
@@ -128,6 +176,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 34383
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 34622
       }
     ],
     "openrouter/extended": [
@@ -138,6 +190,10 @@
       {
         "reason": "Sanctions screening inputs on counterparty_check",
         "tokens": 34881
+      },
+      {
+        "reason": "Position sources on save_playbook",
+        "tokens": 35121
       }
     ]
   },
