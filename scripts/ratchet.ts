@@ -3018,7 +3018,7 @@ const RATCHET_METRICS: readonly RatchetMetric[] = [
       isExcludedSource(file) ||
       file === "apps/api/src/db/root.ts" ||
       ROOT_CONNECTION_DOOR_FILES.has(file),
-    count: countRootConnectionShapes,
+    count: (content, { file }) => countRootConnectionShapes(content, file),
     perFile: true,
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
@@ -3578,7 +3578,11 @@ export const scanAll = (
   assertMetricRegistry();
   const snapshot: Baseline = {};
   for (const metric of metrics) {
-    snapshot[metric.id] = scanMetric(metric, { root, role, trackedFiles });
+    snapshot[metric.id] = scanMetric(metric, {
+      root,
+      role,
+      ...(trackedFiles === undefined ? {} : { trackedFiles }),
+    });
   }
   const inspection = inspectConfiguration(metrics, snapshot);
   if (inspection.status === "invalid") {
