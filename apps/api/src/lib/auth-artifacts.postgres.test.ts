@@ -27,7 +27,7 @@ import {
   workspaceMembers,
   workspaces,
 } from "@/api/db/schema";
-import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
+import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   authorizeDesktopEditSession,
@@ -69,6 +69,7 @@ const tables = [
 ];
 
 const snapshot = async (tx: Transaction) => ({
+  members: await tx.select().from(member).orderBy(member.id),
   entities: await tx.select().from(entities).orderBy(entities.id),
   versions: await tx.select().from(entityVersions).orderBy(entityVersions.id),
   properties: await tx.select().from(properties).orderBy(properties.id),
@@ -153,6 +154,7 @@ if (!databaseUrl || !enabled) {
             organizationId: scope.organizationId,
             userId: scope.userId,
             workspaceId: scope.workspaceId,
+            memberId: Bun.randomUUIDv7(),
             sessionId: createSafeId<"desktopEditSession">(),
             token: Bun.randomUUIDv7(),
           }));
@@ -217,7 +219,7 @@ if (!databaseUrl || !enabled) {
                 },
               ]);
               await tx.insert(member).values({
-                id: Bun.randomUUIDv7(),
+                id: scope.memberId,
                 organizationId: scope.organizationId,
                 userId: scope.userId,
                 role: "owner",
@@ -307,6 +309,9 @@ if (!databaseUrl || !enabled) {
             }
           });
           const before = await transaction(snapshot);
+          expect(before.members.some((row) => row.id === target.memberId)).toBe(
+            true,
+          );
           for (const scope of cases) {
             expect(
               await transaction(
@@ -332,7 +337,8 @@ if (!databaseUrl || !enabled) {
           const interrupted = await Result.tryPromise({
             try: async () =>
               await transaction(async (tx) => {
-                await revokeOrganizationMemberAuthArtifacts(tx, {
+                await removeOrganizationMemberWithAuthArtifacts(tx, {
+                  memberId: target.memberId,
                   organizationId,
                   userId,
                 });
@@ -356,12 +362,19 @@ if (!databaseUrl || !enabled) {
             await tx.execute(sql`DROP TRIGGER reject_cleanup ON ${apikey}`);
           });
           await transaction(async (tx) => {
-            await revokeOrganizationMemberAuthArtifacts(tx, {
+            await removeOrganizationMemberWithAuthArtifacts(tx, {
+              memberId: target.memberId,
               organizationId,
               userId,
             });
           });
           const after = await transaction(snapshot);
+          expect(after.members.some((row) => row.id === target.memberId)).toBe(
+            false,
+          );
+          expect(after.members).toEqual(
+            before.members.filter((row) => row.id !== target.memberId),
+          );
           expect(before.entities).toHaveLength(cases.length);
           expect(before.versions).toHaveLength(cases.length * 2);
           expect(before.properties).toHaveLength(cases.length);
@@ -465,7 +478,8 @@ if (!databaseUrl || !enabled) {
             ).toBe("authorized");
           }
           await transaction(async (tx) => {
-            await revokeOrganizationMemberAuthArtifacts(tx, {
+            await removeOrganizationMemberWithAuthArtifacts(tx, {
+              memberId: target.memberId,
               organizationId,
               userId,
             });

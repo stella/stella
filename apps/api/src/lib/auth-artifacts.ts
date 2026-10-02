@@ -5,6 +5,7 @@ import type { PgTable, PgUpdateSetSource } from "drizzle-orm/pg-core";
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
   apikey,
+  member,
   oauthAccessToken,
   oauthConsent,
   oauthRefreshToken,
@@ -345,6 +346,27 @@ export const revokeOrganizationMemberAuthArtifacts = async (
   for (const revoke of Object.values(MEMBER_CREDENTIAL_REVOCATION)) {
     await revoke(tx, scope);
   }
+};
+
+type RemoveOrganizationMemberScope = MemberCredentialScope & {
+  memberId: string;
+};
+
+/** The caller's transaction commits membership and credential cleanup together. */
+export const removeOrganizationMemberWithAuthArtifacts = async (
+  tx: AuthArtifactTransaction,
+  { memberId, organizationId, userId }: RemoveOrganizationMemberScope,
+): Promise<void> => {
+  await tx
+    .delete(member)
+    .where(
+      and(
+        eq(member.id, memberId),
+        eq(member.organizationId, organizationId),
+        eq(member.userId, userId),
+      ),
+    );
+  await revokeOrganizationMemberAuthArtifacts(tx, { organizationId, userId });
 };
 
 type RevokeOAuthClientAuthArtifactsOptions = {

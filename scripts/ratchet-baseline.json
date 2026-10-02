@@ -894,7 +894,7 @@
   "mcp-security-redact-oauth-registration-response-suppressions": {
     "files": {}
   },
-  "auth-lifecycle-after-remove-member-revokes-artifacts-suppressions": {
+  "auth-lifecycle-member-removal-revokes-artifacts-suppressions": {
     "files": {}
   },
   "auth-lifecycle-no-direct-auth-artifact-delete-suppressions": {

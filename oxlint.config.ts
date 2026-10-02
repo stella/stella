@@ -144,7 +144,7 @@ const fixtureRuleOverrides = [
     rules: publicSsrAmbientStateRules,
   },
   fixtureRuleOverride("auth-lifecycle.fixture.ts", [
-    "auth-lifecycle/after-remove-member-revokes-artifacts",
+    "auth-lifecycle/member-removal-revokes-artifacts",
     "auth-lifecycle/no-direct-auth-artifact-delete",
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
@@ -3824,7 +3824,7 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
-        "auth-lifecycle/after-remove-member-revokes-artifacts": "error",
+        "auth-lifecycle/member-removal-revokes-artifacts": "error",
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
