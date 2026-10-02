@@ -229,7 +229,7 @@ test("a same-contact refetch preserves an active notes draft", async () => {
     target: { value: "active draft" },
   });
   await testing.act(async () => {
-    await client.fetchQuery({
+    await client.query({
       ...contactOptions(ORGANIZATION, A),
       staleTime: 0,
       queryFn: async () => contact(A, "refetched"),
@@ -469,7 +469,11 @@ test.each([200, 500])(
           onClick={() =>
             update.mutate(
               { organizationId: ORGANIZATION, contactId: A, notes: "saved" },
-              { onSuccess: () => successes++ },
+              {
+                onSuccess: () => {
+                  successes++;
+                },
+              },
             )
           }
         >
@@ -719,7 +723,7 @@ test("two quick data-box additions build on refreshed detail while lists refetch
   const client = createClient();
   warmPage(client);
   const listResponse = Promise.withResolvers<string[]>();
-  const fetchList = () => listResponse.promise;
+  const fetchList = async () => await listResponse.promise;
   const observer = new query.QueryObserver(client, {
     queryKey: contactsKeys.lists(ORGANIZATION),
     queryFn: fetchList,
