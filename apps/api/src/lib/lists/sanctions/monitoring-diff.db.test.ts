@@ -280,14 +280,12 @@ test(
           .digest("hex"),
       };
     });
-    await db
-      .insert(sanctionsEntryPayloads)
-      .values(
-        entries.map(({ payload: entry, contentHash }) => ({
-          payload: entry,
-          contentHash,
-        })),
-      );
+    await db.insert(sanctionsEntryPayloads).values(
+      entries.map(({ payload: entry, contentHash }) => ({
+        payload: entry,
+        contentHash,
+      })),
+    );
     await db
       .delete(sanctionsEditionEntries)
       .where(eq(sanctionsEditionEntries.editionId, editionId));
@@ -323,17 +321,13 @@ test(
       );
       expect(await stateFor(contact.id)).toEqual(initial);
     }
-    await db
-      .insert(sanctionsEditionEntries)
-      .values(
-        entries
-          .slice(2, 1000)
-          .map(({ sourceEntryId, contentHash }) => ({
-            editionId,
-            sourceEntryId,
-            contentHash,
-          })),
-      );
+    await db.insert(sanctionsEditionEntries).values(
+      entries.slice(2, 1000).map(({ sourceEntryId, contentHash }) => ({
+        editionId,
+        sourceEntryId,
+        contentHash,
+      })),
+    );
     await db
       .update(sanctionsEditions)
       .set({ entryCount: 1000 })
