@@ -174,7 +174,9 @@ const prepareSoftLawPage = async ({
         digest: new Bun.CryptoHasher("sha256").update(part.bytes).digest("hex"),
       }))
       .toSorted((left, right) => {
-        if (left.role === right.role) {return 0;}
+        if (left.role === right.role) {
+          return 0;
+        }
         return left.role < right.role ? -1 : 1;
       });
     const contentHash = new Bun.CryptoHasher("sha256")
