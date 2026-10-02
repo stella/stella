@@ -1,5 +1,8 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import type {
@@ -64,6 +67,43 @@ const sequences = (count: number, length: number) => {
 };
 
 describe("foldClaimReview", () => {
+  test("notes and decisions preserve each other's independent fields", () => {
+    assertProperty(
+      "notes and decisions preserve each other's independent fields",
+      fc.property(
+        fc.array(fc.constantFrom(...PAYLOADS), { maxLength: 40 }),
+        (payloads) => {
+          const originalPayloads = structuredClone(payloads);
+          const events = payloads.map((payload, index) => ({
+            payload,
+            actorId: `user-${String(index)}`,
+            createdAt: at(index),
+          }));
+          const full = foldClaimReview(events);
+          const notes = foldClaimReview(
+            events.filter((event) => event.payload.kind === "note"),
+          );
+          const decisions = foldClaimReview(
+            events.filter((event) => event.payload.kind !== "note"),
+          );
+          expect(full.note).toBe(notes.note);
+          expect(full.noteSavedAt).toEqual(notes.noteSavedAt);
+          expect({ ...full, note: "", noteSavedAt: null }).toEqual(decisions);
+          expect(events.map((event) => event.payload)).toEqual(
+            originalPayloads,
+          );
+          expect(EMPTY_CLAIM_REVIEW).toMatchObject({
+            status: null,
+            override: null,
+            note: "",
+            reopened: false,
+            recordConflictResolution: null,
+          });
+        },
+      ),
+    );
+  });
+
   test("no events is the empty review", () => {
     expect(foldClaimReview([])).toEqual(EMPTY_CLAIM_REVIEW);
   });
