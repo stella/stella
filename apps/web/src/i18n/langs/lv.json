@@ -1530,6 +1530,7 @@
     "variantUpdated": "Variants atjaunināts",
     "variants": "Varianti",
     "versionCount": "{count, plural, zero {# versiju} one {# versija} other {# versijas}}",
+    "versionLimitReached": "Sasniegts šīs klauzulas versiju limits",
     "versionRestored": "Versija atjaunota"
   },
   "common": {

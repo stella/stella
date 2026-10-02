@@ -11,6 +11,8 @@ import {
   test,
 } from "bun:test";
 
+import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
+
 import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import englishMessages from "@/i18n/langs/en.json";
 
@@ -48,7 +50,7 @@ const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { useClauseNavStore } =
   await import("@/stores/knowledge/clause-nav-store");
 const { stellaToast } = await import("@stll/ui/toast");
-const { APIError } = await import("@/lib/errors/api");
+const { toAPIError } = await import("@/lib/errors/api");
 const { knowledgeKeys, clauseDetailOptions } =
   await import("@/lib/knowledge/queries");
 const { DetailContent } = await import("./clause-detail");
@@ -654,9 +656,30 @@ describe("clause detail with the real editor", () => {
     },
   );
 
-  test.each(["History restore", "variant promotion"])(
-    "%s refusal leaves head and editor unchanged",
-    async (action) => {
+  test.each(
+    ["History restore", "variant promotion"].flatMap((action) => [
+      {
+        action,
+        status: 400,
+        code: CLAUSE_VERSION_LIMIT_ERROR_CODE,
+        description: englishMessages.clauses.versionLimitReached,
+      },
+      {
+        action,
+        status: 500,
+        code: CLAUSE_VERSION_LIMIT_ERROR_CODE,
+        description: englishMessages.common.unexpectedError,
+      },
+      {
+        action,
+        status: 400,
+        code: "unknown_error",
+        description: englishMessages.common.unexpectedError,
+      },
+    ]),
+  )(
+    "$action refusal at $status ($code) leaves head and editor unchanged",
+    async ({ action, status, code, description }) => {
       const save = mountDetail();
       if (action === "History restore") {
         await save.click(
@@ -699,7 +722,7 @@ describe("clause detail with the real editor", () => {
       await save.settle(
         0,
         HISTORY,
-        new APIError({ status: 400, message: "version cap reached" }),
+        toAPIError({ status, value: { code, message: "server detail" } }),
       );
       expect(save.head().body).toEqual(A);
       expect(save.editor().getText()).toBe("Initial clause");
@@ -707,6 +730,9 @@ describe("clause detail with the real editor", () => {
       expect(save.requests).toHaveLength(1);
       expect(save.toast).not.toHaveBeenCalledWith(
         expect.objectContaining({ type: "success" }),
+      );
+      expect(save.toast).toHaveBeenCalledWith(
+        expect.objectContaining({ type: "error", description }),
       );
     },
   );
@@ -734,7 +760,12 @@ describe("clause detail with the real editor", () => {
     await save.click(save.saveButton());
     await save.settle(0, B);
     await aborted.promise;
-    expect((await refetch).isErr()).toBe(true);
+    const cancelled = await refetch;
+    expect(cancelled.isOk()).toBe(true);
+    response.resolve(DETAIL);
+    await act(async () => {
+      await response.promise;
+    });
     expect(save.queryClient.getQueryData(save.key)).toMatchObject({ body: B });
     await act(() => save.reopen());
     expect(save.editor().getText()).toBe("Edited clause");

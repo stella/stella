@@ -3,6 +3,8 @@ import { deepEquals } from "bun";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
+import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
+
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
@@ -114,7 +116,7 @@ const restoreClauseVersion = createSafeRootHandler(
       );
     }
 
-    const restoredBody = normalizeClauseBody(version.body);
+    const restoredBody = version.body;
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
@@ -231,6 +233,8 @@ const restoreClauseVersion = createSafeRootHandler(
         new HandlerError({
           status: 400,
           message: "Version limit reached for this clause",
+          code: CLAUSE_VERSION_LIMIT_ERROR_CODE,
+          retryable: false,
         }),
       );
     }

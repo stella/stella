@@ -1533,6 +1533,7 @@ type Messages = {
     "variantUpdated": "Variant updated";
     "variants": "Variants";
     "versionCount": "{count, plural, one {# version} other {# versions}}";
+    "versionLimitReached": "Version limit reached for this clause";
     "versionRestored": "Version restored";
   };
   "common": {

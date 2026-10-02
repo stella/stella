@@ -1530,6 +1530,7 @@
     "variantUpdated": "تم تحديث الصيغة",
     "variants": "الصيغ",
     "versionCount": "{count, plural, zero {# إصدار} one {إصدار واحد} two {إصداران} few {# إصدارات} many {# إصدارًا} other {# إصدار}}",
+    "versionLimitReached": "تم بلوغ الحد الأقصى لإصدارات هذا البند",
     "versionRestored": "تمت استعادة الإصدار"
   },
   "common": {

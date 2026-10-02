@@ -1483,11 +1483,11 @@
     "renameSlot": "Nimeta pesa ümber",
     "renameSlotInvalid": "Pesade nimed peavad olema kordumatud ega tohi sisaldada tühikuid, kooloneid ega loogsulge.",
     "restoreVersion": "Taasta see versioon",
-    "reviewBeforeBodyAction": "Lõpeta soovitatud muudatuste ülevaatamine, enne kui taastad tingimuse või määrad selle põhitekstiks.",
+    "reviewBeforeBodyAction": "Lõpeta soovitatud muudatuste ülevaatamine, enne kui taastad klausli või määrad selle põhitekstiks.",
     "reviewBeforeLeaving": "Üle vaadatud tekst pole veel salvestatud. Võid redigeerimist jätkata või lahkuda ja salvestamata muudatused hüljata.",
     "saveAsVersion": "Salvesta uue versioonina",
     "saveConflictDescription": "Vali, millise teksti soovid alles jätta. Sinu muudatused on endiselt siin.",
-    "saveConflictTitle": "Seda tingimust muudeti mujal",
+    "saveConflictTitle": "Seda klauslit muudeti mujal",
     "saveFailed": "Salvestamine ebaõnnestus",
     "saveFailedLeaveDescription": "Muudatusi ei saanud salvestada. Võid redigeerimist jätkata või lahkuda ja muudatused hüljata.",
     "saveVersionAndLeave": "Salvesta versioon ja lahku",
@@ -1530,6 +1530,7 @@
     "variantUpdated": "Variant uuendatud",
     "variants": "Variandid",
     "versionCount": "{count, plural, one {# versioon} other {# versiooni}}",
+    "versionLimitReached": "Selle klausli versioonide piir on saavutatud",
     "versionRestored": "Versioon taastatud"
   },
   "common": {

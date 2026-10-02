@@ -307,7 +307,7 @@ export const DetailContent = ({
     stellaToast.add({
       type: "error",
       title: t("clauses.saveFailed"),
-      description: t("common.unexpectedError"),
+      description: userErrorFromThrown(error, t("common.unexpectedError")),
     });
   };
   const bodySave = useClauseBodySave({

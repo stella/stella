@@ -1466,7 +1466,7 @@
     "keepMyText": "Ponechat můj text",
     "languagePlaceholder": "např. cs",
     "leaveAndDiscard": "Odejít a zahodit neuložené změny",
-    "leaveWithoutVersion": "Odejít bez uložení",
+    "leaveWithoutVersion": "Odejít bez vytvoření verze",
     "limitReached": "Byl dosažen limit vzorových ustanovení",
     "linkClause": "Propojit vzorové ustanovení",
     "linkFailed": "Propojení vzorového ustanovení se nezdařilo",
@@ -1530,6 +1530,7 @@
     "variantUpdated": "Varianta upravena",
     "variants": "Varianty",
     "versionCount": "{count, plural, one {# verze} few {# verze} other {# verzí}}",
+    "versionLimitReached": "Byl dosažen limit verzí tohoto vzorového ustanovení",
     "versionRestored": "Verze obnovena"
   },
   "common": {

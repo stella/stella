@@ -457,6 +457,7 @@
       "devDependencies": {
         "@happy-dom/global-registrator": "20.14.5",
         "@playwright/test": "^1.63.0",
+        "@stll/property-testing": "workspace:*",
         "@stll/ssr-testkit": "workspace:^",
         "@stll/typescript-config": "workspace:*",
         "@tailwindcss/vite": "catalog:",
@@ -471,6 +472,7 @@
         "@types/react-dom": "catalog:react19",
         "@vitejs/plugin-react": "catalog:",
         "bun-types": "catalog:",
+        "fast-check": "catalog:",
         "happy-dom": "20.14.5",
         "oxc-transform-react": "catalog:",
         "rollup-plugin-visualizer": "^7.1.1",

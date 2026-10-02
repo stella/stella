@@ -4,6 +4,7 @@ import { eq, inArray } from "drizzle-orm";
 import { Elysia } from "elysia";
 import fc from "fast-check";
 
+import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
 import { assertProperty } from "@stll/property-testing";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
@@ -68,12 +69,19 @@ describe("clause body preconditions", () => {
   test("restore honors its precondition and returns the audited server head", async () => {
     const clauseId = await seedClause();
     const versionId = createSafeId<"clauseVersion">();
+    const storedBody = [
+      {
+        text: "Next text",
+        extra: { source: "import" },
+        runs: [{ text: "Next text", extra: "run metadata" }],
+      },
+    ];
     await testDb.insert(clauseVersions).values({
       id: versionId,
       organizationId: ids.orgA,
       clauseId,
       version: 1,
-      body: nextBody,
+      body: storedBody,
     });
     const audits: AuditEvent[] = [];
     const restore = async (expectedBody: ClauseBody) =>
@@ -107,10 +115,24 @@ describe("clause body preconditions", () => {
       ),
     ).toBe(1);
     expect(await restore(initialBody)).toMatchObject({
-      body: nextBody,
+      body: storedBody,
       currentVersion: 2,
       updatedAt: expect.any(Date),
     });
+    expect(
+      (
+        await testDb.query.clauses.findFirst({
+          where: { id: { eq: clauseId } },
+        })
+      )?.body,
+    ).toEqual(storedBody);
+    const snapshots = await testDb.query.clauseVersions.findMany({
+      where: { clauseId: { eq: clauseId } },
+    });
+    expect(snapshots).toHaveLength(2);
+    for (const snapshot of snapshots) {
+      expect(snapshot.body).toEqual(storedBody);
+    }
     expect(audits).toHaveLength(1);
     expect(audits.at(0)?.changes).toMatchObject({
       restoredFromVersion: { new: 1 },
@@ -485,6 +507,8 @@ describe("clause body preconditions", () => {
       expect(refused.error).toMatchObject({
         status: 400,
         message: "Version limit reached for this clause",
+        code: CLAUSE_VERSION_LIMIT_ERROR_CODE,
+        retryable: false,
       });
     }
     expect(audits).toBe(0);
@@ -557,7 +581,10 @@ describe("clause body preconditions", () => {
         },
       }),
     );
-    expect(result).toMatchObject({ code: 400 });
+    expect(result).toMatchObject({
+      code: 400,
+      response: { code: CLAUSE_VERSION_LIMIT_ERROR_CODE, retryable: false },
+    });
     expect(
       await testDb.query.clauses.findFirst({ where: { id: { eq: clauseId } } }),
     ).toEqual(before);

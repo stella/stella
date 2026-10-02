@@ -4,6 +4,8 @@ import { and, desc, eq } from "drizzle-orm";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
+import { CLAUSE_VERSION_LIMIT_ERROR_CODE } from "@stll/api-contract";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -311,6 +313,8 @@ export const updateClauseHandler = async function* ({
           new HandlerError({
             status: 400,
             message: "Version limit reached for this clause",
+            code: CLAUSE_VERSION_LIMIT_ERROR_CODE,
+            retryable: false,
           }),
         );
       default: {

@@ -1530,6 +1530,7 @@
     "variantUpdated": "Variant upravený",
     "variants": "Varianty",
     "versionCount": "{count, plural, one {# verzia} few {# verzie} other {# verzií}}",
+    "versionLimitReached": "Bol dosiahnutý limit verzií tohto ustanovenia",
     "versionRestored": "Verzia obnovená"
   },
   "common": {

@@ -1530,6 +1530,7 @@
     "variantUpdated": "Variantas atnaujintas",
     "variants": "Variantai",
     "versionCount": "{count, plural, one {# versija} few {# versijos} many {# versijos} other {# versijų}}",
+    "versionLimitReached": "Pasiektas šios sąlygos versijų limitas",
     "versionRestored": "Versija atkurta"
   },
   "common": {

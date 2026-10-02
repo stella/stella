@@ -1530,6 +1530,7 @@
     "variantUpdated": "Variante mise à jour",
     "variants": "Variantes",
     "versionCount": "{count, plural, one {# version} many {# versions} other {# versions}}",
+    "versionLimitReached": "La limite de versions de cette clause est atteinte",
     "versionRestored": "Version restaurée"
   },
   "common": {
