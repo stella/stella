@@ -156,6 +156,7 @@ const createContext = ({
       searchLegislationHandler: asTestRaw(searchLegislationHandlerMock),
     },
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 

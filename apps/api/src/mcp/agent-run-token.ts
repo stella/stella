@@ -1,7 +1,7 @@
 import { Temporal } from "@stll/time";
 
 import { getAuth } from "@/api/lib/auth";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getMcpResourceUrl,

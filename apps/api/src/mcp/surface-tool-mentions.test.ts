@@ -251,6 +251,7 @@ describe("the dispatch boundary scopes the hints it emits", () => {
     safeDb: toSafeDbMock(throwingScopedDb),
     scopedDb: throwingScopedDb,
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   });
 
   const INTERNAL_ERROR_ENVELOPE = v.object({

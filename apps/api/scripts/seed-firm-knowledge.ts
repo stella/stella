@@ -26,7 +26,7 @@ import path from "node:path";
 
 import { STELLA_API_VERSION_PREFIX } from "@stll/api-contract";
 
-import { sessionCookieNameForDevPort } from "@/api/lib/auth-cookie-name";
+import { sessionCookieNameForDevPort } from "@/api/lib/auth/auth-cookie-name";
 
 import { selectMatterNames } from "./seed-firm-knowledge.logic";
 

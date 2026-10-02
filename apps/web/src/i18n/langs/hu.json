@@ -2176,6 +2176,7 @@
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "notFound": "A kért elem nem található.",
       "payloadTooLarge": "A kérés túl nagy.",
+      "publicCountryUnavailable": "Az ország jogszabályai és ítélkezési gyakorlata nem érhetők el. Válasszon másik országot.",
       "rateLimited": "Túl sok kérés. Próbálja újra később.",
       "server": "Hiba történt. Próbálja újra.",
       "serviceUnavailable": "A szolgáltatás átmenetileg nem érhető el. Próbálja újra.",

@@ -2176,6 +2176,7 @@
       "forbidden": "No tienes permiso para hacer esto.",
       "notFound": "No pudimos encontrar lo solicitado.",
       "payloadTooLarge": "La solicitud es demasiado grande.",
+      "publicCountryUnavailable": "La legislación y la jurisprudencia de este país no están disponibles. Elige otro país.",
       "rateLimited": "Demasiadas solicitudes. Inténtalo de nuevo más tarde.",
       "server": "Algo salió mal. Inténtalo de nuevo.",
       "serviceUnavailable": "El servicio no está disponible temporalmente. Inténtalo de nuevo.",

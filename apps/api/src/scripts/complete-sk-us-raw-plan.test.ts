@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
+
+import { assertProperty } from "@stll/property-testing";
 
 import {
   decodeSourceRawEnvelope,
@@ -28,8 +31,18 @@ import {
   completeSkUsRawObservation,
   prepareSkUsRawCompletion,
   runSkUsRawPage,
+  runSkUsRawBatch,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+
+/** A fixture row that must exist; a missing one fails loudly, never as `undefined`. */
+const rowAt = <T>(items: readonly T[], index: number): T => {
+  const item = items.at(index);
+  if (item === undefined) {
+    throw new TypeError(`fixture row ${index} is missing`);
+  }
+  return item;
+};
 
 const identity = {
   documentId: "7964d54e-6708-48e9-92cc-5cc400aab1e3",
@@ -210,6 +223,7 @@ test("the first 429 halts the page with no further requests or checkpoint", asyn
             return "completed";
           },
         }),
+      journal: async () => {},
       checkpoint: async () => {
         checkpoints += 1;
       },
@@ -258,6 +272,7 @@ test("a search 404 or undocumented empty body stops without checkpointing", asyn
             return "completed";
           },
         }),
+      journal: async () => {},
       checkpoint: async () => {
         checkpoints += 1;
       },
@@ -311,6 +326,7 @@ test("permanent raw-read failures are journaled terminal rejections, transient f
             },
           });
         },
+        journal: async () => {},
         checkpoint: async (row, outcome) => {
           audited.push({ row, outcome });
         },
@@ -490,6 +506,7 @@ test("dry runs and transient failures never persist a checkpoint", async () => {
       mode,
       complete: async () =>
         mode === "dry-run" ? "would_complete" : "retry_later",
+      journal: async () => {},
       checkpoint: async (value) => {
         persisted.push(value);
       },
@@ -544,6 +561,7 @@ test("undecodable non-PDF bytes are a checkpointed terminal outcome, not a retry
     rows: [cursor, next],
     mode: "apply",
     complete: async (row) => (row === cursor ? "raw_unavailable" : "completed"),
+    journal: async () => {},
     checkpoint: async (row, outcome) => {
       persisted.push([row, outcome]);
     },
@@ -594,6 +612,7 @@ test("a crash between fetch and write retries the item, while a crash after writ
         rows: [cursor],
         mode: "apply",
         complete,
+        journal: async () => {},
         checkpoint: async () => {
           if (crashing) {
             throw new AdapterFetchError({
@@ -626,6 +645,7 @@ test("a concurrent pointer writer holds the checkpoint for a fresh read", async 
     rows: [cursor],
     mode: "apply",
     complete: async () => "concurrent_write",
+    journal: async () => {},
     checkpoint: async () => {
       checkpoints += 1;
     },
@@ -633,4 +653,156 @@ test("a concurrent pointer writer holds the checkpoint for a fresh read", async 
   expect(result.stopped).toBe(true);
   expect(result.cursor).toBeNull();
   expect(checkpoints).toBe(0);
+});
+
+test("deterministic invalid payloads advance past poison rows in both modes", async () => {
+  const payloads = [
+    new Uint8Array([0xff]),
+    new Uint8Array([0xc0, 0xaf]),
+    new Uint8Array([0xe2, 0x82]),
+    new Uint8Array([0xed, 0xa0, 0x80]),
+    encoder.encode(""),
+    encoder.encode("plain publisher text"),
+    encoder.encode("{broken JSON"),
+    encoder.encode(JSON.stringify({ unknown: "shape" })),
+  ];
+  for (const mode of ["apply", "dry-run"] as const) {
+    for (const contentType of [
+      null,
+      "application/json",
+      SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    ]) {
+      const rows = payloads.map(() => ({
+        ...cursor,
+        id: createSafeId<"caseLawDecision">(),
+      }));
+      const next = { ...cursor, id: createSafeId<"caseLawDecision">() };
+      const visited: string[] = [];
+      const persisted: unknown[] = [];
+      let fetches = 0;
+      let writes = 0;
+      const result = await runSkUsRawBatch({
+        rows: [...rows, next],
+        pageSize: 3,
+        after: null,
+        mode,
+        complete: async (row) => {
+          visited.push(row.id);
+          const index = rows.findIndex(({ id }) => id === row.id);
+          if (index === -1) {
+            return "already_complete";
+          }
+          const raw = payloads.at(index);
+          if (raw === undefined) {
+            expect.unreachable("poison row must have bytes");
+          }
+          return await completeSkUsRawObservation({
+            ...identity,
+            raw: Result.ok(raw),
+            contentType,
+            mode,
+            fetchListing: async () => {
+              fetches += 1;
+              return { type: "listing", listing: listingJson };
+            },
+            writeCompletion: async () => {
+              writes += 1;
+              return "completed";
+            },
+          });
+        },
+        journal: async () => {},
+        checkpoint: async (row, outcome) => {
+          persisted.push([row, outcome]);
+        },
+      });
+      expect(result.stopped).toBe(false);
+      expect(result.cursor).toEqual(next);
+      expect(result.scanned).toBe(rows.length + 1);
+      expect(result.counts["raw_unavailable"]).toBe(rows.length);
+      expect(visited).toEqual([...rows, next].map(({ id }) => id));
+      expect(persisted).toEqual(
+        mode === "apply"
+          ? [
+              ...rows.map((row) => [row, "raw_unavailable"]),
+              [next, "already_complete"],
+            ]
+          : [],
+      );
+      expect(fetches).toBe(0);
+      expect(writes).toBe(0);
+    }
+  }
+});
+
+test("bounded batch results are invariant under page size and stop before later pages", async () => {
+  await assertProperty(
+    "bounded batch results are invariant under page size and stop before later pages",
+    fc.asyncProperty(
+      fc.record({
+        rowCount: fc.integer({ min: 0, max: 30 }),
+        limit: fc.integer({ min: 1, max: 200 }),
+        pageSize: fc.integer({ min: 1, max: 200 }),
+        failureIndex: fc.integer({ min: 0, max: 30 }),
+        failure: fc.constantFrom(
+          "retry_later",
+          "concurrent_write",
+          "publisher_rate_limited",
+        ),
+        mode: fc.constantFrom("apply", "dry-run"),
+      }),
+      async ({ rowCount, limit, pageSize, failureIndex, failure, mode }) => {
+        const rows = Array.from({ length: rowCount }, () => ({
+          ...cursor,
+          id: createSafeId<"caseLawDecision">(),
+        })).slice(0, limit);
+        const previous = { ...cursor, id: createSafeId<"caseLawDecision">() };
+        const visited: string[] = [];
+        const persisted: string[] = [];
+        const journaled: string[] = [];
+        const result = await runSkUsRawBatch({
+          rows,
+          pageSize,
+          after: previous,
+          mode,
+          complete: async (row, operation) => {
+            expect(operation).toBe(mode);
+            visited.push(row.id);
+            return row.id === rows.at(failureIndex)?.id
+              ? failure
+              : "already_complete";
+          },
+          journal: async (row) => {
+            journaled.push(row.id);
+          },
+          checkpoint: async (row) => {
+            persisted.push(row.id);
+          },
+        });
+        const terminalCount = Math.min(failureIndex, rows.length);
+        const stopped = failureIndex < rows.length;
+        const terminalIds = rows.slice(0, terminalCount).map(({ id }) => id);
+        expect(visited).toEqual(
+          rows.slice(0, terminalCount + (stopped ? 1 : 0)).map(({ id }) => id),
+        );
+        expect(persisted).toEqual(mode === "apply" ? terminalIds : []);
+        expect(journaled).toEqual(mode === "apply" ? visited : []);
+        expect(result.stopped).toBe(stopped);
+        expect(result.scanned).toBe(visited.length);
+        expect(result.scanned).toBeLessThanOrEqual(limit);
+        expect(
+          Object.values(result.counts).reduce(
+            (total, count) => total + count,
+            0,
+          ),
+        ).toBe(visited.length);
+        expect(result.counts["already_complete"] ?? 0).toBe(terminalCount);
+        expect(result.counts[failure] ?? 0).toBe(stopped ? 1 : 0);
+        expect(result.cursor).toEqual(
+          terminalCount === 0 ? previous : rowAt(rows, terminalCount - 1),
+        );
+      },
+    ),
+    { numRuns: 60, seed: 4377 },
+  );
 });
