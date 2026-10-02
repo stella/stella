@@ -2176,6 +2176,7 @@
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "notFound": "Das Angeforderte konnte nicht gefunden werden.",
       "payloadTooLarge": "Die Anfrage ist zu groß.",
+      "publicCountryUnavailable": "Rechtsvorschriften und Rechtsprechung für dieses Land sind nicht verfügbar. Wählen Sie ein anderes Land.",
       "rateLimited": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
       "server": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "serviceUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.",

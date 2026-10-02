@@ -2,6 +2,10 @@ import { expect, test } from "bun:test";
 import nodePath from "node:path";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import {
+  PUBLIC_COUNTRIES,
+  publicCountryUnavailable,
+} from "@stll/api-contract/public-country-capability";
 
 import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { encodeCorpusSearchCursor } from "@/api/lib/legal-search/corpus-search-cursor";
@@ -33,7 +37,7 @@ const CASE_LAW_CURSOR = encodeCorpusSearchCursor({
   target: null,
 });
 
-test.each(["SVK", "POL", "DEU", "cze", "cz", "*"])(
+test.each(["DEU", "cze", "cz", "*"])(
   "jurisdiction %s is refused with the admitted codes before reading",
   async (jurisdiction) => {
     const { db, reads } = unreachableDb();
@@ -50,6 +54,27 @@ test.each(["SVK", "POL", "DEU", "cze", "cz", "*"])(
           `Admitted jurisdiction codes (uppercase): ${PUBLIC_LEGISLATION_COUNTRIES.join(", ")}`,
         ),
       },
+    });
+    expect(reads()).toBe(0);
+  },
+);
+
+test.each(
+  PUBLIC_COUNTRIES.filter(
+    (country) => publicCountryUnavailable(country) !== null,
+  ),
+)(
+  "pending jurisdiction %s returns its capability before reading",
+  async (jurisdiction) => {
+    const { db, reads } = unreachableDb();
+    const result = await searchLegislationHandler(
+      { jurisdiction, query: "nájemné" },
+      db,
+      "unobserved",
+    );
+    expect(result).toMatchObject({
+      code: 503,
+      response: publicCountryUnavailable(jurisdiction),
     });
     expect(reads()).toBe(0);
   },
