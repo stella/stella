@@ -24,6 +24,10 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 import { tPaginationCursor, tPaginationLimit } from "@/api/lib/custom-schema";
 import { escapeLike } from "@/api/lib/escape-like";
+import {
+  ACT_NUMBER_PATTERN,
+  actNumberCondition,
+} from "@/api/lib/legal-search/legislation-act-number";
 import { publishedLegislationDocument } from "@/api/lib/legal-search/legislation-redistribution";
 import {
   applicableKind,
@@ -56,8 +60,6 @@ import {
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
-/** `<number>/<year>` as a collection prints it: `89/2012`. */
-export const ACT_NUMBER_PATTERN = /^([0-9]{1,5})\/([0-9]{4})$/u;
 /** A publisher collection segment of an ELI: `sb`, `ul1`, `zz`. */
 const COLLECTION_PATTERN = /^[a-z0-9]{1,8}$/u;
 
@@ -295,33 +297,6 @@ const lastAmendedOn = sql<string | null>`(CASE
 END)`;
 
 /**
- * The work an act number names. ELIs end in `/<collection>/<year>/<number>`
- * (`/eli/cz/sb/2012/89`), so the number is matched on that tail: a suffix
- * match the trigram index serves, made exact by the anchored pattern so
- * `/2012/89` cannot answer for `/2012/189`. Without a collection every
- * collection of the jurisdiction qualifies; the caller shows the candidates
- * rather than picking one.
- */
-const actNumberCondition = (
-  number: string,
-  collection: string | undefined,
-): SQL | null => {
-  const match = ACT_NUMBER_PATTERN.exec(number);
-  const ordinal = match?.[1];
-  const year = match?.[2];
-  if (ordinal === undefined || year === undefined) {
-    return null;
-  }
-  const tail = `${year}/${ordinal}`;
-  const anchored =
-    collection === undefined ? `(^|/)${tail}$` : `/${collection}/${tail}$`;
-  return sql`(
-    ${legislationDocuments.eli} LIKE ${`%${escapeLike(tail)}`}
-    AND ${legislationDocuments.eli} ~ ${anchored}
-  )`;
-};
-
-/**
  * 0 for a work whose name starts with the typed text, 1 for one that merely
  * mentions it: `občanský zákoník` must rank the code above the acts amending
  * it (`kterým se mění zákon č. 89/2012 Sb., občanský zákoník`). Both sides
@@ -370,7 +345,10 @@ export const listStatutesHandler = async (
   }
   if (
     query.number !== undefined &&
-    actNumberCondition(query.number, query.collection) === null
+    actNumberCondition({
+      number: query.number,
+      collection: query.collection,
+    }) === null
   ) {
     return status(400, { message: "Invalid act number" });
   }
@@ -455,7 +433,10 @@ export const buildListStatutesQuery = (
   }
 
   if (query.number !== undefined) {
-    const byNumber = actNumberCondition(query.number, query.collection);
+    const byNumber = actNumberCondition({
+      number: query.number,
+      collection: query.collection,
+    });
     if (byNumber === null) {
       return panic("List statutes query received an invalid act number");
     }

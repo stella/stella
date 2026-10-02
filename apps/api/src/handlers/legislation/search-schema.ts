@@ -12,7 +12,7 @@ import {
   tPaginationLimit,
   tSafeId,
 } from "@/api/lib/custom-schema";
-import { CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
+import { CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH } from "@/api/lib/legal-search/corpus-search-cursor";
 import { tPublicCountryUnavailable } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
@@ -29,7 +29,7 @@ export const searchLegislationBodySchema = t.Object({
   // showed, so the cursor may be longer than a bare keyset.
   cursor: t.Optional(
     tPaginationCursor({
-      maxChars: CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+      maxChars: CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
     }),
   ),
   jurisdiction: t.Optional(
@@ -52,6 +52,16 @@ export const searchLegislationSuccessResponseSchema = t.Object(
     items: t.Array(
       t.Object(
         {
+          match: t.Union([
+            t.Object(
+              { type: t.Literal("strict") },
+              { additionalProperties: false },
+            ),
+            t.Object(
+              { type: t.Literal("relaxed") },
+              { additionalProperties: false },
+            ),
+          ]),
           documentId: t.String(),
           eli: t.String(),
           slug: nullableStringSchema,

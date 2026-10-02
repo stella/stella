@@ -1,10 +1,11 @@
 import { foldToAscii } from "@stll/text-normalize";
 
 import {
+  STATUTE_ALIASES,
   resolveStatuteAlias,
   type StatuteAliasTarget,
-} from "@/features/statutes/statute-aliases";
-import type { StatuteCountry } from "@/lib/statute-route";
+  type StatuteQueryCountry,
+} from "./statute-aliases";
 
 /**
  * What a statute box entry asks for. An act is addressed by number (with the
@@ -43,9 +44,9 @@ export const foldStatuteQuery = (raw: string): string =>
  * split into two ELI collections, so its abbreviation names no single one.
  */
 const COLLECTION_BY_ABBREVIATION = {
-  cze: { sb: "sb", ul: null },
+  cze: { sb: "sb", sbms: "sm", ul: null },
   svk: { zb: "zz", zz: "zz" },
-} as const satisfies Record<StatuteCountry, Record<string, string | null>>;
+} as const satisfies Record<StatuteQueryCountry, Record<string, string | null>>;
 
 /** `Sb.`, `Z. z.`, `Ú.l. I` → `sb`, `zz`, `ul`: dots, spaces and series dropped. */
 const canonicalCollectionAbbreviation = (suffix: string): string =>
@@ -68,8 +69,8 @@ const ACT_PREFIX_WORD_RE =
   /^(?:c\.|zakon[a-z]*|zak\.|z\.|vyhlaska|vyhl\.|narizeni|nariadenie|nar\.) ?/u;
 const ACT_PREFIX_WORDS_MAX = 4;
 
-const ACT_NUMBER_RE =
-  /^(\d{1,5}) ?\/ ?(\d{4})(?: ?(sb\.?|zb\.?|z\. ?z\.?|u\. ?l\.(?: i{1,2})?))?$/u;
+const ACT_NUMBER_SHAPE = String.raw`(\d{1,5}) ?/ ?(\d{4})(?: ?(sb\.?(?: ?m\.? ?s\.?)?|zb\.?|z\. ?z\.?|u\. ?l\.(?: i{1,2})?))?`;
+const ACT_NUMBER_RE = new RegExp(`^${ACT_NUMBER_SHAPE}$`, "u");
 
 const stripActPrefixWords = (folded: string): string => {
   let rest = folded;
@@ -84,7 +85,7 @@ const stripActPrefixWords = (folded: string): string => {
 };
 
 const actFromNumber = (
-  country: StatuteCountry,
+  country: StatuteQueryCountry,
   folded: string,
   provision: string | null,
 ): StatuteQueryIntent | null => {
@@ -132,7 +133,7 @@ const actFromAlias = (
 });
 
 const actIntent = (
-  country: StatuteCountry,
+  country: StatuteQueryCountry,
   folded: string,
   provision: string | null,
 ): StatuteQueryIntent | null => {
@@ -151,7 +152,7 @@ const actIntent = (
  * grammar does not claim is a title search, verbatim.
  */
 export const parseStatuteQuery = (
-  country: StatuteCountry,
+  country: StatuteQueryCountry,
   raw: string,
 ): StatuteQueryIntent => {
   const text = raw.trim();
@@ -180,4 +181,93 @@ export const parseStatuteQuery = (
   }
 
   return actIntent(country, folded, null) ?? { type: "text", text };
+};
+
+/** One act mentioned in a query, independent of the publisher's title text. */
+export type StatuteQueryReference = {
+  country: StatuteQueryCountry;
+  collection: string | null;
+  number: string;
+  year: string;
+  label: string | null;
+};
+
+const WORD_CHARACTER = /[\p{L}\p{M}\p{N}]/u;
+const ANOTHER_GAZETTE_SUFFIX = /^ ?nss\b/u;
+
+/**
+ * Uses the box parser's number grammar and alias owner inside longer text.
+ * Each Work identity appears once, in mention order; a collection belonging
+ * to another jurisdiction never widens to a collection-less reference.
+ */
+export const readStatuteQueryReferences = (
+  country: StatuteQueryCountry,
+  raw: string,
+): StatuteQueryReference[] => {
+  const folded = foldStatuteQuery(raw);
+  const mentions: {
+    offset: number;
+    end: number;
+    reference: StatuteQueryReference;
+  }[] = [];
+  const numberMentions = new RegExp(
+    String.raw`(?<![\p{L}\p{N}/])${ACT_NUMBER_SHAPE}(?![\p{L}\p{N}/])`,
+    "gu",
+  );
+  for (const match of folded.matchAll(numberMentions)) {
+    const after = folded.slice(match.index + match[0].length);
+    if (ANOTHER_GAZETTE_SUFFIX.test(after)) {
+      continue;
+    }
+    const intent = actFromNumber(country, match[0], null);
+    if (intent?.type === "act") {
+      mentions.push({
+        offset: match.index,
+        end: match.index + match[0].length,
+        reference: {
+          country,
+          collection: intent.collection,
+          number: intent.number,
+          year: intent.year,
+          label: intent.label,
+        },
+      });
+    }
+  }
+  for (const [alias, target] of Object.entries(STATUTE_ALIASES[country])) {
+    let offset = folded.indexOf(alias);
+    while (offset !== -1) {
+      const end = offset + alias.length;
+      if (
+        !WORD_CHARACTER.test(folded.charAt(offset - 1)) &&
+        !WORD_CHARACTER.test(folded.charAt(end))
+      ) {
+        mentions.push({ offset, end, reference: { country, ...target } });
+      }
+      offset = folded.indexOf(alias, end);
+    }
+  }
+  const seen = new Set<string>();
+  let consumedUntil = 0;
+  return mentions
+    .toSorted(
+      (left, right) => left.offset - right.offset || right.end - left.end,
+    )
+    .flatMap(({ offset, end, reference }) => {
+      // A complete alias wins over a shorter one inside it (občanský soudní řád vs občanský).
+      if (offset < consumedUntil) {
+        return [];
+      }
+      consumedUntil = end;
+      const key = JSON.stringify([
+        reference.collection,
+        reference.year,
+        reference.number,
+      ]);
+      if (seen.has(key)) {
+        return [];
+      }
+      seen.add(key);
+      return [reference];
+    });
 };

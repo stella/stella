@@ -1,6 +1,12 @@
+// parser-output-unchanged: query reference lookup; stored title derivation is unchanged
 import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
+import {
+  STATUTE_ALIASES,
+  isStatuteQueryCountry,
+} from "@stll/api-contract/statute-aliases";
+import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 import {
   splitStatuteTitleCitation,
   statuteTitleCitationMentionRegex,
@@ -14,6 +20,8 @@ import {
 } from "@/api/db/schema";
 import type { LegislationWorkNameDerivation } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { actNumberCondition } from "@/api/lib/legal-search/legislation-act-number";
+import { redistributableLegislationVersion } from "@/api/lib/legal-search/legislation-redistribution";
 import type { LegislationReadTransaction } from "@/api/lib/legislation-public-read-db";
 
 /**
@@ -458,19 +466,74 @@ type ReadNamedLegislationWorksOptions = {
 };
 
 /**
- * The Works a query names: the query, as a whole, equals a name some stored
- * title states for them. A name a citation elsewhere attaches to a Work
- * corroborates it: when any named Work is corroborated, only the
+ * Explicit citations and aliases address Works by act identity. Otherwise
+ * the whole query is compared with names stored titles state. A name a
+ * citation elsewhere attaches to a Work corroborates it: when any named Work is corroborated, only the
  * corroborated ones are returned, because an amending act's own title can
  * carry the amended act's name without being that act.
  *
- * Two index lookups on the match key and one read of the named versions'
- * Work keys, each bounded.
+ * Identity lookups use the ELI trigram index; title lookups use the match-key
+ * index. Every read is bounded.
  */
 export const readNamedLegislationWorks = async (
   tx: LegislationReadTransaction,
   { query, country }: ReadNamedLegislationWorksOptions,
 ): Promise<NamedLegislationWork[]> => {
+  // Explicit act identities outrank titles of amendments that mention them.
+  const countries =
+    country === undefined
+      ? Object.keys(STATUTE_ALIASES).filter(isStatuteQueryCountry).toSorted()
+      : [country.toLowerCase()].filter(isStatuteQueryCountry);
+  const references = countries.flatMap((jurisdiction) =>
+    readStatuteQueryReferences(jurisdiction, query),
+  );
+  if (references.length > 0) {
+    const versions = await tx
+      .select({
+        sourceId: legislationDocuments.sourceId,
+        eli: legislationDocuments.eli,
+        language: legislationDocuments.language,
+      })
+      .from(legislationDocuments)
+      .where(
+        and(
+          redistributableLegislationVersion,
+          or(
+            ...references.map((reference) =>
+              and(
+                eq(
+                  legislationDocuments.country,
+                  reference.country.toUpperCase(),
+                ),
+                actNumberCondition({
+                  number: `${reference.number}/${reference.year}`,
+                  collection: reference.collection ?? undefined,
+                }),
+              ),
+            ),
+          ),
+        ),
+      )
+      .groupBy(
+        legislationDocuments.sourceId,
+        legislationDocuments.eli,
+        legislationDocuments.language,
+      )
+      .orderBy(
+        legislationDocuments.sourceId,
+        legislationDocuments.eli,
+        legislationDocuments.language,
+      )
+      .limit(NAMED_VERSION_LIMIT);
+    if (versions.length > 0) {
+      return versions.map(({ sourceId, eli, language }) => ({
+        sourceId,
+        eli,
+        language,
+        fromCitation: true,
+      }));
+    }
+  }
   const matchKey = legislationNameMatchKey(query);
   if (matchKey === null) {
     return [];

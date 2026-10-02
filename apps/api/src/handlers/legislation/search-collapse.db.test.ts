@@ -4,6 +4,8 @@ import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { and, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { STATUTE_ALIASES } from "@stll/api-contract/statute-aliases";
+
 import {
   corpusIndexGenerations,
   corpusIndexProjectionIntents,
@@ -33,6 +35,7 @@ import {
 import { legislationWorkToken } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
   legislationWorkRefKey,
+  readNamedLegislationWorks,
   syncLegislationWorkNamesTx,
 } from "@/api/lib/legal-search/legislation-work-names";
 import type {
@@ -119,6 +122,49 @@ const VERSIONS = [
   vatAmendment,
 ];
 
+// Alias targets are derived from their owner; added documents have no search
+// projection, so these identity lookups cannot change the paging fixtures.
+const aliasTargetSeeds = [
+  ...new Map(
+    Object.values(STATUTE_ALIASES.cze).map(
+      (target) =>
+        [
+          `${target.collection}/${target.year}/${target.number}`,
+          target,
+        ] as const,
+    ),
+  ).values(),
+]
+  .filter(
+    (target) =>
+      !VERSIONS.some(
+        (seed) => seed.eli === eli(`${target.year}/${target.number}`),
+      ),
+  )
+  .map((target) =>
+    version(
+      `${target.year}/${target.number}`,
+      target.label,
+      "2024-01-01",
+      null,
+    ),
+  );
+const domesticSameNumber = version(
+  "2008/57",
+  "57/2008 Sb.",
+  "2008-01-01",
+  null,
+);
+const internationalSameNumber = {
+  ...version("2008/57", "57/2008 Sb. m. s.", "2008-01-01", null),
+  eli: "https://example.test/eli/cz/sm/2008/57",
+};
+const IDENTITY_LOOKUP_VERSIONS = [
+  ...aliasTargetSeeds,
+  domesticSameNumber,
+  internationalSameNumber,
+];
+
 let client: PGlite;
 let db: ReturnType<typeof drizzle>;
 let legislationDb: LegislationReadDb;
@@ -170,6 +216,19 @@ beforeAll(
         versionValidFrom: seed.validFrom,
         versionValidTo: seed.validTo,
         contentHash: `hash-${String(index)}`,
+      })),
+    );
+    await db.insert(legislationDocuments).values(
+      IDENTITY_LOOKUP_VERSIONS.map((seed, index) => ({
+        id: seed.id,
+        sourceId,
+        eli: seed.eli,
+        title: seed.title,
+        country: "CZE",
+        language: "cs",
+        versionValidFrom: seed.validFrom,
+        versionValidTo: seed.validTo,
+        contentHash: `identity-lookup-${String(index)}`,
       })),
     );
     // The excerpt configuration the Postgres path highlights with.
@@ -335,6 +394,60 @@ describe("one hit per act", () => {
 });
 
 describe("acts the query names come first", () => {
+  test.each([
+    "Výklad smlouvy podle zákona č. 89/2012 Sb. při náhradě škody",
+    "Výklad smlouvy podle OZ při náhradě škody",
+    "Vyklad smlouvy podle NOZ pri nahrade skody",
+    "Výklad smlouvy podle občanského zákoníku a § 2051 zákona č. 89/2012 Sb.",
+  ])(
+    "a reference inside %s pins the act even when only its amendment was scanned",
+    async (query) => {
+      const scan: [VersionSeed, number][] = [[amendment, 0.9]];
+      expect(scan.some(([seed]) => seed.eli === codeCurrent.eli)).toBe(false);
+
+      const result = await rehydrate(query, scan);
+
+      expect(ids(result)).toEqual([
+        String(codeCurrent.id),
+        String(amendment.id),
+      ]);
+    },
+  );
+
+  test.each(Object.entries(STATUTE_ALIASES.cze))(
+    "the shared alias %s resolves to its declared act",
+    async (alias, target) => {
+      const named = await legislationDb(
+        async (tx) =>
+          await readNamedLegislationWorks(tx, {
+            query: `Použití ${alias} při výkladu`,
+            country: "CZE",
+          }),
+      );
+
+      expect(named.map((work) => work.eli)).toEqual([
+        `https://example.test/eli/cz/${target.collection}/${target.year}/${target.number}`,
+      ]);
+      expect(named.every((work) => work.fromCitation)).toBe(true);
+    },
+  );
+
+  test.each([
+    ["Výklad zákona č. 57/2008 Sb.", domesticSameNumber],
+    ["Výklad smlouvy č. 57/2008 Sb. m. s.", internationalSameNumber],
+  ] as const)(
+    "the collection in %s selects only that act",
+    async (query, expected) => {
+      expect(domesticSameNumber.eli).not.toBe(internationalSameNumber.eli);
+      const named = await legislationDb(
+        async (tx) =>
+          await readNamedLegislationWorks(tx, { query, country: "CZE" }),
+      );
+
+      expect(named.map((work) => work.eli)).toEqual([expected.eli]);
+    },
+  );
+
   test("a name in the act's own title, corroborated by a citation, pins the act in force", async () => {
     const result = await rehydrate("Občanský zákoník", [
       [old1964, 0.9],

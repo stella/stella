@@ -1,17 +1,19 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
-import { STATUTE_ALIASES } from "@/features/statutes/statute-aliases";
+import { STATUTE_ALIASES } from "./statute-aliases";
+import type { StatuteQueryCountry } from "./statute-aliases";
 import {
   foldStatuteQuery,
   parseStatuteQuery,
-} from "@/features/statutes/statute-query-intent";
-import { STATUTE_COUNTRIES, type StatuteCountry } from "@/lib/statute-route";
+  readStatuteQueryReferences,
+} from "./statute-query-intent";
 
-const countries = Object.keys(STATUTE_COUNTRIES).filter(
-  (country): country is StatuteCountry => country in STATUTE_COUNTRIES,
+const countries = Object.keys(STATUTE_ALIASES).filter(
+  (country): country is StatuteQueryCountry =>
+    Object.hasOwn(STATUTE_ALIASES, country),
 );
 
 const SPACES = [" ", "  ", " ", "　", "\t", ""] as const;
@@ -52,7 +54,8 @@ const spelled = (parts: readonly string[], spaces: readonly string[]): string =>
 
 describe("reading an act number", () => {
   test("every lenient spelling of a Czech number names the same act", () => {
-    fc.assert(
+    assertProperty(
+      "every lenient spelling of a Czech number names the same act",
       fc.property(
         number,
         year,
@@ -72,12 +75,12 @@ describe("reading an act number", () => {
           });
         },
       ),
-      propertyConfig(),
     );
   });
 
   test("every lenient spelling of a Slovak number names the same act", () => {
-    fc.assert(
+    assertProperty(
+      "every lenient spelling of a Slovak number names the same act",
       fc.property(
         number,
         year,
@@ -96,7 +99,6 @@ describe("reading an act number", () => {
           });
         },
       ),
-      propertyConfig(),
     );
   });
 
@@ -202,5 +204,179 @@ describe("reading an alias", () => {
     expect(parseStatuteQuery("svk", "Obchodný zákonník")).toMatchObject({
       number: "513",
     });
+  });
+});
+
+describe("reading act references inside a full-text query", () => {
+  test("embedded citations preserve mention order and their collections", () => {
+    expect(
+      readStatuteQueryReferences(
+        "cze",
+        "Výklad §2051 zákona č. 89/2012 Sb., ve spojení s č. 57/2008 Sb. m. s. a 90/2012 Sb.",
+      ),
+    ).toEqual([
+      {
+        country: "cze",
+        collection: "sb",
+        number: "89",
+        year: "2012",
+        label: null,
+      },
+      {
+        country: "cze",
+        collection: "sm",
+        number: "57",
+        year: "2008",
+        label: null,
+      },
+      {
+        country: "cze",
+        collection: "sb",
+        number: "90",
+        year: "2012",
+        label: null,
+      },
+    ]);
+  });
+
+  test("the same act number in different collections stays distinct", () => {
+    expect(
+      readStatuteQueryReferences("cze", "výklad 57/2008 Sb. a 57/2008 Sb.m.s."),
+    ).toEqual([
+      {
+        country: "cze",
+        collection: "sb",
+        number: "57",
+        year: "2008",
+        label: null,
+      },
+      {
+        country: "cze",
+        collection: "sm",
+        number: "57",
+        year: "2008",
+        label: null,
+      },
+    ]);
+  });
+
+  test("section-adjacent aliases and citations identify acts without confusing section numbers", () => {
+    expect(
+      readStatuteQueryReferences("cze", "§2051 OZ a §52 písm. f) ZP"),
+    ).toEqual([
+      { country: "cze", ...STATUTE_ALIASES.cze.oz },
+      { country: "cze", ...STATUTE_ALIASES.cze.zp },
+    ]);
+    expect(
+      readStatuteQueryReferences("cze", "§2051, odst. 2 zákona č.89/2012Sb."),
+    ).toEqual([
+      {
+        country: "cze",
+        collection: "sb",
+        number: "89",
+        year: "2012",
+        label: null,
+      },
+    ]);
+    expect(
+      readStatuteQueryReferences(
+        "cze",
+        "§2051 odst. 2 písm. f), 1. 1. 2024, 50000 Kč",
+      ),
+    ).toEqual([]);
+  });
+
+  test("every alias target remains available inside a longer query", () => {
+    for (const country of countries) {
+      for (const [alias, target] of Object.entries(STATUTE_ALIASES[country])) {
+        for (const typed of [alias, alias.toUpperCase(), `(${alias})`]) {
+          expect(
+            readStatuteQueryReferences(country, `výklad ${typed} při použití`),
+          ).toEqual([{ country, ...target }]);
+        }
+      }
+    }
+  });
+
+  test("required Czech abbreviations resolve with and without diacritics", () => {
+    for (const [typed, target] of [
+      ["OZ", STATUTE_ALIASES.cze.oz],
+      ["NOZ", STATUTE_ALIASES.cze.noz],
+      ["ZOK", STATUTE_ALIASES.cze.zok],
+      ["OSŘ", STATUTE_ALIASES.cze.osr],
+      ["OSR", STATUTE_ALIASES.cze.osr],
+      ["TrZ", STATUTE_ALIASES.cze.trz],
+      ["ZP", STATUTE_ALIASES.cze.zp],
+      ["Občanský zákoník", STATUTE_ALIASES.cze.oz],
+      ["obcansky zakonik", STATUTE_ALIASES.cze.oz],
+    ] as const) {
+      expect(
+        readStatuteQueryReferences("cze", `výklad ${typed} pro smlouvu`),
+      ).toEqual([{ country: "cze", ...target }]);
+    }
+    const decomposed = "OSŘ".normalize("NFD");
+    expect(decomposed).not.toBe("OSŘ");
+    expect(
+      readStatuteQueryReferences("cze", `výklad ${decomposed} pro řízení`),
+    ).toEqual([{ country: "cze", ...STATUTE_ALIASES.cze.osr }]);
+  });
+
+  test("repeated aliases and explicit citations produce one reference per identity", () => {
+    expect(
+      readStatuteQueryReferences("cze", "ZP, OZ, NOZ, 89/2012 Sb., OZ, ZP"),
+    ).toEqual([
+      { country: "cze", ...STATUTE_ALIASES.cze.zp },
+      { country: "cze", ...STATUTE_ALIASES.cze.oz },
+    ]);
+  });
+
+  test("an alias embedded in another word never pins its act", () => {
+    assertProperty(
+      "an alias embedded in another word never pins its act",
+      fc.property(fc.constantFrom("a", "ž", "7"), (boundary) => {
+        for (const country of countries) {
+          for (const alias of Object.keys(STATUTE_ALIASES[country])) {
+            expect(
+              readStatuteQueryReferences(
+                country,
+                `${boundary}${alias}${boundary}`,
+              ),
+            ).toEqual([]);
+          }
+        }
+      }),
+    );
+  });
+
+  test("foreign gazettes and fragments of larger identifiers do not pin an act", () => {
+    expect(
+      readStatuteQueryReferences("cze", "40/1964 Z. z. a 89/2012 Sb. NSS"),
+    ).toEqual([]);
+    expect(
+      readStatuteQueryReferences("svk", "89/2012 Sb. a 57/2008 Sb. m. s."),
+    ).toEqual([]);
+    for (const fragment of [
+      "x89/2012",
+      "89/2012x",
+      "123456/2012",
+      "89/20120",
+      "1/89/2012",
+      "89/2012/3",
+    ]) {
+      expect(readStatuteQueryReferences("cze", `výklad ${fragment}`)).toEqual(
+        [],
+      );
+    }
+    expect(
+      readStatuteQueryReferences("svk", "výklad zákona č. 40/1964 Zb."),
+    ).toEqual([
+      {
+        country: "svk",
+        collection: "zz",
+        number: "40",
+        year: "1964",
+        label: null,
+      },
+    ]);
   });
 });

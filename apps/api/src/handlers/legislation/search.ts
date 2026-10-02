@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 import { status } from "elysia";
 import type { Static } from "elysia";
+import { createHash } from "node:crypto";
 
 import {
   PUBLIC_LEGISLATION_COUNTRIES,
@@ -34,12 +35,17 @@ import {
   noCourtTierSql,
 } from "@/api/lib/legal-search/authority-sql";
 import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
+import type { ServingCorpusIndexGeneration } from "@/api/lib/legal-search/corpus-index-generation-store";
 import type { SearchCursor } from "@/api/lib/legal-search/corpus-index-pagination";
 import { readCorpusIndexSearchPage } from "@/api/lib/legal-search/corpus-index-pagination";
 import {
   corpusFreeTextClause,
   quoteCorpusValue,
 } from "@/api/lib/legal-search/corpus-query";
+import type {
+  CorpusSearchCursor,
+  CorpusSearchPhase,
+} from "@/api/lib/legal-search/corpus-search-cursor";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
@@ -57,6 +63,7 @@ import {
 } from "@/api/lib/legal-search/index-naming";
 import { currentLegislationCorpusProjection } from "@/api/lib/legal-search/legislation-corpus-projection";
 import { isCurrentVersionOfWork } from "@/api/lib/legal-search/legislation-current-version";
+import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import {
   redistributableLegislationSource,
   publishedLegislationDocument,
@@ -75,6 +82,7 @@ import {
   pinnedLegislationWorks,
   pinnedLegislationWorkScore,
   shownLegislationVersionId,
+  legislationWorkToken,
 } from "@/api/lib/legal-search/legislation-work-collapse";
 import type { LegislationWorkRepresentative } from "@/api/lib/legal-search/legislation-work-collapse";
 import {
@@ -111,6 +119,7 @@ import {
 import { isRecord } from "@/api/lib/type-guards";
 
 type LegislationHit = {
+  match: { type: "strict" } | { type: "relaxed" };
   documentId: string;
   eli: string;
   /** The persisted public slug; null until the corpus mints one. */
@@ -158,8 +167,14 @@ const toNullableString = (x: unknown): string | null => {
 
 const headlineRegconfig = sql`'public.stella_unaccent'::regconfig`;
 
-const buildCorpusIndexQuery = (body: SearchLegislationBody): string | null => {
-  const freeText = corpusFreeTextClause(body.query);
+const buildCorpusIndexQuery = (
+  body: SearchLegislationBody,
+  match: "strict" | "relaxed" = "strict",
+): string | null => {
+  const freeText =
+    match === "strict"
+      ? corpusFreeTextClause(body.query)
+      : relaxedLegislationClause(body);
   if (freeText === null) {
     return null;
   }
@@ -219,6 +234,7 @@ type RehydrateLegislationCandidatesOptions = {
    * `excludedGroups`), not shown again.
    */
   excludedWorkTokens?: readonly string[] | undefined;
+  ranking?: "authority" | "lexical" | undefined;
 };
 
 /** The request filters a stored version must satisfy to stand for a hit. */
@@ -417,6 +433,7 @@ export const rehydrateLegislationCandidates = async ({
   cursorId,
   namedWorks,
   excludedWorkTokens,
+  ranking = "authority",
 }: RehydrateLegislationCandidatesOptions) => {
   const ids = candidates.map((candidate) =>
     toSafeId<"legislationDocument">(candidate.id),
@@ -508,12 +525,15 @@ export const rehydrateLegislationCandidates = async ({
   }
 
   const collapsed = collapseLegislationHitsByWork({
-    ranked: blendStableCitationAuthority({
-      candidates: candidates.filter((candidate) =>
-        matchedIds.has(candidate.id),
-      ),
-      authorityById,
-    }),
+    ranked:
+      ranking === "authority"
+        ? blendStableCitationAuthority({
+            candidates: candidates.filter((candidate) =>
+              matchedIds.has(candidate.id),
+            ),
+            authorityById,
+          })
+        : candidates.filter((candidate) => matchedIds.has(candidate.id)),
     workOf,
     representatives,
     // Named Works that apply today are placed first; a name only repealed or
@@ -866,6 +886,7 @@ const pgSearch = async (
     // version's wording may not contain it.
     const headline = shown.id === row.keyId ? row.headline : null;
     return {
+      match: { type: "strict" },
       documentId: shown.id,
       eli: shown.eli,
       slug: shown.slug,
@@ -883,111 +904,214 @@ const pgSearch = async (
   return { hits, nextCursor };
 };
 
-const corpusIndexSearch = async (
-  body: SearchLegislationBody,
-  parsedCursor: SearchCursor | null,
-  legislationDb: LegislationReadDb,
-  observer: RegistryRequestObservation,
-): Promise<{ hits: LegislationHit[]; nextCursor: string | null }> => {
+const legislationQueryFingerprint = (body: SearchLegislationBody): string =>
+  createHash("sha256")
+    .update(
+      JSON.stringify([
+        "legislation",
+        body.query,
+        body.jurisdiction ?? null,
+        body.documentType ?? null,
+        body.status ?? null,
+        body.source ?? null,
+        body.language ?? null,
+        body.dateFrom ?? null,
+        body.dateTo ?? null,
+      ]),
+    )
+    .digest("hex");
+
+type CorpusLegislationSearchOptions = {
+  body: SearchLegislationBody;
+  parsedCursor: CorpusSearchCursor | null;
+  legislationDb: LegislationReadDb;
+  observer: RegistryRequestObservation;
+  serving: ServingCorpusIndexGeneration;
+};
+
+const corpusIndexSearch = async ({
+  body,
+  parsedCursor,
+  legislationDb,
+  observer,
+  serving,
+}: CorpusLegislationSearchOptions): Promise<{
+  hits: LegislationHit[];
+  nextCursor: string | null;
+}> => {
   const limit = normalizeTenantPageLimit(
     body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
   );
-  const serving = await legislationDb(
-    async (tx) => await readServingCorpusIndexGenerationTx(tx, "legislation"),
-  );
-  const generation = serving.generation;
+  const { generation, cluster } = serving;
   const indexId = body.jurisdiction
     ? corpusIndexId(generation, body.jurisdiction)
     : corpusIndexPattern(generation);
+  const fingerprint = legislationQueryFingerprint(body);
+  const phase: CorpusSearchPhase = parsedCursor?.phase ?? {
+    type: "strict",
+    fingerprint,
+    generation,
+  };
+  const namedWorks =
+    phase.type === "relaxed"
+      ? []
+      : await legislationDb(
+          async (tx) =>
+            await readNamedLegislationWorks(tx, {
+              query: body.query,
+              country: body.jurisdiction,
+            }),
+        );
 
-  const query = buildCorpusIndexQuery(body);
-  if (query === null) {
-    return { hits: [], nextCursor: null };
-  }
+  type ReadPhaseOptions = {
+    active: CorpusSearchPhase;
+    pageLimit: number;
+    cursor: SearchCursor | null;
+  };
+  const readPhase = async ({ active, pageLimit, cursor }: ReadPhaseOptions) => {
+    const query = buildCorpusIndexQuery(body, active.type);
+    if (query === null) {
+      return null;
+    }
+    const excludedWorkTokens = [
+      ...new Set([
+        ...(cursor?.excludedGroups ?? []),
+        ...(active.type === "relaxed" ? active.strictWorkTokens : []),
+      ]),
+    ];
+    return await readCorpusIndexSearchPage({
+      observer,
+      cluster,
+      indexId,
+      query,
+      limit: pageLimit,
+      order: RELEVANCE_ORDER,
+      parsedCursor: cursor,
+      ...(active.type === "relaxed"
+        ? {
+            maxRounds: 1,
+            scanTransport: {
+              type: "native" as const,
+              snippets: "inline" as const,
+            },
+          }
+        : {}),
+      snippetFields: ["text"],
+      extractId: (hit) => {
+        const id = hit["document_id"];
+        return typeof id === "string" && isUuid(id) ? id : null;
+      },
+      extractSnippet: extractCorpusSnippet,
+      unseenScoreUpperBound:
+        active.type === "strict" ? stableBlendUpperBound : (score) => score,
+      rankCandidates: async (candidates) =>
+        await rehydrateLegislationCandidates({
+          body,
+          candidates,
+          generation,
+          legislationDb,
+          cursorId: cursor?.id,
+          namedWorks: active.type === "strict" ? namedWorks : [],
+          excludedWorkTokens,
+          ranking: active.type === "strict" ? "authority" : "lexical",
+        }),
+    });
+  };
 
-  // The Works the query names depend on the query alone, so they are read
-  // once rather than on every scan round.
-  const namedWorks = await legislationDb(
-    async (tx) =>
-      await readNamedLegislationWorks(tx, {
-        query: body.query,
-        country: body.jurisdiction,
-      }),
-  );
-
-  const searchPage = await readCorpusIndexSearchPage({
-    observer,
-    cluster: serving.cluster,
-    indexId,
-    query,
-    limit,
-    // The legislation corpus is read best-first and nothing else; a date
-    // order over it would need a timestamp field its generation does not map.
-    order: RELEVANCE_ORDER,
-    parsedCursor,
-    snippetFields: ["text"],
-    extractId: (hit) => {
-      const id = hit["document_id"];
-      return typeof id === "string" && isUuid(id) ? id : null;
-    },
-    extractSnippet: extractCorpusSnippet,
-    // Upper bound for the pagination early-stop: scanning may end only once
-    // no unseen candidate could out-blend the page cursor. Saturated
-    // authority is bounded by 1, so the bound reads nothing from the corpus.
-    unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) =>
-      await rehydrateLegislationCandidates({
-        body,
-        candidates,
-        generation,
-        legislationDb,
-        cursorId: parsedCursor?.id,
-        namedWorks,
-        excludedWorkTokens: parsedCursor?.excludedGroups,
-      }),
-  });
-
-  const {
-    context: { byId },
-    pageRanked,
-    snippetById,
-  } = searchPage;
-  // Legislation queries are never expanded, so the identity a legislation
-  // page reports is always `none` — one wire format across both corpora, and
-  // a cursor that crosses them is refused rather than misread.
-  const nextCursor =
-    searchPage.nextCursor === null
+  type PhasePage = NonNullable<Awaited<ReturnType<typeof readPhase>>>;
+  const hitsOf = (
+    page: PhasePage,
+    active: CorpusSearchPhase,
+  ): LegislationHit[] =>
+    page.pageRanked.flatMap((hit) => {
+      const row = page.context.byId.get(hit.id);
+      if (row === undefined) {
+        return panic("Ranked legislation hit has no hydrated row");
+      }
+      return [
+        {
+          match: { type: active.type },
+          documentId: row.id,
+          eli: row.eli,
+          slug: row.slug,
+          title: row.title,
+          country: row.country,
+          language: row.language,
+          documentType: toNullableString(row.documentType),
+          status: row.statusValue,
+          effectiveDate: toNullableString(row.effectiveDate),
+          sourceUrl: toNullableString(row.sourceUrl),
+          headline: page.snippetById.get(hit.id) ?? null,
+          score: hit.score,
+        },
+      ];
+    });
+  const cursorOf = (
+    page: PhasePage,
+    active: CorpusSearchPhase,
+  ): string | null =>
+    page.nextCursor === null
       ? null
       : encodeCorpusSearchCursor({
-          ...searchPage.nextCursor,
+          ...page.nextCursor,
           dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
           target: null,
+          phase: active,
         });
-
-  const hits = pageRanked.flatMap((hit): LegislationHit[] => {
-    const row = byId.get(hit.id);
-    if (!row) {
-      return [];
-    }
-    return [
-      {
-        documentId: row.id,
-        eli: row.eli,
-        slug: row.slug,
-        title: row.title,
-        country: row.country,
-        language: row.language,
-        documentType: toNullableString(row.documentType),
-        status: row.statusValue,
-        effectiveDate: toNullableString(row.effectiveDate),
-        sourceUrl: toNullableString(row.sourceUrl),
-        headline: snippetById.get(hit.id) ?? null,
-        score: hit.score,
-      },
-    ];
+  const page = await readPhase({
+    active: phase,
+    pageLimit: limit,
+    cursor: parsedCursor,
   });
-
-  return { hits, nextCursor };
+  if (page === null) {
+    return { hits: [], nextCursor: null };
+  }
+  const hits = hitsOf(page, phase);
+  // A continuation means strict results remain. Only an exhausted first page can append coverage hits.
+  if (
+    phase.type === "relaxed" ||
+    parsedCursor !== null ||
+    hits.length >= limit ||
+    page.nextCursor !== null
+  ) {
+    return { hits, nextCursor: cursorOf(page, phase) };
+  }
+  const strictWorkTokens = [
+    ...new Set(
+      hits.map((hit) => {
+        const row = page.context.byId.get(hit.documentId);
+        return row === undefined
+          ? panic("Strict legislation hit has no Work")
+          : legislationWorkToken(legislationWorkRefKey(row));
+      }),
+    ),
+  ];
+  const relaxed: CorpusSearchPhase = {
+    type: "relaxed",
+    fingerprint,
+    generation,
+    strictWorkTokens,
+  };
+  // This synthetic boundary admits every relaxed score while carrying the strict Works to exclude.
+  const boundary: SearchCursor = {
+    score: Number.MAX_VALUE,
+    id: "00000000-0000-0000-0000-000000000000",
+    sort: DEFAULT_SEARCH_SORT,
+    windowStart: 0,
+    excludedGroups: strictWorkTokens,
+  };
+  const extra = await readPhase({
+    active: relaxed,
+    pageLimit: limit - hits.length,
+    cursor: boundary,
+  });
+  if (extra === null) {
+    return { hits, nextCursor: null };
+  }
+  return {
+    hits: [...hits, ...hitsOf(extra, relaxed)],
+    nextCursor: cursorOf(extra, relaxed),
+  };
 };
 
 export const searchLegislationHandler = async (
@@ -1037,14 +1161,65 @@ export const searchLegislationHandler = async (
         dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
         target: null,
         sort: DEFAULT_SEARCH_SORT,
+        phase: parsedCursor?.phase,
       }))
   ) {
     return status(400, { message: "Invalid cursor" });
   }
 
-  const { hits: items, nextCursor } =
+  const serving =
     envBase.LEGAL_SEARCH_PROVIDER === "corpus-index"
-      ? await corpusIndexSearch(body, parsedCursor, legislationDb, observer)
+      ? await legislationDb(
+          async (tx) =>
+            await readServingCorpusIndexGenerationTx(tx, "legislation"),
+        )
+      : null;
+  let expectedPhase: CorpusSearchPhase | undefined;
+  if (serving !== null) {
+    const phase = parsedCursor?.phase;
+    switch (phase?.type) {
+      case "relaxed":
+        expectedPhase = {
+          type: "relaxed",
+          fingerprint: legislationQueryFingerprint(body),
+          generation: serving.generation,
+          strictWorkTokens: phase.strictWorkTokens,
+        };
+        break;
+      case "strict":
+      case undefined:
+        expectedPhase = {
+          type: "strict",
+          fingerprint: legislationQueryFingerprint(body),
+          generation: serving.generation,
+        };
+        break;
+      default:
+        phase satisfies never;
+        return panic("Unhandled legislation cursor phase");
+    }
+  }
+  if (
+    body.cursor !== undefined &&
+    isStaleCorpusSearchCursor(parsedCursor, {
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      target: null,
+      sort: DEFAULT_SEARCH_SORT,
+      phase: expectedPhase,
+    })
+  ) {
+    return status(400, { message: "Invalid cursor" });
+  }
+
+  const { hits: items, nextCursor } =
+    serving !== null
+      ? await corpusIndexSearch({
+          body,
+          parsedCursor,
+          legislationDb,
+          observer,
+          serving,
+        })
       : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
   const response: Static<typeof searchLegislationSuccessResponseSchema> = {
@@ -1058,7 +1233,7 @@ export const searchLegislationHandler = async (
 const config = {
   description:
     "Full-text search the stella legislation corpus, returning ranked results " +
-    "with a highlighted snippet and each document's ELI, title, country, " +
+    "with strict or relaxed match metadata, a highlighted snippet and each document's ELI, title, country, " +
     "language, type, status, and effective date. Filter by jurisdiction, " +
     "document type, status, source, language, and effective-date range; " +
     `paginate with limit and cursor. ${PUBLIC_JURISDICTIONS_DESCRIPTION} Only admitted jurisdictions and sources cleared for redistribution ` +

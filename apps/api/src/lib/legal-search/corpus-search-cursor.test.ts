@@ -1,15 +1,17 @@
 import { expect, test } from "bun:test";
 import fc from "fast-check";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   CORPUS_CURSOR_GROUP_TOKEN_CHARS,
   CORPUS_READ_TARGET_IDENTITY_LENGTH,
   CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+  CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
+  type CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
 import {
@@ -448,4 +450,220 @@ test.each([
       encodeCursor(0.5, `900:none:relevance:${segment}:${DECISION_ID}`),
     ),
   ).toBeNull();
+});
+
+const phaseCursor = (phase: CorpusSearchPhase) => ({
+  dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+  id: DECISION_ID,
+  score: 0.5,
+  sort: "relevance" as const,
+  target: null,
+  windowStart: 0,
+  phase,
+});
+
+const phaseSegment = (phase: unknown): string =>
+  `p${Buffer.from(JSON.stringify(phase)).toString("base64url")}`;
+
+const STRICT_PHASE = {
+  type: "strict",
+  fingerprint: HASH_A,
+  generation: "legislation_v2",
+} as const satisfies CorpusSearchPhase;
+
+test("legislation phases round-trip independently of existing optional cursor segments", () => {
+  assertProperty(
+    "legislation phases round-trip independently of existing optional cursor segments",
+    fc.property(
+      fc.boolean(),
+      fc.uniqueArray(fc.nat({ max: 999_999 }), {
+        maxLength: LIMITS.corpusIndexSearchMaxExcludedGroups,
+      }),
+      fc.constantFrom(null, TARGET_A),
+      fc.boolean(),
+      (relaxed, tokenNumbers, target, carryGroups) => {
+        const strictWorkTokens = tokenNumbers.map((value) =>
+          String(value).padStart(CORPUS_CURSOR_GROUP_TOKEN_CHARS, "0"),
+        );
+        const phase = relaxed
+          ? ({
+              type: "relaxed",
+              fingerprint: HASH_A,
+              generation: "legislation_v2",
+              strictWorkTokens,
+            } as const)
+          : STRICT_PHASE;
+        const cursor = {
+          ...phaseCursor(phase),
+          target,
+          ...(carryGroups ? { excludedGroups: ["AbC_1-"] } : {}),
+        };
+        const encoded = encodeCorpusSearchCursor(cursor);
+        expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+        expect(encoded.length).toBeLessThanOrEqual(
+          CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+        );
+      },
+    ),
+  );
+});
+
+test("a phase cursor requires the same query, generation and continuation phase", () => {
+  const cursor = decodeCorpusSearchCursor(
+    encodeCorpusSearchCursor(phaseCursor(STRICT_PHASE)),
+  );
+  const ranking = {
+    dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+    sort: "relevance",
+    target: null,
+  } as const;
+  expect(
+    isStaleCorpusSearchCursor(cursor, { ...ranking, phase: STRICT_PHASE }),
+  ).toBe(false);
+  expect(isStaleCorpusSearchCursor(cursor, ranking)).toBe(true);
+  expect(
+    isStaleCorpusSearchCursor(cursor, {
+      ...ranking,
+      phase: { ...STRICT_PHASE, fingerprint: HASH_B },
+    }),
+  ).toBe(true);
+  expect(
+    isStaleCorpusSearchCursor(cursor, {
+      ...ranking,
+      phase: { ...STRICT_PHASE, generation: "legislation_v3" },
+    }),
+  ).toBe(true);
+  expect(
+    isStaleCorpusSearchCursor(cursor, {
+      ...ranking,
+      phase: {
+        type: "relaxed",
+        fingerprint: HASH_A,
+        generation: "legislation_v2",
+        strictWorkTokens: [],
+      },
+    }),
+  ).toBe(true);
+  const unphased = decodeCorpusSearchCursor(
+    encodeCorpusSearchCursor({
+      ...ranking,
+      id: DECISION_ID,
+      score: 0.5,
+      windowStart: 0,
+    }),
+  );
+  expect(
+    isStaleCorpusSearchCursor(unphased, { ...ranking, phase: STRICT_PHASE }),
+  ).toBe(true);
+  expect(
+    isStaleCorpusSearchCursor(null, { ...ranking, phase: STRICT_PHASE }),
+  ).toBe(false);
+});
+
+test("relaxed continuation exclusions are payload, rather than a second phase identity", () => {
+  const phase = {
+    type: "relaxed",
+    fingerprint: HASH_A,
+    generation: "legislation_v2",
+    strictWorkTokens: ["AbC_1-"],
+  } as const;
+  const cursor = decodeCorpusSearchCursor(
+    encodeCorpusSearchCursor(phaseCursor(phase)),
+  );
+  expect(
+    isStaleCorpusSearchCursor(cursor, {
+      dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
+      sort: "relevance",
+      target: null,
+      phase: {
+        type: "relaxed",
+        fingerprint: HASH_A,
+        generation: "legislation_v2",
+        strictWorkTokens: [],
+      },
+    }),
+  ).toBe(false);
+});
+
+test.each([
+  null,
+  [],
+  { ...STRICT_PHASE, type: "other" },
+  { ...STRICT_PHASE, fingerprint: HASH_A.slice(1) },
+  { ...STRICT_PHASE, fingerprint: HASH_A.toUpperCase() },
+  { ...STRICT_PHASE, generation: "" },
+  { ...STRICT_PHASE, generation: "../legislation_v2" },
+  { ...STRICT_PHASE, generation: "a".repeat(65) },
+  { ...STRICT_PHASE, extra: "unexpected" },
+  { ...STRICT_PHASE, strictWorkTokens: [] },
+  { ...STRICT_PHASE, type: "relaxed" },
+  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: "AbC_1-" },
+  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["short"] },
+  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["ab.def"] },
+  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: [1] },
+  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["AbC_1-", "AbC_1-"] },
+  {
+    ...STRICT_PHASE,
+    type: "relaxed",
+    strictWorkTokens: Array.from(
+      { length: LIMITS.corpusIndexSearchMaxExcludedGroups + 1 },
+      (_, index) => String(index).padStart(6, "0"),
+    ),
+  },
+])("rejects malformed phase data %p", (phase) => {
+  expect(
+    decodeCorpusSearchCursor(
+      encodeCursor(
+        0.5,
+        `0:none:relevance:${phaseSegment(phase)}:${DECISION_ID}`,
+      ),
+    ),
+  ).toBeNull();
+});
+
+test("phase segments are canonical base64url and occur once after other optional metadata", () => {
+  const segment = phaseSegment(STRICT_PHASE);
+  for (const optional of [
+    "p",
+    "p!",
+    "pbm90LWpzb24",
+    `${segment}=`,
+    `${segment}:${segment}`,
+    `${segment}:xAbC_1-`,
+    `${segment}:${TARGET_A}`,
+  ]) {
+    expect(
+      decodeCorpusSearchCursor(
+        encodeCursor(0.5, `0:none:relevance:${optional}:${DECISION_ID}`),
+      ),
+    ).toBeNull();
+  }
+});
+
+test("the maximum phase and group payload fits the legislation-only cursor cap", () => {
+  const tokens = Array.from(
+    { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
+    (_, index) => String(index).padStart(CORPUS_CURSOR_GROUP_TOKEN_CHARS, "0"),
+  );
+  const cursor = {
+    ...phaseCursor({
+      type: "relaxed",
+      fingerprint: HASH_A,
+      generation: "a".repeat(64),
+      strictWorkTokens: tokens,
+    }),
+    dictionary: DICTIONARY_A,
+    excludedGroups: tokens,
+    target: TARGET_A,
+    score: -2.2250738585072014e-308,
+    windowStart: 9_999_999_999,
+  };
+  const encoded = encodeCorpusSearchCursor(cursor);
+  expect(encoded.length).toBeGreaterThan(
+    CORPUS_SEARCH_CURSOR_WITH_GROUPS_MAX_LENGTH,
+  );
+  expect(encoded.length).toBeLessThanOrEqual(
+    CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+  );
+  expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
 });
