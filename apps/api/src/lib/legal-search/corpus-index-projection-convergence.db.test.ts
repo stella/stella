@@ -292,9 +292,9 @@ const isBlockingIntentStatus = (
 test("every blocking revision status holds the census", async () => {
   expect(await readStatus()).toBe("ready_for_census");
   for (const status of CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES) {
-    if (!isBlockingIntentStatus(status)) {
-      return panic(`No revision shape for blocking status ${status}`);
-    }
+    const shape = isBlockingIntentStatus(status)
+      ? BLOCKING_REVISION_SHAPES[status]
+      : panic(`No revision shape for blocking status ${status}`);
     await db.insert(corpusIndexProjectionIntents).values({
       id: BLOCKING_INTENT_ID,
       ...TARGET,
@@ -303,7 +303,7 @@ test("every blocking revision status holds the census", async () => {
       fingerprint: "f".repeat(64),
       indexId: INDEX_ID,
       status,
-      ...BLOCKING_REVISION_SHAPES[status],
+      ...shape,
     });
     expect({ status, convergence: await readStatus() }).toEqual({
       status,
