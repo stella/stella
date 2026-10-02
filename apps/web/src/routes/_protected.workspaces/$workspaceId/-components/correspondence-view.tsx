@@ -1,32 +1,23 @@
 import { Suspense } from "react";
 
 import { useQuery, useSuspenseInfiniteQuery } from "@tanstack/react-query";
-import {
-  createFileRoute,
-  Link,
-  Outlet,
-  useMatch,
-} from "@tanstack/react-router";
+import { Link } from "@tanstack/react-router";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import { copyToClipboard } from "@stll/clipboard";
 import { Button } from "@stll/ui/button";
 import { CopyIcon, RefreshCwIcon, Trash2Icon } from "@stll/ui/icons";
-import { ScrollArea } from "@stll/ui/scroll-area";
 import { Skeleton } from "@stll/ui/skeleton";
 import { stellaToast } from "@stll/ui/toast";
 
 import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
-import { getAnalytics, useAnalytics } from "@/lib/analytics/provider";
+import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
 import {
-  ensureRouteInfiniteQueryData,
-  prefetchRouteQuery,
-} from "@/lib/react-query";
-import {
   correspondenceAddressOptions,
+  CORRESPONDENCE_PAGE_SIZE,
   CORRESPONDENCE_STATE_LABEL_KEYS,
   correspondenceInfiniteOptions,
   uniqueCorrespondenceAddresses,
@@ -39,69 +30,43 @@ import {
   useRotateCorrespondenceAddress,
 } from "@/routes/_protected.workspaces/$workspaceId/-mutations/correspondence";
 
-const PAGE_SIZE = 50;
-
-const isListLocation = (pathname: string, workspaceId: string) => {
-  const listPath = `/workspaces/${workspaceId}/correspondence`;
-  return pathname === listPath || pathname === `${listPath}/`;
-};
-
-export const Route = createFileRoute(
-  "/_protected/workspaces/$workspaceId/correspondence",
-)({
-  component: CorrespondencePage,
-  loader: async ({ context, location, params }) => {
-    // A record renders in place of the list; only the list view needs it.
-    if (!isListLocation(location.pathname, params.workspaceId)) {
-      return;
-    }
-    await Promise.all([
-      ensureRouteInfiniteQueryData(
-        context.queryClient,
-        correspondenceInfiniteOptions(params.workspaceId, PAGE_SIZE),
-      ),
-      prefetchRouteQuery(
-        context.queryClient,
-        correspondenceAddressOptions(params.workspaceId),
-        (error: unknown) => {
-          getAnalytics().captureError(error);
-        },
-      ),
-    ]);
-  },
-});
-
-function CorrespondencePage() {
+/**
+ * Body of a matter's correspondence view: the matter's inbound address, the
+ * messages that could not be filed, and the messages filed to it. Each
+ * message opens its own page.
+ */
+export const CorrespondenceView = ({
+  workspaceId,
+}: {
+  workspaceId: string;
+}) => {
   const t = useTranslations();
-  const workspaceId = Route.useParams({
-    select: (params) => params.workspaceId,
-  });
-  const detailMatch = useMatch({
-    from: "/_protected/workspaces/$workspaceId/correspondence/$correspondenceId",
-    shouldThrow: false,
-  });
-
-  if (detailMatch) {
-    return <Outlet />;
-  }
-
   return (
-    <div className="flex h-full flex-col">
-      <div className="border-b px-4 py-3">
-        <h1 className="text-sm font-medium">{t("correspondence.title")}</h1>
-      </div>
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="space-y-5 p-4">
-          <AddressCard workspaceId={workspaceId} />
-          <CorrespondenceDrops workspaceId={workspaceId} />
-          <Suspense fallback={<CorrespondenceListSkeleton />}>
-            <CorrespondenceList workspaceId={workspaceId} />
-          </Suspense>
-        </div>
-      </ScrollArea>
+    <div className="space-y-5 p-4 sm:p-6">
+      <h1 className="sr-only">{t("correspondence.title")}</h1>
+      <AddressCard workspaceId={workspaceId} />
+      <CorrespondenceDrops workspaceId={workspaceId} />
+      <Suspense fallback={<CorrespondenceListSkeleton />}>
+        <CorrespondenceList workspaceId={workspaceId} />
+      </Suspense>
     </div>
   );
-}
+};
+
+/** Route-pending body: the address card and the list rows, shimmering. */
+export const CorrespondenceViewSkeleton = () => (
+  <div className="space-y-5 p-4 sm:p-6">
+    <div className="flex flex-wrap items-center justify-between gap-3 rounded-lg border p-4">
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-48" />
+      </div>
+      <Skeleton className="h-9 w-24 rounded-md" />
+    </div>
+    <Skeleton className="h-11 w-full rounded-md" />
+    <CorrespondenceListSkeleton />
+  </div>
+);
 
 const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
   const t = useTranslations();
@@ -224,7 +189,7 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
   const format = useFormatter();
   const { data, fetchNextPage, hasNextPage, isFetchingNextPage } =
     useSuspenseInfiniteQuery(
-      correspondenceInfiniteOptions(workspaceId, PAGE_SIZE),
+      correspondenceInfiniteOptions(workspaceId, CORRESPONDENCE_PAGE_SIZE),
     );
   const items = data.pages.flatMap((page) => page.items);
 
@@ -241,7 +206,6 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
       <div className="overflow-hidden rounded-lg border">
         {items.map((item) => (
           <Link
-            from={Route.fullPath}
             className="hover:bg-muted/40 flex min-h-16 items-center gap-4 border-b px-4 py-3 last:border-0"
             key={item.id}
             params={{ workspaceId, correspondenceId: item.id }}
@@ -313,12 +277,14 @@ const CorrespondenceList = ({ workspaceId }: { workspaceId: string }) => {
   );
 };
 
+const CORRESPONDENCE_SKELETON_ROW_KEYS = ["s1", "s2", "s3", "s4", "s5"];
+
 const CorrespondenceListSkeleton = () => (
   <div className="space-y-2">
-    {Array.from({ length: 5 }, (_, index) => (
+    {CORRESPONDENCE_SKELETON_ROW_KEYS.map((rowKey) => (
       <div
         className="flex h-16 items-center gap-4 rounded-lg border px-4"
-        key={index}
+        key={rowKey}
       >
         <div className="flex-1 space-y-2">
           <Skeleton className="h-4 w-56" />

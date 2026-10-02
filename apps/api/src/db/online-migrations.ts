@@ -248,6 +248,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "workspace_views_correspondence_uidx" ON public."workspace_views" USING btree ("workspace_id") WHERE ("layout" ->> \'type\') = \'correspondence\'',
+    definitionBody:
+      "ON public.workspace_views USING btree (workspace_id) WHERE ((layout ->> 'type'::text) = 'correspondence'::text)",
+    isUnique: true,
+    name: "workspace_views_correspondence_uidx",
+    tableName: "workspace_views",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "report_exports_workspace_requester_created_idx" ON public."report_exports" USING btree ("workspace_id", "requested_by", "created_at", "id")',
     definitionBody:
       "ON public.report_exports USING btree (workspace_id, requested_by, created_at, id)",
