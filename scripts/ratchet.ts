@@ -3063,7 +3063,8 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: API_OWNER_HANDLE_GLOBS,
     exclude: (file) =>
       isExcludedSource(file) || file === "apps/api/src/db/root.ts",
-    count: (content, { file }) => countRootConnectionImports(content, file),
+    count: ((content, { file }) =>
+      countRootConnectionImports(content, file)) satisfies FileCounter,
     perFile: true,
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
@@ -3075,7 +3076,8 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
     include: API_OWNER_HANDLE_GLOBS,
     exclude: (file) =>
       isExcludedSource(file) || file === "apps/api/src/db/root.ts",
-    count: (content, { file }) => countRootConnectionTypeImports(content, file),
+    count: ((content, { file }) =>
+      countRootConnectionTypeImports(content, file)) satisfies FileCounter,
     perFile: true,
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
@@ -3089,7 +3091,8 @@ export const RATCHET_METRICS: readonly RatchetMetric[] = [
       isExcludedSource(file) ||
       file === "apps/api/src/db/root.ts" ||
       ROOT_CONNECTION_DOOR_FILES.has(file),
-    count: (content, { file }) => countRootConnectionShapes(content, file),
+    count: ((content, { file }) =>
+      countRootConnectionShapes(content, file)) satisfies FileCounter,
     perFile: true,
     allowlist: OWNER_HANDLE_ALLOWLIST_REMEDY,
   },
