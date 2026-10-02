@@ -334,4 +334,146 @@ if (!databaseUrl || !runPostgresTests) {
       }
     });
   }, 120_000);
+
+  test("committed orchestration tables isolate tenant CRUD on PostgreSQL", async () => {
+    await withCommittedMonitoring(databaseUrl, async (tx) => {
+      await applyMigration(tx, "20261003122900_sanctions_monitoring_marks");
+      await applyMigration(tx, "20261003123000_sanctions_monitoring_backfills");
+      const tables = [
+        "sanctions_contact_marks",
+        "sanctions_organization_marks",
+        "sanctions_monitoring_backfills",
+      ] as const;
+      await assertForcedRls(tx, [...tables, "sanctions_edition_fanouts"]);
+      for (const table of tables) {
+        await tx.execute(
+          sql.raw(`ALTER TABLE public.${table} OWNER TO ${OWNER}`),
+        );
+      }
+      const rowFor = (
+        table: (typeof tables)[number],
+        organization: string,
+        contact: string,
+      ) => {
+        switch (table) {
+          case "sanctions_contact_marks":
+            return sql`INSERT INTO public.sanctions_contact_marks (organization_id, contact_id) VALUES (${organization}, ${contact}) RETURNING *`;
+          case "sanctions_organization_marks":
+            return sql`INSERT INTO public.sanctions_organization_marks (organization_id) VALUES (${organization}) RETURNING *`;
+          case "sanctions_monitoring_backfills":
+            return sql`INSERT INTO public.sanctions_monitoring_backfills (organization_id, source_id, edition_id) VALUES (${organization}, ${SOURCE}, ${EDITION}) RETURNING *`;
+          default: {
+            const exhaustive: never = table;
+            return exhaustive;
+          }
+        }
+      };
+      for (const table of tables) {
+        await tx.execute(rowFor(table, ORG_B, CONTACT_B));
+      }
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      await tx.execute(
+        sql`INSERT INTO public.sanctions_edition_fanouts (source_id, edition_id) VALUES (${SOURCE}, ${EDITION}) ON CONFLICT (source_id) DO UPDATE SET edition_id = excluded.edition_id`,
+      );
+      await tx.execute(sql`RESET ROLE`);
+      await asApplication(tx);
+      for (const table of tables) {
+        const relation = sql.identifier(table);
+        expect(
+          await tx.execute(
+            sql`SELECT * FROM ${relation} WHERE organization_id = ${ORG_B}`,
+          ),
+        ).toEqual([]);
+        expect(
+          await tx.execute(
+            sql`UPDATE ${relation} SET generation = generation + 1 WHERE organization_id = ${ORG_B} RETURNING *`,
+          ),
+        ).toEqual([]);
+        expect(
+          await tx.execute(
+            sql`DELETE FROM ${relation} WHERE organization_id = ${ORG_B} RETURNING *`,
+          ),
+        ).toEqual([]);
+        await expectRejectedStatement(
+          tx,
+          rowFor(table, ORG_B, CONTACT_B),
+          "row-level security",
+        );
+        expect(await tx.execute(rowFor(table, ORG_A, CONTACT_A))).toHaveLength(
+          1,
+        );
+        // The worker's explicit organization predicate and direct role-level read agree.
+        expect(
+          await tx.execute(
+            sql`SELECT organization_id FROM ${relation} WHERE organization_id = ${ORG_A}`,
+          ),
+        ).toEqual([{ organization_id: ORG_A }]);
+        expect(
+          await tx.execute(sql`SELECT organization_id FROM ${relation}`),
+        ).toEqual([{ organization_id: ORG_A }]);
+        await expectRejectedStatement(
+          tx,
+          sql`UPDATE ${relation} SET organization_id = ${ORG_B} WHERE organization_id = ${ORG_A}`,
+          "row-level security",
+        );
+        expect(
+          await tx.execute(
+            sql`UPDATE ${relation} SET generation = generation + 1 WHERE organization_id = ${ORG_A} RETURNING generation::text AS generation`,
+          ),
+        ).toEqual([{ generation: "2" }]);
+        expect(
+          await tx.execute(
+            sql`DELETE FROM ${relation} WHERE organization_id = ${ORG_A} RETURNING *`,
+          ),
+        ).toHaveLength(1);
+      }
+      await expectRejectedStatement(
+        tx,
+        rowFor("sanctions_contact_marks", ORG_A, CONTACT_B),
+        "foreign key constraint",
+      );
+      await expectRejectedStatement(
+        tx,
+        sql`INSERT INTO public.sanctions_edition_fanouts (source_id) VALUES (${SOURCE})`,
+        "permission denied",
+      );
+      await expectRejectedStatement(
+        tx,
+        sql`UPDATE public.sanctions_edition_fanouts SET state = 'complete' WHERE source_id = ${SOURCE}`,
+        "permission denied",
+      );
+      await expectRejectedStatement(
+        tx,
+        sql`DELETE FROM public.sanctions_edition_fanouts WHERE source_id = ${SOURCE}`,
+        "permission denied",
+      );
+      expect(
+        await tx.execute(
+          sql`SELECT source_id FROM public.sanctions_edition_fanouts WHERE source_id = ${SOURCE}`,
+        ),
+      ).toEqual([{ source_id: SOURCE }]);
+      await asOwner(tx);
+      for (const table of tables) {
+        const relation = sql.identifier(table);
+        expect(
+          await tx.execute(
+            sql`SELECT organization_id FROM ${relation} WHERE organization_id = ${ORG_B}`,
+          ),
+        ).toEqual([{ organization_id: ORG_B }]);
+        expect(await tx.execute(rowFor(table, ORG_A, CONTACT_A))).toHaveLength(
+          1,
+        );
+        expect(
+          await tx.execute(
+            sql`UPDATE ${relation} SET generation = generation + 1 WHERE organization_id = ${ORG_B} RETURNING generation::text AS generation`,
+          ),
+        ).toEqual([{ generation: "2" }]);
+        expect(
+          await tx.execute(
+            sql`DELETE FROM ${relation} WHERE organization_id = ${ORG_B} RETURNING *`,
+          ),
+        ).toHaveLength(1);
+      }
+    });
+  }, 120_000);
 }
