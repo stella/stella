@@ -11,11 +11,11 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
-import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import {
   DEFAULT_POLAR_API_VERSION,
   polarApiVersionSchema,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
