@@ -282,6 +282,9 @@ jobs:
 
           for package in "${pkgs[@]}"; do
             echo "::group::Build + pack @stll/${package}"
+            if [[ "$package" == cli ]]; then
+              (cd packages/cli && bun run codegen:runtime)
+            fi
             (cd "packages/${package}" && bun run build)
             bun scripts/prepare-publish.ts "packages/${package}"
             destination="release-artifacts/${package}"
