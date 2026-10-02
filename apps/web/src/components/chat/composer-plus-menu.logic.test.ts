@@ -144,14 +144,7 @@ describe("resolveComposerMenuShortcut", () => {
     ).toBeNull();
   });
 
-  test("preserves command shortcuts and IME composition", () => {
-    expect(
-      resolveComposerMenuShortcut({
-        ...baseOptions,
-        ctrlKey: true,
-        key: "/",
-      }),
-    ).toBeNull();
+  test("preserves IME composition", () => {
     expect(
       resolveComposerMenuShortcut({
         ...baseOptions,
@@ -161,16 +154,60 @@ describe("resolveComposerMenuShortcut", () => {
     ).toBeNull();
   });
 
-  test("allows AltGraph printable characters", () => {
-    expect(
-      resolveComposerMenuShortcut({
-        ...baseOptions,
-        altKey: true,
-        ctrlKey: true,
-        isAltGraph: true,
-        key: "@",
-      }),
-    ).toBe(COMPOSER_MENU_SHORTCUT.context);
+  // Every modifier combination a layout can type the trigger with: Option on
+  // macOS (Czech, Slovak, German "@"), AltGr on Windows (Ctrl+Alt, with or
+  // without the AltGraph state), and Shift folded into `key` everywhere. Only
+  // Cmd, or Ctrl without Alt, is a command chord.
+  describe("modifier chords", () => {
+    const flags = [false, true];
+    const chords = flags.flatMap((altKey) =>
+      flags.flatMap((ctrlKey) =>
+        flags.flatMap((metaKey) =>
+          flags.map((isAltGraph) => ({ altKey, ctrlKey, isAltGraph, metaKey })),
+        ),
+      ),
+    );
+
+    test.each(chords)(
+      "alt=$altKey ctrl=$ctrlKey meta=$metaKey altGraph=$isAltGraph",
+      (chord) => {
+        const isCommandChord =
+          chord.metaKey ||
+          (chord.ctrlKey && !chord.altKey && !chord.isAltGraph);
+        const expected = isCommandChord ? null : COMPOSER_MENU_SHORTCUT.context;
+
+        expect(
+          resolveComposerMenuShortcut({ ...baseOptions, ...chord, key: "@" }),
+        ).toBe(expected);
+      },
+    );
+
+    test("opens for Option-typed characters on macOS", () => {
+      expect(
+        resolveComposerMenuShortcut({
+          ...baseOptions,
+          altKey: true,
+          key: "@",
+        }),
+      ).toBe(COMPOSER_MENU_SHORTCUT.context);
+    });
+
+    test("keeps Ctrl and Cmd shortcuts", () => {
+      expect(
+        resolveComposerMenuShortcut({
+          ...baseOptions,
+          ctrlKey: true,
+          key: "/",
+        }),
+      ).toBeNull();
+      expect(
+        resolveComposerMenuShortcut({
+          ...baseOptions,
+          metaKey: true,
+          key: "/",
+        }),
+      ).toBeNull();
+    });
   });
 });
 

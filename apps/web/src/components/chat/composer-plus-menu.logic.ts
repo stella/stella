@@ -109,8 +109,12 @@ export const resolveComposerMenuShortcut = ({
   key,
   metaKey,
 }: ResolveComposerMenuShortcutOptions): ComposerMenuShortcut | null => {
-  const hasBlockingModifier = metaKey || (!isAltGraph && (altKey || ctrlKey));
-  if (isComposing || hasBlockingModifier) {
+  // `key` is the character the layout produced, so only command modifiers
+  // block. Alt alone is text input: macOS layouts type "@" with Option (Czech,
+  // Slovak, German) and Chrome on macOS never reports AltGraph. Ctrl is a
+  // command unless it is half of Windows' AltGr (Ctrl+Alt).
+  const isCommandChord = metaKey || (ctrlKey && !altKey && !isAltGraph);
+  if (isComposing || isCommandChord) {
     return null;
   }
   if (!startsWord(charBefore)) {
