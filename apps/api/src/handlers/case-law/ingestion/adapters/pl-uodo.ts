@@ -1,4 +1,3 @@
-// parser-output-unchanged: Importing the unchanged common-court ruling-key helper from its own module preserves publisher output.
 import { Result, panic } from "better-result";
 
 import { polishAdministrativeDocketOf } from "@stll/api-contract/decision-docket-grammar";

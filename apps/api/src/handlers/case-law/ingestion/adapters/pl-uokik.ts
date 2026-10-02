@@ -1,4 +1,3 @@
-// parser-output-unchanged: Importing the unchanged common-court ruling-key helper from its own module preserves publisher output.
 import { Result, panic } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
