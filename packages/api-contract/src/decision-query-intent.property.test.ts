@@ -148,7 +148,10 @@ test(
               jurisdiction,
             });
             expect(isWholeEntryIdentifier(standalone)).toBe(true);
-            if (standalone.type !== "identifier") {
+            if (
+              standalone.type !== "identifier" ||
+              standalone.kind !== "docket"
+            ) {
               return;
             }
             expect(parseDecisionQuery(standalone.value, options)).toEqual(
@@ -347,6 +350,10 @@ test(
           });
           const repeated = `rozsudek ${family}-${sheet} a ${family}-${sheet}`;
           const intent = parseDecisionQuery(`${family}-${sheet}`, options);
+          expect(intent).toMatchObject({ type: "identifier", kind: "docket" });
+          if (intent.type !== "identifier" || intent.kind !== "docket") {
+            return;
+          }
           expect(parseDecisionQuery(repeated, options)).toEqual({
             ...intent,
             embeddedIn: repeated,
