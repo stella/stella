@@ -108,7 +108,9 @@ test("blocked status and redirects latch before failing body cleanup", async () 
         calls++;
         return new Response(
           new ReadableStream({
-            cancel: () => Promise.reject(new TypeError("Cleanup failed")),
+            cancel: async () => {
+              throw new TypeError("Cleanup failed");
+            },
           }),
           { status, headers: { location: "/cdn-cgi/challenge" } },
         );

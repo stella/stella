@@ -1315,11 +1315,12 @@ if (!databaseUrl || !enabled) {
               `UPDATE ${table} SET id = id`,
               `DELETE FROM ${table}`,
             ]) {
-              const denied = await Result.tryPromise(() =>
-                db.transaction(async (tx) => {
-                  await tx.execute(sql.raw(`SET LOCAL ROLE "${role}"`));
-                  await tx.execute(sql.raw(statement));
-                }),
+              const denied = await Result.tryPromise(
+                async () =>
+                  await db.transaction(async (tx) => {
+                    await tx.execute(sql.raw(`SET LOCAL ROLE "${role}"`));
+                    await tx.execute(sql.raw(statement));
+                  }),
               );
               expect(Result.isError(denied)).toBe(true);
               if (Result.isError(denied)) {
@@ -1345,13 +1346,14 @@ if (!databaseUrl || !enabled) {
           `UPDATE soft_law_sources SET descriptor = '{}'::jsonb WHERE id = '${sourceId}'`,
           "DELETE FROM soft_law_documents",
         ]) {
-          const denied = await Result.tryPromise(() =>
-            db.transaction(async (tx) => {
-              await tx.execute(
-                sql.raw(`SET LOCAL ROLE "${stellaIngestion.name}"`),
-              );
-              await tx.execute(sql.raw(statement));
-            }),
+          const denied = await Result.tryPromise(
+            async () =>
+              await db.transaction(async (tx) => {
+                await tx.execute(
+                  sql.raw(`SET LOCAL ROLE "${stellaIngestion.name}"`),
+                );
+                await tx.execute(sql.raw(statement));
+              }),
           );
           expect(Result.isError(denied)).toBe(true);
           if (Result.isError(denied)) {
@@ -1362,10 +1364,11 @@ if (!databaseUrl || !enabled) {
           sql`SELECT column_name FROM information_schema.columns WHERE table_name = 'soft_law_documents' AND column_name = 'superseded_by'`,
         );
         expect(supersessionColumn).toHaveLength(0);
-        const unknownFailure = await Result.tryPromise(() =>
-          db.execute(
-            sql`UPDATE soft_law_sources SET failure_tag = 'unknown_failure' WHERE id = ${sourceId}`,
-          ),
+        const unknownFailure = await Result.tryPromise(
+          async () =>
+            await db.execute(
+              sql`UPDATE soft_law_sources SET failure_tag = 'unknown_failure' WHERE id = ${sourceId}`,
+            ),
         );
         expect(Result.isError(unknownFailure)).toBe(true);
       }));

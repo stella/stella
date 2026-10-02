@@ -208,8 +208,16 @@ const fetchSoftLawPage = async ({
       return renewed;
     }
     const maxRawBytes = PAGE_RAW_BYTE_LIMIT - retainedRawBytes;
-    const attempted = await Result.tryPromise(() =>
-      fetchSoftLawItem({ entry, adapter, signal, fetch, count, maxRawBytes }),
+    const attempted = await Result.tryPromise(
+      async () =>
+        await fetchSoftLawItem({
+          entry,
+          adapter,
+          signal,
+          fetch,
+          count,
+          maxRawBytes,
+        }),
     );
     const result =
       attempted.status === "error"
