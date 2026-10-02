@@ -88,7 +88,9 @@ const fixture = () => {
       options: EuCompletionRowOptions,
     ): Promise<Result<EuCompletionRowOutcome, unknown>> => {
       const checked = await options.check();
-      if (checked.isErr()) {return checked;}
+      if (checked.isErr()) {
+        return checked;
+      }
       events.push(`run:${row.id}`);
       requests++;
       return Result.ok({ type: "dry-run" });
@@ -204,7 +206,9 @@ describe("bounded EU completion orchestration", () => {
     state.dependencies.runRow = async (_row, options) => {
       state.disable();
       const checked = await options.check();
-      if (checked.isErr()) {return checked;}
+      if (checked.isErr()) {
+        return checked;
+      }
       state.events.push("unexpected-effect");
       return Result.ok({ type: "applied" });
     };
@@ -223,14 +227,13 @@ describe("bounded EU completion orchestration", () => {
   });
   test("hard cancellation during work is durably refunded", async () => {
     const state = fixture();
-    state.dependencies.runRow = async () => 
+    state.dependencies.runRow = async () =>
       Result.err(
         new EuCompletionStop({
           message: "fixture deadline",
           reason: "cancelled",
         }),
-      )
-    ;
+      );
     expect((await state.run()).status).toBe("cancelled");
     expect(state.events).toEqual(["reserve", "pickup:first", "refund:first"]);
   });

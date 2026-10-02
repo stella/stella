@@ -115,7 +115,9 @@ describe("completion request boundary", () => {
         catch: (error) => error,
       });
       expect(result.isErr()).toBe(true);
-      if (result.isErr()) {expect(result.error).toBe(failure);}
+      if (result.isErr()) {
+        expect(result.error).toBe(failure);
+      }
       expect(requests).toBe(0);
       expect(state.charges()).toBe(0);
     },
@@ -224,8 +226,9 @@ describe("completion request boundary", () => {
       catch: (error) => error,
     });
     expect(result.isErr()).toBe(true);
-    if (result.isErr())
-      {expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);}
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);
+    }
     expect(visited).toEqual([target]);
     expect(state.charges()).toBe(1);
     expect(state.refused()).toBeGreaterThanOrEqual(60_000);

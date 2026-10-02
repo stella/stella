@@ -234,14 +234,17 @@ export const runEuCompletionTick = async ({
       try: dependencies.fence,
       catch: (error) => error,
     });
-    if (fenced.isErr()) {return fenced;}
-    if (signal.aborted)
-      {return Result.err(
+    if (fenced.isErr()) {
+      return fenced;
+    }
+    if (signal.aborted) {
+      return Result.err(
         new EuCompletionStop({
           message: "Completion cancelled",
           reason: "cancelled",
         }),
-      );}
+      );
+    }
     return Result.ok();
   };
   const check = async () =>
