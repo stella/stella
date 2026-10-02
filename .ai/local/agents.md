@@ -71,8 +71,10 @@ Database deployments use committed migrations via
 
 CI autofix formats changed files outside `.github/workflows/`, applies safe
 lint fixes, and regenerates selected outputs on same-repository pull requests.
-Local formatting and generator runs are optional, except that workflow files
-must be formatted locally.
+There, local formatting and generator runs are optional, except that workflow
+files must be formatted locally. Fork pull requests get no autofix: run
+`bun run autofix` (the same generators, lint fixes and formatting, against the
+canonical repository's main) before pushing.
 
 `bun run verify` runs the local package checks from `ci-checks` in
 `.github/workflows/ci.yml`; use it before pushing code changes instead of
@@ -113,11 +115,11 @@ nothing and exits non-zero (`NOT JUMPED`). After enqueueing, one fresh queue
 read determines the result: exit 0 verifies the pull request is first. When
 the queue lists the pull request, that entry takes precedence over the enqueue
 response. A recorded jump at position greater than 1 exits 2 with `JUMP PENDING`,
-the position and state, and the one-shot follow-up command
-`pw sub pr <repo>#<n> --on merged,closed,checks-failed`.
+the position and state, and a follow-up: wait once for the pull request to
+merge, close or fail checks, and do not jump again.
 If the queue does not list a newly enqueued pull request yet, a recorded jump
-in the enqueue response also exits 2 with the same follow-up command and says
-the queue read did not list it yet. If first place is not verified, exit 1
+in the enqueue response also exits 2 with the same follow-up and says the
+queue read did not list it yet. If first place is not verified, exit 1
 reports `JUMP DROPPED` when the jump flag is false or missing, the queue entry
 conflicts, or the pull request is absent and there is no enqueue response
 (for an already queued pull request).
