@@ -1,14 +1,19 @@
 import { afterEach, describe, expect, it, mock, test } from "bun:test";
 
+import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   createPublisherSlot,
   publisherRequestIntervalMs,
   publisherRequestsPerDay,
   PUBLISHER_GATES,
+  withPublisherRequestRateLimit,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { connectedGateClient } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchPublisher,
+  fetchWithRetry,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -201,6 +206,114 @@ describe("a publisher's rate-limit refusal", () => {
 
     expect(response.status).toBe(503);
     expect(requests).toBe(3);
+  });
+});
+
+describe("a run-scoped publisher rate limit", () => {
+  const originalFetch = globalThis.fetch;
+  const originalSleep = Bun.sleep;
+
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+    Bun.sleep = originalSleep;
+  });
+
+  test("counts listing, notice, HTML, and every Formex retry in the run window", async () => {
+    let now = 0;
+    let nextSlot = 0;
+    let formexAttempts = 0;
+    const requests: { url: string; time: number }[] = [];
+    const reservations: string[][] = [];
+    globalThis.fetch = asFetchMock(
+      mock(async (input) => {
+        const url = String(input);
+        requests.push({ url, time: now });
+        if (url.endsWith("/formex") && formexAttempts++ === 0) {
+          return new Response("", { status: 503 });
+        }
+        return new Response("", { status: 200 });
+      }),
+    );
+    Bun.sleep = async () => {};
+
+    const response = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 2,
+      dependencies: {
+        redis: () => ({
+          send: (_command, args) => {
+            reservations.push(args);
+            const slot = Math.max(now, nextSlot);
+            nextSlot = slot + Number(args.at(-1));
+            return slot - now;
+          },
+        }),
+        sleep: async (durationMs) => {
+          now += durationMs;
+        },
+      },
+      operation: async () => {
+        const publisher = "https://publications.europa.eu";
+        const listing = await fetchPublisher(`${publisher}/listing`, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        const notice = await fetchPublisher(`${publisher}/notice`, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        const html = await fetchPublisher(`${publisher}/html`, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        const formex = await fetchWithRetry(`${publisher}/formex`, undefined, {
+          adapterKey: ADAPTER_KEYS.EU_ECJ,
+          maxRetries: 1,
+          baseDelayMs: 0,
+          maxDelayMs: 0,
+        });
+        return { listing, notice, html, formex };
+      },
+    });
+
+    expect(Object.values(response).map((result) => result.status)).toEqual([
+      200, 200, 200, 200,
+    ]);
+    expect(reservations).toHaveLength(5);
+    expect(reservations.map((args) => args.at(-1))).toEqual([
+      "500",
+      "500",
+      "500",
+      "500",
+      "500",
+    ]);
+    expect(requests.map(({ url }) => new URL(url).pathname)).toEqual([
+      "/listing",
+      "/notice",
+      "/html",
+      "/formex",
+      "/formex",
+    ]);
+    expect(requests.map(({ time }) => time)).toEqual([
+      0, 500, 1000, 1500, 2000,
+    ]);
+    for (const { time } of requests) {
+      expect(
+        requests.filter(
+          (request) => request.time >= time && request.time < time + 1000,
+        ).length,
+      ).toBeLessThanOrEqual(2);
+    }
+  });
+
+  test("rejects rates above the gate's two requests per second", async () => {
+    await expect(
+      withPublisherRequestRateLimit({
+        gateId: "cellar-eu",
+        requestsPerSecond: 2.01,
+        operation: async () => "unreachable",
+      }),
+    ).rejects.toThrow("at most 2");
   });
 });
 

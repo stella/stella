@@ -7,6 +7,12 @@
   },
   {
     "kind": "source-import",
+    "source": "apps/legal-atlas-runner/src/index.ts",
+    "specifier": "@/api/scripts/eu-ecj-refetch",
+    "target": "apps/api"
+  },
+  {
+    "kind": "source-import",
     "source": "apps/legal-atlas-runner/src/db.ts",
     "specifier": "@/api/db/root",
     "target": "apps/api"

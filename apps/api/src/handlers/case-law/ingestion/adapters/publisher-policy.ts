@@ -16,6 +16,9 @@
  * requests rather than a total.
  */
 
+import { TaggedError } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
+
 import { DAY_IN_MS } from "@stll/time";
 
 import {
@@ -230,6 +233,63 @@ export const PUBLISHER_GATES = {
 
 export type PublisherGateId = keyof typeof PUBLISHER_GATES;
 
+const MILLISECONDS_PER_SECOND = 1000;
+const MAX_PUBLISHER_REQUESTS_PER_SECOND = 2;
+
+class InvalidPublisherRequestRateError extends TaggedError(
+  "InvalidPublisherRequestRateError",
+)<{ message: string }> {}
+
+type RunPublisherLimit = {
+  gateId: PublisherGateId;
+  reserve: (signal?: AbortSignal) => Promise<void>;
+};
+
+const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
+
+/**
+ * Apply a publisher request rate to one async run. Every `fetchPublisher`
+ * attempt reserves through this slot, including attempts made by retries.
+ * The rate may only slow the publisher's declared/default gate, up to 2 req/s.
+ */
+type WithPublisherRequestRateLimitOptions<T> = {
+  gateId: "cellar-eu";
+  requestsPerSecond: number;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+export const withPublisherRequestRateLimit = async <T>({
+  gateId,
+  requestsPerSecond,
+  operation,
+  dependencies,
+}: WithPublisherRequestRateLimitOptions<T>): Promise<T> => {
+  if (
+    !Number.isFinite(requestsPerSecond) ||
+    requestsPerSecond <= 0 ||
+    requestsPerSecond > MAX_PUBLISHER_REQUESTS_PER_SECOND
+  ) {
+    throw new InvalidPublisherRequestRateError({
+      message: `requestsPerSecond must be greater than 0 and at most ${MAX_PUBLISHER_REQUESTS_PER_SECOND}`,
+    });
+  }
+
+  const { intervalMs, publisher } = PUBLISHER_GATES[gateId];
+  const requestedIntervalMs = Math.ceil(
+    MILLISECONDS_PER_SECOND / requestsPerSecond,
+  );
+  const reserve = createPublisherRequestSlot(
+    {
+      intervalMs: Math.max(intervalMs, requestedIntervalMs),
+      key: `case-law:publisher-gate:${gateId}`,
+      publisher,
+    },
+    dependencies,
+  );
+  return await runPublisherLimit.run({ gateId, reserve }, operation);
+};
+
 /**
  * Which publisher each adapter spends against.
  *
@@ -336,6 +396,11 @@ export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
   signal?: AbortSignal,
 ): Promise<void> => {
+  const runLimit = runPublisherLimit.getStore();
+  if (runLimit?.gateId === gateId) {
+    await runLimit.reserve(signal);
+    return;
+  }
   if (!publisherGateReserves()) {
     return;
   }

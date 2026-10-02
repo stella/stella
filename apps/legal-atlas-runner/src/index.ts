@@ -22,10 +22,29 @@ const writeOut = async (text: string): Promise<number> =>
 const writeErr = async (text: string): Promise<number> =>
   await Bun.write(Bun.stderr, `${text}\n`);
 
-const runImplementedRunner = async (
-  runnerName: string,
-  argv: readonly string[],
-): Promise<number> => {
+type RunCliOptions = {
+  refetch?: (argv: readonly string[]) => Promise<number>;
+};
+
+const refetchEuDecisions = async (argv: readonly string[]): Promise<number> => {
+  const { runEuEcjRefetch } = await import("@/api/scripts/eu-ecj-refetch");
+  return await runEuEcjRefetch(argv);
+};
+
+type ImplementedRunnerOptions = {
+  runnerName: string;
+  argv: readonly string[];
+  refetch: (argv: readonly string[]) => Promise<number>;
+};
+const runImplementedRunner = async ({
+  runnerName,
+  argv,
+  refetch,
+}: ImplementedRunnerOptions): Promise<number> => {
+  if (runnerName === "eu-ecj-refetch") {
+    return await refetch(argv);
+  }
+
   if (runnerName === "case-law-ingest") {
     const { runCaseLawIngest } = await import("./runners/case-law-ingest.js");
     return await runCaseLawIngest(argv);
@@ -47,7 +66,10 @@ const runImplementedRunner = async (
   return 70;
 };
 
-export const runCli = async (argv: readonly string[]): Promise<number> => {
+export const runCli = async (
+  argv: readonly string[],
+  { refetch = refetchEuDecisions }: RunCliOptions = {},
+): Promise<number> => {
   const command = argv.at(0) ?? "--help";
 
   if (command === "--help" || command === "-h") {
@@ -100,7 +122,11 @@ export const runCli = async (argv: readonly string[]): Promise<number> => {
     return 78;
   }
 
-  return await runImplementedRunner(runner.name, argv.slice(2));
+  return await runImplementedRunner({
+    runnerName: runner.name,
+    argv: argv.slice(2),
+    refetch,
+  });
 };
 
 if (import.meta.main) {
