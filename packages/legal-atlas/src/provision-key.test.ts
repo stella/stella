@@ -281,7 +281,7 @@ describe("provision identity construction", () => {
     expect(parseProvisionKey(raw)).toBeNull();
   });
 
-  test("reference scope changes leave the branded key unchanged", () => {
+  test("minted references preserve scope while their branded keys stay unchanged", () => {
     const ref = grammar.parseReference("§ 5 odst. 2");
     expect(ref).not.toBeNull();
     if (ref === null) {
@@ -292,19 +292,30 @@ describe("provision identity construction", () => {
       workIdentifier: "89/2012 Sb.",
       reference: ref,
     });
-    const scoped = provisionRefOf({
-      jurisdiction: "CZE",
-      workIdentifier: "89/2012 Sb.",
-      reference: { ...ref, sentence: "3", openEnded: true },
-    });
     expect(original.status).toBe("resolved");
-    expect(scoped.status).toBe("resolved");
-    if (original.status !== "resolved" || scoped.status !== "resolved") {
+    if (original.status !== "resolved") {
       return;
     }
-    expect(formatProvisionKey(original.provision)).toBe(
-      formatProvisionKey(scoped.provision),
-    );
+    for (const scope of [
+      { sentence: "3", openEnded: false },
+      { sentence: null, openEnded: true },
+      { sentence: "3", openEnded: true },
+    ]) {
+      const scopedReference = { ...ref, ...scope };
+      const scoped = provisionRefOf({
+        jurisdiction: "CZE",
+        workIdentifier: "89/2012 Sb.",
+        reference: scopedReference,
+      });
+      expect(scoped.status).toBe("resolved");
+      if (scoped.status !== "resolved") {
+        continue;
+      }
+      expect(scoped.provision.reference).toEqual(scopedReference);
+      expect(formatProvisionKey(original.provision)).toBe(
+        formatProvisionKey(scoped.provision),
+      );
+    }
   });
 
   test("construction rejects invalid reference paths before minting a brand", () => {

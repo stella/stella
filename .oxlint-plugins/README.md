@@ -301,3 +301,5 @@ implies a hazard that is gone.
 - [`require-running-entry-guard`](./require-running-entry-guard.ts) (`require-running-entry-guard`): requires an awaited running-entry guard and an early refusal in the same transaction before updating or deleting time entries; timer consumption and local fixture reset are scoped exceptions.
 
 - [no-parser-validator-calls](./no-parser-validator-calls.ts): `no-parser-validator-calls` confines text-retention validation to the ingestion pipeline, with a shrinking legacy import/call ledger.
+
+- [`no-provision-brand-outside-owner`](./no-provision-brand-outside-owner.ts) (`no-provision-brand-outside-owner`): confines Valibot `ProvisionKey` and `ProvisionRef` brand minting to `packages/legal-atlas`, including imported aliases.
