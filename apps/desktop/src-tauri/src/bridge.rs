@@ -128,21 +128,18 @@ async fn connection_status(
 ) -> impl IntoResponse {
   let origin = get_origin(&headers);
   let allowed = is_allowed_origin(&state, origin.as_deref()).await;
-  let status = match crate::account::signed_browser_connection_status(
+  let Ok(status) = crate::account::signed_browser_connection_status(
     &state.account,
     &query.correlation_id,
   )
   .await
-  {
-    Ok(status) => status,
-    Err(_) => {
-      return json_response(
-        StatusCode::UNAUTHORIZED,
-        serde_json::json!({"message":"Desktop connection is unavailable"}),
-        origin.as_deref(),
-        allowed,
-      );
-    }
+  else {
+    return json_response(
+      StatusCode::UNAUTHORIZED,
+      serde_json::json!({"message":"Desktop connection is unavailable"}),
+      origin.as_deref(),
+      allowed,
+    );
   };
   json_response(
     StatusCode::OK,

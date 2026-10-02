@@ -695,18 +695,17 @@ pub async fn complete_browser_connection(
       .claim(correlation_id, std::time::Instant::now())?
   };
   let result = redeem_browser_connection(app, pending, expected_identity.clone()).await;
-  if let Ok(mut pending) = BROWSER_CONNECTION.lock() {
-    if let Some(connection) = pending.as_mut()
-      && connection.correlation_id == correlation_id
-    {
-      connection.redemption = if result.is_ok() {
-        LinkRedemption::Connected {
-          identity: expected_identity,
-        }
-      } else {
-        LinkRedemption::Failed
-      };
-    }
+  if let Ok(mut pending) = BROWSER_CONNECTION.lock()
+    && let Some(connection) = pending.as_mut()
+    && connection.correlation_id == correlation_id
+  {
+    connection.redemption = if result.is_ok() {
+      LinkRedemption::Connected {
+        identity: expected_identity,
+      }
+    } else {
+      LinkRedemption::Failed
+    };
   }
   result
 }
@@ -725,15 +724,14 @@ async fn redeem_browser_connection(
   } = pending;
   let state = app.state::<AccountState>();
   let saved = current(&state).await?;
-  if let Some(saved) = &saved {
-    if saved.api_base_url != api_base_url
+  if let Some(saved) = &saved
+    && (saved.api_base_url != api_base_url
       || saved.identity.user_id != expected_identity.user_id
-      || saved.identity.organization_id != expected_identity.organization_id
-    {
-      return Err(
-        "Disconnect the current desktop account before connecting another".into(),
-      );
-    }
+      || saved.identity.organization_id != expected_identity.organization_id)
+  {
+    return Err(
+      "Disconnect the current desktop account before connecting another".into(),
+    );
   }
   let client =
     crate::http_client::DesktopHttpClient::new(crate::http_client::HttpClientOptions {
@@ -1110,6 +1108,26 @@ mod tests {
       LinkOutcome::Linked
     );
     assert!(matches!(expired, AccountStore::Memory(None)));
+  }
+
+  #[tokio::test]
+  async fn an_expired_credential_that_cannot_be_removed_blocks_the_link() {
+    let mut store = AccountStore::ReadOnly(Some(fixture("stella_dr_expired", -60)));
+    assert_eq!(
+      prepare_replacement(&mut store, &pending("stella_dr_new"))
+        .await
+        .unwrap_err(),
+      "Could not remove desktop account"
+    );
+
+    let state = Arc::new(Mutex::new(AccountStore::ReadOnly(Some(fixture(
+      "stella_dr_expired",
+      -60,
+    )))));
+    let Err(error) = current(&state).await else {
+      panic!("a credential that cannot be removed must not read as signed out");
+    };
+    assert_eq!(error, "Could not remove desktop account");
   }
 
   #[tokio::test]

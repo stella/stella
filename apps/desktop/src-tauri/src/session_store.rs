@@ -111,13 +111,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
 
 pub async fn persist_session_store(
   store_path: &Path,
-  cleanup_paths: &[String],
-  linked_account: &Option<LinkedAccountSnapshot>,
-  linked_account_web_origin: &Option<String>,
-  selected_self_host_connection: &Option<TrustedSelfHostConnection>,
-  notification_preferences: &DesktopNotificationPreferences,
-  sessions: &[PersistedDesktopSession],
-  trusted_self_host_connections: &[TrustedSelfHostConnection],
+  payload: &SessionStorePayload,
 ) -> Result<(), String> {
   if let Some(parent) = store_path.parent() {
     fs::create_dir_all(parent)
@@ -125,17 +119,7 @@ pub async fn persist_session_store(
       .map_err(|e| format!("mkdir failed: {e}"))?;
   }
 
-  let payload = SessionStorePayload {
-    cleanup_paths: cleanup_paths.to_vec(),
-    linked_account: linked_account.clone(),
-    linked_account_web_origin: linked_account_web_origin.clone(),
-    selected_self_host_connection: selected_self_host_connection.clone(),
-    notification_preferences: Some(notification_preferences.clone()),
-    sessions: sessions.to_vec(),
-    trusted_self_host_connections: trusted_self_host_connections.to_vec(),
-  };
-
-  let json = serde_json::to_string_pretty(&payload)
+  let json = serde_json::to_string_pretty(payload)
     .map_err(|e| format!("serialize failed: {e}"))?;
 
   let temp_path = format!(
@@ -310,17 +294,19 @@ mod tests {
 
     persist_session_store(
       &path,
-      &["/tmp/cleanup.docx".into()],
-      &linked,
-      &Some("https://selfhost.example".into()),
-      &None,
-      &prefs,
-      &[session],
-      &[TrustedSelfHostConnection {
-        api_base_url: "https://api.selfhost.example".into(),
-        trusted_at: "2026-04-25T00:00:00Z".into(),
-        web_origin: "https://selfhost.example".into(),
-      }],
+      &SessionStorePayload {
+        cleanup_paths: vec!["/tmp/cleanup.docx".into()],
+        linked_account: linked,
+        linked_account_web_origin: Some("https://selfhost.example".into()),
+        selected_self_host_connection: None,
+        notification_preferences: Some(prefs),
+        sessions: vec![session],
+        trusted_self_host_connections: vec![TrustedSelfHostConnection {
+          api_base_url: "https://api.selfhost.example".into(),
+          trusted_at: "2026-04-25T00:00:00Z".into(),
+          web_origin: "https://selfhost.example".into(),
+        }],
+      },
     )
     .await
     .unwrap();

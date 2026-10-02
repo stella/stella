@@ -197,11 +197,6 @@ pub struct SessionManager {
   app_handle: Option<AppHandle>,
 }
 
-pub(crate) enum LinkedAccountOriginUpdate {
-  Preserve,
-  Replace(Option<String>),
-}
-
 fn session_key(workspace_id: &str, entity_id: &str, property_id: &str) -> String {
   format!("{workspace_id}:{entity_id}:{property_id}")
 }
@@ -740,7 +735,6 @@ impl SessionManager {
     &mut self,
     request: OpenFileRequest,
     prefetched_buffer: Option<Vec<u8>>,
-    linked_account_origin_update: LinkedAccountOriginUpdate,
   ) -> Result<OpenFileResponse, String> {
     let key = session_key(
       &request.workspace_id,
@@ -748,10 +742,7 @@ impl SessionManager {
       &request.property_id,
     );
     self
-      .sync_linked_account(
-        request.linked_account.as_ref(),
-        linked_account_origin_update,
-      )
+      .sync_linked_account(request.linked_account.as_ref())
       .await?;
 
     let remote = &request.remote_session;
@@ -1041,26 +1032,24 @@ impl SessionManager {
   async fn sync_linked_account(
     &mut self,
     linked_account: Option<&LinkedAccountSnapshot>,
-    origin_update: LinkedAccountOriginUpdate,
   ) -> Result<(), String> {
     let Some(linked_account) = linked_account else {
       return Ok(());
-    };
-    let next_web_origin = match origin_update {
-      LinkedAccountOriginUpdate::Preserve => self.linked_account_web_origin.clone(),
-      LinkedAccountOriginUpdate::Replace(web_origin) => web_origin,
     };
     let changed = self.linked_account.as_ref().is_none_or(|current| {
       current.email != linked_account.email
         || current.name != linked_account.name
         || current.verified_at != linked_account.verified_at
-    }) || self.linked_account_web_origin != next_web_origin;
+    });
     if !changed {
       return Ok(());
     }
 
     self
-      .link_account(linked_account.clone(), next_web_origin)
+      .link_account(
+        linked_account.clone(),
+        self.linked_account_web_origin.clone(),
+      )
       .await
   }
 
@@ -2121,13 +2110,15 @@ impl SessionManager {
 
     session_store::persist_session_store(
       &self.store_path,
-      &cleanup,
-      &self.linked_account,
-      &self.linked_account_web_origin,
-      &self.selected_self_host_connection,
-      &self.notification_preferences,
-      &persisted,
-      &self.trusted_self_host_connections,
+      &session_store::SessionStorePayload {
+        cleanup_paths: cleanup,
+        linked_account: self.linked_account.clone(),
+        linked_account_web_origin: self.linked_account_web_origin.clone(),
+        selected_self_host_connection: self.selected_self_host_connection.clone(),
+        notification_preferences: Some(self.notification_preferences.clone()),
+        sessions: persisted,
+        trusted_self_host_connections: self.trusted_self_host_connections.clone(),
+      },
     )
     .await
   }
@@ -2878,7 +2869,7 @@ mod tests {
   }
 
   #[tokio::test]
-  async fn document_relink_replaces_or_preserves_the_account_origin_explicitly() {
+  async fn document_relink_preserves_the_account_origin() {
     let path = std::env::temp_dir().join(format!(
       "stella-desktop-account-origin-{}.json",
       uuid::Uuid::new_v4()
@@ -2888,10 +2879,6 @@ mod tests {
     manager.trust_self_host_connection_for_test(
       "https://first.example".to_string(),
       "https://api.first.example".to_string(),
-    );
-    manager.trust_self_host_connection_for_test(
-      "https://second.example".to_string(),
-      "https://api.second.example".to_string(),
     );
     let account = LinkedAccountSnapshot {
       email: "user@example.com".to_string(),
@@ -2903,32 +2890,12 @@ mod tests {
       .await
       .unwrap();
 
-    manager
-      .sync_linked_account(
-        Some(&account),
-        LinkedAccountOriginUpdate::Replace(Some("https://second.example".to_string())),
-      )
-      .await
-      .unwrap();
-    assert_eq!(
-      manager.linked_self_host_origin(),
-      Some("https://second.example")
-    );
-
-    manager
-      .sync_linked_account(Some(&account), LinkedAccountOriginUpdate::Replace(None))
-      .await
-      .unwrap();
-    assert!(manager.linked_self_host_origin().is_none());
-
-    manager
-      .link_account(account.clone(), Some("https://first.example".to_string()))
-      .await
-      .unwrap();
-    manager
-      .sync_linked_account(Some(&account), LinkedAccountOriginUpdate::Preserve)
-      .await
-      .unwrap();
+    // A relink with changed profile details keeps the stored origin.
+    let renamed = LinkedAccountSnapshot {
+      name: Some("Renamed User".to_string()),
+      ..account
+    };
+    manager.sync_linked_account(Some(&renamed)).await.unwrap();
     assert_eq!(
       manager.linked_self_host_origin(),
       Some("https://first.example")
