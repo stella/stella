@@ -90,11 +90,14 @@ if (!databaseUrl || !runPostgresTests) {
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const { db } = openClient();
         const prefix = `pause.${Bun.randomUUIDv7()}.`;
-        const definitions = DECLARED_SCHEDULER_JOBS.map((definition) => ({
-          ...definition,
-          enabled: "enabled" in definition ? definition.enabled : true,
-          id: `${prefix}${definition.id}`,
-        }));
+        const definitions = [];
+        for (const definition of DECLARED_SCHEDULER_JOBS) {
+          definitions.push({
+            ...definition,
+            enabled: "enabled" in definition ? definition.enabled : true,
+            id: `${prefix}${definition.id}`,
+          });
+        }
         const ids = definitions.map(({ id }) => id);
         expect(ids.length).toBeGreaterThan(0);
         try {
@@ -208,16 +211,14 @@ if (!databaseUrl || !runPostgresTests) {
           invoked.push(job.id);
         };
         const registry = new Map([[taskName, task]]);
-        const job = await acquireNextDueJob({
-          db,
-          leaseMs: LEASE_MS,
-          now: () => CLOCK_MS,
-          registry,
-          runnerId: jobId,
-        });
-        if (!job) {
-          return panic("Enabled job must permit acquisition");
-        }
+        const job =
+          (await acquireNextDueJob({
+            db,
+            leaseMs: LEASE_MS,
+            now: () => CLOCK_MS,
+            registry,
+            runnerId: jobId,
+          })) ?? panic("Enabled job must permit acquisition");
         await db
           .update(schedulerJobs)
           .set({ enabled: false })
@@ -303,16 +304,14 @@ if (!databaseUrl || !runPostgresTests) {
           completed.push(job.id);
         };
         const registry = new Map([[taskName, task]]);
-        const job = await acquireNextDueJob({
-          db,
-          leaseMs: LEASE_MS,
-          now: () => CLOCK_MS,
-          registry,
-          runnerId: jobId,
-        });
-        if (!job) {
-          return panic("Expired pause must permit acquisition");
-        }
+        const job =
+          (await acquireNextDueJob({
+            db,
+            leaseMs: LEASE_MS,
+            now: () => CLOCK_MS,
+            registry,
+            runnerId: jobId,
+          })) ?? panic("Expired pause must permit acquisition");
         expect(job).toMatchObject({
           id: jobId,
           pausedUntil: null,
@@ -406,16 +405,14 @@ if (!databaseUrl || !runPostgresTests) {
             invoked.push(job.id);
           };
           const registry = new Map([[taskName, task]]);
-          const job = await acquireNextDueJob({
-            db,
-            leaseMs: LEASE_MS,
-            now: () => CLOCK_MS,
-            registry,
-            runnerId: jobId,
-          });
-          if (!job) {
-            return panic("Unpaused job must permit acquisition");
-          }
+          const job =
+            (await acquireNextDueJob({
+              db,
+              leaseMs: LEASE_MS,
+              now: () => CLOCK_MS,
+              registry,
+              runnerId: jobId,
+            })) ?? panic("Unpaused job must permit acquisition");
           expect(job.pausedUntil).toBeNull();
           await db
             .update(schedulerJobs)
@@ -489,16 +486,14 @@ if (!databaseUrl || !runPostgresTests) {
           completed.push(jobId);
         };
         const registry = new Map([[taskName, task]]);
-        const job = await acquireNextDueJob({
-          db,
-          leaseMs: LEASE_MS,
-          now: () => CLOCK_MS,
-          registry,
-          runnerId: jobId,
-        });
-        if (!job) {
-          return panic("Unpaused job must permit acquisition");
-        }
+        const job =
+          (await acquireNextDueJob({
+            db,
+            leaseMs: LEASE_MS,
+            now: () => CLOCK_MS,
+            registry,
+            runnerId: jobId,
+          })) ?? panic("Unpaused job must permit acquisition");
         const logs = installRecordingLogger();
         try {
           expect(
@@ -574,16 +569,14 @@ if (!databaseUrl || !runPostgresTests) {
           checkpoints.push("aborted");
         };
         const registry = new Map([[taskName, task]]);
-        const job = await acquireNextDueJob({
-          db,
-          leaseMs: LEASE_MS,
-          now: () => CLOCK_MS,
-          registry,
-          runnerId: jobId,
-        });
-        if (!job) {
-          return panic("Unpaused job must permit acquisition");
-        }
+        const job =
+          (await acquireNextDueJob({
+            db,
+            leaseMs: LEASE_MS,
+            now: () => CLOCK_MS,
+            registry,
+            runnerId: jobId,
+          })) ?? panic("Unpaused job must permit acquisition");
         const logs = installRecordingLogger();
         try {
           expect(
