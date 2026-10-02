@@ -207,3 +207,31 @@ export {
   readShadowedClient,
   writeWithClient,
 };
+
+// Content identity must use a digest; validators and their aliases are opaque.
+declare const sourceMetadata: { ETag: string; ContentMD5: string };
+declare const copyMetadata: { ETag: string };
+declare const responseHeaders: Headers;
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- opaque object validators
+void (sourceMetadata.ETag === copyMetadata.ETag);
+const originalValidator = sourceMetadata.ETag;
+const aliasedValidator = originalValidator;
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- alias keeps validator provenance
+void (aliasedValidator !== copyMetadata.ETag);
+const { ETag: renamedValidator } = sourceMetadata;
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- renamed destructuring keeps provenance
+void (renamedValidator === "known");
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- normalized validator is still opaque
+void (sourceMetadata.ETag.replaceAll('"', "") === "known");
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- header validator is still opaque
+void (responseHeaders.get("etag") === "known");
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- MD5 headers are not opaque ETag digests
+void (sourceMetadata.ContentMD5 === "known");
+// expect-clean: s3-object-boundary/no-etag-content-identity
+void (sourceMetadata.ETag === null);
+// expect-clean: s3-object-boundary/no-etag-content-identity
+void (sourceMetadata.ETag !== undefined);
+declare const sourceSha256: string;
+declare const copySha256: string;
+// expect-clean: s3-object-boundary/no-etag-content-identity
+void (sourceSha256 === copySha256);

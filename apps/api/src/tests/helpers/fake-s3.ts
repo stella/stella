@@ -112,6 +112,12 @@ const escapeXml = (value: string): string =>
     .replaceAll(">", "&gt;")
     .replaceAll('"', "&quot;");
 
+const requestedSha256 = (headers: Headers, bytes: Uint8Array): string | null =>
+  (headers.get("x-amz-sdk-checksum-algorithm") ??
+    headers.get("x-amz-checksum-algorithm")) === "SHA256"
+    ? new Bun.CryptoHasher("sha256").update(bytes).digest("base64")
+    : null;
+
 const errorResponse = (code: string, status: number, key: string): Response =>
   new Response(
     `${XML_HEADER}<Error><Code>${code}</Code><Message>${code}</Message><Key>${escapeXml(key)}</Key></Error>`,
@@ -260,8 +266,19 @@ export type FakeS3Options = {
 export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
   const objects = new Map<string, FakeS3Object>();
   const versions = new Map<string, number>();
+  const etags = new Map<string, string>();
+  const checksums = new Map<string, string>();
+  let validatorSequence = 0;
+  const newValidator = (id: string): string => {
+    validatorSequence += 1;
+    const etag = `"${validatorSequence.toString(16).padStart(32, "0")}"`;
+    etags.set(id, etag);
+    checksums.delete(id);
+    return etag;
+  };
   const modifiedAt = new Map<string, Date>();
   const addVersion = (id: string): void => {
+    newValidator(id);
     versions.set(id, (versions.get(id) ?? 0) + 1);
     modifiedAt.set(id, new Date());
   };
@@ -308,10 +325,15 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     // A server-side copy is a PUT carrying `x-amz-copy-source`; the SDK's
     // CopyObjectCommand never sends a body, so it must not be stored as one.
     const copySource = request.headers.get("x-amz-copy-source");
-    const copySourceKey =
+    const decodedCopySource =
       copySource === null
         ? null
-        : decodeURIComponent(copySource.replace(/^\/?[^/]+\//u, ""));
+        : decodeURIComponent(copySource).replace(/^\//u, "");
+    const copySourceSeparator = decodedCopySource?.indexOf("/") ?? -1;
+    const copySourceBucket =
+      decodedCopySource?.slice(0, copySourceSeparator) ?? null;
+    const copySourceKey =
+      decodedCopySource?.slice(copySourceSeparator + 1) ?? null;
     const method = ((): FakeS3Method => {
       if (isList) {
         return "LIST";
@@ -383,15 +405,26 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
 
     const id = objectId(bucket, key);
     if (method === "COPY" && copySourceKey !== null) {
-      const source = objects.get(objectId(bucket, copySourceKey));
+      const sourceId = objectId(copySourceBucket ?? bucket, copySourceKey);
+      const source = objects.get(sourceId);
       if (source === undefined) {
         return errorResponse("NoSuchKey", 404, copySourceKey);
+      }
+      const sourceIfMatch = request.headers.get("x-amz-copy-source-if-match");
+      if (sourceIfMatch !== null && sourceIfMatch !== etags.get(sourceId)) {
+        return errorResponse("PreconditionFailed", 412, copySourceKey);
       }
       // Snapshot, as S3 does: the copy must not alias the source's bytes.
       objects.set(id, { ...source, bytes: source.bytes.slice() });
       addVersion(id);
+      // Encryption-aware copies receive independent validators. A checksum
+      // is available only when the caller explicitly requests one.
+      const checksum = requestedSha256(request.headers, source.bytes);
+      if (checksum !== null) {
+        checksums.set(id, checksum);
+      }
       return new Response(
-        `${XML_HEADER}<CopyObjectResult><ETag>&quot;fake&quot;</ETag><LastModified>2026-01-01T00:00:00.000Z</LastModified></CopyObjectResult>`,
+        `${XML_HEADER}<CopyObjectResult><ETag>${escapeXml(etags.get(id) ?? panic("copy validator missing"))}</ETag><LastModified>2026-01-01T00:00:00.000Z</LastModified>${checksum === null ? "" : `<ChecksumSHA256>${checksum}</ChecksumSHA256><ChecksumType>FULL_OBJECT</ChecksumType>`}</CopyObjectResult>`,
         { status: 200, headers: { "content-type": "application/xml" } },
       );
     }
@@ -405,11 +438,20 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       }
       objects.set(id, { bytes, contentType });
       addVersion(id);
-      return new Response(null, { status: 200, headers: { etag: '"fake"' } });
+      const checksum = requestedSha256(request.headers, bytes);
+      if (checksum !== null) {
+        checksums.set(id, checksum);
+      }
+      return new Response(null, {
+        status: 200,
+        headers: { etag: etags.get(id) ?? panic("put validator missing") },
+      });
     }
     if (method === "DELETE") {
       objects.delete(id);
       modifiedAt.delete(id);
+      etags.delete(id);
+      checksums.delete(id);
       return new Response(null, { status: 204 });
     }
 
@@ -417,13 +459,27 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     if (object === undefined) {
       return errorResponse("NoSuchKey", 404, key);
     }
+    const ifMatch = request.headers.get("if-match");
+    if (ifMatch !== null && ifMatch !== etags.get(id)) {
+      return errorResponse("PreconditionFailed", 412, key);
+    }
+    const checksum =
+      request.headers.get("x-amz-checksum-mode") === "ENABLED"
+        ? checksums.get(id)
+        : undefined;
     const headers: Record<string, string> = {
       "content-length": String(object.bytes.byteLength),
       "last-modified": (modifiedAt.get(id) ?? FAKE_EPOCH).toUTCString(),
       // S3 answers every object read with a validator, and callers pass it
       // through to their own clients; a store with no ETag would let that
       // pass-through look tested when nothing had one to pass.
-      etag: `"${new Bun.CryptoHasher("md5").update(object.bytes).digest("hex")}"`,
+      etag: etags.get(id) ?? panic("read validator missing"),
+      ...(checksum === undefined
+        ? {}
+        : {
+            "x-amz-checksum-sha256": checksum,
+            "x-amz-checksum-type": "FULL_OBJECT",
+          }),
       ...(object.contentType === null
         ? {}
         : { "content-type": object.contentType }),
@@ -475,6 +531,7 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
     },
     modifiedAt,
     put: (bucket, key, bytes, contentType, lastModified = FAKE_EPOCH) => {
+      newValidator(objectId(bucket, key));
       modifiedAt.set(objectId(bucket, key), lastModified);
       objects.set(objectId(bucket, key), {
         // Snapshot the caller's buffer so a later mutation cannot rewrite
