@@ -45,8 +45,9 @@ export const fetchManagedProviderCatalog = (
     hostPolicy: { type: "exact-origin", origins: MANAGED_PROVIDER_ORIGINS },
     pathPrefixes: ["/api/v1/models"],
   });
-  if (target === null)
-    {return panic("Managed catalog target is outside the provider policy.");}
+  if (target === null) {
+    return panic("Managed catalog target is outside the provider policy.");
+  }
   return fetchWithTimeout(target, { ...init, redirect: "error" });
 };
 
