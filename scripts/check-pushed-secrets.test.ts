@@ -56,7 +56,9 @@ const base = run(repo, ["git", "rev-parse", "HEAD"]);
 run(repo, ["git", "commit", "-q", "--allow-empty", "-m", "change"]);
 const head = run(repo, ["git", "rev-parse", "HEAD"]);
 
-const scannedRanges = (stdin: string): string[] => {
+type ScanResult = { exitCode: number; ranges: string[]; stderr: string };
+
+const scan = (stdin: string): ScanResult => {
   rmSync(log, { force: true });
   const result = Bun.spawnSync(["bash", SCRIPT], {
     cwd: repo,
@@ -64,8 +66,19 @@ const scannedRanges = (stdin: string): string[] => {
     stdin: new TextEncoder().encode(stdin),
     stderr: "pipe",
   });
+  return {
+    exitCode: result.exitCode,
+    ranges: existsSync(log)
+      ? readFileSync(log, "utf-8").trim().split("\n")
+      : [],
+    stderr: result.stderr.toString(),
+  };
+};
+
+const scannedRanges = (stdin: string): string[] => {
+  const result = scan(stdin);
   expect(result.exitCode).toBe(0);
-  return existsSync(log) ? readFileSync(log, "utf-8").trim().split("\n") : [];
+  return result.ranges;
 };
 
 describe("pushed-secret scan ranges", () => {
@@ -85,5 +98,23 @@ describe("pushed-secret scan ranges", () => {
     expect(
       scannedRanges(`refs/heads/x ${head} refs/heads/x ${ZERO_OID}\n`),
     ).toEqual([`${head} --not --remotes`]);
+  });
+
+  // The fake scanner exits 0 for any range, as a real scanner can when Git
+  // cannot resolve the commits it was asked to read.
+  test("an unresolvable range fails before the scanner runs", () => {
+    const result = scan(`refs/heads/x ${UNFETCHED_OID} refs/heads/x ${base}\n`);
+    expect(result.exitCode).toBe(1);
+    expect(result.ranges).toEqual([]);
+    expect(result.stderr).toContain("cannot resolve pushed commit range");
+  });
+
+  test("one unresolvable ref refuses the whole push", () => {
+    const result = scan(
+      `refs/heads/x ${head} refs/heads/x ${base}\n` +
+        `refs/heads/y ${UNFETCHED_OID} refs/heads/y ${base}\n`,
+    );
+    expect(result.exitCode).toBe(1);
+    expect(result.ranges).toEqual([]);
   });
 });
