@@ -42,7 +42,6 @@ import {
 import { storeTextField } from "@/api/lib/case-law/decision-text";
 import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
-import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,
   atRisFixture,
@@ -65,6 +64,11 @@ import {
   skUsFixture,
   type EnrolledAdapterFixture,
 } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import {
+  isClassifiedMetadataKey,
+  METADATA_TEXT_DISPOSITIONS,
+  metadataDisplayTextOf,
+} from "@/api/tests/helpers/case-law-metadata-text-census";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
 import { COURTLISTENER_IMPORT_KEY } from "./courtlistener/map";
@@ -204,66 +208,21 @@ const storedPartsOf = (
   return parts;
 };
 
-/** Metadata values rendered as wording, excluding identifiers and transport data. */
-const DISPLAY_TEXT_METADATA_KEYS = [
-  "abstract",
-  "area",
-  "decisionNature",
-  "documentName",
-  "documentTitle",
-  "headnote",
-  "judge",
-  "keywords",
-  "legalArea",
-  "legalAreas",
-  "legalSentence",
-  "originCaseNumber",
-  "originCourt",
-  "subArea",
-  "subject",
-  "subjectIndex",
-  "subjectOfProceeding",
-  "summary",
-  "title",
-] as const;
-
-const displayTextValuesOf = (
-  field: string,
-  value: unknown,
-): { field: string; value: string }[] => {
-  if (typeof value === "string") {
-    return [{ field, value }];
-  }
-  if (!Array.isArray(value)) {
-    return [];
-  }
-  return value.flatMap((item, index) =>
-    typeof item === "string"
-      ? [{ field: `${field}.${index}`, value: item }]
-      : [],
-  );
-};
-
-type DisplayTextPropertiesOptions = {
-  field: string;
-  value: unknown;
-  properties: readonly string[];
-};
-
-const displayTextPropertiesOf = ({
-  field,
-  value,
-  properties,
-}: DisplayTextPropertiesOptions): { field: string; value: string }[] => {
-  if (!isRecord(value)) {
-    return [];
-  }
-  return properties.flatMap((property) => {
-    const text = value[property];
-    return typeof text === "string"
-      ? [{ field: `${field}.${property}`, value: text }]
-      : [];
+/**
+ * Every metadata key a decision carries, read through the census's total
+ * disposition map: the display strings of the classified keys, and the keys
+ * nothing classified yet.
+ */
+const metadataDisplayTextCensus = (metadata: Record<string, unknown>) => {
+  const unclassified: string[] = [];
+  const texts = Object.entries(metadata).flatMap(([key, value]) => {
+    if (!isClassifiedMetadataKey(key)) {
+      unclassified.push(key);
+      return [];
+    }
+    return metadataDisplayTextOf(key, value);
   });
+  return { texts, unclassified };
 };
 
 // ── Invariants ───────────────────────────────────────────
@@ -278,6 +237,11 @@ describe("every adapter accounts for the fields its source states", () => {
       const decision = await evidence.buildDecision();
       const parts = storedPartsOf(key, decision);
 
+      const metadataCensus = metadataDisplayTextCensus(decision.metadata);
+      expect(
+        metadataCensus.unclassified,
+        `${key}: metadata keys the display-text census does not classify: ${metadataCensus.unclassified.join(", ")}. Add each to METADATA_TEXT_DISPOSITIONS as inspected, or excluded with the reason.`,
+      ).toEqual([]);
       const textOutputs = [
         { field: "caseNumber", value: decision.caseNumber },
         { field: "court", value: decision.court },
@@ -309,33 +273,7 @@ describe("every adapter accounts for the fields its source states", () => {
           },
           { field: `sections.${section.index}.text`, value: section.text },
         ]),
-        ...DISPLAY_TEXT_METADATA_KEYS.flatMap((field) =>
-          displayTextValuesOf(`metadata.${field}`, decision.metadata[field]),
-        ),
-        ...(Array.isArray(decision.metadata["judges"])
-          ? decision.metadata["judges"].flatMap((judge, index) =>
-              displayTextPropertiesOf({
-                field: `metadata.judges.${index}`,
-                value: judge,
-                properties: ["name"],
-              }),
-            )
-          : []),
-        ...(Array.isArray(decision.metadata["referencedLegislation"])
-          ? decision.metadata["referencedLegislation"].flatMap(
-              (reference, index) =>
-                displayTextPropertiesOf({
-                  field: `metadata.referencedLegislation.${index}`,
-                  value: reference,
-                  properties: ["nazov"],
-                }),
-            )
-          : []),
-        ...displayTextPropertiesOf({
-          field: "metadata.courtRegistry",
-          value: decision.metadata["courtRegistry"],
-          properties: ["nazov", "typSudu", "skratka_string"],
-        }),
+        ...metadataCensus.texts,
         ...("blocks" in decision.documentAst
           ? [
               ...decision.documentAst.metadata.keywords.map((value, index) => ({
@@ -424,4 +362,49 @@ describe("every adapter accounts for the fields its source states", () => {
       ).toEqual([]);
     });
   }
+});
+
+describe("the display-text census classifies exactly the metadata adapters emit", () => {
+  test("every classified key is emitted by some fixture, and every emitted key is classified", async () => {
+    const emitted = new Set<string>();
+    for (const key of DECLARED_ADAPTER_KEYS) {
+      // Fixtures stub the global fetch, so they build one at a time.
+      const decision = await ADAPTER_INVENTORY_COVERAGE[key]().buildDecision();
+      globalThis.fetch = originalFetch;
+      for (const metadataKey of Object.keys(decision.metadata)) {
+        emitted.add(metadataKey);
+      }
+    }
+    const unclassified = [...emitted].filter(
+      (metadataKey) => !isClassifiedMetadataKey(metadataKey),
+    );
+    expect(
+      unclassified,
+      `metadata keys no disposition covers: ${unclassified.join(", ")}`,
+    ).toEqual([]);
+    const neverEmitted = Object.keys(METADATA_TEXT_DISPOSITIONS).filter(
+      (metadataKey) => !emitted.has(metadataKey),
+    );
+    expect(
+      neverEmitted,
+      `dispositions no fixture exercises: ${neverEmitted.join(", ")}. Drop them, or add the field to the fixture that states it.`,
+    ).toEqual([]);
+  });
+
+  test("an inspected value is read at every depth, past only its excluded properties", () => {
+    const texts = metadataDisplayTextOf("referencedLegislation", [
+      { nazov: "Z&#225;kon", url: "https://example.org/?a=1&amp;b=2" },
+    ]);
+    expect(texts).toEqual([
+      { field: "metadata.referencedLegislation.0.nazov", value: "Z&#225;kon" },
+    ]);
+    expect(entityResiduesInStoredText(texts)).toEqual([
+      {
+        field: "metadata.referencedLegislation.0.nazov",
+        entity: "&#225;",
+        index: 1,
+      },
+    ]);
+    expect(metadataDisplayTextOf("guid", "source&amp;key")).toEqual([]);
+  });
 });
