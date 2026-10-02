@@ -15,6 +15,7 @@ import { timeDailyTargets } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { dailyTargetBody } from "@/api/lib/billing/daily-target";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -83,7 +84,7 @@ const updateOwn = async ({
       safeDb: createSafeDb(db, [], organizationId, ids.userA1),
       session: { activeOrganizationId: organizationId },
       user: { id: ids.userA1 },
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
       recordAuditEvent: audit.record,
     }),
   );
@@ -112,7 +113,7 @@ const updateMember = async ({
       safeDb: createSafeDb(db, [], ids.orgA, actorId),
       session: { activeOrganizationId: ids.orgA },
       user: { id: actorId },
-      memberRole: { role: actor },
+      memberRole: sessionMemberRole(actor),
       recordAuditEvent: audit.record,
     }),
   );

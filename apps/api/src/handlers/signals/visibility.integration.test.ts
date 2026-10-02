@@ -25,6 +25,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -141,7 +142,7 @@ const runListAs = async ({
         workspaceIds.map((id) => ({ id, status: "active" })),
       getWorkspaceAccess: async () => null,
       createAuditRecorder: () => recordAuditEvent,
-      memberRole: { role },
+      memberRole: sessionMemberRole(role),
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,

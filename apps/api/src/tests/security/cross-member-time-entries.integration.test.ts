@@ -52,6 +52,7 @@ import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { formatTodayInTimeZone } from "@/api/lib/timezone";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { handleMcpToolCall } from "@/api/mcp/tools";
@@ -240,7 +241,7 @@ const contextFor = (
       workspaceIds.includes(targetWorkspaceId)
         ? { id: targetWorkspaceId, status: "active" as const }
         : null,
-    memberRole: { role: actor.role },
+    memberRole: sessionMemberRole(actor.role),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,

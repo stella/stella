@@ -1,6 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -79,7 +80,7 @@ const createContext = ({
 
   return {
     context: asTestRaw<ReadWorkspaceNavigationContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       orgAIConfig: null,
       query,
       request: new Request("https://example.test/v1/workspaces/navigation"),

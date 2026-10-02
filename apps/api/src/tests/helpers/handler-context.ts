@@ -13,6 +13,7 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -91,7 +92,7 @@ const unconfiguredDb = (): never =>
 
 const createBaseContext = (): BaseTestHandlerContext => ({
   workspaceId: DEFAULT_WORKSPACE_ID,
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   session: { activeOrganizationId: DEFAULT_ORGANIZATION_ID },
   user: { id: DEFAULT_USER_ID, email: "standard@example.test" },
   safeDb: unconfiguredDb,

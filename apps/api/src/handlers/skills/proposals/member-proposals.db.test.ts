@@ -11,6 +11,7 @@ import {
 import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -102,7 +103,7 @@ describe("a member's own proposal on a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof updateSkillProposal.handler>[0]
       >({
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         safeDb: memberSafeDb(),
@@ -123,7 +124,7 @@ describe("a member's own proposal on a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof deleteSkillProposal.handler>[0]
       >({
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         safeDb: memberSafeDb(),
@@ -143,7 +144,7 @@ describe("a member reviewing a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof createSkillProposal.handler>[0]
       >({
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         safeDb: memberSafeDb(),
@@ -172,7 +173,7 @@ describe("a member reviewing a team skill", () => {
       createTestHandlerContext<
         Parameters<typeof createSkillComment.handler>[0]
       >({
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         safeDb: memberSafeDb(),
@@ -232,7 +233,7 @@ describe("an owner saving a team skill a member anchored to", () => {
       createTestHandlerContext<
         Parameters<typeof createSkillProposal.handler>[0]
       >({
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
         safeDb: memberSafeDb(),

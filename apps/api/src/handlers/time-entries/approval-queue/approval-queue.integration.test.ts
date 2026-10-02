@@ -26,6 +26,7 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -124,7 +125,7 @@ const context = (actor = ids.userA2, role: "member" | "owner" = "member") => {
     route: "/time-entries/approval-queue",
     session: { activeOrganizationId: ids.orgA },
     user: { id: actor },
-    memberRole: { role },
+    memberRole: sessionMemberRole(role),
     safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, actor),
     scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, actor),
     getActiveWorkspaceIds: async () => [ids.wsA2],
