@@ -9,9 +9,9 @@ and coordinate development.
 
 ## Getting Started
 
-1. Install [Bun](https://bun.sh) 1.4.2 (the version pinned in
-   `package.json`) and Docker (the local stack runs its services in
-   containers).
+1. Install [Bun](https://bun.sh) at the version pinned in the
+   `packageManager` field of `package.json`, and Docker (the local stack
+   runs its services in containers).
 2. Fork the repository and clone your fork with its submodules:
    `git clone --recurse-submodules <your fork URL>` (in an existing clone,
    run `git submodule update --init`).

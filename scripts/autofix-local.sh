@@ -38,10 +38,11 @@ if [[ -z "$base_ref" ]]; then
 fi
 merge_base="$(git merge-base "$base_ref" HEAD)"
 
-# Committed, staged and unstaged changes plus untracked files, existing only.
+# Committed, staged and unstaged changes plus untracked files. Deleted paths
+# stay in the list: a deleted generator input still selects its generator.
 changed_files() {
   {
-    git diff --name-only --diff-filter=d "$merge_base"
+    git diff --name-only "$merge_base"
     git ls-files --others --exclude-standard
   } | sort -u
 }
@@ -73,5 +74,10 @@ fi
 if ((${#format_paths[@]} > 0)); then
   bun run format:guard
   bun --bun oxfmt -c .oxfmtrc.json --no-error-on-unmatched-pattern "${format_paths[@]}"
+fi
+# CI runs the ratchet improvement phase last, on the final tree, so a removed
+# violation tightens the committed baseline instead of leaving slack.
+if [[ "$(sed -n 's/^ratchet=//p' <<<"$plan")" == "true" ]]; then
+  bun --no-install --no-env-file scripts/ratchet.ts --write-improvements-only --base "$merge_base"
 fi
 echo "autofix: compared against $base_ref; review and commit the changes"

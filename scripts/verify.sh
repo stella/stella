@@ -146,7 +146,7 @@ run_ratchet_guard() {
   # first proves each counter counts what it claims, so a broken guard cannot
   # pass silently.
   bun scripts/ratchet.ts --self-test || return 1
-  bun scripts/ratchet.ts --check
+  bun scripts/ratchet.ts --check --base "$(git merge-base "$base_ref" HEAD)"
 }
 
 run_result_boundary_enrolment_guard() {
