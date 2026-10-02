@@ -14,7 +14,11 @@ export default createSafeRootHandler(
       "Read durable new and reopened sanctions events in bounded cursor pages. Changed evidence and review decisions do not notify. Excluded contacts and disabled firms are omitted. This feed does not deliver notifications or select recipients.",
     permissions: { workspace: ["read"] },
     access: "read",
-    mcp: { type: "capability", reason: "contact_directory" },
+    mcp: {
+      type: "capability",
+      reason: "contact_directory",
+      consumesServices: false,
+    },
     query: t.Object({
       cursor: t.Optional(tPaginationCursor({ maxChars: 8192 })),
       limit: t.Optional(tPaginationLimit(SANCTIONS_MONITORING_PAGE_SIZE)),

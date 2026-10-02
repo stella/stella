@@ -13,7 +13,11 @@ export default createSafeRootHandler(
     description:
       "Set a contact to included or excluded from sanctions monitoring. Excluding hides active hits and preserves history. Including queues a re-screen; read contacts.sanctions.get for its eventual result. Firm-level disablement still applies. Changes are audited.",
     permissions: { contact: ["update"] },
-    mcp: { type: "capability", reason: "contact_directory" },
+    mcp: {
+      type: "capability",
+      reason: "contact_directory",
+      consumesServices: false,
+    },
     params: t.Object({ contactId: tSafeId("contact") }),
     body: t.Object({ mode: t.UnionEnum(["included", "excluded"]) }),
   },

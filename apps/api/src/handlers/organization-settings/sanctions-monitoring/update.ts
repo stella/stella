@@ -12,7 +12,11 @@ export default createSafeRootHandler(
     description:
       "Enable or disable sanctions monitoring for the active organization. Disabling hides active hits and preserves history. Enabling queues a bounded backfill; contact opt-outs still apply. Read contacts.sanctions.get for eventual screening results. Changes are audited.",
     permissions: { organizationSettings: ["update"] },
-    mcp: { type: "capability", reason: "contact_directory" },
+    mcp: {
+      type: "capability",
+      reason: "contact_directory",
+      consumesServices: false,
+    },
     body: t.Object({ mode: t.UnionEnum(["enabled", "disabled"]) }),
   },
   async function* ({ safeDb, session, body, recordAuditEvent }) {

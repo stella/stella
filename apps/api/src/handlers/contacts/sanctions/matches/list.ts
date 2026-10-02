@@ -14,7 +14,11 @@ export default createSafeRootHandler(
       "List open sanctions matches for the active organization in bounded cursor pages with binding versus informational classification from the firm's practice jurisdictions. Only fresh, currently screened contacts included in monitoring are returned. Dismissed and confirmed matches are omitted. To review a match, read contacts.sanctions.get with the returned contactId and copy its reviewTarget to contacts.sanctions.reviews.update with a disposition and reason.",
     permissions: { workspace: ["read"] },
     access: "read",
-    mcp: { type: "capability", reason: "contact_directory" },
+    mcp: {
+      type: "capability",
+      reason: "contact_directory",
+      consumesServices: false,
+    },
     query: t.Object({
       cursor: t.Optional(tPaginationCursor({ maxChars: 8192 })),
       limit: t.Optional(tPaginationLimit(SANCTIONS_MONITORING_PAGE_SIZE)),

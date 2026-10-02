@@ -11,7 +11,11 @@ export default createSafeRootHandler(
     description:
       "Dismiss or confirm one current sanctions match with a reason. Read contacts.sanctions.get first and copy the match's reviewTarget, then supply disposition and reason. A stale reviewTarget is rejected; read the contact again before retrying. A decision remains valid only while the contact fingerprint and listed-entry hash remain unchanged. Repeating the same decision is idempotent; changed evidence reopens it.",
     permissions: { contact: ["update"] },
-    mcp: { type: "capability", reason: "contact_directory" },
+    mcp: {
+      type: "capability",
+      reason: "contact_directory",
+      consumesServices: false,
+    },
     params: t.Object({ contactId: tSafeId("contact") }),
     body: t.Object({
       source: t.UnionEnum(sanctionsSourceIds()),
