@@ -83,8 +83,9 @@ const errorCodeBody = (code: string): string =>
   soapBody(`<stav><kodChyby>${code}</kodChyby><textChyby>x</textChyby></stav>`);
 
 /** Run a check that must produce an outcome rather than an error. */
-const check = async (options: Parameters<typeof runEntityCheck>[0]) =>
-  (await runEntityCheck(options)).unwrap();
+const check = async (
+  options: Omit<Parameters<typeof runEntityCheck>[0], "observer">,
+) => (await runEntityCheck({ ...options, observer: "unobserved" })).unwrap();
 
 /** The phase of the first insolvency finding, or null for any other outcome. */
 const firstPhase = (result: Awaited<ReturnType<typeof check>>) =>
@@ -446,7 +447,11 @@ describe("Czech insolvency check input", () => {
       },
     ];
     for (const subject of invalid) {
-      const result = await runEntityCheck({ kind: "cz-insolvency", subject });
+      const result = await runEntityCheck({
+        observer: "unobserved",
+        kind: "cz-insolvency",
+        subject,
+      });
       expect(result.isErr() && result.error._tag).toBe("EntityCheckInputError");
     }
     expect(requests).toHaveLength(0);
@@ -457,6 +462,7 @@ describe("Czech insolvency check input", () => {
     controller.abort(new Error("caller went away"));
     stubFetch([new DOMException("aborted", "AbortError")]);
     const result = await runEntityCheck({
+      observer: "unobserved",
       kind: "cz-insolvency",
       subject: HEALTHY_COMPANY,
       signal: controller.signal,
