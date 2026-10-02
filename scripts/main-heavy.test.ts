@@ -69,7 +69,14 @@ const readWorkflow = (relativePath: string) =>
       readFileSync(new URL(`../${relativePath}`, import.meta.url), "utf-8"),
     ),
   );
-const mainWorkflow = readWorkflow(".github/workflows/main-heavy.yml");
+const parsedMain = readWorkflow(".github/workflows/main-heavy.yml");
+const mainWorkflow = {
+  ...parsedMain,
+  jobs: v.parse(
+    v.object({ validate: jobSchema, suites: jobSchema, status: jobSchema }),
+    parsedMain.jobs,
+  ),
+};
 const ciWorkflow = readWorkflow(".github/workflows/ci.yml");
 const mainTriggers = v.parse(mainTriggersSchema, mainWorkflow.on);
 const ciCall = v.parse(ciCallSchema, ciWorkflow.on).workflow_call;
@@ -80,7 +87,7 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
   );
   expect(mainTriggers.push.branches).toEqual(["main"]);
   expect(Object.keys(mainTriggers.workflow_dispatch.inputs)).toEqual(["sha"]);
-  expect(mainTriggers.workflow_dispatch.inputs.sha).toMatchObject({
+  expect(mainTriggers.workflow_dispatch.inputs["sha"]).toMatchObject({
     required: true,
     type: "string",
   });
@@ -97,17 +104,17 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
     heavy_only: true,
     sha: `\${{ needs.validate.outputs.sha }}`,
   });
-  expect(mainWorkflow.jobs.validate.outputs?.sha).toBe(
+  expect(mainWorkflow.jobs.validate.outputs?.["sha"]).toBe(
     `\${{ steps.ancestor.outputs.sha }}`,
   );
-  expect(ciCall.inputs.heavy_only).toMatchObject({
+  expect(ciCall.inputs["heavy_only"]).toMatchObject({
     required: false,
     type: "boolean",
   });
-  expect(ciWorkflow.jobs["ci-plan"].outputs?.heavy_jobs).toBe(
+  expect(ciWorkflow.jobs["ci-plan"]?.outputs?.["heavy_jobs"]).toBe(
     `\${{ steps.heavy-plan.outputs.heavy_jobs }}`,
   );
-  const plannerStep = ciWorkflow.jobs["ci-plan"].steps?.find(
+  const plannerStep = ciWorkflow.jobs["ci-plan"]?.steps?.find(
     ({ name }) => name === "Derive heavy jobs",
   );
   expect(plannerStep?.run).toContain("scripts/main-heavy-plan.ts");
@@ -123,7 +130,7 @@ test("heavy job checkouts and production consumers use the validated SHA", () =>
       uses?.startsWith("actions/checkout@"),
     );
     if (checkout) {
-      expect(checkout.with?.ref, job).toBe(`\${{ inputs.sha }}`);
+      expect(checkout.with?.["ref"], job).toBe(`\${{ inputs.sha }}`);
     }
   }
   for (const job of ["route-smoke", "e2e-production-shard"]) {
@@ -134,7 +141,7 @@ test("heavy job checkouts and production consumers use the validated SHA", () =>
       `\${{ inputs.sha || github.sha }}`,
     );
   }
-  expect(ciWorkflow.jobs["marketing-screenshots"].with?.ref).toBe(
+  expect(ciWorkflow.jobs["marketing-screenshots"]?.with?.["ref"]).toBe(
     `\${{ inputs.sha }}`,
   );
   const marketing = v.parse(
@@ -149,16 +156,16 @@ test("heavy job checkouts and production consumers use the validated SHA", () =>
       ),
     ),
   );
-  const checkout = marketing.jobs.check.steps?.find(({ uses }) =>
+  const checkout = marketing.jobs["check"]?.steps?.find(({ uses }) =>
     uses?.startsWith("actions/checkout@"),
   );
-  expect(checkout?.with?.ref).toBe(`\${{ inputs.ref }}`);
+  expect(checkout?.with?.["ref"]).toBe(`\${{ inputs.ref }}`);
 });
 
 test("only the final job can publish the main/heavy status", () => {
   expect(mainWorkflow.permissions).toEqual({});
   const jobsWithStatusPermission = Object.entries(mainWorkflow.jobs)
-    .filter(([, job]) => job.permissions?.statuses === "write")
+    .filter(([, job]) => job.permissions?.["statuses"] === "write")
     .map(([name]) => name);
   expect(jobsWithStatusPermission).toEqual(["status"]);
   expect(mainWorkflow.jobs.status.permissions).toEqual({ statuses: "write" });
@@ -220,7 +227,7 @@ test("status step publishes success only when both workflow jobs succeeded", () 
           GH_LOG: logPath,
           GH_TOKEN: "fixture-token",
           GITHUB_OUTPUT: outputPath,
-          PATH: `${bin}:${Bun.env.PATH ?? ""}`,
+          PATH: `${bin}:${Bun.env["PATH"] ?? ""}`,
           REPOSITORY: repository,
           RESULTS: results,
           RUN_URL: runUrl,

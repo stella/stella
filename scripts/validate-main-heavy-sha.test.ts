@@ -14,7 +14,7 @@ const stepSchema = v.looseObject({
 const jobSchema = v.looseObject({
   steps: v.optional(v.array(stepSchema)),
 });
-const workflowSchema = v.object({ jobs: v.record(v.string(), jobSchema) });
+const workflowSchema = v.object({ jobs: v.object({ validate: jobSchema }) });
 const workflow = v.parse(
   workflowSchema,
   Bun.YAML.parse(
