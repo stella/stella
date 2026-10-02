@@ -1142,6 +1142,7 @@
       "noSkills": "Még nincsenek készségek",
       "pinnedMatters": "Kitűzött ügyek",
       "recentChats": "Legutóbbi csevegések",
+      "skillEditedBy": "{name} szerkesztette · {time}",
       "skills": "Készségek"
     },
     "loadEarlierMessages": "Korábbi üzenetek betöltése",
@@ -1273,6 +1274,9 @@
     },
     "tabToAsk": "→ a kérdezéshez: „{prompt}“",
     "thinking": "Kontextussal dolgozom",
+    "threadFiles": {
+      "title": "Fájlok ebben a csevegésben"
+    },
     "tool": {
       "add_comment": "Megjegyzés hozzáadása",
       "apply-active-docx-edits": "Dokumentummódosítások előkészítése",

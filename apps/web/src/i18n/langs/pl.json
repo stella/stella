@@ -1142,6 +1142,7 @@
       "noSkills": "Nie ma jeszcze umiejętności",
       "pinnedMatters": "Przypięte sprawy",
       "recentChats": "Ostatnie czaty",
+      "skillEditedBy": "Edytował(a) {name} · {time}",
       "skills": "Umiejętności"
     },
     "loadEarlierMessages": "Załaduj wcześniejsze wiadomości",
@@ -1273,6 +1274,9 @@
     },
     "tabToAsk": "→, aby zapytać: „{prompt}”",
     "thinking": "Pracuję z kontekstem",
+    "threadFiles": {
+      "title": "Pliki w tym czacie"
+    },
     "tool": {
       "add_comment": "Dodawanie komentarza",
       "apply-active-docx-edits": "Przygotowywanie zmian w dokumencie",

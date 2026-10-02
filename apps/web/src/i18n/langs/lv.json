@@ -1142,6 +1142,7 @@
       "noSkills": "Prasmju vēl nav",
       "pinnedMatters": "Piespraustās lietas",
       "recentChats": "Nesenās tērzēšanas",
+      "skillEditedBy": "Rediģēja {name} · {time}",
       "skills": "Prasmes"
     },
     "loadEarlierMessages": "Ielādēt vecākus ziņojumus",
@@ -1273,6 +1274,9 @@
     },
     "tabToAsk": "→, lai jautātu: “{prompt}”",
     "thinking": "Strādāju ar kontekstu",
+    "threadFiles": {
+      "title": "Šīs tērzēšanas faili"
+    },
     "tool": {
       "add_comment": "Komentāra pievienošana",
       "apply-active-docx-edits": "Dokumenta izmaiņu sagatavošana",

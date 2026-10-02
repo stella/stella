@@ -1142,6 +1142,7 @@
       "noSkills": "Noch keine Skills",
       "pinnedMatters": "Angeheftete Akten",
       "recentChats": "Letzte Chats",
+      "skillEditedBy": "Bearbeitet von {name} · {time}",
       "skills": "Skills"
     },
     "loadEarlierMessages": "Ältere Nachrichten laden",
@@ -1273,6 +1274,9 @@
     },
     "tabToAsk": "→ zum Fragen: „{prompt}“",
     "thinking": "Arbeite mit Kontext",
+    "threadFiles": {
+      "title": "Dateien in diesem Chat"
+    },
     "tool": {
       "add_comment": "Kommentar hinzufügen",
       "apply-active-docx-edits": "Dokumentänderungen vorbereiten",
