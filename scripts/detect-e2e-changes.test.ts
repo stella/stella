@@ -1,4 +1,3 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -13,7 +12,6 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { Script } from "node:vm";
-import * as v from "valibot";
 
 import { parseBunLockText } from "./bun-lock-text";
 
@@ -77,31 +75,86 @@ const marketingCapture = readFileSync(
   "utf-8",
 );
 
-const contractStepSchema = v.looseObject({
-  name: v.optional(v.string()),
-  uses: v.optional(v.string()),
-  run: v.optional(v.string()),
-  with: v.optional(v.record(v.string(), v.unknown())),
-});
-const contractWorkflowSchema = v.object({
-  jobs: v.record(
-    v.string(),
-    v.looseObject({
-      if: v.optional(v.string()),
-      needs: v.optional(v.union([v.string(), v.array(v.string())])),
-      with: v.optional(v.record(v.string(), v.unknown())),
-      outputs: v.optional(v.record(v.string(), v.string())),
-      steps: v.optional(v.array(contractStepSchema)),
-    }),
+// This contract is exercised before CI installs dependencies.
+const contractRecord = (value: unknown): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    throw new TypeError("Expected workflow object");
+  }
+  return value;
+};
+const requiredExpression = (value: unknown) => {
+  if (typeof value !== "string") {
+    throw new TypeError("Missing workflow expression");
+  }
+  return value;
+};
+type ContractStep = {
+  name?: string;
+  uses?: string;
+  run?: string;
+  with?: Record<string, unknown>;
+};
+const contractStep = (value: unknown): ContractStep => {
+  const record = contractRecord(value);
+  const step: ContractStep = {};
+  for (const field of ["name", "uses", "run"] as const) {
+    if (record[field] !== undefined) {
+      step[field] = requiredExpression(record[field]);
+    }
+  }
+  if (record["with"] !== undefined) {
+    step.with = contractRecord(record["with"]);
+  }
+  return step;
+};
+type ContractJob = {
+  if?: string;
+  needs?: string | string[];
+  with?: Record<string, unknown>;
+  outputs?: Record<string, string>;
+  steps?: ContractStep[];
+};
+const contractJob = (value: unknown): ContractJob => {
+  const record = contractRecord(value);
+  const job: ContractJob = {};
+  if (record["if"] !== undefined) {
+    job.if = requiredExpression(record["if"]);
+  }
+  if (record["needs"] !== undefined) {
+    const needs = record["needs"];
+    job.needs = Array.isArray(needs)
+      ? needs.map(requiredExpression)
+      : requiredExpression(needs);
+  }
+  if (record["with"] !== undefined) {
+    job.with = contractRecord(record["with"]);
+  }
+  if (record["outputs"] !== undefined) {
+    job.outputs = Object.fromEntries(
+      Object.entries(contractRecord(record["outputs"])).map(
+        ([key, output]) => [key, requiredExpression(output)] as const,
+      ),
+    );
+  }
+  if (record["steps"] !== undefined) {
+    const steps = record["steps"];
+    if (!Array.isArray(steps)) {
+      throw new TypeError("Expected workflow steps array");
+    }
+    job.steps = steps.map(contractStep);
+  }
+  return job;
+};
+const contractWorkflow = (value: unknown) => ({
+  jobs: Object.fromEntries(
+    Object.entries(contractRecord(contractRecord(value)["jobs"])).map(
+      ([key, job]) => [key, contractJob(job)] as const,
+    ),
   ),
 });
-const ciContract = v.parse(contractWorkflowSchema, Bun.YAML.parse(workflow));
-const marketingContract = v.parse(
-  contractWorkflowSchema,
-  Bun.YAML.parse(marketingWorkflow),
-);
-const mainHeavyContract = v.parse(
-  contractWorkflowSchema,
+const ciContract = contractWorkflow(Bun.YAML.parse(workflow));
+const marketingContract = contractWorkflow(Bun.YAML.parse(marketingWorkflow));
+const mainHeavyContract = contractWorkflow(
   Bun.YAML.parse(
     readFileSync(
       path.join(import.meta.dirname, "../.github/workflows/main-heavy.yml"),
@@ -118,12 +171,6 @@ const evaluateExpression = (expression: string, context: object) =>
         (_, job: string) => `needs[${JSON.stringify(job)}]`,
       ),
   ).runInNewContext(context);
-const requiredExpression = (value: unknown) => {
-  if (typeof value !== "string") {
-    panic("Missing workflow expression");
-  }
-  return value;
-};
 const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
   (job.steps ?? []).filter(
     (step) =>
@@ -136,7 +183,7 @@ const marketingCheckout = (job: string) => {
     ({ name }) => name === "Checkout",
   );
   if (!checkout) {
-    panic(`Missing marketing ${job} checkout`);
+    throw new Error(`Missing marketing ${job} checkout`);
   }
   return requiredExpression(checkout.with?.["ref"]);
 };
@@ -619,14 +666,63 @@ describe("detect-e2e-changes", () => {
     );
 
     const screenshots = workflowJob("marketing-screenshots");
-    expect(screenshots).toContain("needs: [ci-plan, web-build]");
+    expect(ciContract.jobs["marketing-screenshots"]?.needs).toEqual([
+      "ci-plan",
+      "web-build",
+      "heavy-web-build",
+    ]);
     expect(screenshots).toContain("always()");
     expect(screenshots).toContain(
       "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
     );
-    expect(screenshots).toContain(
-      "needs.ci-plan.outputs.web_build_required != 'true'\n          || needs.web-build.result == 'success'",
+    const predicate = requiredExpression(
+      ciContract.jobs["marketing-screenshots"]?.if,
     );
+    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+      for (const planned of [false, true]) {
+        for (const trusted of [false, true]) {
+          for (const buildRequired of [false, true]) {
+            for (const webResult of ["success", "skipped", "failure"]) {
+              for (const heavyResult of ["success", "skipped", "failure"]) {
+                for (const cancelled of [false, true]) {
+                  const context = {
+                    github: { event_name: event },
+                    needs: {
+                      "ci-plan": {
+                        outputs: {
+                          queue_depth: "full",
+                          trusted: String(trusted),
+                          marketing_screenshots_required: String(planned),
+                          web_build_required: String(buildRequired),
+                        },
+                      },
+                      "web-build": { result: webResult },
+                      "heavy-web-build": { result: heavyResult },
+                    },
+                    always: () => true,
+                    cancelled: () => cancelled,
+                  };
+                  expect(Boolean(evaluateExpression(predicate, context))).toBe(
+                    planned &&
+                      (trusted || event === "workflow_dispatch") &&
+                      (!buildRequired ||
+                        webResult === "success" ||
+                        heavyResult === "success") &&
+                      (event !== "merge_group" || !cancelled),
+                  );
+                  if (predicate.includes("queue_depth")) {
+                    context.needs["ci-plan"].outputs.queue_depth = "thin";
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                    ).toBe(false);
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     expect(screenshots).toContain(
       "uses: ./.github/workflows/marketing-screenshots.yml",
     );
