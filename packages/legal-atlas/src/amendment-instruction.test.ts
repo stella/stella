@@ -289,3 +289,81 @@ describe("bill to enacted instruction alignment", () => {
     ).toBe("unresolved_anchor");
   });
 });
+
+describe("instruction identity and correspondence boundaries", () => {
+  test("unquoted replacement bodies remain part of instruction identity", () => {
+    const bill = point("bill", "§ 5 zní: Nové pravidlo A.");
+    const enacted = point("enacted", "§ 5 zní: Nové pravidlo B.");
+    const left = parseAmendmentInstruction({
+      jurisdiction: "CZE",
+      text: bill.text,
+    });
+    const right = parseAmendmentInstruction({
+      jurisdiction: "CZE",
+      text: enacted.text,
+    });
+    expect(left.status).toBe("parsed");
+    expect(right.status).toBe("parsed");
+    if (left.status !== "parsed" || right.status !== "parsed") {
+      return;
+    }
+    expect(left.targets).toEqual(right.targets);
+    expect(left.operations).toEqual(right.operations);
+    expect(left.quotes).toEqual(right.quotes);
+    expect(left.signature).not.toBe(right.signature);
+    expect(
+      alignAmendmentPoints({
+        jurisdiction: "CZE",
+        enactedCoverage: "complete",
+        bill: [bill],
+        enacted: [enacted],
+      }).at(0)?.status,
+    ).toBe("not_in_enacted_text");
+  });
+
+  test("unsupported enacted instructions affect only their own act", () => {
+    const bill = point("bill", "V § 5 se slovo „a“ nahrazuje slovem „b“.");
+    const matching = { ...bill, id: "matching" };
+    for (const workIdentifier of ["150/2002 Sb.", bill.workIdentifier]) {
+      const result = alignAmendmentPoints({
+        jurisdiction: "CZE",
+        enactedCoverage: "complete",
+        bill: [bill],
+        enacted: [
+          matching,
+          { ...point("unsupported", "K příloze"), workIdentifier },
+        ],
+      }).at(0);
+      if (workIdentifier === bill.workIdentifier) {
+        expect(result?.status).toBe("unresolved_anchor");
+        continue;
+      }
+      expect(result?.status).toBe("aligned");
+      if (result?.status === "aligned") {
+        expect(result.enactedId).toBe(matching.id);
+      }
+    }
+  });
+
+  test.each([
+    ["3 a 4", "4 až 6", "unsupported"],
+    ["3 až 5", "4 a 5", "unsupported"],
+    ["3 a 4", "4 a 5", "parsed"],
+  ] as const)(
+    "renumbering requires equal list lengths: %s to %s",
+    (from, to, status) => {
+      const context = PROVISION_CITATION_GRAMMARS.CZE.parseReference("§ 5");
+      expect(context).not.toBeNull();
+      if (context === null) {
+        return;
+      }
+      expect(
+        parseAmendmentInstruction({
+          jurisdiction: "CZE",
+          context,
+          text: `Dosavadní odstavce ${from} se označují jako odstavce ${to}.`,
+        }).status,
+      ).toBe(status);
+    },
+  );
+});

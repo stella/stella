@@ -248,6 +248,18 @@ const specialHeadings = (
   return blocks;
 };
 
+const anchoredSection = (num: string): ProvisionNode => ({
+  type: "provision",
+  eId: `section-${num}`,
+  wId: `section-${num}`,
+  anchorId: `par_${num}`,
+  kind: "section",
+  num,
+  heading: null,
+  plainText: "",
+  children: [],
+});
+
 describe("recorded explanatory report coverage", () => {
   test("captures contain both complete reports and their declared enactment pages", async () => {
     expect(report10.pocetStranek).toBe(1);
@@ -473,9 +485,20 @@ describe("AST confirmed attachment outcomes", () => {
   });
 
   test("missing publisher parent anchors remain unresolved", () => {
+    const missingParent = structuredClone(ast);
+    const parent = missingParent.body.find(
+      (entry) => entry.type === "provision" && entry.num === "1",
+    );
+    if (parent?.type !== "provision") {
+      return panic("Missing recorded section parent");
+    }
+    parent.anchorId = "";
     expect(
-      resolveExplanatoryBlocks({ ...base, blocks: [block("K § 1")] }).at(0)
-        ?.status,
+      resolveExplanatoryBlocks({
+        ...base,
+        works: [{ workIdentifier: "358/2016 Sb.", ast: missingParent }],
+        blocks: [block("K § 1")],
+      }).at(0)?.status,
     ).toBe("unresolved_anchor");
   });
 
@@ -489,7 +512,7 @@ describe("AST confirmed attachment outcomes", () => {
       num: "PRVNÍ",
       heading: null,
       plainText: "",
-      children: ast.body,
+      children: [{ ...anchoredSection("5"), anchorId: "" }],
     };
     const grouped = { ...ast, body: [container] };
     const result = resolveExplanatoryBlocks({
@@ -497,7 +520,7 @@ describe("AST confirmed attachment outcomes", () => {
       works: [{ workIdentifier: "358/2016 Sb.", ast: grouped }],
       blocks: [block("K části první")],
     }).at(0);
-    // Missing source anchors for unchanged parents prevent partial success of a structural group.
+    // A structural group cannot attach a descendant whose stored anchor is missing.
     expect(result?.status).toBe("unresolved_anchor");
   });
 
@@ -657,5 +680,195 @@ describe("AST confirmed attachment outcomes", () => {
         ],
       }).at(0)?.status,
     ).toBe("not_in_enacted_text");
+  });
+});
+
+const amendmentBlock = (heading: string): PendingExplanatoryBlock => ({
+  status: "pending",
+  id: heading,
+  heading,
+  scope: { type: "amendment", article: "1", numbering: "enacted" },
+});
+const canonicalWorks = [
+  {
+    workIdentifier: "358/2016 Sb.",
+    ast: { ...ast, body: [anchoredSection("5"), anchoredSection("6")] },
+  },
+];
+const enactedPoint = (id: string) => ({
+  id,
+  article: "1",
+  point: 1,
+  workIdentifier: "358/2016 Sb.",
+  text: "§ 5 zní: Nové pravidlo.",
+});
+
+describe("complete explanatory attachment selection", () => {
+  test.each([
+    { kind: "part", heading: "části" },
+    { kind: "chapter", heading: "hlavě" },
+  ] as const)(
+    "structural groups require every member and exclude unrequested $kind containers",
+    ({ kind, heading }) => {
+      const containers = ["PRVNÍ", "DRUHÁ"].map(
+        (num, index) =>
+          ({
+            type: "provision",
+            eId: num,
+            wId: num,
+            anchorId: "",
+            kind,
+            num,
+            heading: null,
+            plainText: "",
+            children: [anchoredSection(String(index + 5))],
+          }) satisfies ProvisionNode,
+      );
+      for (const count of [1, 2]) {
+        const works = [
+          {
+            workIdentifier: "358/2016 Sb.",
+            ast: { ...ast, body: containers.slice(0, count) },
+          },
+        ];
+        const grouped = resolveExplanatoryBlocks({
+          ...base,
+          works,
+          blocks: [block(`K ${heading} první a druhé`)],
+        }).at(0);
+        expect(grouped?.status).toBe(
+          count === 1 ? "unresolved_anchor" : "resolved",
+        );
+        if (grouped?.status === "resolved") {
+          expect(
+            grouped.attachments.map(({ provision }) => provision.anchor),
+          ).toEqual(["par_5", "par_6"]);
+        } else if (grouped !== undefined) {
+          expect("attachments" in grouped).toBe(false);
+          expect(grouped.fanOut).toBe("grouped");
+        }
+        const single = resolveExplanatoryBlocks({
+          ...base,
+          works,
+          blocks: [block(`K ${heading} první`)],
+        }).at(0);
+        expect(single?.status).toBe("resolved");
+        if (single?.status === "resolved") {
+          expect(
+            single.attachments.map(({ provision }) => provision.anchor),
+          ).toEqual(["par_5"]);
+        }
+      }
+    },
+  );
+
+  test("explicit and inherited article scopes select competing enacted points", () => {
+    const enactedPoints = [
+      { ...enactedPoint("article-one"), point: 7 },
+      {
+        ...enactedPoint("article-two"),
+        point: 7,
+        article: "2",
+        text: "§ 6 zní: Druhé pravidlo.",
+      },
+    ];
+    for (const [heading, anchor, pointId] of [
+      ["K čl. II bodu 7", "par_6", "article-two"],
+      ["K bodu 7", "par_5", "article-one"],
+    ] as const) {
+      const result = resolveExplanatoryBlocks({
+        ...base,
+        works: canonicalWorks,
+        enactedPoints,
+        blocks: [amendmentBlock(heading)],
+      }).at(0);
+      expect(result?.status).toBe("resolved");
+      if (result?.status !== "resolved") {
+        continue;
+      }
+      expect(result.attachments).toHaveLength(1);
+      expect(result.attachments.at(0)?.provision.anchor).toBe(anchor);
+      expect(result.attachments.at(0)?.selection).toEqual({
+        type: "enacted_point",
+        pointId,
+      });
+    }
+  });
+
+  test("recorded enacted numbering attaches its exact publisher anchor", () => {
+    const source = enacted10.seznam.find(({ eli }) =>
+      eli.endsWith("/novela/cl_1/bod_3"),
+    );
+    if (source?.xhtml === undefined) {
+      return panic("Missing recorded enacted instruction");
+    }
+    const result = resolveExplanatoryBlocks({
+      ...base,
+      blocks: [amendmentBlock("K bodu 3")],
+      enactedPoints: [
+        {
+          id: source.eli,
+          article: "1",
+          point: 3,
+          workIdentifier: "358/2016 Sb.",
+          text: sourceText(source.xhtml),
+        },
+      ],
+    }).at(0);
+    expect(result?.status).toBe("resolved");
+    if (result?.status !== "resolved") {
+      return;
+    }
+    expect(result.attachments).toHaveLength(1);
+    expect(result.attachments.at(0)?.provision.anchor).toBe("par_1-pism_k");
+    expect(result.attachments.at(0)?.selection).toEqual({
+      type: "enacted_point",
+      pointId: source.eli,
+    });
+  });
+
+  test("shared amendment targets retain each source selection", () => {
+    const result = resolveExplanatoryBlocks({
+      ...base,
+      works: canonicalWorks,
+      blocks: [amendmentBlock("K bodům 1 a 2")],
+      enactedPoints: [
+        enactedPoint("first"),
+        { ...enactedPoint("second"), point: 2 },
+      ],
+    }).at(0);
+    expect(result?.status).toBe("resolved");
+    if (result?.status !== "resolved") {
+      return;
+    }
+    expect(result.fanOut).toBe("grouped");
+    expect(result.attachments.map(({ provision }) => provision.anchor)).toEqual(
+      ["par_5", "par_5"],
+    );
+    expect(result.attachments.map(({ selection }) => selection)).toEqual([
+      { type: "enacted_point", pointId: "first" },
+      { type: "enacted_point", pointId: "second" },
+    ]);
+  });
+
+  test("amendment groups never resolve an absent requested member", () => {
+    for (const enactedCoverage of ["complete", "partial"] as const) {
+      const result = resolveExplanatoryBlocks({
+        ...base,
+        works: canonicalWorks,
+        enactedCoverage,
+        blocks: [amendmentBlock("K bodům 1 a 2")],
+        enactedPoints: [enactedPoint("first")],
+      }).at(0);
+      expect(result?.status).toBe(
+        enactedCoverage === "complete"
+          ? "not_in_enacted_text"
+          : "unresolved_anchor",
+      );
+      expect(result?.fanOut).toBe("grouped");
+      if (result !== undefined) {
+        expect("attachments" in result).toBe(false);
+      }
+    }
   });
 });

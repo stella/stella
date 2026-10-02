@@ -569,20 +569,24 @@ const headingCandidates = ({
     };
   }
   const candidates: Candidate[] = [];
+  const matchedDesignators = new Set<string>();
   for (const entry of indexes.get(identifier) ?? []) {
-    if (
-      entry.structures.some(
-        (structure) =>
-          structure.kind === target.kind &&
-          target.designators.includes(structure.designator),
-      )
-    ) {
-      candidates.push({
-        workIdentifier: identifier,
-        reference: entry.provision.reference,
-        selection: { type: "direct_heading" },
-      });
+    const structures = entry.structures.filter(
+      (structure) =>
+        structure.kind === target.kind &&
+        target.designators.includes(structure.designator),
+    );
+    if (structures.length === 0) {
+      continue;
     }
+    for (const structure of structures) {
+      matchedDesignators.add(structure.designator);
+    }
+    candidates.push({
+      workIdentifier: identifier,
+      reference: entry.provision.reference,
+      selection: { type: "direct_heading" },
+    });
     if (candidates.length > MAX_EXPLANATORY_TARGETS) {
       return {
         status: "unresolved_anchor",
@@ -591,7 +595,9 @@ const headingCandidates = ({
       };
     }
   }
-  if (candidates.length === 0) {
+  if (
+    target.designators.some((designator) => !matchedDesignators.has(designator))
+  ) {
     return {
       status: "unresolved_anchor",
       reason: "structural_anchor",
