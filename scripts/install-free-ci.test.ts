@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 import {
   mkdirSync,
   mkdtempSync,
+  readdirSync,
   readFileSync,
   rmSync,
   writeFileSync,
@@ -606,4 +607,28 @@ test("everything CI runs without the dependency install imports only built-ins",
       invocationProblems(REPO_ROOT, invocation),
     ),
   ).toEqual([]);
+});
+
+// Bun commands that cannot fetch a package: lockfile operations and runs that
+// disable auto-install explicitly.
+const NO_FETCH_COMMAND =
+  /^bun(?:\s+--[\w-]+)*\s+(?:dedupe\b|[^\n]*--no-install\b)/u;
+
+test("every workflow's install-free Bun commands load only built-ins", () => {
+  const workflows = readdirSync(path.join(REPO_ROOT, ".github/workflows"))
+    .filter((name) => /\.ya?ml$/u.test(name))
+    .map((name) => `.github/workflows/${name}`);
+  expect(workflows).toContain(CI_WORKFLOW);
+  const problems = workflows.flatMap((workflow) =>
+    installFreeInvocations({ root: REPO_ROOT, workflow }).flatMap(
+      (invocation) =>
+        invocation.classification.type === "unclassified" &&
+        NO_FETCH_COMMAND.test(invocation.command)
+          ? []
+          : invocationProblems(REPO_ROOT, invocation).map(
+              (problem) => `${workflow}: ${problem}`,
+            ),
+    ),
+  );
+  expect(problems).toEqual([]);
 });
