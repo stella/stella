@@ -282,7 +282,7 @@ type PlainTextResultFields = {
     | undefined;
 };
 
-export type PlainTextOutcome =
+type PlainTextOutcome =
   | { type: "accepted" }
   | { type: "item_build_failed"; error: PlainTextError };
 

@@ -131,12 +131,14 @@ describe("publisher document role persistence", () => {
         },
       };
       const stored = sanitizeResult(input);
-      expect(stored.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
-        documentRole,
-      );
+      expect(
+        stored.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY] === documentRole,
+      ).toBe(true);
       expect(stored.documentRole).toBe(documentRole);
-      expect(stored.decisionType).toBe(input.decisionType);
-      expect(stored.metadata["decisionType"]).toBe(input.metadata.decisionType);
+      expect(stored.decisionType === input.decisionType).toBe(true);
+      expect(
+        stored.metadata["decisionType"] === input.metadata.decisionType,
+      ).toBe(true);
       expect(input.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
         "untrusted",
       );
@@ -157,7 +159,7 @@ describe("publisher document role persistence", () => {
     expect(
       Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
     ).toBe(false);
-    expect(stored.decisionType).toBe(input.decisionType);
+    expect(stored.decisionType === input.decisionType).toBe(true);
     expect(sanitizeResult(stored)).toEqual(stored);
   });
 });

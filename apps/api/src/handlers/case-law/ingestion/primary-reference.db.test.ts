@@ -352,12 +352,15 @@ test("a docket primary of an existing jurisdiction is stored as it always was", 
 
 test("a docket stored with its sheet is keyed by its case file", async () => {
   const sourceId = await newSource();
-  await ingest(sourceId, {
-    ...czechDecision("cz-sheet"),
-    caseNumber: "4 As 50/2012 - 33",
-    court: "Nejvyšší správní soud",
-    sourceDocumentId: "cz-sheet",
-  });
+  await ingest(
+    sourceId,
+    plainTextIngestionResult({
+      ...czechDecision("cz-sheet"),
+      caseNumber: "4 As 50/2012 - 33",
+      court: "Nejvyšší správní soud",
+      sourceDocumentId: "cz-sheet",
+    }),
+  );
   const stored = await storedDecision(sourceId, "cz-sheet");
 
   expect(stored.caseNumber).toBe("4 As 50/2012 - 33");

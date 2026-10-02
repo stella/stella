@@ -281,8 +281,8 @@ describe("Slovak court display text decodes publisher entities once", () => {
 
   test("preserves literal ampersands, unknown entities, and unfinished references", () => {
     const text = "Novák & synovia; &neexistuje; &#x; &#; &amp bez bodkočiarky";
-    expect(decisionFor(text).metadata["judge"]).toBe(text);
-    expect(decisionFor(encodeHTML(text)).metadata["judge"]).toBe(text);
+    expect(decisionFor(text).metadata["judge"] === text).toBe(true);
+    expect(decisionFor(encodeHTML(text)).metadata["judge"] === text).toBe(true);
   });
 
   test("double encoding decodes exactly once even when output resembles an entity", () => {
@@ -292,7 +292,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
       { source: "&amp;#xFD;", expected: "&#xFD;" },
       { source: "&amp;nbsp;", expected: "&nbsp;" },
     ]) {
-      expect(decisionFor(source).metadata["judge"]).toBe(expected);
+      expect(decisionFor(source).metadata["judge"] === expected).toBe(true);
     }
   });
 
@@ -352,7 +352,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
         ];
         for (const encoded of encodings) {
           const decoded = decisionFor(encoded).metadata["judge"];
-          expect(decoded).toBe(text);
+          expect(decoded === text).toBe(true);
           expect(
             entityResidueIn(typeof decoded === "string" ? decoded : ""),
           ).toBeUndefined();

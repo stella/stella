@@ -794,11 +794,11 @@ test("replay persists a newly derived reasons role and converges without changin
     .update(caseLawDecisions)
     .set({ decisionType: statedType })
     .where(eq(caseLawDecisions.id, fixture.id));
-  const result = {
+  const result = plainTextIngestionResult({
     ...fixture.result,
     decisionType: statedType,
     documentRole: DECISION_DOCUMENT_ROLE.REASONS,
-  };
+  });
   const sourceLease = await acquireCaseLawSourceIngestionLease({
     scopedDb,
     sourceId: fixture.sourceId,

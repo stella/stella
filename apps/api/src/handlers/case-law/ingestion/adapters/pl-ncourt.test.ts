@@ -668,9 +668,12 @@ describe("decision types", () => {
           ? outcome.supplement.document
           : built(outcome);
       expect(decision.documentRole).toBe(role);
-      expect(decision.metadata["documentTypes"]).toEqual(
-        type === "" ? undefined : plNcourtComponents(type),
-      );
+      expect(
+        Bun.deepEquals(
+          decision.metadata["documentTypes"],
+          type === "" ? undefined : plNcourtComponents(type),
+        ),
+      ).toBe(true);
       for (const metadata of [{}, { documentRole: role }]) {
         const replayed = plNcourtAdapter.reparseStoredRaw?.({
           raw: new TextEncoder().encode(decision.sourceRaw ?? ""),
