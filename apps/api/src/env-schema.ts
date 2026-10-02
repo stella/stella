@@ -432,6 +432,25 @@ export const envApiServerSchema = {
       v.maxValue(Number.MAX_SAFE_INTEGER),
     ),
   ),
+  FEATURE_ORG_SERVICE_BUDGETS: featureFlagSchema,
+  SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
@@ -695,7 +714,9 @@ type EnvApiInvariantInput = {
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
+  FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
@@ -719,7 +740,9 @@ export const envApiInvariantViolation = ({
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
+  FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
+  FEATURE_ORG_SERVICE_BUDGETS,
   FRONTEND_URL,
   GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
@@ -778,6 +801,9 @@ export const envApiInvariantViolation = ({
   }
   if (FEATURE_ORG_ACCESS_STATE && ORG_EVALUATION_PERIOD_DAYS === undefined) {
     return "ORG_EVALUATION_PERIOD_DAYS is required when FEATURE_ORG_ACCESS_STATE is true.";
+  }
+  if (FEATURE_ORG_SERVICE_BUDGETS && !FEATURE_ACTION_ADMISSION) {
+    return "FEATURE_ORG_SERVICE_BUDGETS requires FEATURE_ACTION_ADMISSION.";
   }
   if (
     (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&
