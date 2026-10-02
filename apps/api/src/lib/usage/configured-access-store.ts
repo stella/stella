@@ -13,6 +13,7 @@ import {
 } from "@/api/lib/usage/configured-access";
 import {
   configuredAccessSourceMatches,
+  type ConfiguredAccessSource,
   decodeConfiguredAccess,
   readOriginalOrganizationAccessSnapshot,
 } from "@/api/lib/usage/organization-access-snapshot";
@@ -22,10 +23,7 @@ type ApplyConfiguredAccessEventOptions = {
   organizationId: SafeId<"organization">;
   event: ConfiguredAccessEvent;
   mapping: "current" | "replacement";
-  previousSource: Pick<
-    typeof usageEntitlements.$inferSelect,
-    "status" | "cancelAtPeriodEnd" | "hostedLastEventAt"
-  > | null;
+  previousSource: ConfiguredAccessSource | null;
 };
 
 // Called only after the dispatcher has locked and accepted the current mapping;
@@ -74,10 +72,7 @@ export const applyConfiguredAccessEvent = async ({
   if (
     row !== undefined &&
     JSON.stringify(decodeConfiguredAccess(row)) === JSON.stringify(access) &&
-    row?.sourceSignature === sourceSignature &&
-    row.sourceEntitlementStatus === source.status &&
-    row.sourceCancelAtPeriodEnd === source.cancelAtPeriodEnd &&
-    row.sourceEventAt?.getTime() === sourceEventAt?.getTime()
+    configuredAccessSourceMatches({ configured: row, original, source })
   ) {
     return;
   }
@@ -85,6 +80,10 @@ export const applyConfiguredAccessEvent = async ({
     organizationId,
     sourceSignature,
     sourceEventAt,
+    sourceEntitlementExternalId:
+      source.hostedEntitlementExternalId ??
+      panic("Configured access generation is missing"),
+    sourceEntitlementCreatedAt: source.hostedEntitlementCreatedAt,
     sourceEntitlementStatus: source.status,
     sourceCancelAtPeriodEnd: source.cancelAtPeriodEnd,
     configuredAccessStatus: access.status,

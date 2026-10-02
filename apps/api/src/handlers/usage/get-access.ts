@@ -4,6 +4,7 @@ import { env } from "@/api/env";
 import {
   createSafeRootHandler,
   type HandlerConfig,
+  type SafeHandlerGenerator,
 } from "@/api/lib/api-handlers";
 import {
   CONFIGURED_ACCESS_STATE,
@@ -19,9 +20,16 @@ const config = {
   mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
 
+type UsageAccessResult = {
+  paymentRetry: ReturnType<typeof configuredPaymentRetry>;
+};
+
 const getAccess = createSafeRootHandler(
   config,
-  async function* ({ session, safeDb }) {
+  async function* ({
+    session,
+    safeDb,
+  }): SafeHandlerGenerator<UsageAccessResult> {
     if (!env.FEATURE_CONFIGURED_ACCESS) {
       return Result.ok({ paymentRetry: { status: "none" as const } });
     }

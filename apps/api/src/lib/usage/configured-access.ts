@@ -31,7 +31,12 @@ export type ConfiguredAccessEvent =
       cancelAtPeriodEnd: boolean;
     }
   | { type: "cancel" }
-  | { type: "payment_retry"; occurredAt: Date; retryWindowMs: number }
+  | {
+      type: "payment_retry";
+      occurredAt: Date;
+      retryWindowMs: number;
+      cancelAtPeriodEnd: boolean;
+    }
   | { type: "deny" };
 
 export const transitionConfiguredAccess = (
@@ -80,6 +85,17 @@ export const transitionConfiguredAccess = (
     case "payment_retry":
       if (current === null || current.status === "disabled") {
         return { status: "disabled" };
+      }
+      if (event.cancelAtPeriodEnd) {
+        return transitionConfiguredAccess(
+          transitionConfiguredAccess(current, { type: "cancel" }),
+          {
+            type: "payment_retry",
+            occurredAt: event.occurredAt,
+            retryWindowMs: event.retryWindowMs,
+            cancelAtPeriodEnd: false,
+          },
+        );
       }
       if (current.status === "payment_retry") {
         return current;

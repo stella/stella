@@ -513,6 +513,7 @@ const providerAccessEvent = ({
     case "past_due":
       return {
         type: "payment_retry",
+        cancelAtPeriodEnd,
         occurredAt: parseOccurredAt(payload) ?? new Date(),
         retryWindowMs:
           env.PAYMENT_RETRY_WINDOW_MS ??

@@ -439,6 +439,10 @@ export const organizationConfiguredAccess = p.pgTable(
     organizationId: safeOrganizationId("organization_id").primaryKey(),
     sourceSignature: p.text("source_signature").notNull(),
     sourceEventAt: timestamptz("source_event_at"),
+    sourceEntitlementExternalId: p
+      .text("source_entitlement_external_id")
+      .notNull(),
+    sourceEntitlementCreatedAt: timestamptz("source_entitlement_created_at"),
     sourceEntitlementStatus: p
       .text("source_entitlement_status", { enum: USAGE_ENTITLEMENT_STATUSES })
       .notNull(),

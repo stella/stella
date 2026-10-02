@@ -3,6 +3,7 @@ import { describe, expect, test, setSystemTime } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
 import { organization } from "@/api/db/auth-schema";
+import { SETTING_ORGANIZATION_ID, stella } from "@/api/db/rls";
 import type { Transaction } from "@/api/db/root";
 import {
   ORGANIZATION_ACCESS_STATE,
@@ -23,6 +24,7 @@ import {
   POLAR_ENTITLEMENT_STATUSES,
   DEFAULT_POLAR_API_VERSION,
 } from "@/api/lib/hosted-usage-provider/polar/contract";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import {
   CONFIGURED_ACCESS_STATE,
   configuredPaymentRetry,
@@ -1040,6 +1042,212 @@ describe.skipIf(!runPostgresTests)(
         expect(
           (await readAccess(tx, fixture.organizationId)).row,
         ).toBeUndefined();
+      });
+    });
+    test("a replacement with matching lifecycle fields invalidates the old overlay", async () => {
+      await withFixture(async (tx, fixture) => {
+        await seedPrior(tx, fixture, "evaluation_ended");
+        const original = (await readAccess(tx, fixture.organizationId))
+          .snapshot;
+        await deliver({
+          tx,
+          type: "subscription.active",
+          data: { ...fixture.data, modified_at: at(5000).toISOString() },
+        });
+        const before = await readAccess(tx, fixture.organizationId);
+        expectEnabled(before.snapshot, at(6000), true);
+        const replacementId = `replacement_${Bun.randomUUIDv7()}`;
+        env.FEATURE_CONFIGURED_ACCESS = false;
+        await deliver({
+          tx,
+          type: "subscription.active",
+          data: {
+            ...fixture.data,
+            id: replacementId,
+            created_at: at(1000).toISOString(),
+            modified_at: at(5000).toISOString(),
+            current_period_end: at(99_000).toISOString(),
+          },
+        });
+        const source = await tx
+          .select()
+          .from(usageEntitlements)
+          .where(eq(usageEntitlements.organizationId, fixture.organizationId))
+          .limit(1)
+          .then((rows) => rows.at(0));
+        // Prove replacement acceptance and the collision, not an ignored event.
+        expect(source?.hostedEntitlementExternalId).toBe(replacementId);
+        expect(source?.hostedLastEventAt).toEqual(before.row?.sourceEventAt);
+        expect(source?.status).toBe(before.row?.sourceEntitlementStatus);
+        expect(source?.cancelAtPeriodEnd).toBe(
+          before.row?.sourceCancelAtPeriodEnd,
+        );
+        env.FEATURE_CONFIGURED_ACCESS = true;
+        const after = await readAccess(tx, fixture.organizationId);
+        expect(after.row).toEqual(before.row);
+        expect(after.snapshot).toEqual(original);
+        expectEnabled(after.snapshot, at(6000), false);
+      });
+    });
+
+    test("a retry snapshot carrying scheduled cancellation cannot exceed the paid end", async () => {
+      await withFixture(async (tx, fixture) => {
+        await seedPrior(tx, fixture, "configured_access");
+        await deliver({
+          tx,
+          data: {
+            ...fixture.data,
+            status: "past_due",
+            cancel_at_period_end: true,
+            modified_at: at(66_000).toISOString(),
+          },
+        });
+        const result = await readAccess(tx, fixture.organizationId);
+        expect(result.row?.sourceCancelAtPeriodEnd).toBe(true);
+        expect(result.row?.configuredAccessStatus).toBe("payment_retry");
+        expect(result.row?.paymentRetryEndsAt).toEqual(END);
+        for (const delta of [-1, 0, 1]) {
+          expectEnabled(
+            result.snapshot,
+            new Date(END.getTime() + delta),
+            delta < 0,
+          );
+        }
+        expect(
+          configuredPaymentRetry(
+            result.snapshot?.state === CONFIGURED_ACCESS_STATE
+              ? result.snapshot.configuredAccess
+              : null,
+            new Date(END.getTime() - 1),
+          ),
+        ).toEqual({ status: "payment_retry", endsAt: END.toISOString() });
+      });
+    });
+
+    test("canceled snapshots without a cancellation flag deny immediately", async () => {
+      for (const type of ["subscription.updated", "subscription.canceled"]) {
+        for (const prior of [
+          "absent",
+          "configured_access",
+          "ending",
+        ] as const) {
+          await withFixture(async (tx, fixture) => {
+            await seedPrior(tx, fixture, prior);
+            const data = {
+              ...fixture.data,
+              status: "canceled",
+              cancel_at_period_end: undefined,
+              modified_at: at(1000).toISOString(),
+            };
+            expect(JSON.stringify(data)).not.toContain("cancel_at_period_end");
+            await deliver({ tx, type, data });
+            const first = await readAccess(tx, fixture.organizationId);
+            expect(first.row?.configuredAccessStatus).toBe("disabled");
+            expectEnabled(first.snapshot, at(1000), false);
+            await deliver({ tx, type, data });
+            expect((await readAccess(tx, fixture.organizationId)).row).toEqual(
+              first.row,
+            );
+          });
+        }
+      }
+    });
+
+    test("application scopes see only their configured access and cannot write it", async () => {
+      await withFixture(async (tx, fixture) => {
+        const other = await seedFixture(tx);
+        await seedPrior(tx, fixture, "configured_access");
+        await seedPrior(tx, other, "payment_retry");
+        const beforeA = (await readAccess(tx, fixture.organizationId)).row;
+        const beforeB = (await readAccess(tx, other.organizationId)).row;
+        expect(beforeA).toBeDefined();
+        expect(beforeB).toBeDefined();
+        await tx
+          .transaction(async (nested) => {
+            await nested.execute(sql`SELECT
+        set_config('role', ${stella.name}, true),
+        set_config(${SETTING_ORGANIZATION_ID}, ${fixture.organizationId}, true)`);
+            expect(
+              await nested
+                .select({
+                  organizationId: organizationConfiguredAccess.organizationId,
+                })
+                .from(organizationConfiguredAccess),
+            ).toEqual([{ organizationId: fixture.organizationId }]);
+            expect(
+              await nested
+                .select()
+                .from(organizationConfiguredAccess)
+                .where(
+                  eq(
+                    organizationConfiguredAccess.organizationId,
+                    other.organizationId,
+                  ),
+                ),
+            ).toEqual([]);
+            expect(
+              await nested
+                .update(organizationConfiguredAccess)
+                .set({
+                  configuredAccessStatus: "disabled",
+                  configuredPeriodEndsAt: null,
+                  paymentRetryEndsAt: null,
+                  serviceActionsPerPeriod: null,
+                })
+                .where(
+                  eq(
+                    organizationConfiguredAccess.organizationId,
+                    fixture.organizationId,
+                  ),
+                )
+                .returning(),
+            ).toEqual([]);
+            expect(
+              await nested
+                .delete(organizationConfiguredAccess)
+                .where(
+                  eq(
+                    organizationConfiguredAccess.organizationId,
+                    fixture.organizationId,
+                  ),
+                )
+                .returning(),
+            ).toEqual([]);
+            const rejected = await nested
+              .transaction(async (write) => {
+                await write.insert(organizationConfiguredAccess).values({
+                  organizationId: fixture.organizationId,
+                  sourceSignature: "null",
+                  sourceEntitlementExternalId: "fixture-generation",
+                  sourceEntitlementStatus: "active",
+                  sourceCancelAtPeriodEnd: false,
+                  configuredAccessStatus: "disabled",
+                });
+              })
+              .then(
+                () => null,
+                (error: unknown) => error,
+              );
+            // RLS rejects before the duplicate primary key; savepoint restores scope.
+            expect(getPgErrorCode(rejected)).toBe(
+              PG_ERROR.INSUFFICIENT_PRIVILEGE,
+            );
+            nested.rollback();
+          })
+          .then(
+            () => panic("Read fixture unexpectedly committed"),
+            (error: unknown) => {
+              if (!(error instanceof TransactionRollbackError)) {
+                throw error;
+              }
+            },
+          );
+        expect((await readAccess(tx, fixture.organizationId)).row).toEqual(
+          beforeA,
+        );
+        expect((await readAccess(tx, other.organizationId)).row).toEqual(
+          beforeB,
+        );
       });
     });
   },

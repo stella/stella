@@ -74,13 +74,19 @@ export const decodeConfiguredAccess = (
   }
 };
 
+export type ConfiguredAccessSource = Pick<
+  typeof usageEntitlements.$inferSelect,
+  | "status"
+  | "cancelAtPeriodEnd"
+  | "hostedLastEventAt"
+  | "hostedEntitlementExternalId"
+  | "hostedEntitlementCreatedAt"
+>;
+
 type ConfiguredAccessSourceOptions = {
   configured: typeof organizationConfiguredAccess.$inferSelect;
   original: Awaited<ReturnType<typeof readOriginalOrganizationAccessSnapshot>>;
-  source: Pick<
-    typeof usageEntitlements.$inferSelect,
-    "status" | "cancelAtPeriodEnd" | "hostedLastEventAt"
-  >;
+  source: ConfiguredAccessSource;
 };
 
 export const configuredAccessSourceMatches = ({
@@ -88,6 +94,10 @@ export const configuredAccessSourceMatches = ({
   original,
   source,
 }: ConfiguredAccessSourceOptions) =>
+  configured.sourceEntitlementExternalId ===
+    source.hostedEntitlementExternalId &&
+  configured.sourceEntitlementCreatedAt?.getTime() ===
+    source.hostedEntitlementCreatedAt?.getTime() &&
   configured.sourceSignature === JSON.stringify(original ?? null) &&
   configured.sourceEntitlementStatus === source.status &&
   configured.sourceCancelAtPeriodEnd === source.cancelAtPeriodEnd &&
@@ -107,6 +117,10 @@ export const readOrganizationAccessSnapshot = async (
         status: usageEntitlements.status,
         cancelAtPeriodEnd: usageEntitlements.cancelAtPeriodEnd,
         hostedLastEventAt: usageEntitlements.hostedLastEventAt,
+        hostedEntitlementExternalId:
+          usageEntitlements.hostedEntitlementExternalId,
+        hostedEntitlementCreatedAt:
+          usageEntitlements.hostedEntitlementCreatedAt,
         configured: getTableColumns(organizationConfiguredAccess),
       })
       .from(usageEntitlements)

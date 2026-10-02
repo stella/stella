@@ -69,6 +69,7 @@ describe("configured access boundaries", () => {
       type: "payment_retry",
       occurredAt: START,
       retryWindowMs: RETRY_MS,
+      cancelAtPeriodEnd: false,
     } as const;
     const access = transitionConfiguredAccess(active, event);
     expect(access.status).toBe("payment_retry");
@@ -95,6 +96,7 @@ describe("configured access boundaries", () => {
       type: "payment_retry",
       occurredAt: START,
       retryWindowMs: RETRY_MS,
+      cancelAtPeriodEnd: false,
     });
     const recovered = transitionConfiguredAccess(first, {
       type: "active",
@@ -110,6 +112,7 @@ describe("configured access boundaries", () => {
       type: "payment_retry",
       occurredAt: later,
       retryWindowMs: RETRY_MS,
+      cancelAtPeriodEnd: false,
     });
     expect(configuredPaymentRetry(next, later)).toEqual({
       status: "payment_retry",
@@ -126,6 +129,7 @@ describe("configured access boundaries", () => {
         type: "payment_retry",
         occurredAt: START,
         retryWindowMs: RETRY_MS,
+        cancelAtPeriodEnd: false,
       }),
       { status: "disabled" } as const,
       null,
@@ -141,6 +145,7 @@ describe("configured access boundaries", () => {
           type: "payment_retry",
           occurredAt: START,
           retryWindowMs: RETRY_MS,
+          cancelAtPeriodEnd: false,
         }),
       ).toEqual(denied);
     }
@@ -152,12 +157,14 @@ describe("configured access boundaries", () => {
       type: "payment_retry",
       occurredAt: new Date(END.getTime() - 1),
       retryWindowMs: RETRY_MS,
+      cancelAtPeriodEnd: false,
     });
     expectAccess(retry, END, false);
     const firstRetry = transitionConfiguredAccess(active, {
       type: "payment_retry",
       occurredAt: START,
       retryWindowMs: RETRY_MS,
+      cancelAtPeriodEnd: false,
     });
     const cancelled = transitionConfiguredAccess(firstRetry, {
       type: "cancel",
@@ -176,5 +183,39 @@ describe("configured access boundaries", () => {
       START,
       false,
     );
+  });
+  test("scheduled activation preserves stored terms and uncancellation accepts new terms", () => {
+    const renewedEnd = new Date(END.getTime() + 32_000);
+    const renewedProfile = PROFILE + 14;
+    const scheduled = transitionConfiguredAccess(active, {
+      type: "active",
+      periodEndsAt: renewedEnd,
+      serviceActionsPerPeriod: renewedProfile,
+      cancelAtPeriodEnd: true,
+    });
+    expect(scheduled).toEqual({
+      status: "ending",
+      periodEndsAt: END,
+      serviceActionsPerPeriod: PROFILE,
+    });
+    expectAccess(scheduled, new Date(END.getTime() - 1), true);
+    expectAccess(scheduled, END, false);
+    const renewed = transitionConfiguredAccess(scheduled, {
+      type: "active",
+      periodEndsAt: renewedEnd,
+      serviceActionsPerPeriod: renewedProfile,
+      cancelAtPeriodEnd: false,
+    });
+    expect(renewed).toEqual({
+      status: "active",
+      periodEndsAt: renewedEnd,
+      serviceActionsPerPeriod: renewedProfile,
+    });
+    expect(budget(renewed, END)).toEqual({
+      status: "resolved",
+      policy: { periodMs: 23_000, limit: renewedProfile },
+      serviceDeadlineMs: renewedEnd.getTime(),
+    });
+    expectAccess(renewed, renewedEnd, false);
   });
 });

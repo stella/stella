@@ -10,6 +10,8 @@ CREATE TABLE "organization_configured_access" (
   "organization_id" varchar(128) PRIMARY KEY NOT NULL CONSTRAINT "configured_access_org_fk" REFERENCES "organization"("id") ON DELETE cascade,
   "source_signature" text NOT NULL,
   "source_event_at" timestamptz,
+  "source_entitlement_external_id" text NOT NULL,
+  "source_entitlement_created_at" timestamptz,
   "source_entitlement_status" text NOT NULL,
   "source_cancel_at_period_end" boolean NOT NULL,
   "configured_access_status" text NOT NULL,
