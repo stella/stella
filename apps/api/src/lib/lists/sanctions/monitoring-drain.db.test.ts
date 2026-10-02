@@ -5,6 +5,9 @@ import type { SQL } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { loadavg } from "node:os";
 
+import { compareCodeUnit } from "@stll/collation";
+import type { SanctionsEntry } from "@stll/sanctions";
+
 import { organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
@@ -16,6 +19,9 @@ import {
   sanctionsEditionFanouts,
   sanctionsOrganizationMarks,
   sanctionsContactScreenings,
+  sanctionsContactMatches,
+  sanctionsEditionEntries,
+  sanctionsEntryPayloads,
   sanctionsScreeningEvents,
   sanctionsSources,
   sanctionsEditions,
@@ -27,7 +33,13 @@ import {
   SANCTIONS_MARK_LEASE_MS,
 } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
+import {
+  monitoringFingerprint,
+  monitoringSubject,
+} from "@/api/lib/lists/sanctions/monitoring-input";
 import { requestSanctionsMonitoringRefresh } from "@/api/lib/lists/sanctions/monitoring-refresh";
+import { prepareMonitoringContacts } from "@/api/lib/lists/sanctions/monitoring-screen";
+import { screenSanctionsSubjects } from "@/api/lib/lists/sanctions/screening-service";
 import {
   SANCTIONS_SOURCE_CONFIG,
   sanctionsSourceIds,
@@ -842,6 +854,308 @@ test(
     `),
     );
     expect(marks.at(0)).toEqual({ count: 10_000, minimum: "1", maximum: "1" });
+  },
+  TIMEOUT,
+);
+
+const isolatedMonitoringOrganization = async (name: string) => {
+  const id = toSafeId<"organization">(name);
+  await db.insert(organization).values({
+    id,
+    name,
+    slug: name,
+    createdAt: new Date(),
+  });
+  return { organizationId: id, scoped: scopedFor(id) };
+};
+
+const seedIdentityEdition = async (now: Date) => {
+  const editionId = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+  const entries = [
+    { sourceEntryId: "identity-a", name: "Alexandrov Zhuravlev" },
+    { sourceEntryId: "identity-d", name: "Kwame Nkrumah" },
+  ];
+  const hash = new Bun.CryptoHasher("sha256").update(editionId).digest("hex");
+  await db.insert(sanctionsEditions).values({
+    id: editionId,
+    sourceId: "eu",
+    markerKey: hash,
+    contentHash: hash,
+    state: "ready",
+    publishedAt: "2026-09-30",
+    entryCount: entries.length,
+  });
+  for (const { sourceEntryId, name } of entries) {
+    const payload = {
+      source: "eu",
+      issuer: "EU",
+      sourceId: sourceEntryId,
+      referenceNumber: null,
+      entityType: "person",
+      names: [{ name, quality: "strong" }],
+      birthDates: [],
+      nationalities: [],
+      identifiers: [],
+      addresses: [],
+      programme: null,
+      legalBasis: null,
+      listedOn: null,
+      sourceUrl: "https://example.test/identity",
+    } satisfies SanctionsEntry;
+    const contentHash = new Bun.CryptoHasher("sha256")
+      .update(JSON.stringify(payload))
+      .digest("hex");
+    await db
+      .insert(sanctionsEntryPayloads)
+      .values({ contentHash, payload })
+      .onConflictDoNothing();
+    await db
+      .insert(sanctionsEditionEntries)
+      .values({ editionId, sourceEntryId, contentHash });
+  }
+  await db
+    .update(sanctionsSources)
+    .set({
+      activeEditionId: editionId,
+      lastSuccessfulVerifiedAt: now,
+    })
+    .where(eq(sanctionsSources.id, "eu"));
+  return editionId;
+};
+
+test(
+  "batched screening preserves subject identity across invalid slots and reordered batches",
+  async () => {
+    const { organizationId, scoped } =
+      await isolatedMonitoringOrganization("drain-identity");
+    const previousSource =
+      (
+        await db
+          .select()
+          .from(sanctionsSources)
+          .where(eq(sanctionsSources.id, "eu"))
+      ).at(0) ?? panic("EU source missing");
+    try {
+      const editionId = await seedIdentityEdition(futureNow());
+      const subjects = [
+        { displayName: "Alexandrov Zhuravlev", entryIds: ["identity-a"] },
+        { displayName: "12345 !!!", entryIds: [] },
+        { displayName: "Marisol Benitez", entryIds: [] },
+        { displayName: "Kwame Nkrumah", entryIds: ["identity-d"] },
+      ];
+      const rows = await scoped(
+        async (tx) =>
+          await tx
+            .insert(contacts)
+            .values(
+              Array.from({ length: 104 }, (_, index) => ({
+                organizationId,
+                type: "person" as const,
+                displayName:
+                  subjects.at(index % subjects.length)?.displayName ??
+                  panic("Identity fixture missing"),
+              })),
+            )
+            .returning(),
+      );
+      const now = futureNow();
+      const independent = await Promise.all(
+        subjects.map(async (fixture) => {
+          const contact =
+            rows.find(
+              ({ displayName }) => displayName === fixture.displayName,
+            ) ?? panic("Identity contact missing");
+          const result =
+            (
+              await screenSanctionsSubjects({
+                db: scoped,
+                subjects: [monitoringSubject(contact)],
+                practiceJurisdictions: [],
+                resultMode: "complete",
+                now,
+              })
+            ).at(0) ?? panic("Independent screening missing");
+          if (fixture.displayName === "12345 !!!") {
+            expect(result.isErr()).toBe(true);
+            return { displayName: fixture.displayName, outcome: null };
+          }
+          expect(result.isOk()).toBe(true);
+          if (result.isErr()) {
+            panic("Valid independent subject rejected");
+          }
+          const outcome =
+            result.value.lists.find(({ source }) => source === "eu") ??
+            panic("Independent EU result missing");
+          expect(
+            outcome.possibleMatches
+              .map(({ sourceEntryId }) => sourceEntryId)
+              .toSorted(),
+          ).toEqual(fixture.entryIds);
+          return { displayName: fixture.displayName, outcome };
+        }),
+      );
+      const reordered = rows.toReversed();
+      const prepared = await prepareMonitoringContacts({
+        db: scoped,
+        contactRows: reordered.slice(0, 100),
+        now,
+      });
+      prepared.push(
+        ...(await prepareMonitoringContacts({
+          db: scoped,
+          contactRows: reordered.slice(100),
+          now,
+        })),
+      );
+      for (const contact of reordered) {
+        const outcome =
+          prepared
+            .find(({ contactId }) => contactId === contact.id)
+            ?.lists.find(({ source }) => source === "eu") ??
+          panic("Prepared identity missing");
+        const expected = (
+          independent.find(
+            ({ displayName }) => displayName === contact.displayName,
+          ) ?? panic("Independent identity missing")
+        ).outcome;
+        if (expected === null) {
+          expect(outcome).toMatchObject({
+            status: "unavailable",
+            reason: "load-failed",
+            possibleMatches: [],
+          });
+        } else {
+          expect(outcome).toEqual(expected);
+        }
+      }
+      const drain = async () =>
+        await drainSanctionsContactMarks({
+          db: scoped,
+          organizationId,
+          now,
+          signal: new AbortController().signal,
+        });
+      expect(await drain()).toEqual({ claimed: 100, terminal: 100 });
+      expect(await drain()).toEqual({ claimed: 4, terminal: 4 });
+      const census = async () =>
+        await scoped(async (tx) => ({
+          matches: await tx.select().from(sanctionsContactMatches),
+          coverage: await tx.select().from(sanctionsContactScreenings),
+          events: await tx.select().from(sanctionsScreeningEvents),
+          marks: await tx.select().from(sanctionsContactMarks),
+        }));
+      const first = await census();
+      expect(first.marks).toEqual([]);
+      for (const contact of rows) {
+        const fixture =
+          subjects.find(
+            ({ displayName }) => displayName === contact.displayName,
+          ) ?? panic("Identity fixture missing");
+        expect(
+          first.matches
+            .filter(({ contactId }) => contactId === contact.id)
+            .map(({ sourceEntryId }) => sourceEntryId)
+            .toSorted(),
+        ).toEqual(fixture.entryIds);
+        expect(
+          first.events
+            .filter(({ contactId }) => contactId === contact.id)
+            .map(({ sourceId, sourceEntryId, type }) => ({
+              sourceId,
+              sourceEntryId,
+              type,
+            })),
+        ).toEqual(
+          fixture.entryIds.map((sourceEntryId) => ({
+            sourceId: "eu",
+            sourceEntryId,
+            type: "new",
+          })),
+        );
+        const coverage = first.coverage.filter(
+          ({ contactId }) => contactId === contact.id,
+        );
+        expect(coverage.map(({ sourceId }) => sourceId).toSorted()).toEqual(
+          sanctionsSourceIds().toSorted(),
+        );
+        expect(
+          coverage.every(
+            ({ contactFingerprint }) =>
+              contactFingerprint === monitoringFingerprint(contact),
+          ),
+        ).toBe(true);
+        const eu = coverage.find(({ sourceId }) => sourceId === "eu");
+        expect(eu).toMatchObject(
+          contact.displayName === "12345 !!!"
+            ? { status: "unavailable", reason: "load-failed", editionId }
+            : {
+                status: fixture.entryIds.length ? "possible-match" : "clear",
+                reason: null,
+                editionId,
+              },
+        );
+        if (contact.displayName === "12345 !!!") {
+          expect(coverage.every(({ status }) => status === "unavailable")).toBe(
+            true,
+          );
+        }
+      }
+      await scoped(
+        async (tx) =>
+          await requestSanctionsMonitoringRefresh(tx, {
+            organizationId,
+            contactIds: reordered.map(({ id }) => id),
+          }),
+      );
+      const replayNow = futureNow();
+      for (let batch = 0; batch < 2; batch += 1) {
+        await drainSanctionsContactMarks({
+          db: scoped,
+          organizationId,
+          now: replayNow,
+          signal: new AbortController().signal,
+        });
+      }
+      const replay = await census();
+      expect(replay.marks).toEqual([]);
+      expect(
+        replay.matches
+          .map(({ updatedAt: _updatedAt, ...row }) => row)
+          .toSorted((a, b) => compareCodeUnit(a.contactId, b.contactId)),
+      ).toEqual(
+        first.matches
+          .map(({ updatedAt: _updatedAt, ...row }) => row)
+          .toSorted((a, b) => compareCodeUnit(a.contactId, b.contactId)),
+      );
+      expect(replay.events).toEqual(first.events);
+      expect(
+        replay.coverage
+          .map(({ checkedAt: _checkedAt, ...row }) => row)
+          .toSorted((a, b) =>
+            compareCodeUnit(
+              `${a.contactId}:${a.sourceId}`,
+              `${b.contactId}:${b.sourceId}`,
+            ),
+          ),
+      ).toEqual(
+        first.coverage
+          .map(({ checkedAt: _checkedAt, ...row }) => row)
+          .toSorted((a, b) =>
+            compareCodeUnit(
+              `${a.contactId}:${a.sourceId}`,
+              `${b.contactId}:${b.sourceId}`,
+            ),
+          ),
+      );
+    } finally {
+      await db
+        .update(sanctionsSources)
+        .set({
+          activeEditionId: previousSource.activeEditionId,
+          lastSuccessfulVerifiedAt: previousSource.lastSuccessfulVerifiedAt,
+        })
+        .where(eq(sanctionsSources.id, "eu"));
+    }
   },
   TIMEOUT,
 );
