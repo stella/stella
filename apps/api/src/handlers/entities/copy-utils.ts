@@ -1111,6 +1111,7 @@ const validateMoveSourceRows = async ({
     workspaceId: sourceWorkspaceId,
     entityIds: sourceIds,
     operation: "move",
+    now: new Date(),
   });
   if (Result.isError(removal)) {
     return removal;

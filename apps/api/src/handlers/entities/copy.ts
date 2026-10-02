@@ -440,6 +440,7 @@ const copyToWorkspaceHandler = async function* ({
           workspaceId: sourceWorkspaceId,
           entityIds: sourceEntities.map(({ id }) => id),
           operation: "move",
+          now: new Date(),
         });
         if (Result.isError(removal)) {
           return removal;

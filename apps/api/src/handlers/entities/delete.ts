@@ -150,6 +150,7 @@ export const deleteEntitiesHandler = async function* ({
         workspaceId,
         entityIds: body.entityIds,
         operation: "delete",
+        now: new Date(),
       });
       if (removalState.isErr()) {
         return {

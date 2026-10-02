@@ -11,7 +11,9 @@ import {
   timeEntries,
 } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { livePdfSigningSessionPredicates } from "@/api/lib/files/pdf-signing/session-predicates";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
 
 type EntityRemovalStateOptions = {
@@ -19,6 +21,7 @@ type EntityRemovalStateOptions = {
   workspaceId: SafeId<"workspace">;
   entityIds: SafeId<"entity">[];
   operation: "delete" | "move";
+  now: Date;
 };
 
 export const validateEntityRemovalState = async ({
@@ -26,6 +29,7 @@ export const validateEntityRemovalState = async ({
   workspaceId,
   entityIds,
   operation,
+  now,
 }: EntityRemovalStateOptions): Promise<Result<void, HandlerError>> => {
   if (entityIds.length === 0) {
     return Result.ok(undefined);
@@ -73,7 +77,7 @@ export const validateEntityRemovalState = async ({
       and(
         eq(desktopEditSessions.workspaceId, workspaceId),
         inArray(desktopEditSessions.entityId, entityIds),
-        eq(desktopEditSessions.status, "open"),
+        ...liveDesktopEditSessionPredicates(now),
       ),
     )
     .limit(1);
@@ -101,7 +105,7 @@ export const validateEntityRemovalState = async ({
       and(
         eq(pdfSigningSessions.workspaceId, workspaceId),
         inArray(pdfSigningSessions.entityId, entityIds),
-        eq(pdfSigningSessions.status, "open"),
+        ...livePdfSigningSessionPredicates(now),
       ),
     )
     .limit(1);

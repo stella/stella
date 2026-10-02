@@ -111,6 +111,7 @@ const validate = (
         workspaceId,
         entityIds: [createSafeId<"entity">(), f.entityId],
         operation,
+        now: new Date(),
       }),
   );
 
@@ -268,5 +269,58 @@ test.each(Object.entries(cases))(
     // Restrictions must be removed before the organization's cascading teardown.
     await db.delete(organization).where(eq(organization.id, f.organizationId));
     await db.delete(user).where(eq(user.id, f.userId));
+  },
+);
+
+test.each(["desktop", "signing"] as const)(
+  "only unexpired open %s sessions block removal at the caller's cutoff",
+  async (kind) => {
+    const f = await seed();
+    const clear = await cases[kind](f);
+    const now = new Date("2030-01-01T12:00:00.000Z");
+    try {
+      for (const offset of [-1, 0, 1]) {
+        const tokenExpiresAt = new Date(now.getTime() + offset);
+        if (kind === "desktop") {
+          await db
+            .update(desktopEditSessions)
+            .set({ tokenExpiresAt })
+            .where(eq(desktopEditSessions.entityId, f.entityId));
+        } else {
+          await db
+            .update(pdfSigningSessions)
+            .set({ tokenExpiresAt })
+            .where(eq(pdfSigningSessions.entityId, f.entityId));
+        }
+        const result = await db.transaction(
+          async (tx) =>
+            await validateEntityRemovalState({
+              tx: asTestRaw<Transaction>(tx),
+              workspaceId: f.workspaceId,
+              entityIds: [f.entityId],
+              operation: "move",
+              now,
+            }),
+        );
+        if (offset <= 0) {
+          expect(result.isOk()).toBe(true);
+        } else {
+          expect(result.isErr()).toBe(true);
+          if (result.isErr()) {
+            expect(result.error).toMatchObject({
+              status: 409,
+              code: "entity_transfer_source_in_use",
+              retryable: true,
+            });
+          }
+        }
+      }
+    } finally {
+      await clear();
+      await db
+        .delete(organization)
+        .where(eq(organization.id, f.organizationId));
+      await db.delete(user).where(eq(user.id, f.userId));
+    }
   },
 );

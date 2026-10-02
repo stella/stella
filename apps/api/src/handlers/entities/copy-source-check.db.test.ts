@@ -407,6 +407,75 @@ test.each(Object.entries(removalBlockers))(
   30_000,
 );
 
+test.each(["desktop", "signing"] as const)(
+  "folder move allows an expired open %s session on a child",
+  async (kind) => {
+    const f = await seed(true);
+    const clearSession = await removalBlockers[kind](f);
+    // A fixed old timestamp keeps this a liveness test, independent of how
+    // long the handler takes to reach either removal-state check.
+    const tokenExpiresAt = new Date("2020-01-01T00:00:00.000Z");
+    try {
+      switch (kind) {
+        case "desktop": {
+          const expired = await db
+            .update(desktopEditSessions)
+            .set({ tokenExpiresAt })
+            .where(eq(desktopEditSessions.entityId, f.documentId))
+            .returning({
+              status: desktopEditSessions.status,
+              tokenExpiresAt: desktopEditSessions.tokenExpiresAt,
+            });
+          expect(expired).toEqual([{ status: "open", tokenExpiresAt }]);
+          break;
+        }
+        case "signing": {
+          const expired = await db
+            .update(pdfSigningSessions)
+            .set({ tokenExpiresAt })
+            .where(eq(pdfSigningSessions.entityId, f.documentId))
+            .returning({
+              status: pdfSigningSessions.status,
+              tokenExpiresAt: pdfSigningSessions.tokenExpiresAt,
+            });
+          expect(expired).toEqual([{ status: "open", tokenExpiresAt }]);
+          break;
+        }
+        default: {
+          const exhaustive: never = kind;
+          throw new TypeError(`Unexpected session kind: ${exhaustive}`);
+        }
+      }
+      expect(await f.run(true)).toHaveProperty("entityId");
+      expect(
+        await db.$count(
+          entities,
+          eq(entities.workspaceId, f.sourceWorkspaceId),
+        ),
+      ).toBe(0);
+      expect(
+        await db.$count(
+          entities,
+          eq(entities.workspaceId, f.targetWorkspaceId),
+        ),
+      ).toBe(2);
+      expect(
+        f.fake.requests.filter(({ method }) => method === "COPY"),
+      ).toHaveLength(2);
+      expect(f.fake.objects.size).toBe(2);
+      expect(
+        [...f.fake.objects.keys()].every((key) =>
+          key.includes(f.targetWorkspaceId),
+        ),
+      ).toBe(true);
+    } finally {
+      await clearSession();
+      f.fake.stop();
+    }
+  },
+  30_000,
+);
+
 test("move refuses a source beyond the live-version read limit without suggesting retry or copying objects", async () => {
   const f = await seed(false);
   try {
