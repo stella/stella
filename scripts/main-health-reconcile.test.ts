@@ -296,7 +296,7 @@ const fixture = () => {
         repo: REPO,
         eventName,
         payload:
-          eventName === "workflow_run" ? { workflow_run: { id: 100 } } : {},
+          eventName === "workflow_run" ? { workflow_run: runs.get(100) } : {},
       },
       config: { autoRevert: "on" },
     } satisfies MainHealthOptions;
@@ -442,4 +442,41 @@ describe("main health reconciles replaced workflow events", () => {
       expect(f.proposals).toHaveLength(0);
     },
   );
+});
+
+test("an all-skipped push with success conclusion and no status is a cheap no-op", async () => {
+  const reads: string[] = [];
+  const api: MainHealthApi = {
+    request: async (route) => {
+      reads.push(route);
+      return { data: [] };
+    },
+    graphql: async () => {
+      throw new Error("UNEXPECTED_GRAPHQL_WRITE");
+    },
+  };
+  const result = await reconcileMainHealth({
+    github: api,
+    writer: api,
+    config: { autoRevert: "on" },
+    context: {
+      repo: REPO,
+      eventName: "workflow_run",
+      payload: {
+        workflow_run: {
+          id: 100,
+          path: MAIN_HEAVY.path,
+          repository: { full_name: "stella/stella" },
+          event: "push",
+          head_branch: "main",
+          head_sha: RED_B,
+          display_title: `${MAIN_HEAVY.testedPrefix}${RED_B}`,
+          html_url: "https://github.com/stella/stella/actions/runs/100",
+          conclusion: "success",
+        },
+      },
+    },
+  });
+  expect(result).toEqual({ title: "IGNORED", reason: "NO_HEAVY_KNOWLEDGE" });
+  expect(reads).toEqual(["GET /repos/{owner}/{repo}/commits/{ref}/statuses"]);
 });

@@ -93,7 +93,7 @@ const fixture = () => {
       name: MAIN_HEAVY.name,
       repository: { full_name: "stella/stella" },
       head_branch: "main",
-      head_sha: event === "push" ? commit : RED,
+      head_sha: event === "workflow_dispatch" ? RED : commit,
       display_title: `${MAIN_HEAVY.testedPrefix}${commit}`,
       html_url: link,
       event,
@@ -277,6 +277,14 @@ describe("main recovery with a fake GitHub", () => {
       expect(codeWrites(f)).toHaveLength(value === "on" ? 1 : 0);
     },
   );
+  test("nightly heavy runs use the same trusted commit binding", async () => {
+    const f = fixture();
+    f.setHeavy(RED, "failure", "schedule");
+    expect((await f.run({ eventName: "workflow_run", runId: 30 })).title).toBe(
+      "MAIN_RED_REVERT_OPENED",
+    );
+    expect(codeWrites(f)).toHaveLength(1);
+  });
   test("green parent identifies culprit and proposes a signed verified inverse", async () => {
     const f = fixture();
     const result = await f.run();

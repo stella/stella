@@ -124,7 +124,7 @@ const repositoryTools = (
       text(object(run["repository"])["full_name"]) !== repository ||
       run["path"] !== MAIN_HEAVY.path ||
       run["head_branch"] !== "main" ||
-      !["push", "workflow_dispatch"].includes(text(run["event"]))
+      !["push", "workflow_dispatch", "schedule"].includes(text(run["event"]))
     ) {
       return fail("UNTRUSTED_HEAVY_RUN");
     }
@@ -133,7 +133,10 @@ const repositoryTools = (
       return fail("MISSING_TESTED_SHA_BINDING");
     }
     const result = sha(title.slice(MAIN_HEAVY.testedPrefix.length));
-    if (run["event"] === "push" && sha(run["head_sha"]) !== result) {
+    if (
+      run["event"] !== "workflow_dispatch" &&
+      sha(run["head_sha"]) !== result
+    ) {
       return fail("HEAVY_SHA_MISMATCH");
     }
     return result;
@@ -1166,6 +1169,28 @@ export const reconcileMainHealth = async (options: MainHealthOptions) => {
     }
   }
   const tools = repositoryTools(options.github, options.context.repo);
+  if (options.context.eventName === "workflow_run") {
+    const wake = object(options.context.payload["workflow_run"]);
+    if (wake["path"] === MAIN_HEAVY.path) {
+      const commit = tools.testedSha(wake);
+      const link = `https://github.com/${tools.repository}/actions/runs/${number(wake["id"])}`;
+      if (wake["html_url"] !== link) {return fail("INVALID_HEAVY_RUN_LINK");}
+      const statuses = (
+        await tools.list("GET /repos/{owner}/{repo}/commits/{ref}/statuses", {
+          ref: commit,
+        })
+      ).map(object);
+      if (
+        !statuses.some(
+          (status) =>
+            status["context"] === MAIN_HEAVY.context &&
+            status["target_url"] === link &&
+            object(status["creator"])["login"] === MAIN_HEAVY.publisher,
+        )
+      )
+        {return { title: "IGNORED", reason: "NO_HEAVY_KNOWLEDGE" };}
+    }
+  }
   const head = await tools.main();
   const reporter = healthReporter(tools);
   try {
