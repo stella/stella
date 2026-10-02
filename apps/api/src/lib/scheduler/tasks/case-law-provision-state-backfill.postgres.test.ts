@@ -56,7 +56,7 @@ const withFixture = async (
   }) => Promise<void>,
 ) => {
   if (databaseUrl === undefined) {
-    return panic("DATABASE_URL required");
+    panic("DATABASE_URL required");
   }
   await withGatedTestClients(databaseUrl, async ({ openClient }) => {
     const operator = openClient().sql;
@@ -267,7 +267,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       expect(failure).toMatchObject({ cause: expect.any(BackfillFailedError) });
       expect(isPgError(failure, PG_ERROR.QUERY_CANCELED)).toBe(true);
       expect(
-        await operator.unsafe(
+        await operator.unsafe<{ name: string }[]>(
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors`,
         ),
       ).toHaveLength(0);
@@ -275,7 +275,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       await resumed.run();
       expect(resumed.failures).toEqual([]);
       expect(
-        await operator.unsafe(
+        await operator.unsafe<{ name: string }[]>(
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
         ),
       ).toHaveLength(2);
@@ -297,7 +297,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         ...resumed.failures,
       ]).toEqual([]);
       expect(
-        await operator.unsafe(
+        await operator.unsafe<{ name: string }[]>(
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
         ),
       ).toHaveLength(2);
@@ -320,7 +320,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
             )
           ).at(0)?.pid;
           if (pid === undefined) {
-            return panic("missing worker pid");
+            panic("missing worker pid");
           }
           await operator.unsafe("SELECT pg_terminate_backend($1)", [pid]);
         },
@@ -328,7 +328,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       await killed.run();
       expect(killed.failures).toHaveLength(1);
       expect(
-        await operator.unsafe(
+        await operator.unsafe<{ name: string }[]>(
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors WHERE completed_at IS NOT NULL`,
         ),
       ).toHaveLength(2);

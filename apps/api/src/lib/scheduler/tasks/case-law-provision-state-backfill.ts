@@ -217,7 +217,7 @@ export const createCaseLawProvisionStateBackfillTask =
     if (Result.isError(settled)) {
       if (signal.aborted) {
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
-        return;
+        return undefined;
       }
       return Result.err(
         new SchedulerTaskFailure({
@@ -232,7 +232,7 @@ export const createCaseLawProvisionStateBackfillTask =
       // the unit rolled back and the next run retries it from its cursor.
       if (signal.aborted) {
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
-        return;
+        return undefined;
       }
       if (run.error.cause instanceof BackfillHeldError) {
         logger.info("scheduler.case_law_provision_state_backfill_held", {
@@ -243,7 +243,7 @@ export const createCaseLawProvisionStateBackfillTask =
             ? {}
             : { heldSince: run.error.cause.heldSince }),
         });
-        return;
+        return undefined;
       }
       return Result.err(
         new SchedulerTaskFailure({

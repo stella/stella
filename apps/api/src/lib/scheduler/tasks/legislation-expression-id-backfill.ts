@@ -360,7 +360,7 @@ export const createLegislationExpressionIdBackfill =
             ? {}
             : { heldSince: settled.error.heldSince }),
         });
-        return;
+        return undefined;
       }
       return Result.err(
         new SchedulerTaskFailure({

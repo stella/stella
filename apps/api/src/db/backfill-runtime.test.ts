@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { SQL } from "bun";
 import { expect, test } from "bun:test";
 import { PgDialect } from "drizzle-orm/pg-core";
@@ -297,13 +297,23 @@ test.each(["default", "changes"] as const)(
         );
       }
       verdict = { kind: "unknown", signals: [] };
-      await expect(runtime.step(batch)).rejects.toBeInstanceOf(
-        BackfillHeldError,
-      );
+      const firstHold = await Result.tryPromise({
+        try: async () => await runtime.step(batch),
+        catch: (cause) => cause,
+      });
+      expect(firstHold.isErr()).toBe(true);
+      if (firstHold.isErr()) {
+        expect(firstHold.error).toBeInstanceOf(BackfillHeldError);
+      }
       const held = checkpoint;
-      await expect(runtime.step(batch)).rejects.toBeInstanceOf(
-        BackfillHeldError,
-      );
+      const secondHold = await Result.tryPromise({
+        try: async () => await runtime.step(batch),
+        catch: (cause) => cause,
+      });
+      expect(secondHold.isErr()).toBe(true);
+      if (secondHold.isErr()) {
+        expect(secondHold.error).toBeInstanceOf(BackfillHeldError);
+      }
       expect(decisions).toHaveLength(reporting === "changes" ? 2 : 10);
       expect(summaries).toHaveLength(reporting === "changes" ? 0 : 4);
       await runtime.recordCompletion(async () => false);
@@ -408,14 +418,29 @@ for (const mode of ["database", "script"] as const) {
         parameters: readonly unknown[] = [],
       ) => {
         if (
-          statement.startsWith("INSERT") ||
+          statement.startsWith("INSERT INTO database_backfill_states") ||
           statement.startsWith("UPDATE database_backfill_states")
         ) {
-          const serialized = parameters.at(2);
-          if (typeof serialized === "string") {
-            const batch: unknown = JSON.parse(serialized);
-            checkpoint = { cursor: parameters.at(1), batch };
+          const batchParameter = statement.startsWith(
+            "INSERT INTO database_backfill_states",
+          )
+            ? 3
+            : Number(/batch = \$(\d+)/u.exec(statement)?.at(1));
+          const cursorParameter = statement.startsWith(
+            "INSERT INTO database_backfill_states",
+          )
+            ? 2
+            : Number(/cursor = \$(\d+)/u.exec(statement)?.at(1));
+          const serialized = parameters.at(batchParameter - 1);
+          if (
+            !Number.isSafeInteger(batchParameter) ||
+            !Number.isSafeInteger(cursorParameter) ||
+            typeof serialized !== "string"
+          ) {
+            panic("Invalid checkpoint fixture parameter binding");
           }
+          const batch: unknown = JSON.parse(serialized);
+          checkpoint = { cursor: parameters.at(cursorParameter - 1), batch };
         }
         if (statement.startsWith("SELECT cursor, batch")) {
           return [checkpoint];

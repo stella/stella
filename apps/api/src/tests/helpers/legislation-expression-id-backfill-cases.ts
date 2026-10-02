@@ -80,7 +80,7 @@ export const registerExpressionBackfillCases = ({
     if (!job) {
       return panic("expected the scheduler job");
     }
-    let continued = false;
+    const continuation = { requested: false };
     continuationAt = undefined;
     const outcome = await task({
       db: asTestRaw<SchedulerDb>(db),
@@ -89,12 +89,12 @@ export const registerExpressionBackfillCases = ({
       runId: createSafeId<"schedulerJobRun">(),
       scheduleContinuation: (at) => {
         continuationAt = at;
-        continued = true;
+        continuation.requested = true;
       },
       signal: new AbortController().signal,
       logger: taskLogger,
     });
-    return outcome !== undefined && outcome.isErr() ? outcome : continued;
+    return outcome?.isErr() ? outcome : continuation.requested;
   };
 
   /**
@@ -184,7 +184,8 @@ export const registerExpressionBackfillCases = ({
     options: Parameters<typeof createLegislationExpressionIdBackfill>[0] = {},
   ) =>
     createLegislationExpressionIdBackfill({
-      readVerdict: async () => ({ kind: "normal", signals: [] }),
+      readVerdict: async () =>
+        await Promise.resolve({ kind: "normal", signals: [] }),
       observeStatus: () => undefined,
       createRuntime,
       ...options,
@@ -434,7 +435,8 @@ export const registerExpressionBackfillCases = ({
           createTask({
             pageRows: 1,
             clock: () => 100_000,
-            readVerdict: async () => ({ kind: "stop", signals: [] }),
+            readVerdict: async () =>
+              await Promise.resolve({ kind: "stop", signals: [] }),
           }),
           recording,
         ),
@@ -502,14 +504,12 @@ export const registerExpressionBackfillCases = ({
         const task = createTask({
           createRuntime: (options) => ({
             ...createRuntime(options),
-            step: async () => {
-              throw failure;
-            },
+            step: async () => await Promise.reject(failure),
           }),
         });
         const outcome = await run(task, recording);
         if (typeof outcome === "boolean") {
-          return panic("Expected expression scheduler failure");
+          panic("Expected expression scheduler failure");
         }
         const rejected = outcome.error.cause;
         expect(rejected).toBe(failure);
@@ -562,7 +562,7 @@ export const registerExpressionBackfillCases = ({
             recording,
           );
           if (typeof outcome === "boolean") {
-            return panic("Expected real expression statement timeout");
+            panic("Expected real expression statement timeout");
           }
           const rejected = outcome.error.cause;
           expect(rejected).toBeInstanceOf(BackfillFailedError);

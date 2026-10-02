@@ -226,9 +226,14 @@ describe.skipIf(!enabled)(
           const first = await openRuntime();
           expect((await first.runtime.step(batch)).cursor).toBe("4");
           balance(64);
-          await expect(first.runtime.step(batch)).rejects.toBeInstanceOf(
-            BackfillHeldError,
+          const firstHeld = await Result.tryPromise(
+            async () => await first.runtime.step(batch),
           );
+          expect(firstHeld.isErr()).toBe(true);
+          if (firstHeld.isOk()) {
+            panic("Held runtime executed work");
+          }
+          expect(firstHeld.error.cause).toBeInstanceOf(BackfillHeldError);
           const held = await checkpoint();
           expect(held.cursor).toBe("4");
           expect(held.batch.heldSince).not.toBeNull();
@@ -239,9 +244,14 @@ describe.skipIf(!enabled)(
           const restarted = await openRuntime();
           advance(config.holdBackoffCapMs + 1);
           balance(74);
-          await expect(restarted.runtime.step(batch)).rejects.toBeInstanceOf(
-            BackfillHeldError,
+          const restartedHeld = await Result.tryPromise(
+            async () => await restarted.runtime.step(batch),
           );
+          expect(restartedHeld.isErr()).toBe(true);
+          if (restartedHeld.isOk()) {
+            panic("Restarted held runtime executed work");
+          }
+          expect(restartedHeld.error.cause).toBeInstanceOf(BackfillHeldError);
           expect((await checkpoint()).batch.heldSince).toBe(
             held.batch.heldSince,
           );
@@ -287,9 +297,14 @@ describe.skipIf(!enabled)(
               return written;
             });
             expect((await checkpoint()).cursor).toBe("4");
-            await expect(backfill.runtime.step(batch)).rejects.toBeInstanceOf(
-              BackfillHeldError,
+            const heldRun = await Result.tryPromise(
+              async () => await backfill.runtime.step(batch),
             );
+            expect(heldRun.isErr()).toBe(true);
+            if (heldRun.isOk()) {
+              panic("Operator-held runtime executed work");
+            }
+            expect(heldRun.error.cause).toBeInstanceOf(BackfillHeldError);
             expect((await checkpoint()).cursor).toBe("4");
             expect((await checkpoint()).batch.heldSince).not.toBeNull();
             await operator.close();
@@ -336,9 +351,9 @@ describe.skipIf(!enabled)(
           );
           expect(killed.isErr()).toBe(true);
           if (killed.isOk()) {
-            return panic("Killed backfill transaction succeeded");
+            panic("Killed backfill transaction succeeded");
           }
-          expect(String(killed.error)).toMatch(
+          expect(killed.error.message).toMatch(
             /closed|terminated|connection|socket/iu,
           );
           await first.close();
@@ -373,11 +388,17 @@ describe.skipIf(!enabled)(
         const first = await openRuntime();
         const second = await openRuntime();
         balance(64);
-        await expect(
-          first.runtime.step(async () =>
-            panic("Held runtime must not execute work"),
-          ),
-        ).rejects.toBeInstanceOf(BackfillHeldError);
+        const heldRun = await Result.tryPromise(
+          async () =>
+            await first.runtime.step(async () =>
+              panic("Held runtime must not execute work"),
+            ),
+        );
+        expect(heldRun.isErr()).toBe(true);
+        if (heldRun.isOk()) {
+          panic("Held runtime executed work");
+        }
+        expect(heldRun.error.cause).toBeInstanceOf(BackfillHeldError);
         const held = await checkpoint();
         const entered = Promise.withResolvers<undefined>();
         const release = Promise.withResolvers<undefined>();
@@ -400,9 +421,9 @@ describe.skipIf(!enabled)(
           );
           expect(concurrent.isErr()).toBe(true);
           if (concurrent.isOk()) {
-            return panic("Concurrent completion bypassed the checkpoint lock");
+            panic("Concurrent completion bypassed the checkpoint lock");
           }
-          expect(String(concurrent.error)).toMatch(/lock timeout/iu);
+          expect(concurrent.error.message).toMatch(/lock timeout/iu);
           expect(confirmations).toBe(0);
           expect(await checkpoint()).toEqual(held);
         } finally {
@@ -433,7 +454,7 @@ describe.skipIf(!enabled)(
             )
           ).at(0);
           if (backend === undefined) {
-            return panic("Missing test backend pid");
+            panic("Missing test backend pid");
           }
           expect(
             (
@@ -449,9 +470,9 @@ describe.skipIf(!enabled)(
           );
           expect(completion.isErr()).toBe(true);
           if (completion.isOk()) {
-            return panic("Killed runtime recorded completion");
+            panic("Killed runtime recorded completion");
           }
-          expect(String(completion.error)).toMatch(
+          expect(completion.error.message).toMatch(
             /closed|terminated|connection|socket/iu,
           );
           expect((await checkpoint()).cursor).toBe("8");
@@ -484,11 +505,17 @@ describe.skipIf(!enabled)(
         const completing = await openRuntime();
         const holding = await openRuntime();
         balance(64);
-        await expect(
-          holding.runtime.step(async () =>
-            panic("Held runtime must not execute work"),
-          ),
-        ).rejects.toBeInstanceOf(BackfillHeldError);
+        const heldRun = await Result.tryPromise(
+          async () =>
+            await holding.runtime.step(async () =>
+              panic("Held runtime must not execute work"),
+            ),
+        );
+        expect(heldRun.isErr()).toBe(true);
+        if (heldRun.isOk()) {
+          panic("Held runtime executed work");
+        }
+        expect(heldRun.error.cause).toBeInstanceOf(BackfillHeldError);
         const held = await checkpoint();
         expect(held.batch.heldSince).not.toBeNull();
         await completing.runtime.recordCompletion(async () => false);

@@ -222,7 +222,7 @@ test("separate signal readers coalesce provider requests and refresh at exactly 
   const startedResolvers: (() => void)[] = [];
   const started = Array.from(
     { length: 2 },
-    () =>
+    async () =>
       new Promise<void>((resolve) => {
         startedResolvers.push(resolve);
       }),

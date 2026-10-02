@@ -179,7 +179,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     const outcome = await task.run();
     expect(outcome).toBeDefined();
     if (outcome === undefined || outcome.isOk()) {
-      return panic("Expected a scheduler task failure result");
+      panic("Expected a scheduler task failure result");
     }
     expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
     expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
@@ -190,7 +190,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
       !(failure instanceof ProvisionBackfillUnitError) ||
       !(failure.cause instanceof BackfillFailedError)
     ) {
-      return panic("Expected typed provision timeout failure");
+      panic("Expected typed provision timeout failure");
     }
     expect(failure.cause.cause).toBe(timeout);
     expect(isPgError(failure, PG_ERROR.QUERY_CANCELED)).toBe(true);
@@ -220,7 +220,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     task.advance(120_000);
     const outcome = await task.run();
     if (outcome === undefined || outcome.isOk()) {
-      return panic("Expected failure after the hold expired");
+      panic("Expected failure after the hold expired");
     }
     expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
     expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
@@ -252,7 +252,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
       });
       const outcome = await task.run();
       if (outcome === undefined || outcome.isOk()) {
-        return panic("Expected a scheduler CHECK timeout failure result");
+        panic("Expected a scheduler CHECK timeout failure result");
       }
       expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
       expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
@@ -263,7 +263,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
         !(failure instanceof ProvisionBackfillUnitError) ||
         !(failure.cause instanceof BackfillFailedError)
       ) {
-        return panic("Expected typed provision CHECK timeout failure");
+        panic("Expected typed provision CHECK timeout failure");
       }
       expect(outcome.error.cause).toBe(failure);
       expect(failure.cause.cause).toBe(timeout);
