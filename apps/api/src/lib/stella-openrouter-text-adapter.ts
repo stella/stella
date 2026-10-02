@@ -226,7 +226,9 @@ class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
           ? managedProviderUnavailable("openrouter")
           : error,
     });
-    if (Result.isError(result)) {throw result.error;}
+    if (Result.isError(result)) {
+      throw result.error;
+    }
     return result.value;
   }
 
