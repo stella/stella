@@ -10,6 +10,7 @@ import {
   ONLINE_MIGRATION_REPAIRS,
   runOnlineMigrations,
 } from "./online-migrations";
+import { SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS } from "./sanctions-monitoring-constraint-validation";
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
 const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
@@ -54,6 +55,27 @@ describe("online migrations", () => {
       [...repairNames].filter((name) => name.includes("provision")),
     ).toEqual([]);
   });
+
+  test.each(SANCTIONS_MONITORING_CONSTRAINT_VALIDATIONS)(
+    "validates monitoring constraint $name once and rejects incomplete startup",
+    async ({ name }) => {
+      const harness = createHarness({ unvalidatedConstraints: [name] });
+      await expect(assertOnlineMigrationsApplied(harness.pool)).rejects.toThrow(
+        `constraint ${name} is not validated`,
+      );
+      const beforeRepair = harness.statements.length;
+      await runOnlineMigrations(harness.pool);
+      await assertOnlineMigrationsApplied(harness.pool);
+      await runOnlineMigrations(harness.pool);
+      const validations = harness.statements
+        .slice(beforeRepair)
+        .filter((statement) =>
+          statement.includes(`VALIDATE CONSTRAINT "${name}"`),
+        );
+      expect(validations).toHaveLength(1);
+      expect(harness.released()).toBe(true);
+    },
+  );
 
   test("accepts an already valid index without rebuilding it", async () => {
     const harness = createHarness();
