@@ -579,7 +579,7 @@ export const generatedRouteMap: RouteNode = {
                 cursor: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 1623,
+                  maxLength: 1756,
                   description:
                     "Opaque cursor from a previous search_case_law call. It continues the same queries, in the same order. It carries each query's own position and not what earlier pages emitted, so a decision several queries return can appear on more than one page: key results by decisionId.",
                 },
@@ -3603,7 +3603,7 @@ export const generatedRouteMap: RouteNode = {
                 cursor: {
                   type: "string",
                   minLength: 1,
-                  maxLength: 1844,
+                  maxLength: 1860,
                   description:
                     "Opaque cursor from a previous search_legislation call",
                 },
@@ -27520,7 +27520,7 @@ export const generatedRouteMap: RouteNode = {
                           type: "integer",
                         },
                         cursor: {
-                          maxLength: 1844,
+                          maxLength: 1860,
                           description:
                             "Opaque cursor from a previous page to fetch the next page",
                           type: "string",
