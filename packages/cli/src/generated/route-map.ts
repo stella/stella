@@ -33597,16 +33597,6 @@ export const generatedRouteMap: RouteNode = {
                             },
                           ],
                         },
-                        matterNumberPadding: {
-                          maximum: 6,
-                          minimum: 1,
-                          type: "integer",
-                        },
-                        matterNumberPattern: {
-                          maxLength: 128,
-                          minLength: 1,
-                          type: "string",
-                        },
                         managedAIResidency: {
                           anyOf: [
                             {
@@ -33618,6 +33608,16 @@ export const generatedRouteMap: RouteNode = {
                               type: "string",
                             },
                           ],
+                        },
+                        matterNumberPadding: {
+                          maximum: 6,
+                          minimum: 1,
+                          type: "integer",
+                        },
+                        matterNumberPattern: {
+                          maxLength: 128,
+                          minLength: 1,
+                          type: "string",
                         },
                         memoryExtractionEnabled: {
                           type: "boolean",
