@@ -2154,7 +2154,9 @@ test.each([
     expect(await matchFor(contact.id)).toEqual(initialMatch);
     expect(await screeningFor(contact.id)).toEqual(initialCoverage);
     // Prove the mark itself suppresses still-current evidence before changing the edition.
-    if (cause === "edition switch") {await activate("8");}
+    if (cause === "edition switch") {
+      await activate("8");
+    }
     const drainNow = new Date(Date.now() + 1000);
     await db
       .update(sanctionsSources)
@@ -2278,8 +2280,9 @@ test.each(["contact", "firm"] as const)(
             now,
             recordAuditEvent: failAudit,
           };
-          if (scope === "contact")
-            {return (await excludeSanctionsContact(tx, options)).unwrap();}
+          if (scope === "contact") {
+            return (await excludeSanctionsContact(tx, options)).unwrap();
+          }
           return await disableSanctionsMonitoring(tx, options);
         }),
       "synthetic opt-out audit failure",
@@ -2300,8 +2303,9 @@ test.each(["contact", "firm"] as const)(
           now,
           recordAuditEvent: record,
         };
-        if (scope === "contact")
-          {return (await excludeSanctionsContact(tx, options)).unwrap();}
+        if (scope === "contact") {
+          return (await excludeSanctionsContact(tx, options)).unwrap();
+        }
         return await disableSanctionsMonitoring(tx, options);
       });
     expect(await run()).toEqual({

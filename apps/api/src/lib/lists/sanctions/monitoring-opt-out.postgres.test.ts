@@ -375,10 +375,11 @@ if (!runPostgresTests || databaseUrl === undefined) {
             })),
           );
           expect(await readMatches()).toEqual(
-            beforeMatches.map((row) =>
-              ({ ...row, state: "lapsed",
-                updatedAt: now,}),
-            ),
+            beforeMatches.map((row) => ({
+              ...row,
+              state: "lapsed",
+              updatedAt: now,
+            })),
           );
           expect(await readHistory()).toEqual(beforeHistory);
           if (operation === "contact-exclude") {
