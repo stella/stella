@@ -29,9 +29,17 @@ import {
   USAGE_ALLOCATION_SOURCES,
   USAGE_ENTITLEMENT_SOURCES,
   USAGE_ENTITLEMENT_STATUSES,
+  type UsageEntitlementStatus,
   USAGE_PROVIDER_WEBHOOK_RESULTS,
   USAGE_SERVICE_TIERS,
 } from "./skills";
+
+export const CLOSED_USAGE_ENTITLEMENT_STATUSES = [
+  "paused",
+  "cancelled",
+] as const satisfies readonly UsageEntitlementStatus[];
+const CLOSED_USAGE_ENTITLEMENT_STATUS_SQL_VALUES =
+  CLOSED_USAGE_ENTITLEMENT_STATUSES.map((status) => sql.raw(`'${status}'`));
 
 export const USAGE_POLICY_KINDS = ["subscription", "addon"] as const;
 export type UsagePolicyKind = (typeof USAGE_POLICY_KINDS)[number];
@@ -289,7 +297,7 @@ export const usageEntitlements = p.pgTable(
     ),
     p.check(
       "usage_entitlements_period_order",
-      sql`current_period_end > current_period_start`,
+      sql`current_period_end > current_period_start OR (current_period_end = current_period_start AND status IN (${sql.join(CLOSED_USAGE_ENTITLEMENT_STATUS_SQL_VALUES, sql`, `)}))`,
     ),
     // Entitlements are owned by system paths (hosted webhook adapter
     // via rootDb, or future admin tools also via rootDb), not by org

@@ -26,7 +26,7 @@
  * narrow helpers.
  */
 
-import { panic } from "better-result";
+import { panic, TaggedError } from "better-result";
 import * as v from "valibot";
 
 import {
@@ -38,6 +38,7 @@ import type { DispatchOutcome } from "@/api/handlers/hosted-usage-webhook/dispat
 import { captureError } from "@/api/lib/analytics/capture";
 import {
   getHostedUsageProviderKind,
+  getHostedUsageProviderApiVersion,
   getWebhookSecret,
 } from "@/api/lib/hosted-usage-provider/config";
 import {
@@ -61,6 +62,7 @@ export const HOSTED_USAGE_WEBHOOK_HEADERS = {
   id: "webhook-id",
   timestamp: "webhook-timestamp",
   signature: "webhook-signature",
+  apiVersion: "webhook-api-version",
 } as const;
 
 type ReceiveCtx = {
@@ -75,6 +77,14 @@ const respond = (statusCode: number, message: string): Response =>
     status: statusCode,
     headers: { "content-type": "application/json" },
   });
+
+class HostedProviderContractMismatch extends TaggedError(
+  "HostedProviderContractMismatch",
+)<{ message: string }> {}
+const providerContractMismatch = failureSink({
+  event: "usage_provider.webhook.contract_mismatch",
+  expected: [],
+});
 
 export const receiveHostedUsageWebhook = async (
   ctx: ReceiveCtx,
@@ -134,6 +144,39 @@ export const receiveHostedUsageWebhook = async (
     return respond(400, "Malformed payload");
   }
   const payload = parsedJson;
+
+  if (getHostedUsageProviderKind() === "polar") {
+    const reportedVersion =
+      ctx.request.headers.get(HOSTED_USAGE_WEBHOOK_HEADERS.apiVersion) ??
+      payload["api_version"];
+    // Keep delivery metadata with the signed envelope for later reconciliation.
+    payload["delivery_api_version"] = reportedVersion ?? null;
+    if (
+      reportedVersion !== getHostedUsageProviderApiVersion() ||
+      (payload["api_version"] !== undefined &&
+        payload["api_version"] !== getHostedUsageProviderApiVersion()) ||
+      envelope.type === "subscription.migrated"
+    ) {
+      observeFailure(
+        new HostedProviderContractMismatch({
+          message: "Provider event requires reconciliation",
+        }),
+        {
+          sink: providerContractMismatch,
+          ctx: {
+            source: "usage_provider.webhook",
+            requestId: eventId,
+            versionId:
+              typeof reportedVersion === "string" ? reportedVersion : "missing",
+            step:
+              envelope.type === "subscription.migrated"
+                ? "migration"
+                : "apiVersion",
+          },
+        },
+      );
+    }
+  }
 
   // Translate the (already authenticated) body into the neutral event
   // contract before validating it. For the neutral provider this is a
@@ -323,6 +366,13 @@ const dispatchEvent = async (
         tx,
         payload: event.data,
         eventId,
+      });
+    case "entitlement.paused":
+      return await handleUsageEntitlementStatusChange({
+        tx,
+        payload: event.data,
+        eventId,
+        eventKind: "paused",
       });
     case "entitlement.canceled":
       return await handleUsageEntitlementStatusChange({

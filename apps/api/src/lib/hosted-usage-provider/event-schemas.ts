@@ -18,6 +18,7 @@ const ENTITLEMENT_UPDATED_EVENT_TYPE = "entitlement.updated";
 const ENTITLEMENT_ACTIVE_EVENT_TYPE = "entitlement.active";
 const ENTITLEMENT_CANCELED_EVENT_TYPE = "entitlement.canceled";
 const ENTITLEMENT_REVOKED_EVENT_TYPE = "entitlement.revoked";
+const ENTITLEMENT_PAUSED_EVENT_TYPE = "entitlement.paused";
 const ALLOCATION_CREATED_EVENT_TYPE = "allocation.created";
 
 export const HOSTED_USAGE_HANDLED_EVENT_TYPES = [
@@ -26,6 +27,7 @@ export const HOSTED_USAGE_HANDLED_EVENT_TYPES = [
   ENTITLEMENT_ACTIVE_EVENT_TYPE,
   ENTITLEMENT_CANCELED_EVENT_TYPE,
   ENTITLEMENT_REVOKED_EVENT_TYPE,
+  ENTITLEMENT_PAUSED_EVENT_TYPE,
   ALLOCATION_CREATED_EVENT_TYPE,
 ] as const;
 
@@ -63,7 +65,7 @@ const providerEntitlementSchema = v.object({
   account_ref: v.string(),
   policy_ref: v.string(),
   current_period_start: v.string(),
-  current_period_end: v.string(),
+  current_period_end: v.nullable(v.string()),
   /**
    * True when the provider entitlement has been cancelled but is
    * still active until the end of the current entitlement period. Provider
@@ -119,6 +121,11 @@ export const entitlementRevokedEventSchema = v.looseObject({
   data: providerEntitlementSchema,
 });
 
+const entitlementPausedEventSchema = v.looseObject({
+  type: v.literal(ENTITLEMENT_PAUSED_EVENT_TYPE),
+  data: providerEntitlementSchema,
+});
+
 export const allocationCreatedEventSchema = v.looseObject({
   type: v.literal(ALLOCATION_CREATED_EVENT_TYPE),
   data: providerAllocationSchema,
@@ -130,6 +137,7 @@ export const hostedUsageWebhookEventSchema = v.variant("type", [
   entitlementActiveEventSchema,
   entitlementCanceledEventSchema,
   entitlementRevokedEventSchema,
+  entitlementPausedEventSchema,
   allocationCreatedEventSchema,
 ]);
 

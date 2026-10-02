@@ -13,6 +13,10 @@ import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import {
+  DEFAULT_POLAR_API_VERSION,
+  polarApiVersionSchema,
+} from "@/api/lib/hosted-usage-provider/polar/contract";
+import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
@@ -579,6 +583,10 @@ export const envApiServerSchema = {
    */
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: v.optional(
     v.pipe(v.string(), v.minLength(16)),
+  ),
+  HOSTED_USAGE_PROVIDER_API_VERSION: v.optional(
+    polarApiVersionSchema,
+    DEFAULT_POLAR_API_VERSION,
   ),
   HOSTED_USAGE_PROVIDER_API_KEY: v.optional(v.pipe(v.string(), v.minLength(8))),
   HOSTED_USAGE_PROVIDER_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
