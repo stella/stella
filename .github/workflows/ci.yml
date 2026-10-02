@@ -1105,8 +1105,9 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+          BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
-          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base origin/main HEAD)}"
+          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base "origin/$BASE_REF" HEAD)}"
           git cat-file -e "$base^{commit}"
           echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
 

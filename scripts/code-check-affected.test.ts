@@ -617,6 +617,40 @@ describe("Turbo cache input contract", () => {
 });
 
 describe("full and affected code-check parity", () => {
+  test("an unexpected merge-base failure is surfaced, not read as no base", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
+    const git = Bun.which("git");
+    expect(git).not.toBeNull();
+    writeFileSync(
+      path.join(directory, "git"),
+      `#!/usr/bin/env bun
+if (process.argv[2] === "merge-base") {
+  process.stderr.write("fatal: injected failure\\n");
+  process.exit(128);
+}
+const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
+process.exit(result.exitCode);
+`,
+      { mode: 0o755 },
+    );
+    try {
+      const environmentPath = process.env["PATH"];
+      if (environmentPath === undefined) {
+        throw new Error("PATH is required to run the code-check command");
+      }
+      const result = Bun.spawnSync(
+        ["bun", "scripts/code-check-affected.ts", "--all", "--dry-run"],
+        { env: { ...process.env, PATH: `${directory}:${environmentPath}` } },
+      );
+      expect(result.exitCode).not.toBe(0);
+      expect(result.stderr.toString()).toContain(
+        "git merge-base origin/main HEAD failed: fatal: injected failure",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 30_000);
+
   test("the full command still plans normal checks without origin/main", () => {
     const directory = mkdtempSync(path.join(tmpdir(), "code-check-git-"));
     const git = Bun.which("git");
@@ -624,7 +658,7 @@ describe("full and affected code-check parity", () => {
     writeFileSync(
       path.join(directory, "git"),
       `#!/usr/bin/env bun
-if (process.argv[2] === "merge-base") process.exit(128);
+if (process.argv[2] === "rev-parse" && process.argv.at(-1) === "origin/main^{commit}") process.exit(1);
 const result = Bun.spawnSync([${JSON.stringify(git)}, ...process.argv.slice(2)], { stdout: "inherit", stderr: "inherit" });
 process.exit(result.exitCode);
 `,
