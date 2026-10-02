@@ -288,15 +288,8 @@ const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {
 };
 
 /** The timeout and caller cancellation of one request. */
-type RequestContext = {
+type RequestContext = RegistryClientOptions & {
   timeoutMs: number;
-  signal: AbortSignal | undefined;
-};
-
-// The search and the current extract, as ORSR has always run them.
-const CORE_REQUEST: RequestContext = {
-  timeoutMs: DEFAULT_REGISTRY_TIMEOUT_MS,
-  signal: undefined,
 };
 
 type OrsrGetOptions<T> = {
@@ -308,10 +301,11 @@ type OrsrGetOptions<T> = {
 const orsrGet = async <T>({
   url,
   isExpectedShape,
-  context: { timeoutMs, signal },
+  context: { timeoutMs, signal, observer },
 }: OrsrGetOptions<T>): Promise<T> => {
   const response = await performRegistryRequest({
     url,
+    observer,
     init: { headers: { Accept: "application/json" } },
     signal,
     timeoutMs,
@@ -560,9 +554,12 @@ const settlePart = async <Value>(
  * @throws {OrsrAPIError} on upstream HTTP errors or a non-JSON body
  * @throws {OrsrRequestError} on network failures and timeouts
  */
-export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
+export const lookupByIco = async (
+  ico: string,
+  options: RegistryClientOptions,
+): Promise<OrsrCompany | null> => {
   const normalized = validatedIco(ico);
-  const context = CORE_REQUEST;
+  const context = { ...options, timeoutMs: DEFAULT_REGISTRY_TIMEOUT_MS };
   const file = await findFileByIco(normalized, context);
   if (!file) {
     return null;
@@ -587,16 +584,24 @@ export const lookupByIco = async (ico: string): Promise<OrsrCompany | null> => {
  */
 export const lookupFullRecordByIco = async (
   ico: string,
-  options?: RegistryClientOptions,
+  options: RegistryClientOptions,
 ): Promise<OrsrFullRecord | null> => {
   const normalized = validatedIco(ico);
-  const signal = options?.signal;
-  const core = { timeoutMs: DEFAULT_REGISTRY_TIMEOUT_MS, signal };
+  const signal = options.signal;
+  const core = {
+    observer: options.observer,
+    timeoutMs: DEFAULT_REGISTRY_TIMEOUT_MS,
+    signal,
+  };
   const file = await findFileByIco(normalized, core);
   if (!file) {
     return null;
   }
-  const parts = { timeoutMs: PART_TIMEOUT_MS, signal };
+  const parts = {
+    observer: options.observer,
+    timeoutMs: PART_TIMEOUT_MS,
+    signal,
+  };
   const [extract, history, documents, related] = await Promise.all([
     fetchExtract(file, core),
     settlePart(fetchHistory(file, parts)),
@@ -607,7 +612,7 @@ export const lookupFullRecordByIco = async (
   return company ? { company, history, documents, related } : null;
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /** Maximum number of results. Clamped to the adapter ceiling (100). @default 50 */
   limit?: number;
 };
@@ -624,13 +629,13 @@ export type SearchOptions = {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<OrsrSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     throw new OrsrValidationError("Search name must not be empty");
   }
-  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options.limit ?? DEFAULT_SEARCH_LIMIT;
   const take = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const searchTake = Math.min(
     Math.max(take, DEFAULT_SEARCH_LIMIT),
@@ -639,7 +644,7 @@ export const searchByName = async (
   const data = await orsrGet({
     url: buildSearchUrl(trimmed, searchTake),
     isExpectedShape: isOrsrSearchResponse,
-    context: CORE_REQUEST,
+    context: { ...options, timeoutMs: DEFAULT_REGISTRY_TIMEOUT_MS },
   });
   return dedupeLatestHitsByIco(data.data).slice(0, take).map(parseSearchHit);
 };

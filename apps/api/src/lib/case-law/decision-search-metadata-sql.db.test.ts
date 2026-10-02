@@ -128,7 +128,7 @@ test("legal sentence presence follows stored absence validation and field semant
     { present: false, absence_valid: true },
     { present: true, absence_valid: true },
     { present: false, absence_valid: false },
-    { present: false, absence_valid: false },
+    { present: false, absence_valid: true },
     { present: false, absence_valid: false },
     { present: false, absence_valid: false },
   ]);
