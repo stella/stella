@@ -52,6 +52,11 @@
     "takenOverTitle": "Redagavimas perkeltas į kitą įrenginį"
   },
   "dialog": {
+    "accountWindowTitle": "Prijungti paskyrą",
+    "accountTitle": "Prijungti šią paskyrą?",
+    "accountSubtitle": "Prijunkite stella desktop prie šios paskyros ir organizacijos.",
+    "accountEmail": "Paskyra",
+    "organizationName": "Organizacija",
     "allow": "Leisti",
     "apiUrl": "API adresas",
     "cancel": "Atšaukti",

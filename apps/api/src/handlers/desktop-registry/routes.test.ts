@@ -2,9 +2,21 @@ import { Value } from "@sinclair/typebox/value";
 import { describe, expect, test } from "bun:test";
 
 import grant from "@/api/handlers/desktop-registry/grant";
-import request from "@/api/handlers/desktop-registry/request";
+import request, {
+  desktopRequestAuthorization,
+} from "@/api/handlers/desktop-registry/request";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
-import { DESKTOP_REGISTRY_PERMISSION } from "@/api/lib/business-registries/desktop/config";
+import { createDesktopEditHandoff } from "@/api/handlers/entities/desktop-edit-handoffs";
+import createPdfSigningHandoff from "@/api/handlers/entities/pdf-signing-handoffs";
+import {
+  authorizeDesktopAccount,
+  authorizeDesktopRegistry,
+} from "@/api/lib/business-registries/desktop/auth";
+import {
+  DESKTOP_ACCOUNT_PERMISSION,
+  DESKTOP_REGISTRY_PERMISSION,
+} from "@/api/lib/business-registries/desktop/config";
+import { canWriteWorkspaceEntities } from "@/api/lib/entities/workspace-entity-write-access";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 
 const FORMAT_ID = "11111111-1111-4111-8111-111111111111";
@@ -12,7 +24,7 @@ const FORMAT_ID = "11111111-1111-4111-8111-111111111111";
 test("registering desktop routes preserves the grant authorization contract", () => {
   desktopRegistryRoute.compile();
 
-  expect(grant.config.permissions).toEqual(DESKTOP_REGISTRY_PERMISSION);
+  expect(grant.config.permissions).toEqual(DESKTOP_ACCOUNT_PERMISSION);
   expect(hasMemberPermission({ role: "owner" }, grant.config.permissions)).toBe(
     true,
   );
@@ -56,4 +68,51 @@ describe("the desktop request body union", () => {
       ]);
     }
   });
+});
+
+test("desktop account linking preserves document access for each supported role", () => {
+  for (const role of [
+    "owner",
+    "admin",
+    "member",
+    "intern",
+    "external",
+  ] as const) {
+    expect(hasMemberPermission({ role }, grant.config.permissions)).toBe(true);
+    const webWriteAllowed = hasMemberPermission(
+      { role },
+      { entity: ["update"] },
+    );
+    expect(
+      hasMemberPermission(
+        { role },
+        createDesktopEditHandoff.config.permissions,
+      ),
+    ).toBe(webWriteAllowed);
+    expect(
+      hasMemberPermission({ role }, createPdfSigningHandoff.config.permissions),
+    ).toBe(webWriteAllowed);
+    expect(
+      canWriteWorkspaceEntities({
+        organizationRole: role,
+        workspaceMemberId: "member-fixture",
+      }),
+    ).toBe(webWriteAllowed);
+  }
+  expect(
+    hasMemberPermission({ role: "external" }, grant.config.permissions),
+  ).toBe(true);
+  expect(
+    hasMemberPermission({ role: "external" }, DESKTOP_REGISTRY_PERMISSION),
+  ).toBe(false);
+});
+
+test("desktop request authorization follows each operation", () => {
+  expect(desktopRequestAuthorization.config).toBe(authorizeDesktopAccount);
+  expect(desktopRequestAuthorization.revoke).toBe(authorizeDesktopAccount);
+  expect(desktopRequestAuthorization.search).toBe(authorizeDesktopRegistry);
+  expect(desktopRequestAuthorization.format).toBe(authorizeDesktopRegistry);
+  expect(desktopRequestAuthorization.setDefaultFormat).toBe(
+    authorizeDesktopRegistry,
+  );
 });
