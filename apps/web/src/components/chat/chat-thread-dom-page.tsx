@@ -10,6 +10,7 @@ import { render, waitFor, within } from "@testing-library/react";
 import { panic } from "better-result";
 import { IntlProvider } from "use-intl";
 
+import { ChatEditorProvider } from "@/components/chat-editor-provider";
 import { ChatApprovalContext } from "@/components/chat/chat-approval-context";
 import { ChatMattersContext } from "@/components/chat/chat-matters-context";
 import { ChatThreadMessages } from "@/components/chat/chat-thread-messages";
@@ -102,27 +103,31 @@ const ChatThreadDomPage = ({
           handleDeny: session.handleDeny,
         }}
       >
-        <ChatThreadMessages
-          approvalPendingMessageId={session.approvalPendingMessageId}
-          error={session.error}
-          hasOlderMessages={session.olderCursor !== null}
-          isGenerating={session.isGenerating}
-          isLoadingOlder={session.isLoadingOlder}
-          loadOlderError={session.loadOlderError}
-          messages={session.messages}
-          onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
-          onAskUserSubmit={session.handleAskUserSubmit}
-          onCreateDocumentResolve={session.handleCreateDocumentResolve}
-          onLoadOlder={session.loadOlder}
-          onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
-          onOpenCreatedDocument={session.handleOpenCreatedDocument}
-          onRemoveQueuedMessage={session.removeQueuedMessage}
-          onResend={session.resendLatestMessage}
-          queuedMessages={session.queuedMessages}
-          showThinkingIndicator
-          streamdownComponents={session.streamdownComponents}
-          threadRef={threadRef}
-        />
+        {/* The selection bar quotes into the composer through the editor
+            manager, as on the real page. */}
+        <ChatEditorProvider>
+          <ChatThreadMessages
+            approvalPendingMessageId={session.approvalPendingMessageId}
+            error={session.error}
+            hasOlderMessages={session.olderCursor !== null}
+            isGenerating={session.isGenerating}
+            isLoadingOlder={session.isLoadingOlder}
+            loadOlderError={session.loadOlderError}
+            messages={session.messages}
+            onAskUserEditAndRerun={session.handleAskUserEditAndRerun}
+            onAskUserSubmit={session.handleAskUserSubmit}
+            onCreateDocumentResolve={session.handleCreateDocumentResolve}
+            onLoadOlder={session.loadOlder}
+            onOpenCreateDocumentDraft={session.handleOpenCreateDocumentDraft}
+            onOpenCreatedDocument={session.handleOpenCreatedDocument}
+            onRemoveQueuedMessage={session.removeQueuedMessage}
+            onResend={session.resendLatestMessage}
+            queuedMessages={session.queuedMessages}
+            showThinkingIndicator
+            streamdownComponents={session.streamdownComponents}
+            threadRef={threadRef}
+          />
+        </ChatEditorProvider>
       </ChatApprovalContext>
     </ChatMattersContext>
   );

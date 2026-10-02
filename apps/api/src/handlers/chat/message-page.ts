@@ -25,6 +25,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { parseUserFileId } from "@/api/lib/user-files/types";
 
@@ -115,7 +116,7 @@ const loadChatMessagePageOnTx = async ({
   userId,
   before,
 }: LoadChatMessagePageOnTxArgs): Promise<ChatMessagePage> => {
-  const pageSize = LIMITS.chatMessagesPageSizeDefault;
+  const pageSize = normalizeTenantPageLimit(LIMITS.chatMessagesPageSizeDefault);
 
   const rows = await tx
     .select({

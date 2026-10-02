@@ -34,6 +34,7 @@ const generate = async () =>
     pageNumber: 1,
     workspaceId: toSafeId<"workspace">("ws_test"),
     orgAIConfig: null,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
     generateObjectForRole: generateObjectForTest,
   });

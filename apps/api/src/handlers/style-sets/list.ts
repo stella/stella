@@ -10,6 +10,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedStyleSetId } from "@/api/lib/safe-id-boundaries";
 import { styleSetColumns } from "@/api/lib/style-sets";
 
@@ -44,7 +45,9 @@ const styleSetCursor = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query }) {
-    const limit = query.limit ?? LIMITS.styleSetsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.styleSetsPageSizeDefault,
+    );
     const conditions = [
       eq(styleSets.organizationId, session.activeOrganizationId),
       isNull(styleSets.deletedAt),

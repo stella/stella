@@ -9643,7 +9643,7 @@ export const generatedRouteMap: RouteNode = {
                 commandPath: ["capability", "chat", "threads-list"],
                 capabilityId: "chat.threads.list",
                 description:
-                  "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. search matches the thread title or the matter name; paginate with limit and cursor.",
+                  "List your own chat threads, most recently active first, split into global threads and groups per matter. Threads with no messages, and threads belonging to a matter that is being deleted, are left out. Each thread carries a bounded preview of its context: the matters and files it drew on, with their total counts. search matches the thread title, the matter it lives in, or a matter pinned to it; paginate with limit and cursor.",
                 access: "read",
                 flags: [
                   {
@@ -33572,7 +33572,10 @@ export const generatedRouteMap: RouteNode = {
                     partPath: "timeNarrativeRequired",
                   },
                 ],
-                inputOnly: ["body.documentProcessingMode"],
+                inputOnly: [
+                  "body.documentProcessingMode",
+                  "body.managedAIResidency",
+                ],
                 paginated: false,
                 destructive: false,
                 scope: "admin_write",
@@ -33607,6 +33610,18 @@ export const generatedRouteMap: RouteNode = {
                         },
                         promptCachingEnabled: {
                           type: "boolean",
+                        },
+                        managedAIResidency: {
+                          anyOf: [
+                            {
+                              const: "eu",
+                              type: "string",
+                            },
+                            {
+                              const: "us",
+                              type: "string",
+                            },
+                          ],
                         },
                         memoryExtractionEnabled: {
                           type: "boolean",

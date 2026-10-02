@@ -139,6 +139,7 @@ const createHarness = ({
     user: { id: USER_ID },
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
   });
 

@@ -1,7 +1,7 @@
 import type { AnchorHTMLAttributes, ComponentProps, ReactNode } from "react";
 import { useCallback, useMemo, useState } from "react";
 
-import { Streamdown } from "streamdown";
+import { defaultRehypePlugins, Streamdown } from "streamdown";
 import type { PluggableList } from "unified";
 import { useTranslations } from "use-intl";
 
@@ -14,6 +14,7 @@ import {
 import { contentDir } from "@stll/ui/use-content-dir";
 import { cn } from "@stll/ui/utils";
 
+import { messageComponents } from "@/components/ai-elements/message-response-components";
 import { AnonymizedSpan } from "@/components/chat/anonymized-span";
 import type {
   AskUserInput,
@@ -173,6 +174,7 @@ export const AskUserCard = ({
   const analysisComponents = useMemo(
     () => ({
       a: createAnalysisAnchor(workspaceId),
+      img: messageComponents.img,
       "stll-anon": renderAnalysisAnonymizedSpan,
     }),
     [workspaceId],
@@ -180,7 +182,10 @@ export const AskUserCard = ({
   // Stable rehype-plugins identity so Streamdown's internal memo
   // can short-circuit when nothing actually changed.
   const analysisRehypePlugins = useMemo<PluggableList | undefined>(
-    () => (pairs.length > 0 ? [[rehypeAnonSpans, pairs]] : undefined),
+    () =>
+      pairs.length > 0
+        ? [...Object.values(defaultRehypePlugins), [rehypeAnonSpans, pairs]]
+        : undefined,
     [pairs],
   );
   const answeredOutput = part.state === "complete" ? part.output : null;

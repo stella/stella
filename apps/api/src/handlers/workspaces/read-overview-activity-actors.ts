@@ -7,6 +7,7 @@ import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 import {
   decodeActorCursor,
@@ -43,7 +44,9 @@ const readOverviewActivityActors = createSafeHandler(
       );
     }
 
-    const limit = query.limit ?? LIMITS.matterActivityActorPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.matterActivityActorPageSizeDefault,
+    );
     const actorRows = yield* Result.await(
       readOverviewActivityActorRows({
         afterActorId,

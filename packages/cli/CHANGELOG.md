@@ -1,5 +1,11 @@
 # @stll/cli
 
+## 3.3.1
+
+### Patch Changes
+
+- [#4324](https://github.com/stella/stella/pull/4324) [`5abf3bf`](https://github.com/stella/stella/commit/5abf3bf5e5e46be267eaca68edba2fcdc552495a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Handle structured action refusal codes.
+
 ## 3.3.0
 
 ### Minor Changes

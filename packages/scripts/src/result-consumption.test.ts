@@ -3,8 +3,11 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import ts from "typescript";
 
+import { CODE_CHECK_LEGS } from "./code-quality-partition";
 import {
   findResultWorkspaceConfigs,
+  parseResultConsumptionArgs,
+  partitionResultProjects,
   scanResultConsumption,
 } from "./result-consumption";
 
@@ -67,6 +70,167 @@ const sourceLocations = (
 };
 
 describe("Result consumption guard", () => {
+  test("partitions every discovered project into exactly one leg", () => {
+    const repositoryRoot = path.resolve(import.meta.dir, "../../..");
+    const projects = findResultWorkspaceConfigs(repositoryRoot);
+    expect(projects.size).toBeGreaterThan(0);
+    const partitioned = CODE_CHECK_LEGS.flatMap((leg) => [
+      ...partitionResultProjects({ projects, repositoryRoot, leg }),
+    ]);
+    expect(partitioned.length).toBe(projects.size);
+    expect(new Map(partitioned)).toEqual(projects);
+    expect(new Set(partitioned.map(([config]) => config)).size).toBe(
+      projects.size,
+    );
+  });
+
+  test("partitions changed projects without changing their root-name filters", () => {
+    const repositoryRoot = path.resolve(import.meta.dir, "../../..");
+    const roots = [
+      "apps/api",
+      "apps/api/scripts",
+      "apps/web",
+      "packages/scripts",
+      "packages/new-unassigned-workspace",
+      "scripts",
+      "apps/api-like-new-workspace",
+    ];
+    const projects = new Map(
+      roots.map((root) => [
+        path.join(repositoryRoot, root, "tsconfig.json"),
+        [path.join(repositoryRoot, root, "src/changed.ts")],
+      ]),
+    );
+    const originalEntries = [...projects];
+    const partitioned = CODE_CHECK_LEGS.flatMap((leg) => [
+      ...partitionResultProjects({ projects, repositoryRoot, leg }),
+    ]);
+    expect(partitioned.length).toBe(projects.size);
+    expect(new Map(partitioned)).toEqual(projects);
+    expect([...projects]).toEqual(originalEntries);
+    for (const [config, rootNames] of partitioned) {
+      expect(rootNames).toBe(projects.get(config));
+    }
+    const rest = partitionResultProjects({
+      projects,
+      repositoryRoot,
+      leg: "rest",
+    });
+    for (const root of [
+      "packages/new-unassigned-workspace",
+      "apps/api-like-new-workspace",
+      "scripts",
+    ]) {
+      expect(rest.has(path.join(repositoryRoot, root, "tsconfig.json"))).toBe(
+        true,
+      );
+    }
+  });
+
+  test("accepts each leg without changing discovery mode or its base", () => {
+    const modes = [["--all"], ["--base", "refs/heads/example"]];
+    for (const args of modes) {
+      const unsplit = parseResultConsumptionArgs(args);
+      expect(Object.hasOwn(unsplit, "leg")).toBe(false);
+      for (const leg of CODE_CHECK_LEGS) {
+        expect(parseResultConsumptionArgs([...args, "--leg", leg])).toEqual({
+          ...unsplit,
+          leg,
+        });
+      }
+    }
+    expect(parseResultConsumptionArgs(["--all"])).toEqual({ mode: "all" });
+    expect(
+      parseResultConsumptionArgs(["--base", "refs/heads/example"]),
+    ).toEqual({ mode: "changed", base: "refs/heads/example" });
+    expect(Object.hasOwn(parseResultConsumptionArgs([]), "leg")).toBe(false);
+  });
+
+  test("partition legs preserve all changed-file diagnostics exactly once", () => {
+    const directory = mkdtempSync(path.join(import.meta.dir, ".result-test-"));
+    const relativeFiles = [
+      "apps/api/src/changed.ts",
+      "apps/web/src/changed.ts",
+      "scripts/changed.ts",
+      "packages/new-workspace/src/unchanged.ts",
+    ];
+    const files = relativeFiles.map((file) => path.join(directory, file));
+    try {
+      for (const file of files) {
+        mkdirSync(path.dirname(file), { recursive: true });
+        writeFileSync(
+          file,
+          'import { Result } from "better-result";\nResult.ok(1);\n',
+        );
+      }
+      writeFileSync(
+        path.join(directory, "apps/api/src/changed.ts"),
+        'import "../../../packages/new-workspace/src/unchanged";\nimport { Result } from "better-result";\nResult.ok(1);\n',
+      );
+      const program = ts.createProgram({
+        rootNames: files.slice(0, 3),
+        options: {
+          module: ts.ModuleKind.Preserve,
+          moduleResolution: ts.ModuleResolutionKind.Bundler,
+          skipLibCheck: true,
+          strict: true,
+          target: ts.ScriptTarget.ESNext,
+        },
+      });
+      const projects = new Map(
+        files
+          .slice(0, 3)
+          .map((file) => [
+            path.join(
+              file.endsWith(`${path.sep}scripts${path.sep}changed.ts`)
+                ? path.dirname(file)
+                : path.dirname(path.dirname(file)),
+              "tsconfig.json",
+            ),
+            [file],
+          ]),
+      );
+      const scan = (sourceFiles: ReadonlySet<string>) =>
+        scanResultConsumption({
+          program,
+          repositoryRoot: directory,
+          sourceFiles,
+        });
+      const unsplit = scan(new Set(files.slice(0, 3)));
+      expect(unsplit.length).toBe(3);
+      expect(scan(new Set(files)).length).toBe(4);
+      const partitioned = CODE_CHECK_LEGS.flatMap((leg) =>
+        [
+          ...partitionResultProjects({
+            projects,
+            repositoryRoot: directory,
+            leg,
+          }).values(),
+        ].flatMap((rootNames) => scan(new Set(rootNames))),
+      );
+      const byFile = (
+        left: (typeof unsplit)[number],
+        right: (typeof unsplit)[number],
+      ) => left.file.localeCompare(right.file);
+      expect(partitioned.toSorted(byFile)).toEqual(unsplit.toSorted(byFile));
+    } finally {
+      rmSync(directory, { force: true, recursive: true });
+    }
+  });
+
+  test("rejects missing and invalid leg values before discovery", () => {
+    for (const args of [
+      ["--leg"],
+      ["--leg", "unknown"],
+      ["--all", "--leg", "unknown"],
+      ["--leg", "--all"],
+    ]) {
+      expect(() => parseResultConsumptionArgs(args)).toThrow(
+        "--leg requires api, web or rest",
+      );
+    }
+  });
+
   test("discovers source, root-script, and app-script projects", () => {
     const repositoryRoot = path.resolve(import.meta.dir, "../../..");
     const configs = findResultWorkspaceConfigs(repositoryRoot);

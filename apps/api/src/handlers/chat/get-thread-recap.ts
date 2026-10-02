@@ -37,6 +37,7 @@ const getThreadRecap = createSafeRootHandler(
   async function* ({
     getWorkspaceAccess,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     params: { threadId },
     promptCachingEnabled,
@@ -50,6 +51,7 @@ const getThreadRecap = createSafeRootHandler(
     if (
       Result.isError(
         requireTanStackAIAvailableForRole({
+          dataClass: "customer",
           configStatus: orgAIConfigStatus,
           orgConfig: orgAIConfig,
           role: "fast",
@@ -140,6 +142,7 @@ const getThreadRecap = createSafeRootHandler(
       messages: recapMessages,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       threadId,
       workspaceId: persistedWorkspaceId,
