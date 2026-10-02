@@ -339,34 +339,15 @@ export const requiredChecksSucceeded = ({
   });
 };
 
-// A direct merge needs every required check to have SUCCEEDED on the head:
-// the write is final. "Merge when ready" needs only that none has FAILED: a
-// check still running, or not yet created for a fresh push, is what GitHub
-// waits on before it enqueues, so refusing it would only add a manual wait.
-const evaluateRequiredCheck = ({
-  checkRuns,
-  checkRunsHeadSha,
-  headSha,
-  landing,
-  requiredCheckRuns,
-}: {
-  checkRuns: readonly CheckRunSnapshot[];
-  checkRunsHeadSha: string;
-  headSha: string;
-  landing: Landing;
-  requiredCheckRuns: readonly string[];
-}): GateVerdict => {
-  if (checkRunsHeadSha !== headSha) {
-    return {
-      gate: "required-check",
-      status: "fail",
-      reason: MERGE_BAR_REASONS.checkRunsStale,
-      detail: `check runs read for ${checkRunsHeadSha}, head is ${headSha}`,
-    };
-  }
-
-  const latestByName = latestRunByName(checkRuns);
-  const cla = latestByName.get("cla");
+const evaluateContributorSignatureCheck = (
+  latestByName: ReadonlyMap<string, CheckRunSnapshot>,
+  pullNumber: number,
+): GateVerdict | undefined => {
+  const contributorCheck = latestByName.get("cla");
+  const openerCheck = latestByName.get(`cla/pr-${pullNumber}`);
+  const cla = [contributorCheck, openerCheck].find(
+    (check) => check?.status === "completed" && check.conclusion === "failure",
+  );
   if (
     (cla?.outputTitle === "CLA_UNSIGNED" ||
       cla?.outputTitle === "CLA_UNLINKED_AUTHOR") &&
@@ -393,6 +374,60 @@ const evaluateRequiredCheck = ({
       detail:
         "cla verification failed; inspect the check output and rerun after fixing it.",
     };
+  }
+  if (
+    contributorCheck?.status === "completed" &&
+    contributorCheck.conclusion === "success" &&
+    !(
+      openerCheck?.status === "completed" &&
+      openerCheck.conclusion === "success"
+    )
+  ) {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.requiredCheckNotSuccessful,
+      detail: `The exact pull request check cla/pr-${pullNumber} must succeed before landing.`,
+    };
+  }
+  return undefined;
+};
+
+// A direct merge needs every required check to have SUCCEEDED on the head:
+// the write is final. "Merge when ready" needs only that none has FAILED: a
+// check still running, or not yet created for a fresh push, is what GitHub
+// waits on before it enqueues, so refusing it would only add a manual wait.
+const evaluateRequiredCheck = ({
+  checkRuns,
+  checkRunsHeadSha,
+  headSha,
+  landing,
+  requiredCheckRuns,
+  pullNumber,
+}: {
+  pullNumber: number;
+  checkRuns: readonly CheckRunSnapshot[];
+  checkRunsHeadSha: string;
+  headSha: string;
+  landing: Landing;
+  requiredCheckRuns: readonly string[];
+}): GateVerdict => {
+  if (checkRunsHeadSha !== headSha) {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.checkRunsStale,
+      detail: `check runs read for ${checkRunsHeadSha}, head is ${headSha}`,
+    };
+  }
+
+  const latestByName = latestRunByName(checkRuns);
+  const claVerdict = evaluateContributorSignatureCheck(
+    latestByName,
+    pullNumber,
+  );
+  if (claVerdict) {
+    return claVerdict;
   }
   const required = requiredCheckRuns.flatMap((name) => {
     const run = latestByName.get(name);
@@ -574,6 +609,7 @@ export const evaluateMergeBar = (
     evaluatePullRequestState(snapshot.pullRequest),
     evaluateMergeable(snapshot.pullRequest),
     evaluateRequiredCheck({
+      pullNumber: snapshot.pullRequest.number,
       checkRuns: snapshot.checkRuns,
       checkRunsHeadSha: snapshot.checkRunsHeadSha,
       headSha: snapshot.pullRequest.headSha,

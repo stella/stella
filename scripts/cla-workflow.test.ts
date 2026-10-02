@@ -27,10 +27,16 @@ const workflow = v.parse(
   Bun.YAML.parse(readFileSync(WORKFLOW, "utf-8")),
 );
 const steps = workflow.jobs["verify-signatures"]?.steps ?? [];
-const scriptStep = steps.find(({ uses }) =>
-  uses.startsWith("actions/github-script@"),
+const scriptStep = steps.find(
+  ({ name }) => name === "Verify contributor signatures",
 );
 const source = v.parse(v.string(), scriptStep?.with["script"]);
+const credentialsSource = v.parse(
+  v.string(),
+  steps.find(({ name }) => name === "Select signature credentials")?.with[
+    "script"
+  ],
+);
 const author = { id: 101, login: "fixture-author", type: "User" };
 const pull = (number = 17, user = author, sha = HEAD) => ({
   number,
@@ -78,6 +84,16 @@ type FixtureOptions = {
   pulls?: ReturnType<typeof pull>[];
   memberships?: Record<string, { state: string; role: string }>;
   commitsByPull?: Record<number, ReturnType<typeof commit>[]>;
+  authorsByCommit?: Record<
+    string,
+    {
+      users: (typeof author | null)[];
+      totalCount?: number;
+      oid?: string;
+    }
+  >;
+  authorPreflightError?: boolean;
+  accountsByLogin?: Record<string, typeof author>;
   changedPull?: ReturnType<typeof pull>;
   comparedCommits?: ReturnType<typeof commit>[];
   groupAncestor?: string;
@@ -87,6 +103,7 @@ type FixtureOptions = {
   conflicts?: number;
   membershipError?: number;
   storeError?: number;
+  apiError?: { route: string; status: number };
   queuePages?: {
     baseCommit: { oid: string };
     headCommit: { oid: string };
@@ -99,6 +116,9 @@ const fixture = ({
   pulls = [pull()],
   memberships = {},
   commitsByPull,
+  authorsByCommit = {},
+  authorPreflightError = false,
+  accountsByLogin = {},
   changedPull,
   comparedCommits,
   groupAncestor,
@@ -108,6 +128,7 @@ const fixture = ({
   conflicts = 0,
   membershipError,
   storeError,
+  apiError,
   queuePages = [
     [
       {
@@ -141,6 +162,14 @@ const fixture = ({
   const commentsByPull = new Map(
     pulls.map(({ number }) => [number, [...comments]]),
   );
+  const injectFailure = (route: string) => {
+    if (apiError?.route === route) {
+      throw new FixtureApiError({
+        status: apiError.status,
+        message: "Injected API failure",
+      });
+    }
+  };
   class Api {
     token: string;
     constructor({ auth = "base-fixture" } = {}) {
@@ -148,6 +177,30 @@ const fixture = ({
     }
     async request(route: string, params: Record<string, unknown>) {
       requests.push({ route, params, token: this.token });
+      injectFailure(route);
+      if (route === "GET /users/{username}") {
+        expect(this.token).toBe("base-fixture");
+        const login = v.parse(v.string(), params["username"]);
+        const users = [
+          ...pulls.map(({ user }) => user),
+          ...Object.values(commitsByPull ?? {})
+            .flat()
+            .map(({ author: user }) => user),
+          ...Object.values(authorsByCommit).flatMap(
+            ({ users: commitUsers }) => commitUsers,
+          ),
+        ];
+        const user =
+          accountsByLogin[login] ??
+          users.find((candidate) => candidate?.login === login);
+        if (!user) {
+          throw new FixtureApiError({
+            status: 404,
+            message: "Account unavailable",
+          });
+        }
+        return { data: user };
+      }
       if (route.includes("/memberships/")) {
         expect(this.token).toBe("store-fixture");
         if (membershipError) {
@@ -294,7 +347,7 @@ const fixture = ({
         };
       }
       if (route === "POST /repos/{owner}/{repo}/check-runs") {
-        expect(params["name"]).toBe("cla");
+        expect(params["name"]).toMatch(/^cla(?:\/pr-\d+)?$/u);
         created.push(params);
         return { data: { id: created.length + 400 } };
       }
@@ -331,6 +384,66 @@ const fixture = ({
     }
     async graphql(query: string, params: Record<string, unknown>) {
       expect(this.token).toBe("base-fixture");
+      requests.push({ route: "GRAPHQL", params, token: this.token });
+      injectFailure(
+        query.includes("authors(") ? "GRAPHQL authors" : "GRAPHQL queue",
+      );
+      if (query.includes("authors(")) {
+        if (authorPreflightError && !query.includes("totalCount")) {
+          throw new FixtureApiError({
+            status: 503,
+            message: "Commit author preflight unavailable",
+          });
+        }
+        expect(params["owner"]).toBe("stella");
+        expect(params["repo"]).toBe("stella");
+        const oid = v.parse(v.string(), params["oid"]);
+        const restCommit = pulls
+          .flatMap(
+            (candidate) =>
+              commitsByPull?.[candidate.number] ?? [
+                commit({ user: candidate.user, sha: candidate.head.sha }),
+              ],
+          )
+          .find((candidate) => candidate.sha === oid);
+        if (!restCommit) {
+          throw new FixtureApiError({
+            status: 404,
+            message: "Commit author snapshot unavailable",
+          });
+        }
+        const snapshot = authorsByCommit[oid];
+        const users = snapshot?.users ?? [restCommit.author];
+        const offset =
+          params["cursor"] === null || params["cursor"] === undefined
+            ? 0
+            : Number(params["cursor"]);
+        const page = users.slice(offset, offset + 100);
+        return {
+          repository: {
+            object: {
+              oid: snapshot?.oid ?? oid,
+              authors: {
+                totalCount: snapshot?.totalCount ?? users.length,
+                nodes: page.map((user) => ({
+                  user:
+                    user === null
+                      ? null
+                      : {
+                          databaseId: user.id,
+                          login: user.login,
+                          __typename: "User",
+                        },
+                })),
+                pageInfo: {
+                  hasNextPage: offset + page.length < users.length,
+                  endCursor: String(offset + page.length),
+                },
+              },
+            },
+          },
+        };
+      }
       expect(query).toContain(
         "baseCommit { oid } headCommit { oid } pullRequest { number }",
       );
@@ -352,6 +465,8 @@ const fixture = ({
     }
     paginate = {
       async *iterator(route: string, params: Record<string, unknown>) {
+        requests.push({ route, params, token: "base-fixture" });
+        injectFailure(route);
         if (route.endsWith("/pulls/{pull_number}/commits")) {
           const number = v.parse(v.number(), params["pull_number"]);
           const selected = pulls.find(
@@ -392,7 +507,40 @@ const fixture = ({
       },
     };
   }
+  const credentials: Record<string, string> = {};
+  const selectCredentials = async () => {
+    const api = new Api();
+    const paginate = async (route: string, params: Record<string, unknown>) => {
+      const result: unknown[] = [];
+      for await (const page of api.paginate.iterator(route, params)) {
+        result.push(...page.data);
+      }
+      return result;
+    };
+    await runInNewContext(`(async () => { ${credentialsSource}\n })()`, {
+      github: {
+        request: api.request.bind(api),
+        graphql: api.graphql.bind(api),
+        paginate,
+      },
+      context: {
+        eventName: event,
+        payload,
+        repo: { owner: "stella", repo: "stella" },
+      },
+      core: {
+        setOutput: (name: string, value: string) => {
+          credentials[name] = value;
+        },
+      },
+    });
+  };
   const execute = async () => {
+    if (event === "workflow_run") {
+      await selectCredentials();
+    } else {
+      credentials["store_required"] ??= "true";
+    }
     const result: unknown = runInNewContext(`(async () => { ${source}\n })()`, {
       github: new Api(),
       context: {
@@ -401,13 +549,22 @@ const fixture = ({
         repo: { owner: "stella", repo: "stella" },
       },
       core: { setFailed: (message: string) => errors.push(message) },
-      process: { env: { CLA_STORE_TOKEN: "store-fixture" } },
+      process: {
+        env: {
+          ...(credentials["store_required"] === "false"
+            ? {}
+            : { CLA_STORE_TOKEN: "store-fixture" }),
+          CLA_PULL_REQUESTS: credentials["pull_requests"],
+        },
+      },
       Buffer,
     });
     await result;
   };
   return {
     execute,
+    selectCredentials,
+    credentials,
     requests,
     created,
     updates,
@@ -417,21 +574,474 @@ const fixture = ({
     prompts: () => prompts,
   };
 };
-const lastOutput = (run: ReturnType<typeof fixture>) =>
+const lastOutput = (run: ReturnType<typeof fixture>, name?: string) =>
   v.parse(
     v.object({
       conclusion: v.string(),
       output: v.object({ title: v.string(), summary: v.string() }),
     }),
-    run.updates.at(-1),
+    name === undefined
+      ? run.updates.at(-1)
+      : run.updates.findLast((update) => {
+          const index = v.parse(v.number(), update["check_run_id"]) - 401;
+          return run.created.at(index)?.["name"] === name;
+        }),
   );
 
 describe("contributor signature workflow", () => {
+  test.each(["signed", "member"])(
+    "unsigned opener cannot reuse fully signed or exempt commits (%s)",
+    async (kind) => {
+      const contributor = { ...author, id: 102, login: "signed-contributor" };
+      const run = fixture({
+        commitsByPull: { 17: [commit({ user: contributor })] },
+        signatures: kind === "signed" ? [signature(contributor.id)] : [],
+        memberships:
+          kind === "member"
+            ? { [contributor.login]: { state: "active", role: "member" } }
+            : {},
+      });
+      await run.execute();
+      expect(run.errors).toEqual([]);
+      expect(lastOutput(run, "cla").conclusion).toBe("success");
+      expect(lastOutput(run, "cla/pr-17").conclusion).toBe("failure");
+      expect(lastOutput(run, "cla/pr-17").output.title).toBe("CLA_UNSIGNED");
+      expect(lastOutput(run, "cla/pr-17").output.summary).toContain(
+        author.login,
+      );
+      expect(
+        run.stored().signedContributors.some(({ id }) => id === author.id),
+      ).toBe(false);
+      expect(run.writes()).toBe(0);
+    },
+  );
+
+  test("opener signature cannot sign a different commit author", async () => {
+    const contributor = { ...author, id: 102, login: "unsigned-contributor" };
+    const run = fixture({
+      signatures: [signature()],
+      comments: [comment()],
+      commitsByPull: { 17: [commit({ user: contributor })] },
+    });
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    for (const name of ["cla", "cla/pr-17"]) {
+      expect(lastOutput(run, name).conclusion).toBe("failure");
+      expect(lastOutput(run, name).output.title).toBe("CLA_UNSIGNED");
+      expect(lastOutput(run, name).output.summary).toContain(contributor.login);
+    }
+    expect(run.writes()).toBe(0);
+    expect(run.stored().signedContributors.map(({ id }) => id)).toEqual([
+      author.id,
+    ]);
+  });
+
+  test.each([
+    "cursoragent-copy",
+    "claude-suffix",
+    "CursorAgent-copy",
+    "claude-agent",
+  ])(
+    "allowlist exemptions require the complete account login (%s)",
+    async (login) => {
+      const run = fixture({
+        pulls: [pull(17, { ...author, login, type: "User" })],
+      });
+      await run.execute();
+      expect(run.errors).toEqual([]);
+      expect(lastOutput(run).conclusion).toBe("failure");
+      expect(lastOutput(run).output.title).toBe("CLA_UNSIGNED");
+      expect(lastOutput(run).output.summary).toContain(login);
+      expect(run.writes()).toBe(0);
+    },
+  );
+
+  const assertActiveChecksFailed = (
+    run: ReturnType<typeof fixture>,
+    status: number,
+  ) => {
+    expect(run.errors).toEqual([`CLA_API_ERROR_${status}`]);
+    expect(run.created.length).toBeGreaterThan(0);
+    for (let index = 0; index < run.created.length; index++) {
+      const update = run.updates.findLast(
+        (value) => value["check_run_id"] === index + 401,
+      );
+      expect(update?.["conclusion"]).toBe("failure");
+      expect(update?.["status"]).toBe("completed");
+    }
+  };
+  test.each([401, 403, 429, 500, 502, 503])(
+    "every API failure keeps active CLA checks unsuccessful (%s)",
+    async (status) => {
+      for (const options of [
+        { membershipError: status },
+        { storeError: status },
+      ]) {
+        const run = fixture(options);
+        await run.execute();
+        assertActiveChecksFailed(run, status);
+      }
+    },
+  );
+  test.each([
+    ["commits", "GET /repos/{owner}/{repo}/pulls/{pull_number}/commits"],
+    ["comments", "GET /repos/{owner}/{repo}/issues/{issue_number}/comments"],
+    ["queue", "GRAPHQL queue"],
+    ["store-put", "PUT /repos/{owner}/{repo}/contents/{path}"],
+  ])(
+    "every API failure keeps active CLA checks unsuccessful at %s",
+    async (boundary, route) => {
+      const options =
+        boundary === "queue"
+          ? {
+              event: "merge_group",
+              payload: {
+                merge_group: {
+                  head_sha: HEAD,
+                  base_sha: BASE,
+                  base_ref: "refs/heads/main",
+                  head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${HEAD}`,
+                },
+              },
+              apiError: { route: "GRAPHQL queue", status: 500 },
+            }
+          : {
+              ...(boundary === "store-put" ? { comments: [comment()] } : {}),
+              apiError: {
+                route,
+                status: 500,
+              },
+            };
+      const run = fixture(options);
+      await run.execute();
+      assertActiveChecksFailed(run, 500);
+    },
+  );
+  test("a scoped API error preserves the completed common contributor verdict", async () => {
+    const contributor = { ...author, id: 102, login: "signed-contributor" };
+    const run = fixture({
+      commitsByPull: { 17: [commit({ user: contributor })] },
+      signatures: [signature(contributor.id)],
+      apiError: {
+        route: "GET /repos/{owner}/{repo}/issues/{issue_number}/comments",
+        status: 500,
+      },
+    });
+    await run.execute();
+    expect(run.errors).toEqual(["CLA_API_ERROR_500"]);
+    expect(lastOutput(run, "cla").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("failure");
+    expect(lastOutput(run, "cla/pr-17").output.title).toBe("CLA_ERROR");
+    expect(
+      run.updates.filter((update) => update["check_run_id"] === 401),
+    ).toHaveLength(1);
+  });
+
+  for (const event of ["pull_request_target", "merge_group"]) {
+    const eventOptions =
+      event === "merge_group"
+        ? {
+            event,
+            payload: {
+              merge_group: {
+                head_sha: HEAD,
+                base_sha: BASE,
+                base_ref: "refs/heads/main",
+                head_ref: `refs/heads/gh-readonly-queue/main/pr-17-${HEAD}`,
+              },
+            },
+            queuePages: [
+              [
+                {
+                  headCommit: { oid: HEAD },
+                  baseCommit: { oid: BASE },
+                  pullRequest: { number: 17 },
+                },
+              ],
+            ],
+          }
+        : { event };
+    test.each(["unsigned", "signed", "member", "unlinked"])(
+      `${event} verifies every coauthor (%s)`,
+      async (state) => {
+        const coauthor = { ...author, id: 102, login: "coauthor" };
+        const run = fixture({
+          ...eventOptions,
+          signatures:
+            state === "signed"
+              ? [signature(), signature(coauthor.id)]
+              : [signature()],
+          memberships:
+            state === "member"
+              ? { [coauthor.login]: { state: "active", role: "member" } }
+              : {},
+          authorsByCommit: {
+            [HEAD]: { users: [author, state === "unlinked" ? null : coauthor] },
+          },
+        });
+        await run.execute();
+        expect(run.errors).toEqual([]);
+        const output = lastOutput(
+          run,
+          event === "merge_group" ? "cla" : "cla/pr-17",
+        );
+        const linkedTitle =
+          state === "unsigned" ? "CLA_UNSIGNED" : "CLA_VERIFIED";
+        const expectedTitle =
+          state === "unlinked" ? "CLA_UNLINKED_AUTHOR" : linkedTitle;
+        expect(output.output.title).toBe(expectedTitle);
+        expect(output.conclusion).toBe(
+          state === "signed" || state === "member" ? "success" : "failure",
+        );
+        expect(
+          run.requests.some(
+            ({ route, params }) =>
+              route === "GRAPHQL" && params["oid"] === HEAD,
+          ),
+        ).toBe(true);
+        if (state === "unsigned") {
+          expect(output.output.summary).toContain(coauthor.login);
+        }
+      },
+    );
+
+    test(`${event} contributor snapshots include the last author page`, async () => {
+      const finalAuthor = { ...author, id: 1001, login: "last-page-coauthor" };
+      const firstPage = Array.from({ length: 100 }, (_, index) => ({
+        ...author,
+        id: author.id + index,
+        login: `${author.login}-${index}`,
+      }));
+      const users = [...firstPage, finalAuthor];
+      const signedFirstPage = firstPage.map(({ id }) => signature(id));
+      const run = fixture({
+        ...eventOptions,
+        signatures: signedFirstPage,
+        authorsByCommit: { [HEAD]: { users } },
+      });
+      await run.execute();
+      expect(run.errors).toEqual([]);
+      expect(lastOutput(run).output.title).toBe("CLA_UNSIGNED");
+      expect(lastOutput(run).output.summary).toContain(finalAuthor.login);
+      expect(
+        run.requests.some(
+          ({ route, params }) =>
+            route === "GRAPHQL" &&
+            params["oid"] === HEAD &&
+            params["cursor"] === "100",
+        ),
+      ).toBe(true);
+      const signed = fixture({
+        ...eventOptions,
+        signatures: [...signedFirstPage, signature(finalAuthor.id)],
+        authorsByCommit: { [HEAD]: { users } },
+      });
+      await signed.execute();
+      expect(signed.errors).toEqual([]);
+      expect(lastOutput(signed).conclusion).toBe("success");
+    });
+
+    test.each(["incomplete", "wrong-oid"])(
+      `${event} rejects %s contributor snapshots`,
+      async (corruption) => {
+        const run = fixture({
+          ...eventOptions,
+          signatures: [signature()],
+          authorsByCommit: {
+            [HEAD]: {
+              users: [author],
+              ...(corruption === "incomplete"
+                ? { totalCount: 2 }
+                : { oid: OTHER_HEAD }),
+            },
+          },
+        });
+        await run.execute();
+        expect(run.errors).toContain(
+          corruption === "incomplete"
+            ? "CLA_INCOMPLETE_AUTHOR_LIST"
+            : "CLA_INVALID_AUTHOR_LIST",
+        );
+        expect(lastOutput(run).output.title).toBe("CLA_ERROR");
+        expect(lastOutput(run).conclusion).toBe("failure");
+        expect(
+          run.requests.some(
+            ({ route, params }) =>
+              route === "GRAPHQL" && params["oid"] === HEAD,
+          ),
+        ).toBe(true);
+      },
+    );
+  }
+
+  const notification = {
+    workflow_run: {
+      repository: { full_name: "stella/stella" },
+      path: ".github/workflows/cla-notify.yml",
+      event: "pull_request",
+      conclusion: "success",
+      head_sha: HEAD,
+    },
+  };
+  const dependabot = {
+    ...author,
+    id: 1001,
+    login: "dependabot[bot]",
+    type: "Bot",
+  };
+  test("an ordinary all-bot PR skips store credentials after a fresh API preflight", async () => {
+    const bot = { ...author, login: "release-fixture[bot]", type: "Bot" };
+    const run = fixture({ pulls: [pull(17, bot)] });
+    await run.selectCredentials();
+    expect(run.credentials["store_required"]).toBe("false");
+    await run.execute();
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
+    expect(run.requests.some(({ token }) => token === "store-fixture")).toBe(
+      false,
+    );
+    expect(
+      run.requests.some(({ route }) => route === "GET /users/{username}"),
+    ).toBe(true);
+  });
+  test("a bot preflight API failure cannot produce a check or credentials decision", async () => {
+    const run = fixture({
+      pulls: [pull(17, dependabot)],
+      authorPreflightError: true,
+    });
+    await expect(run.selectCredentials()).rejects.toThrow(
+      "Commit author preflight unavailable",
+    );
+    expect(run.credentials).toEqual({});
+    expect(run.created).toEqual([]);
+    expect(run.writes()).toBe(0);
+  });
+  test("a bot preflight missing immutable commit object fails before reporting", async () => {
+    const run = fixture({
+      pulls: [pull(17, dependabot)],
+      authorsByCommit: { [HEAD]: { users: [dependabot], oid: OTHER_HEAD } },
+    });
+    await expect(run.selectCredentials()).rejects.toThrow(
+      "CLA_INVALID_AUTHOR_LIST",
+    );
+    expect(run.credentials).toEqual({});
+    expect(run.created).toEqual([]);
+  });
+  test("a linked GraphQL identity cannot borrow another REST account's exemption", async () => {
+    const run = fixture({
+      signatures: [signature()],
+      accountsByLogin: { [author.login]: { ...author, id: 102, type: "Bot" } },
+    });
+    await run.execute();
+    expect(run.errors).toEqual(["CLA_AUTHOR_IDENTITY_CHANGED"]);
+    expect(lastOutput(run, "cla").conclusion).toBe("failure");
+    expect(lastOutput(run, "cla").output.title).toBe("CLA_ERROR");
+    expect(
+      run.requests.some(
+        ({ route, params }) =>
+          route === "GET /users/{username}" &&
+          params["username"] === author.login,
+      ),
+    ).toBe(true);
+  });
+  test("trusted all-bot notification reports both checks without signature-store credentials", async () => {
+    const run = fixture({
+      event: "workflow_run",
+      payload: notification,
+      pulls: [pull(17, dependabot)],
+    });
+    await run.execute();
+    expect(run.credentials).toEqual({
+      store_required: "false",
+      pull_requests: "[17]",
+    });
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
+    expect(run.requests.some(({ token }) => token === "store-fixture")).toBe(
+      false,
+    );
+  });
+  test("bot-opened human contribution requires store credentials and human consent", async () => {
+    const run = fixture({
+      event: "workflow_run",
+      payload: notification,
+      pulls: [pull(17, dependabot)],
+      commitsByPull: { 17: [commit()] },
+    });
+    await run.execute();
+    expect(run.credentials["store_required"]).toBe("true");
+    expect(run.errors).toEqual([]);
+    expect(lastOutput(run, "cla").output.title).toBe("CLA_UNSIGNED");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("failure");
+  });
+  test.each(["unlinked", "paginated"])(
+    "notification preflight requests credentials for %s contributors",
+    async (kind) => {
+      const run = fixture({
+        event: "workflow_run",
+        payload: notification,
+        pulls: [pull(17, dependabot)],
+        authorsByCommit: {
+          [HEAD]: {
+            users:
+              kind === "unlinked"
+                ? [dependabot, null]
+                : Array.from({ length: 101 }, () => dependabot),
+          },
+        },
+      });
+      await run.selectCredentials();
+      expect(run.credentials["store_required"]).toBe("true");
+      expect(run.created).toEqual([]);
+    },
+  );
+  test.each(["repository", "path", "event", "head_sha", "conclusion"])(
+    "notification rejects untrusted %s before reporting",
+    async (field) => {
+      const run = fixture({
+        event: "workflow_run",
+        payload: {
+          workflow_run: {
+            ...notification.workflow_run,
+            [field]:
+              field === "repository"
+                ? { full_name: "attacker/repo" }
+                : "attacker",
+          },
+        },
+        pulls: [pull(17, dependabot)],
+      });
+      await expect(run.selectCredentials()).rejects.toThrow(
+        "CLA_UNTRUSTED_NOTIFICATION",
+      );
+      expect(run.created).toEqual([]);
+      expect(run.writes()).toBe(0);
+    },
+  );
+
+  test("a stale notification head cannot report on the current bot PR", async () => {
+    const run = fixture({
+      event: "workflow_run",
+      payload: {
+        workflow_run: { ...notification.workflow_run, head_sha: OTHER_HEAD },
+      },
+      pulls: [pull(17, dependabot)],
+    });
+    await run.execute();
+    expect(run.credentials["pull_requests"]).toBe("[]");
+    expect(run.created).toEqual([]);
+    expect(run.updates).toEqual([]);
+    expect(run.writes()).toBe(0);
+  });
+
   test("members, owners, allowlisted accounts, Bot authors and Dependabot always report success", async () => {
     for (const options of [
       { memberships: { [author.login]: { state: "active", role: "member" } } },
       { memberships: { [author.login]: { state: "active", role: "admin" } } },
       { pulls: [pull(17, { ...author, login: "cursoragent" })] },
+      { pulls: [pull(17, { ...author, login: "claude" })] },
       { pulls: [pull(17, { ...author, login: "fixture-bot", type: "Bot" })] },
       {
         pulls: [pull(17, { ...author, login: "dependabot[bot]", type: "Bot" })],
@@ -695,16 +1305,28 @@ describe("contributor signature workflow", () => {
     );
   });
 
-  test("a member PR sharing a head cannot hide an unsigned outsider's check", async () => {
+  test("an unrelated unsigned opener cannot pollute a member PR's shared-head contributor check", async () => {
     const run = fixture({
       pulls: [pull(), pull(18, { ...author, id: 102, login: "second-author" })],
       memberships: { [author.login]: { state: "active", role: "member" } },
     });
     await run.execute();
     expect(run.errors).toEqual([]);
-    expect(lastOutput(run).conclusion).toBe("failure");
-    expect(lastOutput(run).output.title).toBe("CLA_UNSIGNED");
-    expect(lastOutput(run).output.summary).toContain("#18");
+    expect(lastOutput(run, "cla").conclusion).toBe("success");
+    expect(lastOutput(run, "cla/pr-17").conclusion).toBe("success");
+    expect(run.created.some((check) => check["name"] === "cla/pr-18")).toBe(
+      false,
+    );
+    const outsider = fixture({
+      payload: { pull_request: { number: 18 } },
+      pulls: [pull(), pull(18, { ...author, id: 102, login: "second-author" })],
+      memberships: { [author.login]: { state: "active", role: "member" } },
+      commitsByPull: { 18: [commit()] },
+    });
+    await outsider.execute();
+    expect(outsider.errors).toEqual([]);
+    expect(lastOutput(outsider, "cla").conclusion).toBe("success");
+    expect(lastOutput(outsider, "cla/pr-18").output.title).toBe("CLA_UNSIGNED");
   });
 
   test("only active memberships exempt authors and signing comments are paginated", async () => {
@@ -825,7 +1447,7 @@ describe("contributor signature workflow", () => {
     });
     await run.execute();
     expect(run.errors).toEqual([]);
-    expect(run.created).toHaveLength(2);
+    expect(run.created).toHaveLength(4);
     expect(run.prompts()).toBe(2);
     const invalid = fixture({
       event: "workflow_dispatch",
@@ -909,8 +1531,9 @@ describe("contributor signature workflow", () => {
   test("privileged steps are pinned API actions with no executable PR-head data", () => {
     expect(readFileSync(WORKFLOW, "utf-8")).toContain("SECURITY INVARIANT");
     expect(workflow.jobs).not.toHaveProperty("cla");
-    expect(steps).toHaveLength(2);
+    expect(steps).toHaveLength(3);
     expect(steps.map(({ uses }) => uses)).toEqual([
+      "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
       "actions/create-github-app-token@bcd2ba49218906704ab6c1aa796996da409d3eb1",
       "actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3",
     ]);
@@ -919,7 +1542,14 @@ describe("contributor signature workflow", () => {
       expect(step.uses).not.toContain("checkout");
     }
     expect(source).not.toContain("${{");
+    expect(credentialsSource).not.toContain("${{");
     expect(source).not.toMatch(/\b(?:eval|require|exec|spawn)\s*\(/u);
+    expect(credentialsSource).not.toMatch(
+      /\b(?:eval|require|exec|spawn)\s*\(/u,
+    );
+    expect(steps.at(1)?.if).toBe(
+      "steps.credentials.outputs.store_required == 'true'",
+    );
     expect(scriptStep?.if).toBe(`\${{ !cancelled() }}`);
     expect(workflow.permissions).toEqual({
       contents: "read",
@@ -929,6 +1559,7 @@ describe("contributor signature workflow", () => {
     });
     expect(workflow.on).toHaveProperty("merge_group");
     expect(workflow.on).toHaveProperty("workflow_dispatch");
+    expect(workflow.on).toHaveProperty("workflow_run");
     expect(source).not.toContain("author_association");
   });
 });

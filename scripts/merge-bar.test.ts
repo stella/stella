@@ -1785,12 +1785,86 @@ describe("contributor signature check", () => {
             id: 3,
             outputTitle: "CLA_VERIFIED",
           }),
+          checkRun(
+            `cla/pr-${passingSnapshot().pullRequest.number}`,
+            "completed",
+            "success",
+            {
+              id: 4,
+              outputTitle: "CLA_VERIFIED",
+            },
+          ),
         ],
       });
       expect(evaluateMergeBar(snapshot).decision).toBe("merge");
       expect(
         failedGate({ ...snapshot, checkRunsHeadSha: OTHER_SHA }).reasons,
       ).toContain("CHECK_RUNS_READ_FOR_STALE_SHA");
+    }
+  });
+
+  test("shared heads enforce only the exact PR opener in both landing modes", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const common = checkRun("cla", "completed", "success", {
+        id: 2,
+        outputTitle: "CLA_VERIFIED",
+      });
+      const own = checkRun(
+        `cla/pr-${passingSnapshot().pullRequest.number}`,
+        "completed",
+        "success",
+        {
+          id: 3,
+          outputTitle: "CLA_VERIFIED",
+        },
+      );
+      const other = checkRun("cla/pr-999", "completed", "failure", {
+        id: 4,
+        outputTitle: "CLA_UNSIGNED",
+      });
+      const snapshot = passingSnapshot({
+        landing,
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          common,
+          own,
+          other,
+        ],
+      });
+      expect(evaluateMergeBar(snapshot).decision).toBe("merge");
+      expect(
+        failedGate({
+          ...snapshot,
+          checkRuns: [
+            common,
+            checkRun(
+              `cla/pr-${passingSnapshot().pullRequest.number}`,
+              "completed",
+              "failure",
+              {
+                id: 3,
+                outputTitle: "CLA_UNSIGNED",
+              },
+            ),
+          ],
+        }).reasons,
+      ).toContain("CLA_UNSIGNED");
+      for (const pending of [
+        undefined,
+        checkRun(
+          `cla/pr-${passingSnapshot().pullRequest.number}`,
+          "in_progress",
+          null,
+          { id: 3 },
+        ),
+      ]) {
+        expect(
+          evaluateMergeBar({
+            ...snapshot,
+            checkRuns: pending ? [common, pending, other] : [common, other],
+          }).decision,
+        ).toBe("abort");
+      }
     }
   });
 
