@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import ts from "typescript";
 
 import { RECORDED_CONVERSATION_SUITES } from "../src/tests/helpers/recorded-conversation-suites";
+import rssData from "./test-peak-rss.json";
 
 /** The ordinary DB batch stays small without paying one process per file. */
 export const DB_TEST_BATCH_SIZE = 3;
@@ -16,19 +17,10 @@ export const PROPERTY_DB_TEST_BATCH_SIZE = 1;
 export const dbTestBatchSize = (propertyOnly: boolean) =>
   propertyOnly ? PROPERTY_DB_TEST_BATCH_SIZE : DB_TEST_BATCH_SIZE;
 
-/**
- * Test files whose own peak RSS leaves too little of their batch budget for
- * neighbours. Each runs in a process of its own, whatever its class (see
- * `splitSoloTests`).
- */
-export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
-  ...Object.values(RECORDED_CONVERSATION_SUITES),
-  // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
-  // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
-  "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
-  // Keep this suite's retained database graph in its own process.
-  "src/handlers/chat/thread-durable-refs.integration.test.ts",
-]);
+/** Match transcript generation's per-suite process boundary (gen-chat-transcripts.ts). */
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set(
+  Object.values(RECORDED_CONVERSATION_SUITES),
+);
 
 /**
  * Move each solo file out of its composed batch into a batch of its own. The
@@ -47,48 +39,307 @@ export const splitSoloTests = (
     return shared.length > 0 ? [shared, ...solo] : solo;
   });
 
-// Estimates guide composition; the runtime RSS guard remains authoritative.
-export const DEFAULT_TEST_PEAK_RSS_MB = 128;
+// Shared batches reserve headroom for interaction between retained module graphs.
 export const TEST_BATCH_RSS_HEADROOM_RATIO = 0.7;
+export const UNMEASURED_TEST_RSS_RATIO = 0.4;
+export const SOLO_TEST_RSS_RATIO = 0.6;
+
+export type TestRssEnvironment = {
+  os: string;
+  arch: string;
+  bunVersion: string;
+  runnerImage: string;
+};
+export type TestRssSource = { runId: string; job: string };
+export type TestRssFile = {
+  peakMb: number;
+  baselineMb: number;
+  source: TestRssSource;
+};
+export type TestRssTable =
+  | { type: "uncalibrated"; files: Readonly<Record<string, number>> }
+  | {
+      type: "measured";
+      environment: TestRssEnvironment;
+      baselineMb: number;
+      files: Readonly<Record<string, TestRssFile>>;
+    };
+
+const rssRecord = (value: unknown, label: string): Record<string, unknown> => {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+    panic(`Invalid ${label}`);
+  }
+  return Object.fromEntries(Object.entries(value));
+};
+const rssPositive = (value: unknown, label: string) => {
+  if (typeof value !== "number" || !Number.isFinite(value) || value <= 0) {
+    return panic(`Invalid ${label}`);
+  }
+  return value;
+};
+const rssString = (value: unknown, label: string) => {
+  if (typeof value !== "string" || value.trim().length === 0) {
+    return panic(`Invalid ${label}`);
+  }
+  return value;
+};
+export const readTestRssSource = (value: unknown): TestRssSource => {
+  const raw = rssRecord(value, "RSS source");
+  return {
+    runId: rssString(raw["runId"], "run id"),
+    job: rssString(raw["job"], "job"),
+  };
+};
+export const readTestRssEnvironment = (value: unknown): TestRssEnvironment => {
+  const raw = rssRecord(value, "RSS environment");
+  return {
+    os: rssString(raw["os"], "OS"),
+    arch: rssString(raw["arch"], "architecture"),
+    bunVersion: rssString(raw["bunVersion"], "Bun version"),
+    runnerImage: rssString(raw["runnerImage"], "runner image"),
+  };
+};
+
+/** Preserve uncalibrated observations without inventing an empty-process measurement. */
+export const readTestRssTable = (value: unknown): TestRssTable => {
+  const raw = rssRecord(value, "RSS table");
+  const files = rssRecord(raw["files"], "RSS files");
+  if (raw["type"] === "uncalibrated") {
+    const peaks: Record<string, number> = {};
+    for (const [file, peak] of Object.entries(files)) {
+      peaks[file] = rssPositive(peak, `peak RSS for ${file}`);
+    }
+    return { type: "uncalibrated", files: peaks };
+  }
+  if (raw["type"] !== "measured") {
+    return panic("Invalid RSS table type");
+  }
+  const baselineMb = rssPositive(raw["baselineMb"], "RSS baseline");
+  const measured: Record<string, TestRssFile> = {};
+  for (const [file, observation] of Object.entries(files)) {
+    const row = rssRecord(observation, `RSS row ${file}`);
+    const fileBaseline = rssPositive(
+      row["baselineMb"],
+      `RSS baseline for ${file}`,
+    );
+    if (fileBaseline > baselineMb) {
+      panic(`Table baseline is below the measured baseline for ${file}`);
+    }
+    measured[file] = {
+      peakMb: rssPositive(row["peakMb"], `peak RSS for ${file}`),
+      baselineMb: fileBaseline,
+      source: readTestRssSource(row["source"]),
+    };
+  }
+  return {
+    type: "measured",
+    environment: readTestRssEnvironment(raw["environment"]),
+    baselineMb,
+    files: measured,
+  };
+};
+
+/** The committed table is consumed only through this planner boundary. */
+export const measuredTestRssTable = () => readTestRssTable(rssData);
+export const unmeasuredTestPeakRss = (budgetMb: number) =>
+  Math.ceil(
+    budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO * UNMEASURED_TEST_RSS_RATIO,
+  );
+
+const rssBaseline = (table: TestRssTable) =>
+  table.type === "measured" ? table.baselineMb : 0;
+const rssFileWeight = (file: string, table: TestRssTable, budgetMb: number) => {
+  const observation = table.files[file];
+  if (observation === undefined) {
+    const incrementalMb = unmeasuredTestPeakRss(budgetMb);
+    return {
+      type: "unmeasured",
+      peakMb: rssBaseline(table) + incrementalMb,
+      incrementalMb,
+    } as const;
+  }
+  if (typeof observation === "number") {
+    return {
+      type: "measured",
+      peakMb: observation,
+      incrementalMb: observation,
+    } as const;
+  }
+  return {
+    type: "measured",
+    peakMb: observation.peakMb,
+    incrementalMb: Math.max(0, observation.peakMb - observation.baselineMb),
+  } as const;
+};
+
+type BatchPeakRssOptions = {
+  files: readonly string[];
+  rssTable: TestRssTable;
+  budgetMb: number;
+};
+export const batchPeakRss = ({
+  files,
+  rssTable,
+  budgetMb,
+}: BatchPeakRssOptions) => {
+  let peakMb = rssBaseline(rssTable);
+  for (const file of files) {
+    peakMb += rssFileWeight(file, rssTable, budgetMb).incrementalMb;
+  }
+  return peakMb;
+};
 
 type SplitMemoryBoundedBatchesOptions = {
   batches: readonly string[][];
-  peakRssMb: Readonly<Record<string, number>>;
+  rssTable?: TestRssTable;
+  /** Hard execution-class cap; shared composition additionally reserves headroom. */
   budgetMb: number;
 };
 
 /** Split existing batches without introducing new process neighbours. */
 export const splitMemoryBoundedBatches = ({
   batches,
-  peakRssMb,
+  rssTable = measuredTestRssTable(),
   budgetMb,
 }: SplitMemoryBoundedBatchesOptions): string[][] => {
   if (!Number.isFinite(budgetMb) || budgetMb <= 0) {
     panic("test batch memory budget must be positive and finite");
   }
+  const compositionBudgetMb = budgetMb * TEST_BATCH_RSS_HEADROOM_RATIO;
   const result: string[][] = [];
   for (const batch of batches) {
     let current: string[] = [];
-    let totalMb = 0;
+    let totalMb = rssBaseline(rssTable);
     for (const file of batch) {
-      const weight = peakRssMb[file] ?? DEFAULT_TEST_PEAK_RSS_MB;
-      if (!Number.isFinite(weight) || weight <= 0) {
+      const weight = rssFileWeight(file, rssTable, budgetMb);
+      if (
+        !Number.isFinite(weight.peakMb) ||
+        weight.peakMb <= 0 ||
+        !Number.isFinite(weight.incrementalMb) ||
+        weight.incrementalMb < 0
+      ) {
         panic(`Invalid peak RSS for ${file}`);
       }
-      if (current.length > 0 && totalMb + weight > budgetMb) {
+      const singletonPeak = rssBaseline(rssTable) + weight.incrementalMb;
+      if (singletonPeak > budgetMb) {
+        panic(
+          `Cannot plan API test batch [${batch.join(", ")}]: ${file} requires ${singletonPeak} MB, class budget ${budgetMb} MB`,
+        );
+      }
+      if (
+        weight.type === "measured" &&
+        weight.peakMb >= budgetMb * SOLO_TEST_RSS_RATIO
+      ) {
+        if (current.length > 0) {
+          result.push(current);
+          current = [];
+          totalMb = rssBaseline(rssTable);
+        }
+        result.push([file]);
+        continue;
+      }
+      if (
+        current.length > 0 &&
+        totalMb + weight.incrementalMb > compositionBudgetMb
+      ) {
         result.push(current);
         current = [];
-        totalMb = 0;
+        totalMb = rssBaseline(rssTable);
       }
       current.push(file);
-      totalMb += weight;
+      totalMb += weight.incrementalMb;
     }
-    // A file above the composition budget runs alone; its runtime cap is unchanged.
     if (current.length > 0) {
       result.push(current);
     }
   }
+  for (const batch of result) {
+    const peak = batchPeakRss({ files: batch, rssTable, budgetMb });
+    if (peak > budgetMb) {
+      panic(
+        `Cannot plan API test batch [${batch.join(", ")}]: requires ${peak} MB, class budget ${budgetMb} MB`,
+      );
+    }
+  }
   return result;
+};
+
+export type TestRssMeasurement = {
+  file: string;
+  peakMb: number;
+  exitCode: number;
+};
+type TestRssArtifactOptions = {
+  measurements: readonly TestRssMeasurement[];
+  baselineMb: number;
+  environment: TestRssEnvironment;
+  source: TestRssSource;
+};
+export const testRssArtifact = ({
+  measurements,
+  baselineMb,
+  environment,
+  source,
+}: TestRssArtifactOptions) =>
+  `${JSON.stringify({ version: 1, environment, source, baselineMb, measurements }, null, 2)}\n`;
+
+export const parseRssMeasurementArguments = (arguments_: readonly string[]) => {
+  const index = arguments_.indexOf("--measure-rss");
+  if (index === -1) {
+    return { mode: "batched", arguments: [...arguments_] } as const;
+  }
+  const outputPath = arguments_.at(index + 1);
+  if (
+    outputPath === undefined ||
+    outputPath.startsWith("-") ||
+    outputPath.length === 0 ||
+    arguments_.lastIndexOf("--measure-rss") !== index ||
+    arguments_.includes("--property")
+  ) {
+    panic(
+      "Usage: --measure-rss <artifact.json> (full per-file measurement; no --property)",
+    );
+  }
+  const remaining = arguments_.filter(
+    (_, position) => position !== index && position !== index + 1,
+  );
+  const takeOption = (flag: string, fallback: string) => {
+    const position = remaining.indexOf(flag);
+    if (position === -1) {
+      return fallback;
+    }
+    const value = remaining.at(position + 1);
+    if (
+      value === undefined ||
+      value.startsWith("-") ||
+      remaining.lastIndexOf(flag) !== position
+    ) {
+      return panic(`Missing or repeated ${flag}`);
+    }
+    remaining.splice(position, 2);
+    return value;
+  };
+  const runnerImage = rssString(
+    takeOption("--measure-rss-image", "local"),
+    "runner image",
+  );
+  const source = readTestRssSource(
+    JSON.parse(
+      takeOption("--measure-rss-source", '{"runId":"local","job":"local"}'),
+    ),
+  );
+  return {
+    mode: "measure-rss",
+    outputPath,
+    source,
+    environment: {
+      os: process.platform,
+      arch: process.arch,
+      bunVersion: Bun.version,
+      runnerImage,
+    },
+    arguments: remaining,
+  } as const;
 };
 
 export const TEST_BATCH_KIND = {
