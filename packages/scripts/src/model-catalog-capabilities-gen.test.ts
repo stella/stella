@@ -293,17 +293,9 @@ describe("image-input evidence", () => {
       upstream: upstreamWithToolCall(() => true),
     });
     const source = renderCapabilitiesModule(rows);
-    const idsByProvider = Object.fromEntries(
-      TANSTACK_AI_PROVIDERS.map((provider) => [
-        provider,
-        BYOK_MODEL_OPTIONS[provider]
-          .map((id) => JSON.stringify(id))
-          .join(" | "),
-      ]),
-    );
     const declarations = (extraId: string) => `
       export type BYOKProvider = ${TANSTACK_AI_PROVIDERS.map((provider) => JSON.stringify(provider)).join(" | ")};
-      export type BYOKModelIdByProvider = { ${TANSTACK_AI_PROVIDERS.map((provider) => `${provider}: ${idsByProvider[provider]}${provider === "openai" ? extraId : ""}`).join("; ")} };
+      export type BYOKModelIdByProvider = { ${TANSTACK_AI_PROVIDERS.map((provider) => `${provider}: ${BYOK_MODEL_OPTIONS[provider].map((id) => JSON.stringify(id)).join(" | ")}${provider === "openai" ? extraId : ""}`).join("; ")} };
       export type OfferedBYOKModelId = ${rows.map(({ modelId }) => JSON.stringify(modelId)).join(" | ")};
       export type ImageInputCapability = "supported" | "unsupported" | "unknown";
       export type ReasoningEffort = string;

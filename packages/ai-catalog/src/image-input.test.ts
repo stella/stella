@@ -15,7 +15,9 @@ test("every offered provider model has explicit image-input evidence", () => {
     ).toEqual([...BYOK_MODEL_OPTIONS[provider]].toSorted());
     for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
       const capability = getModelImageInputCapability({ provider, modelId });
-      expect(IMAGE_INPUT_CAPABILITIES).toContain(capability);
+      expect(
+        IMAGE_INPUT_CAPABILITIES.some((state) => state === capability),
+      ).toBe(true);
     }
   }
 });
