@@ -3,18 +3,18 @@ import { and, eq, isNull, sql } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
 
+import {
+  AGENT_CLIENT_LOCK_BUDGET_MS,
+  AGENT_CLIENT_STATEMENT_BUDGET_MS,
+  countPreviousAgentClientValues,
+  runAgentClientCredentialBatch,
+} from "@/api/agent-auth/credential-storage";
 import { schedulerJobs } from "@/api/db/schema";
 import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
-import {
-  AGENT_CLIENT_LOCK_BUDGET_MS,
-  AGENT_CLIENT_STATEMENT_BUDGET_MS,
-  countPreviousAgentClientValues,
-  runAgentClientCredentialBatch,
-} from "@/api/lib/agent-client-credential-storage";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -62,14 +62,17 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
         message: "Agent client storage update did not complete",
       }),
   });
-  if (Result.isError(result) && !signal.aborted) {
-    observeFailure(result.error, { sink: backfillFailed });
+  const batch = Result.isError(result)
+    ? Result.err(result.error)
+    : result.value;
+  if (Result.isError(batch) && !signal.aborted) {
+    observeFailure(batch.error, { sink: backfillFailed });
   }
   if (signal.aborted) {
     return;
   }
   const remainingCount = await countPreviousAgentClientValues(db);
-  if (!Result.isError(result) && remainingCount === 0) {
+  if (!Result.isError(batch) && remainingCount === 0) {
     await db.transaction(async (tx) => {
       await setSharedStatementTimeout(tx, AGENT_CLIENT_STATEMENT_BUDGET_MS);
       await setSharedLockTimeout(tx, AGENT_CLIENT_LOCK_BUDGET_MS);
@@ -91,7 +94,7 @@ export const backfillAgentClientStorage: SchedulerTask = async ({
     });
   }
   logger.info("scheduler.agent_client_storage", {
-    ...(!Result.isError(result) && { "migration.updated_count": result.value }),
+    ...(!Result.isError(batch) && { "migration.updated_count": batch.value }),
     "migration.remaining_count": remainingCount,
     "migration.paused": paused,
   });

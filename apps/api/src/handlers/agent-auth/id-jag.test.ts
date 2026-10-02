@@ -29,6 +29,7 @@ import {
 import { user } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import {
   agentAuthConfirmRoute,
   agentAuthRoute,
@@ -227,6 +228,42 @@ const createHumanSession = async (email: string) =>
     orgName: "Existing Org",
     orgSlugPrefix: "existing",
   });
+
+describe("agent-auth ID-JAG storage configuration", () => {
+  test("retains the service error for ready and step-up registrations", async () => {
+    enableFeature();
+    await trustIssuer();
+    const readyIdentity = {
+      email: `idjag-ready-${Bun.randomUUIDv7()}@external.test`,
+      sub: `sub-ready-${Bun.randomUUIDv7()}`,
+    };
+    const ready = await postIdentity(
+      identityAssertionBody(await mintIdJag(readyIdentity)),
+    );
+    expect(ready.status).toBe(200);
+    const stepUpIdentity = {
+      email: `idjag-stepup-${Bun.randomUUIDv7()}@stella.dev`,
+      sub: `sub-stepup-${Bun.randomUUIDv7()}`,
+    };
+    await createHumanSession(stepUpIdentity.email);
+    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
+    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    try {
+      for (const identity of [readyIdentity, stepUpIdentity]) {
+        const response = await postIdentity(
+          identityAssertionBody(await mintIdJag(identity)),
+        );
+        expect(response.status).toBe(503);
+        const body = await readJson(response);
+        expect(body["message"]).toBe("Could not secure agent credentials");
+        expect(body["identity_assertion"]).toBeUndefined();
+        expect(body["claim_token"]).toBeUndefined();
+      }
+    } finally {
+      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+    }
+  });
+});
 
 describe("agent-auth ID-JAG dark-launch gate", () => {
   test("identity_assertion is rejected when the feature flag is off", async () => {

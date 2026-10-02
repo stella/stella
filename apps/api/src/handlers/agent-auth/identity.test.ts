@@ -20,6 +20,7 @@ import {
 import { agentRegistration } from "@/api/db/agent-auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
 import { isAgentAuthRateLimitedPath } from "@/api/handlers/agent-auth/rate-limit";
 import {
   agentAuthConfirmRoute,
@@ -121,6 +122,36 @@ const createHumanSession = async () =>
 
 /** Hint for ceremonies whose confirm step no human in the test completes. */
 const unclaimedHint = () => `nobody-${Bun.randomUUIDv7()}@stella.dev`;
+
+describe("agent registration configuration", () => {
+  test("returns a service error when the selected storage format is unavailable", async () => {
+    const anonymous = await readJson(await postIdentity({ type: "anonymous" }));
+    const originalKey = envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY;
+    envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = undefined;
+    try {
+      const responses = [
+        await postIdentity({
+          type: "service_auth",
+          login_hint: unclaimedHint(),
+        }),
+        await postIdentity({ type: "anonymous" }),
+        await postClaim({
+          claim_token: String(anonymous["claim_token"]),
+          email: unclaimedHint(),
+        }),
+      ];
+      for (const response of responses) {
+        expect(response.status).toBe(503);
+        const body = await readJson(response);
+        expect(body["message"]).toBe("Could not secure agent credentials");
+        expect(body["access_token"]).toBeUndefined();
+        expect(body["registration_id"]).toBeUndefined();
+      }
+    } finally {
+      envDocumentProcessingWorker.CONTENT_ENCRYPTION_KEY = originalKey;
+    }
+  });
+});
 
 describe("agent-auth service_auth flow", () => {
   test("registration retains the initial stored format before activation", async () => {

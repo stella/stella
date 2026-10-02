@@ -2,12 +2,12 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { eq, sql, TransactionRollbackError } from "drizzle-orm";
 
-import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { env } from "@/api/env";
 import {
   encryptAgentClientCredential,
   readAgentClientCredential,
-} from "@/api/lib/agent-client-credentials";
+} from "@/api/agent-auth/credentials";
+import { agentRegistration } from "@/api/db/agent-auth-schema";
+import { env } from "@/api/env";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 
 let priorStorageSetting = false;
@@ -36,7 +36,9 @@ if (!databaseUrl || !runPostgresTests) {
           try: async () => {
             await db.transaction(async (tx) => {
               const id = Bun.randomUUIDv7();
-              const encrypted = await encryptAgentClientCredential(credential);
+              const encrypted = (
+                await encryptAgentClientCredential(credential)
+              ).unwrap();
               await tx.insert(agentRegistration).values({
                 id,
                 registrationType: "service_auth",
@@ -60,12 +62,15 @@ if (!databaseUrl || !runPostgresTests) {
               }
               let upgrades = 0;
               expect(
-                await readAgentClientCredential({
-                  storedCredential,
-                  upgrade: async () => {
-                    upgrades += 1;
-                  },
-                }),
+                (
+                  await readAgentClientCredential({
+                    storedCredential,
+                    upgrade: async () => {
+                      upgrades += 1;
+                      return Result.ok();
+                    },
+                  })
+                ).unwrap(),
               ).toBe(credential);
               expect(upgrades).toBe(0);
               tx.rollback();
@@ -107,15 +112,18 @@ if (!databaseUrl || !runPostgresTests) {
                 throw new Error("registration fixture was not persisted");
               }
               expect(
-                await readAgentClientCredential({
-                  storedCredential,
-                  upgrade: async (encrypted) => {
-                    await tx
-                      .update(agentRegistration)
-                      .set({ clientSecretSink: encrypted })
-                      .where(eq(agentRegistration.id, id));
-                  },
-                }),
+                (
+                  await readAgentClientCredential({
+                    storedCredential,
+                    upgrade: async (encrypted) => {
+                      await tx
+                        .update(agentRegistration)
+                        .set({ clientSecretSink: encrypted })
+                        .where(eq(agentRegistration.id, id));
+                      return Result.ok();
+                    },
+                  })
+                ).unwrap(),
               ).toBe(credential);
               const upgradedRows = await tx
                 .select({
@@ -131,12 +139,15 @@ if (!databaseUrl || !runPostgresTests) {
               }
               let upgrades = 0;
               expect(
-                await readAgentClientCredential({
-                  storedCredential: upgraded,
-                  upgrade: async () => {
-                    upgrades += 1;
-                  },
-                }),
+                (
+                  await readAgentClientCredential({
+                    storedCredential: upgraded,
+                    upgrade: async () => {
+                      upgrades += 1;
+                      return Result.ok();
+                    },
+                  })
+                ).unwrap(),
               ).toBe(credential);
               expect(upgrades).toBe(0);
               tx.rollback();

@@ -1821,7 +1821,10 @@ const buildApiEnv = ({
     ...env,
     CONTENT_ENCRYPTION_KEY:
       env["CONTENT_ENCRYPTION_KEY"] ||
-      readOrCreateDevContentEncryptionKey(rootDir),
+      readOrCreateDevContentEncryptionKey(rootDir).match({
+        ok: (key) => key,
+        err: (error) => panic(error.message),
+      }),
   };
 };
 

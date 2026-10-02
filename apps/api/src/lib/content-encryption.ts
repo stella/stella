@@ -11,6 +11,7 @@
  * fallback only fires in local development and tests.
  */
 
+import { Result } from "better-result";
 import { hkdf } from "node:crypto";
 
 import { envDocumentProcessingWorker } from "@/api/env-document-processing-worker";
@@ -167,30 +168,47 @@ export const decryptContent = async (
 
 const APP_CONTENT_SCOPE = "stella:app-content:v1";
 
-const requireAppContentKey = (): void => {
-  if (!getMasterKey()) {
-    throw new ConfigurationError({
-      message: "Application credential storage requires CONTENT_ENCRYPTION_KEY",
-    });
-  }
-};
+const requireAppContentKey = (): Result<void, ConfigurationError> =>
+  getMasterKey()
+    ? Result.ok(undefined)
+    : Result.err(
+        new ConfigurationError({
+          message:
+            "Application credential storage requires CONTENT_ENCRYPTION_KEY",
+        }),
+      );
 
 export const encryptAppContent = async (
   plaintext: string,
-): Promise<EncryptedContent> => {
-  requireAppContentKey();
-  return await encryptScopedContent(APP_CONTENT_SCOPE, plaintext);
+): Promise<Result<EncryptedContent, ConfigurationError>> => {
+  const configured = requireAppContentKey();
+  if (Result.isError(configured)) {return Result.err(configured.error);}
+  return await Result.tryPromise({
+    try: async () => await encryptScopedContent(APP_CONTENT_SCOPE, plaintext),
+    catch: () =>
+      new ConfigurationError({
+        message: "Could not prepare application content",
+      }),
+  });
 };
 
 export const decryptAppContent = async (
   ciphertext: Buffer,
   iv: Buffer,
-): Promise<string> => {
-  requireAppContentKey();
+): Promise<Result<string, ConfigurationError>> => {
+  const configured = requireAppContentKey();
+  if (Result.isError(configured)) {return Result.err(configured.error);}
   if (iv.length !== IV_BYTES || iv.every((byte) => byte === 0)) {
-    throw new ConfigurationError({
-      message: "Application credential storage requires an encrypted envelope",
-    });
+    return Result.err(
+      new ConfigurationError({
+        message: "Application credential storage requires the shared envelope",
+      }),
+    );
   }
-  return await decryptScopedContent(APP_CONTENT_SCOPE, ciphertext, iv);
+  return await Result.tryPromise({
+    try: async () =>
+      await decryptScopedContent(APP_CONTENT_SCOPE, ciphertext, iv),
+    catch: () =>
+      new ConfigurationError({ message: "Could not read application content" }),
+  });
 };

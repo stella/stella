@@ -1213,12 +1213,14 @@ describe("dev env factories", () => {
   test("keeps a private persistent content encryption key per checkout", () => {
     const rootDir = createTempDir();
     const otherRootDir = createTempDir();
-    const key = readOrCreateDevContentEncryptionKey(rootDir);
+    const key = readOrCreateDevContentEncryptionKey(rootDir).unwrap();
     expect(key).toMatch(/^[a-f0-9]{64}$/u);
-    expect(readOrCreateDevContentEncryptionKey(rootDir) === key).toBe(true);
-    expect(readOrCreateDevContentEncryptionKey(otherRootDir) === key).toBe(
-      false,
+    expect(readOrCreateDevContentEncryptionKey(rootDir).unwrap() === key).toBe(
+      true,
     );
+    expect(
+      readOrCreateDevContentEncryptionKey(otherRootDir).unwrap() === key,
+    ).toBe(false);
     expect(
       statSync(devStatePath(rootDir, "content-encryption-key")).mode % 0o1_0000,
     ).toBe(0o600);
@@ -1234,11 +1236,24 @@ describe("dev env factories", () => {
     }
   });
 
+  test("returns a typed error when local state cannot be created", () => {
+    const rootDir = createTempDir();
+    writeFileSync(path.join(rootDir, ".stella-dev"), "occupied");
+    const result = readOrCreateDevContentEncryptionKey(rootDir);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        "Could not initialize local content encryption key",
+      );
+      expect(result.error.cause).toBeInstanceOf(Error);
+    }
+  });
+
   test("requires a valid persisted content encryption key", () => {
     const rootDir = createTempDir();
     readOrCreateDevContentEncryptionKey(rootDir);
     writeFileSync(devStatePath(rootDir, "content-encryption-key"), "invalid");
-    expect(() => readOrCreateDevContentEncryptionKey(rootDir)).toThrow(
+    expect(() => readOrCreateDevContentEncryptionKey(rootDir).unwrap()).toThrow(
       "must contain a 32-byte hexadecimal key",
     );
   });

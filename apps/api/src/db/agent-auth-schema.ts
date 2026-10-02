@@ -8,9 +8,9 @@ import {
   uniqueIndex,
 } from "drizzle-orm/pg-core";
 
+import type { StoredAgentClientCredential } from "@/api/agent-auth/credentials";
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
-import type { StoredAgentClientCredential } from "@/api/lib/agent-client-credentials";
 
 /**
  * Agent-registration ceremony state for the auth.md protocol.

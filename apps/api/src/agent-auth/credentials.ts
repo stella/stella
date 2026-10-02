@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import {
   decryptAppContent,
   encryptAppContent,
@@ -33,50 +32,60 @@ const CREDENTIAL_ENVELOPE_PATTERN =
 
 export const encryptAgentClientCredential = async (
   credential: string,
-): Promise<EncryptedAgentClientCredential> => {
-  const result = await Result.tryPromise({
-    try: async () => {
-      const { ciphertext, iv } = await encryptAppContent(credential);
-      return v.parse(
-        encryptedCredentialSchema,
-        `${CREDENTIAL_PREFIX}${iv.toString("base64")}:${ciphertext.toString("base64")}`,
-      );
-    },
-    catch: () =>
+): Promise<Result<EncryptedAgentClientCredential, HandlerError>> => {
+  const content = await encryptAppContent(credential);
+  if (Result.isError(content))
+    {return Result.err(
       new HandlerError({
         status: 503,
         message: "Could not secure agent credentials",
       }),
-  });
-  if (Result.isError(result)) {
-    captureError(result.error);
-    throw result.error;
-  }
-  return result.value;
+    );}
+  const { ciphertext, iv } = content.value;
+  return Result.ok(
+    v.parse(
+      encryptedCredentialSchema,
+      `${CREDENTIAL_PREFIX}${iv.toString("base64")}:${ciphertext.toString("base64")}`,
+    ),
+  );
 };
 
 export const prepareAgentClientCredential = async (
   credential: string,
-): Promise<StoredAgentClientCredential> =>
-  env.AGENT_CLIENT_STORAGE_V1_ENABLED
-    ? await encryptAgentClientCredential(credential)
-    : v.parse(previousCredentialSchema, credential);
+): Promise<Result<StoredAgentClientCredential, HandlerError>> => {
+  if (env.AGENT_CLIENT_STORAGE_V1_ENABLED)
+    {return await encryptAgentClientCredential(credential);}
+  const parsed = v.safeParse(previousCredentialSchema, credential);
+  return parsed.success
+    ? Result.ok(parsed.output)
+    : Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Agent credential is invalid",
+        }),
+      );
+};
 
 type ReadAgentClientCredentialOptions = {
   storedCredential: string;
-  upgrade: (encrypted: EncryptedAgentClientCredential) => Promise<void>;
+  upgrade: (
+    encrypted: EncryptedAgentClientCredential,
+  ) => Promise<Result<void, HandlerError>>;
 };
 
 export const readAgentClientCredential = async ({
   storedCredential,
   upgrade,
-}: ReadAgentClientCredentialOptions): Promise<string> => {
+}: ReadAgentClientCredentialOptions): Promise<Result<string, HandlerError>> => {
   if (LEGACY_CREDENTIAL_PATTERN.test(storedCredential)) {
     logger.info("agent.credentials.legacy_read", { "migration.read_count": 1 });
     if (env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
-      await upgrade(await encryptAgentClientCredential(storedCredential));
+      const envelope = await encryptAgentClientCredential(storedCredential);
+      if (Result.isError(envelope)) {return Result.err(envelope.error);}
+      const updated = await upgrade(envelope.value);
+      if (Result.isError(updated)) {return Result.err(updated.error);}
     }
-    return storedCredential;
+    return Result.ok(storedCredential);
   }
 
   const match = storedCredential.startsWith(CREDENTIAL_PREFIX)
@@ -87,10 +96,12 @@ export const readAgentClientCredential = async ({
   const encodedIv = match?.at(1);
   const encodedCiphertext = match?.at(2);
   if (!encodedIv || !encodedCiphertext) {
-    throw new HandlerError({
-      status: 500,
-      message: "Stored agent credential is invalid",
-    });
+    return Result.err(
+      new HandlerError({
+        status: 500,
+        message: "Stored agent credential is invalid",
+      }),
+    );
   }
   const iv = Buffer.from(encodedIv, "base64");
   const ciphertext = Buffer.from(encodedCiphertext, "base64");
@@ -98,22 +109,20 @@ export const readAgentClientCredential = async ({
     ciphertext.length < 16 ||
     ciphertext.toString("base64") !== encodedCiphertext
   ) {
-    throw new HandlerError({
-      status: 500,
-      message: "Stored agent credential is invalid",
-    });
-  }
-  const result = await Result.tryPromise({
-    try: async () => await decryptAppContent(ciphertext, iv),
-    catch: () =>
+    return Result.err(
       new HandlerError({
         status: 500,
-        message: "Could not read stored agent credential",
+        message: "Stored agent credential is invalid",
       }),
-  });
-  if (Result.isError(result)) {
-    captureError(result.error);
-    throw result.error;
+    );
   }
-  return result.value;
+  const content = await decryptAppContent(ciphertext, iv);
+  return Result.isError(content)
+    ? Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Could not read stored agent credential",
+        }),
+      )
+    : Result.ok(content.value);
 };

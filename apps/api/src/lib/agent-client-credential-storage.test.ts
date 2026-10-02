@@ -1,7 +1,8 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
+import { runAgentClientCredentialBatch } from "@/api/agent-auth/credential-storage";
 import { env } from "@/api/env";
-import { runAgentClientCredentialBatch } from "@/api/lib/agent-client-credential-storage";
 
 let priorStorageSetting = false;
 beforeEach(() => {
@@ -22,21 +23,25 @@ describe("agent client storage run boundaries", () => {
   test("does not access storage before the write setting is enabled", async () => {
     env.AGENT_CLIENT_STORAGE_V1_ENABLED = false;
     expect(
-      await runAgentClientCredentialBatch({
-        db: unusedDatabase,
-        signal: new AbortController().signal,
-        deadline: Date.now() + 60_000,
-      }),
+      (
+        await runAgentClientCredentialBatch({
+          db: unusedDatabase,
+          signal: new AbortController().signal,
+          deadline: Date.now() + 60_000,
+        })
+      ).unwrap(),
     ).toBe(0);
   });
 
   test("does not start a page after its run budget expires", async () => {
     expect(
-      await runAgentClientCredentialBatch({
-        db: unusedDatabase,
-        signal: new AbortController().signal,
-        deadline: 0,
-      }),
+      (
+        await runAgentClientCredentialBatch({
+          db: unusedDatabase,
+          signal: new AbortController().signal,
+          deadline: 0,
+        })
+      ).unwrap(),
     ).toBe(0);
   });
 
@@ -44,12 +49,14 @@ describe("agent client storage run boundaries", () => {
     const controller = new AbortController();
     const reason = new Error("storage run cancelled");
     controller.abort(reason);
-    await expect(
-      runAgentClientCredentialBatch({
-        db: unusedDatabase,
-        signal: controller.signal,
-        deadline: Date.now() + 60_000,
-      }),
-    ).rejects.toThrow(reason.message);
+    const result = await runAgentClientCredentialBatch({
+      db: unusedDatabase,
+      signal: controller.signal,
+      deadline: Date.now() + 60_000,
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error.status).toBe(503);
+    }
   });
 });

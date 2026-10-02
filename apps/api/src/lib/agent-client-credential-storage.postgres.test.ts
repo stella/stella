@@ -2,16 +2,16 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { asc, eq, sql } from "drizzle-orm";
 
-import { agentRegistration } from "@/api/db/agent-auth-schema";
-import { schedulerJobs } from "@/api/db/schema";
-import { env } from "@/api/env";
 import {
   AGENT_CLIENT_BATCH_SIZE,
   countPreviousAgentClientValues,
   readStoredAgentClientCredential,
   runAgentClientCredentialBatch,
-} from "@/api/lib/agent-client-credential-storage";
-import { encryptAgentClientCredential } from "@/api/lib/agent-client-credentials";
+} from "@/api/agent-auth/credential-storage";
+import { encryptAgentClientCredential } from "@/api/agent-auth/credentials";
+import { agentRegistration } from "@/api/db/agent-auth-schema";
+import { schedulerJobs } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
@@ -290,16 +290,22 @@ if (!databaseUrl || !enabled) {
         await db.transaction(async (tx) => await seed(tx, total));
         expect(await countPreviousAgentClientValues(db)).toBe(total);
         expect(
-          await runAgentClientCredentialBatch({ db, ...batchOptions() }),
+          (
+            await runAgentClientCredentialBatch({ db, ...batchOptions() })
+          ).unwrap(),
         ).toBe(AGENT_CLIENT_BATCH_SIZE);
         expect(await countPreviousAgentClientValues(db)).toBe(
           total - AGENT_CLIENT_BATCH_SIZE,
         );
         expect(
-          await runAgentClientCredentialBatch({ db, ...batchOptions() }),
+          (
+            await runAgentClientCredentialBatch({ db, ...batchOptions() })
+          ).unwrap(),
         ).toBe(AGENT_CLIENT_BATCH_SIZE);
         expect(
-          await runAgentClientCredentialBatch({ db, ...batchOptions() }),
+          (
+            await runAgentClientCredentialBatch({ db, ...batchOptions() })
+          ).unwrap(),
         ).toBe(3);
         expect(await countPreviousAgentClientValues(db)).toBe(0);
         const before = await db.transaction(
@@ -310,7 +316,9 @@ if (!databaseUrl || !enabled) {
               .orderBy(asc(agentRegistration.id)),
         );
         expect(
-          await runAgentClientCredentialBatch({ db, ...batchOptions() }),
+          (
+            await runAgentClientCredentialBatch({ db, ...batchOptions() })
+          ).unwrap(),
         ).toBe(0);
         const after = await db.transaction(
           async (tx) =>
@@ -323,8 +331,8 @@ if (!databaseUrl || !enabled) {
         const values = await db.transaction(
           async (tx) =>
             await Promise.all(
-              after.map(
-                async (row) => await readStoredAgentClientCredential(tx, row),
+              after.map(async (row) =>
+                (await readStoredAgentClientCredential(tx, row)).unwrap(),
               ),
             ),
         );
@@ -355,9 +363,10 @@ if (!databaseUrl || !enabled) {
             if (!pageLoaded) {
               pageLoaded = true;
               expect(
-                await db.transaction(
-                  async (tx) =>
-                    await readStoredAgentClientCredential(tx, original),
+                await db.transaction(async (tx) =>
+                  (
+                    await readStoredAgentClientCredential(tx, original)
+                  ).unwrap(),
                 ),
               ).toBe(credential);
             }
@@ -365,16 +374,18 @@ if (!databaseUrl || !enabled) {
           },
         };
         expect(
-          await runAgentClientCredentialBatch({
-            db: interleaved,
-            ...batchOptions(),
-          }),
+          (
+            await runAgentClientCredentialBatch({
+              db: interleaved,
+              ...batchOptions(),
+            })
+          ).unwrap(),
         ).toBe(0);
         expect(pageLoaded).toBe(true);
         expect(await countPreviousAgentClientValues(db)).toBe(0);
         expect(
-          await db.transaction(
-            async (tx) => await readStoredAgentClientCredential(tx, original),
+          await db.transaction(async (tx) =>
+            (await readStoredAgentClientCredential(tx, original)).unwrap(),
           ),
         ).toBe(credential);
       });
@@ -389,9 +400,11 @@ if (!databaseUrl || !enabled) {
         if (!original) {
           throw new Error("registration fixture missing");
         }
-        const replacement = await encryptAgentClientCredential(
-          Buffer.alloc(32, 0x2b).toString("hex"),
-        );
+        const replacement = (
+          await encryptAgentClientCredential(
+            Buffer.alloc(32, 0x2b).toString("hex"),
+          )
+        ).unwrap();
         await db.transaction(
           async (tx) =>
             await tx
@@ -399,13 +412,9 @@ if (!databaseUrl || !enabled) {
               .set({ clientSecretSink: replacement })
               .where(eq(agentRegistration.id, original.id)),
         );
-        const result = await Result.tryPromise({
-          try: async () =>
-            await db.transaction(
-              async (tx) => await readStoredAgentClientCredential(tx, original),
-            ),
-          catch: (cause) => cause,
-        });
+        const result = await db.transaction(
+          async (tx) => await readStoredAgentClientCredential(tx, original),
+        );
         expect(Result.isError(result)).toBe(true);
         if (Result.isError(result)) {
           expect(result.error).toBeInstanceOf(HandlerError);
@@ -422,7 +431,9 @@ if (!databaseUrl || !enabled) {
       await withStoredValues(databaseUrl, async (db) => {
         await db.transaction(async (tx) => await seed(tx, 1));
         expect(
-          await runAgentClientCredentialBatch({ db, ...batchOptions() }),
+          (
+            await runAgentClientCredentialBatch({ db, ...batchOptions() })
+          ).unwrap(),
         ).toBe(1);
         const stored = await db.transaction(async (tx) =>
           (await tx.select().from(agentRegistration)).at(0),
@@ -439,14 +450,12 @@ if (!databaseUrl || !enabled) {
             "--eval",
             `
             import { Result } from "better-result";
-            import { readAgentClientCredential } from "./src/lib/agent-client-credentials.ts";
+            import { readAgentClientCredential } from "./src/agent-auth/credentials.ts";
             import { HandlerError } from "./src/lib/errors/tagged-errors.ts";
             let updates = 0;
-            const result = await Result.tryPromise({
-              try: async () => await readAgentClientCredential({
-                storedCredential: process.env.STORED_AGENT_TEST_VALUE,
-                upgrade: async () => { updates += 1; },
-              }), catch: (cause) => cause,
+            const result = await readAgentClientCredential({
+              storedCredential: process.env.STORED_AGENT_TEST_VALUE,
+              upgrade: async () => { updates += 1; return Result.ok(); },
             });
             if (Result.isError(result) && result.error instanceof HandlerError &&
                 result.error.message === "Could not read stored agent credential" && updates === 0) {
@@ -498,16 +507,25 @@ if (!databaseUrl || !enabled) {
             return await db.transaction(fn);
           },
         };
-        await expect(
-          runAgentClientCredentialBatch({ db: interrupted, ...batchOptions() }),
-        ).rejects.toThrow(interruption.message);
+        const result = await runAgentClientCredentialBatch({
+          db: interrupted,
+          ...batchOptions(),
+        });
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(result.error.status).toBe(503);
+        }
         expect(await countPreviousAgentClientValues(db)).toBe(2);
         expect(
-          await runAgentClientCredentialBatch({ db, ...batchOptions() }),
+          (
+            await runAgentClientCredentialBatch({ db, ...batchOptions() })
+          ).unwrap(),
         ).toBe(2);
         expect(await countPreviousAgentClientValues(db)).toBe(0);
         expect(
-          await runAgentClientCredentialBatch({ db, ...batchOptions() }),
+          (
+            await runAgentClientCredentialBatch({ db, ...batchOptions() })
+          ).unwrap(),
         ).toBe(0);
       });
     });

@@ -1,4 +1,9 @@
-import { Result, panic } from "better-result";
+import {
+  Result,
+  TaggedError,
+  panic,
+  type TaggedErrorClass,
+} from "better-result";
 import { randomBytes, randomUUID } from "node:crypto";
 import {
   existsSync,
@@ -39,42 +44,77 @@ export const devStatePath = (rootDir: string, fileName: string) =>
 
 const runtimePath = (rootDir: string) => devStatePath(rootDir, RUNTIME_FILE);
 
-export const readOrCreateDevContentEncryptionKey = (rootDir: string) => {
+const DevContentEncryptionKeyErrorBase: TaggedErrorClass<"DevContentEncryptionKeyError"> =
+  TaggedError("DevContentEncryptionKeyError");
+
+class DevContentEncryptionKeyError extends DevContentEncryptionKeyErrorBase<{
+  cause: unknown;
+  message: string;
+}> {}
+
+export const readOrCreateDevContentEncryptionKey = (
+  rootDir: string,
+): Result<string, DevContentEncryptionKeyError> => {
   const filePath = devStatePath(rootDir, CONTENT_ENCRYPTION_KEY_FILE);
+  const filesystemError = (cause: unknown) =>
+    new DevContentEncryptionKeyError({
+      cause,
+      message: `Could not initialize local content encryption key at ${filePath}`,
+    });
   if (!existsSync(filePath)) {
-    mkdirSync(path.join(rootDir, DEV_STATE_DIR), { recursive: true });
     const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
-    try {
-      writeFileSync(temporaryPath, randomBytes(32).toString("hex"), {
-        flag: "wx",
-        mode: 0o600,
-      });
-      // Publish only complete contents, without replacing another runner's key.
-      const published = Result.try({
-        try: () => linkSync(temporaryPath, filePath),
-        catch: (cause) => cause,
-      });
-      if (published.isErr()) {
-        const cause = published.error;
-        if (
-          !(
-            cause instanceof Error &&
-            "code" in cause &&
-            cause.code === "EEXIST"
-          )
-        ) {
-          throw published.error;
-        }
+    const written = Result.try({
+      try: () => {
+        mkdirSync(path.join(rootDir, DEV_STATE_DIR), { recursive: true });
+        writeFileSync(temporaryPath, randomBytes(32).toString("hex"), {
+          flag: "wx",
+          mode: 0o600,
+        });
+      },
+      catch: filesystemError,
+    });
+    // Publish only complete contents, without replacing another runner's key.
+    const published = written.isErr()
+      ? written
+      : Result.try({
+          try: () => linkSync(temporaryPath, filePath),
+          catch: filesystemError,
+        });
+    const cleaned = Result.try({
+      try: () => rmSync(temporaryPath, { force: true }),
+      catch: filesystemError,
+    });
+    if (written.isErr()) {
+      return written;
+    }
+    if (published.isErr()) {
+      const cause = published.error.cause;
+      if (
+        !(cause instanceof Error && "code" in cause && cause.code === "EEXIST")
+      ) {
+        return published;
       }
-    } finally {
-      rmSync(temporaryPath, { force: true });
+    }
+    if (cleaned.isErr()) {
+      return cleaned;
     }
   }
-  const key = readFileSync(filePath, "utf-8").trim();
-  if (!/^[a-f0-9]{64}$/u.test(key)) {
-    panic(`${filePath} must contain a 32-byte hexadecimal key`);
+  const read = Result.try({
+    try: () => readFileSync(filePath, "utf-8").trim(),
+    catch: filesystemError,
+  });
+  if (read.isErr()) {
+    return read;
   }
-  return key;
+  if (!/^[a-f0-9]{64}$/u.test(read.value)) {
+    return Result.err(
+      new DevContentEncryptionKeyError({
+        cause: undefined,
+        message: `${filePath} must contain a 32-byte hexadecimal key`,
+      }),
+    );
+  }
+  return Result.ok(read.value);
 };
 
 export const writeDevRuntime = (rootDir: string, runtime: DevRuntime) => {
