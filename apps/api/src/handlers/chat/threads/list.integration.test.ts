@@ -20,6 +20,7 @@ import type { ChatMention } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createUserFileKey } from "@/api/lib/files/utils";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
@@ -218,7 +219,7 @@ const listThreads = async (
 ) => {
   const listed = await getThreads.handler(
     asTestRaw<ThreadsCtx>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       query: { limit: 100, ...(search === undefined ? {} : { search }) },
       request: new Request("http://localhost/v1/chat/threads"),
       safeDb: scopedTo(workspaceIds),

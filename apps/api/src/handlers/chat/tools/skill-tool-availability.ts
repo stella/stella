@@ -1,18 +1,18 @@
-import type { roles } from "@stll/permissions";
-
 import {
   getChatTools,
   type GetChatToolsProps,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
-  chatProjectableReadToolNames,
+  chatScriptReadToolNames,
   CODE_MODE_EXECUTE_TOOL_NAME,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { DIRECT_ONLY_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import {
   restrictChatToolsToScope,
   type ChatToolScope,
 } from "@/api/handlers/chat/tools/tool-scope";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
+import type { MemberRole } from "@/api/lib/member-roles";
 import { getStaticMcpToolDefinition } from "@/api/mcp/static-tool-definitions";
 import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
 
@@ -23,7 +23,7 @@ import { isMcpToolFeatureEnabled } from "@/api/mcp/tool-feature";
  */
 const isRegistryToolUsable = (
   toolName: string,
-  memberRole: keyof typeof roles,
+  memberRole: MemberRole,
 ): boolean => {
   const definition = getStaticMcpToolDefinition(toolName);
   if (definition === undefined) {
@@ -45,14 +45,21 @@ const chatOfferedToolNames = ({
   memberRole,
   tools,
 }: {
-  memberRole: keyof typeof roles;
+  memberRole: MemberRole;
   tools: ChatToolMap;
 }): ReadonlySet<string> => {
   const names = Object.entries(tools).flatMap(([name, tool]) =>
     tool === undefined ? [] : [name],
   );
   if (names.includes(CODE_MODE_EXECUTE_TOOL_NAME)) {
-    names.push(...chatProjectableReadToolNames());
+    names.push(...chatScriptReadToolNames());
+  }
+  for (const [readName, directTool] of Object.entries(
+    DIRECT_ONLY_CHAT_READ_TOOLS,
+  )) {
+    if (names.includes(directTool)) {
+      names.push(readName);
+    }
   }
   return new Set(
     names.filter((name) => isRegistryToolUsable(name, memberRole)),

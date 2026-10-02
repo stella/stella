@@ -32,6 +32,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { CHAT_THREAD_NAME_KIND } from "@/api/lib/chat/thread-name-kinds";
 import { HandlerError, DatabaseError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   ActionAdmissionError,
   actionAdmissionRefusal,
@@ -285,7 +286,7 @@ const createContext = ({
     ],
     getActiveWorkspaceIds: async () => [activeWorkspaceId],
     getWorkspaceAccess: async () => null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,
@@ -1742,9 +1743,12 @@ describe("assistant turn settlement", () => {
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
-      return new Response("", {
-        headers: { "content-type": "text/event-stream" },
-      });
+      return {
+        type: "streaming",
+        response: new Response("", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      } as const;
     });
     const send = createSendMessage({
       compactMessagesForContext: compactMessagesForContextMock,
