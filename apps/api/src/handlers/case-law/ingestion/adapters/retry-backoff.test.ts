@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
+import { FetchBoundaryError } from "@stll/errors";
 import { propertyConfig } from "@stll/property-testing";
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -17,6 +18,72 @@ const URL = "https://publications.europa.eu/test";
 const INIT = { adapterKey: ADAPTER_KEYS.EU_ECJ, timeoutMs: 1000 };
 
 describe("publisher throttling and transient failures", () => {
+  test("nested fetch-boundary connection failures retain their kind through adapter wrappers", async () => {
+    for (const message of ["TLS handshake failed", "Unable to connect"]) {
+      let requests = 0;
+      const pending = retryPublisherRequest(URL, INIT, {
+        request: async () => {
+          requests++;
+          throw new FetchBoundaryError({
+            message,
+            url: URL,
+            failureKind: "source_unreachable",
+          });
+        },
+        defer: async () => NOW,
+        sleep: async () => undefined,
+        now: () => NOW,
+        random: () => 0.5,
+      });
+      const cause = await pending.then(
+        () => undefined,
+        (error: unknown) => error,
+      );
+      const wrapped = new AdapterFetchError({
+        message: "Page failed",
+        adapterKey: INIT.adapterKey,
+        cursor: null,
+        cause,
+      });
+      expect(wrapped.stopKind).toBe("source_unreachable");
+      expect(requests).toBe(1);
+    }
+  });
+
+  for (const httpStatus of [401, 403, 429]) {
+    test(`${httpStatus} is a publisher refusal even through a cause wrapper`, () => {
+      const cause = new AdapterFetchError({
+        message: "Refused",
+        adapterKey: INIT.adapterKey,
+        cursor: null,
+        httpStatus,
+      });
+      expect(
+        new AdapterFetchError({
+          message: "Page failed",
+          adapterKey: INIT.adapterKey,
+          cursor: null,
+          cause,
+        }).stopKind,
+      ).toBe("publisher_refusal");
+    });
+  }
+
+  test("parse and invalid request failures are adapter errors", () => {
+    for (const cause of [
+      new SyntaxError("Invalid listing"),
+      new TypeError("Invalid URL"),
+    ]) {
+      expect(
+        new AdapterFetchError({
+          message: "Page failed",
+          adapterKey: INIT.adapterKey,
+          cursor: null,
+          cause,
+        }).stopKind,
+      ).toBe("adapter_error");
+    }
+  });
   const headers = [
     { label: "absent", value: null, wait: 1000 },
     { label: "seconds", value: "3", wait: 3000 },
@@ -128,6 +195,7 @@ describe("publisher throttling and transient failures", () => {
         ).toMatchObject({
           publisherKey: "cellar-eu",
           status,
+          stopKind: "publisher_refusal",
           cooldownUntilEpochMs: NOW + header.wait,
         });
         expect(requests).toBe(1);
@@ -207,24 +275,28 @@ describe("publisher throttling and transient failures", () => {
     test(`${status} is returned without spending a retry`, async () => {
       let requests = 0;
       const waits: number[] = [];
-      const response = await retryPublisherRequest(URL, INIT, {
-        request: async () => {
-          requests += 1;
-          return new Response(null, {
-            status,
-            headers: { "Retry-After": "30" },
-          });
+      const response = await retryPublisherRequest(
+        URL,
+        { ...INIT, refusalMode: "return-response" },
+        {
+          request: async () => {
+            requests += 1;
+            return new Response(null, {
+              status,
+              headers: { "Retry-After": "30" },
+            });
+          },
+          defer: async (durationMs) => {
+            waits.push(durationMs);
+            return NOW + durationMs;
+          },
+          sleep: async (durationMs) => {
+            waits.push(durationMs);
+          },
+          now: () => NOW,
+          random: () => 0.5,
         },
-        defer: async (durationMs) => {
-          waits.push(durationMs);
-          return NOW + durationMs;
-        },
-        sleep: async (durationMs) => {
-          waits.push(durationMs);
-        },
-        now: () => NOW,
-        random: () => 0.5,
-      });
+      );
       expect(response.status).toBe(status);
       expect(requests).toBe(1);
       expect(waits).toEqual([]);

@@ -802,6 +802,8 @@ const readDocumentResponse = async ({
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    // A refusal belongs to this manifestation; other variants may still exist.
+    refusalMode: "return-response",
     retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -2864,3 +2866,4 @@ export const euEcjAdapter = defineSourceAdapter({
     });
   },
 });
+// parser-output-unchanged: document refusal handling retains the existing per-variant outcome.

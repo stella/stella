@@ -1,3 +1,4 @@
+// parser-output-unchanged: session refusals retain their HTTP status; successful page parsing is unchanged.
 /**
  * Polish Constitutional Tribunal (Trybunał Konstytucyjny) adapter.
  *
@@ -217,10 +218,12 @@ type TkResponse = {
  * the caller decides what a redirect from that page means.
  */
 const requestTk = async ({
+  cursor,
   cookie,
   path,
   signal,
 }: {
+  cursor: string;
   cookie: string | undefined;
   path: string;
   signal: AbortSignal | undefined;
@@ -265,8 +268,12 @@ const requestTk = async ({
       new AdapterFetchError({
         message: `ipo.trybunal.gov.pl: ${path} failed`,
         adapterKey: ADAPTER_KEYS.PL_TK,
-        cursor: path,
+        cursor,
         cause: requested.error,
+        ...(requested.error instanceof AdapterFetchError &&
+        requested.error.httpStatus !== undefined
+          ? { httpStatus: requested.error.httpStatus }
+          : {}),
       }),
     );
   }
@@ -277,7 +284,7 @@ const requestTk = async ({
       : await readCappedBytes(response.body, MAX_RESPONSE_BYTES);
   if (bytes === null) {
     return Result.err(
-      tkError(path, `the page ${path} exceeded ${MAX_RESPONSE_BYTES} bytes`),
+      tkError(cursor, `the page ${path} exceeded ${MAX_RESPONSE_BYTES} bytes`),
     );
   }
   return Result.ok({
@@ -324,6 +331,7 @@ const openSession = async (
   signal: AbortSignal | undefined,
 ): Promise<Result<Session, AdapterFetchError>> => {
   const landed = await requestTk({
+    cursor,
     cookie: undefined,
     path: "/",
     signal,
@@ -335,7 +343,11 @@ const openSession = async (
   const sessionId = cookieValue(landing.setCookies, "JSESSIONID");
   if (landing.status !== 200 || sessionId === undefined) {
     return Result.err(
-      tkError(cursor, `the portal opened no session (${landing.status})`),
+      tkError(
+        cursor,
+        `the portal opened no session (${landing.status})`,
+        landing.status,
+      ),
     );
   }
   return Result.ok({ sessionId });
@@ -358,6 +370,7 @@ const selectStage = async (
   signal: AbortSignal | undefined,
 ): Promise<Result<void, AdapterFetchError>> => {
   const searched = await requestTk({
+    cursor,
     cookie: sessionCookie(session, stage),
     path: "/Szukaj?cid=1",
     signal,
@@ -592,6 +605,7 @@ const readListingPage = async (
     return Result.ok(cached);
   }
   const requested = await requestTk({
+    cursor: listing.cursor,
     cookie: sessionCookie(listing.session, listing.stage),
     path: `/SzukajDrukuj?cid=1&page=${index}`,
     signal: listing.signal,
@@ -1064,6 +1078,7 @@ const buildPlTkDecision = async ({
     row.caseId === undefined ? undefined : pageCache.get(row.caseId);
   if (casePage === undefined) {
     const first = await requestTk({
+      cursor,
       cookie: sessionCookie(session),
       path,
       signal,
@@ -1082,6 +1097,7 @@ const buildPlTkDecision = async ({
       }
       session.sessionId = reopened.value.sessionId;
       const retried = await requestTk({
+        cursor,
         cookie: sessionCookie(session),
         path,
         signal,

@@ -156,29 +156,57 @@ describe("a publisher's rate-limit refusal", () => {
     Bun.sleep = originalSleep;
   });
 
-  test("costs one request and is handed back, never retried", async () => {
-    let requests = 0;
-    globalThis.fetch = asFetchMock(
-      mock(async () => {
-        requests += 1;
-        return new Response("", { status: 429 });
-      }),
-    );
+  test.each([401, 403, 429])(
+    "%s costs one request and stops with a typed refusal, never retried",
+    async (httpStatus) => {
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          requests += 1;
+          return new Response("", { status: httpStatus });
+        }),
+      );
 
-    const response = await fetchWithRetry(
-      "https://ris.bka.gv.at/x",
-      undefined,
-      {
-        adapterKey: ADAPTER_KEYS.AT_COURTS,
-        maxRetries: 2,
-      },
-    );
+      const error = await rejectionOf(
+        fetchWithRetry("https://ris.bka.gv.at/x", undefined, {
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+          maxRetries: 2,
+        }),
+      );
 
-    // Rule 19a: no retry clears the refusal, and the budget a retry would
-    // spend is the budget the halt protects. The caller holds its cursor.
-    expect(response.status).toBe(429);
-    expect(requests).toBe(1);
-  });
+      // Rule 19a: no retry clears the refusal, and the budget a retry would
+      // spend is the budget the halt protects. The caller holds its cursor.
+      expect(error).toMatchObject({
+        httpStatus,
+        stopKind: "publisher_refusal",
+      });
+      expect(requests).toBe(1);
+    },
+  );
+
+  test.each([401, 403])(
+    "an explicit document workflow can read %s without retries",
+    async (status) => {
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          requests++;
+          return new Response("refused document", { status });
+        }),
+      );
+      const response = await fetchWithRetry(
+        "https://ris.bka.gv.at/x",
+        undefined,
+        {
+          adapterKey: ADAPTER_KEYS.AT_COURTS,
+          refusalMode: "return-response",
+        },
+      );
+      expect(response.status).toBe(status);
+      expect(await response.text()).toBe("refused document");
+      expect(requests).toBe(1);
+    },
+  );
 
   test("still retries a 5xx, which is the publisher failing to answer", async () => {
     let requests = 0;

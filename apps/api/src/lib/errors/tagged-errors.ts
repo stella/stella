@@ -1,8 +1,14 @@
+// parser-output-unchanged: adapter errors carry stop kinds; successful parsed records are unchanged.
 import { panic, TaggedError } from "better-result";
 
 import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
-import { declareFailureClass } from "@stll/errors";
+import { declareFailureClass, FetchBoundaryError } from "@stll/errors";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
+
+import {
+  INGESTION_STOP_KIND,
+  type IngestionStopKind,
+} from "@/api/lib/legal-search/ingestion-stop-kind";
 
 export { FetchBoundaryError } from "@stll/errors";
 
@@ -527,14 +533,66 @@ export class TemplateDirectiveError extends TaggedError(
   }[];
 }> {}
 
-/** Case-law adapter page-fetch failure. */
-export class AdapterFetchError extends TaggedError("AdapterFetchError")<{
+type AdapterFetchErrorOptions = {
   message: string;
   adapterKey: string;
   cursor: string | null;
   httpStatus?: number;
   cause?: unknown;
-}> {}
+  stopKind?: IngestionStopKind;
+};
+
+const adapterFetchStopKind = ({
+  httpStatus,
+  cause,
+}: AdapterFetchErrorOptions): IngestionStopKind => {
+  if (httpStatus === 401 || httpStatus === 403 || httpStatus === 429) {
+    return INGESTION_STOP_KIND.PUBLISHER_REFUSAL;
+  }
+  const visited = new Set<unknown>();
+  let current = cause;
+  while (current instanceof Error && !visited.has(current)) {
+    visited.add(current);
+    if (current instanceof AdapterFetchError) {
+      return current.stopKind;
+    }
+    if (
+      current instanceof FetchBoundaryError &&
+      (current.status === 401 ||
+        current.status === 403 ||
+        current.status === 429)
+    ) {
+      return INGESTION_STOP_KIND.PUBLISHER_REFUSAL;
+    }
+    if (
+      current instanceof FetchBoundaryError &&
+      current.failureKind === "source_unreachable"
+    ) {
+      return INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    }
+    if (
+      (current instanceof DOMException && current.name === "TimeoutError") ||
+      ("code" in current &&
+        (current.code === "ETIMEDOUT" || current.code === "ESOCKETTIMEDOUT"))
+    ) {
+      return INGESTION_STOP_KIND.SOURCE_UNREACHABLE;
+    }
+    current = current.cause;
+  }
+  return INGESTION_STOP_KIND.ADAPTER_ERROR;
+};
+
+/** Case-law adapter page-fetch failure; wrappers retain its operational kind. */
+export class AdapterFetchError extends TaggedError(
+  "AdapterFetchError",
+)<AdapterFetchErrorOptions> {
+  readonly stopKind: IngestionStopKind;
+
+  constructor(options: AdapterFetchErrorOptions) {
+    super(options);
+    this.stopKind = options.stopKind ?? adapterFetchStopKind(options);
+  }
+}
 
 /**
  * One source made no progress for a sustained run of ingestion cycles.

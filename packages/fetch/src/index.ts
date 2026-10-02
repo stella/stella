@@ -1,3 +1,9 @@
+import { Result } from "better-result";
+
+import { FetchBoundaryError } from "@stll/errors";
+
+import { isConnectionFailure } from "./connection-failure";
+
 export type Fetcher = (
   input: string | URL | Request,
   init?: RequestInit,
@@ -20,13 +26,35 @@ const executeFetchWithTimeout = async (
   const timeout = AbortSignal.timeout(timeoutMs);
   const activeFetcher = fetcher ?? globalThis.fetch;
 
-  return await activeFetcher(input, {
-    ...init,
-    // Avoid the AbortSignal.any allocation when the timeout is the only signal.
-    signal:
-      callerSignals.length === 0
-        ? timeout
-        : AbortSignal.any([...callerSignals, timeout]),
+  const response = await Result.tryPromise({
+    try: async () =>
+      await activeFetcher(input, {
+        ...init,
+        // Avoid the AbortSignal.any allocation when the timeout is the only signal.
+        signal:
+          callerSignals.length === 0
+            ? timeout
+            : AbortSignal.any([...callerSignals, timeout]),
+      }),
+    catch: (cause) => cause,
+  });
+  if (Result.isOk(response)) {
+    return response.value;
+  }
+  // Caller cancellation and request timeouts keep their original identity:
+  // retry policies distinguish them from a failed connection.
+  if (
+    callerSignals.some((candidate) => candidate.aborted) ||
+    timeout.aborted ||
+    !isConnectionFailure(response.error)
+  ) {
+    throw response.error;
+  }
+  throw new FetchBoundaryError({
+    message: "Fetch connection failed",
+    url: input instanceof Request ? input.url : String(input),
+    failureKind: "source_unreachable",
+    cause: response.error,
   });
 };
 

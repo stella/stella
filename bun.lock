@@ -797,6 +797,10 @@
     "packages/fetch": {
       "name": "@stll/fetch",
       "version": "0.0.0",
+      "dependencies": {
+        "@stll/errors": "workspace:*",
+        "better-result": "catalog:",
+      },
       "devDependencies": {
         "@stll/typescript-config": "workspace:*",
         "bun-types": "catalog:",

@@ -1,3 +1,4 @@
+// parser-output-unchanged: transport errors gain a failure kind; successful parsed records are unchanged.
 import { TaggedError } from "better-result";
 
 export { createDetached, type DetachedRejectionSink } from "./detached";
@@ -31,4 +32,5 @@ export class FetchBoundaryError extends TaggedError("FetchBoundaryError")<{
   body?: string;
   message: string;
   cause?: unknown;
+  failureKind?: "source_unreachable";
 }> {}

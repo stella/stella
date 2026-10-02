@@ -7,7 +7,7 @@
  * arithmetic is checked against rows whose positions are known.
  */
 
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
@@ -194,6 +194,70 @@ beforeEach(() => {
 afterEach(() => {
   globalThis.fetch = originalFetch;
   Bun.sleep = originalSleep;
+});
+
+describe("portal session outcomes", () => {
+  test("an entry refusal stops before search or listing", async () => {
+    const body = await Bun.file(
+      new URL("pl-tk-entry-refused.html", ADAPTER_FIXTURES),
+    ).text();
+    const seen: string[] = [];
+    globalThis.fetch = asFetchMock(async (input) => {
+      seen.push(requestUrl(input));
+      return new Response(body, { status: 403 });
+    });
+
+    const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
+    if (Result.isOk(result)) {
+      return panic("Expected the entry refusal to stop the page");
+    }
+    expect(result.error.stopKind).toBe("publisher_refusal");
+    expect(result.error.httpStatus).toBe(403);
+    expect(result.error.cursor).toBe("merits:1645,0,0");
+    expect(seen).toEqual(["https://ipo.trybunal.gov.pl/ipo/"]);
+  });
+
+  test("a refusal after successful bootstrap holds the cursor without reopening", async () => {
+    const seen: string[] = [];
+    globalThis.fetch = asFetchMock(async (input, init) => {
+      const url = new URL(requestUrl(input));
+      seen.push(url.pathname);
+      if (url.pathname === "/ipo/") {
+        return html("<html></html>", [
+          "JSESSIONID=fixture-session; Path=/ipo; Secure; HttpOnly",
+        ]);
+      }
+      expect(new Headers(init?.headers).get("Cookie")).toContain(
+        "JSESSIONID=fixture-session",
+      );
+      return new Response("the portal opened no session", { status: 403 });
+    });
+
+    const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
+    if (Result.isOk(result)) {
+      return panic("Expected the search refusal to stop the page");
+    }
+    expect(result.error.stopKind).toBe("publisher_refusal");
+    expect(result.error.httpStatus).toBe(403);
+    expect(result.error.cursor).toBe("merits:1645,0,0");
+    expect(seen).toEqual(["/ipo/", "/ipo/Szukaj"]);
+  });
+
+  test("an entry transport failure is source unreachable and makes one request", async () => {
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests += 1;
+      throw new TypeError("Unable to connect");
+    });
+
+    const result = await plTkAdapter.fetchPage("merits:1645,0,0", {});
+    if (Result.isOk(result)) {
+      return panic("Expected the transport failure to stop the page");
+    }
+    expect(result.error.stopKind).toBe("source_unreachable");
+    expect(result.error.httpStatus).toBeUndefined();
+    expect(requests).toBe(1);
+  });
 });
 
 // ── The print view ───────────────────────────────────────
@@ -394,6 +458,12 @@ describe("a crawl page against the portal", () => {
     const listing = seen.find(
       (request) => request.url.pathname === "/ipo/SzukajDrukuj",
     );
+    expect(listing?.cookie).toContain('JSESSIONID="s1.Internet-C:ipo"');
+    expect(
+      casePages.every(
+        (request) => request.cookie === 'JSESSIONID="s1.Internet-C:ipo"',
+      ),
+    ).toBe(true);
     expect(listing?.cookie).toContain("Okres=Since1986");
     expect(listing?.cookie).toContain("RodzajRozstrzygniecia=300");
   });
