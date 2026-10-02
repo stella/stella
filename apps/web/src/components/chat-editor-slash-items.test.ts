@@ -320,7 +320,6 @@ describe("buildChatSlashItems", () => {
     const rows = commandShortcutRowsFromSkillPages(
       [
         {
-          builtIn: [],
           installed: [
             skillRow({
               body: "Summarise this document.",

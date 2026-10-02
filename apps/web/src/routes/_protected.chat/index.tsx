@@ -393,9 +393,8 @@ function ChatIndex() {
     () => listChatHistoryItems(groupedThreads).slice(0, 5),
     [groupedThreads],
   );
-  const matterColors = new Map(
-    (workspaces ?? []).map((workspace) => [workspace.id, workspace.color]),
-  );
+  const storedMatterColor = (workspaceId: string) =>
+    workspaces?.find(({ id }) => id === workspaceId)?.color ?? null;
 
   const selectPrompt = (prompt: ChatPrompt) => {
     controller.setContent(composerStoredMarkdown(prompt.body));
@@ -774,7 +773,7 @@ function ChatIndex() {
                           style={{
                             backgroundColor: resolveMatterColor(
                               chat.workspaceId,
-                              matterColors.get(chat.workspaceId) ?? null,
+                              storedMatterColor(chat.workspaceId),
                             ),
                           }}
                         />
@@ -869,10 +868,7 @@ type SkillAuthor =
   | { type: "stella" }
   | { type: "unknown" };
 
-const skillAuthor = ({ lastEdit, scope }: SuggestedSkill): SkillAuthor => {
-  if (scope === "built-in") {
-    return { type: "stella" };
-  }
+const skillAuthor = ({ lastEdit }: SuggestedSkill): SkillAuthor => {
   if (lastEdit === null) {
     return { type: "unknown" };
   }
