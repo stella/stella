@@ -100,7 +100,7 @@ const seed = async () => {
   };
 };
 type Fixture = Awaited<ReturnType<typeof seed>>;
-const validate = (
+const validate = async (
   f: Fixture,
   operation: "delete" | "move",
   workspaceId = f.workspaceId,

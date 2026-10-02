@@ -208,7 +208,7 @@ if (!databaseUrl || !runPostgresTests) {
               },
             ],
           );
-          const move = () =>
+          const move = async () =>
             mover.db.transaction(async (rawTx) => {
               const tx = asTestRaw<Transaction>(rawTx);
               const result = await copyEntities({
@@ -267,7 +267,7 @@ if (!databaseUrl || !runPostgresTests) {
           };
           // These are the same mutations as rename, version annotation and
           // derivative updates: none acquires a workspace row lock.
-          const write = () =>
+          const write = async () =>
             writer.db.transaction(async (tx) => {
               switch (owner) {
                 case "entity":
@@ -485,7 +485,7 @@ if (!databaseUrl || !runPostgresTests) {
             // Observe each decisive row lock without a test-only timeout. This
             // also makes removal of ANY source lock fail this test. The normal
             // writer below still uses the production waiting UPDATE semantics.
-            const locked = await Result.tryPromise(() =>
+            const locked = await Result.tryPromise(async () =>
               probe.db.transaction(async (tx) => {
                 if (owner === "entity") {
                   return await tx

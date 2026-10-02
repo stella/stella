@@ -205,7 +205,7 @@ const seed = async (folder: boolean) => {
     });
   fake.put(envBase.S3_BUCKET, key(fileId), "original", "text/plain");
   fake.put(envBase.S3_BUCKET, key(historicalFileId), "history", "text/plain");
-  const run = (deleteSource: boolean) =>
+  const run = async (deleteSource: boolean) =>
     handler.handler(
       asTestRaw<Parameters<typeof handler.handler>[0]>({
         workspaceId: sourceWorkspaceId,
@@ -444,7 +444,7 @@ test.each(["desktop", "signing"] as const)(
         }
         default: {
           const exhaustive: never = kind;
-          throw new TypeError(`Unexpected session kind: ${exhaustive}`);
+          throw new TypeError("Unexpected session kind", { cause: exhaustive });
         }
       }
       expect(await f.run(true)).toHaveProperty("entityId");
