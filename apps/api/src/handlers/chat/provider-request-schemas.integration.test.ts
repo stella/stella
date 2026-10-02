@@ -5,7 +5,11 @@ import { eq, inArray } from "drizzle-orm";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
+import {
+  BYOK_MODEL_OPTIONS,
+  getModelImageInputCapability,
+  TANSTACK_AI_PROVIDERS,
+} from "@stll/ai-catalog";
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 import {
   BUILT_IN_CHAT_TOOL_POLICY_KINDS,
@@ -34,7 +38,6 @@ import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { encodeChatModelSelection } from "@/api/lib/chat-model-selection";
 import { BEDROCK_IMAGE_MAX_BYTES } from "@/api/lib/chat/provider-image-input";
-import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import type { StreamChatChunksOptions } from "@/api/lib/chat/tanstack-chat-runtime";
 import { runChatThreadCompaction } from "@/api/lib/chat/thread-compaction";
 import { toDataUrl } from "@/api/lib/data-url";
@@ -814,9 +817,11 @@ const checkImageRequest = async ({
 }: {
   provider: TanStackAIProvider;
   modelId: string;
-  status: "accepts" | "unknown";
+  status: "supported" | "unlisted";
 }) => {
-  expect(getModelImageCapability({ modelId, provider })).toBe(status);
+  expect(getModelImageInputCapability({ modelId, provider })).toBe(
+    status === "unlisted" ? undefined : status,
+  );
   const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
   seededThreadIds.push(threadId);
   const session = await openSession({
@@ -849,23 +854,16 @@ const checkImageRequest = async ({
     const unknownLogs = logs.records.filter(
       ({ message }) => message === "ai.image_capability_unknown",
     );
-    if (status === "unknown") {
+    if (status === "unlisted") {
       expect(unknownLogs.length).toBeGreaterThan(0);
       expect(
-        unknownLogs.some(
+        unknownLogs.every(
           ({ attributes }) =>
             attributes?.["provider"] === provider &&
-            attributes["image_capability_unknown"] === true,
+            attributes["image_capability_unknown"] === true &&
+            attributes["reason"] === "unlisted_model",
         ),
       ).toBe(true);
-      if (provider === "mistral" && modelId === "mistral-large-latest") {
-        expect(
-          unknownLogs.every(
-            ({ attributes }) =>
-              attributes?.["reason"] === "conflicting_sources",
-          ),
-        ).toBe(true);
-      }
     } else {
       expect(unknownLogs).toEqual([]);
     }
@@ -911,38 +909,22 @@ const checkImageRefusal = async ({
   }
 };
 
-// SDK modality metadata is advisory when absent; an explicit unsupported
-// modality refuses before dispatch. Offered models and unlisted choices both
-// go through the real send path and adapter here.
+// The catalog's image capability decides: an unsupported entry refuses before
+// dispatch, and a model the catalog does not list is sent and logged. Offered
+// models and unlisted choices both go through the real send path and adapter.
 describe("image input at the provider request boundary", () => {
-  test(
-    "conflicting sources: Mistral images reach the provider and record the reason",
-    async () => {
-      await checkImageRequest({
-        provider: "mistral",
-        modelId: "mistral-large-latest",
-        status: "unknown",
-      });
-    },
-    propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
-  );
-
   for (const provider of TANSTACK_AI_PROVIDERS) {
     const models: readonly string[] = BYOK_MODEL_OPTIONS[provider];
     const capable = models.find(
-      (modelId) => getModelImageCapability({ modelId, provider }) === "accepts",
+      (modelId) =>
+        getModelImageInputCapability({ modelId, provider }) === "supported",
     );
     if (capable === undefined) {
-      panic(`The ${provider} image matrix needs an image-capable SDK model`);
+      panic(`The ${provider} image matrix needs an image-capable model`);
     }
-    const unknown =
-      models.find(
-        (modelId) =>
-          getModelImageCapability({ modelId, provider }) === "unknown",
-      ) ?? "stella-cassette-unknown-vision-model";
     for (const imageModel of [
-      { status: "accepts", modelId: capable },
-      { status: "unknown", modelId: unknown },
+      { status: "supported", modelId: capable },
+      { status: "unlisted", modelId: "stella-cassette-unknown-vision-model" },
     ] as const) {
       test(
         `${provider}/${imageModel.status}: image input sends a valid request`,
@@ -953,7 +935,7 @@ describe("image input at the provider request boundary", () => {
 
     for (const modelId of models.filter(
       (candidate) =>
-        getModelImageCapability({ modelId: candidate, provider }) ===
+        getModelImageInputCapability({ modelId: candidate, provider }) ===
         "unsupported",
     )) {
       test(

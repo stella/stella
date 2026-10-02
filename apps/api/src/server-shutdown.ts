@@ -16,6 +16,7 @@ type ApiShutdownOutcome =
 
 type ShutdownApiServicesOptions = {
   closeBackgroundWorkers: () => Promise<void>;
+  closeManagedProviderChecks: () => Promise<void>;
   /** Undefined where the login check is not started (local runs). */
   closeDatabaseLoginProbe: (() => Promise<void>) | undefined;
   drainScheduler: Promise<void> | undefined;
@@ -33,6 +34,7 @@ type ShutdownApiServicesOptions = {
 
 export const shutdownApiServices = async ({
   closeBackgroundWorkers,
+  closeManagedProviderChecks,
   closeDatabaseLoginProbe,
   drainScheduler,
   onHttpStopError,
@@ -42,6 +44,7 @@ export const shutdownApiServices = async ({
   stopSse,
   timeout,
 }: ShutdownApiServicesOptions): Promise<ApiShutdownOutcome> => {
+  const providerChecksClosed = closeManagedProviderChecks();
   const httpStopped = stopHttp().catch((error: unknown) => {
     onHttpStopError(error);
     throw error;
@@ -63,6 +66,7 @@ export const shutdownApiServices = async ({
   return await Promise.race([
     Promise.allSettled([
       httpStopped,
+      providerChecksClosed,
       chatTurnRunsRelinquished,
       drainScheduler,
       closeBackgroundWorkers(),

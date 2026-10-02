@@ -52,6 +52,11 @@
     "takenOverTitle": "Muutmine teisaldatud teise seadmesse"
   },
   "dialog": {
+    "accountWindowTitle": "Ühenda konto",
+    "accountTitle": "Kas ühendada see konto?",
+    "accountSubtitle": "Ühendage stella desktop selle konto ja organisatsiooniga.",
+    "accountEmail": "Konto",
+    "organizationName": "Organisatsioon",
     "allow": "Luba",
     "apiUrl": "API aadress",
     "cancel": "Loobu",
