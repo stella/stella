@@ -24,10 +24,16 @@ import {
 } from "../packages/cli/src/generate-capability-tree";
 import { generateRouteMap } from "../packages/cli/src/generate-route-map";
 import { generateCliSkill } from "../packages/cli/src/generate-skill";
-import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "../packages/cli/src/generated/tool-annotations";
 import type { RegistryToolListing } from "../packages/cli/src/route-types";
 
 const root = path.resolve(import.meta.dir, "..");
+const generated = Bun.spawnSync(
+  [process.execPath, "--cwd=packages/cli", "run", "codegen:runtime"],
+  { cwd: root, stdout: "pipe", stderr: "pipe" },
+);
+expect(generated.exitCode, generated.stderr.toString()).toBe(0);
+const { generatedToolAnnotations: TOOL_ANNOTATIONS } =
+  await import("../packages/cli/src/generated/tool-annotations");
 const outputs = [
   "packages/cli/skills/stella-cli/SKILL.md",
   "docs/capability-coverage.md",
