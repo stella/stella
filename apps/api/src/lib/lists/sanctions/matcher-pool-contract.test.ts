@@ -102,7 +102,7 @@ test.each(multilingualCases)(
           name,
           entityType: "person",
           birthDate: fixture.birthDate,
-          nationalityCodes: [...fixture.nationalityCodes],
+          nationality: [...fixture.nationalityCodes],
         } as const satisfies ScreeningQuery;
         const expected = screen(index, query, {
           cutoff: DEFAULT_CUTOFF,
@@ -334,5 +334,69 @@ test("close waits for actual worker retirement", async () => {
     retirement.resolve(0);
     await pool.close();
     await active;
+  }
+});
+
+test("real worker honors cutoff and limit on cold and cached requests", async () => {
+  const template = personList("Alex Novak").entries.at(0);
+  if (template === undefined) {throw new TypeError("Missing protocol fixture");}
+  const list = {
+    version: personList("Alex Novak").version,
+    entries: [
+      ...Array.from({ length: 3 }, (_, index) => ({
+        ...template,
+        sourceId: `exact-${index}`,
+      })),
+      {
+        ...template,
+        sourceId: "near",
+        names: [{ name: "Alek Novak", quality: "strong" as const }],
+      },
+    ],
+  } satisfies ParsedList;
+  const query = {
+    name: "Alex Novak",
+    entityType: "person",
+  } as const satisfies ScreeningQuery;
+  const index = buildScreeningIndex([list]);
+  const low = screen(index, query, { cutoff: 0.5, limit: 20 }).unwrap();
+  const high = screen(index, query, { cutoff: 0.999, limit: 20 }).unwrap();
+  expect(low.totalMatches).toBeGreaterThan(high.totalMatches);
+  expect(
+    low.possibleMatches.some(({ entry }) => entry.sourceId === "near"),
+  ).toBe(true);
+  expect(
+    high.possibleMatches.map(({ entry }) => entry.sourceId).toSorted(),
+  ).toEqual(["exact-0", "exact-1", "exact-2"]);
+  const pool = createSanctionsMatcherPool({ size: 1, deadlineMs: 5000 });
+  try {
+    for (const cutoff of [0.5, 0.999]) {
+      for (const limit of [1, 2, 20]) {
+        const expected = screen(index, query, { cutoff, limit }).unwrap();
+        expect(expected.possibleMatches).toHaveLength(
+          Math.min(limit, expected.totalMatches),
+        );
+        expect(expected.truncated).toBe(limit < expected.totalMatches);
+        const request = {
+          source: "eu",
+          editionId: `cutoff-${cutoff}-limit-${limit}`,
+          list,
+          query,
+          cutoff,
+          limit,
+        } as const satisfies SanctionsMatcherRequest;
+        const cold = await pool.run(
+          async (session) => await session.match(request),
+        );
+        expect(cold).toEqual({ status: "screened", result: expected });
+        expect(
+          await pool.run(
+            async (session) => await session.match({ ...request, list: null }),
+          ),
+        ).toEqual(cold);
+      }
+    }
+  } finally {
+    await pool.close();
   }
 });
