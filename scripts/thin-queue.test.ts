@@ -476,7 +476,7 @@ test("running main heavy on ordinary full-depth pushes violates the scheduling c
     panic("Missing main validation job");
   }
   validate.if = "true";
-  expect(() => assertMainSelection(mutated)).toThrow("expect(received)");
+  expect(() => assertMainSelection(mutated)).toThrow("push/ordinary/");
 });
 
 test("invalid configuration is validated before fetching code and publishes no commit status", () => {
