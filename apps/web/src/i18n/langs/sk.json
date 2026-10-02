@@ -636,6 +636,27 @@
     "timerActive": "Časovač beží",
     "timesheets": "Výkaz práce",
     "total": "Celkom",
+    "vatRates": {
+      "add": "Pridať sadzbu DPH",
+      "archiveConfirm": "Archivovať túto sadzbu DPH? Nebude už dostupná pre nové doklady.",
+      "code": "Kód sadzby",
+      "current": "Aktuálna sadzba",
+      "description": "Spravujte sadzby a obdobia ich platnosti.",
+      "edit": "Upraviť sadzbu DPH",
+      "empty": "Žiadne sadzby DPH.",
+      "future": "Budúca sadzba",
+      "invalidPeriod": "Vyberte platné dátumy s koncom po začiatku.",
+      "invalidRate": "Zadajte nezápornú percentuálnu sadzbu s najviac dvoma desatinnými miestami.",
+      "name": "Označenie sadzby",
+      "openEnded": "Bez koncového dátumu",
+      "overlap": "Obdobia platnosti pre rovnaký kód sadzby sa nesmú prekrývať.",
+      "past": "Predchádzajúca sadzba",
+      "periodHelp": "Počiatočný dátum je zahrnutý; koncový dátum nie je zahrnutý. Pre obdobie bez konca ponechajte koncový dátum prázdny.",
+      "rate": "Percentuálna sadzba DPH",
+      "title": "Sadzby DPH",
+      "validFrom": "Platí od",
+      "validTo": "Platí do"
+    },
     "writeOff": "Odpísať"
   },
   "caseLaw": {
