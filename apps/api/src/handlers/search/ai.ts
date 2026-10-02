@@ -37,6 +37,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { proveTextOnlyPersistedChatMessageContent } from "@/api/lib/chat/persisted-message-content";
 import { tSafeId, tUserId } from "@/api/lib/custom-schema";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedCaseLawDecisionId,
   brandPersistedContactId,
@@ -825,7 +826,9 @@ const loadSummaryContexts = async ({
       mimeTypes: filters.mimeTypes,
       updatedFrom: filters.updatedFrom,
       updatedTo: filters.updatedTo,
-      limit: filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
+      limit: normalizeTenantPageLimit(
+        filters.limit ?? SEARCH_SUMMARY_RESULT_LIMIT,
+      ),
     },
     { scopedDb },
   );

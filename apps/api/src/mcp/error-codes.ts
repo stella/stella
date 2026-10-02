@@ -12,6 +12,8 @@ export const MCP_ERROR_CODES = [
   ...Object.values(ACTION_ADMISSION_CODES),
   /** Input failed validation at the tool boundary (shape, type, range). */
   "validation_error",
+  /** The read result needs a smaller selection or page. */
+  "result_too_large",
   /** The session lacks the OAuth scope the tool requires. */
   "missing_scope",
   /** The tool's backing feature is turned off for this deployment/org. */

@@ -23,6 +23,7 @@ import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
   description:
@@ -53,7 +54,9 @@ const config = {
 const getThreads = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user }) {
-    const limit = query.limit ?? LIMITS.chatThreadListPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.chatThreadListPageSizeDefault,
+    );
     const cursor = query.cursor
       ? chatThreadListCursorCodec.decode(query.cursor)
       : null;

@@ -1,9 +1,14 @@
 import { panic } from "better-result";
 
+import { LIMITS } from "@/api/lib/limits";
 import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import {
+  getTenantActionSizePolicy,
+  normalizeTenantPageLimit as normalizePage,
+} from "@/api/lib/rate-limit/action-size-limits";
 import {
   EMPTY_CORPUS_CURSORS,
   readCompatDecision,
@@ -167,4 +172,30 @@ export const compatCorpusFetchResponse = async <TData>({
       read satisfies never;
       return panic("Unhandled compat corpus read");
   }
+};
+
+// The shared corpus cursor advances every fetched country page. Refuse a
+// budget that cannot emit those pages whole rather than dropping cursor hits.
+export const compatSearchPageLimitResult = (audience: "tenant" | "law") => {
+  const policy = getTenantActionSizePolicy();
+  if (policy === undefined) {
+    return null;
+  }
+  const matterLimit =
+    audience === "tenant"
+      ? normalizePage(LIMITS.mcpCompatSearchPageSizeDefault)
+      : 0;
+  const combinedLimit =
+    matterLimit +
+    LIMITS.mcpCompatDecisionPageSizeDefault +
+    LIMITS.mcpCompatStatutePageSizeDefault;
+  if (combinedLimit <= policy.pageSize) {
+    return null;
+  }
+  return structuredErrorResult({
+    code: "validation_error",
+    message:
+      "The configured page limit cannot include the combined search page",
+    hint: "Use search_case_law or search_legislation with an explicit smaller limit; search matters separately with search_across_matters.",
+  });
 };

@@ -14,6 +14,7 @@ import type {
   Resource,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
+import { AsyncLocalStorage } from "node:async_hooks";
 
 import { ACTION_ADMISSION_REFUSALS } from "@stll/api-contract/action-admission";
 
@@ -24,6 +25,15 @@ import {
   actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
+import {
+  actionSizeErrorResponse,
+  boundActionJsonResponse,
+  boundActionRequest,
+  getActionSizePolicy,
+  getTenantActionSizePolicy,
+  recordActionResponseOversize,
+  withTenantActionSizePolicy,
+} from "@/api/lib/rate-limit/action-size-limits";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import {
@@ -82,10 +92,15 @@ import {
 } from "@/api/mcp/tool-utils";
 
 const MAX_TOOL_NAME_SUGGESTION_CHARS = 128;
+const responseDisposition = new AsyncLocalStorage<{ type: "read" | "tool" }>();
 
 const mcpStructuredErrorResult = (
   args: Parameters<typeof structuredErrorResult>[0],
 ): CallToolResult => serializeToolResult(structuredErrorResult(args));
+
+// Only an explicit read hint permits refusal after a tool has run.
+const toolResultDisposition = (annotations: McpTool["annotations"]) =>
+  annotations?.readOnlyHint === true ? "read" : "mutation";
 
 type ByteStreamReadResult =
   | { done: false; value: Uint8Array }
@@ -142,6 +157,7 @@ const requiredScopesForTool = (
 
 type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
+  actionSizePolicy?: typeof getActionSizePolicy;
   authenticateMcpRequest: (
     token: string,
     options: { mode: McpMode },
@@ -624,6 +640,7 @@ const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
 
 export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
+  actionSizePolicy = getActionSizePolicy,
   authenticateMcpRequest,
   captureError,
   getMcpToolDefinition,
@@ -679,7 +696,11 @@ export const createMcpHttpRequestHandler = ({
         await readMcpResource(resourceRequest.params.uri, mode),
     );
 
-    server.setRequestHandler("tools/call", async (toolRequest) => {
+    server.setRequestHandler("tools/call", async (toolRequest, { mcpReq }) => {
+      const disposition = responseDisposition.getStore();
+      if (disposition !== undefined) {
+        disposition.type = "tool";
+      }
       const toolName = toolRequest.params.name;
       const requiredScopesHint = getMcpToolRequiredScopesHint(toolName, mode);
       const missingHintedScope = requiredScopesHint?.find(
@@ -747,6 +768,7 @@ export const createMcpHttpRequestHandler = ({
         });
       }
 
+      const resultDisposition = toolResultDisposition(definition.annotations);
       const run = async (signal?: AbortSignal) => {
         signal?.throwIfAborted();
         const result = await handleMcpToolCall({
@@ -755,7 +777,44 @@ export const createMcpHttpRequestHandler = ({
           mode,
           toolName,
         });
-        return result;
+        const policy = getTenantActionSizePolicy();
+        if (policy === undefined) {
+          return result;
+        }
+        const bytes = Buffer.byteLength(
+          JSON.stringify({ jsonrpc: "2.0", id: mcpReq.id, result }),
+          "utf-8",
+        );
+        if (bytes <= policy.responseBytes) {
+          return result;
+        }
+        recordActionResponseOversize({
+          transport: "mcp",
+          operation: toolName,
+          bytes,
+          maximum: policy.responseBytes,
+        });
+        if (resultDisposition === "read" || result.isError === true) {
+          return mcpStructuredErrorResult({
+            code: "result_too_large",
+            message: "Tool result exceeds the configured byte limit",
+            hint: "Request a smaller selection using this tool's filters or page limit.",
+          });
+        }
+        return {
+          isError: false,
+          content: [
+            {
+              type: "text",
+              text: "Action applied. The result was too large and was omitted. Do not repeat the action; use a read tool to inspect its outcome.",
+            },
+          ],
+          structuredContent: {
+            applied: true,
+            resultOmitted: true,
+            reason: "result_too_large",
+          },
+        } satisfies CallToolResult;
       };
       if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
         return await run();
@@ -1067,9 +1126,51 @@ export const createMcpHttpRequestHandler = ({
       });
     }
 
-    // A declared length is refused from the header alone, before the token
-    // costs a verification.
-    if (declaredBodyLength(incomingRequest) === "too_large") {
+    const configuredPolicy = actionSizePolicy();
+    if (Result.isError(configuredPolicy)) {
+      return withMcpCors(
+        actionSizeErrorResponse(configuredPolicy.error),
+        undefined,
+        mode,
+      );
+    }
+    const policy = configuredPolicy.value;
+    const envelopeDisposition: { type: "read" | "tool" } = { type: "read" };
+    const completeResponse = async (
+      response: Response,
+      session?: McpSession,
+    ) => {
+      const bounded =
+        policy === undefined || envelopeDisposition.type === "tool"
+          ? response
+          : await boundActionJsonResponse(response, {
+              maximum: policy.responseBytes,
+              disposition: "refuse",
+              operation: "mcp",
+            });
+      return withMcpCors(bounded, session, mode);
+    };
+    let framedRequest = incomingRequest;
+    if (policy !== undefined) {
+      const bounded = await boundActionRequest(
+        incomingRequest,
+        policy.requestBytes,
+      );
+      if (Result.isError(bounded)) {
+        return withMcpCors(
+          actionSizeErrorResponse(bounded.error, policy.responseBytes),
+          undefined,
+          mode,
+        );
+      }
+      framedRequest = bounded.value;
+    }
+
+    // Preserve the existing transport frame limit while admission is disabled.
+    if (
+      policy === undefined &&
+      declaredBodyLength(incomingRequest) === "too_large"
+    ) {
       return payloadTooLargeResponse();
     }
 
@@ -1109,10 +1210,9 @@ export const createMcpHttpRequestHandler = ({
       // unauthenticated probe still receives the 401 + `WWW-Authenticate` that
       // drives OAuth discovery.
       if (incomingRequest.method === "DELETE") {
-        return withMcpCors(
+        return await completeResponse(
           sessionOperationUnsupportedResponse(),
           session,
-          mode,
         );
       }
 
@@ -1120,7 +1220,10 @@ export const createMcpHttpRequestHandler = ({
       // without one is refused from the headers alone, so it cannot hold
       // connections and buffers open by streaming a body that is discarded
       // anyway.
-      const frame = await withCappedRequestBody(incomingRequest);
+      const frame =
+        policy === undefined
+          ? await withCappedRequestBody(incomingRequest)
+          : { request: framedRequest, status: "within_limit" as const };
       if (frame.status === "too_large") {
         return withMcpCors(payloadTooLargeResponse(), session, mode);
       }
@@ -1133,23 +1236,32 @@ export const createMcpHttpRequestHandler = ({
         token,
       };
       const legacyRequest = await isLegacyRequest(request);
-      const response = legacyRequest
-        ? await serveLegacyRequest({
-            authInfo,
-            clientIp,
-            mode,
-            request,
-            session,
-          })
-        : await handlerForMode(mode).fetch(request, { authInfo });
+      const dispatch = async () =>
+        responseDisposition.run(envelopeDisposition, async () =>
+          legacyRequest
+            ? await serveLegacyRequest({
+                authInfo,
+                clientIp,
+                mode,
+                request,
+                session,
+              })
+            : await handlerForMode(mode).fetch(request, { authInfo }),
+        );
+      const response =
+        policy === undefined
+          ? await dispatch()
+          : await withTenantActionSizePolicy(policy, dispatch);
 
       // `createMcpHandler` owns and catches modern exchange failures. Restore
       // the public retry contract the outer catch provides on the legacy leg.
       if (!legacyRequest && response.status >= 500) {
-        return retryableServerErrorResponse();
+        return policy === undefined
+          ? retryableServerErrorResponse()
+          : await completeResponse(retryableServerErrorResponse(), session);
       }
 
-      return withMcpCors(response, session, mode);
+      return await completeResponse(response, session);
     } catch (error) {
       if (error instanceof McpOrganizationAccessError) {
         return accessDeniedResponse({ denial: "organization_forbidden", mode });

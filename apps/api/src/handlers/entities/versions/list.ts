@@ -14,6 +14,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const readVersionsParamsSchema = workspaceParams({
   entityId: tSafeId("entity"),
@@ -46,7 +47,7 @@ const readVersionsHandler = async function* ({
     );
   }
 
-  const pageSize = LIMITS.versionsPageSizeDefault;
+  const pageSize = normalizeTenantPageLimit(LIMITS.versionsPageSizeDefault);
 
   const keyset = cursor
     ? or(
