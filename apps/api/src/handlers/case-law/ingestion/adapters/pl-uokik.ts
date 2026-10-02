@@ -1,3 +1,4 @@
+// parser-output-unchanged: Importing the unchanged common-court ruling-key helper from its own module preserves publisher output.
 import { Result, panic } from "better-result";
 /**
  * Polish competition and consumer protection authority (Prezes UOKiK) adapter.
@@ -102,7 +103,7 @@ import type {
   SyncPage,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
-import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-ncourt";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import { plSupremeCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-sn-ruling-keys";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";

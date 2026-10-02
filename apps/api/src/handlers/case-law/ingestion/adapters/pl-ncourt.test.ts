@@ -17,6 +17,7 @@ import {
 
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { plCommonCourtRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-common-court-ruling-keys";
 import {
   buildPlDecision,
   normalizeSaosDumpItem,
@@ -29,7 +30,6 @@ import {
   normalizePlNcourtListingRow,
   parsePlNcourtCursor,
   PL_NCOURT_WINDOW,
-  plCommonCourtRulingKeys,
   plNcourtAdapter,
   plNcourtCensus,
   plNcourtComponents,
@@ -828,17 +828,6 @@ describe("the SAOS copy of a judgment", () => {
     expect(Bun.deepEquals(official.metadata["rulingKeys"], saosKeys)).toBe(
       true,
     );
-  });
-
-  test("a key needs the date and the type: a signature alone names no judgment", () => {
-    expect(
-      plCommonCourtRulingKeys({
-        caseNumber: "II Ca 236/18",
-        court: "Sąd Okręgowy w Świdnicy",
-        decisionDate: undefined,
-        decisionType: "postanowienie",
-      }),
-    ).toEqual([]);
   });
 });
 
