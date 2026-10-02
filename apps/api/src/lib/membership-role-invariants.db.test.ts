@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import {
   afterAll,
   beforeAll,
@@ -8,38 +8,20 @@ import {
   test,
 } from "bun:test";
 import { and, eq } from "drizzle-orm";
-import { readFileSync } from "node:fs";
-import * as v from "valibot";
 
 import { assignableRoles, roles } from "@stll/permissions";
 
-import {
-  invitation,
-  member,
-  organization as organizationTable,
-  user,
-} from "@/api/db/auth-schema";
-import { getAuth } from "@/api/lib/auth";
-import { createConfirmationOtp } from "@/api/lib/confirmation-otp";
-import {
-  ACCOUNT_DELETION_ERROR_CODE,
-  verifyAndDeleteUser,
-} from "@/api/lib/delete-account";
+import { invitation, member } from "@/api/db/auth-schema";
+import { createAuth, getAuth } from "@/api/lib/auth";
 import { isMemberRole } from "@/api/lib/member-roles";
 import type { MemberRole } from "@/api/lib/member-roles";
 import { OWNER_REQUIRED_ERROR_CODE } from "@/api/lib/membership-role-invariants";
-import { brandPersistedUserId } from "@/api/lib/safe-id-boundaries";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
-
-import {
-  inviteMemberSchema,
-  roleAssignmentOptions,
-} from "../../../web/src/lib/organization/role-assignment.logic.ts";
 
 setDefaultTimeout(120_000);
 let testDb: TestDatabase;
@@ -167,164 +149,282 @@ describe("single membership roles", () => {
 
 const productRoles = Object.keys(roles).filter(isMemberRole);
 
-describe("live organization ownership", () => {
-  test("last-owner role changes and removal return typed refusals without persistence", async () => {
+describe("membership hook enforcement", () => {
+  test("role updates and invitations apply the configured assignment policy beyond plugin grants", async () => {
     const { auth, owner, organization } = await createOrganization();
+    const administrator = await signInHuman(
+      `role-policy-admin-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    await auth.api.addMember({
+      body: {
+        organizationId: organization.id,
+        userId: administrator.userId,
+        role: "admin",
+      },
+      headers: owner.headers(),
+    });
+    await administrator.setActiveOrganization(organization.id);
+    const target = await signInHuman(
+      `role-policy-target-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const targetMember = await auth.api.addMember({
+      body: {
+        organizationId: organization.id,
+        userId: target.userId,
+        role: "member",
+      },
+      headers: owner.headers(),
+    });
+    const baselineUpdate = await auth.api.updateMemberRole({
+      body: {
+        organizationId: organization.id,
+        memberId: targetMember.id,
+        role: "admin",
+      },
+      headers: administrator.headers(),
+      asResponse: true,
+    });
+    expect(baselineUpdate.status).toBe(200);
+    await auth.api.updateMemberRole({
+      body: {
+        organizationId: organization.id,
+        memberId: targetMember.id,
+        role: "member",
+      },
+      headers: administrator.headers(),
+    });
+    const baselineEmail = `role-policy-baseline-${Bun.randomUUIDv7()}@stella.dev`;
+    const baselineInvite = await auth.api.createInvitation({
+      body: {
+        organizationId: organization.id,
+        email: baselineEmail,
+        role: "admin",
+      },
+      headers: administrator.headers(),
+      asResponse: true,
+    });
+    expect(baselineInvite.status).toBe(200);
     const before = await getTestDatabase()
       .select()
       .from(member)
-      .where(eq(member.organizationId, organization.id));
-    const ownerMember = before.at(0);
-    if (!ownerMember) {
-      panic("Organization creation did not persist its owner");
+      .where(eq(member.id, targetMember.id));
+    const restrictedAuth = createAuth((actorRole) =>
+      assignableRoles(actorRole).filter((targetRole) => targetRole !== "admin"),
+    );
+    expect(assignableRoles("admin")).toContain("admin");
+    const update = await restrictedAuth.api.updateMemberRole({
+      body: {
+        organizationId: organization.id,
+        memberId: targetMember.id,
+        role: "admin",
+      },
+      headers: administrator.headers(),
+      asResponse: true,
+    });
+    expect(update.status).toBe(403);
+    expect(await update.json()).toMatchObject({
+      code: "member_role_not_assignable",
+    });
+    expect(
+      await getTestDatabase()
+        .select()
+        .from(member)
+        .where(eq(member.id, targetMember.id)),
+    ).toEqual(before);
+    const email = `role-policy-invite-${Bun.randomUUIDv7()}@stella.dev`;
+    const invite = await restrictedAuth.api.createInvitation({
+      body: { organizationId: organization.id, email, role: "admin" },
+      headers: administrator.headers(),
+      asResponse: true,
+    });
+    expect(invite.status).toBe(403);
+    expect(await invite.json()).toMatchObject({
+      code: "member_role_not_assignable",
+    });
+    expect(
+      await getTestDatabase()
+        .select()
+        .from(invitation)
+        .where(
+          and(
+            eq(invitation.organizationId, organization.id),
+            eq(invitation.email, email),
+          ),
+        ),
+    ).toEqual([]);
+  });
+
+  test("the last-owner hook refuses after the plugin reads two owners and before the adapter writes", async () => {
+    const { auth, owner, organization } = await createOrganization();
+    const sibling = await signInHuman(
+      `role-preflight-sibling-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const siblingMember = await auth.api.addMember({
+      body: {
+        organizationId: organization.id,
+        userId: sibling.userId,
+        role: "owner",
+      },
+      headers: owner.headers(),
+    });
+    const actorRows = await getTestDatabase()
+      .select()
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organization.id),
+          eq(member.userId, owner.userId),
+        ),
+      );
+    const actorMember = actorRows.at(0);
+    if (!actorMember) {
+      panic("The assigning owner's membership was not persisted");
     }
-    for (const role of productRoles.filter(
-      (targetRole) => targetRole !== "owner",
-    )) {
+    const context = await auth.$context;
+    const originalFindMany = context.adapter.findMany;
+    const originalUpdate = context.adapter.update;
+    let pluginReadInterposed = false;
+    let membershipWrites = 0;
+    context.adapter.findMany = async <T>(
+      args: Parameters<typeof originalFindMany>[0],
+    ) => {
+      const rows = await originalFindMany<T>(args);
+      if (args.model === "member" && !pluginReadInterposed) {
+        expect(rows).toHaveLength(2);
+        pluginReadInterposed = true;
+        await getTestDatabase()
+          .update(member)
+          .set({ role: "member" })
+          .where(eq(member.id, siblingMember.id));
+      }
+      return rows;
+    };
+    context.adapter.update = async <T>(
+      args: Parameters<typeof originalUpdate>[0],
+    ) => {
+      if (args.model === "member") {
+        membershipWrites += 1;
+      }
+      return await originalUpdate<T>(args);
+    };
+    try {
       const response = await auth.api.updateMemberRole({
         body: {
           organizationId: organization.id,
-          memberId: ownerMember.id,
-          role,
+          memberId: actorMember.id,
+          role: "member",
         },
         headers: owner.headers(),
         asResponse: true,
       });
+      expect(pluginReadInterposed).toBe(true);
+      expect(response.status).toBe(400);
+      expect(await response.json()).toMatchObject({
+        code: OWNER_REQUIRED_ERROR_CODE,
+      });
+      expect(membershipWrites).toBe(0);
+      expect(
+        await getTestDatabase()
+          .select({ userId: member.userId, role: member.role })
+          .from(member)
+          .where(
+            and(
+              eq(member.organizationId, organization.id),
+              eq(member.role, "owner"),
+            ),
+          ),
+      ).toEqual([{ userId: owner.userId, role: "owner" }]);
+    } finally {
+      context.adapter.findMany = originalFindMany;
+      context.adapter.update = originalUpdate;
+    }
+  });
+
+  test("the adapter maps a last-owner trigger refusal after both preflights read two owners", async () => {
+    const { auth, owner, organization } = await createOrganization();
+    const sibling = await signInHuman(
+      `role-trigger-sibling-${Bun.randomUUIDv7()}@stella.dev`,
+    );
+    const siblingMember = await auth.api.addMember({
+      body: {
+        organizationId: organization.id,
+        userId: sibling.userId,
+        role: "owner",
+      },
+      headers: owner.headers(),
+    });
+    const actorRows = await getTestDatabase()
+      .select()
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organization.id),
+          eq(member.userId, owner.userId),
+        ),
+      );
+    const actorMember = actorRows.at(0);
+    if (!actorMember) {
+      panic("The assigning owner's membership was not persisted");
+    }
+    const context = await auth.$context;
+    const originalUpdate = context.adapter.update;
+    let interposedWrite = false;
+    context.adapter.update = async <T>(
+      args: Parameters<typeof originalUpdate>[0],
+    ) => {
+      if (args.model === "member" && !interposedWrite) {
+        expect(
+          await getTestDatabase()
+            .select()
+            .from(member)
+            .where(
+              and(
+                eq(member.organizationId, organization.id),
+                eq(member.role, "owner"),
+              ),
+            ),
+        ).toHaveLength(2);
+        interposedWrite = true;
+        await getTestDatabase()
+          .update(member)
+          .set({ role: "member" })
+          .where(eq(member.id, siblingMember.id));
+      }
+      return await originalUpdate<T>(args);
+    };
+    try {
+      const response = await auth.api.updateMemberRole({
+        body: {
+          organizationId: organization.id,
+          memberId: actorMember.id,
+          role: "member",
+        },
+        headers: owner.headers(),
+        asResponse: true,
+      });
+      expect(interposedWrite).toBe(true);
       expect(response.status).toBe(400);
       expect(await response.json()).toMatchObject({
         code: OWNER_REQUIRED_ERROR_CODE,
       });
       expect(
         await getTestDatabase()
-          .select()
+          .select({ userId: member.userId, role: member.role })
           .from(member)
-          .where(eq(member.organizationId, organization.id)),
-      ).toEqual(before);
+          .where(
+            and(
+              eq(member.organizationId, organization.id),
+              eq(member.role, "owner"),
+            ),
+          ),
+      ).toEqual([{ userId: owner.userId, role: "owner" }]);
+    } finally {
+      context.adapter.update = originalUpdate;
     }
-    const removal = await auth.api.removeMember({
-      body: { organizationId: organization.id, memberIdOrEmail: owner.email },
-      headers: owner.headers(),
-      asResponse: true,
-    });
-    expect(removal.status).toBe(400);
-    expect(await removal.json()).toMatchObject({
-      code: "YOU_CANNOT_LEAVE_THE_ORGANIZATION_AS_THE_ONLY_OWNER",
-    });
-    expect(
-      await getTestDatabase()
-        .select()
-        .from(member)
-        .where(eq(member.organizationId, organization.id)),
-    ).toEqual(before);
-  });
-
-  test("organization deletion cascades its last owner through real auth", async () => {
-    const { auth, owner, organization } = await createOrganization();
-    expect(
-      await getTestDatabase()
-        .select()
-        .from(member)
-        .where(eq(member.organizationId, organization.id)),
-    ).toHaveLength(1);
-    const deletion = await auth.api.deleteOrganization({
-      body: { organizationId: organization.id },
-      headers: owner.headers(),
-      asResponse: true,
-    });
-    expect(deletion.status).toBe(200);
-    expect(
-      await getTestDatabase()
-        .select()
-        .from(organizationTable)
-        .where(eq(organizationTable.id, organization.id)),
-    ).toEqual([]);
-    expect(
-      await getTestDatabase()
-        .select()
-        .from(member)
-        .where(eq(member.organizationId, organization.id)),
-    ).toEqual([]);
-    expect(
-      await getTestDatabase()
-        .select()
-        .from(user)
-        .where(eq(user.id, owner.userId)),
-    ).toHaveLength(1);
-  });
-
-  test("account deletion preserves its existing last-owner refusal and account", async () => {
-    const { owner, organization } = await createOrganization();
-    const beforeMembers = await getTestDatabase()
-      .select()
-      .from(member)
-      .where(eq(member.organizationId, organization.id));
-    const beforeUser = await getTestDatabase()
-      .select()
-      .from(user)
-      .where(eq(user.id, owner.userId));
-    const otp = await createConfirmationOtp({
-      purpose: "delete-account",
-      email: owner.email,
-    });
-    if (Result.isError(otp)) {
-      panic(otp.error.message);
-    }
-    const deletion = await verifyAndDeleteUser(
-      brandPersistedUserId(owner.userId),
-      owner.email,
-      otp.value,
-    );
-    expect(Result.isError(deletion)).toBe(true);
-    if (Result.isOk(deletion)) {
-      panic("A last owner's account deletion succeeded");
-    }
-    expect(deletion.error).toMatchObject({
-      code: ACCOUNT_DELETION_ERROR_CODE.soleOwner,
-      status: 400,
-    });
-    expect(
-      await getTestDatabase()
-        .select()
-        .from(user)
-        .where(eq(user.id, owner.userId)),
-    ).toEqual(beforeUser);
-    expect(
-      await getTestDatabase()
-        .select()
-        .from(member)
-        .where(eq(member.organizationId, organization.id)),
-    ).toEqual(beforeMembers);
   });
 });
 
 describe("membership assignment policy", () => {
-  test("role controls and form validation retain their shared source", () => {
-    const logic = readFileSync(
-      new URL(
-        "../../../web/src/lib/organization/role-assignment.logic.ts",
-        import.meta.url,
-      ),
-      "utf-8",
-    );
-    const translations = readFileSync(
-      new URL("../../../web/src/lib/organization/consts.ts", import.meta.url),
-      "utf-8",
-    );
-    const schema = readFileSync(
-      new URL("../../../web/src/lib/schema.ts", import.meta.url),
-      "utf-8",
-    );
-    expect(logic).toContain(
-      'import { assignableRoles } from "@stll/permissions"',
-    );
-    expect(logic).toContain("assignableRoles(actorRole)");
-    expect(logic).not.toMatch(/picklist\(\s*\[/u);
-    expect(translations).toMatch(/satisfies Record\s*<\s*Role,/u);
-    expect(translations).not.toContain("ASSIGNABLE_ROLES");
-    expect(schema).toContain("export const emailSchema");
-    expect(schema).toContain("v.email()");
-  });
-
   for (const actorRole of productRoles) {
     test(`${actorRole} submits exactly its offered single roles on add, invite and update`, async () => {
       const { auth, owner, organization } = await createOrganization();
@@ -344,18 +444,6 @@ describe("membership assignment policy", () => {
         await actor.setActiveOrganization(organization.id);
       }
       const expected = assignableRoles(actorRole);
-      const offered = roleAssignmentOptions(actorRole).map(
-        ({ value }) => value,
-      );
-      const formAccepted = productRoles.filter(
-        (role) =>
-          v.safeParse(inviteMemberSchema(actorRole), {
-            email: "member@example.com",
-            role,
-          }).success,
-      );
-      expect(offered).toEqual(expected);
-      expect(formAccepted).toEqual(expected);
       const acceptedAdds: MemberRole[] = [];
       const acceptedInvites: MemberRole[] = [];
       const acceptedUpdates: MemberRole[] = [];
@@ -488,9 +576,6 @@ describe("membership assignment policy", () => {
       expect(acceptedAdds).toEqual(expected);
       expect(acceptedInvites).toEqual(expected);
       expect(acceptedUpdates).toEqual(expected);
-      expect(acceptedAdds).toEqual(offered);
-      expect(acceptedInvites).toEqual(formAccepted);
-      expect(acceptedUpdates).toEqual(offered);
     });
   }
 

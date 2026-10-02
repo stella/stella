@@ -1,4 +1,4 @@
-import type { PGlite } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
@@ -92,6 +92,123 @@ describe("membership role database invariants", () => {
     } finally {
       await data.cleanUp();
     }
+  });
+
+  test("moving an owner preserves ownership in the source organization", async () => {
+    const source = await fixture();
+    const destination = await fixture();
+    try {
+      await expect(
+        client.query(`UPDATE member SET organization_id = $1 WHERE id = $2`, [
+          destination.organizationId,
+          source.userId,
+        ]),
+      ).rejects.toMatchObject({
+        code: "23514",
+        constraint: "member_organization_owner_required",
+      });
+      await client.query(
+        `INSERT INTO member (id, organization_id, user_id, role, created_at) VALUES ($1, $2, $3, 'owner', now())`,
+        [Bun.randomUUIDv7(), source.organizationId, destination.userId],
+      );
+      await client.query(
+        `UPDATE member SET organization_id = $1 WHERE id = $2`,
+        [destination.organizationId, source.userId],
+      );
+      const { rows } = await client.query<{
+        organizationId: string;
+        role: string;
+      }>(
+        `SELECT organization_id AS "organizationId", role FROM member WHERE id = $1`,
+        [source.userId],
+      );
+      expect(rows).toEqual([
+        { organizationId: destination.organizationId, role: "owner" },
+      ]);
+    } finally {
+      await source.cleanUp();
+      await destination.cleanUp();
+    }
+  });
+
+  test("owner changes refuse isolation levels that retain a pre-lock snapshot", async () => {
+    const data = await fixture();
+    try {
+      for (const isolation of ["REPEATABLE READ", "SERIALIZABLE"] as const) {
+        await client.transaction(async (tx) => {
+          await tx.query(`SET TRANSACTION ISOLATION LEVEL ${isolation}`);
+          const { rows } = await tx.query<{ role: string }>(
+            `UPDATE member SET role = 'owner' WHERE id = $1 RETURNING role`,
+            [data.userId],
+          );
+          expect(rows).toEqual([{ role: "owner" }]);
+        });
+        await expect(
+          client.transaction(async (tx) => {
+            await tx.query(`SET TRANSACTION ISOLATION LEVEL ${isolation}`);
+            await tx.query(`UPDATE member SET role = 'member' WHERE id = $1`, [
+              data.userId,
+            ]);
+          }),
+        ).rejects.toMatchObject({
+          code: "23514",
+          constraint: "member_organization_owner_read_committed",
+        });
+      }
+      const { rows } = await client.query<{ role: string }>(
+        `SELECT role FROM member WHERE id = $1`,
+        [data.userId],
+      );
+      expect(rows).toEqual([{ role: "owner" }]);
+    } finally {
+      await data.cleanUp();
+    }
+  });
+
+  test("validation commits the role constraints before validating both domains", async () => {
+    await using database = await PGlite.create();
+    await database.exec(`CREATE TABLE organization (id text PRIMARY KEY);
+      CREATE TABLE member (organization_id text NOT NULL, role text NOT NULL);
+      CREATE TABLE invitation (role text);`);
+    const firstMigration = readFileSync(
+      nodePath.join(
+        import.meta.dir,
+        "../../drizzle/20261003123500_membership_role_invariants/migration.sql",
+      ),
+      "utf-8",
+    );
+    const validationMigration = readFileSync(
+      nodePath.join(
+        import.meta.dir,
+        "../../drizzle/20261003123600_validate_membership_role_invariants/migration.sql",
+      ),
+      "utf-8",
+    );
+    expect(validationMigration).toContain(
+      "-- requires: 20261003123500_membership_role_invariants",
+    );
+    const readConstraints = async () => {
+      const { rows } = await database.query<{
+        name: string;
+        validated: boolean;
+      }>(
+        `SELECT conname AS name, convalidated AS validated FROM pg_constraint
+         WHERE conname IN ('member_single_product_role', 'invitation_single_product_role') ORDER BY conname`,
+      );
+      return rows;
+    };
+    const unvalidated = [
+      { name: "invitation_single_product_role", validated: false },
+      { name: "member_single_product_role", validated: false },
+    ];
+    await database.exec(`BEGIN; ${firstMigration}`);
+    expect(await readConstraints()).toEqual(unvalidated);
+    await database.exec(validationMigration);
+    expect(await readConstraints()).toEqual(
+      unvalidated.map(({ name }) => ({ name, validated: true })),
+    );
+    await database.exec("ROLLBACK");
+    expect(await readConstraints()).toEqual(unvalidated);
   });
 
   test("the live SQL role domains equal the product role source", async () => {

@@ -751,7 +751,20 @@ describe("matter correspondence", () => {
       });
       const removedMemberships: (typeof member.$inferSelect)[] = [];
       const removedAssignments: (typeof workspaceMembers.$inferSelect)[] = [];
+      const retainedOwnerId = Bun.randomUUIDv7();
       try {
+        await testDb.insert(user).values({
+          id: retainedOwnerId,
+          name: "Retained organization owner",
+          email: `${retainedOwnerId}@example.test`,
+        });
+        await testDb.insert(member).values({
+          id: Bun.randomUUIDv7(),
+          organizationId: ids.orgA,
+          userId: retainedOwnerId,
+          role: "owner",
+          createdAt: new Date(),
+        });
         for (const originalUser of originalUsers) {
           await testDb
             .update(user)
@@ -871,6 +884,7 @@ describe("matter correspondence", () => {
         if (removedAssignments.length) {
           await testDb.insert(workspaceMembers).values(removedAssignments);
         }
+        await testDb.delete(user).where(eq(user.id, retainedOwnerId));
       }
     },
   );

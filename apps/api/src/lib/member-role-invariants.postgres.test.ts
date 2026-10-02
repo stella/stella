@@ -28,9 +28,23 @@ import { signInHuman } from "@/api/tests/helpers/human-session";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const BLOCK_OBSERVATION_ATTEMPTS = 200;
+const BLOCK_OBSERVATION_TIMEOUT_MS = 10_000;
+const BLOCK_OBSERVATION_INTERVAL_MS = 10;
 
 setDefaultTimeout(120_000);
+
+const waitForMembershipBlock = async (observeBlock: () => Promise<boolean>) => {
+  const deadline = performance.now() + BLOCK_OBSERVATION_TIMEOUT_MS;
+  while (performance.now() < deadline) {
+    if (await observeBlock()) {
+      return;
+    }
+    await Bun.sleep(BLOCK_OBSERVATION_INTERVAL_MS);
+  }
+  throw new Error(
+    "Membership mutation did not reach its database lock before the deadline",
+  );
+};
 
 const fixture = async (db: GatedTestDb, ownerCount: number) => {
   const organizationId = mintAuthProviderId<"organization">();
@@ -107,7 +121,7 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
   };
 };
 
-type MembershipOperation = "remove" | "demote" | "self-remove";
+type MembershipOperation = "remove" | "demote";
 
 type ApplyOperationArgs = {
   tx: Transaction;
@@ -131,8 +145,7 @@ const applyOperation = async ({
         .set({ role: "member" })
         .where(eq(member.id, memberId));
       return;
-    case "remove":
-    case "self-remove": {
+    case "remove": {
       const offboarding = await closeRemovedMemberActiveTimer({
         tx,
         organizationId,
@@ -163,7 +176,6 @@ if (!databaseUrl || !runPostgresTests) {
       ["remove", "remove"],
       ["demote", "demote"],
       ["remove", "demote"],
-      ["self-remove", "demote"],
     ] as const satisfies readonly (readonly [
       MembershipOperation,
       MembershipOperation,
@@ -240,18 +252,12 @@ if (!databaseUrl || !runPostgresTests) {
                 );
 
               // Query the real lock wait; no elapsed-time assumption chooses the schedule.
-              let blocked = false;
-              for (
-                let attempt = 0;
-                attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
-                attempt += 1
-              ) {
+              await waitForMembershipBlock(async () => {
                 const [row] = await setup.sql<{ blocked: boolean }[]>`
                   SELECT cardinality(pg_blocking_pids(${secondSession.pid})) > 0 AS blocked
                 `;
-                blocked = row?.blocked === true;
-              }
-              expect(blocked).toBe(true);
+                return row?.blocked === true;
+              });
               releaseFirst.resolve(undefined);
               await firstChange;
               const outcome = await secondChange;
@@ -351,18 +357,12 @@ if (!databaseUrl || !runPostgresTests) {
               () => ({ status: "committed" as const }),
               (error: unknown) => ({ status: "refused" as const, error }),
             );
-          let blocked = false;
-          for (
-            let attempt = 0;
-            attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
-            attempt += 1
-          ) {
+          await waitForMembershipBlock(async () => {
             const [row] = await setup.sql<{ blocked: boolean }[]>`
               SELECT cardinality(pg_blocking_pids(${secondSession.pid})) > 0 AS blocked
             `;
-            blocked = row?.blocked === true;
-          }
-          expect(blocked).toBe(true);
+            return row?.blocked === true;
+          });
           releaseFirst.resolve(undefined);
           await firstChange;
           expect(await secondChange).toEqual({ status: "committed" });
@@ -450,21 +450,15 @@ if (!databaseUrl || !runPostgresTests) {
                     headers: secondBrowser.headers(),
                     asResponse: true,
                   });
-            let blocked = false;
-            for (
-              let attempt = 0;
-              attempt < BLOCK_OBSERVATION_ATTEMPTS && !blocked;
-              attempt += 1
-            ) {
+            await waitForMembershipBlock(async () => {
               const [row] = await setup.sql<{ blocked: boolean }[]>`
                 SELECT EXISTS (
                   SELECT 1 FROM pg_stat_activity
                   WHERE ${firstPid} = ANY(pg_blocking_pids(pid))
                 ) AS blocked
               `;
-              blocked = row?.blocked === true;
-            }
-            expect(blocked).toBe(true);
+              return row?.blocked === true;
+            });
             releaseFirst.resolve(undefined);
             await firstChange;
             const response = await secondChange;

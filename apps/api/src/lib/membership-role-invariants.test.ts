@@ -1,8 +1,8 @@
-import { protocol } from "@electric-sql/pglite";
+import { PGlite } from "@electric-sql/pglite";
 import { APIError } from "better-auth/api";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { DrizzleQueryError } from "drizzle-orm/errors";
 
 import {
@@ -17,20 +17,37 @@ const constraints = [
   { constraint: "invitation_single_product_role", code: "invalid_member_role" },
 ];
 
+let database: PGlite;
+const getDatabase = () => database;
+beforeAll(async () => {
+  database = new PGlite();
+});
+afterAll(async () => {
+  await getDatabase().close();
+});
+
 describe("membership constraint refusals", () => {
   for (const { constraint, code } of constraints) {
-    test(`${constraint} maps direct and Drizzle-wrapped driver errors to a typed refusal`, () => {
+    test(`${constraint} maps direct and Drizzle-wrapped driver errors to a typed refusal`, async () => {
       const postgres = new SQL.PostgresError("Membership constraint refusal", {
         code: "23514",
         constraint,
       });
-      const pglite = new protocol.DatabaseError(
-        "Membership constraint refusal",
-        0,
-        "error",
-      );
-      pglite.code = "23514";
-      pglite.constraint = constraint;
+      const raised = await Result.tryPromise({
+        try: () =>
+          getDatabase().exec(
+            `DO $$ BEGIN RAISE EXCEPTION USING ERRCODE = '23514', CONSTRAINT = '${constraint}', MESSAGE = 'Membership constraint refusal'; END $$;`,
+          ),
+        catch: (cause) => cause,
+      });
+      if (Result.isOk(raised)) {
+        panic("PGlite did not raise its named check violation");
+      }
+      const pglite = raised.error;
+      if (!(pglite instanceof Error)) {
+        panic("PGlite did not return a driver error");
+      }
+      expect(pglite).toMatchObject({ code: "23514", constraint });
       for (const driverError of [postgres, pglite]) {
         for (const error of [
           driverError,

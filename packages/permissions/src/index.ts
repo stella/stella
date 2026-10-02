@@ -225,18 +225,14 @@ export const roles = {
   }),
 } satisfies Record<OrganizationRoleName, unknown>;
 
-const ROLE_ASSIGNMENT_POLICY = {
-  owner: ORGANIZATION_ROLE_NAMES,
-  admin: ORGANIZATION_ROLE_NAMES.filter((role) => role !== "owner"),
-  member: [],
-  intern: [],
-  external: [],
-} as const satisfies Record<
-  keyof typeof roles,
-  readonly OrganizationRoleName[]
->;
-
 /** Single product roles an actor can assign through membership management. */
 export const assignableRoles = (
   actorRole: keyof typeof roles,
-): readonly OrganizationRoleName[] => ROLE_ASSIGNMENT_POLICY[actorRole];
+): readonly OrganizationRoleName[] => {
+  if (!isOrganizationManagementRole(actorRole)) {
+    return [];
+  }
+  return ORGANIZATION_ROLE_NAMES.filter(
+    (role) => role !== "owner" || actorRole === "owner",
+  );
+};

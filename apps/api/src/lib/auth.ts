@@ -881,7 +881,7 @@ const oauthUiFragmentBridgePlugin = {
 // database adapter, which accesses `rootDb`. Deferring to
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
-const createAuth = () => {
+export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
   const demoConfig = getDemoAccountConfig();
   const demoSessionGuard = createDemoAuthSessionGuard(demoConfig);
   warnDemoAccountConfiguration(demoConfig, (attributes) =>
@@ -952,15 +952,15 @@ const createAuth = () => {
     }
     const actor = await rootDb.query.member.findFirst({
       columns: { role: true },
-      where: and(
-        eq(member.organizationId, organizationId),
-        eq(member.userId, session.user.id),
-      ),
+      where: {
+        organizationId: { eq: organizationId },
+        userId: { eq: session.user.id },
+      },
     });
     if (
       !actor ||
       !isMemberRole(actor.role) ||
-      !assignableRoles(actor.role).includes(role)
+      !roleAssignmentPolicy(actor.role).includes(role)
     ) {
       throw new APIError("FORBIDDEN", {
         code: "member_role_not_assignable",
@@ -1003,7 +1003,12 @@ const createAuth = () => {
           catch: mapMembershipInvariantError,
         });
         if (Result.isError(update)) {
-          captureError(update.error, { model: args.model });
+          if (
+            !(update.error instanceof APIError) ||
+            update.error.statusCode >= 500
+          ) {
+            captureError(update.error, { model: args.model });
+          }
           throw update.error;
         }
         return update.value;
@@ -1481,10 +1486,25 @@ const createAuth = () => {
             user,
             member: addedMember,
           }) {
-            await requireAssignableMemberRole(
-              brandPersistedOrganizationId(org.id),
-              addedMember.role,
-            );
+            const endpoint = tryGetCurrentAuthEndpointContext();
+            if (endpoint?.path === "/organization/create") {
+              // Better Auth supplies the creator role, before a membership or
+              // browser session exists on the system provisioning path.
+              if (
+                addedMember.role !==
+                BETTER_AUTH_ORGANIZATION_OPTIONS.creatorRole
+              ) {
+                throw new APIError("BAD_REQUEST", {
+                  code: "invalid_member_role",
+                  message: "Select one product membership role.",
+                });
+              }
+            } else {
+              await requireAssignableMemberRole(
+                brandPersistedOrganizationId(org.id),
+                addedMember.role,
+              );
+            }
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: user.email,
@@ -1571,7 +1591,12 @@ const createAuth = () => {
               catch: mapMembershipInvariantError,
             });
             if (Result.isError(removal)) {
-              captureError(removal.error, { organizationId });
+              if (
+                !(removal.error instanceof APIError) ||
+                removal.error.statusCode >= 500
+              ) {
+                captureError(removal.error, { organizationId });
+              }
               throw removal.error;
             }
           },

@@ -1,19 +1,13 @@
 import { useState } from "react";
 
-import {
-  useMutation,
-  useQueryClient,
-  useSuspenseQuery,
-} from "@tanstack/react-query";
+import { useSuspenseQuery } from "@tanstack/react-query";
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { compareByLocale } from "@stll/collation";
-import { assignableRoles } from "@stll/permissions";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
-import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
 import { Frame, FramePanel } from "@stll/ui/frame";
 import {
   ArrowDownIcon,
@@ -27,13 +21,6 @@ import {
   InputGroupInput,
 } from "@stll/ui/input-group";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
-import {
-  Select,
-  SelectItem,
-  SelectPopup,
-  SelectTrigger,
-  SelectValue,
-} from "@stll/ui/select";
 import { Skeleton } from "@stll/ui/skeleton";
 import {
   Table,
@@ -46,26 +33,17 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
+import { RoleCell } from "@/components/organization/member-role-cell";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
-import { useAnalytics } from "@/lib/analytics/provider";
-import { authClient } from "@/lib/auth-client";
-import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
-import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { roleTranslationKeys } from "@/lib/organization/consts";
 import {
   useCancelInvitation,
   useInviteMember,
   useRemoveMember,
 } from "@/lib/organization/mutations";
-import {
-  organizationKeys,
-  organizationOptions,
-} from "@/lib/organization/queries";
-import { roleAssignmentOptions } from "@/lib/organization/role-assignment.logic";
+import { organizationOptions } from "@/lib/organization/queries";
 import { formatMemberDate } from "@/lib/organization/utils";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
@@ -419,135 +397,6 @@ function Members() {
     </>
   );
 }
-
-type RoleCellProps = {
-  memberId: string;
-  memberEmail: string;
-  memberRole: Role;
-  currentUserRole: Role;
-  isSelf: boolean;
-};
-
-const RoleCell = ({
-  memberId,
-  memberEmail,
-  memberRole,
-  currentUserRole,
-  isSelf,
-}: RoleCellProps) => {
-  const t = useTranslations();
-  const analytics = useAnalytics();
-  const queryClient = useQueryClient();
-  const [pendingRole, setPendingRole] = useState<Role | null>(null);
-
-  const offeredRoles = assignableRoles(currentUserRole);
-  const editable = !isSelf && offeredRoles.includes(memberRole);
-
-  const updateRole = useMutation({
-    mutationFn: async (role: Role) => {
-      const result = await authClient.organization.updateMemberRole({
-        memberId,
-        role,
-      });
-
-      if (result.error) {
-        analytics.captureError(toAuthClientError(result.error));
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(result.error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
-        throw toAuthClientError(result.error);
-      }
-    },
-    onSuccess: async () => {
-      await queryClient.invalidateQueries({ queryKey: organizationKeys.all });
-      stellaToast.add({ title: t("success.roleUpdated"), type: "success" });
-    },
-  });
-
-  if (!editable) {
-    return (
-      <span className="text-foreground">
-        {t(`organization.roles.${memberRole}`)}
-      </span>
-    );
-  }
-
-  const roleData = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
-    description: t(roleTranslationKeys[value].descriptionKey),
-    label: t(roleTranslationKeys[value].labelKey),
-    value,
-  }));
-
-  const handleConfirm = async () => {
-    if (pendingRole) {
-      await updateRole.mutateAsync(pendingRole);
-      setPendingRole(null);
-    }
-  };
-
-  return (
-    <>
-      <Select
-        disabled={updateRole.isPending}
-        onValueChange={(value) => {
-          if (value && offeredRoles.includes(value) && value !== memberRole) {
-            setPendingRole(value);
-          }
-        }}
-        value={memberRole}
-      >
-        <SelectTrigger
-          className={cn(
-            "min-w-32 border-transparent shadow-none",
-            "hover:border-input data-popup-open:border-input",
-          )}
-          size="sm"
-        >
-          <SelectValue>{t(`organization.roles.${memberRole}`)}</SelectValue>
-        </SelectTrigger>
-        <SelectPopup alignItemWithTrigger={false} className="min-w-72">
-          {roleData.map((item) => (
-            <SelectItem key={item.value} label={item.label} value={item.value}>
-              <div className="flex flex-col gap-0.5 py-0.5">
-                <span>{item.label}</span>
-                <span className="text-muted-foreground text-xs leading-tight">
-                  {item.description}
-                </span>
-              </div>
-            </SelectItem>
-          ))}
-        </SelectPopup>
-      </Select>
-
-      <DestructiveConfirmDialog
-        cancelLabel={t("common.cancel")}
-        confirmation={memberEmail}
-        confirmLabel={t("organization.members.changeRole")}
-        description={t("organization.members.confirmRoleChangeDescription", {
-          email: memberEmail,
-          oldRole: t(`organization.roles.${memberRole}`),
-          newRole: pendingRole ? t(`organization.roles.${pendingRole}`) : "",
-        })}
-        inputLabel={t("organization.members.typeEmailToConfirm", {
-          email: memberEmail,
-        })}
-        loading={updateRole.isPending}
-        onConfirm={handleConfirm}
-        onOpenChange={(open) => {
-          if (!open) {
-            setPendingRole(null);
-          }
-        }}
-        open={pendingRole !== null}
-        title={t("organization.members.confirmRoleChangeTitle")}
-      />
-    </>
-  );
-};
 
 type SortableHeadProps = {
   label: string;
