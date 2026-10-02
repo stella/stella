@@ -745,6 +745,13 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (
+            query.includes("pg_try_advisory_lock") ||
+            query.includes("pg_advisory_unlock") ||
+            query.includes("pg_locks")
+          ) {
+            return [{ acquired: true }];
+          }
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
