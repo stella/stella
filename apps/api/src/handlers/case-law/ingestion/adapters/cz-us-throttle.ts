@@ -1,3 +1,4 @@
+// parser-output-unchanged: The request-limit import now resolves directly to its existing owner; limit values and parsed output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";

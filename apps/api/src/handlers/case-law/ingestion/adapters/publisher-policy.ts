@@ -1,4 +1,4 @@
-// parser-output-unchanged: gate definitions moved to their shared owner; request pacing and response parsing are unchanged.
+// parser-output-unchanged: Gate re-exports are removed; callers read the same shared definitions directly, preserving pacing and parsed output.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
