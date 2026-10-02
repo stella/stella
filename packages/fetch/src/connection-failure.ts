@@ -1,3 +1,4 @@
+// parser-output-unchanged: pure error classification does not alter fetch execution or successful records.
 const CONNECTION_ERROR_CODES = new Set([
   "ConnectionRefused",
   "FailedToOpenSocket",

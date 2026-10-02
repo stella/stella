@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch execution is unchanged; only a pure ingestion classification predicate is re-exported.
 export { isConnectionFailure } from "./connection-failure";
 
 export type Fetcher = (
