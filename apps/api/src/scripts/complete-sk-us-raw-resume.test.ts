@@ -427,16 +427,20 @@ test("torn-tail repair preserves every complete byte beyond the journal read win
   const sourceId = createSafeId<"caseLawSource">();
   const checkpointPath = path.join(directory, "checkpoint.json");
   const journalPath = `${checkpointPath}.outcomes.jsonl`;
-  const records = Array.from({ length: 400 }, () => ({
-    version: 1,
-    sourceId,
-    cursor: {
-      id: createSafeId<"caseLawDecision">(),
-      createdAt: "2026-03-01T00:00:00.000001Z",
-    },
-    outcome: "completed",
-    disposition: "terminal",
-  }));
+  const records = Array.from(
+    { length: 400 },
+    () =>
+      ({
+        version: 1,
+        sourceId,
+        cursor: {
+          id: createSafeId<"caseLawDecision">(),
+          createdAt: "2026-03-01T00:00:00.000001Z",
+        },
+        outcome: "completed",
+        disposition: "terminal",
+      }) as const,
+  );
   const prefix = records
     .map((record) => `${JSON.stringify(record)}\n`)
     .join("");
@@ -450,8 +454,10 @@ test("torn-tail repair preserves every complete byte beyond the journal read win
     cursor,
     outcome: "retry_later",
     disposition: "retryable",
-  };
-  expect(Buffer.byteLength(prefix)).toBeGreaterThan(96 * 1024);
+  } as const;
+  // Larger than the 64 KiB tail the repair reads, so it must keep bytes it
+  // never looked at.
+  expect(Buffer.byteLength(prefix)).toBeGreaterThan(64 * 1024);
   try {
     for (const fragmentLength of [1, 37, 1024]) {
       const torn = `${prefix}${"x".repeat(fragmentLength)}`;
