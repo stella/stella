@@ -22,6 +22,13 @@ const stepSchema = v.looseObject({
   env: v.optional(v.record(v.string(), v.string())),
 });
 const workflowSchema = v.object({
+  "run-name": v.optional(v.string()),
+  concurrency: v.optional(
+    v.object({
+      group: v.string(),
+      "cancel-in-progress": v.union([v.boolean(), v.string()]),
+    }),
+  ),
   jobs: v.record(
     v.string(),
     v.looseObject({
@@ -120,6 +127,107 @@ const selected = (condition: string | undefined, value: object) => {
     );
   return new Script(`Boolean(${expression})`).runInNewContext(value);
 };
+const templateValue = (template: string, value: object) =>
+  template.replaceAll(/\$\{\{([\s\S]*?)\}\}/gu, (_, expression: string) =>
+    v.parse(v.string(), new Script(`(${expression})`).runInNewContext(value)),
+  );
+
+type ConcurrencyContextOptions = {
+  event: (typeof events)[number];
+  variable: string;
+  eventSha: string;
+  testedSha: string;
+};
+const concurrencyContext = ({
+  event,
+  variable,
+  eventSha,
+  testedSha,
+}: ConcurrencyContextOptions) => {
+  const value = context({ event, variable, queueDepth: "full" });
+  return {
+    ...value,
+    github: { ...value.github, sha: eventSha },
+    inputs: {
+      ...value.inputs,
+      sha: event.event === "workflow_dispatch" ? testedSha : "",
+    },
+    format: (template: string, sha: string) =>
+      template.replace("{0}", () => sha),
+  };
+};
+
+const assertMainConcurrency = (workflow: typeof main) => {
+  const concurrency = workflow.concurrency;
+  const runName = workflow["run-name"];
+  if (!concurrency || !runName) {
+    panic("Main heavy workflow requires concurrency and a run name");
+  }
+  expect(
+    concurrency["cancel-in-progress"],
+    "running heavy work is never cancelled",
+  ).toBe(false);
+  const shaA = "a".repeat(40);
+  const shaB = "b".repeat(40);
+  for (const event of events.filter(({ event: eventName }) =>
+    mainTriggered(eventName),
+  )) {
+    for (const variable of ["", "full", "thin"]) {
+      const groups = [];
+      for (const eventSha of [shaA, shaB]) {
+        let testedSha = eventSha;
+        if (event.event === "workflow_dispatch") {
+          testedSha = eventSha === shaA ? shaB : shaA;
+        }
+        const value = concurrencyContext({
+          event,
+          variable,
+          eventSha,
+          testedSha,
+        });
+        const group = templateValue(concurrency.group, value);
+        const coalesced =
+          event.event === "push" &&
+          variable === "thin" &&
+          !event.message.startsWith("chore: release v");
+        expect(group, `${event.event}/${event.message}/${variable}/group`).toBe(
+          coalesced ? "main-heavy-push" : `main-heavy-${testedSha}`,
+        );
+        expect(
+          templateValue(runName, value),
+          `${event.event}/tested SHA title`,
+        ).toBe(`Main heavy suites ${testedSha}`);
+        if (
+          event.event === "push" &&
+          event.message === "ordinary" &&
+          variable !== "thin"
+        ) {
+          expect(
+            selected(workflow.jobs["validate"]?.if, value),
+            `${variable}/ordinary push skipped`,
+          ).toBe(false);
+        }
+        groups.push(group);
+      }
+      const [first, second] = groups;
+      if (
+        event.event === "push" &&
+        event.message === "ordinary" &&
+        variable === "thin"
+      ) {
+        expect(first, "ordinary thin pushes share one pending group").toBe(
+          second,
+        );
+      } else {
+        expect(
+          first,
+          `${event.event}/${event.message}/${variable}/distinct SHAs`,
+        ).not.toBe(second);
+      }
+    }
+  }
+};
+
 let baselineWorkflows: { ci: typeof ci; main: typeof main } | undefined;
 const original = (name: "ci.yml" | "main-heavy.yml") => {
   if (baselineWorkflows) {
@@ -466,6 +574,27 @@ test("ignoring queue depth in the result gate breaks intended thin skips", () =>
       script: `QUEUE_DEPTH=full\n${outcome.run}`,
     }),
   ).toBe(1);
+}, 30_000);
+
+test("thin ordinary pushes coalesce pending work while releases, schedules and dispatches stay per SHA", () => {
+  assertMainConcurrency(main);
+}, 30_000);
+
+test("dropping push coalescing or cancelling running heavy work violates the concurrency contract", () => {
+  const perSha = structuredClone(main);
+  const cancelling = structuredClone(main);
+  if (!perSha.concurrency || !cancelling.concurrency) {
+    panic("Missing main heavy concurrency");
+  }
+  perSha.concurrency.group = `main-heavy-\${{ inputs.sha || github.sha }}`;
+  expect(perSha.concurrency.group).not.toBe(main.concurrency?.group);
+  expect(() => assertMainConcurrency(perSha)).toThrow(
+    "push/ordinary/thin/group",
+  );
+  cancelling.concurrency["cancel-in-progress"] = true;
+  expect(() => assertMainConcurrency(cancelling)).toThrow(
+    "running heavy work is never cancelled",
+  );
 }, 30_000);
 
 test("running main heavy on ordinary full-depth pushes violates the scheduling contract", () => {

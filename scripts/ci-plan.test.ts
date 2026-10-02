@@ -20,6 +20,7 @@ import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
 import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { GENERATORS } from "./generated-files";
+import { mainHeavyJobs } from "./main-heavy-plan";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -3091,10 +3092,15 @@ const queueOnlyJobs = v.parse(
 
 // Evaluate the actual predicate with a successful trusted plan. Unfamiliar
 // expression syntax fails closed instead of silently evading parity.
-type DepthContext = { event: Event; depth: SuiteDepth; heavyOnly?: boolean };
+type DepthContext = {
+  event: Event;
+  depth: SuiteDepth;
+  heavyOnly?: boolean;
+  queueDepth?: "full" | "thin";
+};
 const runsAtDepth = (
   condition: string,
-  { event, depth, heavyOnly }: DepthContext,
+  { event, depth, heavyOnly, queueDepth = "full" }: DepthContext,
 ) => {
   const expression = condition
     .replaceAll(/\balways\(\)/gu, "true")
@@ -3114,6 +3120,8 @@ const runsAtDepth = (
           actual = event;
         } else if (context === "needs.ci-plan.outputs.suite_depth") {
           actual = depth;
+        } else if (context === "needs.ci-plan.outputs.queue_depth") {
+          actual = event === EVENT.mergeGroup ? queueDepth : "full";
         } else if (
           context === "needs.ci-plan.outputs.heavy_web_build_required"
         ) {
@@ -3331,6 +3339,43 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
       depth: SUITE_DEPTH.fast,
     }),
   ).toThrow("Unknown CI predicate syntax");
+});
+
+test("thin merge groups intentionally skip heavy jobs while full parity stays enforced", () => {
+  const heavy = new Set(mainHeavyJobs({ jobs: ciJobs }));
+  for (const { name, condition } of parityJobs) {
+    const full = runsAtDepth(condition, {
+      event: EVENT.mergeGroup,
+      depth: SUITE_DEPTH.full,
+    });
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "full",
+      }),
+      name,
+    ).toBe(full);
+    expect(
+      runsAtDepth(condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+        queueDepth: "thin",
+      }),
+      name,
+    ).toBe(heavy.has(name) ? false : full);
+    for (const event of [EVENT.pullRequest, EVENT.workflowDispatch]) {
+      expect(
+        runsAtDepth(condition, {
+          event,
+          depth: SUITE_DEPTH.fast,
+          queueDepth: "thin",
+        }),
+        name,
+      ).toBe(runsAtDepth(condition, { event, depth: SUITE_DEPTH.fast }));
+    }
+  }
+  expect(parityViolations(parityJobs, queueOnlyJobs)).toEqual([]);
 });
 
 test("parity treats absent or false heavy-only input as ordinary event execution", () => {

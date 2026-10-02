@@ -14,7 +14,9 @@ on:
         type: string
 
 concurrency:
-  group: main-heavy-${{ inputs.sha || github.sha }}
+  # Ordinary thin-mode pushes share one running and one replaceable pending run.
+  # Release merges and explicit historical dispatches retain their SHA identity.
+  group: "${{ github.event_name == 'push' && vars.MERGE_QUEUE_DEPTH == 'thin' && !startsWith(github.event.head_commit.message, 'chore: release v') && 'main-heavy-push' || format('main-heavy-{0}', inputs.sha || github.sha) }}"
   cancel-in-progress: false
 
 permissions: {}
