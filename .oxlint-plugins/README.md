@@ -285,7 +285,7 @@ implies a hazard that is gone.
 - Record the retirement in the ownership row that replaced it, naming the rule:
   the row is then the only place a reader has to look.
 
-- [`drizzle`](./drizzle.ts) (`enforce-delete-with-where`, `enforce-update-with-where`): requires `.where(...)` on each configured Drizzle mutation chain; unrelated preceding or enclosing chains cannot supply its filter. Receiver aliases and separately stored builders are outside this check.
+- [`drizzle`](./drizzle.ts) (`enforce-delete-with-where`, `enforce-update-with-where`, `no-direct-entity-reparent`): requires `.where(...)` on each configured Drizzle mutation chain; unrelated preceding or enclosing chains cannot supply its filter. Receiver aliases and separately stored builders are outside this check. Direct `entities.parentId` updates belong to `moveEntityHandler`, the serialized ancestry owner; the API rule flags inline parent writes outside that module. Separately stored update payloads and raw SQL remain outside this syntax check.
 
 ## Adding or changing a rule
 
