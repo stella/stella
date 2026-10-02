@@ -120,11 +120,17 @@ const failureMessages = (error: unknown): string => {
   return `${error.message} ${"cause" in error ? failureMessages(error.cause) : ""}`;
 };
 
-const expectRejectedStatement = async (
-  tx: Transaction,
-  statement: ReturnType<typeof sql>,
-  message: string,
-) => {
+type RejectedStatementOptions = {
+  tx: Transaction;
+  statement: ReturnType<typeof sql>;
+  message: string;
+};
+
+const expectRejectedStatement = async ({
+  tx,
+  statement,
+  message,
+}: RejectedStatementOptions) => {
   const result = await Result.tryPromise(async () => {
     await tx.transaction(async (savepoint) => {
       await savepoint.execute(statement);
@@ -251,28 +257,28 @@ if (!databaseUrl || !runPostgresTests) {
             sql`DELETE FROM ${relation} WHERE organization_id = ${ORG_B} RETURNING *`,
           ),
         ).toEqual([]);
-        await expectRejectedStatement(
+        await expectRejectedStatement({
           tx,
-          insertRow({
+          statement: insertRow({
             table,
             organization: ORG_B,
             contact: CONTACT_B,
             entry: "denied",
             event: EVENT_A,
           }),
-          "row-level security",
-        );
-        await expectRejectedStatement(
+          message: "row-level security",
+        });
+        await expectRejectedStatement({
           tx,
-          insertRow({
+          statement: insertRow({
             table,
             organization: ORG_A,
             contact: CONTACT_B,
             entry: "mismatched",
             event: EVENT_A,
           }),
-          "foreign key constraint",
-        );
+          message: "foreign key constraint",
+        });
         expect(
           await tx.execute(
             insertRow({
@@ -350,11 +356,12 @@ if (!databaseUrl || !runPostgresTests) {
           sql.raw(`ALTER TABLE public.${table} OWNER TO ${OWNER}`),
         );
       }
-      const rowFor = (
-        table: (typeof tables)[number],
-        organization: string,
-        contact: string,
-      ) => {
+      type RowOptions = {
+        table: (typeof tables)[number];
+        organization: string;
+        contact: string;
+      };
+      const rowFor = ({ table, organization, contact }: RowOptions) => {
         switch (table) {
           case "sanctions_contact_marks":
             return sql`INSERT INTO public.sanctions_contact_marks (organization_id, contact_id) VALUES (${organization}, ${contact}) RETURNING *`;
@@ -369,7 +376,9 @@ if (!databaseUrl || !runPostgresTests) {
         }
       };
       for (const table of tables) {
-        await tx.execute(rowFor(table, ORG_B, CONTACT_B));
+        await tx.execute(
+          rowFor({ table, organization: ORG_B, contact: CONTACT_B }),
+        );
       }
       await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
       await tx.execute(
@@ -394,14 +403,20 @@ if (!databaseUrl || !runPostgresTests) {
             sql`DELETE FROM ${relation} WHERE organization_id = ${ORG_B} RETURNING *`,
           ),
         ).toEqual([]);
-        await expectRejectedStatement(
+        await expectRejectedStatement({
           tx,
-          rowFor(table, ORG_B, CONTACT_B),
-          "row-level security",
-        );
-        expect(await tx.execute(rowFor(table, ORG_A, CONTACT_A))).toHaveLength(
-          1,
-        );
+          statement: rowFor({
+            table,
+            organization: ORG_B,
+            contact: CONTACT_B,
+          }),
+          message: "row-level security",
+        });
+        expect(
+          await tx.execute(
+            rowFor({ table, organization: ORG_A, contact: CONTACT_A }),
+          ),
+        ).toHaveLength(1);
         // The worker's explicit organization predicate and direct role-level read agree.
         expect(
           await tx.execute(
@@ -411,11 +426,11 @@ if (!databaseUrl || !runPostgresTests) {
         expect(
           await tx.execute(sql`SELECT organization_id FROM ${relation}`),
         ).toEqual([{ organization_id: ORG_A }]);
-        await expectRejectedStatement(
+        await expectRejectedStatement({
           tx,
-          sql`UPDATE ${relation} SET organization_id = ${ORG_B} WHERE organization_id = ${ORG_A}`,
-          "row-level security",
-        );
+          statement: sql`UPDATE ${relation} SET organization_id = ${ORG_B} WHERE organization_id = ${ORG_A}`,
+          message: "row-level security",
+        });
         expect(
           await tx.execute(
             sql`UPDATE ${relation} SET generation = generation + 1 WHERE organization_id = ${ORG_A} RETURNING generation::text AS generation`,
@@ -427,26 +442,30 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         ).toHaveLength(1);
       }
-      await expectRejectedStatement(
+      await expectRejectedStatement({
         tx,
-        rowFor("sanctions_contact_marks", ORG_A, CONTACT_B),
-        "foreign key constraint",
-      );
-      await expectRejectedStatement(
+        statement: rowFor({
+          table: "sanctions_contact_marks",
+          organization: ORG_A,
+          contact: CONTACT_B,
+        }),
+        message: "foreign key constraint",
+      });
+      await expectRejectedStatement({
         tx,
-        sql`INSERT INTO public.sanctions_edition_fanouts (source_id) VALUES (${SOURCE})`,
-        "permission denied",
-      );
-      await expectRejectedStatement(
+        statement: sql`INSERT INTO public.sanctions_edition_fanouts (source_id) VALUES (${SOURCE})`,
+        message: "permission denied",
+      });
+      await expectRejectedStatement({
         tx,
-        sql`UPDATE public.sanctions_edition_fanouts SET state = 'complete' WHERE source_id = ${SOURCE}`,
-        "permission denied",
-      );
-      await expectRejectedStatement(
+        statement: sql`UPDATE public.sanctions_edition_fanouts SET state = 'complete' WHERE source_id = ${SOURCE}`,
+        message: "permission denied",
+      });
+      await expectRejectedStatement({
         tx,
-        sql`DELETE FROM public.sanctions_edition_fanouts WHERE source_id = ${SOURCE}`,
-        "permission denied",
-      );
+        statement: sql`DELETE FROM public.sanctions_edition_fanouts WHERE source_id = ${SOURCE}`,
+        message: "permission denied",
+      });
       expect(
         await tx.execute(
           sql`SELECT source_id FROM public.sanctions_edition_fanouts WHERE source_id = ${SOURCE}`,
@@ -460,9 +479,11 @@ if (!databaseUrl || !runPostgresTests) {
             sql`SELECT organization_id FROM ${relation} WHERE organization_id = ${ORG_B}`,
           ),
         ).toEqual([{ organization_id: ORG_B }]);
-        expect(await tx.execute(rowFor(table, ORG_A, CONTACT_A))).toHaveLength(
-          1,
-        );
+        expect(
+          await tx.execute(
+            rowFor({ table, organization: ORG_A, contact: CONTACT_A }),
+          ),
+        ).toHaveLength(1);
         expect(
           await tx.execute(
             sql`UPDATE ${relation} SET generation = generation + 1 WHERE organization_id = ${ORG_B} RETURNING generation::text AS generation`,
@@ -474,6 +495,85 @@ if (!databaseUrl || !runPostgresTests) {
           ),
         ).toHaveLength(1);
       }
+    });
+  }, 120_000);
+
+  test("screening history cannot be changed or deleted by the application role", async () => {
+    await withCommittedMonitoring(databaseUrl, async (tx) => {
+      await asApplication(tx);
+      const statement = insertRow({
+        table: "sanctions_screening_events",
+        organization: ORG_A,
+        contact: CONTACT_A,
+        entry: "history",
+        event: EVENT_A,
+      });
+      const before = await tx.execute(statement);
+      expect(before).toHaveLength(1);
+      expect(
+        await tx.execute(
+          sql`UPDATE public.sanctions_screening_events SET old_match = '{"name":"Changed"}', new_match = '{"name":"Changed"}', reason = 'edited', type = 'changed' WHERE id = ${EVENT_A} RETURNING *`,
+        ),
+      ).toEqual([]);
+      expect(
+        await tx.execute(
+          sql`DELETE FROM public.sanctions_screening_events WHERE id = ${EVENT_A} RETURNING *`,
+        ),
+      ).toEqual([]);
+      expect(
+        await tx.execute(
+          sql`SELECT * FROM public.sanctions_screening_events WHERE id = ${EVENT_A}`,
+        ),
+      ).toEqual(before);
+      await asOwner(tx);
+      expect(
+        await tx.execute(
+          insertRow({
+            table: "sanctions_screening_events",
+            organization: ORG_B,
+            contact: CONTACT_B,
+            entry: "owner-history",
+            event: EVENT_B,
+          }),
+        ),
+      ).toHaveLength(1);
+      expect(
+        await tx.execute(
+          sql`SELECT * FROM public.sanctions_screening_events WHERE id = ${EVENT_A}`,
+        ),
+      ).toEqual(before);
+      expect(
+        await tx.execute(
+          sql`UPDATE public.sanctions_screening_events SET reason = 'owner-edit' WHERE id = ${EVENT_A} RETURNING *`,
+        ),
+      ).toEqual([]);
+      expect(
+        await tx.execute(
+          sql`DELETE FROM public.sanctions_screening_events WHERE id = ${EVENT_A} RETURNING *`,
+        ),
+      ).toEqual([]);
+      expect(
+        await tx.execute(
+          sql`SELECT * FROM public.sanctions_screening_events WHERE id = ${EVENT_A}`,
+        ),
+      ).toEqual(before);
+      // RESET returns to CI's administrative identity; this bypass is intentional
+      // and is distinct from the forced-RLS, non-superuser owner checked above.
+      await tx.execute(sql`RESET ROLE`);
+      const administrator = await tx.execute<{ bypass: boolean }>(
+        sql`SELECT rolsuper OR rolbypassrls AS bypass FROM pg_roles WHERE rolname = current_user`,
+      );
+      expect(administrator).toEqual([{ bypass: true }]);
+      expect(
+        await tx.execute(
+          sql`UPDATE public.sanctions_screening_events SET reason = 'administrative' WHERE id = ${EVENT_A} RETURNING *`,
+        ),
+      ).toHaveLength(1);
+      expect(
+        await tx.execute(
+          sql`DELETE FROM public.sanctions_screening_events WHERE id = ${EVENT_A} RETURNING *`,
+        ),
+      ).toHaveLength(1);
     });
   }, 120_000);
 }
