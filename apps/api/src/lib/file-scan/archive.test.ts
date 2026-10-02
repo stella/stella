@@ -135,7 +135,7 @@ const NAMES = [
 ] as const;
 
 const FILLER = fc
-  .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz <>/=\"'\n"), {
+  .array(fc.constantFrom(..."abcdefghijklmnopqrstuvwxyz <>/=\"'\n".split("")), {
     maxLength: 9000,
   })
   .map((chars) => chars.join(""));
