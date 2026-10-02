@@ -503,6 +503,19 @@ describe("generated imports", () => {
     expect(specifierCandidates("a/src/x.ts", "../generated/data.json")).toEqual(
       ["a/generated/data.json"],
     );
+    expect(specifierCandidates("a/src/x.ts", "./generated/y")).toEqual([
+      "a/src/generated/y.ts",
+      "a/src/generated/y.tsx",
+      "a/src/generated/y.d.ts",
+      "a/src/generated/y.js",
+      "a/src/generated/y.jsx",
+      "a/src/generated/y/index.ts",
+      "a/src/generated/y/index.tsx",
+      "a/src/generated/y/index.d.ts",
+      "a/src/generated/y/index.js",
+      "a/src/generated/y/index.jsx",
+      "a/src/generated/y",
+    ]);
   });
 
   test("the pack closure follows run chains and ignores other scripts", () => {
@@ -516,6 +529,14 @@ describe("generated imports", () => {
         c: "echo c",
       }),
     ).toEqual(new Set(["prepack", "build", "a", "b"]));
+    // `npm pack` also runs `prepare`; a `build` that no pack hook reaches never
+    // runs during a clean pack, so it derives nothing for this check.
+    expect(
+      packScriptClosure({ prepare: "bun run gen", gen: "echo gen" }),
+    ).toEqual(new Set(["prepare", "gen"]));
+    expect(
+      packScriptClosure({ build: "bun run gen", gen: "echo gen" }),
+    ).toEqual(new Set());
     expect(generatorPackageScript(["bun", "scripts/x.ts"])).toBeNull();
     expect(generatorPackageScript(RUNTIME_GENERATOR.write)).toEqual({
       directory: CLI_DIRECTORY,

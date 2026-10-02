@@ -9,14 +9,17 @@ import {
 
 /**
  * A package source may import a generated module only when a fresh export of
- * the package can still compile: the module is tracked, or the package's own
- * prepack/build script chain derives it (a manifest `derived` generator run
- * through one of those scripts). Anything else compiles in a developer
+ * the package can still compile: the module is tracked, or a script that
+ * `npm pack` runs before packing (`prepack`, `prepare`, and anything they
+ * reach through `<runner> run <name>`) derives it (a manifest `derived`
+ * generator). Anything else compiles in a developer
  * checkout that happens to hold the file and fails in a clean pack.
  */
 
 const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".mjs"];
-const PACK_ROOT_SCRIPTS = ["prepack", "build"] as const;
+// The lifecycle scripts `npm pack` runs before it packs; `build` counts only
+// when one of them reaches it.
+const PACK_ROOT_SCRIPTS = ["prepack", "prepare"] as const;
 const SCRIPT_RUNNERS = new Set(["bun", "npm", "pnpm", "yarn"]);
 const SHELL_SEPARATORS = new Set(["&&", "||", ";", "|"]);
 
@@ -61,11 +64,18 @@ export const specifierCandidates = (
     case ".cjs":
       return [`${stem}.cts`, `${stem}.d.cts`, target];
     case "":
+      // Bundler resolution: the file forms, then the directory index forms.
       return [
         `${target}.ts`,
         `${target}.tsx`,
         `${target}.d.ts`,
+        `${target}.js`,
+        `${target}.jsx`,
         `${target}/index.ts`,
+        `${target}/index.tsx`,
+        `${target}/index.d.ts`,
+        `${target}/index.js`,
+        `${target}/index.jsx`,
         target,
       ];
     default:
@@ -84,7 +94,7 @@ const owningPackage = (file: string, tracked: ReadonlySet<string>): string => {
   return directory;
 };
 
-/** Scripts reachable from `prepack` and `build` through `<runner> run <name>`. */
+/** Scripts `npm pack` runs before packing, plus what they reach by name. */
 export const packScriptClosure = (
   scripts: Record<string, string>,
 ): Set<string> => {
