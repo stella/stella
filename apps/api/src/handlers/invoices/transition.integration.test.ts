@@ -144,7 +144,7 @@ describe("invoice transition integration", () => {
   test("preserves a manual number through edits after reverting to draft", async () => {
     const invoiceId = await seedInvoice({
       status: INVOICE_STATUS.DRAFT,
-      invoiceNumber: "MANUAL-001",
+      invoiceNumber: "REVERTED-001",
     });
     expect(await runTransition(invoiceId, "finalize")).toEqual({
       id: invoiceId,
@@ -152,14 +152,14 @@ describe("invoice transition integration", () => {
     expect(await runTransition(invoiceId, "revert_to_draft")).toEqual({
       id: invoiceId,
     });
-    await assertAssignedNumber(invoiceId, "MANUAL-001");
+    await assertAssignedNumber(invoiceId, "REVERTED-001");
     expect(await runTransition(invoiceId, "finalize")).toEqual({
       id: invoiceId,
     });
     const invoice = await testDb.query.invoices.findFirst({
       where: { id: { eq: invoiceId } },
     });
-    expect(invoice?.invoiceNumber).toBe("MANUAL-001");
+    expect(invoice?.invoiceNumber).toBe("REVERTED-001");
   });
 
   test("a draft that was never finalized can still change, clear and lose its number", async () => {
