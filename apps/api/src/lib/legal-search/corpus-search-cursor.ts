@@ -255,13 +255,12 @@ export const encodeCorpusSearchCursor = ({
 };
 
 /** What the segments before the id say about the ranking a page came from. */
-type CursorRanking = {
+type CursorRanking = Pick<
+  SearchCursor,
+  "windowStart" | "sort" | "rankingMode" | "excludedGroups"
+> & {
   dictionary: ExpansionDictionaryIdentity;
-  windowStart: number;
-  sort: SearchSort;
-  rankingMode?: SearchCursor["rankingMode"];
   target?: string | null;
-  excludedGroups?: readonly string[];
 };
 
 type OptionalSegments = {

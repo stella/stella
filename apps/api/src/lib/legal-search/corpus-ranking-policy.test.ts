@@ -448,7 +448,7 @@ test("with ranking OFF no client cursor can enter the BM25 path", async () => {
               score,
               id: "client-id",
               windowStart: window * 900,
-              rankingMode,
+              ...(rankingMode === undefined ? {} : { rankingMode }),
               sort: "relevance",
             },
           }),
@@ -503,12 +503,14 @@ test("ties below the cutoff page deterministically despite engine tie order", as
         const seen: string[] = [];
         let cursor: SearchCursor | null = null;
         for (let page = 0; page < Math.ceil(count / limit); page += 1) {
-          const result = await readCorpusIndexSearchPage({
-            ...rankingTestOptions,
-            limit,
-            rankingMode: "bm25-ratio",
-            parsedCursor: cursor,
-          });
+          // An explicit result type breaks the cursor/result inference cycle.
+          const result: Awaited<ReturnType<typeof readCorpusIndexSearchPage>> =
+            await readCorpusIndexSearchPage({
+              ...rankingTestOptions,
+              limit,
+              rankingMode: "bm25-ratio",
+              parsedCursor: cursor,
+            });
           seen.push(...result.pageRanked.map(({ id }) => id));
           for (const { id } of result.pageRanked) {
             expect(result.anchorIdById.get(id)).toBe("p0");
@@ -550,12 +552,14 @@ test("a tied cutoff falls back once and every position page keeps that mode", as
           page < Math.ceil(count / limit) + Math.ceil(count / 900) + 1;
           page += 1
         ) {
-          const result = await readCorpusIndexSearchPage({
-            ...rankingTestOptions,
-            limit,
-            rankingMode: "bm25-ratio",
-            parsedCursor: cursor,
-          });
+          // An explicit result type breaks the cursor/result inference cycle.
+          const result: Awaited<ReturnType<typeof readCorpusIndexSearchPage>> =
+            await readCorpusIndexSearchPage({
+              ...rankingTestOptions,
+              limit,
+              rankingMode: "bm25-ratio",
+              parsedCursor: cursor,
+            });
           seen.push(...result.pageRanked.map(({ id }) => id));
           cursor = result.nextCursor;
           if (cursor === null) {
