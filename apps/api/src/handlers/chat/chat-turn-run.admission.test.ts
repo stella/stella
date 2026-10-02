@@ -40,6 +40,7 @@ describe("chat run admission follows owned settlement", () => {
         },
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
         owner: {
@@ -115,6 +116,7 @@ describe("chat run admission follows owned settlement", () => {
           await run.settle(async () => {
             persisted += 1;
             await Promise.resolve();
+            return { type: "stored", outcome: { type: "completed" } };
           });
         },
       });
@@ -159,6 +161,7 @@ describe("chat run admission follows owned settlement", () => {
       },
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
@@ -183,6 +186,7 @@ describe("chat run admission follows owned settlement", () => {
         persistenceStarted.resolve(undefined);
         await persistenceMayFinish.promise;
         persisted += 1;
+        return { type: "stored", outcome: { type: "completed" } };
       });
       yield* [];
     };
@@ -239,6 +243,7 @@ describe("chat run admission follows owned settlement", () => {
       },
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
@@ -289,6 +294,7 @@ describe("chat run admission follows owned settlement", () => {
         await run.settle(async () => {
           persisted += 1;
           persistenceFinished.resolve(undefined);
+          return { type: "stored", outcome: { type: "completed" } };
         });
       },
       processor: new StreamProcessor(),
@@ -360,6 +366,7 @@ describe("chat run admission follows owned settlement", () => {
         checkpoint,
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         ownership: new ChatTurnOwnership(),
         owner: {
           indexThread: async () => await Promise.resolve(),
@@ -472,6 +479,7 @@ describe("chat run admission follows owned settlement", () => {
         checkpoint,
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
         owner: {
@@ -520,6 +528,7 @@ describe("chat run admission follows owned settlement", () => {
             await run.settle(async () => {
               discardedPersistence += 1;
               await Promise.resolve();
+              return { type: "stored", outcome: { type: "completed" } };
             });
           },
           processor: new StreamProcessor(),
@@ -625,6 +634,7 @@ describe("chat run admission follows owned settlement", () => {
       admission,
       connectors: undefined,
       deadlineMs,
+      mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       waitForUpstream: async <T>(
@@ -670,6 +680,7 @@ describe("chat run admission follows owned settlement", () => {
         await run.settle(async () => {
           persisted += 1;
           await Promise.resolve();
+          return { type: "stored", outcome: { type: "completed" } };
         });
         yield* [];
       } finally {

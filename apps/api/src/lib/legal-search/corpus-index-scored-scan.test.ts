@@ -313,6 +313,7 @@ const readFixturePage = async (
 ) => {
   active = fixture;
   return await readCorpusIndexSearchPage({
+    observer: "unobserved",
     cluster: "q09",
     indexId: "case_law_v5_cs_sk",
     query: "text:fixture",

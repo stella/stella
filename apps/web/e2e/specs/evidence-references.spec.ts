@@ -272,7 +272,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       ).toBeVisible({ timeout: 45_000 });
 
       await page
-        .locator('[aria-label="Document content"]')
+        .locator('[aria-label="Document content"][contenteditable="true"]')
         .press("Control+End");
       await page.keyboard.type(": Faktura");
       await expect(
@@ -333,7 +333,7 @@ for (const locale of ["cs", "en", "ar"] as const) {
       expect((await sourceRequest).ok()).toBe(true);
 
       await page
-        .locator('[aria-label="Document content"]')
+        .locator('[aria-label="Document content"][contenteditable="true"]')
         .press("Control+End");
       await evidenceButton.click();
       await reloadedDialog

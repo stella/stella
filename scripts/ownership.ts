@@ -554,6 +554,11 @@ export const OWNERSHIP = [
             "TTL'd shared action leases; admission fails closed when Valkey is unreachable.",
         },
         {
+          path: "apps/api/src/lib/rate-limit/mcp-read-fence.ts",
+          reason:
+            "TTL'd shared emitted-byte windows; authenticated reads fail closed when Valkey is unreachable.",
+        },
+        {
           path: "apps/api/src/lib/rate-limit/auth-storage.ts",
           reason:
             "TTL'd rate-limit counters; degrades to a per-process fallback map when Valkey is unreachable.",

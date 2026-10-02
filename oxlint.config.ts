@@ -953,6 +953,7 @@ export default defineConfig({
       },
     ],
     "no-nanoid/no-nanoid": "error",
+    "confine-server-reads/confine-server-reads": "error",
     "no-direct-matter-glyph/no-direct-matter-glyph": "error",
     "no-direct-entity-glyph/no-direct-entity-glyph": "error",
     "no-direct-lucide-import/no-direct-lucide-import": "error",
@@ -1232,6 +1233,7 @@ export default defineConfig({
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
+    "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
     "./.oxlint-plugins/no-secret-in-log-sink.ts",
     "./.oxlint-plugins/no-raw-api-url.ts",
@@ -1814,7 +1816,11 @@ export default defineConfig({
       // Repository and workspace tooling: CLIs that print reports, plus the
       // on-demand eval runs. Anchored so `apps/api/src/scripts`, which ships
       // as runtime workers and backfills, keeps the product rules.
-      files: [...toolingScriptFiles, "apps/*/evals/**"],
+      files: [
+        ...toolingScriptFiles,
+        "apps/*/evals/**",
+        "packages/property-testing/src/index.ts",
+      ],
       rules: {
         "no-console": "off",
         // `noPropertyAccessFromIndexSignature` requires bracket access on the

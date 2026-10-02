@@ -1,44 +1,16 @@
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 
 import { env } from "@/api/env";
-import { failureSink } from "@/api/lib/observability/failure";
-import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { emitActionCostDropMetric } from "@/api/lib/observability/request-metrics";
 
 import { createObservationBuffer } from "./buffer";
 import { parseActionCostRates } from "./config";
 import type { ActionCostObservation, ActionCostRecorder } from "./context";
-import { createDropReporter } from "./drop-reporter";
+import { COST_FAILURE, drops } from "./observation-failure";
 
-class ActionCostObservationError extends TaggedError(
-  "ActionCostObservationError",
-)<{
-  message: string;
-  dropped: number;
-  cause?: unknown;
-}> {}
-const COST_FAILURE = failureSink({
-  event: "action_cost.observation_dropped",
-  expected: [],
-});
 const BUFFER_CAPACITY = 1024;
 const WRITE_BATCH_SIZE = 64;
 let recorder: ReturnType<typeof createRecorder> | undefined;
-
-const reportDrop = (dropped: number, cause?: unknown): void => {
-  emitActionCostDropMetric(dropped);
-  logger.warn("action_cost.observations_dropped", { dropped });
-  observeFailure(
-    new ActionCostObservationError({
-      message: "Action cost observations were dropped",
-      dropped,
-      cause,
-    }),
-    { sink: COST_FAILURE },
-  );
-};
-const drops = createDropReporter({ report: reportDrop });
 
 const createRecorder = () => {
   const estimates = parseActionCostRates(env.ACTION_COST_ESTIMATES);
@@ -88,6 +60,3 @@ export const flushActionCostRecords = async (): Promise<void> => {
 };
 
 export const reportMissingActionCostIdentity = (): void => drops.add(1);
-
-export const reportActionCostObservationFailure = (cause: unknown): void =>
-  drops.add(1, cause);

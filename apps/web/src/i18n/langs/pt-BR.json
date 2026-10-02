@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Resumo",
+      "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",
       "citedBy": "Citado por",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
