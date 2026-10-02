@@ -10,7 +10,6 @@ import {
   lte,
   lt,
   or,
-  notExists,
   sql,
   type SQL,
 } from "drizzle-orm";
@@ -286,36 +285,36 @@ const replaySelectionPredicate = (
         ),
         // Durable reservations are recovered through pendingBatch; the sweep
         // must not bypass a row's backoff or reselect a terminal receipt.
-        notExists(
-          tx
-            .select({ id: caseLawReplayBatches.id })
-            .from(caseLawReplayBatches)
-            .where(
-              and(
-                eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
-                eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
-                eq(
-                  caseLawReplayBatches.parserVersionTo,
-                  selection.currentParserVersion,
-                ),
+        // Scalar lookups keep each candidate bounded to its indexed receipt;
+        // an anti-join may otherwise materialize the entire source's receipts.
+        sql<boolean>`COALESCE((${tx
+          .select({ present: sql<boolean>`true` })
+          .from(caseLawReplayBatches)
+          .where(
+            and(
+              eq(caseLawReplayBatches.sourceId, caseLawDecisions.sourceId),
+              eq(caseLawReplayBatches.firstDecisionId, caseLawDecisions.id),
+              eq(
+                caseLawReplayBatches.parserVersionTo,
+                selection.currentParserVersion,
               ),
             ),
-        ),
-        notExists(
-          tx
-            .select({ id: caseLawReplayBlocked.decisionId })
-            .from(caseLawReplayBlocked)
-            .where(
-              and(
-                eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
-                eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
-                eq(
-                  caseLawReplayBlocked.parserVersionTo,
-                  selection.currentParserVersion,
-                ),
+          )
+          .limit(1)}), false) = false`,
+        sql<boolean>`COALESCE((${tx
+          .select({ present: sql<boolean>`true` })
+          .from(caseLawReplayBlocked)
+          .where(
+            and(
+              eq(caseLawReplayBlocked.sourceId, caseLawDecisions.sourceId),
+              eq(caseLawReplayBlocked.decisionId, caseLawDecisions.id),
+              eq(
+                caseLawReplayBlocked.parserVersionTo,
+                selection.currentParserVersion,
               ),
             ),
-        ),
+          )
+          .limit(1)}), false) = false`,
       );
     default:
       selection satisfies never;
