@@ -590,10 +590,15 @@ const sourceClauses = (statement: string): SqlSourceClause[] => {
     if (kind === "select") {
       scope.subquery = true;
     }
-    if (kind === "where") {scope.kind = "where";}
-    else if (kind.startsWith("group")) {scope.kind = "group";}
-    else if (kind === "on") {scope.kind = "on";}
-    else {scope.kind = null;}
+    if (kind === "where") {
+      scope.kind = "where";
+    } else if (kind.startsWith("group")) {
+      scope.kind = "group";
+    } else if (kind === "on") {
+      scope.kind = "on";
+    } else {
+      scope.kind = null;
+    }
   }
   const scope =
     scopes.at(-1) ?? panic("SQL predicate scanner lost its final scope");
