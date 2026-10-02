@@ -2,7 +2,8 @@ import { createFormatter, createTranslator } from "use-intl/core";
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 
-import { getFolioMessages } from "@stll/folio-react/messages";
+import folioEn from "@stll/folio-react/messages/en";
+import type { FolioLocale } from "@stll/folio-react/messages/locales";
 import {
   getUiLocaleDirection,
   isUiLocale,
@@ -65,6 +66,34 @@ export const messageLoaders = {
   "pt-BR": async () => (await import("@/i18n/langs/pt-BR.json")).default,
   sk: async () => (await import("@/i18n/langs/sk.json")).default,
 } as const satisfies Record<SupportedLanguage, MessageLoader>;
+
+// Every app language needs a folio editor catalog; a language folio does not
+// ship fails typecheck here instead of rendering English editor strings.
+type MissingFolioLocale = Exclude<SupportedLanguage, FolioLocale>;
+
+true satisfies MissingFolioLocale extends never ? true : never;
+
+type FolioCatalog = typeof folioEn;
+type FolioCatalogLoader = () => FolioCatalog | Promise<FolioCatalog>;
+
+// One module per locale keeps the other catalogs out of the eager graph; the
+// all-locales entry is banned in apps/web by oxlint.config.ts.
+export const folioMessageLoaders = {
+  en: () => folioEn,
+  ar: async () => (await import("@stll/folio-react/messages/ar")).default,
+  cs: async () => (await import("@stll/folio-react/messages/cs")).default,
+  de: async () => (await import("@stll/folio-react/messages/de")).default,
+  es: async () => (await import("@stll/folio-react/messages/es")).default,
+  et: async () => (await import("@stll/folio-react/messages/et")).default,
+  fr: async () => (await import("@stll/folio-react/messages/fr")).default,
+  hu: async () => (await import("@stll/folio-react/messages/hu")).default,
+  lt: async () => (await import("@stll/folio-react/messages/lt")).default,
+  lv: async () => (await import("@stll/folio-react/messages/lv")).default,
+  pl: async () => (await import("@stll/folio-react/messages/pl")).default,
+  "pt-BR": async () =>
+    (await import("@stll/folio-react/messages/pt-BR")).default,
+  sk: async () => (await import("@stll/folio-react/messages/sk")).default,
+} as const satisfies Record<SupportedLanguage, FolioCatalogLoader>;
 
 export const LANG_ENDONYMS = {
   en: "English",
@@ -160,24 +189,24 @@ const applyMessageDefaults = (
 };
 
 /**
- * The folio editor ships its own UI catalog (`@stll/folio-react/messages`)
+ * The folio editor ships its own UI catalog (`@stll/folio-react/messages/*`)
  * and reads the `folio.*` namespace from the app's IntlProvider. Merge the
  * package catalog under the app's own `folio.*` keys (the app wins on shared
  * keys, per the package's documented contract) so new editor strings resolve
  * at runtime without copying keys into the app language files.
  */
 const withFolioMessages = (
-  lang: SupportedLanguage,
   messages: LocaleMessages,
+  folioCatalog: FolioCatalog,
 ): LocaleMessages => {
   const folio = { ...messages.folio };
-  applyMessageDefaults(folio, getFolioMessages(lang).folio);
+  applyMessageDefaults(folio, folioCatalog.folio);
   return { ...messages, folio };
 };
 
 const defaultLanguage = detectLang();
 const defaultRegion = detectRegion();
-const defaultMessages = withFolioMessages("en", en);
+const defaultMessages = withFolioMessages(en, folioEn);
 
 /**
  * The statically bundled English messages. Server-rendered public pages
@@ -186,10 +215,17 @@ const defaultMessages = withFolioMessages("en", en);
  */
 export const bundledEnglishMessages = defaultMessages;
 
+// Both catalogs load in parallel and are merged before the store applies them,
+// so a language switch never renders English editor strings in between.
 export const loadLocaleMessages = async (
   lang: SupportedLanguage,
-): Promise<LocaleMessages> =>
-  withFolioMessages(lang, await messageLoaders[lang]());
+): Promise<LocaleMessages> => {
+  const [messages, folioCatalog] = await Promise.all([
+    messageLoaders[lang](),
+    folioMessageLoaders[lang](),
+  ]);
+  return withFolioMessages(messages, folioCatalog);
+};
 
 let translator = createTranslator({
   locale: "en",
