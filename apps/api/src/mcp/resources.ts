@@ -345,7 +345,13 @@ export const readMcpResource = async (
 
 export const scopeMcpResourceReferences = (
   text: string,
-  { mode, context }: { mode: McpMode; context?: McpFeatureAccessContext },
+  {
+    mode,
+    context,
+  }: {
+    mode: McpMode;
+    context?: McpFeatureAccessContext | undefined;
+  },
 ): string => {
   const hiddenUris = STATIC_RESOURCES.filter(
     (resource) => !isResourceServedInMode(resource, mode, context),

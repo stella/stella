@@ -388,13 +388,10 @@ export const toMcpTools = (
         inputSchema:
           hiddenIds.size === 0
             ? toWireInputSchema(inputSchema)
-            : {
-                ...scopeSchemaAnnotations(
-                  toWireInputSchema(inputSchema),
-                  hiddenIds,
-                ),
+            : toWireInputSchema({
+                ...scopeSchemaAnnotations(inputSchema, hiddenIds),
                 type: "object",
-              },
+              }),
         name,
         ...(outputContract === undefined
           ? {}
@@ -402,13 +399,13 @@ export const toMcpTools = (
               outputSchema:
                 hiddenIds.size === 0
                   ? outputContract.outputSchema
-                  : {
+                  : toWireInputSchema({
                       ...scopeSchemaAnnotations(
                         outputContract.outputSchema,
                         hiddenIds,
                       ),
                       type: "object",
-                    },
+                    }),
             }),
         title: annotations.title,
       };

@@ -1,4 +1,4 @@
-import type { QueryKey } from "@tanstack/react-query";
+import { QueryClient, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -37,6 +37,10 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
+import {
+  organizationSettingsKeys,
+  organizationSettingsOptions,
+} from "@/queries/organization-settings";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 
@@ -93,6 +97,15 @@ const KEY_TYPE_HAS_USER = "the key argument's type requires userId";
 
 // Keyed by handler path under apps/api/src/handlers.
 const PER_USER_READS: Record<string, PerUserRead> = {
+  "organization-settings/get.ts": {
+    kind: "keyed",
+    calls: ['api["organization-settings"].get'],
+    files: ["queries/organization-settings.ts"],
+    keys: () => [
+      organizationSettingsOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+    ],
+  },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
   "catalogue/list.ts": {
     kind: "keyed",
@@ -899,6 +912,37 @@ describe("per-user reads", () => {
 
     expect(unkeyed).toEqual([]);
   });
+});
+
+test("organization settings isolate caller capabilities by user and organization", () => {
+  const caller = { organizationId: ORG, userId: USER };
+  const colleague = { organizationId: ORG, userId: "colleague-probe" };
+  const otherOrganization = { organizationId: "other-org-probe", userId: USER };
+  const queryClient = new QueryClient();
+  const enabled = { capabilities: { fixture: { status: "enabled" } } };
+  const hidden = { capabilities: { fixture: { status: "hidden" } } };
+  queryClient.setQueryData(organizationSettingsKeys.byCaller(caller), enabled);
+  expect(
+    queryClient.getQueryData(organizationSettingsOptions(caller).queryKey),
+  ).toEqual(enabled);
+  expect(
+    queryClient.getQueryData(organizationSettingsOptions(colleague).queryKey),
+  ).toBeUndefined();
+  expect(
+    queryClient.getQueryData(
+      organizationSettingsOptions(otherOrganization).queryKey,
+    ),
+  ).toBeUndefined();
+  queryClient.setQueryData(
+    organizationSettingsKeys.byCaller(colleague),
+    hidden,
+  );
+  expect(
+    queryClient.getQueryData(organizationSettingsOptions(colleague).queryKey),
+  ).toEqual(hidden);
+  expect(
+    queryClient.getQueryData(organizationSettingsOptions(caller).queryKey),
+  ).toEqual(enabled);
 });
 
 describe("the per-user read scan", () => {

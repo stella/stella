@@ -70,7 +70,11 @@ export type ToolScope = (typeof MCP_ALL_RESOURCE_SCOPES)[number];
  * that flag is on (or the deployment is running in dev); see
  * `isMcpToolFeatureEnabled` in `gateway/list-tools.ts`.
  */
-export type McpToolFeatureFlag = Extract<keyof typeof env, `FEATURE_${string}`>;
+export type McpToolFeatureFlag = {
+  [
+    K in Extract<keyof typeof env, `FEATURE_${string}`>
+  ]: (typeof env)[K] extends boolean ? K : never;
+}[Extract<keyof typeof env, `FEATURE_${string}`>];
 
 /**
  * Closed set of reasons a tool is kept off the anonymized surface. No

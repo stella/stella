@@ -1,5 +1,3 @@
-import type { Tool } from "@modelcontextprotocol/server";
-
 import capabilityCatalog from "@stll/cli/capability-catalog.json";
 
 import {
@@ -52,7 +50,7 @@ export const scopeMcpDescriptorProse = (
     .join(" ");
 };
 
-export const containsHiddenMcpDescriptorId = (
+const containsHiddenMcpDescriptorId = (
   value: unknown,
   hiddenIds: ReadonlySet<string>,
 ): boolean => {
@@ -70,12 +68,10 @@ export const containsHiddenMcpDescriptorId = (
   return false;
 };
 
-type WireValue = NonNullable<Tool["inputSchema"]["properties"]>[string];
-
 export const scopeSchemaAnnotations = (
-  schema: Record<string, WireValue>,
+  schema: Record<string, unknown>,
   hiddenIds: ReadonlySet<string>,
-): Record<string, WireValue> =>
+): Record<string, unknown> =>
   Object.fromEntries(
     Object.entries(schema).flatMap(([key, value]) => {
       if (key === "description" && typeof value === "string") {
@@ -100,10 +96,10 @@ export const scopeSchemaAnnotations = (
       return [[key, scopeSchemaValue(value, hiddenIds)]];
     }),
   );
-export const scopeSchemaValue = (
-  value: WireValue,
+const scopeSchemaValue = (
+  value: unknown,
   hiddenIds: ReadonlySet<string>,
-): WireValue => {
+): unknown => {
   if (Array.isArray(value)) {
     return value.map((item) => scopeSchemaValue(item, hiddenIds));
   }

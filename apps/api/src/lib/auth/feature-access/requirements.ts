@@ -3,7 +3,7 @@ import type { FeatureId } from "@/api/lib/auth/feature-access/registry";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdvertisedSchemas } from "@/api/mcp/advertised-schema";
 
-export type FeatureResourceContext = {
+type FeatureResourceContext = {
   body: unknown;
   params: unknown;
   workspaceId?: SafeId<"workspace">;

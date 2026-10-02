@@ -60,7 +60,10 @@ export const unlistedToolNamesIn = (
  * so a shared hint (the report-a-bug step on an internal failure) is written
  * once, one step per sentence, and scoped here at the transport boundary.
  */
-type SurfaceScope = { mode: McpMode; context?: McpFeatureAccessContext };
+type SurfaceScope = {
+  mode: McpMode;
+  context?: McpFeatureAccessContext | undefined;
+};
 
 export const scopeHintToSurface = (
   hint: string,

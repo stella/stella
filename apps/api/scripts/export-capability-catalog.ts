@@ -1185,9 +1185,7 @@ const parseFeatureRequirement = (value: unknown) => {
   return { featureId: value["featureId"], type };
 };
 
-const buildCatalog = async (): Promise<BuildResult> => {
-  const { endpoints, files, importErrors } = await discoverSafeHandlers();
-  const errors: string[] = [];
+const readFeatureDeclarationSources = async () => {
   const featureSources = new Map<string, string>();
   for (const file of new Bun.Glob(
     "apps/api/{src,scripts}/**/*.{ts,tsx}",
@@ -1197,6 +1195,13 @@ const buildCatalog = async (): Promise<BuildResult> => {
     }
     featureSources.set(file, await Bun.file(path.join(REPO_ROOT, file)).text());
   }
+  return featureSources;
+};
+
+const buildCatalog = async (): Promise<BuildResult> => {
+  const { endpoints, files, importErrors } = await discoverSafeHandlers();
+  const errors: string[] = [];
+  const featureSources = await readFeatureDeclarationSources();
   assertFeatureAccessDeclarations({
     registry: FEATURE_REGISTRY,
     endpoints,

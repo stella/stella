@@ -16,7 +16,13 @@ import {
 } from "./feature-command-projection.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { generatedToolAnnotations } from "./generated/tool-annotations.js";
-import { cachePathFor, readCacheFile } from "./registry-cache.js";
+import {
+  CACHE_SCHEMA_VERSION,
+  DEFAULT_TTL_SECONDS,
+  cachePathFor,
+  readCacheFile,
+  writeCacheFile,
+} from "./registry-cache.js";
 import {
   refreshRegistryCache,
   requiresFeatureAccessRefresh,
@@ -218,7 +224,7 @@ for (const featureAccess of [undefined, hidden]) {
           serverUrl: undefined,
           token: undefined,
         }),
-        process,
+        process: { stdout: process.stdout, stderr: process.stderr },
       });
     } finally {
       writer.mockRestore();

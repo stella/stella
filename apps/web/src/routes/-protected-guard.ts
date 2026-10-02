@@ -62,7 +62,10 @@ export const loadProtectedContext = async ({
   ) {
     detached(
       context.queryClient.query({
-        ...organizationSettingsOptions(activeOrganizationId),
+        ...organizationSettingsOptions({
+          organizationId: activeOrganizationId,
+          userId: authContext.user.id,
+        }),
         staleTime: "static",
       }),
       "protected-layout.time-policy-prefetch",

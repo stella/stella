@@ -7,11 +7,10 @@ export type McpFeatureAccessBindings = {
   resources: ReadonlyMap<string, string>;
 };
 
-export type McpFeatureAccessContext = Pick<
-  McpRequestContext,
-  "featureAccessSnapshot" | "testDependencies"
-> &
-  Partial<Pick<McpRequestContext, "organizationId" | "userId">>;
+export type McpFeatureAccessContext = {
+  featureAccessSnapshot?: McpRequestContext["featureAccessSnapshot"];
+  testDependencies?: McpRequestContext["testDependencies"];
+} & Partial<Pick<McpRequestContext, "organizationId" | "userId">>;
 
 type McpDescriptorFeatureArgs = {
   context: McpFeatureAccessContext | undefined;

@@ -813,7 +813,7 @@ export const createMcpHttpRequestHandler = ({
           featureAccess: {
             capabilities: accessibleFeatureCapabilityIds(context),
             tools: tools
-              .filter((tool) => typeof tool._meta?.featureId === "string")
+              .filter((tool) => typeof tool._meta?.["featureId"] === "string")
               .map(({ name }) => name),
           },
         },

@@ -1,4 +1,4 @@
-export type FeatureDefinition = {
+type FeatureDefinition = {
   enrolment: "invitation" | "self-serve";
   ownership?: {
     handlerDirectories: readonly string[];

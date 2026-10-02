@@ -238,7 +238,9 @@ describe("feature descriptor discovery and admission", () => {
       expect(scopedDb).not.toHaveBeenCalled();
       if (kind === "enabled") {
         expect(
-          tools.find((tool) => tool.name === "list_matters")?._meta?.featureId,
+          tools.find((tool) => tool.name === "list_matters")?._meta?.[
+            "featureId"
+          ],
         ).toBe(featureId);
       }
     });
@@ -253,6 +255,9 @@ const modernRequest = (method: string, params: Record<string, unknown> = {}) =>
       authorization: "Bearer fixture",
       "content-type": "application/json",
       "mcp-method": method,
+      ...(typeof params["name"] === "string"
+        ? { "mcp-name": params["name"] }
+        : {}),
       "mcp-protocol-version": "2026-07-28",
     },
     body: JSON.stringify({
