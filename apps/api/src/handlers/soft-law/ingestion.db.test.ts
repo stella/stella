@@ -1431,7 +1431,7 @@ if (!databaseUrl || !enabled) {
               expect(versions).toHaveLength(1);
               expect(versions.at(0)).toMatchObject({
                 sequence: 1,
-                text: bodies.get(winner.url),
+                extractedText: bodies.get(winner.url),
                 observedTo: null,
               });
               const locators = await db
@@ -1523,7 +1523,7 @@ if (!databaseUrl || !enabled) {
           .from(softLawDocumentVersions)
           .where(eq(softLawDocumentVersions.documentId, original.id))
           .orderBy(softLawDocumentVersions.sequence);
-        expect(versions.map((version) => version.text)).toEqual([
+        expect(versions.map((version) => version.extractedText)).toEqual([
           winner.url,
           loser.url,
         ]);
@@ -1607,7 +1607,7 @@ if (!databaseUrl || !enabled) {
           .from(softLawDocumentVersions)
           .where(eq(softLawDocumentVersions.documentId, before.id))
           .orderBy(softLawDocumentVersions.sequence);
-        expect(versions.map((version) => version.text)).toEqual([
+        expect(versions.map((version) => version.extractedText)).toEqual([
           "original",
           "revised",
         ]);
