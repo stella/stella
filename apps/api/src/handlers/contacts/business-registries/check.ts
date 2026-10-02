@@ -11,6 +11,10 @@ import type { EntityCheckSubject } from "@stll/business-registries/entity-checks
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 // A POST body keeps a person's name and birth date out of URLs and access logs.
 const bodySchema = t.Object({
@@ -105,10 +109,15 @@ const businessRegistriesCheck = createSafeRootHandler(
     access: "read",
     body: bodySchema,
   },
-  async function* ({ body, request }) {
+  async function* ({ body, request, session }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const subject = yield* subjectFromBody(body);
     const result = yield* Result.await(
       runEntityCheckShared({
+        observer,
         check: body.check,
         subject,
         signal: request.signal,

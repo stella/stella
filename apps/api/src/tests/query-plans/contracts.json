@@ -21,6 +21,28 @@
       }
     ]
   },
+  "case-law.docket-family-identity": {
+    "scans": [
+      {
+        "position": "root/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_country_date_idx"
+      },
+      {
+        "position": "root/0/1/0/0",
+        "relation": "case_law_decisions",
+        "nodeType": "Index Only Scan",
+        "index": "case_law_decisions_citation_candidate_idx"
+      },
+      {
+        "position": "root/0/1/0/1",
+        "relation": "case_law_decision_identifiers",
+        "nodeType": "Bitmap Heap Scan",
+        "index": "case_law_decision_identifiers_lookup_idx"
+      }
+    ]
+  },
   "case-law.outstanding-document-probe": {
     "scans": [
       {

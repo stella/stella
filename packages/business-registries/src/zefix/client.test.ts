@@ -52,6 +52,7 @@ describe("Zefix client", () => {
 
     const controller = new AbortController();
     const lookup = lookupByUid("CHE-191.546.434", {
+      observer: "unobserved",
       signal: controller.signal,
     });
     expect(signal?.aborted).toBe(false);
@@ -86,7 +87,9 @@ describe("Zefix client", () => {
           { status: 404, headers: { "Content-Type": "application/json" } },
         ),
     );
-    expect(lookupByUid("191546434")).resolves.toBeNull();
+    expect(
+      lookupByUid("191546434", { observer: "unobserved" }),
+    ).resolves.toBeNull();
   });
 
   test("does not accept a fuzzy nonmatching hit for ID lookup", async () => {
@@ -109,7 +112,9 @@ describe("Zefix client", () => {
           { status: 200, headers: { "Content-Type": "application/json" } },
         ),
     );
-    expect(lookupByUid("191546434")).resolves.toBeNull();
+    expect(
+      lookupByUid("191546434", { observer: "unobserved" }),
+    ).resolves.toBeNull();
   });
 
   test("searches by name and forwards a bounded result count", async () => {
@@ -122,7 +127,10 @@ describe("Zefix client", () => {
         headers: { "Content-Type": "application/json" },
       });
     });
-    const companies = await searchByName("Swiss Re", { limit: 500 });
+    const companies = await searchByName("Swiss Re", {
+      observer: "unobserved",
+      limit: 500,
+    });
     expect(companies).toHaveLength(1);
     expect(String(companies.at(0)?.uid)).toBe("191546434");
     expect(JSON.parse(body)).toMatchObject({
@@ -132,10 +140,12 @@ describe("Zefix client", () => {
   });
 
   test("rejects invalid UIDs and empty names before fetch", () => {
-    expect(lookupByUid("CHE-191.546.435")).rejects.toBeInstanceOf(
-      ZefixValidationError,
-    );
-    expect(searchByName("  ")).rejects.toBeInstanceOf(ZefixValidationError);
+    expect(
+      lookupByUid("CHE-191.546.435", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ZefixValidationError);
+    expect(
+      searchByName("  ", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ZefixValidationError);
   });
 
   test("wraps malformed successful payloads", async () => {
@@ -146,7 +156,9 @@ describe("Zefix client", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    expect(lookupByUid("191546434")).rejects.toBeInstanceOf(ZefixAPIError);
+    expect(
+      lookupByUid("191546434", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ZefixAPIError);
   });
 
   test("rejects a successful response without a result list", async () => {
@@ -157,6 +169,8 @@ describe("Zefix client", () => {
           headers: { "Content-Type": "application/json" },
         }),
     );
-    expect(lookupByUid("191546434")).rejects.toBeInstanceOf(ZefixAPIError);
+    expect(
+      lookupByUid("191546434", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(ZefixAPIError);
   });
 });

@@ -1,6 +1,7 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isOptionalRecord, isRecord } from "../shared/guards.js";
 import { registryFetch } from "../shared/http.js";
+import type { RegistryClientOptions } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   CompaniesHouseAPIError,
@@ -36,7 +37,7 @@ const MAX_SEARCH_LIMIT = 100;
 // distinct `CompaniesHouseAuthError` so dispatch can translate it
 // into a clear "API key not configured" 502 instead of a 401 that the
 // end user cannot fix.
-export type CompaniesHouseClientConfig = {
+export type CompaniesHouseClientConfig = RegistryClientOptions & {
   /**
    * Companies House API key. Free, instant via
    * https://developer.company-information.service.gov.uk. Sent as the
@@ -185,16 +186,21 @@ const readUpstreamMessage = async (
   }
 };
 
+type CompaniesHouseGetOptions<T> = CompaniesHouseClientConfig & {
+  isExpectedShape: (value: unknown) => value is T;
+};
+
 const companiesHouseGet = async <T>(
   url: string,
-  apiKey: string,
-  isExpectedShape: (value: unknown) => value is T,
+  { isExpectedShape, ...config }: CompaniesHouseGetOptions<T>,
 ): Promise<T | null> =>
   await registryFetch({
     url,
+    observer: config.observer,
+    signal: config.signal,
     init: {
       headers: {
-        Authorization: buildAuthHeader(apiKey),
+        Authorization: buildAuthHeader(config.apiKey),
         Accept: "application/json",
       },
     },
@@ -265,11 +271,10 @@ export const lookupByCompanyNumber = async (
     );
   }
   const url = `${COMPANIES_HOUSE_BASE}/company/${encodeRegistryComponent(normalized)}`;
-  const raw = await companiesHouseGet<CompaniesHouseRawCompanyProfile>(
-    url,
-    config.apiKey,
-    isCompaniesHouseRawCompanyProfile,
-  );
+  const raw = await companiesHouseGet<CompaniesHouseRawCompanyProfile>(url, {
+    ...config,
+    isExpectedShape: isCompaniesHouseRawCompanyProfile,
+  });
   if (!raw) {
     return null;
   }
@@ -319,11 +324,10 @@ export const searchByName = async (
     start_index: String(startIndex),
   });
   const url = `${COMPANIES_HOUSE_BASE}/search/companies?${params.toString()}`;
-  const raw = await companiesHouseGet<CompaniesHouseRawSearchResponse>(
-    url,
-    config.apiKey,
-    isCompaniesHouseRawSearchResponse,
-  );
+  const raw = await companiesHouseGet<CompaniesHouseRawSearchResponse>(url, {
+    ...config,
+    isExpectedShape: isCompaniesHouseRawSearchResponse,
+  });
   if (!raw) {
     return [];
   }
@@ -390,8 +394,7 @@ export const lookupOfficersByCompanyNumber = async (
     const url = `${COMPANIES_HOUSE_BASE}/company/${encodeRegistryComponent(normalized)}/officers?${params.toString()}`;
     const raw = await companiesHouseGet<CompaniesHouseRawOfficersResponse>(
       url,
-      config.apiKey,
-      isCompaniesHouseRawOfficersResponse,
+      { ...config, isExpectedShape: isCompaniesHouseRawOfficersResponse },
     );
     if (!raw) {
       return collected;

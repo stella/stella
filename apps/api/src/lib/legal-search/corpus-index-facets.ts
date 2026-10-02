@@ -1,5 +1,7 @@
 import { Result } from "better-result";
 
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+
 import { LegalBrowseFacetsError } from "@/api/lib/legal-search/browse-facets";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -209,6 +211,7 @@ const defaultCorpusIndexBrowseFacetsDependencies = {
 
 export const corpusIndexBrowseFacets = async (
   query: LegalBrowseFacetsQuery,
+  observer: RegistryRequestObservation,
   dependencies: CorpusIndexBrowseFacetsDependencies = defaultCorpusIndexBrowseFacetsDependencies,
 ): Promise<Result<LegalBrowseFacets, LegalBrowseFacetsError>> => {
   const family = query.documentFamily ?? "case_law";
@@ -230,6 +233,7 @@ export const corpusIndexBrowseFacets = async (
   const { indexId, jurisdictionClause } = route;
 
   const aggregated = await getCorpusIndexClient(serving.cluster).aggregate({
+    observer,
     indexId,
     query: browseFacetsQuery({
       excludedSourceIds: query.excludedSourceIds,
