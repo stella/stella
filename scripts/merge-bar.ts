@@ -31,6 +31,10 @@
 // Where there is no queue, the bar merges directly, and only once the
 // required checks have succeeded on the exact head.
 //
+// A head the queue ejected for failed checks is not handed back while main
+// still stands where the failed group was built: the queue would rerun the
+// same group. Changing the head, or main moving, lifts the refusal.
+//
 // The squash commit message is the pull request title and body, which each
 // repository's squash settings select; nothing here composes a message.
 //
@@ -49,6 +53,7 @@
 // Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
 import { panic, Result, TaggedError } from "better-result";
+import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { findMigrationIdentityViolation } from "./check-migration-order";
@@ -572,6 +577,157 @@ class StaleGreenResultError extends TaggedError("StaleGreenResultError")<{
   message: string;
 }> {}
 
+// --- CI plan inputs ---------------------------------------------------------
+
+const CI_WORKFLOW = ".github/workflows/ci.yml";
+const CI_PLAN_JOB = "ci-plan";
+
+// A run step executing a repository script through an interpreter. Paths
+// a step only matches against (`case` patterns) are not inputs: they select
+// jobs for the pull request's own diff, which main's changes do not alter.
+const EXECUTED_SCRIPT_PATTERN =
+  /\b(?:bash|sh|bun|node)\s+(?:\.\/)?((?:[\w.-]+\/)+[\w.-]+\.(?:sh|ts|mts|js|mjs|cjs))\b/gu;
+// A shell script handing off to a sibling: exec node "$(dirname "$0")/x.mjs".
+const SIBLING_SCRIPT_PATTERN = /"\$\(dirname "\$0"\)\/([\w.-]+)"/gu;
+const RELATIVE_IMPORT_PATTERN =
+  /\b(?:from|import)\s*\(?\s*["'](\.{1,2}\/[^"']+)["']/gu;
+const MODULE_EXTENSIONS = [".ts", ".mts", ".js", ".mjs", ".cjs"] as const;
+
+export type CiPlanInput = { type: "file" | "directory"; path: string };
+
+/** Contents by path; null for a path with no file. */
+type ReadRepositoryFiles = (
+  paths: readonly string[],
+) => ReadonlyMap<string, string | null>;
+
+const scriptReferences = ({
+  file,
+  source,
+}: {
+  file: string;
+  source: string;
+}): string[][] => {
+  const directory = path.posix.dirname(file);
+  if (file.endsWith(".sh")) {
+    return [
+      ...Array.from(source.matchAll(EXECUTED_SCRIPT_PATTERN), ([, script]) => [
+        script ?? panic("unreachable: the pattern captures a path"),
+      ]),
+      ...Array.from(source.matchAll(SIBLING_SCRIPT_PATTERN), ([, sibling]) => [
+        path.posix.join(
+          directory,
+          sibling ?? panic("unreachable: the pattern captures a path"),
+        ),
+      ]),
+    ];
+  }
+  return Array.from(source.matchAll(RELATIVE_IMPORT_PATTERN), ([, spec]) => {
+    const target = path.posix.join(
+      directory,
+      spec ?? panic("unreachable: the pattern captures a path"),
+    );
+    return MODULE_EXTENSIONS.some((extension) => target.endsWith(extension))
+      ? [target]
+      : MODULE_EXTENSIONS.map((extension) => `${target}${extension}`);
+  });
+};
+
+/**
+ * Everything the `ci-plan` job reads to decide which jobs a pull request
+ * runs: the workflow itself, the local actions it uses, the scripts its steps
+ * execute, and what those scripts load in turn (sibling handoffs and relative
+ * imports, read one layer per call). Data files a script reads at runtime are
+ * not followed. Null when the repository has no such job.
+ */
+export const deriveCiPlanInputs = (
+  readFiles: ReadRepositoryFiles,
+): CiPlanInput[] | null => {
+  const workflowSource = readFiles([CI_WORKFLOW]).get(CI_WORKFLOW);
+  if (workflowSource === null || workflowSource === undefined) {
+    return null;
+  }
+  const jobs = readRecord(
+    readRecord(Bun.YAML.parse(workflowSource), "CI workflow")["jobs"],
+    "CI workflow jobs",
+  );
+  if (jobs[CI_PLAN_JOB] === undefined) {
+    return null;
+  }
+  const steps = readRecord(jobs[CI_PLAN_JOB], `${CI_PLAN_JOB} job`)["steps"];
+  if (!Array.isArray(steps)) {
+    return panic(`Expected \`steps\` in the ${CI_PLAN_JOB} job`);
+  }
+
+  const inputs: CiPlanInput[] = [{ type: "file", path: CI_WORKFLOW }];
+  // Each reference lists candidate paths; the first that exists is the file.
+  let references: string[][] = [];
+  for (const rawStep of steps) {
+    const step = readRecord(rawStep, `${CI_PLAN_JOB} step`);
+    const uses = step["uses"];
+    if (typeof uses === "string" && uses.startsWith("./")) {
+      inputs.push({
+        type: "directory",
+        path: uses.slice(2).replace(/\/+$/u, ""),
+      });
+    }
+    const run = step["run"];
+    if (typeof run === "string") {
+      for (const [, script] of run.matchAll(EXECUTED_SCRIPT_PATTERN)) {
+        references.push([
+          script ?? panic("unreachable: the pattern captures a path"),
+        ]);
+      }
+    }
+  }
+
+  const visited = new Set<string>([CI_WORKFLOW]);
+  while (references.length > 0) {
+    const pending = references.filter((candidates) =>
+      candidates.every((candidate) => !visited.has(candidate)),
+    );
+    if (pending.length === 0) {
+      break;
+    }
+    const contents = readFiles([...new Set(pending.flat())]);
+    const loaded: { file: string; source: string }[] = [];
+    for (const candidates of pending) {
+      const found = candidates.find(
+        (candidate) => typeof contents.get(candidate) === "string",
+      );
+      // A script the plan names but cannot load still counts by name; an
+      // unresolved import is a package, not a repository file.
+      const file = found ?? (candidates.length === 1 ? candidates.at(0) : null);
+      if (file === null || file === undefined || visited.has(file)) {
+        continue;
+      }
+      visited.add(file);
+      inputs.push({ type: "file", path: file });
+      const source = contents.get(file);
+      if (typeof source === "string") {
+        loaded.push({ file, source });
+      }
+    }
+    references = loaded.flatMap(scriptReferences);
+  }
+  return inputs;
+};
+
+const isCiPlanInput = (
+  inputs: readonly CiPlanInput[],
+  changedPath: string,
+): boolean =>
+  inputs.some((input) => {
+    switch (input.type) {
+      case "file":
+        return changedPath === input.path;
+      case "directory":
+        return changedPath.startsWith(`${input.path}/`);
+      default:
+        input.type satisfies never;
+        return panic("Unhandled CI plan input");
+    }
+  });
+
 type CheckGreenResultFreshnessOptions = {
   pullRequest: PullRequestSnapshot;
   jump: boolean;
@@ -579,6 +735,8 @@ type CheckGreenResultFreshnessOptions = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
+  // What the base branch's planner reads today; null when it has none.
+  readCiPlanInputs: () => readonly CiPlanInput[] | null;
 };
 
 export const checkGreenResultFreshness = ({
@@ -588,6 +746,7 @@ export const checkGreenResultFreshness = ({
   readWorkflowRun,
   readBaseComparison,
   readPullFiles,
+  readCiPlanInputs,
 }: CheckGreenResultFreshnessOptions) => {
   if (jump || isReleasePullRequest(pullRequest)) {
     return Result.ok();
@@ -672,6 +831,21 @@ export const checkGreenResultFreshness = ({
       changedPaths.add(file["previous_filename"]);
     }
   }
+  // The green run planned its jobs with the old planner, so a planner change
+  // on main can require jobs that run never had, whatever files this PR
+  // touches.
+  const planInputs = readCiPlanInputs();
+  const planChanges =
+    planInputs === null
+      ? []
+      : [...changedPaths].filter((changedPath) =>
+          isCiPlanInput(planInputs, changedPath),
+        );
+  if (planChanges.length > 0) {
+    return refuse(
+      `main changed the CI plan since the green run (${planChanges.join(", ")})`,
+    );
+  }
   const overlap = readPullFiles().filter((filename) =>
     changedPaths.has(filename),
   );
@@ -681,6 +855,263 @@ export const checkGreenResultFreshness = ({
     );
   }
   return Result.ok();
+};
+
+// --- Merge queue ejections --------------------------------------------------
+
+// Reasons GitHub reports on RemovedFromMergeQueueEvent. Only a group whose
+// checks failed is an ejection: a manual dequeue or a merge says nothing about
+// the result, and a conflict depends on the entries queued ahead (a conflict
+// with the base itself already fails the mergeable gate).
+const MERGE_QUEUE_REMOVAL_DISPOSITIONS = {
+  failed_checks: "ejected",
+  merge_conflict: "not-ejected",
+  manual: "not-ejected",
+  merged: "not-ejected",
+} as const satisfies Record<string, "ejected" | "not-ejected">;
+type MergeQueueRemovalReason = keyof typeof MERGE_QUEUE_REMOVAL_DISPOSITIONS;
+
+// An unrecognized reason counts as an ejection, so a new failure kind cannot
+// slip past the gate; it is printed verbatim.
+type RemovalReason =
+  | { type: "known"; value: MergeQueueRemovalReason }
+  | { type: "unknown"; value: string };
+
+const isKnownRemovalReason = (
+  value: string,
+): value is MergeQueueRemovalReason =>
+  Object.hasOwn(MERGE_QUEUE_REMOVAL_DISPOSITIONS, value);
+
+const readRemovalReason = (value: string): RemovalReason =>
+  isKnownRemovalReason(value)
+    ? { type: "known", value }
+    : { type: "unknown", value };
+
+const removalDisposition = (reason: RemovalReason) => {
+  switch (reason.type) {
+    case "known":
+      return MERGE_QUEUE_REMOVAL_DISPOSITIONS[reason.value];
+    case "unknown":
+      return "ejected";
+    default:
+      reason satisfies never;
+      return panic("Unhandled merge queue removal reason");
+  }
+};
+
+export type MergeQueueRemoval = {
+  removedAt: string;
+  reason: RemovalReason;
+  // The pull request head when it was removed; null when the timeline window
+  // holds no head update before the removal.
+  headSha: string | null;
+  // The merge-group commit the queue tested; null when no group was built.
+  groupSha: string | null;
+};
+
+const readTimestamp = (record: Record<string, unknown>, key: string) => {
+  const value = readString(record, key);
+  if (Number.isNaN(Date.parse(value))) {
+    panic(`Expected a timestamp in \`${key}\`, got: ${value}`);
+  }
+  return value;
+};
+
+const readOptionalOid = (value: unknown, label: string): string | null =>
+  value === null || value === undefined
+    ? null
+    : readString(readRecord(value, label), "oid");
+
+/**
+ * Removals in timeline order, each with the head the pull request had then.
+ * A removal event names only the merge-group commit, so the head is the last
+ * commit or force push before it. A commit dated before a removal but pushed
+ * after it reads as the removed head, which refuses rather than admits.
+ */
+export const parseMergeQueueRemovals = (
+  nodes: unknown,
+): MergeQueueRemoval[] => {
+  if (!Array.isArray(nodes)) {
+    return panic("Expected an array of pull request timeline items");
+  }
+  const removals: MergeQueueRemoval[] = [];
+  let headSha: string | null = null;
+  for (const rawNode of nodes) {
+    const node = readRecord(rawNode, "timeline item");
+    const type = readString(node, "__typename");
+    switch (type) {
+      case "PullRequestCommit":
+        headSha = readString(readRecord(node["commit"], "commit"), "oid");
+        break;
+      case "HeadRefForcePushedEvent":
+        headSha = readOptionalOid(node["afterCommit"], "afterCommit");
+        break;
+      case "RemovedFromMergeQueueEvent":
+        removals.push({
+          removedAt: readTimestamp(node, "createdAt"),
+          reason: readRemovalReason(readString(node, "reason")),
+          headSha,
+          groupSha: readOptionalOid(node["beforeCommit"], "beforeCommit"),
+        });
+        break;
+      default:
+        return panic(`Unexpected timeline item from gh: ${type}`);
+    }
+  }
+  return removals;
+};
+
+/** The latest removal for a failed group; later dequeues do not clear it. */
+export const latestEjection = (
+  removals: readonly MergeQueueRemoval[],
+): MergeQueueRemoval | undefined =>
+  removals.findLast(
+    (removal) => removalDisposition(removal.reason) === "ejected",
+  );
+
+export type MergeGroupRecord =
+  | { type: "found"; baseSha: string; runUrl: string }
+  | { type: "not-found" };
+
+export type BranchTip = { sha: string; committedAt: string };
+
+export type Ejection = {
+  removal: MergeQueueRemoval;
+  group: MergeGroupRecord;
+};
+
+export type EjectedHeadVerdict =
+  | { type: "retry-allowed"; changed: "head" | "main" }
+  | { type: "unchanged-retry" };
+
+type EvaluateEjectedHeadOptions = {
+  headSha: string;
+  ejection: Ejection;
+  mainTip: BranchTip;
+};
+
+/**
+ * Re-queueing a head the queue ejected for failed checks, onto the same main,
+ * rebuilds the group that failed. Main counts as moved when its tip differs
+ * from the base the failed group was built on: the queue fast-forwards main to
+ * group commits, so that comparison is exact even when the group sat behind
+ * another entry. Without a recorded group, a main tip committed after the
+ * removal is the evidence instead.
+ */
+export const evaluateEjectedHead = ({
+  headSha,
+  ejection: { removal, group },
+  mainTip,
+}: EvaluateEjectedHeadOptions): EjectedHeadVerdict => {
+  // An unknown head fails closed: it is treated as this one.
+  if (removal.headSha !== null && removal.headSha !== headSha) {
+    return { type: "retry-allowed", changed: "head" };
+  }
+  switch (group.type) {
+    case "found":
+      return group.baseSha === mainTip.sha
+        ? { type: "unchanged-retry" }
+        : { type: "retry-allowed", changed: "main" };
+    case "not-found":
+      return Date.parse(mainTip.committedAt) > Date.parse(removal.removedAt)
+        ? { type: "retry-allowed", changed: "main" }
+        : { type: "unchanged-retry" };
+    default:
+      group satisfies never;
+      return panic("Unhandled merge group record");
+  }
+};
+
+const EJECTION_TIME_ZONE = "Europe/Prague";
+// The sv-SE locale renders an ISO-like "YYYY-MM-DD HH:MM:SS" timestamp.
+const ejectionTimeFormat = new Intl.DateTimeFormat("sv-SE", {
+  timeZone: EJECTION_TIME_ZONE,
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hourCycle: "h23",
+  timeZoneName: "short",
+});
+
+export const formatEjection = ({ removal, group }: Ejection): string => {
+  const reason =
+    removal.reason.type === "known"
+      ? removal.reason.value
+      : `${removal.reason.value} (unrecognized, counted as a failed group)`;
+  const run =
+    group.type === "found"
+      ? `failing run ${group.runUrl}`
+      : "no merge_group run found for it";
+  return (
+    `previous merge queue ejection: ${ejectionTimeFormat.format(new Date(removal.removedAt))}, ` +
+    `head ${removal.headSha ?? "unknown"}, reason ${reason}, ${run}`
+  );
+};
+
+class UnchangedEjectedHeadError extends TaggedError(
+  "UnchangedEjectedHeadError",
+)<{ message: string }> {}
+
+type CheckEjectedHeadOptions = {
+  gateway: Pick<
+    GitHubGateway,
+    "readMergeQueueRemovals" | "readMergeGroup" | "readBranchTip"
+  >;
+  pullRequest: Pick<PullRequestSnapshot, "headSha" | "baseRefName">;
+};
+
+/**
+ * Refuse to hand the queue a head it already ejected for failed checks while
+ * main still stands where that group was built: the result would repeat.
+ * Ok carries the ejection to print, or null when the head was never ejected.
+ * Neither --jump nor a release pull request is exempt.
+ */
+export const checkEjectedHead = ({
+  gateway,
+  pullRequest,
+}: CheckEjectedHeadOptions) => {
+  const removal = latestEjection(gateway.readMergeQueueRemovals());
+  if (removal === undefined) {
+    return Result.ok(null);
+  }
+  const ejection: Ejection = {
+    removal,
+    group:
+      removal.groupSha === null
+        ? { type: "not-found" }
+        : gateway.readMergeGroup(removal.groupSha),
+  };
+  const mainTip = gateway.readBranchTip(pullRequest.baseRefName);
+  const verdict = evaluateEjectedHead({
+    headSha: pullRequest.headSha,
+    ejection,
+    mainTip,
+  });
+  const printed = formatEjection(ejection);
+  switch (verdict.type) {
+    case "retry-allowed":
+      return Result.ok(
+        verdict.changed === "head"
+          ? `${printed}; the head changed since`
+          : `${printed}; ${pullRequest.baseRefName} moved since (now ${mainTip.sha})`,
+      );
+    case "unchanged-retry":
+      return Result.err(
+        new UnchangedEjectedHeadError({
+          message:
+            `${printed}\nverdict: NOT ARMED — EJECTED_HEAD_UNCHANGED: ${pullRequest.headSha} ` +
+            `failed in the merge queue and ${pullRequest.baseRefName} is still at ${mainTip.sha}, ` +
+            "so the queue would rerun the same group. Push a fix, or wait for " +
+            `${pullRequest.baseRefName} to move.`,
+        }),
+      );
+    default:
+      verdict satisfies never;
+      return panic("Unhandled ejected head verdict");
+  }
 };
 
 // --- gh seam ----------------------------------------------------------------
@@ -694,6 +1125,10 @@ type GitHubGateway = {
   readWorkflowRun: (checkRunId: number) => unknown;
   readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
   readPullFiles: () => readonly string[];
+  readRepositoryFiles: (input: {
+    ref: string;
+    paths: readonly string[];
+  }) => ReadonlyMap<string, string | null>;
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   // Both writes pin the head every gate was evaluated against, so GitHub
@@ -710,6 +1145,9 @@ type GitHubGateway = {
     expectedHeadSha: string;
   }) => EnqueuedMergeQueueEntry;
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
+  readMergeQueueRemovals: () => readonly MergeQueueRemoval[];
+  readMergeGroup: (groupSha: string) => MergeGroupRecord;
+  readBranchTip: (branch: string) => BranchTip;
   sleep: (milliseconds: number) => void;
 };
 
@@ -1074,6 +1512,28 @@ query($owner: String!, $name: String!, $number: Int!, $cursor: String) {
   }
 }`;
 
+const MERGE_QUEUE_REMOVALS_QUERY = `
+query($owner: String!, $name: String!, $number: Int!) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      timelineItems(
+        itemTypes: [REMOVED_FROM_MERGE_QUEUE_EVENT, PULL_REQUEST_COMMIT, HEAD_REF_FORCE_PUSHED_EVENT]
+        last: 100
+      ) {
+        nodes {
+          __typename
+          ... on RemovedFromMergeQueueEvent { createdAt reason beforeCommit { oid } }
+          ... on PullRequestCommit { commit { oid } }
+          ... on HeadRefForcePushedEvent { afterCommit { oid } }
+        }
+      }
+    }
+  }
+}`;
+
+const MERGE_GROUP_BRANCH_PATTERN =
+  /^gh-readonly-queue\/.+\/pr-(?<number>\d+)-(?<base>[0-9a-f]{40})$/u;
+
 const migrationDirectoryFromFile = ({
   filename,
   migrationDirectory,
@@ -1281,6 +1741,60 @@ const createGhGateway = ({
           ? [filename, previousFilename]
           : [filename];
       }),
+
+    // One GraphQL request per call, however many paths: the plan's inputs are
+    // read one reference layer at a time.
+    readRepositoryFiles: ({ ref, paths }) => {
+      const variables = paths.flatMap((filePath, index) => [
+        "-f",
+        `e${index}=${ref}:${filePath}`,
+      ]);
+      const declarations = paths
+        .map((_, index) => `$e${index}: String!`)
+        .join(", ");
+      const fields = paths
+        .map(
+          (_, index) =>
+            `f${index}: object(expression: $e${index}) { ... on Blob { text isTruncated } }`,
+        )
+        .join("\n");
+      const repository = readRecord(
+        readRecord(
+          readRecord(
+            runGhJson([
+              "api",
+              "graphql",
+              "-f",
+              `query=query($owner: String!, $name: String!, ${declarations}) {
+                repository(owner: $owner, name: $name) { ${fields} }
+              }`,
+              "-f",
+              `owner=${owner}`,
+              "-f",
+              `name=${name}`,
+              ...variables,
+            ]),
+            "repository files response",
+          )["data"],
+          "data",
+        )["repository"],
+        "repository",
+      );
+      const files = new Map<string, string | null>();
+      for (const [index, filePath] of paths.entries()) {
+        const blob = repository[`f${index}`];
+        if (blob === null) {
+          files.set(filePath, null);
+          continue;
+        }
+        const record = readRecord(blob, `blob ${filePath}`);
+        if (readBoolean(record, "isTruncated")) {
+          panic(`${filePath} is too large to read through GraphQL`);
+        }
+        files.set(filePath, readString(record, "text"));
+      }
+      return files;
+    },
 
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
@@ -1573,6 +2087,78 @@ const createGhGateway = ({
         };
       });
     },
+
+    readMergeQueueRemovals: () =>
+      parseMergeQueueRemovals(
+        runGhJson([
+          "api",
+          "graphql",
+          "-f",
+          `query=${MERGE_QUEUE_REMOVALS_QUERY}`,
+          "-f",
+          `owner=${owner}`,
+          "-f",
+          `name=${name}`,
+          "-F",
+          `number=${pullNumber}`,
+          "--jq",
+          ".data.repository.pullRequest.timelineItems.nodes",
+        ]),
+      ),
+
+    // `head_sha` is an exact filter; the branch name records the base the
+    // group was built on.
+    readMergeGroup: (groupSha) => {
+      const response = readRecord(
+        runGhJson([
+          "api",
+          `repos/${repo}/actions/runs?event=merge_group&head_sha=${encodeURIComponent(groupSha)}&per_page=100`,
+        ]),
+        "merge group runs",
+      );
+      const rawRuns = response["workflow_runs"];
+      if (!Array.isArray(rawRuns)) {
+        return panic("Expected `workflow_runs` array from gh");
+      }
+      const runs = rawRuns.map((run: unknown) =>
+        readRecord(run, "merge group run"),
+      );
+      const run =
+        runs.find((candidate) => candidate["conclusion"] === "failure") ??
+        runs.at(0);
+      if (run === undefined) {
+        return { type: "not-found" };
+      }
+      const branch = readString(run, "head_branch");
+      const match = MERGE_GROUP_BRANCH_PATTERN.exec(branch)?.groups;
+      const baseSha = match?.["base"];
+      if (baseSha === undefined || match?.["number"] !== String(pullNumber)) {
+        return panic(
+          `Unexpected merge group branch for #${pullNumber}: ${branch}`,
+        );
+      }
+      return {
+        type: "found",
+        baseSha,
+        runUrl: readString(run, "html_url"),
+      };
+    },
+
+    readBranchTip: (branch) => {
+      const tip = readRecord(
+        runGhJson([
+          "api",
+          `repos/${repo}/commits/${encodeURIComponent(branch)}`,
+          "--jq",
+          "{sha, committedAt: .commit.committer.date}",
+        ]),
+        "branch tip",
+      );
+      return {
+        sha: readString(tip, "sha"),
+        committedAt: readTimestamp(tip, "committedAt"),
+      };
+    },
   };
 };
 
@@ -1733,6 +2319,16 @@ if (import.meta.main) {
     );
     process.exit(0);
   }
+  if (policy.landing === "merge-when-ready") {
+    const ejectedHead = checkEjectedHead({ gateway, pullRequest });
+    if (ejectedHead.isErr()) {
+      console.error(ejectedHead.error.message);
+      process.exit(1);
+    }
+    if (ejectedHead.value !== null) {
+      console.log(ejectedHead.value);
+    }
+  }
   // Read order is load-bearing: each gate's window is the time between its
   // own read and the write, so the head SHA the write pins is read last.
   const checkRuns = gateway.readCheckRuns(pullRequest.headSha);
@@ -1743,6 +2339,10 @@ if (import.meta.main) {
     readWorkflowRun: gateway.readWorkflowRun,
     readBaseComparison: gateway.readBaseComparison,
     readPullFiles: gateway.readPullFiles,
+    readCiPlanInputs: () =>
+      deriveCiPlanInputs((paths) =>
+        gateway.readRepositoryFiles({ ref: pullRequest.baseRefName, paths }),
+      ),
   });
   if (freshness.isErr()) {
     console.error(freshness.error.message);

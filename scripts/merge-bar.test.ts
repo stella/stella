@@ -1,24 +1,40 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { chmodSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
+import {
+  chmodSync,
+  existsSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import {
+  checkEjectedHead,
   checkMergeHold,
   checkGreenResultFreshness,
+  deriveCiPlanInputs,
   MergeHoldReadError,
+  evaluateEjectedHead,
   evaluateMergeBar,
   evaluateQueuePlacement,
+  formatEjection,
   formatQueuePlacementFailure,
   isReleasePullRequest,
+  latestEjection,
   mergeBarRepositoryPolicy,
   mergeWhenReadyAction,
+  parseMergeQueueRemovals,
   readMergeHandoff,
   requiredChecksSucceeded,
   verifyFrontOfQueue,
+  type CiPlanInput,
+  type Ejection,
   type MergeBarSnapshot,
+  type MergeQueueRemoval,
 } from "./merge-bar";
 
 const HEAD_SHA = "1f0c3a7d9e5b4c2a8d6f0e1b3c5a7d9e5b4c2a8d";
@@ -121,6 +137,12 @@ const checkRun = (
 
 /** Any repository this one does not enumerate, which the bar treats alike. */
 const PRIVATE_REPO = "stella/private";
+
+const PLAN_INPUTS = [
+  { type: "file", path: ".github/workflows/ci.yml" },
+  { type: "file", path: "scripts/detect-e2e-changes.sh" },
+  { type: "directory", path: ".github/actions/setup-e2e" },
+] as const satisfies readonly CiPlanInput[];
 
 describe("merge handoff state", () => {
   test("the merge gate reads with the workflow token and pins writes with the App token", () => {
@@ -366,6 +388,7 @@ case "$*" in
       *--jq*) printf '%s\\n' '123';;
       *) printf '%s\\n' '[{"number":123,"title":"chore: release v0.9.42","isDraft":false,"isCrossRepository":false}]';;
     esac;;
+  *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *enqueuePullRequest*)
     case "$*" in *'mergeQueueEntry { id position jump state }'*) ;; *) exit 97;; esac
     printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":${mutationJump},"state":"QUEUED"}}}}';;
@@ -458,6 +481,7 @@ esac
 case "$*" in
   'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
   *'pr merge'*|*enqueuePullRequest*) exit 98;;
+  *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' '[]';;
   *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
   *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
   *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/stella/actions/runs/1"}';;
@@ -1539,6 +1563,7 @@ describe("green result freshness", () => {
       return comparison;
     },
     readPullFiles: () => ["scripts/shared.ts"],
+    readCiPlanInputs: () => PLAN_INPUTS,
   });
 
   test("unchanged base and up to twenty unrelated commits retain green results", () => {
@@ -1575,6 +1600,45 @@ describe("green result freshness", () => {
         expect(result.error.message).toContain("merge main and let CI re-run");
       }
     }
+  });
+
+  test.each([
+    { changed: ".github/workflows/ci.yml", refused: true },
+    { changed: "scripts/detect-e2e-changes.sh", refused: true },
+    { changed: ".github/actions/setup-e2e/action.yml", refused: true },
+    { changed: ".github/actions/setup-e2e-stack/action.yml", refused: false },
+    { changed: "apps/web/src/unrelated.ts", refused: false },
+  ])(
+    "main changing $changed, which this PR does not touch, refuses green: $refused",
+    ({ changed, refused }) => {
+      const options = readers({
+        status: "ahead",
+        ahead_by: 1,
+        files: [{ filename: changed }],
+      });
+      // Only the plan rule can refuse: the overlap rule never sees this path.
+      expect(options.readPullFiles()).not.toContain(changed);
+      const result = checkGreenResultFreshness(options);
+      expect(result.isErr()).toBe(refused);
+      if (result.isErr()) {
+        expect(result.error.message).toContain(
+          `STALE_GREEN_RESULT: main changed the CI plan since the green run (${changed})`,
+        );
+      }
+    },
+  );
+
+  test("a base branch without a planner keeps only the overlap rule", () => {
+    expect(
+      checkGreenResultFreshness({
+        ...readers({
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: ".github/workflows/ci.yml" }],
+        }),
+        readCiPlanInputs: () => null,
+      }).isOk(),
+    ).toBe(true);
   });
 
   test("more than twenty commits, rewritten history and truncated files refuse stale green", () => {
@@ -1637,6 +1701,7 @@ describe("green result freshness", () => {
       readWorkflowRun: noRead,
       readBaseComparison: noRead,
       readPullFiles: noRead,
+      readCiPlanInputs: noRead,
     };
     expect(checkGreenResultFreshness({ ...options, jump: true }).isOk()).toBe(
       true,
@@ -1695,4 +1760,419 @@ describe("workflow run URL repository identity", () => {
       "ci-result check does not link to a workflow run in this repository",
     );
   });
+});
+
+describe("CI plan inputs", () => {
+  const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
+  const fixtureReader =
+    (files: Record<string, string>) => (paths: readonly string[]) =>
+      new Map(paths.map((file) => [file, files[file] ?? null]));
+
+  test("the live planner covers the workflow, its detectors and what they hand off to", () => {
+    const inputs = deriveCiPlanInputs(
+      (paths) =>
+        new Map(
+          paths.map((file) => {
+            const absolute = path.join(REPO_ROOT, file);
+            return [
+              file,
+              existsSync(absolute) ? readFileSync(absolute, "utf-8") : null,
+            ];
+          }),
+        ),
+    );
+    const files = inputs?.map((input) => input.path) ?? [];
+    expect(files).toContain(".github/workflows/ci.yml");
+    expect(files).toContain("scripts/detect-e2e-changes.sh");
+    // Reached only through the shell script's sibling handoff.
+    expect(files).toContain("scripts/production-e2e-inputs.mjs");
+  });
+
+  test("follows executed scripts, sibling handoffs and relative imports, not match patterns", () => {
+    const workflow = `
+jobs:
+  ci-plan:
+    steps:
+      - uses: ./.github/actions/setup-plan/
+      - uses: actions/checkout@v4
+      - run: |
+          # scripts/comment-only.ts decides the rest.
+          e2e=$(bash scripts/a.sh core "\${files[@]}")
+          scope=$(bun ./scripts/b.ts --scopes)
+          case "$file" in
+            apps/web/src/pattern.ts|scripts/pattern-only.sh) echo true;;
+          esac
+  other:
+    steps:
+      - run: bash scripts/other.sh
+`;
+    const inputs = deriveCiPlanInputs(
+      fixtureReader({
+        ".github/workflows/ci.yml": workflow,
+        "scripts/a.sh": 'exec node "$(dirname "$0")/c.mjs" "$@"\n',
+        "scripts/b.ts":
+          'import { readFileSync } from "node:fs";\nimport { d } from "./d";\n',
+        "scripts/c.mjs": "export {};\n",
+        // A cycle back to b.ts must terminate.
+        "scripts/d.ts": 'export { b } from "./b";\nexport const d = 1;\n',
+      }),
+    );
+    expect(inputs).toEqual([
+      { type: "file", path: ".github/workflows/ci.yml" },
+      { type: "directory", path: ".github/actions/setup-plan" },
+      { type: "file", path: "scripts/a.sh" },
+      { type: "file", path: "scripts/b.ts" },
+      { type: "file", path: "scripts/c.mjs" },
+      { type: "file", path: "scripts/d.ts" },
+    ]);
+  });
+
+  test("a repository without the workflow or the plan job has no planner", () => {
+    expect(deriveCiPlanInputs(fixtureReader({}))).toBeNull();
+    expect(
+      deriveCiPlanInputs(
+        fixtureReader({
+          ".github/workflows/ci.yml": "jobs:\n  test:\n    steps: []\n",
+        }),
+      ),
+    ).toBeNull();
+  });
+});
+
+const GROUP_SHA = "2a7c9e1b3d5f7a9c1e3b5d7f9a1c3e5b7d9f1a3c";
+const BASE_SHA = "3b8d0f2c4e6a8b0d2f4c6e8a0b2d4f6c8e0a2b4d";
+const MAIN_SHA = "4c9e1a3d5f7b9c1e3a5d7f9b1c3e5a7d9f1b3c5e";
+const RUN_URL = "https://github.com/stella/stella/actions/runs/36997271485";
+const REMOVED_AT = "2026-10-02T11:11:06Z";
+
+const commitNode = (oid: string) => ({
+  __typename: "PullRequestCommit",
+  commit: { oid },
+});
+const forcePushNode = (oid: string | null) => ({
+  __typename: "HeadRefForcePushedEvent",
+  afterCommit: oid === null ? null : { oid },
+});
+const removalNode = ({
+  reason,
+  groupSha = GROUP_SHA,
+}: {
+  reason: string;
+  groupSha?: string | null;
+}) => ({
+  __typename: "RemovedFromMergeQueueEvent",
+  createdAt: REMOVED_AT,
+  reason,
+  beforeCommit: groupSha === null ? null : { oid: groupSha },
+});
+
+const failedRemoval = (
+  overrides: Partial<MergeQueueRemoval> = {},
+): MergeQueueRemoval => ({
+  removedAt: REMOVED_AT,
+  reason: { type: "known", value: "failed_checks" },
+  headSha: HEAD_SHA,
+  groupSha: GROUP_SHA,
+  ...overrides,
+});
+
+const foundGroup = {
+  type: "found",
+  baseSha: BASE_SHA,
+  runUrl: RUN_URL,
+} as const satisfies Ejection["group"];
+
+describe("merge queue ejections", () => {
+  test("each removal carries the head the pull request had then", () => {
+    const removals = parseMergeQueueRemovals([
+      removalNode({ reason: "merge_conflict", groupSha: null }),
+      commitNode(OTHER_SHA),
+      removalNode({ reason: "failed_checks" }),
+      forcePushNode(HEAD_SHA),
+      removalNode({ reason: "manual" }),
+      forcePushNode(null),
+      removalNode({ reason: "failed_checks" }),
+    ]);
+    expect(removals.map(({ headSha }) => headSha)).toEqual([
+      null,
+      OTHER_SHA,
+      HEAD_SHA,
+      null,
+    ]);
+    expect(removals.at(0)?.groupSha).toBeNull();
+    expect(removals.at(1)?.groupSha).toBe(GROUP_SHA);
+  });
+
+  test("an unexpected timeline item fails loudly", () => {
+    expect(() =>
+      parseMergeQueueRemovals([{ __typename: "AddedToMergeQueueEvent" }]),
+    ).toThrow("Unexpected timeline item from gh: AddedToMergeQueueEvent");
+  });
+
+  test.each([
+    { name: "never removed", reasons: [], ejected: undefined },
+    { name: "manual dequeue", reasons: ["manual"], ejected: undefined },
+    { name: "conflict", reasons: ["merge_conflict"], ejected: undefined },
+    { name: "merged", reasons: ["merged"], ejected: undefined },
+    { name: "failed checks", reasons: ["failed_checks"], ejected: 0 },
+    // Unknown reasons fail closed: counted, printed verbatim.
+    { name: "unknown reason", reasons: ["ci_timeout"], ejected: 0 },
+    {
+      name: "a later dequeue does not clear a failure",
+      reasons: ["failed_checks", "manual", "merge_conflict"],
+      ejected: 0,
+    },
+    {
+      name: "several ejections: latest wins",
+      reasons: ["failed_checks", "manual", "failed_checks", "manual"],
+      ejected: 2,
+    },
+  ])("$name", ({ reasons, ejected }) => {
+    const removals = parseMergeQueueRemovals(
+      reasons.flatMap((reason, index) => [
+        commitNode(`${index}`.padStart(40, "a")),
+        removalNode({ reason }),
+      ]),
+    );
+    expect(latestEjection(removals)).toBe(
+      ejected === undefined ? undefined : removals.at(ejected),
+    );
+  });
+
+  test("an unknown reason is printed verbatim", () => {
+    const removal = parseMergeQueueRemovals([
+      commitNode(HEAD_SHA),
+      removalNode({ reason: "ci_timeout" }),
+    ]).at(0);
+    expect(removal?.reason).toEqual({ type: "unknown", value: "ci_timeout" });
+    expect(
+      formatEjection({ removal: failedRemoval(removal), group: foundGroup }),
+    ).toContain("reason ci_timeout (unrecognized, counted as a failed group)");
+  });
+
+  test.each([
+    {
+      name: "ejected at another head: allowed",
+      removal: failedRemoval({ headSha: OTHER_SHA }),
+      group: foundGroup,
+      mainTip: { sha: BASE_SHA, committedAt: "2026-10-02T09:00:00Z" },
+      verdict: { type: "retry-allowed", changed: "head" },
+    },
+    {
+      name: "ejected at this head, main still at the group's base: refused",
+      removal: failedRemoval(),
+      group: foundGroup,
+      mainTip: { sha: BASE_SHA, committedAt: "2026-10-02T09:00:00Z" },
+      verdict: { type: "unchanged-retry" },
+    },
+    {
+      name: "ejected at this head, main moved past the group's base: allowed",
+      removal: failedRemoval(),
+      group: foundGroup,
+      // Committed before the removal: the recorded base decides, not dates.
+      mainTip: { sha: MAIN_SHA, committedAt: "2026-10-02T09:00:00Z" },
+      verdict: { type: "retry-allowed", changed: "main" },
+    },
+    {
+      name: "no recorded group, main tip committed before the removal: refused",
+      removal: failedRemoval(),
+      group: { type: "not-found" },
+      mainTip: { sha: MAIN_SHA, committedAt: "2026-10-02T11:11:05Z" },
+      verdict: { type: "unchanged-retry" },
+    },
+    {
+      name: "no recorded group, main tip committed after the removal: allowed",
+      removal: failedRemoval(),
+      group: { type: "not-found" },
+      mainTip: { sha: MAIN_SHA, committedAt: "2026-10-02T11:11:07Z" },
+      verdict: { type: "retry-allowed", changed: "main" },
+    },
+    {
+      name: "unknown head at removal fails closed",
+      removal: failedRemoval({ headSha: null }),
+      group: foundGroup,
+      mainTip: { sha: BASE_SHA, committedAt: "2026-10-02T09:00:00Z" },
+      verdict: { type: "unchanged-retry" },
+    },
+  ] as const)("$name", ({ removal, group, mainTip, verdict }) => {
+    expect(
+      evaluateEjectedHead({
+        headSha: HEAD_SHA,
+        ejection: { removal, group },
+        mainTip,
+      }),
+    ).toEqual(verdict);
+  });
+
+  const gateway = ({
+    removals,
+    mainTipSha,
+  }: {
+    removals: readonly MergeQueueRemoval[];
+    mainTipSha: string;
+  }) => ({
+    readMergeQueueRemovals: () => removals,
+    readMergeGroup: (groupSha: string) => {
+      expect(groupSha).toBe(GROUP_SHA);
+      return foundGroup;
+    },
+    readBranchTip: (branch: string) => {
+      expect(branch).toBe("main");
+      return { sha: mainTipSha, committedAt: "2026-10-02T09:00:00Z" };
+    },
+  });
+  const pullRequest = { headSha: HEAD_SHA, baseRefName: "main" };
+
+  test("a never-ejected head reads nothing further", () => {
+    const unexpected = () => {
+      throw new Error("unexpected ejection read");
+    };
+    const result = checkEjectedHead({
+      gateway: {
+        readMergeQueueRemovals: () => [
+          failedRemoval({ reason: { type: "known", value: "manual" } }),
+        ],
+        readMergeGroup: unexpected,
+        readBranchTip: unexpected,
+      },
+      pullRequest,
+    });
+    expect(result.isOk() && result.value).toBeNull();
+  });
+
+  test("an unchanged retry is refused with the ejection in Prague time", () => {
+    const result = checkEjectedHead({
+      gateway: gateway({ removals: [failedRemoval()], mainTipSha: BASE_SHA }),
+      pullRequest,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.message).toContain(
+        `previous merge queue ejection: 2026-10-02 13:11:06 CEST, head ${HEAD_SHA}, reason failed_checks, failing run ${RUN_URL}`,
+      );
+      expect(result.error.message).toContain("EJECTED_HEAD_UNCHANGED");
+    }
+  });
+
+  test("a retry after main moved is allowed and still prints the ejection", () => {
+    const result = checkEjectedHead({
+      gateway: gateway({ removals: [failedRemoval()], mainTipSha: MAIN_SHA }),
+      pullRequest,
+    });
+    expect(result.isOk() && result.value).toContain(
+      `previous merge queue ejection: 2026-10-02 13:11:06 CEST, head ${HEAD_SHA}, reason failed_checks, failing run ${RUN_URL}; main moved since (now ${MAIN_SHA})`,
+    );
+  });
+
+  test.each([
+    { title: "fix: something", extraArguments: [] },
+    { title: "chore: release v0.9.42", extraArguments: ["--jump"] },
+  ])(
+    "the CLI applies the same gate to $title $extraArguments",
+    ({ title, extraArguments }) => {
+      for (const { mainTipSha, refused } of [
+        { mainTipSha: BASE_SHA, refused: true },
+        { mainTipSha: MAIN_SHA, refused: false },
+      ]) {
+        const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-eject-"));
+        const executable = path.join(directory, "gh");
+        writeFileSync(
+          executable,
+          `#!/bin/sh
+case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
+  *'pr merge'*|*enqueuePullRequest*) exit 98;;
+  *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
+  *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/private/actions/runs/1"}';;
+  *actions/runs/1*) printf '%s\\n' '{"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
+  *compare/*) printf '%s\\n' '{"status":"identical"}';;
+  *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
+  *headRefOid*)
+    if [ "$1" = api ]; then printf '%s\\n' "$FIXTURE_PULL_REQUEST";
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
+  *) exit 99;;
+esac
+`,
+        );
+        chmodSync(executable, 0o700);
+        try {
+          const result = Bun.spawnSync({
+            cmd: [
+              process.execPath,
+              fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+              "123",
+              "--repo",
+              PRIVATE_REPO,
+              "--dry-run",
+              ...extraArguments,
+            ],
+            env: {
+              ...process.env,
+              PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+              FIXTURE_PULL_REQUEST: JSON.stringify({
+                data: {
+                  repository: {
+                    pullRequest: {
+                      id: "PR_fixture",
+                      number: 123,
+                      title,
+                      isCrossRepository: false,
+                      state: "OPEN",
+                      isDraft: false,
+                      mergeable: "MERGEABLE",
+                      headRefOid: HEAD_SHA,
+                      baseRefName: "main",
+                      autoMergeRequest: null,
+                      mergeQueueEntry: null,
+                    },
+                  },
+                },
+              }),
+              FIXTURE_TIMELINE: JSON.stringify([
+                commitNode(HEAD_SHA),
+                removalNode({ reason: "failed_checks" }),
+              ]),
+              FIXTURE_GROUP_RUNS: JSON.stringify({
+                workflow_runs: [
+                  {
+                    conclusion: "failure",
+                    head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
+                    html_url: RUN_URL,
+                  },
+                ],
+              }),
+              FIXTURE_MAIN_TIP: JSON.stringify({
+                sha: mainTipSha,
+                committedAt: "2026-10-02T09:00:00Z",
+              }),
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+          const output = `${result.stdout.toString()}${result.stderr.toString()}`;
+          expect(output).toContain(
+            `previous merge queue ejection: 2026-10-02 13:11:06 CEST, head ${HEAD_SHA}`,
+          );
+          expect(result.exitCode, output).toBe(refused ? 1 : 0);
+          if (refused) {
+            expect(result.stderr.toString()).toContain(
+              "EJECTED_HEAD_UNCHANGED",
+            );
+            expect(result.stdout.toString()).not.toContain("verdict: MERGE");
+          } else {
+            expect(result.stdout.toString()).toContain(
+              "verdict: MERGE (dry run",
+            );
+          }
+        } finally {
+          rmSync(directory, { recursive: true, force: true });
+        }
+      }
+    },
+    15_000,
+  );
 });
