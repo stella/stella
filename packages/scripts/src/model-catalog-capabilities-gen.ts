@@ -1,7 +1,7 @@
 import { panic } from "better-result";
 /**
  * Generates `packages/ai-catalog/src/capabilities.gen.ts` — the
- * per-model document-input, reasoning-effort, temperature policy and
+ * per-model document-input, image-input, reasoning-effort, temperature policy and
  * output-limit maps
  * from models.dev plus reviewed provider corrections and policy cutovers.
  *
@@ -35,6 +35,7 @@ import {
   BYOK_MODEL_OPTIONS,
   CAPABILITY_OVERRIDES,
   DOCUMENT_INPUT_OVERRIDES,
+  IMAGE_INPUT_OVERRIDES,
   REASONING_EFFORTS,
   TANSTACK_AI_PROVIDERS,
 } from "@stll/ai-catalog";
@@ -42,6 +43,9 @@ import type {
   BYOKProvider,
   CapabilityOverride,
   DocumentInputOverride,
+  ImageInputCapability,
+  ImageInputOverride,
+  ImageInputOverrides,
   ReasoningEffort,
   TemperaturePolicy,
 } from "@stll/ai-catalog";
@@ -87,9 +91,32 @@ const DOCUMENT_INPUT_OVERRIDE_BY_ID: Partial<
   Record<string, DocumentInputOverride>
 > = DOCUMENT_INPUT_OVERRIDES;
 
+const resolveImageInputCapability = (
+  inputModalities: readonly string[] | null,
+  override: ImageInputOverride | undefined,
+): ImageInputCapability => {
+  if (override !== undefined) {
+    if (
+      inputModalities !== null &&
+      override.supported === inputModalities.includes("image")
+    ) {
+      return panic(
+        "Image-input override now agrees with models.dev; delete the override so sourced data wins",
+      );
+    }
+    return override.supported ? "supported" : "unsupported";
+  }
+  if (inputModalities === null) {
+    return "unknown";
+  }
+  return inputModalities.includes("image") ? "supported" : "unsupported";
+};
+
 export type CapabilityRow = {
   defaultReasoningEffort: ReasoningEffort | null;
   documentInput: boolean;
+  imageInput: ImageInputCapability;
+  imageInputOverrideReason: string | null;
   documentInputOverrideReason: string | null;
   modelId: string;
   provider: BYOKProvider;
@@ -103,6 +130,7 @@ export type CapabilityRow = {
 export type BuildCapabilityRowsOptions = {
   /** OpenRouter model id → the concrete effort used when omitted. */
   openRouterDefaults: OpenRouterReasoningDefaults;
+  imageInputOverrides?: ImageInputOverrides;
   /** `${modelsDevKey}:${modelId}` → upstream capability metadata. */
   upstream: ReadonlyMap<string, UpstreamCapabilities>;
 };
@@ -115,13 +143,23 @@ export type BuildCapabilityRowsOptions = {
 export const buildCapabilityRows = ({
   openRouterDefaults,
   upstream,
+  imageInputOverrides = IMAGE_INPUT_OVERRIDES,
 }: BuildCapabilityRowsOptions): CapabilityRow[] => {
   const rows: CapabilityRow[] = [];
+  const imageOverrides: Partial<
+    Record<BYOKProvider, Partial<Record<string, ImageInputOverride>>>
+  > = imageInputOverrides;
   for (const provider of TANSTACK_AI_PROVIDERS) {
     const mdKey = MODELS_DEV_KEY_BY_PROVIDER[provider];
     for (const modelId of BYOK_MODEL_OPTIONS[provider]) {
       const record = upstream.get(`${mdKey}:${modelId}`);
       const override = OVERRIDE_BY_ID[modelId];
+      const imageOverride = imageOverrides[provider]?.[modelId];
+      const imageInput = resolveImageInputCapability(
+        record?.inputModalities ?? null,
+        imageOverride,
+      );
+      const imageInputOverrideReason = imageOverride?.reason ?? null;
       const documentInputOverride = DOCUMENT_INPUT_OVERRIDE_BY_ID[modelId];
       if (record !== undefined && override !== undefined) {
         panic(
@@ -147,6 +185,8 @@ export const buildCapabilityRows = ({
         rows.push({
           defaultReasoningEffort: null,
           documentInput: override.documentInput,
+          imageInput,
+          imageInputOverrideReason,
           documentInputOverrideReason: override.documentInputReason,
           modelId,
           provider,
@@ -249,6 +289,8 @@ export const buildCapabilityRows = ({
       }
       rows.push({
         defaultReasoningEffort: openRouterDefault ?? null,
+        imageInput,
+        imageInputOverrideReason,
         documentInput:
           documentInputOverride?.supported ?? upstreamDocumentInput,
         documentInputOverrideReason: documentInputOverride?.reason ?? null,
@@ -296,6 +338,18 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
     (row) =>
       `  "${row.modelId}": ${renderDefaultEffort(row.defaultReasoningEffort)},`,
   );
+  const imageInputProviderLines = TANSTACK_AI_PROVIDERS.map((provider) => {
+    const modelLines = rows
+      .filter((row) => row.provider === provider)
+      .map((row) => {
+        const comment =
+          row.imageInputOverrideReason === null
+            ? ""
+            : `    // override: ${row.imageInputOverrideReason}\n`;
+        return `${comment}    "${row.modelId}": "${row.imageInput}",`;
+      });
+    return `  ${provider}: {\n${modelLines.join("\n")}\n  },`;
+  });
   const documentInputProviderLines = TANSTACK_AI_PROVIDERS.map((provider) => {
     const modelLines = rows
       .filter((row) => row.provider === provider && row.documentInput)
@@ -319,13 +373,14 @@ export const renderCapabilitiesModule = (rows: CapabilityRow[]): string => {
 // \`modalities.input\`, \`limit.output\`, and release dates (first-party,
 // openrouter, and amazon-bedrock catalogs);
 // OpenRouter's public per-model \`default_effort\`; plus reviewed provider
-// policies and dated entries from capabilities-overrides.ts and
+// policies and dated capability/image-input entries from capabilities-overrides.ts and
 // document-input-overrides.ts.
 // The nightly \`model-catalog-upstream\` check fails CI on unsafe drift.
 import type {
   BYOKModelIdByProvider,
   BYOKProvider,
   OfferedBYOKModelId,
+  ImageInputCapability,
   ReasoningEffort,
   TemperaturePolicy,
 } from "./index";
@@ -338,6 +393,13 @@ export const MODEL_DOCUMENT_INPUT_OPTIONS = {
 ${documentInputProviderLines.join("\n")}
 } as const satisfies {
   [TProvider in BYOKProvider]: readonly BYOKModelIdByProvider[TProvider][];
+};
+
+/** Every offered provider/model pair has explicit image-input evidence. */
+export const MODEL_IMAGE_INPUT_CAPABILITIES = {
+${imageInputProviderLines.join("\n")}
+} as const satisfies {
+  [TProvider in BYOKProvider]: Record<BYOKModelIdByProvider[TProvider], ImageInputCapability>;
 };
 
 /**

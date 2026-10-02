@@ -46,12 +46,22 @@ const isBaselineEntry = (value: unknown): value is BaselineEntry => {
   ) {
     return false;
   }
+  // A budget belongs to a recorded request; one without it is a leftover
+  // allowance that later write passes would keep forever.
+  const requests = new Set<unknown>(value["requests"]);
   for (const field of [
     "requestCounts",
     "dbQueries",
     "responseSizes",
   ] as const) {
-    if (value[field] !== undefined && !isNumberRecord(value[field])) {
+    const budgets = value[field];
+    if (budgets === undefined) {
+      continue;
+    }
+    if (
+      !isNumberRecord(budgets) ||
+      !Object.keys(budgets).every((key) => requests.has(key))
+    ) {
       return false;
     }
   }
