@@ -1,7 +1,10 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { open, rename, unlink } from "node:fs/promises";
+import { setTimeout as waitTimeout } from "node:timers/promises";
 import * as v from "valibot";
+
+import { Temporal } from "@stll/time";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
@@ -10,6 +13,9 @@ import {
   isValidCelex,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { readPublisherCooldown as readSharedPublisherCooldown } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -48,10 +54,11 @@ type RefreshRow = Pick<
   "id" | "sourceDocumentId" | "language"
 >;
 type RefreshOutcome = Awaited<ReturnType<typeof refreshEcjStoredFormex>>;
+type TerminalRefreshOutcome = Exclude<RefreshOutcome["type"], "rate-limited">;
 type ResultOutcome =
-  | RefreshOutcome["type"]
+  | TerminalRefreshOutcome
   | "skipped-resume"
-  | `would-${RefreshOutcome["type"]}`;
+  | `would-${TerminalRefreshOutcome}`;
 export type EcjFormexRefreshResult = {
   id: string;
   sourceDocumentId: string;
@@ -87,6 +94,12 @@ type RunEcjFormexRefreshOptions = {
   leaseWaitMs?: number;
   now?: () => number;
   waitForLease?: (milliseconds: number) => Promise<void>;
+  readPublisherCooldown?: typeof readSharedPublisherCooldown;
+  publisherNow?: () => number;
+  waitForCooldown?: (
+    milliseconds: number,
+    signal: AbortSignal,
+  ) => Promise<void>;
 };
 
 type RequestedIdentity =
@@ -312,9 +325,9 @@ const REFRESH_OUTCOMES = {
   "formex-gone": true,
   "retryable-exhausted": true,
   "write-rejected": true,
-} as const satisfies Record<RefreshOutcome["type"], true>;
+} as const satisfies Record<TerminalRefreshOutcome, true>;
 
-const isRefreshOutcome = (value: string): value is RefreshOutcome["type"] =>
+const isRefreshOutcome = (value: string): value is TerminalRefreshOutcome =>
   Object.hasOwn(REFRESH_OUTCOMES, value);
 
 const parseResultOutcome = (outcome: string): ResultOutcome => {
@@ -380,6 +393,15 @@ const persistIntent = async (path: string, intent: RefreshIntent) => {
   await rename(temporary, path);
 };
 
+type RowRefreshResult =
+  | {
+      type: "terminal";
+      outcome: ResultOutcome;
+      formexShape?: "archive" | "xml";
+      bytes?: number;
+    }
+  | Extract<RefreshOutcome, { type: "rate-limited" }>;
+
 const refreshStoredRow = async ({
   row,
   sourceId,
@@ -391,11 +413,7 @@ const refreshStoredRow = async ({
   writeDecision,
   pending,
   persistIntent: writeIntent,
-}: RefreshStoredRowOptions): Promise<{
-  outcome: ResultOutcome;
-  formexShape?: "archive" | "xml";
-  bytes?: number;
-}> => {
+}: RefreshStoredRowOptions): Promise<RowRefreshResult> => {
   const rawResult =
     row.sourceRawS3Key === null
       ? Result.ok(
@@ -406,11 +424,15 @@ const refreshStoredRow = async ({
       : await readStoredRaw(row.sourceRawS3Key);
   if (Result.isError(rawResult)) {
     return {
+      type: "terminal",
       outcome: apply ? "retryable-exhausted" : "would-retryable-exhausted",
     };
   }
   if (rawResult.value === null) {
-    return { outcome: apply ? "notice-missing" : "would-notice-missing" };
+    return {
+      type: "terminal",
+      outcome: apply ? "notice-missing" : "would-notice-missing",
+    };
   }
   // The order proves this run committed its attempt; matching bytes prove
   // the raw upload landed before an interrupted journal acknowledgment.
@@ -424,6 +446,7 @@ const refreshStoredRow = async ({
     rawDigest(rawResult.value) === pending.rawDigest
   ) {
     return {
+      type: "terminal",
       outcome: apply
         ? "unchanged-already-current"
         : "would-unchanged-already-current",
@@ -445,26 +468,43 @@ const refreshStoredRow = async ({
     documentUrl: row.documentUrl,
     metadata: row.metadata ?? {},
   };
-  const refreshed = await Result.tryPromise(async () =>
-    batch === null
-      ? await refreshStoredFormex({ stored, signal })
-      : await batch.sourceLease.beforeRemoteEffect(
-          async () => await refreshStoredFormex({ stored, signal }),
-        ),
-  );
+  const refreshed = await Result.tryPromise({
+    try: async () =>
+      batch === null
+        ? await refreshStoredFormex({ stored, signal })
+        : await batch.sourceLease.beforeRemoteEffect(
+            async () => await refreshStoredFormex({ stored, signal }),
+          ),
+    catch: (cause) => cause,
+  });
   if (Result.isError(refreshed)) {
     signal.throwIfAborted();
+    if (refreshed.error instanceof PublisherRateLimitRefusalError) {
+      return {
+        type: "rate-limited",
+        publisherKey: refreshed.error.publisherKey,
+        status: refreshed.error.status,
+        cooldownUntilEpochMs: refreshed.error.cooldownUntilEpochMs,
+      };
+    }
     return {
+      type: "terminal",
       outcome: apply ? "retryable-exhausted" : "would-retryable-exhausted",
     };
   }
   const outcome = refreshed.value;
+  if (outcome.type === "rate-limited") {
+    return outcome;
+  }
   if (outcome.type !== "refreshed") {
-    return { outcome: apply ? outcome.type : `would-${outcome.type}` };
+    return {
+      type: "terminal",
+      outcome: apply ? outcome.type : `would-${outcome.type}`,
+    };
   }
   const extra = { formexShape: outcome.formexShape, bytes: outcome.bytes };
   if (batch === null) {
-    return { outcome: "would-refreshed", ...extra };
+    return { type: "terminal", outcome: "would-refreshed", ...extra };
   }
   await batch.sourceLease.beforeDatabaseMark();
   // db-await-in-loop: each pipeline write needs a fresh lease-guarded source observation
@@ -496,6 +536,7 @@ const refreshStoredRow = async ({
     refresh: DECISION_REFRESH.ALWAYS,
   });
   return {
+    type: "terminal",
     outcome:
       written.status === PROCESS_DECISION_STATUS.RETRYABLE || !written.inserted
         ? "write-rejected"
@@ -592,6 +633,168 @@ const acquireRefreshBatch = async ({
   }
 };
 
+type WaitPublisherCooldownOptions = {
+  publisherKey: PublisherGateId;
+  readPublisherCooldown: typeof readSharedPublisherCooldown;
+  publisherNow: () => number;
+  waitForCooldown: (milliseconds: number, signal: AbortSignal) => Promise<void>;
+  signal: AbortSignal;
+};
+const waitPublisherCooldown = async ({
+  publisherKey,
+  readPublisherCooldown,
+  publisherNow,
+  waitForCooldown,
+  signal,
+}: WaitPublisherCooldownOptions) => {
+  while (true) {
+    signal.throwIfAborted();
+    const expiry = await readPublisherCooldown(publisherKey);
+    if (expiry === null) {
+      return;
+    }
+    // Redis decides expiry. The local clock only schedules a bounded recheck,
+    // so clock skew cannot retry early or sleep through a cleared cooldown.
+    const recheckMs = Math.min(
+      PUBLISHER_COOLDOWN_POLL_MAX_MS,
+      Math.max(PUBLISHER_COOLDOWN_POLL_MIN_MS, expiry - publisherNow()),
+    );
+    await waitForCooldown(recheckMs, signal);
+  }
+};
+
+type VisitRefreshBatchOptions = Omit<
+  RefreshStoredRowOptions,
+  "row" | "pending"
+> & {
+  identities: RefreshRow[];
+  currentById: Map<SafeId<"caseLawDecision">, RefreshStoredRowOptions["row"]>;
+  after: string | null;
+  intentState: { pending: RefreshIntent | null };
+  intentPath: string;
+  append: (
+    row: RefreshRow,
+    outcome: ResultOutcome,
+    extra?: { formexShape?: "archive" | "xml"; bytes?: number },
+  ) => Promise<void>;
+  rateState: { blockedId: string; refusals: number };
+  planPositions: Map<SafeId<"caseLawDecision">, number>;
+};
+const visitRefreshBatch = async ({
+  identities,
+  currentById,
+  after,
+  signal,
+  sourceId,
+  batch,
+  apply,
+  readStoredRaw,
+  refreshStoredFormex,
+  writeDecision,
+  intentState,
+  persistIntent: writePending,
+  intentPath,
+  append,
+  rateState,
+  planPositions,
+}: VisitRefreshBatchOptions) => {
+  for (const identity of identities) {
+    signal.throwIfAborted();
+    if (after !== null && identity.id <= after) {
+      await append(identity, "skipped-resume");
+      continue;
+    }
+    const row = currentById.get(identity.id);
+    if (
+      row === undefined ||
+      row.sourceDocumentId !== identity.sourceDocumentId
+    ) {
+      await append(identity, apply ? "write-rejected" : "would-write-rejected");
+      continue;
+    }
+    const refreshed = await refreshStoredRow({
+      row,
+      sourceId,
+      batch,
+      apply,
+      signal,
+      readStoredRaw,
+      refreshStoredFormex,
+      writeDecision,
+      pending: intentState.pending,
+      persistIntent: writePending,
+    });
+    if (refreshed.type === "rate-limited") {
+      rateState.refusals =
+        rateState.blockedId === row.id ? rateState.refusals + 1 : 1;
+      rateState.blockedId = row.id;
+      return {
+        refusal: refreshed,
+        retryOffset:
+          planPositions.get(row.id) ??
+          panic("rate-limited row is absent from the plan"),
+      };
+    }
+    const { outcome, formexShape, bytes } = refreshed;
+    const extra = {
+      ...(formexShape === undefined ? {} : { formexShape }),
+      ...(bytes === undefined ? {} : { bytes }),
+    };
+    await append(row, outcome, extra);
+    rateState.refusals = 0;
+
+    if (intentState.pending?.id === row.id) {
+      await unlink(intentPath);
+      intentState.pending = null;
+    }
+  }
+  return null;
+};
+
+type DurableResumeCursorOptions = {
+  rows: RefreshRow[];
+  prior: Map<string, EcjFormexRefreshResult>;
+  apply: boolean;
+  blockedId: string;
+  after: string | null;
+};
+const durableResumeCursor = ({
+  rows,
+  prior,
+  apply,
+  blockedId,
+  after,
+}: DurableResumeCursorOptions) => {
+  let cursor = after !== null && after < blockedId ? after : null;
+  for (const row of rows) {
+    if (row.id >= blockedId) {
+      break;
+    }
+    const record = prior.get(row.id);
+    if (
+      record !== undefined &&
+      (!apply || !record.outcome.startsWith("would-"))
+    ) {
+      cursor = row.id;
+    }
+  }
+  return cursor;
+};
+
+const MAX_CONSECUTIVE_RATE_REFUSALS = 3;
+const PUBLISHER_COOLDOWN_POLL_MAX_MS = 1000;
+const PUBLISHER_COOLDOWN_POLL_MIN_MS = 100;
+
+export type EcjFormexRefreshSummary =
+  | { type: "complete"; results: EcjFormexRefreshResult[] }
+  | {
+      type: "rate-limited";
+      results: EcjFormexRefreshResult[];
+      blockedId: string;
+      resumeAfter: string | null;
+      refusals: typeof MAX_CONSECUTIVE_RATE_REFUSALS;
+    };
+
 /** Each row is acknowledged only after its pipeline write and durable journal append. */
 export const runEcjFormexRefresh = async ({
   ingestionDb,
@@ -612,7 +815,12 @@ export const runEcjFormexRefresh = async ({
   waitForLease = async (milliseconds) => {
     await Bun.sleep(milliseconds);
   },
-}: RunEcjFormexRefreshOptions) => {
+  readPublisherCooldown = readSharedPublisherCooldown,
+  publisherNow = () => Temporal.Now.instant().epochMilliseconds,
+  waitForCooldown = async (milliseconds, waitSignal) => {
+    await waitTimeout(milliseconds, undefined, { signal: waitSignal });
+  },
+}: RunEcjFormexRefreshOptions): Promise<EcjFormexRefreshSummary> => {
   validateRunOptions({
     resultsOut,
     apply,
@@ -666,8 +874,12 @@ export const runEcjFormexRefresh = async ({
     journal.prior.set(row.id, result);
     journal.offset += Buffer.byteLength(line);
   };
+  const rateState = { blockedId: "", refusals: 0 };
+  const planPositions = new Map(
+    plan.map((row, position) => [row.id, position]),
+  );
   try {
-    for (let offset = 0; offset < plan.length; offset += batchSize) {
+    for (let offset = 0; offset < plan.length;) {
       signal.throwIfAborted();
       const batch = await acquireRefreshBatch({
         apply,
@@ -677,6 +889,10 @@ export const runEcjFormexRefresh = async ({
         now,
         waitForLease,
       });
+      const batchState: {
+        refusal: Extract<RefreshOutcome, { type: "rate-limited" }> | null;
+        retryOffset: number;
+      } = { refusal: null, retryOffset: offset + batchSize };
       try {
         journal = await readPriorResults({
           path: resultsOut,
@@ -690,6 +906,7 @@ export const runEcjFormexRefresh = async ({
           apply,
         });
         if (identities.length === 0) {
+          offset += batchSize;
           continue;
         }
         // db-await-in-loop: read only the current bounded batch while its source lease is held
@@ -711,47 +928,59 @@ export const runEcjFormexRefresh = async ({
               .limit(identities.length),
         );
         const currentById = new Map(currentRows.map((row) => [row.id, row]));
-        for (const identity of identities) {
-          signal.throwIfAborted();
-          if (after !== null && identity.id <= after) {
-            await append(identity, "skipped-resume");
-            continue;
-          }
-          const row = currentById.get(identity.id);
-          if (
-            row === undefined ||
-            row.sourceDocumentId !== identity.sourceDocumentId
-          ) {
-            await append(
-              identity,
-              apply ? "write-rejected" : "would-write-rejected",
-            );
-            continue;
-          }
-          const { outcome, ...extra } = await refreshStoredRow({
-            row,
-            sourceId,
-            batch,
-            apply,
-            signal,
-            readStoredRaw,
-            refreshStoredFormex,
-            writeDecision,
-            pending: intentState.pending,
-            persistIntent: writePending,
-          });
-          await append(row, outcome, extra);
-          if (intentState.pending?.id === row.id) {
-            await unlink(intentPath);
-            intentState.pending = null;
-          }
+        const visited = await visitRefreshBatch({
+          identities,
+          currentById,
+          after,
+          signal,
+          sourceId,
+          batch,
+          apply,
+          readStoredRaw,
+          refreshStoredFormex,
+          writeDecision,
+          intentState,
+          persistIntent: writePending,
+          intentPath,
+          append,
+          rateState,
+          planPositions,
+        });
+        if (visited !== null) {
+          batchState.refusal = visited.refusal;
+          batchState.retryOffset = visited.retryOffset;
         }
       } finally {
         await batch?.release();
       }
+      if (batchState.refusal !== null) {
+        if (rateState.refusals === MAX_CONSECUTIVE_RATE_REFUSALS) {
+          return {
+            type: "rate-limited",
+            results,
+            blockedId: rateState.blockedId,
+            resumeAfter: durableResumeCursor({
+              rows,
+              prior: journal.prior,
+              apply,
+              blockedId: rateState.blockedId,
+              after,
+            }),
+            refusals: MAX_CONSECUTIVE_RATE_REFUSALS,
+          };
+        }
+        await waitPublisherCooldown({
+          publisherKey: batchState.refusal.publisherKey,
+          readPublisherCooldown,
+          publisherNow,
+          waitForCooldown,
+          signal,
+        });
+      }
+      offset = batchState.retryOffset;
     }
   } finally {
     await file.close();
   }
-  return results;
+  return { type: "complete", results };
 };

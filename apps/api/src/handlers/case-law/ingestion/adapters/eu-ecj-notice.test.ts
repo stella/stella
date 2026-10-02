@@ -12,6 +12,7 @@ import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
 
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   buildListingQuery,
   ecjRawParts,
@@ -19,6 +20,7 @@ import {
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
 import type { EcjSparqlBinding } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
+import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
@@ -385,6 +387,32 @@ describe("stored Formex refresh", () => {
       });
       expect(outcome).toEqual({ type: expected });
     }
+
+    const refusal = new PublisherRateLimitRefusalError({
+      adapterKey: ADAPTER_KEYS.EU_ECJ,
+      cursor: null,
+      publisherKey: "cellar-eu",
+      status: 429,
+      cooldownUntilEpochMs: 1_800_000_000_000,
+    });
+    const rateLimited = await refreshEcjStoredFormex({
+      stored: refreshStored({
+        ...ecjRawParts({
+          binding: { ...binding },
+          html: documentEn,
+          notice: noticeEn,
+          formex: "<old-formex />",
+        }),
+      }),
+      signal,
+      fetchFormex: () => Promise.reject(refusal),
+    });
+    expect(rateLimited).toEqual({
+      type: "rate-limited",
+      publisherKey: "cellar-eu",
+      status: 429,
+      cooldownUntilEpochMs: 1_800_000_000_000,
+    });
   });
 
   test("treats a stored archive as current without contacting Cellar", async () => {

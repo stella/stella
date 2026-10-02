@@ -1659,6 +1659,10 @@ type EcjFormexRefreshOutcome =
   | { type: "formex-not-located" }
   | { type: "formex-gone" }
   | { type: "retryable-exhausted" }
+  | ({ type: "rate-limited" } & Pick<
+      PublisherRateLimitRefusalError,
+      "publisherKey" | "status" | "cooldownUntilEpochMs"
+    >)
   | { type: "unchanged-already-current" }
   | { type: "write-rejected"; rejection: string }
   | {
@@ -1700,11 +1704,28 @@ export const refreshEcjStoredFormex = async ({
     return { type: "notice-missing" };
   }
 
-  const fetched = await fetchFormex(
-    parseEcjNotice(notice).manifestations,
-    signal,
-    fetchRequest,
-  );
+  const fetchedResult = await Result.tryPromise({
+    try: async () =>
+      await fetchFormex(
+        parseEcjNotice(notice).manifestations,
+        signal,
+        fetchRequest,
+      ),
+    catch: (error) => error,
+  });
+  if (Result.isError(fetchedResult)) {
+    const { error } = fetchedResult;
+    if (!(error instanceof PublisherRateLimitRefusalError)) {
+      throw error;
+    }
+    return {
+      type: "rate-limited",
+      publisherKey: error.publisherKey,
+      status: error.status,
+      cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+    };
+  }
+  const fetched = fetchedResult.value;
   if (fetched.type === "not-located") {
     return { type: "formex-not-located" };
   }

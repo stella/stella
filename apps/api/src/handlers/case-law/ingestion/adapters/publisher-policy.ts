@@ -240,56 +240,6 @@ class InvalidPublisherRequestRateError extends TaggedError(
   "InvalidPublisherRequestRateError",
 )<{ message: string }> {}
 
-type RunPublisherLimit = {
-  gateId: PublisherGateId;
-  reserve: (signal?: AbortSignal) => Promise<void>;
-};
-
-const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
-
-/**
- * Apply a publisher request rate to one async run. Every `fetchPublisher`
- * attempt reserves through this slot, including attempts made by retries.
- * The rate may only slow the publisher's declared/default gate, up to 2 req/s.
- */
-type WithPublisherRequestRateLimitOptions<T> = {
-  gateId: "cellar-eu";
-  requestsPerSecond: number;
-  operation: () => Promise<T>;
-  dependencies?: PublisherRequestGateDependencies;
-};
-
-export const withPublisherRequestRateLimit = async <T>({
-  gateId,
-  requestsPerSecond,
-  operation,
-  dependencies,
-}: WithPublisherRequestRateLimitOptions<T>): Promise<T> => {
-  if (
-    !Number.isFinite(requestsPerSecond) ||
-    requestsPerSecond <= 0 ||
-    requestsPerSecond > MAX_PUBLISHER_REQUESTS_PER_SECOND
-  ) {
-    throw new InvalidPublisherRequestRateError({
-      message: `requestsPerSecond must be greater than 0 and at most ${MAX_PUBLISHER_REQUESTS_PER_SECOND}`,
-    });
-  }
-
-  const { intervalMs, publisher } = PUBLISHER_GATES[gateId];
-  const requestedIntervalMs = Math.ceil(
-    MILLISECONDS_PER_SECOND / requestsPerSecond,
-  );
-  const reserve = createPublisherRequestSlot(
-    {
-      intervalMs: Math.max(intervalMs, requestedIntervalMs),
-      key: `case-law:publisher-gate:${gateId}`,
-      publisher,
-    },
-    dependencies,
-  );
-  return await runPublisherLimit.run({ gateId, reserve }, operation);
-};
-
 /**
  * Which publisher each adapter spends against.
  *
@@ -360,11 +310,28 @@ export const createPublisherSlot = (
 export const createPublisherGateSlot = (
   gateId: PublisherGateId,
   dependencies?: PublisherRequestGateDependencies,
-) => {
-  const { publisher, intervalMs } = PUBLISHER_GATES[gateId];
+) =>
+  createPublisherGateSlotAtInterval({
+    gateId,
+    intervalMs: PUBLISHER_GATES[gateId].intervalMs,
+    dependencies,
+  });
+
+type CreatePublisherGateSlotWithIntervalOptions = {
+  gateId: PublisherGateId;
+  intervalMs: number;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+const createPublisherGateSlotAtInterval = ({
+  gateId,
+  intervalMs,
+  dependencies,
+}: CreatePublisherGateSlotWithIntervalOptions) => {
+  const { publisher } = PUBLISHER_GATES[gateId];
   return createPublisherRequestSlot(
     {
-      intervalMs,
+      intervalMs: Math.max(PUBLISHER_GATES[gateId].intervalMs, intervalMs),
       key: gateId,
       publisher,
       ...(gateId === "cellar-eu" ? { cooldown: "shared" as const } : {}),
@@ -385,6 +352,62 @@ const slotsByGate = new Map<
   ReturnType<typeof createPublisherGateSlot>
 >();
 
+type RunPublisherLimit = {
+  gateId: "cellar-eu";
+  gateSlot: ReturnType<typeof createPublisherGateSlot>;
+};
+
+const runPublisherLimit = new AsyncLocalStorage<RunPublisherLimit>();
+
+const getPublisherGateSlot = (gateId: PublisherGateId) => {
+  const slot = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
+  slotsByGate.set(gateId, slot);
+  return slot;
+};
+
+type WithPublisherRequestRateLimitOptions<T> = {
+  gateId: "cellar-eu";
+  requestsPerSecond: number;
+  operation: () => Promise<T>;
+  dependencies?: PublisherRequestGateDependencies;
+};
+
+/**
+ * Apply a run-specific interval through the shared EU publisher gate, so
+ * retries, cooldowns, and coordination use the same reservation.
+ */
+export const withPublisherRequestRateLimit = async <T>({
+  gateId,
+  requestsPerSecond,
+  operation,
+  dependencies,
+}: WithPublisherRequestRateLimitOptions<T>): Promise<T> => {
+  if (
+    !Number.isFinite(requestsPerSecond) ||
+    requestsPerSecond <= 0 ||
+    requestsPerSecond > MAX_PUBLISHER_REQUESTS_PER_SECOND
+  ) {
+    throw new InvalidPublisherRequestRateError({
+      message: `requestsPerSecond must be greater than 0 and at most ${MAX_PUBLISHER_REQUESTS_PER_SECOND}`,
+    });
+  }
+
+  const requestedIntervalMs = Math.ceil(
+    MILLISECONDS_PER_SECOND / requestsPerSecond,
+  );
+  return await runPublisherLimit.run(
+    {
+      gateId,
+      gateSlot: createPublisherGateSlotAtInterval({
+        gateId,
+        intervalMs: requestedIntervalMs,
+        dependencies,
+      }),
+    },
+    operation,
+  );
+};
+
 export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
@@ -398,15 +421,13 @@ export const reservePublisherGateSlot = async (
 ): Promise<void> => {
   const runLimit = runPublisherLimit.getStore();
   if (runLimit?.gateId === gateId) {
-    await runLimit.reserve(signal);
+    await runLimit.gateSlot(signal);
     return;
   }
   if (!publisherGateReserves()) {
     return;
   }
-  const reserve = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
-  slotsByGate.set(gateId, reserve);
-  await reserve(signal);
+  await getPublisherGateSlot(gateId)(signal);
 };
 
 export const deferPublisherGate = async (
@@ -414,8 +435,10 @@ export const deferPublisherGate = async (
   durationMs: number,
   signal?: AbortSignal,
 ): Promise<number> => {
-  const reserve = slotsByGate.get(gateId) ?? createPublisherGateSlot(gateId);
-  slotsByGate.set(gateId, reserve);
+  const runLimit = runPublisherLimit.getStore();
+  const reserve =
+    (runLimit?.gateId === gateId ? runLimit.gateSlot : undefined) ??
+    getPublisherGateSlot(gateId);
   return await reserve.defer(durationMs, signal);
 };
 
@@ -430,8 +453,9 @@ export const readPublisherCooldown = async (
       dependencies,
     ).readCooldown();
   }
+  const runLimit = runPublisherLimit.getStore();
   const reserve =
-    slotsByGate.get(publisherKey) ?? createPublisherGateSlot(publisherKey);
-  slotsByGate.set(publisherKey, reserve);
+    (runLimit?.gateId === publisherKey ? runLimit.gateSlot : undefined) ??
+    getPublisherGateSlot(publisherKey);
   return await reserve.readCooldown();
 };

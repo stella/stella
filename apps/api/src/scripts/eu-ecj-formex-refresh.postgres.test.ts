@@ -7,11 +7,13 @@ import path from "node:path";
 
 import { caseLawDecisions, caseLawSources } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   EMPTY_AST,
   StoredRawReadError,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
@@ -21,7 +23,7 @@ import {
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import {
   parseEcjFormexRefreshIds,
-  runEcjFormexRefresh,
+  runEcjFormexRefresh as runRefresh,
 } from "@/api/scripts/eu-ecj-formex-refresh";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
@@ -37,10 +39,19 @@ const expectFailure = async (run: () => Promise<unknown>, message: string) => {
   }
 };
 
-type RunnerOptions = Parameters<typeof runEcjFormexRefresh>[0];
+type RunnerOptions = Parameters<typeof runRefresh>[0];
 type Outcome = Awaited<
   ReturnType<NonNullable<RunnerOptions["refreshStoredFormex"]>>
 >;
+
+const runEcjFormexRefresh = async (options: RunnerOptions) => {
+  const summary = await runRefresh(options);
+  expect(summary.type).toBe("complete");
+  if (summary.type !== "complete") {
+    throw new TypeError("Unexpected rate-limited test result");
+  }
+  return summary.results;
+};
 
 test("validates the entire identity list and rejects duplicate or malformed lines", () => {
   const id = createSafeId<"caseLawDecision">();
@@ -580,4 +591,270 @@ if (!databaseUrl || !runPostgresTests) {
       expect(time).toBe(55_000);
     });
   });
+
+  test("a publisher refusal releases the batch and follows extensions of the shared cooldown before retrying the same row", async () => {
+    await withFixture(async (options, { ids, acquireBetween }) => {
+      let time = 100_000;
+      const waits: number[] = [];
+      const visits: string[] = [];
+      let reads = 0;
+      let refused = false;
+      const originalRefresh = options.refreshStoredFormex;
+      if (originalRefresh === undefined) {
+        throw new TypeError("Missing refresher");
+      }
+      const summary = await runRefresh({
+        ...options,
+        publisherNow: () => time,
+        readPublisherCooldown: async (publisherKey) => {
+          expect(publisherKey).toBe("cellar-eu");
+          reads += 1;
+          if (reads === 1) {
+            return 101_000;
+          }
+          if (reads < 4) {
+            return 102_500;
+          }
+          return null;
+        },
+        waitForCooldown: async (milliseconds) => {
+          await acquireBetween();
+          waits.push(milliseconds);
+          time += milliseconds;
+          expect(await Bun.file(options.resultsOut).text()).toBe("");
+        },
+        refreshStoredFormex: async (input) => {
+          visits.push(input.stored.sourceDocumentId ?? "");
+          if (!refused) {
+            refused = true;
+            return {
+              type: "rate-limited",
+              publisherKey: "cellar-eu",
+              status: 429,
+              cooldownUntilEpochMs: 101_000,
+            };
+          }
+          return await originalRefresh(input);
+        },
+      });
+      expect(summary.type).toBe("complete");
+      expect(waits).toEqual([1000, 1000, 500]);
+      expect(reads).toBe(4);
+      expect(visits.slice(0, 2)).toEqual(["62020CJ0001:cs", "62020CJ0001:cs"]);
+      expect(summary.results.map(({ id }) => id)).toEqual(ids);
+      expect(
+        (await Bun.file(options.resultsOut).text()).trim().split("\n"),
+      ).toHaveLength(ids.length);
+    });
+  });
+
+  test("three refusals stop without journaling the blocked row and resume after the last durable row", async () => {
+    await withFixture(async (options, { ids, acquireBetween }) => {
+      let time = 200_000;
+      let expiry = time;
+      let reads = 0;
+      let refusals = 0;
+      const originalRefresh = options.refreshStoredFormex;
+      if (originalRefresh === undefined) {
+        throw new TypeError("Missing refresher");
+      }
+      const summary = await runRefresh({
+        ...options,
+        publisherNow: () => time,
+        readPublisherCooldown: async () => {
+          reads += 1;
+          return expiry <= time ? null : expiry;
+        },
+        waitForCooldown: async (milliseconds) => {
+          await acquireBetween();
+          time += milliseconds;
+        },
+        refreshStoredFormex: async (input) => {
+          if (input.stored.sourceDocumentId === "62020CJ0002:cs") {
+            refusals += 1;
+            expiry = time + 750;
+            return {
+              type: "rate-limited",
+              publisherKey: "cellar-eu",
+              status: 429,
+              cooldownUntilEpochMs: expiry,
+            };
+          }
+          return await originalRefresh(input);
+        },
+      });
+      expect(summary).toEqual({
+        type: "rate-limited",
+        results: [
+          expect.objectContaining({ id: ids.at(0), outcome: "notice-missing" }),
+        ],
+        blockedId: ids.at(1),
+        resumeAfter: ids.at(0),
+        refusals: 3,
+      });
+      expect(refusals).toBe(3);
+      expect(reads).toBe(4);
+      expect(time).toBe(201_500);
+      await acquireBetween();
+      expect(
+        (await Bun.file(options.resultsOut).text()).trim().split("\n"),
+      ).toHaveLength(1);
+      if (summary.type !== "rate-limited") {
+        throw new TypeError("Expected a rate-limited summary");
+      }
+      const resumed = await runEcjFormexRefresh({
+        ...options,
+        after: summary.resumeAfter,
+      });
+      expect(resumed.map(({ id }) => id)).toEqual(ids.slice(1));
+      expect(resumed.at(0)?.outcome).toBe("formex-not-located");
+      expect(
+        (await Bun.file(options.resultsOut).text()).trim().split("\n"),
+      ).toHaveLength(ids.length);
+    });
+  });
+
+  test("a blocked first row has a null resume cursor and an empty journal", async () => {
+    await withFixture(async (options, { ids }) => {
+      let visits = 0;
+      const summary = await runRefresh({
+        ...options,
+        readPublisherCooldown: async () => null,
+        waitForCooldown: async () => {
+          throw new TypeError("An absent cooldown must not invent a wait");
+        },
+        refreshStoredFormex: async () => {
+          visits += 1;
+          return {
+            type: "rate-limited",
+            publisherKey: "cellar-eu",
+            status: 429,
+            cooldownUntilEpochMs: 1,
+          };
+        },
+      });
+      expect(summary).toEqual({
+        type: "rate-limited",
+        results: [],
+        blockedId: ids.at(0),
+        resumeAfter: null,
+        refusals: 3,
+      });
+      expect(visits).toBe(3);
+      expect(await Bun.file(options.resultsOut).text()).toBe("");
+    });
+  });
+
+  test("successful rows reset refusal accounting instead of accumulating refusals across the run", async () => {
+    await withFixture(async (options, { ids }) => {
+      const calls = new Map<string, number>();
+      const originalRefresh = options.refreshStoredFormex;
+      if (originalRefresh === undefined) {
+        throw new TypeError("Missing refresher");
+      }
+      const summary = await runRefresh({
+        ...options,
+        readPublisherCooldown: async () => null,
+        refreshStoredFormex: async (input) => {
+          const identity = input.stored.sourceDocumentId ?? "";
+          const visits = (calls.get(identity) ?? 0) + 1;
+          calls.set(identity, visits);
+          if (visits <= 2 || identity === "62020CJ0003:cs") {
+            return {
+              type: "rate-limited",
+              publisherKey: "cellar-eu",
+              status: 429,
+              cooldownUntilEpochMs: 1,
+            };
+          }
+          return await originalRefresh(input);
+        },
+      });
+      expect(summary.type).toBe("rate-limited");
+      if (summary.type !== "rate-limited") {
+        throw new TypeError("Expected a rate-limited summary");
+      }
+      expect(summary.blockedId).toBe(ids.at(2));
+      expect(summary.resumeAfter).toBe(ids.at(1));
+      expect(summary.refusals).toBe(3);
+      expect(summary.results.map(({ id }) => id)).toEqual(ids.slice(0, 2));
+      expect([...calls.values()]).toEqual([3, 3, 3]);
+      expect(
+        (await Bun.file(options.resultsOut).text()).trim().split("\n"),
+      ).toHaveLength(2);
+    });
+  });
+
+  test("the real publisher refusal error never becomes a generic retryable journal result", async () => {
+    await withFixture(async (options, { ids }) => {
+      const summary = await runRefresh({
+        ...options,
+        readPublisherCooldown: async () => null,
+        refreshStoredFormex: async ({ stored }) => {
+          throw new PublisherRateLimitRefusalError({
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor: stored.sourceDocumentId,
+            publisherKey: "cellar-eu",
+            status: 429,
+            cooldownUntilEpochMs: 1,
+          });
+        },
+      });
+      expect(summary).toEqual({
+        type: "rate-limited",
+        results: [],
+        blockedId: ids.at(0),
+        resumeAfter: null,
+        refusals: 3,
+      });
+      expect(await Bun.file(options.resultsOut).text()).toBe("");
+    });
+  });
+
+  for (const skew of [
+    { name: "ahead", epoch: 105_000, waits: [100, 100] },
+    { name: "behind", epoch: 95_000, waits: [1000, 1000] },
+  ]) {
+    test(`a local clock ${skew.name} of Redis cannot decide cooldown expiry`, async () => {
+      await withFixture(async (options, { acquireBetween }) => {
+        let time = skew.epoch;
+        let reads = 0;
+        let refused = false;
+        const waits: number[] = [];
+        const originalRefresh = options.refreshStoredFormex;
+        if (originalRefresh === undefined) {
+          throw new TypeError("Missing refresher");
+        }
+        const summary = await runRefresh({
+          ...options,
+          publisherNow: () => time,
+          readPublisherCooldown: async () => {
+            reads += 1;
+            return reads < 3 ? 102_000 : null;
+          },
+          waitForCooldown: async (milliseconds) => {
+            await acquireBetween();
+            waits.push(milliseconds);
+            time += milliseconds;
+          },
+          refreshStoredFormex: async (input) => {
+            if (!refused) {
+              refused = true;
+              return {
+                type: "rate-limited",
+                publisherKey: "cellar-eu",
+                status: 429,
+                cooldownUntilEpochMs: 102_000,
+              };
+            }
+            expect(reads).toBe(3);
+            return await originalRefresh(input);
+          },
+        });
+        expect(summary.type).toBe("complete");
+        expect(waits).toEqual(skew.waits);
+        expect(reads).toBe(3);
+      });
+    });
+  }
 }

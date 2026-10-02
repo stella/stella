@@ -4,12 +4,17 @@ import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   ADAPTER_PUBLISHER_GATES,
   createPublisherSlot,
+  deferPublisherGate,
   publisherRequestIntervalMs,
   publisherRequestsPerDay,
   PUBLISHER_GATES,
+  readPublisherCooldown,
   withPublisherRequestRateLimit,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { connectedGateClient } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import {
+  connectedGateClient,
+  publisherGateKeys,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import {
   fetchPublisher,
   fetchWithRetry,
@@ -218,16 +223,43 @@ describe("a run-scoped publisher rate limit", () => {
     Bun.sleep = originalSleep;
   });
 
-  test("counts listing, notice, HTML, and every Formex retry in the run window", async () => {
+  const createGateClock = () => {
     let now = 0;
     let nextSlot = 0;
+    let cooldownUntil = 0;
+    const reservations: string[][] = [];
+    const dependencies = {
+      redis: () => ({
+        send: (_command: string, args: string[]) => {
+          if (args.length === 5) {
+            reservations.push(args);
+            const intervalMs = Number(args.at(-1));
+            const slot = Math.max(now, nextSlot, cooldownUntil);
+            nextSlot = slot + intervalMs;
+            return slot - now;
+          }
+          if (args.length === 4) {
+            cooldownUntil = Math.max(cooldownUntil, now + Number(args.at(-1)));
+            return cooldownUntil - now;
+          }
+          return cooldownUntil > now ? cooldownUntil - now : 0;
+        },
+      }),
+      sleep: async (durationMs: number) => {
+        now += durationMs;
+      },
+    };
+    return { dependencies, reservations, now: () => now };
+  };
+
+  test("counts listing, notice, HTML, and every Formex retry in the run window", async () => {
     let formexAttempts = 0;
     const requests: { url: string; time: number }[] = [];
-    const reservations: string[][] = [];
+    const clock = createGateClock();
     globalThis.fetch = asFetchMock(
       mock(async (input) => {
         const url = String(input);
-        requests.push({ url, time: now });
+        requests.push({ url, time: clock.now() });
         if (url.endsWith("/formex") && formexAttempts++ === 0) {
           return new Response("", { status: 503 });
         }
@@ -239,19 +271,7 @@ describe("a run-scoped publisher rate limit", () => {
     const response = await withPublisherRequestRateLimit({
       gateId: "cellar-eu",
       requestsPerSecond: 2,
-      dependencies: {
-        redis: () => ({
-          send: (_command, args) => {
-            reservations.push(args);
-            const slot = Math.max(now, nextSlot);
-            nextSlot = slot + Number(args.at(-1));
-            return slot - now;
-          },
-        }),
-        sleep: async (durationMs) => {
-          now += durationMs;
-        },
-      },
+      dependencies: clock.dependencies,
       operation: async () => {
         const publisher = "https://publications.europa.eu";
         const listing = await fetchPublisher(`${publisher}/listing`, {
@@ -279,6 +299,7 @@ describe("a run-scoped publisher rate limit", () => {
     expect(Object.values(response).map((result) => result.status)).toEqual([
       200, 200, 200, 200,
     ]);
+    const reservations = clock.reservations;
     expect(reservations).toHaveLength(5);
     expect(reservations.map((args) => args.at(-1))).toEqual([
       "500",
@@ -304,6 +325,54 @@ describe("a run-scoped publisher rate limit", () => {
         ).length,
       ).toBeLessThanOrEqual(2);
     }
+  });
+
+  test("the shared EU cooldown still blocks requests inside a scoped rate run", async () => {
+    const clock = createGateClock();
+    const { key, cooldownKey } = publisherGateKeys("cellar-eu");
+    const requestTimes: number[] = [];
+    globalThis.fetch = asFetchMock(
+      mock(async () => {
+        requestTimes.push(clock.now());
+        return new Response("", { status: 200 });
+      }),
+    );
+
+    const cooldownUntil = await withPublisherRequestRateLimit({
+      gateId: "cellar-eu",
+      requestsPerSecond: 1,
+      dependencies: clock.dependencies,
+      operation: async () => {
+        const deferred = await deferPublisherGate("cellar-eu", 5000);
+        const sharedDeadline = await readPublisherCooldown("cellar-eu");
+        const first = await fetchPublisher(
+          "https://publications.europa.eu/formex",
+          {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          },
+        );
+        const second = await fetchPublisher(
+          "https://publications.europa.eu/formex",
+          {
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+          },
+        );
+        return { deferred, sharedDeadline, first, second };
+      },
+    });
+
+    expect(cooldownUntil.deferred).toBe(5000);
+    expect(cooldownUntil.sharedDeadline).toBe(5000);
+    expect(cooldownUntil.first.status).toBe(200);
+    expect(cooldownUntil.second.status).toBe(200);
+    expect(requestTimes).toEqual([5000, 6000]);
+    expect(clock.reservations.at(0)?.slice(2, 4)).toEqual([key, cooldownKey]);
+    expect(clock.reservations.map((args) => args.at(-1))).toEqual([
+      "1000",
+      "1000",
+    ]);
   });
 
   test("rejects rates above the gate's two requests per second", async () => {

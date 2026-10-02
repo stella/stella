@@ -9,7 +9,10 @@ import {
   isValidCelex,
   listCelexVariants,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { withPublisherRequestRateLimit } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  readPublisherCooldown,
+  withPublisherRequestRateLimit,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -104,17 +107,19 @@ const runFormexOnly = async ({
     console.error("No case-law source configured for adapter eu-ecj");
     return 1;
   }
+  const resultsPath = resultsOut ?? "eu-ecj-refetch-results.jsonl";
   const interruption = new AbortController();
   const interrupt = () => interruption.abort();
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
   try {
-    await runEcjFormexRefresh({
+    const summary = await runEcjFormexRefresh({
       signal: interruption.signal,
+      readPublisherCooldown,
       ingestionDb,
       sourceId: source.id,
       idsFile,
-      resultsOut: resultsOut ?? "eu-ecj-refetch-results.jsonl",
+      resultsOut: resultsPath,
       apply,
       after,
       limit,
@@ -150,6 +155,36 @@ const runFormexOnly = async ({
         };
       },
     });
+    switch (summary.type) {
+      case "complete":
+        console.log(
+          JSON.stringify({
+            type: summary.type,
+            rows: summary.results.length,
+            resultsOut: resultsPath,
+          }),
+        );
+        break;
+      case "rate-limited":
+        console.log(
+          JSON.stringify({
+            type: summary.type,
+            rows: summary.results.length,
+            blockedId: summary.blockedId,
+            resumeAfter: summary.resumeAfter,
+            refusals: summary.refusals,
+          }),
+        );
+        console.log(
+          summary.resumeAfter === null
+            ? "Resume with the same arguments and no --after cursor."
+            : `Resume with the same arguments and --after ${summary.resumeAfter}.`,
+        );
+        break;
+      default:
+        summary satisfies never;
+        return panic("Unhandled Formex refresh summary");
+    }
   } finally {
     process.removeListener("SIGINT", interrupt);
     process.removeListener("SIGTERM", interrupt);
