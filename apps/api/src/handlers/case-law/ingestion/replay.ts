@@ -1102,11 +1102,12 @@ export type ReplayCaseLawSourceOptions = {
   withdraw?: WithdrawDocument;
   /**
    * Receives every visited row's report, in walk order. The report's
-   * problem listing is a sample; this sees every row. Awaited before the row
-   * counts as finished: a failure stops the run with the cursor behind the
-   * row, so a resume records it instead of stepping over it.
+   * problem listing is a sample; this sees every row. A failure stops the
+   * run after that row: an applying run has already written it, so its
+   * report goes into the halt reason instead of being lost to a resume that
+   * would see the row as already done.
    */
-  recordRow?: (row: ReplayRowReport) => Promise<void>;
+  recordRow?: ((row: ReplayRowReport) => Promise<void>) | undefined;
 };
 
 export type ReplayRun =
@@ -1254,19 +1255,6 @@ export const replayCaseLawSource = async ({
     }
     const rowReport = attempt.value;
 
-    if (recordRow !== undefined) {
-      const recorded = await Result.tryPromise({
-        try: async () => {
-          await recordRow(rowReport);
-        },
-        catch: (cause) => cause,
-      });
-      if (Result.isError(recorded)) {
-        haltReason = `${row.caseNumber} (${row.language}) could not be recorded: ${failureDetail(recorded.error)}`;
-        return false;
-      }
-    }
-
     visited += 1;
     outcomes[rowReport.outcome] += 1;
     if (rowReport.rejection !== undefined) {
@@ -1284,11 +1272,25 @@ export const replayCaseLawSource = async ({
     }
     cursor = row.id;
 
+    const recorded =
+      recordRow === undefined
+        ? Result.ok()
+        : await Result.tryPromise({
+            try: async () => {
+              await recordRow(rowReport);
+            },
+            catch: (cause) => cause,
+          });
+
     if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
       haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
       return false;
     }
     resumeAfter = row.id;
+    if (Result.isError(recorded)) {
+      haltReason = `result of ${row.caseNumber} (${row.language}) could not be recorded (${failureDetail(recorded.error)}): ${JSON.stringify(rowReport)}`;
+      return false;
+    }
     return await replayPage(page, index + 1);
   };
 

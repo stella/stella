@@ -937,7 +937,7 @@ describe("replay of a source", () => {
     }
   });
 
-  test("a row the sink cannot record halts the run behind it, and a resume records it", async () => {
+  test("a row the sink cannot record halts the run with its result, and a resume continues after it", async () => {
     const sourceId = await createSource();
     const ids: SafeId<"caseLawDecision">[] = [];
     for (const sub of [1, 2, 3]) {
@@ -995,14 +995,16 @@ describe("replay of a source", () => {
     if (failing.type !== "ran") {
       throw new TypeError("Expected the capable adapter to run");
     }
-    // The row was replayed but never recorded, so it does not count as
-    // finished: the cursor stays behind it.
-    expect(failing.report.visited).toBe(1);
-    expect(failing.report.resumeAfter).toBe(firstId);
-    expect(failing.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
-    expect(failing.report.haltReason).toContain("C-2/26");
+    // An applying run has already written the row by the time the sink
+    // fails, so a resume would see it as done. The row counts as finished
+    // and its result travels in the halt reason instead.
+    expect(failing.report.visited).toBe(2);
+    expect(failing.report.resumeAfter).toBe(secondId);
+    expect(failing.report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(2);
     expect(failing.report.haltReason).toContain("could not be recorded");
     expect(failing.report.haltReason).toContain("disk full");
+    expect(failing.report.haltReason).toContain(secondId);
+    expect(failing.report.haltReason).toContain('"outcome":"rejected"');
     expect(recorded).toEqual([firstId]);
 
     const resumed = await run(failing.report.resumeAfter, null);
@@ -1010,7 +1012,8 @@ describe("replay of a source", () => {
       throw new TypeError("Expected the capable adapter to run");
     }
     expect(resumed.report.haltReason).toBeNull();
-    expect(recorded).toEqual([firstId, secondId, thirdId]);
+    expect(resumed.report.visited).toBe(1);
+    expect(recorded).toEqual([firstId, thirdId]);
   });
 
   test("a row ingested after the run's end was read is not visited by it", async () => {
