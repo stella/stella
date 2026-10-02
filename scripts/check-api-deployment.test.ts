@@ -715,8 +715,7 @@ describe("API deployment health receipt", () => {
         const installed =
           installCondition === null ||
           (typeof installCondition === "string" &&
-            condition !== null &&
-            condition.includes(installCondition));
+            condition?.includes(installCondition) === true);
         if (!installed && typeof step["run"] === "string") {
           installFree.push(step["run"]);
         }

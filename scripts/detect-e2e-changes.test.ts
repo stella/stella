@@ -5,6 +5,7 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
@@ -1186,7 +1187,19 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     import.meta.dirname,
     "../.github/actions/setup-playwright/run-in-image.sh",
   );
-  const root = path.resolve(import.meta.dirname, "..");
+  // A self-contained workspace: the runner reads the pinned image and the
+  // installed Playwright package from it, and CI runs this test without the
+  // dependency install, so the real checkout may have no node_modules.
+  const root = path.join(realpathSync(directory), "workspace");
+  const imageFile = ".github/actions/setup-playwright/image.txt";
+  mkdirSync(path.join(root, path.dirname(imageFile)), { recursive: true });
+  writeFileSync(
+    path.join(root, imageFile),
+    readFileSync(path.resolve(import.meta.dirname, "..", imageFile), "utf-8"),
+  );
+  mkdirSync(path.join(root, "apps/web/node_modules/@playwright/test"), {
+    recursive: true,
+  });
   const cache = path.join(directory, ".bun/install/cache");
   mkdirSync(cache, { recursive: true });
   writeFileSync(
