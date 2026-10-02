@@ -1,5 +1,6 @@
 import { Result, TaggedError } from "better-result";
 import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import type { Transaction } from "@/api/db/root";
@@ -120,6 +121,21 @@ export const setSourceReportedTotal = async ({
 
 /** Minimum interval between attempts, including failures and worker restarts. */
 export const SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
+export const SOURCE_STORED_TOTAL_REFRESH_WINDOW_MS = 60 * 60 * 1000;
+
+/** Stable source phases skip missed work instead of replaying a refresh backlog. */
+export const sourceStoredTotalNextRefreshAt = (
+  sourceId: SafeId<"caseLawSource">,
+  earliest: Date,
+): Date => {
+  const phase =
+    createHash("sha256").update(sourceId).digest().readUInt32BE(0) %
+    SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS;
+  const period = Math.ceil(
+    (earliest.getTime() - phase) / SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  );
+  return new Date(period * SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS + phase);
+};
 
 const STORED_TOTAL_STATEMENT_TIMEOUT_MS = 5000;
 const STORED_TOTAL_LOCK_TIMEOUT_MS = 1000;
@@ -130,12 +146,15 @@ export type StoredTotalRefresh =
   /** A recent measurement or attempt prevents another refresh. */
   | "fresh"
   /** The previous figure stands; a claimed attempt still backs off. */
-  | "unavailable";
+  | "unavailable"
+  /** Admission held; the durable schedule prevents a recovery burst. */
+  | "held";
 
 type RefreshSourceStoredTotalOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   now: Date;
+  acquireAdmission: () => Promise<"granted" | "held">;
   estimateSource?: (sourceId: SafeId<"caseLawSource">) => Promise<number>;
 };
 
@@ -222,10 +241,18 @@ export const sourceStoredTotalRefreshClaim = ({
   // audit: skip — public case-law corpus bookkeeping, no workspace data
   return tx
     .update(caseLawSources)
-    .set({ storedTotalAttemptedAt: now })
+    .set({
+      storedTotalAttemptedAt: now,
+      storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
+        sourceId,
+        new Date(now.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
+      ),
+    })
     .where(
       and(
         eq(caseLawSources.id, sourceId),
+        sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
+        sql`${caseLawSources.storedTotalNextRefreshAt} > ${new Date(now.getTime() - SOURCE_STORED_TOTAL_REFRESH_WINDOW_MS).toISOString()}::timestamptz`,
         or(
           sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) IS NULL`,
           sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) <= ${dueBefore.toISOString()}::timestamptz`,
@@ -245,14 +272,44 @@ export const refreshSourceStoredTotal = async ({
   now,
   scopedDb,
   sourceId,
+  acquireAdmission,
   estimateSource = estimateSourceOnDedicatedConnection,
 }: RefreshSourceStoredTotalOptions): Promise<StoredTotalRefresh> => {
   const attempt = await Result.tryPromise(async () => {
+    // Missing/expired slots are rescheduled without doing catch-up work. A
+    // persisted legacy measurement still enforces the minimum attempt interval.
+    await scopedDb(async (tx) => {
+      // audit: skip — public case-law corpus bookkeeping, no workspace data
+      await tx
+        .update(caseLawSources)
+        .set({
+          storedTotalNextRefreshAt: sql`to_timestamp((
+            ${sourceStoredTotalNextRefreshAt(sourceId, new Date(0)).getTime()} +
+            ceil((greatest(
+              ${now.getTime() + 1},
+              extract(epoch FROM greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf})) * 1000 + ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
+            ) - ${sourceStoredTotalNextRefreshAt(sourceId, new Date(0)).getTime()}) / ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}) * ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
+          ) / 1000)`,
+        })
+        .where(
+          and(
+            eq(caseLawSources.id, sourceId),
+            or(
+              isNull(caseLawSources.storedTotalNextRefreshAt),
+              sql`${caseLawSources.storedTotalNextRefreshAt} <= ${new Date(now.getTime() - SOURCE_STORED_TOTAL_REFRESH_WINDOW_MS).toISOString()}::timestamptz`,
+            ),
+          ),
+        );
+    });
     const claimed = await scopedDb(
       async (tx) => await sourceStoredTotalRefreshClaim({ tx, sourceId, now }),
     );
     if (claimed.length === 0) {
       return "fresh" as const;
+    }
+    if ((await acquireAdmission()) === "held") {
+      logger.info("case_law.source_stored_total.held", { sourceId });
+      return "held" as const;
     }
     const estimated = v.parse(
       storedTotalEstimateSchema,

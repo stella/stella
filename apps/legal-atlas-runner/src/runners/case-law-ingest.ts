@@ -21,6 +21,7 @@ import { panic } from "better-result";
 
 import { Temporal } from "@stll/time";
 
+import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
@@ -53,6 +54,7 @@ import {
   RECONCILIATION_UNIT_SETTLE_MS,
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
+import { createSourceStoredTotalAdmission } from "@/api/handlers/case-law/ingestion/source-total-admission";
 import {
   readSourceReportedTotals,
   setSourceReportedTotal,
@@ -670,6 +672,12 @@ const runOneCycle = async (
       source,
       sourceLease,
       scopedDb: ingestionDb,
+      acquireStoredTotalAdmission: createSourceStoredTotalAdmission({
+        readVerdict: createDatabaseLoadVerdictReader(
+          { transaction: ingestionDb },
+          "case_law_decisions",
+        ),
+      }),
       dbSlot: dbWriteSemaphore,
       cycle: {
         budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,

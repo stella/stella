@@ -775,6 +775,7 @@ describe("runIngestionPipeline — database timeouts", () => {
     };
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -875,6 +876,7 @@ describe("runIngestionPipeline — failure records", () => {
     const { scopedDb, state } = failingDecisionDb(null);
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -900,6 +902,7 @@ describe("runIngestionPipeline — failure records", () => {
     logs = installRecordingLogger();
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -925,6 +928,7 @@ describe("runIngestionPipeline — failure records", () => {
     const { scopedDb, state } = failingDecisionDb(postgresError("40001"));
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -1007,6 +1011,7 @@ describe("runIngestionPipeline — empty-page cursor progress", () => {
     };
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -1078,6 +1083,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
     // the cycle deadline long before it can finish. The deadline has not
     // fired yet: it is the remaining budget, not the abort, that decides.
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb: cursorOnlyDb((cursor) => {
@@ -1118,6 +1124,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
 
     let persistedCursor: string | null | undefined;
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: lease,
       scopedDb: cursorOnlyDb((cursor) => {
@@ -1145,6 +1152,7 @@ describe("runIngestionPipeline — cycle deadline", () => {
 
     let persistedCursor: string | null | undefined;
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb: cursorOnlyDb((cursor) => {

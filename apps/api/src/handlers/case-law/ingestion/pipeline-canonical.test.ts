@@ -943,6 +943,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       );
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,
@@ -989,6 +990,7 @@ describe("runIngestionPipeline — canonical corpus write failure", () => {
       );
 
     const result = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease: testSourceLease(source),
       scopedDb,

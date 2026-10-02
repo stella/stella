@@ -309,6 +309,32 @@ const drizzleQuery =
     return executedRows(await tx.execute(sql.join(parts, sql``)));
   };
 
+/** Bounded shared health indicators for work with its own admission budget. */
+export const createDatabaseLoadVerdictReader = (
+  db: { transaction: IngestionTransactionRunner<Transaction> },
+  tableName: string,
+) => {
+  const indicators = createBoundedIndicatorQuery({
+    runInTransaction: db.transaction.bind(db),
+    transactionQuery: (tx: Transaction) => drizzleQuery(tx),
+    readTimeoutMs: defaultConfig.readTimeoutMs,
+  });
+  const read = createVerdictReader({
+    query: indicators.query,
+    tableName,
+    clock: () => Temporal.Now.instant().epochMilliseconds,
+    config: defaultConfig,
+  });
+  return async () => {
+    const result = await Result.tryPromise(read);
+    await indicators.settle();
+    if (Result.isError(result)) {
+      throw result.error;
+    }
+    return result.value;
+  };
+};
+
 export const createScriptBackfillRuntime = ({
   db,
   ...options

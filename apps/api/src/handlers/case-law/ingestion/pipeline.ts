@@ -53,7 +53,10 @@ import {
   remainingCycleMs,
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
-import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
+import type {
+  CycleDeadline,
+  StartCycleDeadlineOptions,
+} from "@/api/lib/legal-search/cycle-deadline";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -66,6 +69,9 @@ type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
+  acquireStoredTotalAdmission: (options: {
+    deadline: CycleDeadline | undefined;
+  }) => Promise<"granted" | "held">;
   /**
    * The cycle's time budget, and the signals that end it early. The loop
    * starts a page only while enough of the budget is left for the page to
@@ -203,6 +209,7 @@ export const runIngestionPipeline = async ({
   source,
   sourceLease,
   scopedDb,
+  acquireStoredTotalAdmission,
   cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
@@ -672,6 +679,8 @@ export const runIngestionPipeline = async ({
     scopedDb,
     sourceId: source.id,
     now: new Date(),
+    acquireAdmission: async () =>
+      await acquireStoredTotalAdmission({ deadline }),
   });
 
   return {

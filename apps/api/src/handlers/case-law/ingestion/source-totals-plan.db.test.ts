@@ -74,6 +74,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           id: first,
           adapterKey: `plan-${first}`,
           name: "First planner source",
+          storedTotalNextRefreshAt: new Date("2026-10-03T12:00:00Z"),
         },
         {
           id: second,

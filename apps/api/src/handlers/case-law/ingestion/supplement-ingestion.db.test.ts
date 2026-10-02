@@ -898,6 +898,7 @@ test("the crawl places a page's reasons after its decisions, from the payload it
     );
   try {
     const run = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease,
       scopedDb,
