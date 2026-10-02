@@ -9,6 +9,7 @@ import type {
   EntityCheckResult,
   EntityCheckSubject,
 } from "@stll/business-registries/entity-checks";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import type { CountryCode } from "@stll/country-codes";
 import { Temporal } from "@stll/time";
 
@@ -63,12 +64,13 @@ export type CounterpartyCheckSubject =
 export type CounterpartyCheckResult = EntityCheckResult | SanctionsCheckResult;
 
 export type RunEntityCheckSharedProps = {
+  observer: RegistryRequestObservation;
   check: CounterpartyCheckKind;
   subject: CounterpartyCheckSubject;
   signal?: AbortSignal | undefined;
   runCheck?: typeof runEntityCheck | undefined;
   /** What the sanctions check reads: the lists, the register, the firm's jurisdictions. */
-  sanctions: SanctionsCheckDependencies & {
+  sanctions: Omit<SanctionsCheckDependencies, "observer"> & {
     runSanctionsCheck?: typeof runSanctionsCheck | undefined;
   };
 };
@@ -232,11 +234,13 @@ const toEntityCheckSubject = (
 
 const runRegisterCheck = async ({
   check,
+  observer,
   subject,
   signal,
   runCheck,
 }: {
   check: EntityCheckKind;
+  observer: RegistryRequestObservation;
   subject: CounterpartyCheckSubject;
   signal: AbortSignal | undefined;
   runCheck: typeof runEntityCheck;
@@ -246,6 +250,7 @@ const runRegisterCheck = async ({
     return Result.err(entitySubject.error);
   }
   const result = await runCheck({
+    observer,
     kind: check,
     subject: entitySubject.value,
     signal,
@@ -287,6 +292,7 @@ const runRegisterCheck = async ({
  * missing result.
  */
 export const runEntityCheckShared = async ({
+  observer,
   check,
   subject,
   signal,
@@ -296,7 +302,13 @@ export const runEntityCheckShared = async ({
   Result<CounterpartyCheckResult, HandlerError>
 > => {
   if (check !== "sanctions") {
-    return await runRegisterCheck({ check, subject, signal, runCheck });
+    return await runRegisterCheck({
+      check,
+      observer,
+      subject,
+      signal,
+      runCheck,
+    });
   }
   if (subject.type === "tax-id") {
     return invalidSubject(
@@ -306,5 +318,5 @@ export const runEntityCheckShared = async ({
   }
   const { runSanctionsCheck: run = runSanctionsCheck, ...dependencies } =
     sanctions;
-  return await run({ subject, dependencies });
+  return await run({ subject, dependencies: { ...dependencies, observer } });
 };

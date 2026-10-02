@@ -386,7 +386,7 @@ test.each(["search", "extract", "history", "documents", "related"] as const)(
         const endpoint = endpointForUrl(url);
         return payloads[endpoint];
       },
-      async () => lookupFullRecordByIco("31333532"),
+      async () => lookupFullRecordByIco("31333532", { observer: "unobserved" }),
     );
     expect(baseline?.company.ico).toBe("31333532");
     expect(baseline?.history.status).toBe("loaded");
@@ -417,7 +417,7 @@ test.each(["search", "extract", "history", "documents", "related"] as const)(
       };
       if (kind === "search") {
         const results = await expectRegistryResponses(responseOf, async () =>
-          searchByName("ESET"),
+          searchByName("ESET", { observer: "unobserved" }),
         );
         if (results) {
           for (const row of results) {
@@ -429,7 +429,7 @@ test.each(["search", "extract", "history", "documents", "related"] as const)(
         return;
       }
       const record = await expectRegistryResponses(responseOf, async () =>
-        lookupFullRecordByIco("31333532"),
+        lookupFullRecordByIco("31333532", { observer: "unobserved" }),
       );
       if (!record) {
         return;

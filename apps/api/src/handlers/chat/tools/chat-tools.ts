@@ -761,6 +761,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     dispatch: registryDispatch,
   });
   const businessRegistryTools = createBusinessRegistryTools({
+    organizationId,
     enabledHandlers: businessRegistryHandlers,
   });
   // Findings name natural persons with birth dates and identifiers, which the

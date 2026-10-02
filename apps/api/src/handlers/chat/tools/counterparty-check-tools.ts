@@ -16,6 +16,10 @@ import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { isRecord } from "@/api/lib/type-guards";
 import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
+import {
   agentInputValidationError,
   normalizeObjectInputAtBoundary,
 } from "@/api/mcp/input-normalization";
@@ -106,10 +110,15 @@ export const createCounterpartyCheckTools = ({
         );
       }
       const { check, subject } = parsed.output;
+      const observer = actionRequestObserver(
+        organizationId,
+        ACTION_COST_CALL_KIND.registryRequest,
+      );
       const result = (
         await Result.gen(async function* () {
           const checked = yield* toCounterpartyCheckSubject(subject);
           return await runEntityCheckShared({
+            observer,
             check,
             subject: checked,
             runCheck,

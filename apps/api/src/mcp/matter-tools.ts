@@ -82,6 +82,10 @@ import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
@@ -1000,7 +1004,12 @@ const handleLookupBusinessRegistryTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const result = await lookupBusinessRegistryShared({
+    observer,
     scopedDb: context.scopedDb,
     organizationId: context.organizationId,
     registry: parsed.output.registry,
@@ -1242,7 +1251,12 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
   if (Result.isError(subject)) {
     return internalFailureResult(subject.error);
   }
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const result = await runEntityCheckShared({
+    observer,
     check: parsed.output.check,
     subject: subject.value,
     runCheck: context.testDependencies?.runEntityCheck,
