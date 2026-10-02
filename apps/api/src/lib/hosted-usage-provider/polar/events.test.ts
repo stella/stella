@@ -298,7 +298,7 @@ describe("native event dispositions", () => {
     "subscription.cycled": "entitlement.updated",
     "subscription.paused": "entitlement.paused",
     "subscription.resumed": "entitlement.updated",
-    "subscription.migrated": "entitlement.revoked",
+    "subscription.migrated": "entitlement.reconciliation",
     "order.paid": "allocation.created",
   } as const satisfies Record<
     (typeof POLAR_HANDLED_EVENT_TYPES)[number],

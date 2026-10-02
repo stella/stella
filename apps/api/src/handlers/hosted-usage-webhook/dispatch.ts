@@ -17,7 +17,7 @@ import { panic, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
 import * as v from "valibot";
 
-import { member } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   usagePolicies,
@@ -363,6 +363,60 @@ const mapHostedProviderStatus = (
   return null;
 };
 
+type HostedEntitlementReconciliationParams = {
+  tx: Transaction;
+  payload: HostedUsageEntitlementPayload;
+  eventId: string;
+  reason: "provider_migration" | "unrecognized_status";
+};
+
+export const handleHostedEntitlementReconciliation = async ({
+  tx,
+  payload,
+  eventId,
+  reason,
+}: HostedEntitlementReconciliationParams): Promise<DispatchOutcome> => {
+  const existing =
+    (await findEntitlementByHostedExternalId(tx, payload.id)) ??
+    (await findEntitlementByHostedAccountRef(tx, payload.account_ref));
+  const organizationId =
+    existing?.organizationId ??
+    parseAuthProviderId<"organization">(
+      payload.metadata?.organization_id ?? "",
+    );
+  if (organizationId === null) {
+    return {
+      kind: "ignored",
+      reason: "cannot resolve reconciliation audit owner",
+    };
+  }
+  if (!existing) {
+    const owners = await tx
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, organizationId))
+      .limit(1);
+    if (owners.length === 0) {
+      return {
+        kind: "ignored",
+        reason: "reconciliation organization does not exist",
+      };
+    }
+  }
+  await recordWebhookAuditEvent({
+    tx,
+    organizationId,
+    eventId,
+    action: AUDIT_ACTION.REVIEW,
+    resourceType: existing
+      ? AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT
+      : AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: existing?.id ?? organizationId,
+    changes: { reconciliation: { old: null, new: reason } },
+  });
+  return { kind: "ignored", reason };
+};
+
 const closedEntitlementStatuses: ReadonlySet<UsageEntitlementStatus> = new Set(
   CLOSED_USAGE_ENTITLEMENT_STATUSES,
 );
@@ -378,8 +432,9 @@ const readHostedPeriod = (
     return null;
   }
   const start = new Date(payload.current_period_start);
-  // A suspended snapshot without an end stores a closed interval, so a
-  // first delivery fences older activation without allocating capacity.
+  // Polar current_period_end is null on a suspended snapshot. Use
+  // current_period_start as its equal bound to fence older activation
+  // without inventing an end or allocating capacity.
   const end = new Date(
     payload.current_period_end ?? payload.current_period_start,
   );
@@ -408,7 +463,12 @@ export const handleHostedEntitlementUpsert = async ({
 }: HostedEntitlementUpsertParams): Promise<DispatchOutcome> => {
   const status = mapHostedProviderStatus(payload.status);
   if (status === null) {
-    return { kind: "ignored", reason: "unrecognized provider status" };
+    return await handleHostedEntitlementReconciliation({
+      tx,
+      payload,
+      eventId,
+      reason: "unrecognized_status",
+    });
   }
   const period = readHostedPeriod(payload, status);
   if (period === null) {
@@ -838,7 +898,12 @@ export const handleUsageEntitlementStatusChange = async ({
 }: UsageEntitlementStatusUpdateParams): Promise<DispatchOutcome> => {
   const mappedStatus = mapHostedProviderStatus(payload.status);
   if (mappedStatus === null) {
-    return { kind: "ignored", reason: "unrecognized provider status" };
+    return await handleHostedEntitlementReconciliation({
+      tx,
+      payload,
+      eventId,
+      reason: "unrecognized_status",
+    });
   }
   const transition = {
     canceled: {

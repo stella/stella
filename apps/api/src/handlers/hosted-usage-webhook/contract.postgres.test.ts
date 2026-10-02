@@ -225,59 +225,87 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
     });
   }
 
-  test("unknown status emits an alert and cannot create or change access", async () => {
-    await withFixture(async (tx, fixture) => {
-      const logs = installRecordingLogger();
-      const analytics = installRecordingAnalytics();
-      try {
-        const eventId = await deliver({
-          tx,
-          type: "subscription.created",
-          data: { ...fixture.data, status: "UNRECOGNISED" },
+  const reconciliationCases = [
+    {
+      type: "subscription.migrated",
+      status: "active",
+      alert: "usage_provider.webhook.contract_mismatch",
+    },
+    {
+      type: "subscription.updated",
+      status: "UNRECOGNISED",
+      alert: "usage_provider.webhook.unknown_status",
+    },
+  ] as const;
+  for (const { type, status, alert } of reconciliationCases) {
+    for (const priorStatus of [null, ...POLAR_ENTITLEMENT_STATUSES]) {
+      test(`${type} reconciliation preserves ${priorStatus ?? "absent"} state and audits exactly once`, async () => {
+        await withFixture(async (tx, fixture) => {
+          if (priorStatus !== null) {
+            await deliver({
+              tx,
+              type: "subscription.created",
+              data: { ...fixture.data, status: priorStatus },
+            });
+          }
+          const before = await readState(tx, fixture.organizationId);
+          const logs = installRecordingLogger();
+          const analytics = installRecordingAnalytics();
+          try {
+            const data = {
+              ...fixture.data,
+              status,
+              seats: 7,
+              modified_at: "2026-06-03T00:00:00Z",
+              metadata: {
+                organization_id:
+                  priorStatus === null
+                    ? fixture.organizationId
+                    : "org_unrelated",
+              },
+            };
+            const eventId = await deliver({ tx, type, data });
+            const after = await readState(tx, fixture.organizationId);
+            expect(after.entitlements).toEqual(before.entitlements);
+            expect(after.allocations).toEqual(before.allocations);
+            expect(after.audits).toHaveLength(before.audits.length + 1);
+            expect(
+              after.audits.filter(
+                ({ triggerSourceId }) => triggerSourceId === eventId,
+              ),
+            ).toMatchObject([
+              {
+                action: "review",
+                performerType: "service",
+                triggerType: "webhook",
+                organizationId: fixture.organizationId,
+              },
+            ]);
+            expect(
+              logs.at("ERROR").filter(({ message }) => message === alert),
+            ).toHaveLength(1);
+            expect(analytics.exceptions()).toHaveLength(1);
+            const receipts = await tx
+              .select()
+              .from(hostedUsageWebhookEvents)
+              .where(eq(hostedUsageWebhookEvents.eventId, eventId));
+            expect(receipts.at(0)?.result).toBe("ignored");
+            await deliver({ tx, type, data, eventId });
+            expect(await readState(tx, fixture.organizationId)).toEqual(after);
+          } finally {
+            logs.restore();
+            analytics.restore();
+          }
         });
-        const receipts = await tx
-          .select()
-          .from(hostedUsageWebhookEvents)
-          .where(eq(hostedUsageWebhookEvents.eventId, eventId));
-        expect(receipts.at(0)?.result).toBe("ignored");
-        expect(await readState(tx, fixture.organizationId)).toEqual({
-          entitlements: [],
-          allocations: [],
-          audits: [],
-        });
-        expect(
-          logs
-            .at("ERROR")
-            .filter(
-              ({ message }) =>
-                message === "usage_provider.webhook.unknown_status",
-            ),
-        ).toHaveLength(1);
-        expect(analytics.exceptions()).toHaveLength(1);
-        await deliver({ tx, type: "subscription.active", data: fixture.data });
-        const before = await readState(tx, fixture.organizationId);
-        await deliver({
-          tx,
-          type: "subscription.updated",
-          data: {
-            ...fixture.data,
-            status: "UNRECOGNISED",
-            modified_at: "2026-06-02T00:00:00Z",
-          },
-        });
-        expect(await readState(tx, fixture.organizationId)).toEqual(before);
-      } finally {
-        logs.restore();
-        analytics.restore();
-      }
-    });
-  });
+      });
+    }
+  }
 
   const lifecycle = [
     { type: "subscription.cycled", status: "active", expected: "active" },
     { type: "subscription.paused", status: "paused", expected: "paused" },
     { type: "subscription.resumed", status: "active", expected: "active" },
-    { type: "subscription.migrated", status: "active", expected: "cancelled" },
+    { type: "subscription.migrated", status: "active", expected: "active" },
   ] as const;
   for (const { type, status, expected } of lifecycle) {
     test(`${type} writes an attributed audit once and applies its disposition`, async () => {
@@ -610,6 +638,38 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
           expect(Result.isOk(result)).toBe(true);
           continue;
         }
+        expect(Result.isError(result)).toBe(true);
+        if (Result.isError(result)) {
+          expect(getPgErrorCode(result.error)).toBe("23514");
+        }
+      }
+    });
+  });
+
+  test("Postgres rejects inverted periods for every persisted status", async () => {
+    await withFixture(async (tx, fixture) => {
+      await deliver({ tx, type: "subscription.created", data: fixture.data });
+      for (const status of USAGE_ENTITLEMENT_STATUSES) {
+        const result = await Result.tryPromise({
+          try: async () =>
+            await tx.transaction(
+              async (nested) =>
+                await nested
+                  .update(usageEntitlements)
+                  .set({
+                    status,
+                    currentPeriodStart: new Date(END),
+                    currentPeriodEnd: new Date(START),
+                  })
+                  .where(
+                    eq(
+                      usageEntitlements.organizationId,
+                      fixture.organizationId,
+                    ),
+                  ),
+            ),
+          catch: (cause) => cause,
+        });
         expect(Result.isError(result)).toBe(true);
         if (Result.isError(result)) {
           expect(getPgErrorCode(result.error)).toBe("23514");

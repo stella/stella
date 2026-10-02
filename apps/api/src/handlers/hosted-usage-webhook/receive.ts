@@ -31,6 +31,7 @@ import * as v from "valibot";
 
 import {
   handleHostedAllocation,
+  handleHostedEntitlementReconciliation,
   handleUsageEntitlementStatusChange,
   handleHostedEntitlementUpsert,
 } from "@/api/handlers/hosted-usage-webhook/dispatch";
@@ -366,6 +367,13 @@ const dispatchEvent = async (
         tx,
         payload: event.data,
         eventId,
+      });
+    case "entitlement.reconciliation":
+      return await handleHostedEntitlementReconciliation({
+        tx,
+        payload: event.data,
+        eventId,
+        reason: "provider_migration",
       });
     case "entitlement.paused":
       return await handleUsageEntitlementStatusChange({

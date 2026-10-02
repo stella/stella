@@ -18,6 +18,7 @@ const ENTITLEMENT_UPDATED_EVENT_TYPE = "entitlement.updated";
 const ENTITLEMENT_ACTIVE_EVENT_TYPE = "entitlement.active";
 const ENTITLEMENT_CANCELED_EVENT_TYPE = "entitlement.canceled";
 const ENTITLEMENT_REVOKED_EVENT_TYPE = "entitlement.revoked";
+const ENTITLEMENT_RECONCILIATION_EVENT_TYPE = "entitlement.reconciliation";
 const ENTITLEMENT_PAUSED_EVENT_TYPE = "entitlement.paused";
 const ALLOCATION_CREATED_EVENT_TYPE = "allocation.created";
 
@@ -28,6 +29,7 @@ export const HOSTED_USAGE_HANDLED_EVENT_TYPES = [
   ENTITLEMENT_CANCELED_EVENT_TYPE,
   ENTITLEMENT_REVOKED_EVENT_TYPE,
   ENTITLEMENT_PAUSED_EVENT_TYPE,
+  ENTITLEMENT_RECONCILIATION_EVENT_TYPE,
   ALLOCATION_CREATED_EVENT_TYPE,
 ] as const;
 
@@ -121,6 +123,11 @@ export const entitlementRevokedEventSchema = v.looseObject({
   data: providerEntitlementSchema,
 });
 
+const entitlementReconciliationEventSchema = v.looseObject({
+  type: v.literal(ENTITLEMENT_RECONCILIATION_EVENT_TYPE),
+  data: providerEntitlementSchema,
+});
+
 const entitlementPausedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_PAUSED_EVENT_TYPE),
   data: providerEntitlementSchema,
@@ -138,6 +145,7 @@ export const hostedUsageWebhookEventSchema = v.variant("type", [
   entitlementCanceledEventSchema,
   entitlementRevokedEventSchema,
   entitlementPausedEventSchema,
+  entitlementReconciliationEventSchema,
   allocationCreatedEventSchema,
 ]);
 

@@ -164,7 +164,7 @@ export const normalizePolarEvent = (
       return handledEntitlement("entitlement.paused", data ?? {});
     // Imported external state requires operator reconciliation before access.
     case "subscription.migrated":
-      return handledEntitlement("entitlement.revoked", data ?? {});
+      return handledEntitlement("entitlement.reconciliation", data ?? {});
     case "subscription.canceled":
       return handledEntitlement("entitlement.canceled", data ?? {});
     case "subscription.revoked":
