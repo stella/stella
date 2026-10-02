@@ -1,6 +1,8 @@
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
+import { randomBytes, randomUUID } from "node:crypto";
 import {
   existsSync,
+  linkSync,
   mkdirSync,
   readFileSync,
   renameSync,
@@ -17,6 +19,7 @@ import { DEV_MODES, type DevMode } from "./dev-runner-config";
 // is gitignored.
 export const DEV_STATE_DIR = ".stella-dev";
 const RUNTIME_FILE = "runtime.json";
+const CONTENT_ENCRYPTION_KEY_FILE = "content-encryption-key";
 // Written after the seed by apps/api/scripts/seed-seal.ts.
 export const SEAL_FILE = "seal.json";
 
@@ -35,6 +38,44 @@ export const devStatePath = (rootDir: string, fileName: string) =>
   path.join(rootDir, DEV_STATE_DIR, fileName);
 
 const runtimePath = (rootDir: string) => devStatePath(rootDir, RUNTIME_FILE);
+
+export const readOrCreateDevContentEncryptionKey = (rootDir: string) => {
+  const filePath = devStatePath(rootDir, CONTENT_ENCRYPTION_KEY_FILE);
+  if (!existsSync(filePath)) {
+    mkdirSync(path.join(rootDir, DEV_STATE_DIR), { recursive: true });
+    const temporaryPath = `${filePath}.${randomUUID()}.tmp`;
+    try {
+      writeFileSync(temporaryPath, randomBytes(32).toString("hex"), {
+        flag: "wx",
+        mode: 0o600,
+      });
+      // Publish only complete contents, without replacing another runner's key.
+      const published = Result.try({
+        try: () => linkSync(temporaryPath, filePath),
+        catch: (cause) => cause,
+      });
+      if (published.isErr()) {
+        const cause = published.error;
+        if (
+          !(
+            cause instanceof Error &&
+            "code" in cause &&
+            cause.code === "EEXIST"
+          )
+        ) {
+          throw published.error;
+        }
+      }
+    } finally {
+      rmSync(temporaryPath, { force: true });
+    }
+  }
+  const key = readFileSync(filePath, "utf-8").trim();
+  if (!/^[a-f0-9]{64}$/u.test(key)) {
+    panic(`${filePath} must contain a 32-byte hexadecimal key`);
+  }
+  return key;
+};
 
 export const writeDevRuntime = (rootDir: string, runtime: DevRuntime) => {
   mkdirSync(path.join(rootDir, DEV_STATE_DIR), { recursive: true });

@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, test } from "bun:test";
-import { mkdtempSync, mkdirSync, rmSync, writeFileSync } from "node:fs";
+import {
+  mkdtempSync,
+  mkdirSync,
+  rmSync,
+  statSync,
+  writeFileSync,
+} from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
@@ -45,6 +51,10 @@ import {
   MAX_PORT_OFFSET,
   parseDevRunnerConfig,
 } from "./dev-runner-config";
+import {
+  devStatePath,
+  readOrCreateDevContentEncryptionKey,
+} from "./dev-runtime";
 
 const tempDirs: string[] = [];
 
@@ -1177,6 +1187,62 @@ describe("legacy shared Docker service detection", () => {
 });
 
 describe("dev env factories", () => {
+  test("uses the configured content encryption key without creating local state", () => {
+    const rootDir = createTempDir();
+    mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });
+    const configuredKey = "a".repeat(64);
+    writeFileSync(
+      path.resolve(rootDir, "apps/api/.env"),
+      `CONTENT_ENCRYPTION_KEY=${configuredKey}\n`,
+    );
+    const steps = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+    });
+    for (const step of steps.primary) {
+      expect(step.env?.["CONTENT_ENCRYPTION_KEY"] === configuredKey).toBe(true);
+    }
+    expect(() =>
+      statSync(devStatePath(rootDir, "content-encryption-key")),
+    ).toThrow("ENOENT");
+  });
+
+  test("keeps a private persistent content encryption key per checkout", () => {
+    const rootDir = createTempDir();
+    const otherRootDir = createTempDir();
+    const key = readOrCreateDevContentEncryptionKey(rootDir);
+    expect(key).toMatch(/^[a-f0-9]{64}$/u);
+    expect(readOrCreateDevContentEncryptionKey(rootDir) === key).toBe(true);
+    expect(readOrCreateDevContentEncryptionKey(otherRootDir) === key).toBe(
+      false,
+    );
+    expect(
+      statSync(devStatePath(rootDir, "content-encryption-key")).mode % 0o1_0000,
+    ).toBe(0o600);
+    const steps = buildPersistentSteps({
+      infraOffset: 0,
+      infraPorts: infraPortsForOffset(0),
+      mode: "dev:api",
+      ports: portsForOffset(0),
+      rootDir,
+    });
+    for (const step of steps.primary) {
+      expect(step.env?.["CONTENT_ENCRYPTION_KEY"] === key).toBe(true);
+    }
+  });
+
+  test("requires a valid persisted content encryption key", () => {
+    const rootDir = createTempDir();
+    readOrCreateDevContentEncryptionKey(rootDir);
+    writeFileSync(devStatePath(rootDir, "content-encryption-key"), "invalid");
+    expect(() => readOrCreateDevContentEncryptionKey(rootDir)).toThrow(
+      "must contain a 32-byte hexadecimal key",
+    );
+  });
+
   test("keeps scheduled jobs inside the API process", () => {
     const rootDir = createTempDir();
     mkdirSync(path.resolve(rootDir, "apps/api"), { recursive: true });

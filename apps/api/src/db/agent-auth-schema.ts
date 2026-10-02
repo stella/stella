@@ -10,6 +10,7 @@ import {
 
 import { jsonb, timestamptz } from "@/api/db/columns";
 import { denyStellaAccessPolicies } from "@/api/db/rls";
+import type { EncryptedAgentClientCredential } from "@/api/lib/agent-client-credentials";
 
 /**
  * Agent-registration ceremony state for the auth.md protocol.
@@ -31,14 +32,10 @@ export const agentRegistration = pgTable(
     /** SHA-256 of the bearer claim token; never store the raw token. */
     claimTokenHash: text("claim_token_hash").notNull(),
     clientId: text("client_id").notNull(),
-    /**
-     * Raw secret of the first-party agent OAuth client. better-auth
-     * stores only the hash on `oauth_client`, but the server-side code
-     * exchange needs the cleartext secret. Held on this deny-stella
-     * control-plane row (same trust tier as `oauth_client`); never
-     * returned to any caller.
-     */
-    clientSecretSink: text("client_secret_sink").notNull(),
+    /** Versioned application-key envelope used for server-side code exchange. */
+    clientSecretSink: text("client_secret_sink")
+      .$type<EncryptedAgentClientCredential>()
+      .notNull(),
     loginHint: text("login_hint"),
     boundUserId: text("bound_user_id"),
     boundOrganizationId: text("bound_organization_id"),

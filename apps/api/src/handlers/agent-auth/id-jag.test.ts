@@ -22,6 +22,7 @@ import {
 } from "@/api/agent-auth/constants";
 import {
   agentDelegation,
+  agentRegistration,
   agentTrustedIssuer,
 } from "@/api/db/agent-auth-schema";
 import { user } from "@/api/db/auth-schema";
@@ -444,6 +445,20 @@ describe("agent-auth ID-JAG full exchange", () => {
     expect(idRes.status).toBe(200);
     const idBody = await readJson(idRes);
     const serviceAssertion = String(idBody["identity_assertion"]);
+    expect(Object.keys(idBody).toSorted()).toEqual([
+      "assertion_expires",
+      "identity_assertion",
+      "registration_id",
+      "registration_type",
+      "scopes",
+    ]);
+    const registrationId = String(decodeJwt(serviceAssertion)["sub"]);
+    expect(registrationId).toBe(String(idBody["registration_id"]));
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, registrationId));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
 
     const tokenRes = await postToken({
       grant_type: AGENT_AUTH_JWT_BEARER_GRANT_TYPE,
@@ -451,6 +466,12 @@ describe("agent-auth ID-JAG full exchange", () => {
     });
     expect(tokenRes.status).toBe(200);
     const tokenBody = await readJson(tokenRes);
+    expect(Object.keys(tokenBody).toSorted()).toEqual([
+      "access_token",
+      "expires_in",
+      "scope",
+      "token_type",
+    ]);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(String(tokenBody["scope"]).split(" ").toSorted()).toEqual([
       "stella:read",

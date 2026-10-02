@@ -28,9 +28,11 @@ import {
   hashClaimToken,
   issueAuthorizationCode,
   mintInternalSessionCookieHeader,
+  readRegistrationClientCredential,
   startServiceAuthRegistration,
 } from "@/api/lib/agent-auth";
 import type { ServiceAuthCeremony } from "@/api/lib/agent-auth";
+import { encryptAgentClientCredential } from "@/api/lib/agent-client-credentials";
 import { getAuth } from "@/api/lib/auth";
 import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -298,7 +300,9 @@ const issueRegistrationForPrincipal = async (
     // notNull constraint holds and a claim-grant poll never resolves it.
     claimTokenHash: hashClaimToken(generateOpaqueToken()),
     clientId: credentials.clientId,
-    clientSecretSink: credentials.clientSecret,
+    clientSecretSink: await encryptAgentClientCredential(
+      credentials.clientSecret,
+    ),
     boundUserId: principal.userId,
     boundOrganizationId: principal.organizationId,
     grantedScopes: [...AGENT_AUTH_SERVICE_SCOPES],
@@ -492,9 +496,20 @@ export const loadIdJagExchangeContext = async (
     .set({ authorizationCode: null })
     .where(eq(agentRegistration.id, registrationId));
 
+  const credential = await Result.tryPromise(
+    async () =>
+      await readRegistrationClientCredential({
+        id: registrationId,
+        clientId: registration.clientId,
+        clientSecretSink: registration.clientSecretSink,
+      }),
+  );
+  if (Result.isError(credential)) {
+    return Result.err(new AgentTokenError("token_mint_failed"));
+  }
   return Result.ok({
     clientId: registration.clientId,
-    clientSecret: registration.clientSecretSink,
+    clientSecret: credential.value,
     authorizationCode: registration.authorizationCode,
   });
 };

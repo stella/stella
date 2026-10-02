@@ -23,6 +23,8 @@ import {
 } from "@/api/db/auth-schema";
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
+import { readStoredAgentClientCredential } from "@/api/lib/agent-client-credential-storage";
+import { encryptAgentClientCredential } from "@/api/lib/agent-client-credentials";
 import { getAuth } from "@/api/lib/auth";
 import { sessionCookieName } from "@/api/lib/auth-cookie-name";
 import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
@@ -335,7 +337,9 @@ export const startServiceAuthRegistration = async (
     userCode,
     claimTokenHash: hashClaimToken(claimToken),
     clientId: credentials.clientId,
-    clientSecretSink: credentials.clientSecret,
+    clientSecretSink: await encryptAgentClientCredential(
+      credentials.clientSecret,
+    ),
     loginHint,
     grantedScopes: [...AGENT_AUTH_SERVICE_SCOPES],
     pollIntervalSeconds: AGENT_AUTH_POLL_INTERVAL_SECONDS,
@@ -382,7 +386,9 @@ export const startAnonymousRegistration = async (): Promise<
     status: "pending",
     claimTokenHash: hashClaimToken(claimToken),
     clientId: credentials.clientId,
-    clientSecretSink: credentials.clientSecret,
+    clientSecretSink: await encryptAgentClientCredential(
+      credentials.clientSecret,
+    ),
     grantedScopes: [...AGENT_AUTH_ANONYMOUS_SCOPES],
     pollIntervalSeconds: AGENT_AUTH_POLL_INTERVAL_SECONDS,
     expiresAt,
@@ -761,6 +767,17 @@ const isRegistrationStatus = (
   value === "denied" ||
   value === "expired";
 
+type RegistrationCredential = {
+  id: string;
+  clientId: string;
+  clientSecretSink: string;
+};
+
+export const readRegistrationClientCredential = async (
+  registration: RegistrationCredential,
+): Promise<string> =>
+  await readStoredAgentClientCredential(rootDb, registration);
+
 /**
  * Exchange the stored authorization code for a JWT bound to the MCP
  * resource (so it verifies via apps/api/src/mcp/auth.ts) and consume the
@@ -783,17 +800,17 @@ const exchangeClaimedCode = async (
   const resource = getMcpResourceUrl(
     getResourceModeForType(toRegistrationType(registration.registrationType)),
   );
-  const result = await Result.tryPromise(
-    async () =>
-      await callOauth2Token({
-        grant_type: "authorization_code",
-        client_id: registration.clientId,
-        client_secret: registration.clientSecretSink,
-        code,
-        redirect_uri: AGENT_REDIRECT_URI,
-        resource,
-      }),
-  );
+  const result = await Result.tryPromise(async () => {
+    const clientSecret = await readRegistrationClientCredential(registration);
+    return await callOauth2Token({
+      grant_type: "authorization_code",
+      client_id: registration.clientId,
+      client_secret: clientSecret,
+      code,
+      redirect_uri: AGENT_REDIRECT_URI,
+      resource,
+    });
+  });
 
   if (Result.isError(result) || !isTokenResponse(result.value)) {
     return Result.err(new AgentTokenError("token_mint_failed"));
@@ -874,7 +891,9 @@ export const startAnonymousUpgrade = async ({
       userCode,
       claimTokenHash: hashClaimToken(newClaimToken),
       clientId: credentials.clientId,
-      clientSecretSink: credentials.clientSecret,
+      clientSecretSink: await encryptAgentClientCredential(
+        credentials.clientSecret,
+      ),
       loginHint: email,
       grantedScopes: [...AGENT_AUTH_SERVICE_SCOPES],
       expiresAt,

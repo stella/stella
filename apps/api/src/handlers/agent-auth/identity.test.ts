@@ -114,6 +114,20 @@ describe("agent-auth service_auth flow", () => {
     const body = await readJson(response);
 
     expect(body["registration_type"]).toBe("service_auth");
+    expect(Object.keys(body).toSorted()).toEqual([
+      "claim",
+      "claim_token",
+      "claim_token_expires",
+      "claim_url",
+      "post_claim_scopes",
+      "registration_id",
+      "registration_type",
+    ]);
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(body["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
     expect(typeof body["registration_id"]).toBe("string");
     // Top-level handoff fields per the auth.md service guide. `claim_url` is
     // the claim ceremony endpoint, not the token grant the agent later polls.
@@ -225,6 +239,12 @@ describe("agent-auth service_auth flow", () => {
     const claimToken = String(reg["claim_token"]);
     const userCode = String(asJson(reg["claim"])["user_code"]);
 
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(reg["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
+
     // Confirm before any poll, so the first post-confirm poll is not
     // throttled by the server-side interval guard.
     const confirmRes = await postConfirm(
@@ -243,6 +263,12 @@ describe("agent-auth service_auth flow", () => {
     // OAuth §5.1: the bearer-token response must not be cached.
     expect(tokenRes.headers.get("cache-control")).toBe("private, no-store");
     const tokenBody = await readJson(tokenRes);
+    expect(Object.keys(tokenBody).toSorted()).toEqual([
+      "access_token",
+      "expires_in",
+      "scope",
+      "token_type",
+    ]);
     expect(tokenBody["token_type"]).toBe("Bearer");
     expect(tokenBody["expires_in"]).toBeGreaterThan(0);
     expect(String(tokenBody["scope"]).split(" ").toSorted()).toEqual([
@@ -361,6 +387,21 @@ describe("agent-auth anonymous flow", () => {
     const body = await readJson(response);
 
     expect(body["registration_type"]).toBe("anonymous");
+    expect(Object.keys(body).toSorted()).toEqual([
+      "access_token",
+      "claim_token",
+      "claim_uri",
+      "expires_in",
+      "registration_id",
+      "registration_type",
+      "scope",
+      "token_type",
+    ]);
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(body["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
     expect(typeof body["claim_token"]).toBe("string");
     expect(body["token_type"]).toBe("Bearer");
     // The upgrade endpoint the agent posts claim_token + email to — the public
@@ -396,6 +437,11 @@ describe("agent-auth anonymous flow", () => {
     });
     expect(first.status).toBe(200);
     const firstBody = await readJson(first);
+    const storedRows = await rootDb
+      .select({ credential: agentRegistration.clientSecretSink })
+      .from(agentRegistration)
+      .where(eq(agentRegistration.id, String(anon["registration_id"])));
+    expect(storedRows.at(0)?.credential).toStartWith("stella-agent:v1:");
     // A client needs the user-facing URL to hand the human the returned code.
     expect(String(firstBody["verification_uri"])).toContain("/agent-claim");
     expect(String(firstBody["verification_uri_complete"])).toContain(
