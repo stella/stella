@@ -1,71 +1,76 @@
 import { Result } from "better-result";
-import { expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeAll,
+  beforeEach,
+  expect,
+  mock,
+  test,
+} from "bun:test";
+import { eq } from "drizzle-orm";
 
-import type { FieldContent } from "@/api/db/schema-validators";
+import type { SafeDb } from "@/api/db/safe-db";
+import { entities, fields } from "@/api/db/schema";
+import { createSafeDb } from "@/api/db/scoped";
 import { createRenameEntityHandler } from "@/api/handlers/entities/rename";
-import { toSafeId } from "@/api/lib/branded-types";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import {
+  getRlsFixture,
+  releaseRlsFixture,
+} from "@/api/tests/security/rls-fixture";
 
-const entityId = toSafeId<"entity">("entity");
-const fieldId = toSafeId<"field">("field");
-const workspaceId = toSafeId<"workspace">("matter");
-const content = {
-  type: "file",
-  version: 1,
-  id: "file",
-  fileName: sanitizeFilename("previous.md"),
-  mimeType: "text/markdown",
-  sizeBytes: 12,
-  encrypted: false,
-  sha256Hex: "a".repeat(64),
-  pdfFileId: null,
-} satisfies FieldContent;
+let fixture: Awaited<ReturnType<typeof getRlsFixture>>;
+let originalEntity: Awaited<ReturnType<typeof stored>>;
+beforeAll(async () => {
+  fixture = await getRlsFixture();
+  originalEntity = await stored();
+});
+afterEach(async () => {
+  if (!originalEntity) {
+    throw new Error("Fixture entity missing");
+  }
+  await fixture.testDb
+    .update(entities)
+    .set({
+      name: originalEntity.name,
+      kind: originalEntity.kind,
+      readOnly: originalEntity.readOnly,
+      updatedAt: originalEntity.updatedAt,
+    })
+    .where(eq(entities.id, originalEntity.id));
+  for (const field of originalEntity.currentVersion?.fields ?? []) {
+    await fixture.testDb
+      .update(fields)
+      .set({ content: field.content })
+      .where(eq(fields.id, field.id));
+  }
+});
+afterAll(async () => {
+  await releaseRlsFixture();
+});
+beforeEach(async () => {
+  await fixture.testDb
+    .update(entities)
+    .set({ name: "previous.md", readOnly: false, kind: "document" })
+    .where(eq(entities.id, fixture.ids.entityA1));
+});
 
-const fixture = ({
-  kind,
-  readOnly,
-}: {
-  kind: "document" | "folder";
-  readOnly: boolean;
-}) => {
-  const writes: unknown[] = [];
+const invocation = (entityId = fixture.ids.entityA1) => {
+  const { testDb, ids } = fixture;
   const enqueue = mock(async () => undefined);
   const flush = mock(async () => ({ failed: 0, repaired: 0 }));
   const audit = mock(async () => undefined);
-  const { safeDb } = createScopedDbMock({
-    select: () => ({
-      from: () => ({
-        where: () => ({
-          for: async () => [
-            { id: entityId, kind, name: "previous.md", readOnly },
-          ],
-        }),
-      }),
-    }),
-    update: () => ({
-      set: (values: unknown) => ({
-        where: async () => {
-          writes.push(values);
-        },
-      }),
-    }),
-    query: {
-      entities: {
-        findFirst: async () => ({
-          currentVersion: {
-            fields: kind === "document" ? [{ id: fieldId, content }] : [],
-          },
-        }),
-      },
-    },
-  });
   const rename = createRenameEntityHandler({
     enqueueEntitySearchRepairs: enqueue,
     flushEntitySearchRepairs: flush,
   });
+  // Both matters are accessible: the handler must still enforce the selected matter.
+  const safeDb = asTestRaw<SafeDb>(
+    createSafeDb(testDb, [ids.wsA1, ids.wsA2], ids.orgA, ids.userA1),
+  );
   return {
-    writes,
     enqueue,
     flush,
     audit,
@@ -73,7 +78,7 @@ const fixture = ({
       await Result.gen(() =>
         rename({
           safeDb,
-          workspaceId,
+          workspaceId: ids.wsA1,
           recordAuditEvent: audit,
           body: { entityId, name: "updated/name.md" },
         }),
@@ -81,57 +86,118 @@ const fixture = ({
   };
 };
 
-test("returns the same file metadata it commits without replacing field identity", async () => {
-  const { run, writes, enqueue, flush, audit } = fixture({
-    kind: "document",
-    readOnly: false,
+const stored = async () =>
+  await fixture.testDb.query.entities.findFirst({
+    where: { id: { eq: fixture.ids.entityA1 } },
+    with: { currentVersion: { with: { fields: true } } },
   });
+
+test("returns the same file metadata it commits without replacing field identity", async () => {
+  const { run, enqueue, flush, audit } = invocation();
+  const before = await stored();
   const result = await run();
-  expect(result.isOk()).toBe(true);
   if (result.isErr()) {
     throw result.error;
   }
+  const entity = await stored();
+  const file = entity?.currentVersion?.fields.find(
+    (field) => field.content.type === "file",
+  );
   expect(result.value).toEqual({
-    entityId,
+    entityId: fixture.ids.entityA1,
     name: "updated/name.md",
-    file: { fieldId, fileName: "updated_name.md" },
+    file: {
+      fieldId: fixture.ids.fileFieldA1,
+      fileName: sanitizeFilename("updated/name.md"),
+    },
   });
-  expect(writes).toEqual([
-    { name: result.value.name, updatedAt: expect.any(Date) },
-    { content: { ...content, fileName: result.value.file?.fileName } },
-  ]);
+  expect(entity?.name).toBe(result.value.name);
+  expect(entity?.currentVersionId).toBe(before?.currentVersionId);
+  expect(file?.id).toBe(result.value.file?.fieldId);
+  expect(file?.content).toEqual({
+    ...before?.currentVersion?.fields.find(
+      (field) => field.content.type === "file",
+    )?.content,
+    fileName: result.value.file?.fileName,
+  });
   expect(enqueue).toHaveBeenCalledTimes(1);
-  expect(flush).toHaveBeenCalledWith([entityId]);
+  expect(flush).toHaveBeenCalledWith([fixture.ids.entityA1]);
   expect(audit).toHaveBeenCalledTimes(1);
 });
 
-test("returns an explicit absent file for a folder rename", async () => {
-  const { run, writes } = fixture({ kind: "folder", readOnly: false });
-  const result = await run();
-  expect(result.isOk()).toBe(true);
-  if (result.isErr()) {
-    throw result.error;
-  }
-  expect(result.value).toEqual({
-    entityId,
-    name: "updated/name.md",
-    file: null,
+test("returns an explicit absent file when the current version has no file", async () => {
+  await fixture.testDb
+    .update(entities)
+    .set({ kind: "folder" })
+    .where(eq(entities.id, fixture.ids.entityA1));
+  const original = await fixture.testDb.query.fields.findFirst({
+    where: { id: { eq: fixture.ids.fileFieldA1 } },
   });
-  expect(writes).toHaveLength(1);
+  if (!original) {
+    throw new Error("Fixture file missing");
+  }
+  await fixture.testDb
+    .update(fields)
+    .set({ content: { type: "text", version: 1, value: "folder" } })
+    .where(eq(fields.id, original.id));
+  try {
+    const result = await invocation().run();
+    if (result.isErr()) {
+      throw result.error;
+    }
+    expect(result.value).toEqual({
+      entityId: fixture.ids.entityA1,
+      name: "updated/name.md",
+      file: null,
+    });
+  } finally {
+    await fixture.testDb
+      .update(fields)
+      .set({ content: original.content })
+      .where(eq(fields.id, original.id));
+  }
 });
 
-test("a refused rename emits no confirmed metadata or writes", async () => {
-  const { run, writes, enqueue, flush, audit } = fixture({
-    kind: "document",
-    readOnly: true,
-  });
+test("a read-only rename returns 409 and leaves stored metadata unchanged", async () => {
+  await fixture.testDb
+    .update(entities)
+    .set({ readOnly: true })
+    .where(eq(entities.id, fixture.ids.entityA1));
+  const before = await stored();
+  const { run, enqueue, flush, audit } = invocation();
   const result = await run();
-  expect(result.isErr()).toBe(true);
   if (result.isOk()) {
     throw new Error("Expected read-only refusal");
   }
-  expect(result.error.message).toBe("Entity is read-only");
-  expect(writes).toEqual([]);
+  expect(result.error).toMatchObject({
+    status: 409,
+    message: "Entity is read-only",
+  });
+  expect(await stored()).toEqual(before);
+  expect(enqueue).not.toHaveBeenCalled();
+  expect(flush).not.toHaveBeenCalled();
+  expect(audit).not.toHaveBeenCalled();
+});
+
+test("an entity in another accessible matter returns 404 without writes", async () => {
+  const before = await fixture.testDb.query.entities.findFirst({
+    where: { id: { eq: fixture.ids.entityA2 } },
+  });
+  expect(before?.workspaceId).toBe(fixture.ids.wsA2);
+  const { run, enqueue, flush, audit } = invocation(fixture.ids.entityA2);
+  const result = await run();
+  if (result.isOk()) {
+    throw new Error("Expected selected-matter refusal");
+  }
+  expect(result.error).toMatchObject({
+    status: 404,
+    message: "Entity not found",
+  });
+  expect(
+    await fixture.testDb.query.entities.findFirst({
+      where: { id: { eq: fixture.ids.entityA2 } },
+    }),
+  ).toEqual(before);
   expect(enqueue).not.toHaveBeenCalled();
   expect(flush).not.toHaveBeenCalled();
   expect(audit).not.toHaveBeenCalled();

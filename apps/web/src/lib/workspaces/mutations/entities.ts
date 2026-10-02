@@ -2,9 +2,11 @@ import type { QueryClient } from "@tanstack/react-query";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
+import type { StoreApi } from "zustand";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import type { InspectorTabsStore } from "@/components/inspector/inspector-store-types";
 import {
   closeInspectorTabsForEntities,
   useInspectorTabsStore,
@@ -12,12 +14,16 @@ import {
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { UpsertFieldContent } from "@/lib/api-contract";
+import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
+import { detached } from "@/lib/detached";
 import { unwrapEden } from "@/lib/errors/api";
 import { fileMetadataByFieldQueryRoot } from "@/lib/files/file-metadata-query.logic";
+import { inboxKeys } from "@/lib/inbox/queries";
 import { toSafeId } from "@/lib/safe-id";
 import type { EntityKind } from "@/lib/types";
 import { invalidateDeletedEntityQueries } from "@/lib/workspaces/mutations/entities.logic";
 import { entitiesKeys } from "@/lib/workspaces/queries/entities.logic";
+import { entityViewKeys } from "@/lib/workspaces/queries/entity-views";
 
 type CreateEntitiesVars = {
   type: "manual-input";
@@ -127,7 +133,10 @@ type RenameEntityInvocation = RenameEntityVars & {
 // Shared across observers, but isolated to the query client's session.
 const renameQueues = new WeakMap<QueryClient, Map<string, Promise<void>>>();
 
-export const useRenameEntity = () => {
+export const useRenameEntity = (
+  inspectorStore?: StoreApi<InspectorTabsStore>,
+) => {
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const analytics = useAnalytics();
   const t = useTranslations();
   const queryClient = useQueryClient();
@@ -151,27 +160,39 @@ export const useRenameEntity = () => {
       const previous = queues.get(key);
       const gate = Promise.withResolvers<undefined>();
       queues.set(key, gate.promise);
-      await previous;
-      const store = useInspectorTabsStore.getState();
-      const tabs = store.tabs.flatMap((tab) =>
-        tab.type === "pdf" &&
-        tab.workspaceId === workspaceId &&
-        tab.entityId === entityId
-          ? [{ id: tab.id, label: tab.label, fileName: tab.fileName }]
-          : [],
-      );
-      for (const tab of tabs) {
-        store.updateLabel(tab.id, name);
-      }
-      return {
-        tabs,
-        release: () => {
-          if (queues.get(key) === gate.promise) {
-            queues.delete(key);
-          }
-          gate.resolve(undefined);
-        },
+      const release = () => {
+        if (queues.get(key) === gate.promise) {
+          queues.delete(key);
+        }
+        gate.resolve(undefined);
       };
+      const optimistic = await Result.tryPromise(async () => {
+        await previous;
+        const store = inspectorStore
+          ? inspectorStore.getState()
+          : useInspectorTabsStore.getState();
+        const previousLabel = store.tabs.find(
+          (tab) =>
+            tab.type === "pdf" &&
+            tab.workspaceId === workspaceId &&
+            tab.entityId === entityId,
+        )?.label;
+        for (const tab of store.tabs) {
+          if (
+            tab.type === "pdf" &&
+            tab.workspaceId === workspaceId &&
+            tab.entityId === entityId
+          ) {
+            store.updateLabel(tab.id, name);
+          }
+        }
+        return { previousLabel, release };
+      });
+      if (optimistic.isErr()) {
+        release();
+        throw optimistic.error;
+      }
+      return optimistic.value;
     },
     mutationFn: async ({
       workspaceId,
@@ -183,27 +204,45 @@ export const useRenameEntity = () => {
         .rename.patch({ entityId: toSafeId<"entity">(entityId), name });
       return unwrapEden(response);
     },
-    onSuccess: async (data, { workspaceId, entityId }) => {
-      const store = useInspectorTabsStore.getState();
-      for (const tab of store.tabs) {
-        if (
-          tab.type !== "pdf" ||
-          tab.workspaceId !== workspaceId ||
-          tab.entityId !== entityId ||
-          !data.file
-        ) {
-          continue;
+    onSuccess: (data, { workspaceId, entityId }, context) => {
+      const reconciled = Result.try(() => {
+        const store = inspectorStore
+          ? inspectorStore.getState()
+          : useInspectorTabsStore.getState();
+        for (const tab of store.tabs) {
+          if (
+            tab.type !== "pdf" ||
+            tab.workspaceId !== workspaceId ||
+            tab.entityId !== entityId
+          ) {
+            continue;
+          }
+          if (data.file && tab.id === data.file.fieldId) {
+            store.updateFileMetadata(tab.id, {
+              label: data.name,
+              fileName: data.file.fileName,
+            });
+            continue;
+          }
+          store.updateLabel(tab.id, data.name);
         }
-        store.updateFileMetadata(tab.id, {
-          label: data.name,
-          fileName: data.file.fileName,
-        });
+      });
+      if (reconciled.isErr()) {
+        analytics.captureError(reconciled.error);
       }
-      const refreshed = await Result.tryPromise(
-        async () =>
+      context?.release();
+      // Refetches repair caches independently of the committed mutation's settlement.
+      detached(
+        (async () => {
           await Promise.all([
             queryClient.invalidateQueries({
               queryKey: entitiesKeys.all(workspaceId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: entityViewKeys.all(activeOrganizationId, userId),
+            }),
+            queryClient.invalidateQueries({
+              queryKey: inboxKeys.all(activeOrganizationId, userId),
             }),
             ...(data.file
               ? [
@@ -215,17 +254,32 @@ export const useRenameEntity = () => {
                   }),
                 ]
               : []),
-          ]),
+          ]);
+        })(),
+        "entity-rename.refresh",
       );
-      // A refresh failure cannot roll back metadata already committed by the server.
-      if (refreshed.isErr()) {
-        reportFailure(refreshed.error);
-      }
     },
-    onError: (error, _variables, context) => {
-      const store = useInspectorTabsStore.getState();
-      for (const tab of context?.tabs ?? []) {
-        store.updateFileMetadata(tab.id, tab);
+    onError: (error, { workspaceId, entityId, name }, context) => {
+      const rolledBack = Result.try(() => {
+        if (context?.previousLabel === undefined) {
+          return;
+        }
+        const store = inspectorStore
+          ? inspectorStore.getState()
+          : useInspectorTabsStore.getState();
+        for (const tab of store.tabs) {
+          if (
+            tab.type === "pdf" &&
+            tab.workspaceId === workspaceId &&
+            tab.entityId === entityId &&
+            tab.label === name
+          ) {
+            store.updateLabel(tab.id, context.previousLabel);
+          }
+        }
+      });
+      if (rolledBack.isErr()) {
+        analytics.captureError(rolledBack.error);
       }
       reportFailure(error);
     },

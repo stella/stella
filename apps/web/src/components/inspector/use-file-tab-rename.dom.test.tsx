@@ -1,12 +1,21 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import { afterAll, afterEach, describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
+import { createStore } from "zustand";
+import type { StoreApi } from "zustand";
+import { immer } from "zustand/middleware/immer";
+
+import { stellaToast } from "@stll/ui/toast";
 
 import type { FileTab } from "@/components/inspector/inspector-store-types";
 
+import type { InspectorTabsStore } from "./inspector-store-types";
+
+const NativeBroadcastChannel = globalThis.BroadcastChannel;
 GlobalRegistrator.register({ url: "http://localhost:3000" });
+window.BroadcastChannel = NativeBroadcastChannel;
 const React = await import("react");
-const { QueryClient, QueryClientProvider } =
+const { QueryClient, QueryClientProvider, useQuery } =
   await import("@tanstack/react-query");
 const { IntlProvider } = await import("use-intl");
 const { act, cleanup, renderHook, waitFor } =
@@ -15,9 +24,27 @@ const { useFileTabRename } = await import("./use-file-tab-rename");
 const { useRenameEntity } = await import("@/lib/workspaces/mutations/entities");
 const { useInspectorTabsStore, initializeInspectorTabBroadcast } =
   await import("./inspector-tabs-store");
+const { createInspectorTabsSlice } = await import("./inspector-tabs-slice");
+const { createInspectorBroadcastSession: broadcast } =
+  await import("./inspector-broadcast");
+const { getAnalytics } = await import("@/lib/analytics/provider");
+const { AuthenticatedUserProvider } =
+  await import("@/lib/authenticated-user-context");
+const { entityViewKeys } =
+  await import("@/lib/workspaces/queries/entity-views");
+const { inboxKeys } = await import("@/lib/inbox/queries");
+const { entitiesKeys } =
+  await import("@/lib/workspaces/queries/entities.logic");
+const { fileMetadataByFieldQueryRoot } =
+  await import("@/lib/files/file-metadata-query.logic");
 const { downloadTabFile } = await import("./file-download-service");
 const { toSafeId } = await import("@/lib/safe-id");
 const { readStoredJson } = await import("@/lib/stored-json");
+
+const originalActions = {
+  updateLabel: useInspectorTabsStore.getState().updateLabel,
+  updateFileMetadata: useInspectorTabsStore.getState().updateFileMetadata,
+};
 
 const requests: {
   name: string;
@@ -62,7 +89,10 @@ const tab = (id: string) =>
       (candidate): candidate is FileTab =>
         candidate.type === "pdf" && candidate.entityId === id,
     );
-const mount = () => {
+const mount = (
+  inspectorStore: StoreApi<InspectorTabsStore> = useInspectorTabsStore,
+  refetch?: () => Promise<string[]>,
+) => {
   const client = new QueryClient({
     defaultOptions: { mutations: { retry: false }, queries: { retry: false } },
   });
@@ -71,8 +101,15 @@ const mount = () => {
       fileRename: useFileTabRename({
         tabs: useInspectorTabsStore((s) => s.tabs),
       }),
-      first: useRenameEntity(),
-      second: useRenameEntity(),
+      entities: useQuery({
+        queryKey: entitiesKeys.all("matter"),
+        queryFn: async () => (await refetch?.()) ?? [],
+        enabled: refetch !== undefined,
+        initialData: [],
+        staleTime: Infinity,
+      }),
+      first: useRenameEntity(inspectorStore),
+      second: useRenameEntity(inspectorStore),
     }),
     {
       wrapper: ({ children }) =>
@@ -82,7 +119,19 @@ const mount = () => {
           React.createElement(IntlProvider, {
             locale: "en",
             messages: { errors: { actionFailed: "Action failed" } },
-            children,
+            children: React.createElement(AuthenticatedUserProvider, {
+              user: {
+                activeOrganizationId: "org",
+                id: "user",
+                email: "rename@example.test",
+                image: null,
+                name: "Rename tester",
+                preferredName: null,
+                timezoneId: "UTC",
+                wordEditShortcut: null,
+              },
+              children,
+            }),
           }),
         ),
     },
@@ -118,7 +167,11 @@ const failure = (index: number) =>
 afterEach(async () => {
   await act(async () => cleanup());
   requests.length = 0;
-  useInspectorTabsStore.setState({ tabs: [], activeId: null });
+  useInspectorTabsStore.setState({
+    tabs: [],
+    activeId: null,
+    ...originalActions,
+  });
   window.localStorage.clear();
 });
 afterAll(async () => {
@@ -130,6 +183,256 @@ afterAll(async () => {
 });
 
 describe("confirmed file rename state", () => {
+  test("optimistic labels rollback by entity identity after version replacement", async () => {
+    useInspectorTabsStore.getState().openFile(file("A"));
+    const { result, client } = mount();
+    act(() =>
+      result.current.first.mutate({
+        workspaceId: "matter",
+        entityId: "A",
+        name: "draft.md",
+      }),
+    );
+    await waitFor(() => expect(requests).toHaveLength(1));
+    expect(tab("A")).toMatchObject({ label: "draft.md", fileName: "A.md" });
+    act(() =>
+      useInspectorTabsStore.getState().replaceFileFieldId("field-A", {
+        id: "replacement",
+        fileName: "version.md",
+      }),
+    );
+    await act(async () => failure(0));
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(tab("A")).toMatchObject({
+      id: "replacement",
+      label: "A.md",
+      fileName: "version.md",
+    });
+  });
+
+  test("a second window's confirmed rename survives the first window's refusal", async () => {
+    const otherStore = createStore<InspectorTabsStore>()(
+      immer((set) => createInspectorTabsSlice(set)),
+    );
+    const scope = { organizationId: "two-windows", userId: "rename-user" };
+    const stopFirst = broadcast(useInspectorTabsStore, scope);
+    const stopSecond = broadcast(otherStore, scope);
+    try {
+      useInspectorTabsStore.getState().openFile(file("A"));
+      await waitFor(() => expect(otherStore.getState().tabs).toHaveLength(1));
+      const first = mount();
+      const second = mount(otherStore);
+      act(() =>
+        first.result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "refused.md",
+        }),
+      );
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await waitFor(() =>
+        expect(otherStore.getState().tabs.at(0)?.label).toBe("refused.md"),
+      );
+      act(() =>
+        second.result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "confirmed.md",
+        }),
+      );
+      await waitFor(() => expect(requests).toHaveLength(2));
+      await act(async () => success(1, "A", "confirmed.md"));
+      await waitFor(() => expect(tab("A")?.fileName).toBe("confirmed.md"));
+      await act(async () => failure(0));
+      await waitFor(() => expect(first.client.isMutating()).toBe(0));
+      expect(tab("A")).toMatchObject({
+        label: "confirmed.md",
+        fileName: "confirmed.md",
+      });
+      expect(otherStore.getState().tabs.at(0)).toMatchObject({
+        label: "confirmed.md",
+        fileName: "confirmed.md",
+      });
+    } finally {
+      stopFirst.dispose();
+      stopSecond.dispose();
+    }
+  });
+
+  test("pending refreshes do not hold completion, pending state or the next rename", async () => {
+    useInspectorTabsStore.getState().openFile(file("A"));
+    const refresh = Promise.withResolvers<string[]>();
+    let refetchCount = 0;
+    const { result, client } = mount(useInspectorTabsStore, async () => {
+      refetchCount += 1;
+      return await refresh.promise;
+    });
+    const invalidate = spyOn(client, "invalidateQueries");
+    const completed: string[] = [];
+    try {
+      act(() =>
+        result.current.first.mutate(
+          { workspaceId: "matter", entityId: "A", name: "first.md" },
+          {
+            onSuccess: () => {
+              completed.push("first");
+            },
+          },
+        ),
+      );
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await act(async () => success(0, "A", "first.md"));
+      await waitFor(() => expect(result.current.first.isPending).toBe(false));
+      expect(completed).toEqual(["first"]);
+      expect(refetchCount).toBe(1);
+      expect(
+        client.getQueryState(entitiesKeys.all("matter"))?.fetchStatus,
+      ).toBe("fetching");
+      expect(
+        new Set(
+          invalidate.mock.calls.map(([filters]) =>
+            JSON.stringify(filters?.queryKey),
+          ),
+        ),
+      ).toEqual(
+        new Set([
+          JSON.stringify(entitiesKeys.all("matter")),
+          JSON.stringify(entityViewKeys.all("org", "user")),
+          JSON.stringify(inboxKeys.all("org", "user")),
+          JSON.stringify(
+            fileMetadataByFieldQueryRoot({
+              workspaceId: "matter",
+              fieldId: "field-A",
+            }),
+          ),
+        ]),
+      );
+      act(() =>
+        result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "second.md",
+        }),
+      );
+      await waitFor(() => expect(requests).toHaveLength(2));
+      await act(async () => success(1, "A", "second.md"));
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      expect(tab("A")?.label).toBe("second.md");
+    } finally {
+      await act(async () => refresh.resolve([]));
+      invalidate.mockRestore();
+    }
+  });
+
+  test("unmount before settlement still reconciles the store and completion", async () => {
+    useInspectorTabsStore.getState().openFile(file("A"));
+    const { result, client, unmount } = mount();
+    const completed: string[] = [];
+    act(() =>
+      result.current.first.mutate(
+        { workspaceId: "matter", entityId: "A", name: "confirmed.md" },
+        {
+          onSuccess: () => {
+            completed.push("done");
+          },
+        },
+      ),
+    );
+    await waitFor(() => expect(requests).toHaveLength(1));
+    unmount();
+    await act(async () => success(0, "A", "confirmed.md"));
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(tab("A")).toMatchObject({
+      label: "confirmed.md",
+      fileName: "confirmed.md",
+    });
+    expect(completed).toEqual(["done"]);
+  });
+
+  test("version-pinned tabs receive the label and keep the displayed version's filename", async () => {
+    useInspectorTabsStore
+      .getState()
+      .openFile({ ...file("A"), id: "older-field", fileName: "older.docx" });
+    const { result, client } = mount();
+    act(() =>
+      result.current.first.mutate({
+        workspaceId: "matter",
+        entityId: "A",
+        name: "current.pdf",
+      }),
+    );
+    await waitFor(() => expect(requests).toHaveLength(1));
+    await act(async () => success(0, "A", "current.pdf"));
+    await waitFor(() => expect(client.isMutating()).toBe(0));
+    expect(tab("A")).toMatchObject({
+      id: "older-field",
+      label: "current.pdf",
+      fileName: "older.docx",
+    });
+  });
+
+  test("an optimistic store failure releases the next rename", async () => {
+    useInspectorTabsStore.getState().openFile(file("A"));
+    const { result, client } = mount();
+    const update = spyOn(
+      useInspectorTabsStore.getState(),
+      "updateLabel",
+    ).mockImplementationOnce(() => {
+      throw new Error("Store unavailable");
+    });
+    try {
+      act(() => {
+        result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "first.md",
+        });
+        result.current.second.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "second.md",
+        });
+      });
+      await waitFor(() => expect(requests).toHaveLength(1));
+      expect(requests.at(0)?.name).toBe("second.md");
+      await act(async () => success(0, "A", "second.md"));
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      expect(tab("A")?.fileName).toBe("second.md");
+    } finally {
+      update.mockRestore();
+    }
+  });
+
+  test("a success store failure does not rollback a committed rename or show action failed", async () => {
+    useInspectorTabsStore.getState().openFile(file("A"));
+    const { result, client } = mount();
+    const update = spyOn(
+      useInspectorTabsStore.getState(),
+      "updateFileMetadata",
+    ).mockImplementationOnce(() => {
+      throw new Error("Store unavailable");
+    });
+    const toast = spyOn(stellaToast, "add");
+    try {
+      act(() =>
+        result.current.first.mutate({
+          workspaceId: "matter",
+          entityId: "A",
+          name: "confirmed.md",
+        }),
+      );
+      await waitFor(() => expect(requests).toHaveLength(1));
+      await act(async () => success(0, "A", "confirmed.md"));
+      await waitFor(() => expect(client.isMutating()).toBe(0));
+      expect(result.current.first.isSuccess).toBe(true);
+      expect(tab("A")?.label).toBe("confirmed.md");
+      expect(toast).not.toHaveBeenCalled();
+    } finally {
+      update.mockRestore();
+      toast.mockRestore();
+    }
+  });
+
   test("each tab settles when a later tab succeeds before its refusal", async () => {
     useInspectorTabsStore.getState().openFile(file("A"));
     useInspectorTabsStore.getState().openFile(file("B"));
@@ -242,7 +545,7 @@ describe("confirmed file rename state", () => {
         expect.objectContaining({
           id: "other-field",
           label: "two.md",
-          fileName: "two.md",
+          fileName: "other.md",
         }),
       ]),
     );
@@ -251,6 +554,8 @@ describe("confirmed file rename state", () => {
   test("a refresh refusal leaves committed metadata confirmed", async () => {
     useInspectorTabsStore.getState().openFile(file("A"));
     const { result, client } = mount();
+    const toast = spyOn(stellaToast, "add");
+    const capture = spyOn(getAnalytics(), "captureError");
     const invalidate = spyOn(client, "invalidateQueries").mockRejectedValue(
       new Error("Refresh unavailable"),
     );
@@ -269,6 +574,13 @@ describe("confirmed file rename state", () => {
       fileName: "confirmed.md",
     });
     expect(result.current.first.isSuccess).toBe(true);
+    expect(toast).not.toHaveBeenCalled();
+    expect(capture).toHaveBeenCalledWith(expect.any(Error), {
+      type: "detached",
+      operation: "entity-rename.refresh",
+    });
+    capture.mockRestore();
+    toast.mockRestore();
     invalidate.mockRestore();
   });
 

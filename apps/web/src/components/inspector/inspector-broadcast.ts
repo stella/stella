@@ -647,7 +647,7 @@ const subscribeInspectorPersistence = (
   };
 };
 
-const createInspectorBroadcastSession = (
+export const createInspectorBroadcastSession = (
   store: StoreApi<InspectorTabsStore>,
   scope: InspectorBroadcastScope,
 ): InspectorBroadcastSession => {
