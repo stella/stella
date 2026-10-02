@@ -1039,13 +1039,17 @@ type ClassifyShellStringOptions = Pick<
   readonly words: readonly string[];
 };
 
+/** A short-option cluster such as `-c` or `-ec` that carries the command string. */
+const isCommandStringOption = (word: string): boolean =>
+  /^-[a-z]+$/u.test(word) && word.includes("c");
+
 const classifyShellString = ({
   context,
   cwd,
   words,
   mode,
 }: ClassifyShellStringOptions): Expansion[] => {
-  const optionAt = words.findIndex((word) => /^-[a-z]*c[a-z]*$/u.test(word));
+  const optionAt = words.findIndex(isCommandStringOption);
   const script = words.at(optionAt + 1);
   const nested =
     script === undefined || isComputed(script)
@@ -1164,7 +1168,7 @@ const walkCommands = ({
           }
         } else if (
           /^(?:bash|sh|zsh)$/u.test(program) &&
-          words.some((word) => /^-[a-z]*c[a-z]*$/u.test(word))
+          words.some(isCommandStringOption)
         ) {
           expansions.push(
             ...classifyShellString({ context, cwd: current, words, mode }),
