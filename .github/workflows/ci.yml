@@ -1119,12 +1119,15 @@ jobs:
 
       - name: Check AI prompt sync
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        run: bash .ai/shared/scripts/sync-ai-skills.sh --check .
+        run: |
+          bash .ai/shared/scripts/sync-ai-skills.sh --check .
+          bash scripts/check-local-skill-overrides.sh .
 
       - name: Check AI verification guards
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
           bash scripts/check-ai-skill-sync.test.sh
+          bash scripts/check-local-skill-overrides.test.sh
           bash scripts/verify-step.test.sh
 
       - name: Setup Bun
