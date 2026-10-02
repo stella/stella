@@ -21,6 +21,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -81,7 +82,7 @@ const context = <TContext>(
     user: { id: ids.userA1 },
     request: new Request("https://example.test/invoices", { method: "POST" }),
     route: "/test/billing-modes",
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     getWorkspaceAccess: async () => ({ id: ids.wsA2, status: "active" }),
     getActiveWorkspaceIds: async () => [ids.wsA2],
     getAccessibleWorkspaces: async () => [{ id: ids.wsA2, status: "active" }],
