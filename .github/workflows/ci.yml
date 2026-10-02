@@ -3346,7 +3346,7 @@ jobs:
       # Keep fixture cardinality equal to baseline generation and prevent other
       # specs' workspace events from refetching queries during measurement.
       - name: Prepare merge-base network budget
-        if: matrix.shard == 'network-baseline' && github.event_name != 'push'
+        if: matrix.shard == 'network-baseline'
         uses: ./.github/actions/prepare-network-baseline
         with:
           base-sha: ${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || github.sha }}

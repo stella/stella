@@ -208,9 +208,18 @@ const workflowSource = (file: string): string =>
 const readWorkflowJobs = (file: string): Record<string, WorkflowJob> => {
   const parsed: unknown = Bun.YAML.parse(workflowSource(file));
   const jobs = isRecord(parsed) ? parsed["jobs"] : undefined;
-  return isWorkflowJobs(jobs)
-    ? jobs
-    : expect.unreachable(`${file} has no jobs`);
+  if (!isRecord(jobs)) {
+    return expect.unreachable(`${file} has no jobs`);
+  }
+  // Reusable-workflow calls (`uses:` jobs) have no steps to inspect.
+  const stepJobs = Object.fromEntries(
+    Object.entries(jobs).filter(
+      ([, job]) => isRecord(job) && Array.isArray(job["steps"]),
+    ),
+  );
+  return isWorkflowJobs(stepJobs)
+    ? stepJobs
+    : expect.unreachable(`${file} has malformed jobs`);
 };
 
 describe("network baseline workflows", () => {
@@ -308,6 +317,9 @@ describe("network baseline workflows", () => {
       );
       expect(prepare).toBeGreaterThan(-1);
       expect(comparison).toBeGreaterThan(prepare);
+      // Every event that compares also loads the published budget; an event
+      // filter here would compare against the frozen committed JSON instead.
+      expect(job.steps[prepare]?.if ?? "", name).not.toContain("event_name");
       expect(job.steps[prepare]?.with?.["base-sha"]).toContain(
         "github.event.pull_request.base.sha",
       );
