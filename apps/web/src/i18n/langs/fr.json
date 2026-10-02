@@ -636,6 +636,27 @@
     "timerActive": "Chronomètre en cours",
     "timesheets": "Feuilles de temps",
     "total": "Total",
+    "vatRates": {
+      "add": "Ajouter un taux de TVA",
+      "archiveConfirm": "Archiver ce taux de TVA ? Il ne sera plus disponible pour les nouveaux documents.",
+      "code": "Code du taux",
+      "current": "Taux actuel",
+      "description": "Gérez les taux et leurs périodes de validité.",
+      "edit": "Modifier le taux de TVA",
+      "empty": "Aucun taux de TVA.",
+      "future": "Taux à venir",
+      "invalidPeriod": "Choisissez des dates valides avec une fin postérieure au début.",
+      "invalidRate": "Saisissez un pourcentage positif ou nul avec au maximum deux décimales.",
+      "name": "Libellé du taux",
+      "openEnded": "Sans date de fin",
+      "overlap": "Les périodes de validité d’un même code de taux ne peuvent pas se chevaucher.",
+      "past": "Ancien taux",
+      "periodHelp": "La date de début est incluse ; la date de fin est exclue. Laissez la date de fin vide pour une période ouverte.",
+      "rate": "Pourcentage de TVA",
+      "title": "Taux de TVA",
+      "validFrom": "Valide depuis",
+      "validTo": "Valide jusqu’au"
+    },
     "writeOff": "Abandon de créance"
   },
   "caseLaw": {
@@ -869,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Résumé",
+      "caseFileMayHoldOthers": "Ce dossier peut également contenir d’autres décisions.",
       "citedBy": "Cité par",
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",
@@ -2175,6 +2197,7 @@
       "forbidden": "Vous n’avez pas l’autorisation d’effectuer cette action.",
       "notFound": "Nous n’avons pas trouvé l’élément demandé.",
       "payloadTooLarge": "La requête est trop volumineuse.",
+      "publicCountryUnavailable": "Les textes législatifs et la jurisprudence de ce pays ne sont pas disponibles. Choisissez un autre pays.",
       "rateLimited": "Trop de requêtes. Veuillez réessayer plus tard.",
       "server": "Une erreur s’est produite. Veuillez réessayer.",
       "serviceUnavailable": "Le service est temporairement indisponible. Veuillez réessayer.",

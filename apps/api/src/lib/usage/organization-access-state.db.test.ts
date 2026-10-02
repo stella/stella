@@ -44,6 +44,7 @@ import {
   recordMissingOrganizationAccessStatesWhileUnenforced,
   recordNewOrganizationAccessState,
 } from "@/api/lib/usage/organization-access-state";
+import { readOrganizationActionState } from "@/api/lib/usage/organization-action-budget";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -137,6 +138,31 @@ const readState = async (organizationId: SafeId<"organization">) =>
     .from(organizationAccessStates)
     .where(eq(organizationAccessStates.organizationId, organizationId))
     .then((rows) => rows.at(0));
+
+test("action admission reads access state only through its authorized organization scope", async () => {
+  expect(
+    await readOrganizationActionState(requestScope(ids.orgA), ids.orgA),
+  ).toEqual({
+    state: ORGANIZATION_ACCESS_STATE.selfManagedKeys,
+    evaluationEndsAt: null,
+  });
+  expect(
+    await readOrganizationActionState(
+      requestScope(evaluatingOrgId),
+      evaluatingOrgId,
+    ),
+  ).toMatchObject({
+    state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+  });
+  // This user belongs to both organizations; the supplied request scope still
+  // prevents either organization's admission reader from selecting the other.
+  expect(
+    await readOrganizationActionState(requestScope(ids.orgA), evaluatingOrgId),
+  ).toBeUndefined();
+  expect(
+    await readOrganizationActionState(requestScope(evaluatingOrgId), ids.orgA),
+  ).toBeUndefined();
+});
 
 beforeAll(async () => {
   testDb = await getTestDb();

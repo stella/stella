@@ -51,8 +51,8 @@ jobs:
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
-      # services, other platforms). Every heavy job gates on
-      # `suite_depth == 'full'`.
+      # services, other platforms). Production E2E also runs on PRs
+      # that change its spec tree.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -63,6 +63,7 @@ jobs:
       collab_redis_required: ${{ steps.changed-files.outputs.collab_redis_required }}
       desktop_rust_checks_required: ${{ steps.changed-files.outputs.desktop_rust_checks_required }}
       e2e_core_required: ${{ steps.changed-files.outputs.e2e_core_required }}
+      e2e_production_required: ${{ steps.changed-files.outputs.e2e_production_required }}
       e2e_landing_required: ${{ steps.changed-files.outputs.e2e_landing_required }}
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
@@ -77,6 +78,7 @@ jobs:
       service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
+      route_smoke_required: ${{ steps.changed-files.outputs.route_smoke_required }}
       route_tree_required: ${{ steps.changed-files.outputs.route_tree_required }}
       stack_redaction_browsers_required: ${{ steps.changed-files.outputs.stack_redaction_browsers_required }}
       web_api_types_required: ${{ steps.changed-files.outputs.web_api_types_required }}
@@ -258,10 +260,17 @@ jobs:
           if [[ "$EVENT_NAME" == "workflow_dispatch" || "$scope_unknown" == "true" ]]; then
             # e2e-landing runs, and builds the landing site, at full depth only.
             landing_build_required=true
+            e2e_production_required=false
             if [[ "$SUITE_DEPTH" == "full" ]]; then
               landing_build_required=false
+              e2e_production_required=true
+            fi
+            route_smoke_required=false
+            if [[ "$EVENT_NAME" == "pull_request" ]]; then
+              route_smoke_required=true
             fi
             {
+              echo "route_smoke_required=$route_smoke_required"
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
               echo "docker_checks_required=true"
@@ -270,6 +279,7 @@ jobs:
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
+              echo "e2e_production_required=$e2e_production_required"
               echo "e2e_landing_required=true"
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
@@ -302,6 +312,7 @@ jobs:
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
+              echo "e2e_production_required=false"
               echo "e2e_landing_required=false"
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
@@ -314,6 +325,7 @@ jobs:
               echo "package_checks_required=true"
               echo "published_exports_required=false"
               echo "release_typecheck_required=false"
+              echo "route_smoke_required=false"
               echo "route_tree_required=false"
               echo "stack_redaction_browsers_required=false"
               echo "web_api_types_required=false"
@@ -357,6 +369,10 @@ jobs:
           model_catalog_drift_required=false
           published_exports_required=false
           release_typecheck_required=false
+          route_smoke_required=false
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            route_smoke_required=$(bun scripts/detect-route-smoke-changes.ts "${changed_files[@]}")
+          fi
           route_tree_required=false
           stack_redaction_browsers_required=false
           web_api_types_required=false
@@ -523,6 +539,15 @@ jobs:
             landing_build_required=false
           fi
 
+          # Production shards run at full depth for core changes, and on
+          # fast PRs only when their spec/fixture/config tree changes.
+          e2e_production_required=false
+          if [[ "$SUITE_DEPTH" == "full" && "$e2e_core_required" == "true" ]]; then
+            e2e_production_required=true
+          elif [[ "$EVENT_NAME" == "pull_request" ]]; then
+            e2e_production_required=$(bash scripts/detect-e2e-changes.sh pr-core "${changed_files[@]}")
+          fi
+
           docker_checks_required=false
           if [[ "$agent_sandbox_docker_required" == "true" || "$api_image_deps_required" == "true" ]]; then
             docker_checks_required=true
@@ -530,7 +555,7 @@ jobs:
 
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
-          if [[ "$e2e_core_required" == "true" ]]; then
+          if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then
             web_build_required=true
           fi
 
@@ -545,6 +570,7 @@ jobs:
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
+            echo "e2e_production_required=$e2e_production_required"
             echo "e2e_landing_required=$e2e_landing_required"
             echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
@@ -557,6 +583,7 @@ jobs:
             echo "package_checks_required=$package_checks_required"
             echo "published_exports_required=$published_exports_required"
             echo "release_typecheck_required=$release_typecheck_required"
+            echo "route_smoke_required=$route_smoke_required"
             echo "route_tree_required=$route_tree_required"
             echo "stack_redaction_browsers_required=$stack_redaction_browsers_required"
             echo "web_api_types_required=$web_api_types_required"
@@ -851,7 +878,7 @@ jobs:
           cd ../web
           cp .env.example .env
 
-      - name: CLI registry snapshot guard
+      - name: CLI committed registry and derived runtime guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # The CLI and shared chat-policy projections must match the live MCP
         # registry: regenerate all of them and fail on any diff so a registry
@@ -859,11 +886,19 @@ jobs:
         # Regenerate: `bun run codegen` in packages/cli.
         run: |
           (cd packages/cli && bun run codegen)
+          (cd packages/cli && bun run codegen:runtime)
           git diff --exit-code -- \
+            packages/cli/src/generated/api-contract.ts \
+            packages/cli/src/generated/cli-version.ts \
+            packages/cli/src/generated/document-version-upload-transport.ts \
+            packages/cli/src/generated/mcp-contract.ts \
+            packages/cli/src/generated/registry-snapshot.json \
+            packages/cli/src/generated/resource-tree.ts \
+            packages/cli/src/generated/resources-snapshot.json \
+            packages/cli/skills \
             chatgpt-app-submission.json \
-            packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
-            packages/cli/src/generated \
-            packages/cli/skills
+            packages/api-contract/src/mcp-chat-tool-policy.gen.ts
+          bun scripts/check-cli-runtime-generation.ts
 
       - name: MCP App bundle guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -927,6 +962,12 @@ jobs:
           bun scripts/check-published-exports.ts packages/time
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
+
+      - name: MCP kit published export map guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.published_exports_required == 'true'
+        run: bun scripts/check-published-exports.ts packages/mcp-kit
 
   ci-checks-policy:
     needs: ci-plan
@@ -1127,6 +1168,12 @@ jobs:
           bash scripts/check-ai-skill-sync.test.sh
           bash scripts/verify-step.test.sh
 
+      - name: Check local skill overrides
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: |
+          bash scripts/check-local-skill-overrides.sh .
+          bash scripts/check-local-skill-overrides.test.sh
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -1172,7 +1219,7 @@ jobs:
       - name: Changeset present for published package changes
         # The repository owner publishes this versioned shared contract.
         if: github.event_name == 'pull_request'
-        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
+        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -1783,6 +1830,9 @@ jobs:
       - name: Test detect-desktop-release-changes script
         run: bash scripts/detect-desktop-release-changes.test.sh
 
+      - name: Test route smoke change detector
+        run: bun test scripts/detect-route-smoke-changes.test.ts
+
       - name: Test CI workflow invariants
         run: >-
           bun test
@@ -1798,6 +1848,10 @@ jobs:
       - name: Test CLI release coupling gate
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/check-cli-release-coupling.test.ts
+
+      - name: Test CLI runtime package parity
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 
       - name: Test CLI contract changeset guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2927,6 +2981,7 @@ jobs:
         if: >-
           needs.ci-plan.outputs.e2e_core_required == 'true'
           || needs.ci-plan.outputs.marketing_screenshots_required == 'true'
+          || needs.ci-plan.outputs.route_smoke_required == 'true'
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
         with:
           name: e2e-web-build
@@ -3116,15 +3171,76 @@ jobs:
   # a small Vite dependency canary, and the built landing-page suite. The
   # production shards start only after their production build is published.
   # Marketing screenshots remain in the nightly test workflow.
+  route-smoke:
+    needs: [ci-plan, web-build]
+    if: >-
+      always()
+      && needs.ci-plan.outputs.trusted == 'true'
+      && needs.ci-plan.outputs.route_smoke_required == 'true'
+      && needs.web-build.result == 'success'
+      && github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      # The recorder uses this exact setup, build artifact, seed and browser.
+      - name: Setup production browser stack
+        id: e2e-stack
+        uses: ./.github/actions/setup-production-e2e
+        with:
+          expected-sha: ${{ github.sha }}
+          dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
+          dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Require production browser stack
+        env:
+          STACK_STATUS: ${{ steps.e2e-stack.outputs.status }}
+        run: |
+          if [[ "$STACK_STATUS" != "ready" ]]; then
+            echo "::error::Route smoke requires a ready production browser stack."
+            exit 1
+          fi
+
+      - name: Check route network baseline
+        env:
+          E2E_EXECUTION_PROFILE: network-baseline
+          E2E_EXPECT_DEV_ROUTES: "false"
+          PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-pr.zip
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke
+
+      - name: Upload route smoke report
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: route-smoke-pr-blob
+          path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
   e2e-production-shard:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.e2e_core_required == 'true'
+      && needs.ci-plan.outputs.e2e_production_required == 'true'
       && needs.web-build.result == 'success'
-      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
@@ -3388,10 +3504,10 @@ jobs:
         if: steps.e2e-stack.outputs.status == 'ready'
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:anonymized-export
 
-      # Own output dir, not uploaded: the blob reporter clears its directory
+      # Own output dir: the blob reporter clears its directory
       # per invocation, so sharing it would drop the canary blob, and a collab
       # blob (testDir e2e/collab) breaks the merged specs report. Its failures
-      # are read from this job's log.
+      # are uploaded separately with their traces and videos.
       - name: Run lockless collaboration browser suite
         if: steps.e2e-stack.outputs.status == 'ready'
         env:
@@ -3433,6 +3549,14 @@ jobs:
         with:
           name: playwright-blob-vite-canary
           path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
+      - name: Upload collaboration failure artifacts
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: playwright-collab-vite-canary
+          path: apps/web/e2e/test-results-collab/
           retention-days: 7
 
       - name: Upload server logs
@@ -3536,6 +3660,7 @@ jobs:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
@@ -3940,6 +4065,73 @@ jobs:
         env:
           NPM_TOKEN: ""
 
+  # Merge groups only: once any job has failed, cancel the rest of the run so
+  # ci-result (which runs under always()) reports the failure at once instead
+  # of after every other job. This job alone may cancel the run: it checks out
+  # no repository code and installs nothing, so no pull request code ever runs
+  # with the write token. It cancels nothing unless a job already failed, and
+  # it never retries anything. It never fails or holds the group: ci-result
+  # does not need it, and any API error or its own deadline just ends it.
+  # The repository token's API budget is shared by every workflow, so it polls
+  # with conditional requests (an unchanged 304 answer is free) and stops as
+  # soon as every other job is done.
+  merge-group-fail-fast:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel the run once a job fails
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLL_SECONDS: "30"
+          DEADLINE_SECONDS: "2400"
+        run: |
+          set -euo pipefail
+          url="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100"
+          headers="$RUNNER_TEMP/fail-fast-headers"
+          body="$RUNNER_TEMP/fail-fast-body"
+          etag=""
+          states=""
+          stop() {
+            echo "::warning::$1; this run finishes normally."
+            exit 0
+          }
+          while ((SECONDS < DEADLINE_SECONDS)); do
+            conditional=()
+            if [[ -n "$etag" ]]; then
+              conditional=(-H "If-None-Match: $etag")
+            fi
+            if ! status=$(curl -sS -o "$body" -D "$headers" -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              ${conditional[@]+"${conditional[@]}"} "$url"); then
+              stop "Could not read this run's jobs"
+            fi
+            case "$status" in
+              200)
+                etag=$(grep -i '^etag:' "$headers" | head -n 1 | cut -d' ' -f2- | tr -d '\r' || true)
+                # A run with more jobs than one page cannot be watched whole.
+                if ! states=$(jq -er 'if .total_count > (.jobs | length) then error("more jobs than one page") else .jobs[] | select(.name != "merge-group-fail-fast") | [.status, (.conclusion // "")] | @tsv end' "$body"); then
+                  stop "Could not read this run's jobs"
+                fi
+                ;;
+              304) ;;
+              *) stop "Reading this run's jobs returned HTTP $status" ;;
+            esac
+            if grep -Eq $'\t(failure|timed_out)$' <<< "$states"; then
+              echo "A job failed; cancelling the rest of this merge group run."
+              gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" || stop "Could not cancel the run"
+              exit 0
+            fi
+            if [[ -n "$states" ]] && ! grep -qv '^completed' <<< "$states"; then
+              exit 0
+            fi
+            sleep "$POLL_SECONDS"
+          done
+          stop "Stopped watching at the deadline"
+
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
   # merged without CI and trusted PRs must pass all checks.
@@ -3970,6 +4162,7 @@ jobs:
         landing-build,
         marketing-screenshots,
         migration-upgrade-rehearsal,
+        route-smoke,
         e2e-production-shard,
         e2e-vite-canary,
         e2e-landing,
@@ -4019,7 +4212,8 @@ jobs:
             "dependency-malware": "dependency_malware_required",
             "desktop-clippy": "desktop_rust_checks_required",
             "e2e-landing": "e2e_landing_required",
-            "e2e-production-shard": "e2e_core_required",
+            "route-smoke": "route_smoke_required",
+            "e2e-production-shard": "e2e_production_required",
             "e2e-vite-canary": "e2e_core_required",
             "fix-tests-on-base": "fix_tests_on_base_required",
             "landing-build": "landing_build_required",
@@ -4041,7 +4235,7 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "web-image-smoke"]
+            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "route-smoke", "web-image-smoke", "e2e-production-shard"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled

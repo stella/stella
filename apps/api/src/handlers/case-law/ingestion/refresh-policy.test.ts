@@ -1,5 +1,10 @@
 import { describe, expect, test } from "bun:test";
 
+import {
+  DECISION_DOCUMENT_ROLE,
+  DECISION_DOCUMENT_ROLE_METADATA_KEY,
+} from "@stll/api-contract/decision-document-role";
+
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
 
 type IngestionMetadataOptions = {
@@ -170,4 +175,31 @@ describe("shouldSkipRefresh", () => {
       }),
     ).toBe(false);
   });
+});
+
+describe("publisher document roles on unchanged raw", () => {
+  for (const previous of [
+    undefined,
+    ...Object.values(DECISION_DOCUMENT_ROLE),
+  ]) {
+    test.each([undefined, ...Object.values(DECISION_DOCUMENT_ROLE)])(
+      `refreshes role transitions from ${String(previous)} to %p and converges`,
+      (incoming) => {
+        expect(
+          shouldSkipRefresh({
+            existingMetadata:
+              previous === undefined
+                ? {}
+                : { [DECISION_DOCUMENT_ROLE_METADATA_KEY]: previous },
+            incomingMetadata:
+              incoming === undefined
+                ? {}
+                : { [DECISION_DOCUMENT_ROLE_METADATA_KEY]: incoming },
+            existingSourceHash: "unchanged-raw",
+            incomingRawHash: "unchanged-raw",
+          }),
+        ).toBe(previous === incoming);
+      },
+    );
+  }
 });

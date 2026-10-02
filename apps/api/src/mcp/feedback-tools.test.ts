@@ -31,6 +31,7 @@ const context: McpRequestContext = {
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),
+  userEmail: "standard@example.test",
 };
 
 const prepare = async (args: Record<string, unknown>) => {

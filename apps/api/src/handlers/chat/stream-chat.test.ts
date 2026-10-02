@@ -38,6 +38,10 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
 import { settleHistoryForRun } from "@/api/handlers/chat/chat-turn-settlement";
+import {
+  COMPACTION_SUMMARY_MESSAGE_ID,
+  createCompactionSummaryMessage,
+} from "@/api/handlers/chat/compaction";
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { createAutoApplySuggestChangesTools } from "@/api/handlers/chat/tools/auto-apply-suggest-changes-tools";
@@ -63,6 +67,7 @@ import {
   guardModelToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-capture";
 import type { PublicStreamChunk } from "@/api/lib/chat/tanstack-chat-runtime";
 import {
   ChatEmptyCompletionError,
@@ -83,6 +88,7 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+import { buildGlobalPromptParts } from "./chat-prompt";
 import type { GuardedChatSurfaces } from "./stream-chat";
 import {
   chatMessageUsageFromTokenUsage,
@@ -478,6 +484,39 @@ const persistNativeInterruptTurn = async (
   }
   return { emitted, finish: terminal.finish, source };
 };
+
+test("whitespace rejected as an empty completion remains in the raw live processor", async () => {
+  const whitespace = " \n\t\u00a0";
+  const { emitted, finish, source } = await persistNativeInterruptTurn(
+    chat({
+      adapter: createTextReplyAdapter(whitespace),
+      messages: [{ role: "user", content: "Summarize the NDA" }],
+      threadId: "thread-whitespace",
+    }),
+  );
+  expect(
+    source.some(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
+        chunk.delta === whitespace,
+    ),
+  ).toBe(true);
+  expect(finish?.outcome).toEqual({
+    type: "failed",
+    error: "empty_completion",
+  });
+  expect(finish?.responseMessage.parts).toEqual([]);
+  expect(emitted.at(-1)?.type).toBe(EventType.RUN_ERROR);
+
+  // RUN_ERROR does not finalize the browser processor as RUN_FINISHED would.
+  const live = new StreamProcessor();
+  for (const chunk of emitted) {
+    live.processChunk(chunk);
+  }
+  expect(
+    live.getMessages().findLast(({ role }) => role === "assistant")?.parts,
+  ).toContainEqual({ type: "text", content: whitespace });
+});
 
 /**
  * A turn that is cut while the model thinks about a tool result: the run is
@@ -1099,6 +1138,89 @@ describe("native interrupt boundary persistence", () => {
       },
     ]);
   });
+
+  for (const compacted of [false, true]) {
+    test(`keeps model summaries off the live approval page (compacted: ${String(compacted)})`, async () => {
+      const summary = createCompactionSummaryMessage({
+        summarizedMessageCount: 4,
+        summary: "Earlier conversation context",
+      });
+      // Identical text in a real user message must remain visible.
+      const user = {
+        id: "user-1",
+        role: "user",
+        parts: summary.parts,
+      } satisfies ChatMessage;
+      const initialMessages = compacted ? [summary, user] : [user];
+      const approvalTool = toolDefinition({
+        name: "mcp__external__delete",
+        description: "Server tool behind an approval",
+        inputSchema: draftToolInputSchema,
+        needsApproval: true,
+      }).server(async () => "deleted");
+      const { emitted, finish, source } = await persistNativeInterruptTurn(
+        chat({
+          adapter: createSingleToolCallAdapter({
+            arguments: '{"name":"NDA","source":"@title NDA"}',
+            toolName: "mcp__external__delete",
+          }),
+          agentLoopStrategy: maxIterations(3),
+          messages: initialMessages,
+          threadId: "thread-1",
+          tools: [approvalTool],
+        }),
+      );
+      const engineSnapshot = source.find(
+        (chunk) => chunk.type === EventType.MESSAGES_SNAPSHOT,
+      );
+      if (engineSnapshot?.type !== EventType.MESSAGES_SNAPSHOT) {
+        throw new Error("Expected the real engine's approval snapshot");
+      }
+      expect(
+        engineSnapshot.messages.some(
+          ({ id }) => id === COMPACTION_SUMMARY_MESSAGE_ID,
+        ),
+      ).toBe(compacted);
+      expect(finish?.outcome).toMatchObject({
+        type: "awaiting-user",
+        interaction: { type: "approval", toolCallId: "call-1" },
+      });
+      const visible = await collectChunks(
+        transformClientVisibleStream({
+          source: streamChunks(emitted),
+          storedHistory: NOTHING_REWRITTEN,
+        }),
+      );
+      const { processor } = createStreamMessageCapture({
+        initialMessages: [user],
+        capture: (message) => message,
+      });
+      for (const chunk of visible) {
+        processor.processChunk(chunk);
+      }
+      if (finish === null) {
+        throw new Error("Expected the real engine to finish the turn");
+      }
+      expect(
+        processor
+          .getMessages()
+          .map(({ id, role, parts }) => ({ id, role, parts })),
+      ).toEqual([
+        user,
+        {
+          id: finish.responseMessage.id,
+          role: "assistant",
+          parts: finish.responseMessage.parts,
+        },
+      ]);
+      // Presentation must not mutate the history the model and persistence read.
+      expect(
+        engineSnapshot.messages.some(
+          ({ id }) => id === COMPACTION_SUMMARY_MESSAGE_ID,
+        ),
+      ).toBe(compacted);
+    });
+  }
 
   // The same pause, driven by the real `suggest_changes` apply tool rather
   // than a fixture: it carries folio's raw JSON Schema wrapped as a Standard
@@ -3758,6 +3880,7 @@ describe("guarded model-ingress seam", () => {
     const surfaces: GuardedChatSurfaces = {
       messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
+      systemLayers: buildGlobalPromptParts({ userContext: null }).safeLayers,
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
     };

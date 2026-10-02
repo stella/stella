@@ -5,14 +5,15 @@
  * says what kind it is. The crawl, a refresh that changes the kind, a replay
  * of the stored payload and the identifier backfill must all leave the same
  * row: one id and slug, the typed identifiers, the docket kept beside a
- * reporter primary, and a legacy docket key only where the primary is a
- * docket. A docket-primary decision of an existing jurisdiction must come out
+ * reporter primary, and a legacy docket key and a case-file key only where
+ * the primary is a docket. A docket-primary decision of an existing jurisdiction must come out
  * exactly as it did before the type existed.
  */
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, asc, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
+import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 
 import { authRelationsPart } from "@/api/db/auth-schema";
@@ -171,6 +172,7 @@ const storedDecision = async (
         caseNumber: caseLawDecisions.caseNumber,
         caseNumberType: caseLawDecisions.caseNumberType,
         citationKey: caseLawDecisions.citationKey,
+        docketFamilyKey: caseLawDecisions.docketFamilyKey,
         country: caseLawDecisions.country,
         ecli: caseLawDecisions.ecli,
         languageGroupKey: caseLawDecisions.languageGroupKey,
@@ -320,6 +322,7 @@ test("a docket primary of an existing jurisdiction is stored as it always was", 
   const first = await storedDecision(sourceId, "cz-1");
 
   expect(first.citationKey).toBe(citationKeyOf("21 Cdo 1234/2020"));
+  expect(first.docketFamilyKey).toBe("21cdo1234/2020");
   expect(first.languageGroupKey).toBe(`${sourceId}:21 Cdo 1234/2020`);
   expect(first.caseNumberType).toBe(DECISION_IDENTIFIER_TYPES.CASE_NUMBER);
   expect(first.metadata).toEqual({ chamber: "21" });
@@ -336,8 +339,40 @@ test("a docket primary of an existing jurisdiction is stored as it always was", 
   expect(refreshed.id).toBe(first.id);
   expect(refreshed.slug).toBe(first.slug);
   expect(refreshed.citationKey).toBe(first.citationKey);
+  expect(refreshed.docketFamilyKey).toBe(first.docketFamilyKey);
   expect(refreshed.languageGroupKey).toBe(first.languageGroupKey);
   expect(refreshed.identifiers).toEqual(first.identifiers);
+});
+
+test("a docket stored with its sheet is keyed by its case file", async () => {
+  const sourceId = await newSource();
+  await ingest(sourceId, {
+    ...czechDecision("cz-sheet"),
+    caseNumber: "4 As 50/2012 - 33",
+    court: "Nejvyšší správní soud",
+    sourceDocumentId: "cz-sheet",
+  });
+  const stored = await storedDecision(sourceId, "cz-sheet");
+
+  expect(stored.caseNumber).toBe("4 As 50/2012 - 33");
+  expect(stored.citationKey).toBe(citationKeyOf("4 As 50/2012 - 33"));
+  // The file's key, which the sibling filed without the sheet shares.
+  expect(stored.docketFamilyKey).toBe(docketFamilyKeyOf("4 As 50/2012", "CZE"));
+});
+
+test("a refresh keys a row stored before the case-file key", async () => {
+  const sourceId = await newSource();
+  await ingest(sourceId, czechDecision("cz-unkeyed-v1"));
+  const first = await storedDecision(sourceId, "cz-1");
+  await db
+    .update(caseLawDecisions)
+    .set({ docketFamilyKey: null })
+    .where(eq(caseLawDecisions.id, first.id));
+
+  await ingest(sourceId, czechDecision("cz-unkeyed-v2"));
+  const refreshed = await storedDecision(sourceId, "cz-1");
+  expect(first.docketFamilyKey).not.toBeNull();
+  expect(refreshed.docketFamilyKey).toBe(first.docketFamilyKey);
 });
 
 test("a reporter primary keeps its docket as an identifier and no docket key", async () => {
@@ -347,6 +382,7 @@ test("a reporter primary keeps its docket as an identifier and no docket key", a
 
   expect(stored.caseNumber).toBe(REPORTER);
   expect(stored.citationKey).toBeNull();
+  expect(stored.docketFamilyKey).toBeNull();
   expect(stored.languageGroupKey).toBe(`${sourceId}:document:cluster-1`);
   expect(stored.caseNumberType).toBe(
     DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
@@ -363,6 +399,7 @@ test("a docket upgraded to a reporter primary keeps the row and drops its docket
   const docket = await storedDecision(sourceId, "cluster-2");
   // The fixture reaches the fault: a docket primary does carry a key.
   expect(docket.citationKey).toBe(citationKeyOf(DOCKET));
+  expect(docket.docketFamilyKey).toBe(docketFamilyKeyOf(DOCKET, "USA"));
 
   await ingest(sourceId, usReporterDecision("cluster-2"));
   const upgraded = await storedDecision(sourceId, "cluster-2");
@@ -375,6 +412,7 @@ test("a docket upgraded to a reporter primary keeps the row and drops its docket
     DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
   );
   expect(upgraded.citationKey).toBeNull();
+  expect(upgraded.docketFamilyKey).toBeNull();
   expect(upgraded.identifiers).toEqual(REPORTER_IDENTIFIERS);
 });
 
@@ -387,6 +425,7 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
     const crawled = await storedDecision(sourceId, "cluster-3");
     expect(crawled.caseNumber).toBe(DOCKET);
     expect(crawled.citationKey).toBe(citationKeyOf(DOCKET));
+    expect(crawled.docketFamilyKey).toBe(docketFamilyKeyOf(DOCKET, "USA"));
     const { replay, release } = await replayerFor(crawled, (stored) => ({
       ...usReporterDecision(stored.sourceDocumentId ?? ""),
       rawHash: "current-parser",
@@ -405,6 +444,7 @@ test("a replay upgrading a docket primary to its reporter citation, the backfill
       DECISION_IDENTIFIER_TYPES.REPORTER_CITATION,
     );
     expect(replayed.citationKey).toBeNull();
+    expect(replayed.docketFamilyKey).toBeNull();
     expect(replayed.identifiers).toEqual(REPORTER_IDENTIFIERS);
     expect(replayed.recovered).toEqual(REPORTER_IDENTIFIERS);
 
