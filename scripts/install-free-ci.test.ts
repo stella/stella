@@ -359,6 +359,59 @@ describe("install-free invocation classification", () => {
     ]);
   });
 
+  test.each([
+    "env bunx some-tool",
+    "CI=true env -- bunx some-tool",
+    "exec env CI=true bun x some-tool",
+    "env CI=true npx some-tool",
+  ])("classifies package execution through wrappers: %s", (command) => {
+    expect(kinds(command)).toEqual(["fetch"]);
+  });
+
+  test.each([
+    "if false; then bun ci; fi",
+    "if false; then out=$(bun ci); fi",
+    "if false; then (bun ci); fi",
+    "(false && bun ci)",
+    "false && bun ci",
+    "bun ci || true",
+    "for item in; do bun ci; done",
+    "bun ci &",
+    "bun ci | cat",
+    "! bun ci",
+  ])("shell control flow cannot establish install coverage: %s", (install) => {
+    expect(kinds(`${install}\nbun scripts/check.ts`)).toEqual([
+      "install",
+      "files",
+    ]);
+  });
+
+  test("unconditional installs retain coverage across later control flow", () => {
+    expect(kinds("bun ci\nif true; then bun scripts/missing.ts; fi")).toEqual([
+      "install",
+    ]);
+    expect(
+      kinds("(if false; then bun ci; fi)\n(bun ci; bun scripts/missing.ts)"),
+    ).toEqual(["install", "install"]);
+  });
+
+  test("a conditional shell install cannot cover a later workflow step", () => {
+    const root = repository(
+      [
+        "jobs:",
+        "  job:",
+        "    steps:",
+        "      - run: if false; then bun ci; fi",
+        "      - run: bun scripts/check.ts",
+      ].join("\n"),
+    );
+    expect(
+      installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+        ({ classification }) => classification.type,
+      ),
+    ).toEqual(["install", "files"]);
+  });
+
   test("commands after an install in the same directory are covered", () => {
     expect(
       kinds(
@@ -373,7 +426,7 @@ describe("install-free invocation classification", () => {
       kinds(
         [
           "bun install -g turbo",
-          "(cd scratch && bun install)",
+          "(cd scratch; bun install)",
           "bun scripts/check.ts",
           "(cd scratch && bun scripts/missing.ts)",
         ].join("\n"),

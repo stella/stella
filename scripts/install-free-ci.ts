@@ -66,13 +66,53 @@ export type ShellEvent =
   | { readonly type: "command"; readonly words: readonly string[] }
   | { readonly type: "subshell-start" }
   | { readonly type: "subshell-end" }
+  | { readonly type: "control-flow" }
   | { readonly type: "unparsed"; readonly reason: string };
 
 const OPERATOR_CHARACTERS = new Set([";", "&", "|", "(", ")", "<", ">"]);
 const SUBSTITUTION = "$(…)";
+// These constructs can skip commands or run them without waiting for completion.
+const SHELL_CONTROL_FLOW = new Set([
+  "if",
+  "elif",
+  "else",
+  "fi",
+  "for",
+  "select",
+  "while",
+  "until",
+  "do",
+  "done",
+  "case",
+  "esac",
+  "!",
+]);
 
 const isBlank = (character: string) =>
   character === " " || character === "\t" || character === "\r";
+
+type AppendShellCommandOptions = {
+  events: ShellEvent[];
+  words: string[];
+  commandStart: number;
+  controlFlow: boolean;
+};
+
+const appendShellCommand = ({
+  events,
+  words,
+  commandStart,
+  controlFlow,
+}: AppendShellCommandOptions) => {
+  if (words.length === 0) {
+    return;
+  }
+  if (controlFlow || SHELL_CONTROL_FLOW.has(words[0] ?? "")) {
+    // Precede substitutions too: they belong to this command's branch.
+    events.splice(commandStart, 0, { type: "control-flow" });
+  }
+  events.push({ type: "command", words });
+};
 
 /**
  * Splits shell source into simple commands, in execution order. Quotes are
@@ -239,13 +279,13 @@ export const lexShell = (source: string): ShellEvent[] => {
   };
 
   const readList = (closing: ")" | "`" | undefined): void => {
+    let commandStart = events.length;
     let words: string[] = [];
     let wordEnd = -1;
-    const flush = () => {
-      if (words.length > 0) {
-        events.push({ type: "command", words });
-      }
+    const flush = (controlFlow = false) => {
+      appendShellCommand({ events, words, commandStart, controlFlow });
       words = [];
+      commandStart = events.length;
     };
     while (index < source.length) {
       const character = source[index] ?? "";
@@ -265,7 +305,7 @@ export const lexShell = (source: string): ShellEvent[] => {
         const end = source.indexOf("\n", index);
         index = end === -1 ? source.length : end;
       } else if (character === ";" || character === "&" || character === "|") {
-        flush();
+        flush(character !== ";");
         index += 1;
       } else if (character === "(") {
         flush();
@@ -934,6 +974,11 @@ type WalkResult = {
   readonly installs: readonly string[];
 };
 
+type ShellScope = {
+  cwd: string;
+  coverage: "straight-line" | "control-flow";
+};
+
 /** Classifies, in order, each Bun command that runs outside every install. */
 const walkCommands = ({
   context,
@@ -945,7 +990,10 @@ const walkCommands = ({
   const expansions: Expansion[] = [];
   const installs: string[] = [];
   const covered = new Set(installed);
-  const cwdStack = [cwd];
+  const scopes: ShellScope[] = [{ cwd, coverage: "straight-line" }];
+  // A lexer cannot prove which branch executes or whether an install finishes.
+  // Once control flow appears in a shell scope, later installs cannot establish
+  // coverage. An earlier straight-line install still covers subsequent commands.
   const isCovered = (dir: string) =>
     [...covered].some(
       (installedDir) =>
@@ -954,14 +1002,19 @@ const walkCommands = ({
         dir.startsWith(`${installedDir}/`),
     );
   for (const event of events) {
-    const current = cwdStack.at(-1) ?? cwd;
+    const scope = scopes.at(-1) ?? { cwd, coverage: "control-flow" };
+    const current = scope.cwd;
     switch (event.type) {
+      case "control-flow": {
+        scope.coverage = "control-flow";
+        break;
+      }
       case "subshell-start": {
-        cwdStack.push(current);
+        scopes.push({ cwd: current, coverage: scope.coverage });
         break;
       }
       case "subshell-end": {
-        cwdStack.pop();
+        scopes.pop();
         break;
       }
       case "unparsed": {
@@ -980,7 +1033,7 @@ const walkCommands = ({
           break;
         }
         if (program === "cd" || program === "pushd" || program === "popd") {
-          cwdStack[cwdStack.length - 1] =
+          scope.cwd =
             program === "cd"
               ? changeDirectory({ from: current, to: target })
               : "$PWD";
@@ -999,7 +1052,11 @@ const walkCommands = ({
             words,
           })) {
             const { classification } = expansion;
-            if (classification.type === "install" && !classification.global) {
+            if (
+              scope.coverage === "straight-line" &&
+              classification.type === "install" &&
+              !classification.global
+            ) {
               covered.add(classification.dir);
               installs.push(classification.dir);
             }
