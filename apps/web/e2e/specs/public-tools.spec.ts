@@ -30,7 +30,9 @@ const organizationSchema = v.object({
 async function renderServerDocument(browser: Browser, html: string) {
   const isolated = await browser.newContext();
   try {
-    await isolated.route("**/*", (route) => route.abort());
+    await isolated.route("**/*", async (route) => {
+      await route.abort();
+    });
     const page = await isolated.newPage();
     await page.setContent(html, { waitUntil: "domcontentloaded" });
     await expect(page.locator('[id^="S:"], template[id^="B:"]')).toHaveCount(0);
