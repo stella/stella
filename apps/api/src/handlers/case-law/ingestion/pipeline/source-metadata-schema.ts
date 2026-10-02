@@ -28,3 +28,24 @@ export const resolveSourceMetadataUrlSchema = async (
   }
   return metadataUrlSchemaForAdapter(source.adapterKey);
 };
+
+/** Cache belongs to one pipeline run; persisted source changes are read on the next run. */
+export const createSourceMetadataUrlSchemaResolver = (scopedDb: ScopedDb) => {
+  const schemas = new Map<
+    SafeId<"caseLawSource">,
+    ReturnType<typeof resolveSourceMetadataUrlSchema>
+  >();
+  return (sourceId: SafeId<"caseLawSource">) => {
+    const cached = schemas.get(sourceId);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const pending = resolveSourceMetadataUrlSchema(sourceId, scopedDb);
+    schemas.set(sourceId, pending);
+    return pending;
+  };
+};
+
+export type SourceMetadataUrlSchemaResolver = ReturnType<
+  typeof createSourceMetadataUrlSchemaResolver
+>;

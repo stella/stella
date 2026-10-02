@@ -473,6 +473,89 @@ test("the registered batch clones and persists declared URL scalars and diagnost
   }
 });
 
+test.each([ADAPTER_KEYS.PL_COURTS, ADAPTER_KEYS.CZ_NS])(
+  "one batch resolves the persisted source schema once for every decision (%s)",
+  async (adapterKey) => {
+    const sourceId = createSafeId<"caseLawSource">();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: sql`'retired-' || ${caseLawSources.id}` })
+      .where(eq(caseLawSources.adapterKey, adapterKey));
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey,
+      name: "One schema lookup per batch fixture",
+    });
+    const stated = "https://example.test/?stated=&amp;amp;&encoded=%26";
+    const decisions = [901, 902, 903].map((number) =>
+      plainTextIngestionResult(
+        {
+          ...record(number),
+          metadata:
+            adapterKey === ADAPTER_KEYS.PL_COURTS
+              ? checkedDecisionMetadata(
+                  {
+                    href: toMetadataUrl(stated, "transport-json"),
+                    division: { href: toMetadataUrl(stated, "transport-json") },
+                  },
+                  PL_COURTS_METADATA_URL_SCHEMA,
+                )
+              : {},
+        },
+        PL_COURTS_METADATA_URL_SCHEMA,
+      ),
+    );
+    const sourceReads: string[] = [];
+    const countedDb = drizzle({
+      client,
+      relations: { ...relations, ...authRelationsPart },
+      logger: {
+        logQuery(query) {
+          if (
+            query.startsWith("select ") &&
+            query.includes('"adapter_key"') &&
+            query.includes('from "case_law_sources"')
+          ) {
+            sourceReads.push(query);
+          }
+        },
+      },
+    });
+    const countedScopedDb: ScopedDb = async (callback) =>
+      await countedDb.transaction(async (tx) => await callback(asTestRaw(tx)));
+    const sourceLease = await leaseFor(sourceId);
+    const fakeS3 = startFakeS3();
+    try {
+      const applied = await applyCaseLawIngestionBatch({
+        batch: prepared(decisions),
+        sourceLease,
+        scopedDb: countedScopedDb,
+        signal: new AbortController().signal,
+        refresh: DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+        corpus: landingTransfer().corpus,
+      });
+      expect(applied.isOk()).toBe(true);
+      const rows = await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId));
+      expect(rows).toHaveLength(decisions.length);
+      expect(sourceReads).toHaveLength(1);
+      if (adapterKey === ADAPTER_KEYS.PL_COURTS) {
+        for (const row of rows) {
+          expect(row.metadata).toMatchObject({
+            href: stated,
+            division: { href: stated },
+          });
+        }
+      }
+    } finally {
+      fakeS3.stop();
+      await sourceLease.release();
+    }
+  },
+);
+
 /** Certified by the receipt. */
 const directCaller: Caller = {
   name: "records applied directly",

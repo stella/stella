@@ -35,7 +35,8 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
-import { resolveSourceMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import {
   CONTENTION_RECONCILIATION,
   DECISION_REFRESH,
@@ -348,16 +349,18 @@ const processDecisionAttempt = async (
   });
 };
 
-export const processDecision = async ({
-  refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-  corpus = CASE_LAW_CORPUS_DEPENDENCIES,
-  judges = CASE_LAW_JUDGE_DEPENDENCIES,
-  ...options
-}: ProcessDecisionOptions): Promise<ProcessResult> => {
-  const metadataUrlSchema = await resolveSourceMetadataUrlSchema(
-    options.sourceId,
+export const processDecision = async (
+  {
+    refresh = DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+    corpus = CASE_LAW_CORPUS_DEPENDENCIES,
+    judges = CASE_LAW_JUDGE_DEPENDENCIES,
+    ...options
+  }: ProcessDecisionOptions,
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
     options.scopedDb,
-  );
+  ),
+): Promise<ProcessResult> => {
+  const metadataUrlSchema = await resolveMetadataUrlSchema(options.sourceId);
   return await processDecisionAttempt({
     ...options,
     metadataUrlSchema,

@@ -31,6 +31,10 @@ import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/m
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import {
+  createSourceMetadataUrlSchemaResolver,
+  type SourceMetadataUrlSchemaResolver,
+} from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import { shouldSkipRefresh } from "@/api/handlers/case-law/ingestion/refresh-policy";
@@ -495,6 +499,7 @@ const storedInputFor = (
 });
 
 type ReplayRowOptions = {
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
   metadataUrlSchema?: unknown;
   row: ReplayDecisionRow;
   /** The payload this replay read, as stored. */
@@ -781,6 +786,7 @@ const replayWouldChangeRow = async ({
  * did not: the payload the parser derives from it did.
  */
 const replayRow = async ({
+  resolveMetadataUrlSchema,
   metadataUrlSchema,
   row,
   raw,
@@ -919,30 +925,33 @@ const replayRow = async ({
     sourceId,
   });
 
-  const processed = await processDecision({
-    // The payload travels with the result, always, whatever the adapter put
-    // in it. The pipeline writes the row's raw-payload pointer from the
-    // result it is handed, so a result that carried no payload would clear
-    // the stored key and leave the row unreplayable — it would destroy the
-    // one thing that makes this local. These are the bytes this run read,
-    // and the pipeline keys the object on their own hash, so it recognises
-    // the key the row already holds and skips the re-upload.
-    input: {
-      ...reparsed.result,
-      sourceRawBytes: raw,
-      sourceRawContentType:
-        row.sourceRawContentType ?? reparsed.result.sourceRawContentType,
+  const processed = await processDecision(
+    {
+      // The payload travels with the result, always, whatever the adapter put
+      // in it. The pipeline writes the row's raw-payload pointer from the
+      // result it is handed, so a result that carried no payload would clear
+      // the stored key and leave the row unreplayable — it would destroy the
+      // one thing that makes this local. These are the bytes this run read,
+      // and the pipeline keys the object on their own hash, so it recognises
+      // the key the row already holds and skips the re-upload.
+      input: {
+        ...reparsed.result,
+        sourceRawBytes: raw,
+        sourceRawContentType:
+          row.sourceRawContentType ?? reparsed.result.sourceRawContentType,
+      },
+      sourceId,
+      scopedDb,
+      // The replay observed the stored payload now. The pipeline records this
+      // as the observation's time, which is what orders it against a crawl.
+      observedAt: new Date(),
+      observationOrder,
+      refresh: changed
+        ? DECISION_REFRESH.ALWAYS
+        : DECISION_REFRESH.WHEN_SOURCE_CHANGED,
     },
-    sourceId,
-    scopedDb,
-    // The replay observed the stored payload now. The pipeline records this
-    // as the observation's time, which is what orders it against a crawl.
-    observedAt: new Date(),
-    observationOrder,
-    refresh: changed
-      ? DECISION_REFRESH.ALWAYS
-      : DECISION_REFRESH.WHEN_SOURCE_CHANGED,
-  });
+    resolveMetadataUrlSchema,
+  );
 
   if (processed.status === PROCESS_DECISION_STATUS.RETRYABLE) {
     return {
@@ -961,6 +970,7 @@ const replayRow = async ({
 };
 
 type ReplayOneRowOptions = {
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver;
   metadataUrlSchema?: unknown;
   capability: Extract<ReplayCapability, { type: "supported" }>;
   readStoredRaw: StoredRawReader;
@@ -982,6 +992,7 @@ type ReplayOneRowOptions = {
  * as one.
  */
 const replayOneRow = async ({
+  resolveMetadataUrlSchema,
   metadataUrlSchema,
   capability,
   readStoredRaw,
@@ -1003,6 +1014,7 @@ const replayOneRow = async ({
     };
   }
   return await replayRow({
+    resolveMetadataUrlSchema,
     metadataUrlSchema,
     row,
     raw,
@@ -1199,6 +1211,8 @@ export const replayCaseLawSource = async ({
     return { type: "unknown-boundary", after };
   }
 
+  const resolveMetadataUrlSchema =
+    createSourceMetadataUrlSchemaResolver(scopedDb);
   const outcomes = emptyOutcomeCounts();
   const rejections = emptyRejectionCounts();
   const problems: ReplayRowReport[] = [];
@@ -1234,6 +1248,7 @@ export const replayCaseLawSource = async ({
     const attempt = await Result.tryPromise({
       try: async () =>
         await replayOneRow({
+          resolveMetadataUrlSchema,
           metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
           capability,
           readStoredRaw,

@@ -26,6 +26,8 @@ import {
   wrappedErrorDetail,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { createSourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
+import type { SourceMetadataUrlSchemaResolver } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import type { DecisionRefresh } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
@@ -518,19 +520,24 @@ type ApplyDecisionBatchOptions = {
  * signal stops the batch; the pack and the ledger are still written for
  * what it reached.
  */
-export const applyDecisionBatch = async ({
-  batch: { batchRecords },
-  sourceId,
-  scopedDb,
-  observation,
-  refresh,
-  corpus,
-  polarityRules,
-  context,
-  failureStreak,
-  insertLimit,
-  signal,
-}: ApplyDecisionBatchOptions): Promise<DecisionBatchApplication> => {
+export const applyDecisionBatch = async (
+  {
+    batch: { batchRecords },
+    sourceId,
+    scopedDb,
+    observation,
+    refresh,
+    corpus,
+    polarityRules,
+    context,
+    failureStreak,
+    insertLimit,
+    signal,
+  }: ApplyDecisionBatchOptions,
+  resolveMetadataUrlSchema: SourceMetadataUrlSchemaResolver = createSourceMetadataUrlSchemaResolver(
+    scopedDb,
+  ),
+): Promise<DecisionBatchApplication> => {
   const tally: BatchTally = {
     inserted: 0,
     skipped: 0,
@@ -586,17 +593,20 @@ export const applyDecisionBatch = async ({
       const processed = await Result.tryPromise({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
-          await processDecision({
-            input,
-            sourceId,
-            scopedDb,
-            observedAt: observation.observedAt,
-            observationOrder: observation.order,
-            refresh,
-            corpus,
-            corpusBatch,
-            polarityRules,
-          }),
+          await processDecision(
+            {
+              input,
+              sourceId,
+              scopedDb,
+              observedAt: observation.observedAt,
+              observationOrder: observation.order,
+              refresh,
+              corpus,
+              corpusBatch,
+              polarityRules,
+            },
+            resolveMetadataUrlSchema,
+          ),
         catch: (cause) => cause,
       });
       halt = Result.isError(processed)
