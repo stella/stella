@@ -3,6 +3,7 @@ import * as v from "valibot";
 
 import type { CaseLawJurisdiction } from "./case-law-jurisdictions";
 import launchReadiness from "./launch-readiness.json" with { type: "json" };
+import { ADMITTED_PUBLIC_COUNTRIES } from "./public-country-capability";
 
 /** Countries the public case-law browser has a complete routing/display model for. */
 export const CASE_LAW_BROWSER_COUNTRIES = [
@@ -68,8 +69,30 @@ export const parseCaseLawLaunchReadiness = (
 };
 
 /** Countries the public case-law surfaces may enumerate or query. */
-export const PUBLIC_CASE_LAW_COUNTRIES =
-  parseCaseLawLaunchReadiness(launchReadiness);
+const servingReceipts = parseCaseLawLaunchReadiness(launchReadiness);
+
+/** Every admitted country must have a receipt, and receipts cannot admit independently. */
+export const PUBLIC_CASE_LAW_COUNTRIES = ADMITTED_PUBLIC_COUNTRIES.map(
+  (country) => {
+    const receipt = servingReceipts.find((candidate) => candidate === country);
+    if (receipt === undefined) {
+      return panic(
+        "An admitted public country needs a case-law serving receipt.",
+      );
+    }
+    return receipt;
+  },
+);
+if (
+  servingReceipts.some(
+    (country) =>
+      !ADMITTED_PUBLIC_COUNTRIES.some((candidate) => candidate === country),
+  )
+) {
+  panic(
+    "A case-law serving receipt cannot admit a pending or withdrawn country.",
+  );
+}
 
 export const isPublicCaseLawCountry = (
   country: string,

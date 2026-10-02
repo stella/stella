@@ -15,12 +15,14 @@
 
 import { panic, TaggedError } from "better-result";
 import { and, eq } from "drizzle-orm";
+import * as v from "valibot";
 
-import { member } from "@/api/db/auth-schema";
+import { member, organization } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import {
   usagePolicies,
   usageEntitlements,
+  CLOSED_USAGE_ENTITLEMENT_STATUSES,
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
@@ -30,6 +32,10 @@ import type {
   HostedUsageAllocationPayload,
   HostedUsageEntitlementPayload,
 } from "@/api/lib/hosted-usage-provider/event-schemas";
+import {
+  polarEntitlementStatusSchema,
+  type PolarEntitlementStatus,
+} from "@/api/lib/hosted-usage-provider/polar/contract";
 import { recordWebhookAuditEvent } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
@@ -208,6 +214,9 @@ const isStaleProviderEvent = ({
   }
   // At equal versions, terminal/cancellation facts dominate an active replay.
   return (
+    (existing.status === "paused" &&
+      payload.status !== "paused" &&
+      !TERMINAL_PROVIDER_STATUSES.has(payload.status)) ||
     (existing.status === "cancelled" &&
       (payload.status !== "canceled" ||
         payload.cancel_at_period_end === true)) ||
@@ -312,7 +321,7 @@ const findEntitlementByHostedAccountRef = async (
   return rows.at(0) ?? null;
 };
 
-const HOSTED_PROVIDER_STATUS_MAP: Record<string, UsageEntitlementStatus> = {
+const HOSTED_PROVIDER_STATUS_MAP = {
   trialing: "trialing",
   active: "active",
   past_due: "past_due",
@@ -321,12 +330,123 @@ const HOSTED_PROVIDER_STATUS_MAP: Record<string, UsageEntitlementStatus> = {
   incomplete: "past_due",
   incomplete_expired: "cancelled",
   paused: "paused",
-};
+} as const satisfies Record<PolarEntitlementStatus, UsageEntitlementStatus>;
+
+class HostedProviderUnknownStatus extends TaggedError(
+  "HostedProviderUnknownStatus",
+)<{ message: string }> {}
+
+const unknownProviderStatus = failureSink({
+  event: "usage_provider.webhook.unknown_status",
+  expected: [],
+});
 
 const mapHostedProviderStatus = (
   providerStatus: string,
-): UsageEntitlementStatus =>
-  HOSTED_PROVIDER_STATUS_MAP[providerStatus] ?? "past_due";
+): UsageEntitlementStatus | null => {
+  const parsed = v.safeParse(polarEntitlementStatusSchema, providerStatus);
+  if (parsed.success) {
+    return HOSTED_PROVIDER_STATUS_MAP[parsed.output];
+  }
+  observeFailure(
+    new HostedProviderUnknownStatus({
+      message: "Unrecognized provider status",
+    }),
+    {
+      sink: unknownProviderStatus,
+      ctx: {
+        source: "usage_provider.webhook",
+        step: "mapHostedProviderStatus",
+      },
+    },
+  );
+  return null;
+};
+
+type HostedEntitlementReconciliationParams = {
+  tx: Transaction;
+  payload: HostedUsageEntitlementPayload;
+  eventId: string;
+  reason: "provider_migration" | "unrecognized_status";
+};
+
+export const handleHostedEntitlementReconciliation = async ({
+  tx,
+  payload,
+  eventId,
+  reason,
+}: HostedEntitlementReconciliationParams): Promise<DispatchOutcome> => {
+  const existing =
+    (await findEntitlementByHostedExternalId(tx, payload.id)) ??
+    (await findEntitlementByHostedAccountRef(tx, payload.account_ref));
+  const organizationId =
+    existing?.organizationId ??
+    parseAuthProviderId<"organization">(
+      payload.metadata?.organization_id ?? "",
+    );
+  if (organizationId === null) {
+    return {
+      kind: "ignored",
+      reason: "cannot resolve reconciliation audit owner",
+    };
+  }
+  if (!existing) {
+    const owners = await tx
+      .select({ id: organization.id })
+      .from(organization)
+      .where(eq(organization.id, organizationId))
+      .limit(1);
+    if (owners.length === 0) {
+      return {
+        kind: "ignored",
+        reason: "reconciliation organization does not exist",
+      };
+    }
+  }
+  await recordWebhookAuditEvent({
+    tx,
+    organizationId,
+    eventId,
+    action: AUDIT_ACTION.REVIEW,
+    resourceType: existing
+      ? AUDIT_RESOURCE_TYPE.USAGE_ENTITLEMENT
+      : AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+    resourceId: existing?.id ?? organizationId,
+    changes: { reconciliation: { old: null, new: reason } },
+  });
+  return { kind: "ignored", reason };
+};
+
+const closedEntitlementStatuses: ReadonlySet<UsageEntitlementStatus> = new Set(
+  CLOSED_USAGE_ENTITLEMENT_STATUSES,
+);
+
+const readHostedPeriod = (
+  payload: HostedUsageEntitlementPayload,
+  status: UsageEntitlementStatus,
+) => {
+  const closedPeriod = closedEntitlementStatuses.has(status);
+  if (payload.current_period_end === null && !closedPeriod) {
+    return null;
+  }
+  const start = new Date(payload.current_period_start);
+  // Polar current_period_end is null on a suspended snapshot. Use
+  // current_period_start as its equal bound to fence older activation
+  // without inventing an end or allocating capacity.
+  const end = new Date(
+    payload.current_period_end ?? payload.current_period_start,
+  );
+  if (
+    Number.isNaN(start.getTime()) ||
+    Number.isNaN(end.getTime()) ||
+    (closedPeriod ? end < start : end <= start)
+  ) {
+    return null;
+  }
+  return closedPeriod
+    ? { type: "closed" as const, start, end }
+    : { type: "open" as const, start, end };
+};
 
 type HostedEntitlementUpsertParams = {
   tx: Transaction;
@@ -339,6 +459,20 @@ export const handleHostedEntitlementUpsert = async ({
   payload,
   eventId,
 }: HostedEntitlementUpsertParams): Promise<DispatchOutcome> => {
+  const status = mapHostedProviderStatus(payload.status);
+  if (status === null) {
+    return await handleHostedEntitlementReconciliation({
+      tx,
+      payload,
+      eventId,
+      reason: "unrecognized_status",
+    });
+  }
+  const period = readHostedPeriod(payload, status);
+  if (period === null) {
+    return { kind: "ignored", reason: "invalid period dates" };
+  }
+  const { start: periodStart, end: periodEnd } = period;
   // metadata.organization_id (which we set at hosted setup creation) is
   // authoritative only before a local mapping exists. Once an entitlement is
   // mapped, the local row owns the org id, so a renewal/update that arrives
@@ -359,17 +493,6 @@ export const handleHostedEntitlementUpsert = async ({
       kind: "ignored",
       reason: `no subscription usage_policy matches hosted policy reference ${payload.policy_ref}`,
     };
-  }
-
-  const status = mapHostedProviderStatus(payload.status);
-  const periodStart = new Date(payload.current_period_start);
-  const periodEnd = new Date(payload.current_period_end);
-  if (
-    Number.isNaN(periodStart.getTime()) ||
-    Number.isNaN(periodEnd.getTime()) ||
-    periodEnd <= periodStart
-  ) {
-    return { kind: "ignored", reason: "invalid period dates" };
   }
 
   const seats = payload.quantity ?? 1;
@@ -658,6 +781,10 @@ export const handleHostedEntitlementUpsert = async ({
     });
   }
 
+  if (period.type === "closed") {
+    return { kind: "applied", entitlementId };
+  }
+
   // Allocate the period's usage units. Idempotent per entitlement period,
   // not per webhook event id: providers may emit multiple updates inside
   // a single period (status flips, seat changes), each with a
@@ -767,6 +894,43 @@ export const handleUsageEntitlementStatusChange = async ({
   eventId,
   eventKind,
 }: UsageEntitlementStatusUpdateParams): Promise<DispatchOutcome> => {
+  // Revocation denies access independently of the reported snapshot status.
+  const mappedStatus =
+    eventKind === "revoked"
+      ? "cancelled"
+      : mapHostedProviderStatus(payload.status);
+  if (eventKind === "revoked") {
+    // Retain unknown-status detection without letting it veto a denial.
+    mapHostedProviderStatus(payload.status);
+  }
+  if (mappedStatus === null) {
+    return await handleHostedEntitlementReconciliation({
+      tx,
+      payload,
+      eventId,
+      reason: "unrecognized_status",
+    });
+  }
+  const transition = {
+    canceled: {
+      status: mappedStatus,
+      providerStatus: payload.status,
+      cancelAtPeriodEnd: true,
+    },
+    revoked: {
+      status: "cancelled",
+      providerStatus: "canceled",
+      cancelAtPeriodEnd: false,
+    },
+  } as const satisfies Record<
+    UsageEntitlementStatusUpdateParams["eventKind"],
+    {
+      status: UsageEntitlementStatus;
+      providerStatus: string;
+      cancelAtPeriodEnd: boolean;
+    }
+  >;
+  const { providerStatus, ...update } = transition[eventKind];
   let existing = await findEntitlementByHostedExternalId(tx, payload.id);
   if (!existing) {
     const current = await findEntitlementByHostedAccountRef(
@@ -789,7 +953,7 @@ export const handleUsageEntitlementStatusChange = async ({
         eventId,
         payload: {
           ...payload,
-          status: eventKind === "revoked" ? "canceled" : payload.status,
+          status: providerStatus,
           cancel_at_period_end: eventKind === "canceled",
         },
       });
@@ -808,7 +972,7 @@ export const handleUsageEntitlementStatusChange = async ({
   const occurredAt = parseOccurredAt(payload);
   const orderingPayload = {
     ...payload,
-    status: eventKind === "revoked" ? "canceled" : payload.status,
+    status: providerStatus,
     cancel_at_period_end: eventKind === "canceled",
   };
   if (
@@ -819,13 +983,6 @@ export const handleUsageEntitlementStatusChange = async ({
       reason: "stale provider event (does not supersede current state)",
     };
   }
-  const update =
-    eventKind === "canceled"
-      ? {
-          status: mapHostedProviderStatus(payload.status),
-          cancelAtPeriodEnd: true,
-        }
-      : { status: "cancelled" as const, cancelAtPeriodEnd: false };
   await tx
     .update(usageEntitlements)
     .set({

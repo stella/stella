@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { and, eq } from "drizzle-orm";
 
 import { caseLawDecisionSupplements } from "@/api/db/schema";
@@ -8,6 +9,7 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
+import { DECISION_SUPPLEMENT_DOCUMENT_ROLE } from "@/api/handlers/case-law/ingestion/pipeline/supplement-document-role";
 import {
   absorbSupplementIntoJudgment,
   judgmentOwnsSupplementRaw,
@@ -172,6 +174,15 @@ export const processSupplement = async ({
   absorb = absorbStandaloneSupplementRow,
 }: ProcessSupplementOptions): Promise<ProcessSupplementResult> => {
   const { sourceDocumentId } = supplement.document;
+  const expectedRole = DECISION_SUPPLEMENT_DOCUMENT_ROLE[supplement.kind];
+  if (
+    supplement.document.documentRole !== undefined &&
+    supplement.document.documentRole !== expectedRole
+  ) {
+    return panic("Supplement kind contradicts the publisher document role");
+  }
+  // The internal supplement kind does not establish a publisher role when
+  // the adapter could not classify every component of the source enum.
   const document = sanitizeResult(supplement.document);
   assertDocketKeyedSupplementAllowed(document.country);
   const key: SupplementTargetKey = {

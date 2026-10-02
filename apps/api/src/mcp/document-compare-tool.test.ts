@@ -95,6 +95,7 @@ const createHarness = ({
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   });
 
   const compare: CompareDocumentsDependencies["compare"] = (props) =>

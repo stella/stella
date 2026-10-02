@@ -1,10 +1,16 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import nodePath from "node:path";
 
+import {
+  PUBLIC_COUNTRIES,
+  PUBLIC_COUNTRY_CAPABILITIES,
+} from "@stll/api-contract/public-country-capability";
 import { RUNTIME_MODE } from "@stll/runtime-mode";
 
 import { env } from "@/api/env";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import { LIMITS } from "@/api/lib/limits";
 import { setRuntimeModeForTesting } from "@/api/runtime-mode";
 
@@ -15,6 +21,63 @@ const readHandlerSource = async (file: string) =>
   ).text();
 
 describe("public statute routes", () => {
+  test.each(
+    PUBLIC_COUNTRIES.filter(
+      (country) => PUBLIC_COUNTRY_CAPABILITIES[country] !== "admitted",
+    ),
+  )(
+    "advertised %s reports its capability before reading data",
+    async (country) => {
+      const urls = [
+        `/law/statutes?country=${country}`,
+        `/law/sitemap/statutes/shard?country=${country.toLowerCase()}`,
+      ];
+      for (const url of urls) {
+        const response = await publicLegislationRoute.handle(
+          new Request(`http://localhost${url}`),
+        );
+        expect(response.status).toBe(503);
+        expect(await response.json()).toMatchObject({
+          status: "unavailable",
+          country,
+          reason: PUBLIC_COUNTRY_CAPABILITIES[country],
+        });
+      }
+    },
+  );
+
+  test("pending public countries return typed unavailable for statute search and lookup", async () => {
+    const urls = [
+      "/law/statutes?country=SVK",
+      "/law/statutes/facets?country=SVK",
+      "/law/statutes/by-slug/2012-89?country=SVK",
+      "/law/sitemap/statutes/shard?country=svk",
+    ];
+    const requests = urls.map((url) => new Request(`http://localhost${url}`));
+    const search = await searchLegislationHandler(
+      { jurisdiction: "SVK", query: "synthetic" },
+      () => panic("Unavailable country must not reach the database"),
+      "unobserved",
+    );
+    expect(search).toMatchObject({
+      code: 503,
+      response: {
+        status: "unavailable",
+        country: "SVK",
+        reason: "pending_public",
+      },
+    });
+    for (const request of requests) {
+      const response = await publicLegislationRoute.handle(request);
+      expect(response.status, request.url).toBe(503);
+      expect(await response.json()).toMatchObject({
+        status: "unavailable",
+        country: "SVK",
+        reason: "pending_public",
+      });
+    }
+  });
+
   test("serves nothing while the public-law feature is off", async () => {
     const previousFeature = env.FEATURE_PUBLIC_LAW;
     const restoreRuntimeMode = setRuntimeModeForTesting({

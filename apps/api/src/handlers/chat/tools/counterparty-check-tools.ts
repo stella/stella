@@ -36,24 +36,13 @@ export const COUNTERPARTY_CHECK_TOOL_NAME =
 const MCP_TOOL_NAME = "check_counterparty";
 
 const TOOL_DESCRIPTION =
-  "Screen a company or a person against an official register or the " +
-  "sanctions lists for due diligence. A register check's status is clear " +
-  "(the register answered and lists nothing adverse), found (the adverse " +
-  "records), not-registered (the register holds no record, e.g. not a VAT " +
-  "payer; not a clearance), unavailable (the register did not answer: the " +
-  "subject is NOT cleared; say the check could not run), or not-covered " +
-  "(the register cannot screen this subject type, or needs the tax ID " +
-  "because one derived from the company ID was not on file). Person " +
-  "matches rely on name and birth date: compare the record before relying " +
-  "on one. The sanctions check answers per list: clear, possible-match " +
-  "(listed entries resembling the subject, with the identity fields that " +
-  "conflict; each needs human review, none is a confirmed hit) or " +
-  "unavailable (stale or not loaded, or the company's name could not be " +
-  "read from its register: NOT cleared; say which lists could not be " +
-  "checked). For a clear or possible-match list, name the edition screened " +
-  "and whether the list binds the firm or is informational; an unavailable " +
-  "list's edition fields name the latest edition on file, which was not " +
-  "screened. Mention a pending update held for review.";
+  "Screen a company or person against registers or sanctions lists. " +
+  "Register results: clear, found, not-registered (not a clearance), " +
+  "unavailable (not cleared), not-covered. Verify person matches by " +
+  "identity. Sanctions: per-list clear, possible-match (human review, " +
+  "not a confirmed hit), unavailable (not cleared; name unchecked lists). " +
+  "For screened lists cite the edition and binding/informational status; " +
+  "unavailable editions were not screened. Mention pending updates.";
 
 type CreateCounterpartyCheckToolsArgs = {
   scopedDb: ScopedDb;

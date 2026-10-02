@@ -27,6 +27,7 @@ const searchContacts = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     mcp: {
       type: "capability",
+      readClass: "tenant",
       reason: "contact_directory",
       consumesServices: false,
     },

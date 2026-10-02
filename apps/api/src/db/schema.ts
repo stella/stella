@@ -1,5 +1,6 @@
 /* oxlint-disable oxc/no-barrel-file -- Keep the existing "@/api/db/schema" public import path while table definitions live in domain modules. */
 export * from "./schema/contacts";
+export * from "./schema/backfill-state";
 export * from "./schema/properties";
 export * from "./schema/entities";
 export * from "./schema/templates";
