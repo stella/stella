@@ -22,6 +22,7 @@ describe("send lifecycle checkpoint indexing", () => {
     for (const turn of ["turn-a", "turn-b"]) {
       const db = createScopedDbMock({});
       const lifecycle = new ChatSendLifecycle({
+        mode: "raw",
         indexThread: async () => undefined,
         startAdmission: async (options) => {
           expect(options.mode).toBe("concurrency-only");
@@ -83,7 +84,7 @@ describe("send lifecycle checkpoint indexing", () => {
             threadId: "same-thread",
             timestamp: 0,
           } as const;
-          await run.settle(async () => undefined);
+          await run.settle(async () => ({ type: "not-owned" }));
         })(),
       );
       await response.text();
