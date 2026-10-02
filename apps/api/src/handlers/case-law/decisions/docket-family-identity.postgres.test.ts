@@ -23,6 +23,7 @@ import {
   describeDocketFamilyIdentity,
   docketFamilyDecisionRows,
   docketFamilyIdentifierRows,
+  docketFamilyKeyGrantSql,
   docketFamilyScenario,
 } from "@/api/tests/helpers/docket-family-identity-scenario";
 
@@ -44,7 +45,12 @@ if (!databaseUrl || !runPostgresTests) {
       70_000 + Math.floor(Math.random() * 20_000),
     );
 
+    const setFamilyKeyGrant = async (mode: "grant" | "revoke") => {
+      await db.execute(docketFamilyKeyGrantSql(mode));
+    };
+
     beforeAll(async () => {
+      await setFamilyKeyGrant("grant");
       await db.insert(caseLawSources).values(
         caseLawSourceRow({
           adapterKey: `docket-family-${String(scenario.number)}`,
@@ -64,11 +70,13 @@ if (!databaseUrl || !runPostgresTests) {
     // The decisions and their identifiers go with their source.
     cleanUp(async () => {
       await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+      await setFamilyKeyGrant("revoke");
     });
 
     describeDocketFamilyIdentity(() => ({
       caseLawDb: caseLawPublicReadDb,
       scenario,
+      setFamilyKeyGrant,
     }));
   });
 }

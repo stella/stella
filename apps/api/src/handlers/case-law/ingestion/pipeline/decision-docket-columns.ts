@@ -1,7 +1,6 @@
 import { docketFamilyKeyOf } from "@stll/api-contract/decision-docket-reference";
 import type { DecisionPrimaryReferenceType } from "@stll/legal-ast/decision-identifier";
 
-import type { caseLawDecisions } from "@/api/db/schema";
 import { decisionCitationKeyOf } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { primaryReferenceIsDocket } from "@/api/lib/legal-search/decision-primary-reference";
 
@@ -16,12 +15,12 @@ import { primaryReferenceIsDocket } from "@/api/lib/legal-search/decision-primar
  * longer has; built together here, a writer cannot set one without the
  * others (`decision-docket-columns.test.ts` holds every writer to it).
  */
-export type DecisionDocketColumns = Required<
-  Pick<
-    typeof caseLawDecisions.$inferInsert,
-    "caseNumber" | "caseNumberType" | "citationKey" | "docketFamilyKey"
-  >
->;
+export type DecisionDocketColumns = {
+  readonly caseNumber: string;
+  readonly caseNumberType: DecisionPrimaryReferenceType;
+  readonly citationKey: string | null;
+  readonly docketFamilyKey: string | null;
+};
 
 export const decisionDocketColumns = ({
   caseNumber,

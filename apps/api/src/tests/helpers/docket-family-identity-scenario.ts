@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+import { sql } from "drizzle-orm";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 import {
@@ -23,6 +24,7 @@ import { decisionDocketColumns } from "@/api/handlers/case-law/ingestion/pipelin
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
 
 /**
  * Decisions that share a case file, as ingestion stores them, and what the
@@ -36,6 +38,19 @@ import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
  * shared database reads only its own rows.
  */
 export type DocketFamilyScenario = ReturnType<typeof docketFamilyScenario>;
+
+/** A file with more decisions than one identity read keeps. */
+const LARGE_FILE_SIZE = LIMITS.caseLawSearchPageSizeMax + 20;
+
+/**
+ * The public reader's grant on the case-file key. It ships a release after
+ * the column, so the suites set it as that release will, and take it away to
+ * read as a reader that does not hold it yet.
+ */
+export const docketFamilyKeyGrantSql = (mode: "grant" | "revoke") =>
+  mode === "grant"
+    ? sql`GRANT SELECT (docket_family_key) ON TABLE case_law_decisions TO stella_public_law_reader`
+    : sql`REVOKE SELECT (docket_family_key) ON TABLE case_law_decisions FROM stella_public_law_reader`;
 
 export const docketFamilyScenario = (number: number) => {
   const n = String(number);
@@ -71,7 +86,12 @@ export const docketFamilyScenario = (number: number) => {
     legacy: `4 As ${n}/2012`,
     lone: `12 Cdo ${n}/2021`,
     unkeyed: `9 As ${n}/2013`,
+    large: `7 As ${n}/2014`,
   };
+  /** Each decision of the large file, stored with its sheet, latest last. */
+  const largeFile = Array.from({ length: LARGE_FILE_SIZE }, () =>
+    createSafeId<"caseLawDecision">(),
+  );
   const decision = (
     id: SafeId<"caseLawDecision">,
     caseNumber: string,
@@ -167,8 +187,16 @@ export const docketFamilyScenario = (number: number) => {
       {},
       false,
     ),
+    ...largeFile.map((id, index) =>
+      decision(
+        id,
+        `${dockets.large}-${String(index + 1)}`,
+        administrative,
+        new Date(Date.UTC(2014, 0, 1 + index)).toISOString().slice(0, 10),
+      ),
+    ),
   ];
-  return { ids, dockets, decisions, number };
+  return { ids, dockets, decisions, largeFile, number };
 };
 
 /**
@@ -243,6 +271,8 @@ export const describeDocketFamilyIdentity = (
   context: () => {
     caseLawDb: CaseLawPublicReadDb;
     scenario: DocketFamilyScenario;
+    /** Sets the reader's grant on the case-file key, as its owner. */
+    setFamilyKeyGrant: (mode: "grant" | "revoke") => Promise<void>;
   },
 ): void => {
   /** What the public search's identity branch answers an entry with. */
@@ -311,6 +341,23 @@ export const describeDocketFamilyIdentity = (
           status: "ambiguous",
           reason: "several",
         });
+      }
+    });
+
+    test("a reader without the case-file key's grant reads the file by its spellings", async () => {
+      // The release before the grant: no error, and no claim the file is whole.
+      const { dockets, ids } = context().scenario;
+      await context().setFamilyKeyGrant("revoke");
+      try {
+        expect(await searched(dockets.legacy)).toEqual(
+          sorted(ids.legacySibling),
+        );
+        expect(await lookedUp(dockets.legacy)).toMatchObject({
+          status: "ambiguous",
+          reason: "file_incomplete",
+        });
+      } finally {
+        await context().setFamilyKeyGrant("grant");
       }
     });
 
@@ -404,6 +451,20 @@ export const describeDocketFamilyIdentity = (
           basis: "selector",
         });
       }
+    });
+
+    test("a sheet names its decision in a file larger than a read keeps", async () => {
+      // The whole file would outgrow the candidates before the sheet is
+      // applied; a sheet reads its decision's own spellings instead.
+      const { dockets, largeFile } = context().scenario;
+      const named =
+        largeFile.at(-1) ?? panic("The large file holds no decision");
+      const entry = `${dockets.large}-${String(largeFile.length)}`;
+      expect(await searched(entry)).toEqual(sorted(named));
+      expect(await lookedUp(entry)).toMatchObject({
+        status: "unique",
+        basis: "selector",
+      });
     });
 
     test("a sheet the corpus does not hold returns the file, never a sibling", async () => {

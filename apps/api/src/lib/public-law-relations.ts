@@ -178,7 +178,9 @@ export const PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION = {
     slug: "required",
     ecli: "required",
     citation_key: "required",
-    docket_family_key: "required",
+    // Granted a release after the column (expand first); the read probes
+    // for the grant and falls back to the spellings without it.
+    docket_family_key: "permitted",
     court: "required",
     court_id: "required",
     country: "required",

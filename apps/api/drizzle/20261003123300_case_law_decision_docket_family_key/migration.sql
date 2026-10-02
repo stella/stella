@@ -60,9 +60,4 @@ BEGIN
 END
 $$;--> statement-breakpoint
 SET lock_timeout = '1s';--> statement-breakpoint
-SET statement_timeout = '5s';--> statement-breakpoint
-
--- The public reader reads a docket's case file by this key.
-GRANT SELECT (docket_family_key)
-  ON TABLE "case_law_decisions"
-  TO stella_public_law_reader;
+SET statement_timeout = '5s';

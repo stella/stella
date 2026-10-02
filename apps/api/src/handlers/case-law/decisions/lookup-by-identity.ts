@@ -269,21 +269,75 @@ const ownColumnCondition = (locator: DecisionIdentityLocator) => {
 };
 
 /**
- * The ids of the decisions a reference names: the identifier rows of the
- * reference's type, unioned with the decision's own column where the kind has
- * one, so the outer read is a membership test that the primary key answers;
- * each side of the union has its own index. Shared by the lookup and the
- * search handler's identity branch, so the two cannot disagree about which
- * decisions a reference names. The country only normalizes the reference and
- * keys a docket's case file; both callers scope the outer read to it, so the
- * own-column sides stay on their identity indexes alone.
+ * Whether this connection may read the case-file key. The column's grant
+ * lands a release after the column itself, so a reader that does not hold it
+ * yet still serves, reading the file by its spellings alone. Checked on this
+ * transaction, so the grant takes effect without a restart.
  */
-export const decisionIdsNamedBy = ({
+const canReadDocketFamilyKey = async (
+  tx: CaseLawPublicReadTransaction,
+): Promise<boolean> => {
+  const [permission] = await tx
+    .select({
+      available: sql<boolean>`has_column_privilege(current_user, 'public.case_law_decisions', 'docket_family_key', 'SELECT')`,
+    })
+    .from(sql`(SELECT 1) AS reader_permission_probe`);
+  return (permission ?? panic("Reader privilege query returned no result"))
+    .available;
+};
+
+/**
+ * The case-file key a reference reads its file by, or null when it reads none.
+ *
+ * Only a bare docket: a sheet or part names one decision, which its stored
+ * spellings reach directly, while the whole file can outgrow the candidates a
+ * read keeps and push the named decision out before the selector is applied.
+ */
+export const docketFamilyKeyToRead = async ({
   country,
   locator,
   tx,
 }: {
   country: string | undefined;
+  locator: DecisionIdentityLocator;
+  tx: CaseLawPublicReadTransaction;
+}): Promise<string | null> => {
+  if (
+    locator.kind !== "docket" ||
+    locator.selector.kind !== "none" ||
+    country === undefined
+  ) {
+    return null;
+  }
+  const familyKey = docketFamilyKeyOf(locator.family, country);
+  return familyKey !== null && (await canReadDocketFamilyKey(tx))
+    ? familyKey
+    : null;
+};
+
+/**
+ * The ids of the decisions a reference names: the identifier rows of the
+ * reference's type, unioned with the decision's own column where the kind has
+ * one, so the outer read is a membership test that the primary key answers;
+ * each side of the union has its own index. Shared by the lookup and the
+ * search handler's identity branch, so the two cannot disagree about which
+ * decisions a reference names. The country only normalizes the reference;
+ * both callers scope the outer read to it, so the own-column sides stay on
+ * their identity indexes alone.
+ *
+ * `familyKey` (from `docketFamilyKeyToRead`) adds the docket's case file by
+ * its stored key: the members stored with a sheet or part after their
+ * docket, which no spelling reaches. The spellings stay for rows not keyed
+ * yet.
+ */
+export const decisionIdsNamedBy = ({
+  country,
+  familyKey,
+  locator,
+  tx,
+}: {
+  country: string | undefined;
+  familyKey: string | null;
   locator: DecisionIdentityLocator;
   tx: CaseLawPublicReadTransaction;
 }) => {
@@ -302,13 +356,6 @@ export const decisionIdsNamedBy = ({
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
     .where(ownCondition);
-  // A docket's case file by its stored key: the members stored with a sheet
-  // or part after their docket, which no spelling above reaches. The
-  // spellings stay for rows not keyed yet.
-  const familyKey =
-    locator.kind === "docket" && country !== undefined
-      ? docketFamilyKeyOf(locator.family, country)
-      : null;
   if (familyKey === null) {
     return unionAll(own, published);
   }
@@ -427,6 +474,7 @@ export const lookupDecisionsByIdentity = async ({
   locator,
 }: LookupDecisionsByIdentityOptions): Promise<DecisionIdentityRow[]> => {
   const rows = await caseLawDb(async (tx) => {
+    const familyKey = await docketFamilyKeyToRead({ country, locator, tx });
     const decisions = await tx
       .select({
         caseNumber: caseLawDecisions.caseNumber,
@@ -450,7 +498,7 @@ export const lookupDecisionsByIdentity = async ({
         and(
           inArray(
             caseLawDecisions.id,
-            decisionIdsNamedBy({ country, locator, tx }),
+            decisionIdsNamedBy({ country, familyKey, locator, tx }),
           ),
           eq(caseLawDecisions.country, country),
           publishedCaseLawDecision,
