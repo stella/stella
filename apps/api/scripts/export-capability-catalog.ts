@@ -1933,18 +1933,13 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  // Formatted here for the same reason as the dispatch module: an unformatted
-  // artifact fails CI's Format gate, and hand-formatting it afterwards makes it
-  // differ from what this exporter regenerates, which then fails the drift
-  // guard instead. Only generator-formatted output satisfies both.
-  const doc = await formatGeneratedArtifact(
-    serializeCoverageDoc({
-      entries,
-      cliCommandPathById,
-      internalWaiverCounts,
-    }),
-    "capability-coverage.md",
-  );
+  // Unpadded rows keep a wider cell from rewriting every other row. This
+  // generated document is excluded from the formatter for the same reason.
+  const doc = serializeCoverageDoc({
+    entries,
+    cliCommandPathById,
+    internalWaiverCounts,
+  });
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);

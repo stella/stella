@@ -830,6 +830,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",
+  // Nightly issue reporter: suppress writes while exercising failure reporting.
+  "DRY_RUN",
   "E2E_API_URL",
   "E2E_EDGE_HEADER_NAME",
   "E2E_EDGE_HEADER_VALUE",
@@ -896,6 +898,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPOSITORY",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // Nightly issue reporter: workflow run linked from the failure issue.
+  "RUN_URL",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
@@ -924,6 +928,7 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
+  "TURBO_HASH",
   "TURBO_SCM_BASE",
   "TURN_OUTCOME_COMBINATIONS",
   "TURN_OUTCOME_SHARD",

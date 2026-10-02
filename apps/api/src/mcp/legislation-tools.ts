@@ -34,6 +34,10 @@ import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
+import {
   isLegislationSearchSuccess,
   isStatuteDocument,
   defaultListStatuteVersionsHandler,
@@ -546,6 +550,10 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
     );
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.corpusRequest,
+  );
   const result = await (
     context.testDependencies?.searchLegislationHandler ??
     defaultSearchLegislationHandler
@@ -562,6 +570,7 @@ const handleSearchLegislationTool: TypedMcpToolHandler<
       ...(dateTo === undefined ? {} : { dateTo }),
     },
     legislationPublicReadDb,
+    observer,
   );
   if (!isLegislationSearchSuccess(result)) {
     const failure = handlerStatusOf(result);

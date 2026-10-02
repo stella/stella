@@ -13,6 +13,10 @@ import {
 } from "@/api/lib/docx/lookup-fields";
 import { LOOKUP_REGISTRIES } from "@/api/lib/docx/types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 import { getLookupPreviewOutcome } from "../lookup-preview-cache";
 
@@ -53,6 +57,10 @@ const config = {
 const lookupPreview = createSafeRootHandler(
   config,
   async function* ({ body, scopedDb, session }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const { registry, format } = body;
     const number = body.number.trim();
     const registryName = lookupRegistryName(registry);
@@ -92,6 +100,7 @@ const lookupPreview = createSafeRootHandler(
       );
     }
     const resolveLookup = createDispatchLookupResolver({
+      observer,
       dispatch: { ...BUSINESS_REGISTRY_DISPATCH, [registry]: handler },
     });
     const cacheKey = `${session.activeOrganizationId}:${registry}:${handler.cacheVersion ?? "deployment"}:${number.replaceAll(/\s/gu, "")}`;

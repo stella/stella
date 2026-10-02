@@ -76,6 +76,10 @@ import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
@@ -1153,7 +1157,12 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const result = await runEntityCheckShared({
+    observer,
     check: parsed.output.check,
     subject: toEntityCheckSubject(parsed.output.subject),
     runCheck: context.testDependencies?.runEntityCheck,
