@@ -192,7 +192,7 @@ test(
   "missed listings reopen on corrected input and unchanged input preserves their retry state",
   async () => {
     await assertProperty(
-      "reconciliation-tracked-listing-revision-sequence",
+      "missed listings reopen on corrected input and unchanged input preserves their retry state",
       fc.asyncProperty(
         fc.record({
           publisherValue: fc.jsonValue({ maxDepth: 3 }),
