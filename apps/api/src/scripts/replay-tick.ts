@@ -351,7 +351,9 @@ const persistReplayTickReport = async (
       ),
     });
   }
-  const compacted = await Result.tryPromise(cleanupStore.compact);
+  const compacted = await Result.tryPromise(
+    async () => await cleanupStore.compact(),
+  );
   if (compacted.isErr()) {
     log({
       event: "case_law.replay.compaction_deferred",

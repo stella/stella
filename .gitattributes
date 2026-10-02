@@ -17,5 +17,4 @@ packages/*/AGENTS.md linguist-generated=true
 .agents/skills/** linguist-generated=true
 .claude/skills/** linguist-generated=true
 chatgpt-app-submission.json linguist-generated=true
-scripts/ratchet-baseline.json linguist-generated=true
 apps/api/mcp-surface-baseline.json linguist-generated=true

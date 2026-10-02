@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -505,7 +505,7 @@ if (!databaseUrl || !enabled) {
             const recovered = await recoveredRunner.replay(reserved.batch, {
               apply: true,
             });
-            expect(recovered.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+            expect(recovered.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
             expect(recovered.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(0);
             expect(
               await recoveredRunner.completeBatch(reserved.batch, {
@@ -1200,11 +1200,18 @@ if (!databaseUrl || !enabled) {
       if (second.type !== "reserved") {
         throw new TypeError("Expected later fixture while first backs off");
       }
-      expect(second.batch.decisionId).toBe(ids.at(1));
+      expect(second.batch.decisionId).toBe(
+        ids.at(1) ?? panic("Expected second replay decision id"),
+      );
       await db
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
-        .where(eq(caseLawDecisions.id, second.batch.decisionId));
+        .where(
+          eq(
+            caseLawDecisions.id,
+            second.batch.decisionId ?? panic("Expected replay decision id"),
+          ),
+        );
       await store.completeBatch(second.batch, applied(second.batch));
       for (
         let attempt = 2;
@@ -1245,7 +1252,9 @@ if (!databaseUrl || !enabled) {
       if (next.type !== "reserved") {
         throw new TypeError("Expected remaining row");
       }
-      expect(next.batch.decisionId).toBe(ids.at(2));
+      expect(next.batch.decisionId).toBe(
+        ids.at(2) ?? panic("Expected third replay decision id"),
+      );
     });
 
     test("crashed pickups exhaust the row budget and automatically re-admit after seven days", async () => {
@@ -1811,11 +1820,13 @@ if (!databaseUrl || !enabled) {
         async () =>
           await db.transaction(async (tx) => {
             await tx.execute(sql`ANALYZE case_law_replay_batches`);
-            await scaleTableToProfile(
-              tx,
-              "case_law_replay_batches",
-              SYNTHETIC_SCALE_PROFILE,
-            );
+            await scaleTableToProfile(tx, "case_law_replay_batches", {
+              tables: {
+                case_law_replay_batches:
+                  SYNTHETIC_SCALE_PROFILE.tables.case_law_decisions,
+              },
+              attributes: [],
+            });
             const retirement = buildReplayRetirementQuery(
               tx,
               BACKGROUND_REPLAY_LIMITS.maxCompactRows,
@@ -1901,11 +1912,13 @@ if (!databaseUrl || !enabled) {
             );
             await tx.execute(sql`ANALYZE case_law_decisions`);
             await tx.execute(sql`ANALYZE case_law_replay_blocked`);
-            await scaleTableToProfile(
-              tx,
-              "case_law_replay_blocked",
-              SYNTHETIC_SCALE_PROFILE,
-            );
+            await scaleTableToProfile(tx, "case_law_replay_blocked", {
+              tables: {
+                case_law_replay_blocked:
+                  SYNTHETIC_SCALE_PROFILE.tables.case_law_decisions,
+              },
+              attributes: [],
+            });
             await scaleTableToProfile(
               tx,
               "case_law_decisions",
@@ -1948,23 +1961,27 @@ if (!databaseUrl || !enabled) {
                   ({ relation }) => relation === "case_law_decisions",
                 );
                 expect(decisions.length).toBeGreaterThan(0);
+                expect(decisions.filter(({ index }) => index === null)).toEqual(
+                  [],
+                );
+                // The walker attributes bitmap index descendants to their heap
+                // scan; requiring those names also rejects sequential scans.
                 expect(
-                  decisions.every(({ nodeType }) => nodeType.includes("Index")),
-                ).toBe(true);
-                expect(
-                  decisions.some(
-                    ({ index }) =>
-                      index === "case_law_decisions_replay_sparse_idx" ||
-                      index === "case_law_decisions_replay_walk_idx",
-                  ),
-                ).toBe(true);
+                  decisions.flatMap(({ index }) => index?.split(", ") ?? []),
+                ).toEqual(
+                  expect.arrayContaining([
+                    expect.stringMatching(
+                      /^case_law_decisions_replay_(sparse|walk)_idx$/u,
+                    ),
+                  ]),
+                );
                 const blocked = scanOccurrences(root).filter(
                   ({ relation }) => relation === "case_law_replay_blocked",
                 );
                 expect(blocked.length).toBeGreaterThan(0);
-                expect(
-                  blocked.every(({ nodeType }) => nodeType.includes("Index")),
-                ).toBe(true);
+                expect(blocked.filter(({ index }) => index === null)).toEqual(
+                  [],
+                );
                 const cost = root["Total Cost"];
                 expect(typeof cost).toBe("number");
                 if (typeof cost !== "number") {

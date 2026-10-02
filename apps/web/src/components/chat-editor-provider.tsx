@@ -9,6 +9,7 @@ import {
 } from "react";
 import type React from "react";
 
+import { useQueryClient } from "@tanstack/react-query";
 import Bold from "@tiptap/extension-bold";
 import HardBreak from "@tiptap/extension-hard-break";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -61,6 +62,7 @@ import {
 } from "@/components/mounted-editors.logic";
 import type { MountedEditors } from "@/components/mounted-editors.logic";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
+import { seedReferenceHints } from "@/components/references/reference-hints";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUnsavedWork } from "@/hooks/use-unsaved-work";
@@ -590,6 +592,7 @@ export const useChatEditor = ({
   suggestedFollowupPrompt?: string | undefined;
 }): ChatEditorController => {
   const t = useTranslations();
+  const queryClient = useQueryClient();
   const defaultPlaceholder = t("chat.placeholder");
   const tabToAskText = suggestedFollowupPrompt
     ? t("chat.tabToAsk", { prompt: isolateBidi(suggestedFollowupPrompt) })
@@ -1312,6 +1315,10 @@ export const useChatEditor = ({
         return;
       }
 
+      // The persisted message keeps only each mention's identity; keep what
+      // the composer chip already showed so the sent chip looks the same.
+      seedReferenceHints(queryClient, doc);
+
       // A pending mirror write must not resurrect the draft this submit is
       // about to clear.
       debouncedPersistEditorDraft.cancel();
@@ -1351,6 +1358,7 @@ export const useChatEditor = ({
       clearDraft,
       debouncedPersistEditorDraft,
       editor,
+      queryClient,
       setDraft,
       threadKey,
     ],

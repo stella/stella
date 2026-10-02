@@ -616,7 +616,9 @@ const lockCheckpoint = async (
       .for("update")
       .limit(1)
   ).at(0);
-  if (state === undefined) {panic("Replay checkpoint was not created");}
+  if (state === undefined) {
+    panic("Replay checkpoint was not created");
+  }
   return { ...state, batch: decodeCheckpoint(state).batch };
 };
 type PendingBatchOptions = {
