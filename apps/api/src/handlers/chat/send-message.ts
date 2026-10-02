@@ -145,11 +145,7 @@ import {
   readThreadValidationState,
 } from "@/api/handlers/chat/send-message-thread";
 import type { ChatThreadState } from "@/api/handlers/chat/send-message-thread";
-import {
-  ChatTurnFailureResponse,
-  hydrateMessages,
-  streamChat,
-} from "@/api/handlers/chat/stream-chat";
+import { hydrateMessages, streamChat } from "@/api/handlers/chat/stream-chat";
 import type { StreamChatFinishEvent } from "@/api/handlers/chat/stream-chat";
 import type { StoredHistory } from "@/api/handlers/chat/stream-message-identity";
 import {
@@ -3080,7 +3076,7 @@ export const createSendMessage = (
                   });
                 };
 
-                const chatResponse = await dependencies.streamResponse({
+                const outcome = await dependencies.streamResponse({
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
@@ -3144,19 +3140,22 @@ export const createSendMessage = (
                 // refusal). No terminal middleware hook runs in that branch,
                 // so settle the claimed turn here instead of leaving it
                 // indefinitely running.
-                if (!isChatStreamResponse(chatResponse)) {
-                  if (!(chatResponse instanceof ChatTurnFailureResponse)) {
-                    panic(
-                      "A pre-stream refusal must carry its turn failure code",
+                switch (outcome.type) {
+                  case "refused":
+                    await run.fail(
+                      outcome.response.failureCode,
+                      outcome.response.retryable,
+                    );
+                    return outcome.response;
+                  case "streaming":
+                    return outcome.response;
+                  default: {
+                    outcome satisfies never;
+                    return panic(
+                      `Unhandled chat stream outcome: ${String(outcome)}`,
                     );
                   }
-                  await run.fail(
-                    chatResponse.failureCode,
-                    chatResponse.retryable,
-                  );
                 }
-
-                return chatResponse;
               } catch (error) {
                 await run.fail("internal", true);
                 throw error;
@@ -3216,11 +3215,6 @@ const applyAssistantPersistencePlan = ({
       return panic(`Unhandled persistence plan: ${String(persistencePlan)}`);
     }
   }
-};
-
-const isChatStreamResponse = (response: Response): boolean => {
-  const contentType = response.headers.get("content-type");
-  return contentType?.includes("text/event-stream") === true;
 };
 
 const messageNeedsExternalMcpValidation = (

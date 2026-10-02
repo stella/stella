@@ -11,6 +11,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DocumentReviewFindingFlag } from "@/api/lib/document-review/run-contract";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -102,7 +103,7 @@ const createHarness = (rows: StoredFinding[]) => {
 
   const context = asTestRaw<DecideFindingCtx>({
     body: { decision: "accepted" },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     params: { workspaceId: WORKSPACE_ID, findingId: FINDING_ID },
     request: new Request(
       `https://example.test/v1/workspaces/${WORKSPACE_ID}/document-reviews/findings/${FINDING_ID}`,

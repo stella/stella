@@ -2,6 +2,7 @@ import { describe, expect, test } from "bun:test";
 
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -28,7 +29,7 @@ const createContext = ({
       invoiceId: toSafeId<"invoice">("inv_test"),
     },
     workspaceId: toSafeId<"workspace">("ws_test"),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     session: { activeOrganizationId: toSafeId<"organization">("org_test") },
     user: { id: toSafeId<"user">("user_test") },
     recordAuditEvent: async () => {},
