@@ -220,7 +220,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Resolve browser image
         id: browser-image
@@ -741,7 +741,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -2256,7 +2256,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           submodules: true
 
       - name: Check UI browser test scope
@@ -2717,7 +2717,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -2828,7 +2828,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -2896,7 +2896,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -2940,7 +2940,7 @@ jobs:
           fetch-depth: 0
           filter: blob:none
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           submodules: true
 
       - name: Setup Bun
@@ -3219,7 +3219,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Pull web base images
         run: bash scripts/pull-base-images.sh apps/web/Dockerfile
@@ -3276,7 +3276,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3316,7 +3316,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3353,7 +3353,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
         with:
@@ -3391,7 +3391,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3408,7 +3408,7 @@ jobs:
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
-          expected-sha: ${{ inputs.sha || github.sha }}
+          expected-sha: ${{ inputs.heavy_only == true && inputs.sha || github.sha }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -3460,7 +3460,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3477,7 +3477,7 @@ jobs:
         id: e2e-stack
         uses: ./.github/actions/setup-production-e2e
         with:
-          expected-sha: ${{ inputs.sha || github.sha }}
+          expected-sha: ${{ inputs.heavy_only == true && inputs.sha || github.sha }}
           dockerhub-username: ${{ secrets.DOCKERHUB_USERNAME }}
           dockerhub-token: ${{ secrets.DOCKERHUB_TOKEN }}
 
@@ -3581,7 +3581,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3617,7 +3617,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3793,7 +3793,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3880,7 +3880,7 @@ jobs:
       contents: read
     with:
       mode: check
-      ref: ${{ inputs.sha }}
+      ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
       # Serve the same production build the e2e shards use whenever web-build
       # runs in this workflow; the capture job builds it otherwise.
       web-build-artifact: ${{ needs.ci-plan.outputs.web_build_required == 'true' && 'e2e-web-build' || '' }}
@@ -3908,7 +3908,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -3962,7 +3962,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           submodules: true
 
       - name: Pull API base images
@@ -4049,7 +4049,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
@@ -4086,7 +4086,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Bun
         uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
@@ -4151,7 +4151,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
 
       - name: Setup Rust
         uses: dtolnay/rust-toolchain@6bed0761d98439e5a578e2877258200ad565ba87 # stable
@@ -4257,7 +4257,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
       # No dependency cache: Safe Chain must inspect every registry download.
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -4613,7 +4613,7 @@ jobs:
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           persist-credentials: false
-          ref: ${{ inputs.sha }}
+          ref: ${{ inputs.heavy_only == true && inputs.sha || '' }}
           sparse-checkout: |
             scripts/check-main-merge-hold.sh
             scripts/release-pull-requests.sh

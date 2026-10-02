@@ -33,6 +33,7 @@ const jobSchema = v.looseObject({
   steps: v.optional(v.array(stepSchema)),
 });
 const workflowSchema = v.looseObject({
+  name: v.string(),
   on: v.unknown(),
   "run-name": v.optional(v.string()),
   concurrency: v.looseObject({
@@ -72,10 +73,15 @@ const readWorkflow = (relativePath: string) =>
     ),
   );
 const parsedMain = readWorkflow(".github/workflows/main-heavy.yml");
+const callerJobSchema = v.intersect([jobSchema, v.object({ if: v.string() })]);
 const mainWorkflow = {
   ...parsedMain,
   jobs: v.parse(
-    v.object({ validate: jobSchema, suites: jobSchema, status: jobSchema }),
+    v.object({
+      validate: callerJobSchema,
+      suites: callerJobSchema,
+      status: callerJobSchema,
+    }),
     parsedMain.jobs,
   ),
 };
@@ -138,7 +144,7 @@ test("nightly, release pushes and dispatches run suites; ordinary pushes skip su
       ({ name }) => name === "Validate SHA format",
     )?.env?.["SHA"],
   ).toBe(`\${{ inputs.sha || github.sha }}`);
-  assertTriggerBehavior(mainWorkflow.jobs.validate.if ?? "true");
+  assertTriggerBehavior(mainWorkflow.jobs.validate.if);
 });
 
 test("dropping the release filter breaks the trigger contract", () => {
@@ -212,26 +218,65 @@ test("main heavy workflow dispatches exactly the validated commit through ci.yml
   ).toBe(true);
 });
 
-test("heavy job checkouts and production consumers use the validated SHA", () => {
-  for (const job of mainHeavyJobs(ciWorkflow)) {
-    const checkout = ciWorkflow.jobs[job]?.steps?.find(({ uses }) =>
+const expressionValue = (value: unknown, context: object) => {
+  const expression = v
+    .parse(v.string(), value)
+    .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1");
+  return new Script(expression).runInNewContext(context);
+};
+
+test("only main heavy forwards its validated SHA while ordinary checkouts use the event ref", () => {
+  const validatedSha = "a".repeat(40);
+  const eventSha = "b".repeat(40);
+  const mainContext = {
+    inputs: { heavy_only: true, sha: validatedSha },
+    github: { sha: eventSha, workflow: mainWorkflow.name },
+  };
+  for (const [job, body] of Object.entries(ciWorkflow.jobs)) {
+    for (const checkout of body.steps?.filter(({ uses }) =>
       uses?.startsWith("actions/checkout@"),
-    );
-    if (checkout) {
-      expect(checkout.with?.["ref"], job).toBe(`\${{ inputs.sha }}`);
+    ) ?? []) {
+      const reference = checkout.with?.["ref"];
+      if (reference === undefined) {continue;}
+      expect(expressionValue(reference, mainContext), job).toBe(validatedSha);
+      for (const event of [
+        "pull_request",
+        "merge_group",
+        "workflow_dispatch",
+      ]) {
+        expect(
+          expressionValue(reference, {
+            inputs: { heavy_only: false, sha: validatedSha },
+            github: { sha: eventSha, workflow: "CI Checks", event_name: event },
+          }),
+          job,
+        ).toBe("");
+      }
     }
   }
   for (const job of ["route-smoke", "e2e-production-shard"]) {
     const stack = ciWorkflow.jobs[job]?.steps?.find(
       ({ uses }) => uses === "./.github/actions/setup-production-e2e",
     );
-    expect(stack?.with?.["expected-sha"], job).toBe(
-      `\${{ inputs.sha || github.sha }}`,
-    );
+    expect(
+      expressionValue(stack?.with?.["expected-sha"], mainContext),
+      job,
+    ).toBe(validatedSha);
+    expect(
+      expressionValue(stack?.with?.["expected-sha"], {
+        inputs: { heavy_only: false, sha: validatedSha },
+        github: { sha: eventSha },
+      }),
+      job,
+    ).toBe(eventSha);
   }
-  expect(ciWorkflow.jobs["marketing-screenshots"]?.with?.["ref"]).toBe(
-    `\${{ inputs.sha }}`,
-  );
+  const forwarded = ciWorkflow.jobs["marketing-screenshots"]?.with?.["ref"];
+  expect(expressionValue(forwarded, mainContext)).toBe(validatedSha);
+  expect(
+    expressionValue(forwarded, {
+      inputs: { heavy_only: false, sha: validatedSha },
+    }),
+  ).toBe("");
   const marketing = v.parse(
     v.object({ jobs: v.record(v.string(), jobSchema) }),
     Bun.YAML.parse(
@@ -247,7 +292,18 @@ test("heavy job checkouts and production consumers use the validated SHA", () =>
   const checkout = marketing.jobs["check"]?.steps?.find(({ uses }) =>
     uses?.startsWith("actions/checkout@"),
   );
-  expect(checkout?.with?.["ref"]).toBe(`\${{ inputs.ref }}`);
+  expect(
+    expressionValue(checkout?.with?.["ref"], {
+      inputs: { ref: validatedSha },
+      github: { workflow: mainWorkflow.name },
+    }),
+  ).toBe(validatedSha);
+  expect(
+    expressionValue(checkout?.with?.["ref"], {
+      inputs: { ref: validatedSha },
+      github: { workflow: "CI Checks" },
+    }),
+  ).toBe("");
 });
 
 test("only the final job can publish the main/heavy status", () => {
@@ -342,4 +398,4 @@ test("status step publishes success only when both workflow jobs succeeded", () 
       rmSync(fixture, { recursive: true, force: true });
     }
   }
-});
+}, 30_000);
