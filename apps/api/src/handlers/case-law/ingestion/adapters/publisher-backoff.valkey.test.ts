@@ -89,6 +89,33 @@ const positiveTtl = async (client: PublisherStore["first"], key: string) => {
   return ttl;
 };
 
+/**
+ * The gate admits once Redis time reaches the cooldown deadline, compared at
+ * millisecond precision, while the key itself lapses on its own TTL, which can
+ * outlast that deadline by under a millisecond. "The cooldown is over" is
+ * therefore: no deadline in the future, at most that rounding left on the key,
+ * and the key gone once its own TTL lapses.
+ */
+const expectCooldownLapsed = async (
+  client: PublisherStore["first"],
+  cooldownKey: string,
+) => {
+  const now = await redisNow(client);
+  const deadline = await client.send("GET", [cooldownKey]);
+  if (deadline !== null) {
+    expect(Number(deadline)).toBeLessThanOrEqual(now);
+  }
+  const ttl = await client.send("PTTL", [cooldownKey]);
+  if (typeof ttl !== "number") {
+    throw new TypeError("Redis PTTL did not return a number");
+  }
+  expect(ttl === -2 || (ttl >= 0 && ttl <= 1)).toBe(true);
+  if (ttl >= 0) {
+    await abortableSleep(ttl + 1);
+  }
+  expect(await client.send("EXISTS", [cooldownKey])).toBe(0);
+};
+
 if (!runValkeyTests || !process.env["REDIS_URL"]) {
   describe.skip("publisher backoff (valkey)", () => {
     test("requires STELLA_RUN_VALKEY_TESTS=true and REDIS_URL", () => {});
@@ -320,7 +347,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           expect(admitted).toBe(false);
           await positiveTtl(first, key);
           expect(await reservation).toBeGreaterThanOrEqual(deadline);
-          expect(await second.send("EXISTS", [cooldownKey])).toBe(0);
+          await expectCooldownLapsed(second, cooldownKey);
         } finally {
           await reservation;
         }
@@ -474,7 +501,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         await firstGate();
         expect(checkedKeys).toEqual(new Set([key, cooldownKey]));
         await positiveTtl(first, key);
-        expect(await first.send("EXISTS", [cooldownKey])).toBe(0);
+        await expectCooldownLapsed(first, cooldownKey);
       });
     });
   });
