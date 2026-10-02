@@ -77,10 +77,11 @@ const parseErrorBody = (value: unknown): RechercheEntreprisesErrorResponse => {
 
 const rechercheEntreprisesGet = async (
   url: string,
-  signal?: AbortSignal,
+  { signal, observer }: RegistryClientOptions,
 ): Promise<RechercheEntreprisesSearchResponse> => {
   const response = await performRegistryRequest({
     url,
+    observer,
     init: { headers: { Accept: "application/json" } },
     signal,
     wrapRequestError: (cause) =>
@@ -149,7 +150,7 @@ export type LookupOptions = RegistryClientOptions;
 
 export const lookupBySiren = async (
   siren: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<RechercheEntreprisesCompany | null> => {
   const normalized = normalizeSiren(siren);
   if (!validateSiren(normalized)) {
@@ -158,7 +159,7 @@ export const lookupBySiren = async (
   const params = new URLSearchParams({ q: normalized });
   const data = await rechercheEntreprisesGet(
     `${SEARCH_URL}?${params.toString()}`,
-    options?.signal,
+    options,
   );
   const hit = data.results.at(0);
   // Belt-and-braces: the search endpoint matches `q` against any
@@ -189,7 +190,7 @@ export const lookupBySiren = async (
  */
 export const lookupBySiret = async (
   siret: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<RechercheEntreprisesCompany | null> => {
   const normalized = normalizeSiren(siret);
   if (!validateSiret(normalized)) {
@@ -198,7 +199,7 @@ export const lookupBySiret = async (
   const params = new URLSearchParams({ q: normalized });
   const data = await rechercheEntreprisesGet(
     `${SEARCH_URL}?${params.toString()}`,
-    options?.signal,
+    options,
   );
   // SIRET = SIREN (first 9) + NIC (last 5). Require BOTH the unité
   // légale's SIREN to match the SIRET prefix AND the establishment
@@ -239,7 +240,7 @@ export type SearchOptions = RegistryClientOptions & {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<RechercheEntreprisesSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
@@ -247,7 +248,7 @@ export const searchByName = async (
       "Search name must not be empty",
     );
   }
-  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options.limit ?? DEFAULT_SEARCH_LIMIT;
   const perPage = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const params = new URLSearchParams({
     q: trimmed,
@@ -255,7 +256,7 @@ export const searchByName = async (
   });
   const data = await rechercheEntreprisesGet(
     `${SEARCH_URL}?${params.toString()}`,
-    options?.signal,
+    options,
   );
   return data.results.slice(0, perPage).map(parseSearchEntry);
 };

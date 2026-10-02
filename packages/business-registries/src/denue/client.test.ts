@@ -63,6 +63,7 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     const company = await lookupByEstablishmentId("6281106", {
+      observer: "unobserved",
       token: "test-token",
     });
     expect(company).not.toBeNull();
@@ -95,6 +96,7 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     const company = await lookupByEstablishmentId("999999999", {
+      observer: "unobserved",
       token: "test-token",
     });
     expect(company).toBeNull();
@@ -106,7 +108,10 @@ describe("lookupByEstablishmentId (fixture)", () => {
     });
 
     try {
-      await lookupByEstablishmentId("6281106", { token: "secret token" });
+      await lookupByEstablishmentId("6281106", {
+        observer: "unobserved",
+        token: "secret token",
+      });
       throw new Error("expected request failure");
     } catch (error) {
       expect(error).toBeInstanceOf(DenueRequestError);
@@ -128,7 +133,10 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     expect(
-      lookupByEstablishmentId("6281106", { token: "bad-token" }),
+      lookupByEstablishmentId("6281106", {
+        observer: "unobserved",
+        token: "bad-token",
+      }),
     ).rejects.toBeInstanceOf(DenueAuthError);
   });
 
@@ -142,7 +150,10 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     expect(
-      lookupByEstablishmentId("6281106", { token: "test-token" }),
+      lookupByEstablishmentId("6281106", {
+        observer: "unobserved",
+        token: "test-token",
+      }),
     ).rejects.toBeInstanceOf(DenueAPIError);
   });
 
@@ -159,7 +170,10 @@ describe("lookupByEstablishmentId (fixture)", () => {
     );
 
     expect(
-      lookupByEstablishmentId("6281106", { token: "test-token" }),
+      lookupByEstablishmentId("6281106", {
+        observer: "unobserved",
+        token: "test-token",
+      }),
     ).rejects.toBeInstanceOf(DenueAPIError);
   });
 });
@@ -188,7 +202,7 @@ describe("searchByName (fixture)", () => {
 
     const results = await searchByName(
       "Marriott",
-      { token: "test-token" },
+      { observer: "unobserved", token: "test-token" },
       { limit: 1 },
     );
 
@@ -210,7 +224,11 @@ describe("searchByName (fixture)", () => {
       });
     });
 
-    await searchByName("Marriott", { token: "test-token" }, { stateCode: "9" });
+    await searchByName(
+      "Marriott",
+      { observer: "unobserved", token: "test-token" },
+      { stateCode: "9" },
+    );
     expect(requestedUrls[0]).toContain("/Nombre/Marriott/09/");
   });
 
@@ -224,7 +242,7 @@ describe("searchByName (fixture)", () => {
     );
 
     expect(
-      searchByName("Marriott", { token: "test-token" }),
+      searchByName("Marriott", { observer: "unobserved", token: "test-token" }),
     ).rejects.toBeInstanceOf(DenueAPIError);
   });
 
@@ -238,7 +256,10 @@ describe("searchByName (fixture)", () => {
     );
 
     try {
-      await searchByName("Marriott", { token: "secret-token" });
+      await searchByName("Marriott", {
+        observer: "unobserved",
+        token: "secret-token",
+      });
       throw new Error("expected authentication failure");
     } catch (error) {
       expect(error).toBeInstanceOf(DenueAuthError);
@@ -253,22 +274,32 @@ describe("searchByName (fixture)", () => {
 describe("DENUE client validation", () => {
   test("rejects invalid establishment ids", async () => {
     expect(
-      lookupByEstablishmentId("ABC123", { token: "test-token" }),
+      lookupByEstablishmentId("ABC123", {
+        observer: "unobserved",
+        token: "test-token",
+      }),
     ).rejects.toBeInstanceOf(DenueValidationError);
   });
 
   test("rejects empty tokens", async () => {
     expect(
-      lookupByEstablishmentId("6281106", { token: " " }),
+      lookupByEstablishmentId("6281106", {
+        observer: "unobserved",
+        token: " ",
+      }),
     ).rejects.toBeInstanceOf(DenueAuthError);
   });
 
   test("rejects empty search names and invalid state codes", async () => {
-    expect(searchByName("", { token: "test-token" })).rejects.toBeInstanceOf(
-      DenueValidationError,
-    );
     expect(
-      searchByName("Marriott", { token: "test-token" }, { stateCode: "99" }),
+      searchByName("", { observer: "unobserved", token: "test-token" }),
+    ).rejects.toBeInstanceOf(DenueValidationError);
+    expect(
+      searchByName(
+        "Marriott",
+        { observer: "unobserved", token: "test-token" },
+        { stateCode: "99" },
+      ),
     ).rejects.toBeInstanceOf(DenueValidationError);
   });
 });

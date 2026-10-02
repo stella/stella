@@ -269,7 +269,8 @@ const searchDecisions = createSafePublicHandler(
   async function* ({ body }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await searchDecisionsHandler(body, caseLawPublicReadDb),
+        async () =>
+          await searchDecisionsHandler(body, caseLawPublicReadDb, "unobserved"),
       ),
     );
 

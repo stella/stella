@@ -348,6 +348,8 @@ run_step "i18n" bun run i18n:check
 run_step "Release changelog guard" bash scripts/check-release-changelog.sh --base "$base_ref"
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
+run_step "Generate web sources" bun run generate
+run_step "Web API types determinism guard" bun --filter @stll/api gen:web-api-types --check
 run_step "Typecheck coverage" run_typecheck_coverage
 run_step "Code quality" run_code_check
 run_step "Query cache types" bun run check:query-cache-types

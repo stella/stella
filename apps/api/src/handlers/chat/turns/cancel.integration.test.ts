@@ -326,6 +326,7 @@ const produceUntilCut = ({
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
+    mode: "raw",
     heartbeat,
     owner: {
       indexThread: async () => await Promise.resolve(),
@@ -357,6 +358,10 @@ const produceUntilCut = ({
           workspaceId: ids.wsA1,
         }),
       );
+      return {
+        type: "stored",
+        outcome: { reason: "client-disconnected", type: "interrupted" },
+      };
     });
   };
   const response = run.produce(output());

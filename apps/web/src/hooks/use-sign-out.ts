@@ -4,6 +4,7 @@ import { useTranslations } from "use-intl";
 
 import { stellaToast } from "@stll/ui/toast";
 
+import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { useAnalytics } from "@/lib/analytics/provider";
@@ -18,11 +19,16 @@ import { userErrorFromThrown } from "@/lib/errors/user-safe";
  */
 export const signOutAndRelease = async (
   areas?: Parameters<typeof releaseUserStorage>[0],
-) =>
-  await authClient.signOut().finally(() => {
+) => {
+  const result = await authClient.signOut().finally(() => {
     releaseUserStorage(areas);
     signalSessionChange();
   });
+  if (!result.error) {
+    hideSessionDocument();
+  }
+  return result;
+};
 
 export const useSignOut = () => {
   const analytics = useAnalytics();

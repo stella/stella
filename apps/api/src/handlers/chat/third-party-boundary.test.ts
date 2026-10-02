@@ -27,6 +27,11 @@ import type {
 } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { toDataUrl } from "@/api/lib/data-url";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
+import { isRecord } from "@/api/lib/type-guards";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -2217,6 +2222,153 @@ describe("the restorations a request's history holds", () => {
   });
 });
 
+describe("anonymized boundary refusals", () => {
+  const organizationId = toSafeId<"organization">(
+    "11111111-1111-4111-8111-111111111111",
+  );
+
+  const boundaryWith = (
+    anonymizeFields: Parameters<
+      typeof createChatThirdPartyBoundary
+    >[0]["anonymizeFields"],
+  ) =>
+    createChatThirdPartyBoundary({
+      anonymizeFields,
+      anonymizationScopeId: "workspace-A",
+      organizationId,
+      scopedDb: createScopedDbMock({}).scopedDb,
+      sendMode: CHAT_SEND_MODE.anonymized,
+      threadRestorations: [],
+    });
+
+  /** What `run` returned, and the refusal counts written while it ran. */
+  const refusalsDuring = async <T>(run: () => Promise<T>) => {
+    const lines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
+    try {
+      const value = await run();
+      const refusals = lines
+        .map((line): unknown => JSON.parse(line))
+        .filter(isRecord)
+        .filter((record) => "AnonymizationRefusals" in record)
+        .map(({ reason, site }) => ({ reason, site }));
+      return { refusals, value };
+    } finally {
+      resetMetricLineSinkForTesting();
+    }
+  };
+
+  test("a failing anonymizer refuses the text and counts one pipeline error", async () => {
+    const boundary = boundaryWith(
+      async () => await Promise.reject(new Error("anonymizer unavailable")),
+    );
+    const { refusals, value: prepared } = await refusalsDuring(
+      async () =>
+        await prepareTextForThirdParty({
+          boundary,
+          text: "Jan Novák signed the contract.",
+        }),
+    );
+
+    expect(Result.isError(prepared) ? prepared.error.status : null).toBe(500);
+    expect(refusals).toEqual([
+      { reason: "pipeline_error", site: "text_batch" },
+    ]);
+  });
+
+  test("an attachment it cannot read counts as unsupported content", async () => {
+    const { refusals } = await refusalsDuring(
+      async () =>
+        await prepareMessagesForThirdParty({
+          boundary: boundaryWith(anonymizeTextFieldsMock),
+          messages: [
+            {
+              id: "msg_1",
+              role: "user",
+              parts: [
+                createChatAttachmentPart({
+                  filename: "draft.docx",
+                  mimeType: DOCX_MIME_TYPE,
+                  url: toDataUrl(new Uint8Array([1, 2, 3]), DOCX_MIME_TYPE),
+                }),
+              ],
+            },
+          ],
+        }),
+    );
+
+    expect(refusals).toEqual([
+      { reason: "unsupported_content", site: "attachment" },
+    ]);
+  });
+
+  test("a value that must cross unchanged counts as a field boundary", async () => {
+    const boundary = boundaryWith(async ({ fields }) =>
+      Result.ok({
+        entityCount: 1,
+        fields: fields.map((field) =>
+          field.replaceAll(organizationId, () => "[MISC_1]"),
+        ),
+        redactionMap: new Map([["[MISC_1]", organizationId]]),
+      }),
+    );
+    const { refusals } = await refusalsDuring(
+      async () =>
+        await prepareMessagesForThirdParty({
+          boundary,
+          messages: [
+            {
+              id: "msg_1",
+              role: "assistant",
+              parts: [
+                {
+                  type: "tool-call",
+                  id: "call_1",
+                  name: "mcp__test__read_rich_result",
+                  arguments: "{}",
+                  state: "complete",
+                },
+                {
+                  type: "tool-result",
+                  toolCallId: "call_1",
+                  content: [
+                    {
+                      type: "image",
+                      source: {
+                        type: "url",
+                        value: `https://example.test/${organizationId}/image.png`,
+                        mimeType: "image/png",
+                      },
+                    },
+                  ],
+                  state: "complete",
+                },
+              ],
+            },
+          ],
+        }),
+    );
+
+    expect(refusals).toEqual([
+      { reason: "field_boundary", site: "text_batch" },
+    ]);
+  });
+
+  test("a prepared crossing counts nothing", async () => {
+    const { refusals } = await refusalsDuring(
+      async () =>
+        await prepareTextForThirdParty({
+          boundary: boundaryWith(anonymizeTextFieldsMock),
+          text: "Jan Novák signed the contract.",
+        }),
+    );
+
+    expect(refusals).toEqual([]);
+  });
+});
+
 describe("anonymization output that lost its field structure", () => {
   const createBoundaryOverPipeline = (rewrite: (text: string) => string) => {
     const { scopedDb } = createScopedDbMock({});
@@ -2242,10 +2394,16 @@ describe("anonymization output that lost its field structure", () => {
       throw new TypeError("Expected anonymized boundary");
     }
     const placeholdersBefore = new Map(boundary.redactionMap);
+    const metricLines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metricLines.push(line);
+    });
 
     const prepared = await prepareTextForThirdParty({
       boundary,
       text: "Bob briefed Alice.",
+    }).finally(() => {
+      resetMetricLineSinkForTesting();
     });
 
     expect(Result.isError(prepared)).toBe(true);
@@ -2255,6 +2413,14 @@ describe("anonymization output that lost its field structure", () => {
     expect(prepared.error.status).toBe(500);
     expect(prepared.error.cause).toBeInstanceOf(AnonymizedFieldBoundaryError);
     expect(boundary.redactionMap).toEqual(placeholdersBefore);
+    // The refusal is counted once, as a damaged field structure.
+    expect(metricLines.map((line): unknown => JSON.parse(line))).toEqual([
+      expect.objectContaining({
+        AnonymizationRefusals: 1,
+        reason: "field_boundary",
+        site: "text_batch",
+      }),
+    ]);
   });
 
   test("passes the text through when the structure survives", async () => {
