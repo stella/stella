@@ -73,7 +73,7 @@ const expectTerminatingChains = async (
       seen.add(id);
       const parentId = parents.get(id);
       if (parentId === undefined) {
-        return panic("Hierarchy contains a missing parent");
+        panic("Hierarchy contains a missing parent");
       }
       id = parentId;
     }
@@ -158,7 +158,7 @@ const expectDescendantRefusal = (
 ) => {
   expect(result.isErr()).toBe(true);
   if (result.isOk()) {
-    return panic("Expected descendant refusal");
+    panic("Expected descendant refusal");
   }
   expect(result.error).toMatchObject({
     status: 400,
