@@ -31,13 +31,12 @@ const shapes = fc.array(
 const wrappers = fc.array(fc.constantFrom("div", "section", "blockquote"), {
   maxLength: 3,
 });
-const id = "Slovak constitutional body markers retain their source order";
 
 test(
-  id,
+  "Slovak constitutional body markers retain their source order",
   () => {
     assertProperty(
-      id,
+      "Slovak constitutional body markers retain their source order",
       fc.property(
         markerPlan,
         shapes,
