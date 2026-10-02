@@ -196,6 +196,72 @@ describe("provider request policy", () => {
     }
   });
 
+  test("request factories enforce the provider policy for every data class and check mode", () => {
+    const previous = {
+      USE_MOCK_AI: env.USE_MOCK_AI,
+      FEATURE_MANAGED_PROVIDER_CHECKS: env.FEATURE_MANAGED_PROVIDER_CHECKS,
+      ANTHROPIC_API_KEY: env.ANTHROPIC_API_KEY,
+      BEDROCK_API_KEY: env.BEDROCK_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: env.GOOGLE_GENERATIVE_AI_API_KEY,
+      MISTRAL_API_KEY: env.MISTRAL_API_KEY,
+      OPENAI_API_KEY: env.OPENAI_API_KEY,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+    };
+    const dataClasses = {
+      customer: "customer",
+      public_corpus: "public_corpus",
+    } as const satisfies { [DataClass in AIDataClass]: DataClass };
+    Object.assign(env, {
+      USE_MOCK_AI: false,
+      ANTHROPIC_API_KEY: REQUEST_API_KEY,
+      BEDROCK_API_KEY: REQUEST_API_KEY,
+      GOOGLE_GENERATIVE_AI_API_KEY: REQUEST_API_KEY,
+      MISTRAL_API_KEY: REQUEST_API_KEY,
+      OPENAI_API_KEY: REQUEST_API_KEY,
+      OPENROUTER_API_KEY: REQUEST_API_KEY,
+    });
+    try {
+      for (const enabled of [false, true]) {
+        env.FEATURE_MANAGED_PROVIDER_CHECKS = enabled;
+        for (const provider of AI_PROVIDERS) {
+          for (const dataClass of Object.values(dataClasses)) {
+            for (const managedAIResidency of MANAGED_AI_RESIDENCIES) {
+              const policy =
+                dataClass === "customer"
+                  ? { dataClass, managedAIResidency }
+                  : { dataClass };
+              const result = Result.try({
+                try: () =>
+                  createTanStackTextAdapterFactory({ provider, ...policy }),
+                catch: (error) => error,
+              });
+              if (dataClass === "customer" && provider !== "openrouter") {
+                expect(result.isErr()).toBe(true);
+                if (Result.isError(result)) {
+                  expect(result.error).toMatchObject({
+                    status: 503,
+                    code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                  });
+                }
+                continue;
+              }
+              expect(result.isOk()).toBe(
+                resolveTanStackAIProviderSupport({ provider }).supported,
+              );
+              if (Result.isError(result)) {
+                expect(result.error).not.toMatchObject({
+                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                });
+              }
+            }
+          }
+        }
+      }
+    } finally {
+      Object.assign(env, previous);
+    }
+  });
+
   test("resolves model metadata independently of request availability", () => {
     const previous = {
       USE_MOCK_AI: env.USE_MOCK_AI,
@@ -538,7 +604,7 @@ describe("provider request policy", () => {
     }
   });
 
-  test("rejects managed request model overrides and fallbacks before sending", async () => {
+  test("rejects unsafe managed primary models before sending", async () => {
     const previousMock = env.USE_MOCK_AI;
     const previousKey = env.OPENROUTER_API_KEY;
     const originalFetch = globalThis.fetch;
@@ -576,60 +642,58 @@ describe("provider request policy", () => {
             `${model}:online`,
             "not/in-the-catalog",
           ]) {
-            for (const slot of ["model", "fallback"] as const) {
-              const chatOptions = {
-                model: slot === "model" ? invalidModel : model,
-                messages: [{ role: "user" as const, content: REQUEST_TEXT }],
-                logger: resolveDebugOption(false),
-                modelOptions: {
-                  models: slot === "fallback" ? [model, invalidModel] : [model],
-                },
-              };
-              const structuredOptions = {
-                chatOptions,
-                outputSchema: {
-                  type: "object",
-                  properties: { answer: { type: "string" } },
-                },
-              };
-              const result = await Result.tryPromise({
-                try: () => adapter.structuredOutput(structuredOptions),
-                catch: (error) => error,
+            const chatOptions = {
+              model: invalidModel,
+              messages: [{ role: "user" as const, content: REQUEST_TEXT }],
+              logger: resolveDebugOption(false),
+              modelOptions: {
+                models: [model],
+              },
+            };
+            const structuredOptions = {
+              chatOptions,
+              outputSchema: {
+                type: "object",
+                properties: { answer: { type: "string" } },
+              },
+            };
+            const result = await Result.tryPromise({
+              try: () => adapter.structuredOutput(structuredOptions),
+              catch: (error) => error,
+            });
+            expect(result.isErr()).toBe(true);
+            if (result.isErr()) {
+              expect(result.error).toMatchObject({
+                code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                status: 503,
               });
-              expect(result.isErr()).toBe(true);
-              if (result.isErr()) {
-                expect(result.error).toMatchObject({
-                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                  status: 503,
-                });
-              }
-              for (const path of ["chat", "structured-stream"] as const) {
-                const chunks: AdapterYieldChunk[] = [];
-                const stream =
-                  path === "chat"
-                    ? adapter.chatStream(chatOptions)
-                    : adapter.structuredOutputStream?.(structuredOptions);
-                if (!stream) {
-                  throw new HandlerError({
-                    status: 500,
-                    message: "Structured stream unavailable",
-                  });
-                }
-                for await (const chunk of stream) {
-                  chunks.push(chunk);
-                }
-                expect(chunks.map((chunk) => chunk.type)).toEqual([
-                  EventType.RUN_STARTED,
-                  EventType.RUN_ERROR,
-                ]);
-                expect(chunks.at(-1)).toMatchObject({
-                  type: EventType.RUN_ERROR,
-                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                  error: { code: MANAGED_PROVIDER_UNAVAILABLE_CODE },
-                });
-              }
-              expect(sent).toBe(0);
             }
+            for (const path of ["chat", "structured-stream"] as const) {
+              const chunks: AdapterYieldChunk[] = [];
+              const stream =
+                path === "chat"
+                  ? adapter.chatStream(chatOptions)
+                  : adapter.structuredOutputStream?.(structuredOptions);
+              if (!stream) {
+                throw new HandlerError({
+                  status: 500,
+                  message: "Structured stream unavailable",
+                });
+              }
+              for await (const chunk of stream) {
+                chunks.push(chunk);
+              }
+              expect(chunks.map((chunk) => chunk.type)).toEqual([
+                EventType.RUN_STARTED,
+                EventType.RUN_ERROR,
+              ]);
+              expect(chunks.at(-1)).toMatchObject({
+                type: EventType.RUN_ERROR,
+                code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                error: { code: MANAGED_PROVIDER_UNAVAILABLE_CODE },
+              });
+            }
+            expect(sent).toBe(0);
           }
         }
       }
@@ -884,8 +948,12 @@ describe("provider request policy", () => {
               model: scenario.strict
                 ? "google/gemini-3.8-flash"
                 : `${model}:online`,
-              models: [scenario.strict ? "google/gemini-3.8-flash" : model],
             });
+            if (!("apiKey" in scenario.options)) {
+              expect(requests.at(0)?.body).not.toHaveProperty("models");
+            } else {
+              expect(requests.at(0)?.body).toMatchObject({ models: [model] });
+            }
             if (scenario.strict) {
               expect(requests.at(0)?.body).not.toHaveProperty("plugins");
             } else {

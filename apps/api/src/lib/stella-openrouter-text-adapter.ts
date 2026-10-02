@@ -5,16 +5,19 @@ import type {
   createOpenRouterText,
   OpenRouterConfig,
 } from "@tanstack/ai-openrouter";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
 import { Temporal } from "@stll/time";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { checkManagedOpenRouterModel } from "@/api/lib/chat/managed-provider-checks";
 import {
   assertManagedOpenRouterModel,
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
+  withoutModelVariant,
 } from "@/api/lib/chat/provider-data-policy";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
@@ -127,25 +130,33 @@ const isManagedRoutingRefusal = (error: unknown): boolean => {
 
 const checkManagedOpenRouterRequest = (
   options: OpenRouterTextOptions,
+  residency: ManagedAIResidency,
 ): Result<void, HandlerError<503>> => {
   const selection = assertManagedOpenRouterModel(options.model);
   if (Result.isError(selection)) {
     return selection;
   }
-  for (const model of options.modelOptions?.models ?? []) {
-    const fallback = assertManagedOpenRouterModel(model);
-    if (Result.isError(fallback)) {
-      return fallback;
-    }
-  }
-  return Result.ok(undefined);
+  return checkManagedOpenRouterModel(
+    withoutModelVariant(options.model),
+    residency,
+  );
 };
 
-const withManagedRoutingErrors = async function* (
-  stream: AsyncIterable<AdapterYieldChunk>,
-  options: OpenRouterTextOptions,
-): AsyncGenerator<AdapterYieldChunk> {
-  const eligibility = checkManagedOpenRouterRequest(options);
+type ManagedRoutingOptions = {
+  stream: AsyncIterable<AdapterYieldChunk>;
+  options: OpenRouterTextOptions;
+  managedAIResidency: ManagedAIResidency;
+};
+
+const withManagedRoutingErrors = async function* ({
+  stream,
+  options,
+  managedAIResidency,
+}: ManagedRoutingOptions): AsyncGenerator<AdapterYieldChunk> {
+  const eligibility = checkManagedOpenRouterRequest(
+    options,
+    managedAIResidency,
+  );
   if (Result.isError(eligibility)) {
     yield {
       type: EventType.RUN_STARTED,
@@ -153,7 +164,9 @@ const withManagedRoutingErrors = async function* (
       threadId: options.threadId ?? Bun.randomUUIDv7(),
       model: options.model,
       timestamp: Temporal.Now.instant().epochMilliseconds,
-      parentRunId: options.parentRunId,
+      ...(options.parentRunId === undefined
+        ? {}
+        : { parentRunId: options.parentRunId }),
     };
     yield {
       type: EventType.RUN_ERROR,
@@ -192,20 +205,82 @@ const withManagedRoutingErrors = async function* (
   }
 };
 
-class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
+const INSTANCE_DEBUG_LOGGER = {
+  group: () => undefined,
+  groupEnd: () => undefined,
+  log: () => undefined,
+} satisfies NonNullable<OpenRouterConfig["debugLogger"]>;
+
+class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
+  constructor(config: OpenRouterConfig, model: OpenRouterModel) {
+    // A truthy logger also prevents OPENROUTER_DEBUG from enabling SDK logs.
+    super({ ...config, debugLogger: INSTANCE_DEBUG_LOGGER }, model);
+  }
+
   override chatStream(options: OpenRouterTextOptions) {
-    return withManagedRoutingErrors(super.chatStream(options), options);
+    return super.chatStream({ ...options, logger: resolveDebugOption(false) });
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return withManagedRoutingErrors(
-      super.structuredOutputStream(options),
-      options.chatOptions,
-    );
+    return super.structuredOutputStream({
+      ...options,
+      chatOptions: {
+        ...options.chatOptions,
+        logger: resolveDebugOption(false),
+      },
+    });
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
-    const eligibility = checkManagedOpenRouterRequest(options.chatOptions);
+    return await super.structuredOutput({
+      ...options,
+      chatOptions: {
+        ...options.chatOptions,
+        logger: resolveDebugOption(false),
+      },
+    });
+  }
+
+  protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    const { models: _models, ...modelOptions } = options.modelOptions ?? {};
+    return super.mapOptionsToRequest({ ...options, modelOptions });
+  }
+}
+
+class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
+  private readonly residency: ManagedAIResidency;
+
+  constructor(
+    config: OpenRouterConfig,
+    {
+      model,
+      managedAIResidency,
+    }: Pick<ManagedOpenRouterTextOptions, "model" | "managedAIResidency">,
+  ) {
+    super(config, model);
+    this.residency = managedAIResidency;
+  }
+  override chatStream(options: OpenRouterTextOptions) {
+    return withManagedRoutingErrors({
+      stream: super.chatStream(options),
+      options,
+      managedAIResidency: this.residency,
+    });
+  }
+
+  override structuredOutputStream(options: OpenRouterStructuredOptions) {
+    return withManagedRoutingErrors({
+      stream: super.structuredOutputStream(options),
+      options: options.chatOptions,
+      managedAIResidency: this.residency,
+    });
+  }
+
+  override async structuredOutput(options: OpenRouterStructuredOptions) {
+    const eligibility = checkManagedOpenRouterRequest(
+      options.chatOptions,
+      this.residency,
+    );
     if (Result.isError(eligibility)) {
       throw eligibility.error;
     }
@@ -223,6 +298,7 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    const model = withoutModelVariant(options.model);
     const {
       plugins: _plugins,
       variant: _variant,
@@ -230,6 +306,7 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
     } = options.modelOptions ?? {};
     const request = super.mapOptionsToRequest({
       ...options,
+      model,
       modelOptions,
     });
     return {
@@ -272,7 +349,7 @@ export const createManagedOpenRouterText = ({
             managedAIResidency
           ],
       },
-      model,
+      { model, managedAIResidency },
     ),
   );
 };
