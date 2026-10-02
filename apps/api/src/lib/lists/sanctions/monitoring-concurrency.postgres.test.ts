@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { eq, sql } from "drizzle-orm";
 
@@ -17,17 +17,22 @@ import {
   sanctionsEditionFanouts,
   sanctionsEditionEntries,
   sanctionsEntryPayloads,
+  sanctionsMonitoringBackfills,
+  sanctionsOrganizationMarks,
   sanctionsScreeningEvents,
   sanctionsSources,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
+import { readSanctionsFreshness } from "@/api/lib/lists/sanctions/freshness";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
+import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
 import {
   monitoringFingerprint,
   monitoringSubject,
 } from "@/api/lib/lists/sanctions/monitoring-input";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
@@ -131,6 +136,50 @@ const contactState = async (
     .from(sanctionsScreeningEvents)
     .where(eq(sanctionsScreeningEvents.contactId, contactId)),
 });
+
+const failureMessages = (error: unknown): string => {
+  if (!(error instanceof Error)) {
+    return String(error);
+  }
+  return `${error.message} ${"cause" in error ? failureMessages(error.cause) : ""}`;
+};
+
+// Organization-consumption tests own only their request. Keep unrelated edition
+// pages quiescent, and put their exact state back before closing the fixture.
+const pauseEditionFanouts = async (db: GatedTestDb) => {
+  const saved = await db.transaction(async (tx) => {
+    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+    const fanouts = await tx.select().from(sanctionsEditionFanouts);
+    const freshness = await readSanctionsFreshness({
+      db: async (read) => await read(asTestRaw<Transaction>(tx)),
+      now,
+    });
+    await tx.execute(sql`
+      UPDATE sanctions_edition_fanouts AS fanout
+      SET state = 'complete', freshness_status = observed.status
+      FROM jsonb_to_recordset(${JSON.stringify(freshness.map(({ source, status }) => ({ source, status })))}::text::jsonb)
+        AS observed(source text, status text)
+      WHERE fanout.source_id = observed.source
+    `);
+    return fanouts;
+  });
+  return async () =>
+    await db.transaction(async (tx) => {
+      await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
+      await tx
+        .insert(sanctionsEditionFanouts)
+        .values(saved)
+        .onConflictDoUpdate({
+          target: sanctionsEditionFanouts.sourceId,
+          set: {
+            editionId: sql`excluded.edition_id`,
+            cursorOrganizationId: sql`excluded.cursor_organization_id`,
+            freshnessStatus: sql`excluded.freshness_status`,
+            state: sql`excluded.state`,
+          },
+        });
+    });
+};
 
 if (!databaseUrl || !runPostgresTests) {
   describe.skip("monitoring concurrency on PostgreSQL", () => {
@@ -393,6 +442,264 @@ if (!databaseUrl || !runPostgresTests) {
         await controlDb
           .delete(sanctionsEntryPayloads)
           .where(eq(sanctionsEntryPayloads.contentHash, hash));
+      }
+    });
+  }, 120_000);
+
+  test("organization refresh consumption preserves a newer settings generation", async () => {
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const { db: consumerDb } = openClient({
+        connection: { statement_timeout: 10_000 },
+      });
+      const { db: settingsDb } = openClient({
+        connection: { statement_timeout: 10_000 },
+      });
+      const organizationId = mintAuthProviderId<"organization">();
+      const suffix = Bun.randomUUIDv7().replaceAll("-", "");
+      const gate = BigInt(`0x${suffix.slice(-15)}`);
+      const removeGate = await installGate({
+        db: settingsDb,
+        table: "sanctions_monitoring_backfills",
+        suffix,
+      });
+      const faultName = `monitoring_delete_fault_${suffix}`;
+      const restoreFanouts = await pauseEditionFanouts(settingsDb);
+      const running: Promise<unknown>[] = [];
+      let gateHeld = false;
+      try {
+        // The isolated gated database must not have another organization's request
+        // ahead of this fixture; do not silently consume a different test's work.
+        expect(
+          await settingsDb.select().from(sanctionsOrganizationMarks),
+        ).toEqual([]);
+        await settingsDb.insert(organization).values({
+          id: organizationId,
+          name: "Monitoring settings concurrency",
+          slug: `monitoring-settings-${suffix}`,
+          createdAt: now,
+        });
+        await settingsDb
+          .insert(organizationSettings)
+          .values({ organizationId, sanctionsMonitoringMode: "enabled" });
+        const mark =
+          (
+            await settingsDb
+              .select()
+              .from(sanctionsOrganizationMarks)
+              .where(
+                eq(sanctionsOrganizationMarks.organizationId, organizationId),
+              )
+          ).at(0) ?? panic("Missing initial organization mark");
+        expect(mark.generation).toBe(1n);
+        const consumerPid = await backendPid(consumerDb);
+        const settingsPid = await backendPid(settingsDb);
+        await settingsDb.execute(
+          sql`SELECT pg_advisory_lock(${String(gate)}::bigint)`,
+        );
+        gateHeld = true;
+        await consumerDb.execute(
+          sql`SELECT set_config(${GATE_SETTING}, ${String(gate)}, false)`,
+        );
+        const consume = queueSanctionsMonitoringBackfills({
+          db: consumerDb,
+          now,
+        });
+        running.push(consume);
+        // The production INSERT happens after discovery and before deleting the mark.
+        expect(await blockersFor(settingsDb, consumerPid)).toContain(
+          settingsPid,
+        );
+        await settingsDb
+          .update(organizationSettings)
+          .set({ sanctionsMonitoringMode: "disabled" })
+          .where(eq(organizationSettings.organizationId, organizationId));
+        const newer =
+          (
+            await settingsDb
+              .select()
+              .from(sanctionsOrganizationMarks)
+              .where(
+                eq(sanctionsOrganizationMarks.organizationId, organizationId),
+              )
+          ).at(0) ?? panic("Missing newer organization mark");
+        expect(newer.generation).toBe(mark.generation + 1n);
+        await settingsDb.execute(
+          sql`SELECT pg_advisory_unlock(${String(gate)}::bigint)`,
+        );
+        gateHeld = false;
+        expect((await consume).requested).toBe(1);
+        expect((await consume).fanned).toBe(0);
+        expect(
+          await settingsDb
+            .select()
+            .from(sanctionsOrganizationMarks)
+            .where(
+              eq(sanctionsOrganizationMarks.organizationId, organizationId),
+            ),
+        ).toEqual([newer]);
+        await settingsDb
+          .update(sanctionsMonitoringBackfills)
+          .set({ state: "complete", cursorContactId: null })
+          .where(
+            eq(sanctionsMonitoringBackfills.organizationId, organizationId),
+          );
+        expect(
+          (await queueSanctionsMonitoringBackfills({ db: consumerDb, now }))
+            .requested,
+        ).toBe(1);
+        expect(
+          await settingsDb
+            .select()
+            .from(sanctionsOrganizationMarks)
+            .where(
+              eq(sanctionsOrganizationMarks.organizationId, organizationId),
+            ),
+        ).toEqual([]);
+        const jobs = await settingsDb
+          .select()
+          .from(sanctionsMonitoringBackfills)
+          .where(
+            eq(sanctionsMonitoringBackfills.organizationId, organizationId),
+          );
+        expect(jobs.map(({ sourceId }) => sourceId).toSorted()).toEqual(
+          sanctionsSourceIds().toSorted(),
+        );
+        expect(
+          jobs.every(
+            ({ state, cursorContactId }) =>
+              state === "pending" && cursorContactId === null,
+          ),
+        ).toBe(true);
+        expect(
+          (
+            await settingsDb
+              .select()
+              .from(organizationSettings)
+              .where(eq(organizationSettings.organizationId, organizationId))
+          ).at(0)?.sanctionsMonitoringMode,
+        ).toBe("disabled");
+
+        // A failed final deletion must roll back enqueued jobs and their cursors.
+        await settingsDb
+          .update(organizationSettings)
+          .set({ sanctionsMonitoringMode: "enabled" })
+          .where(eq(organizationSettings.organizationId, organizationId));
+        const cursor = createSafeId<"contact">();
+        await settingsDb
+          .update(sanctionsMonitoringBackfills)
+          .set({ state: "complete", cursorContactId: cursor })
+          .where(
+            eq(sanctionsMonitoringBackfills.organizationId, organizationId),
+          );
+        const jobsBeforeFault = await settingsDb
+          .select()
+          .from(sanctionsMonitoringBackfills)
+          .where(
+            eq(sanctionsMonitoringBackfills.organizationId, organizationId),
+          );
+        const marksBeforeFault = await settingsDb
+          .select()
+          .from(sanctionsOrganizationMarks)
+          .where(eq(sanctionsOrganizationMarks.organizationId, organizationId));
+        expect(
+          jobsBeforeFault.every(
+            ({ cursorContactId }) => cursorContactId === cursor,
+          ),
+        ).toBe(true);
+        await settingsDb.execute(sql`
+          CREATE FUNCTION ${sql.identifier(faultName)}() RETURNS trigger
+          LANGUAGE plpgsql AS $fault$
+          BEGIN
+            IF NULLIF(current_setting('test.monitoring_write_gate', true), '') IS NOT NULL THEN
+              RAISE EXCEPTION 'Monitoring organization checkpoint rejected';
+            END IF;
+            RETURN OLD;
+          END
+          $fault$
+        `);
+        await settingsDb.execute(sql`
+          CREATE TRIGGER ${sql.identifier(faultName)} BEFORE DELETE ON sanctions_organization_marks
+          FOR EACH ROW EXECUTE FUNCTION ${sql.identifier(faultName)}()
+        `);
+        const failed = await Result.tryPromise(() =>
+          queueSanctionsMonitoringBackfills({ db: consumerDb, now }),
+        );
+        if (failed.isOk()) {
+          panic("Expected organization checkpoint failure");
+        }
+        expect(failureMessages(failed.error)).toContain(
+          "Monitoring organization checkpoint rejected",
+        );
+        expect(
+          await settingsDb
+            .select()
+            .from(sanctionsOrganizationMarks)
+            .where(
+              eq(sanctionsOrganizationMarks.organizationId, organizationId),
+            ),
+        ).toEqual(marksBeforeFault);
+        expect(
+          await settingsDb
+            .select()
+            .from(sanctionsMonitoringBackfills)
+            .where(
+              eq(sanctionsMonitoringBackfills.organizationId, organizationId),
+            ),
+        ).toEqual(jobsBeforeFault);
+        await settingsDb.execute(
+          sql`DROP TRIGGER ${sql.identifier(faultName)} ON sanctions_organization_marks`,
+        );
+        await settingsDb.execute(
+          sql`DROP FUNCTION ${sql.identifier(faultName)}()`,
+        );
+        expect(
+          (await queueSanctionsMonitoringBackfills({ db: consumerDb, now }))
+            .requested,
+        ).toBe(1);
+        expect(
+          await settingsDb
+            .select()
+            .from(sanctionsOrganizationMarks)
+            .where(
+              eq(sanctionsOrganizationMarks.organizationId, organizationId),
+            ),
+        ).toEqual([]);
+        const retriedJobs = await settingsDb
+          .select()
+          .from(sanctionsMonitoringBackfills)
+          .where(
+            eq(sanctionsMonitoringBackfills.organizationId, organizationId),
+          );
+        expect(retriedJobs.map(({ sourceId }) => sourceId).toSorted()).toEqual(
+          sanctionsSourceIds().toSorted(),
+        );
+        expect(
+          retriedJobs.every(
+            ({ state, cursorContactId }) =>
+              state === "pending" && cursorContactId === null,
+          ),
+        ).toBe(true);
+      } finally {
+        if (gateHeld) {
+          await settingsDb.execute(
+            sql`SELECT pg_advisory_unlock(${String(gate)}::bigint)`,
+          );
+        }
+        await Promise.allSettled(running);
+        await consumerDb.execute(
+          sql`SELECT set_config(${GATE_SETTING}, '', false)`,
+        );
+        await settingsDb.execute(
+          sql`DROP TRIGGER IF EXISTS ${sql.identifier(faultName)} ON sanctions_organization_marks`,
+        );
+        await settingsDb.execute(
+          sql`DROP FUNCTION IF EXISTS ${sql.identifier(faultName)}()`,
+        );
+        await removeGate();
+        await settingsDb
+          .delete(organization)
+          .where(eq(organization.id, organizationId));
+        await restoreFanouts();
       }
     });
   }, 120_000);
