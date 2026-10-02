@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { asc, eq, getTableName, sql } from "drizzle-orm";
 
@@ -205,8 +206,9 @@ if (!databaseUrl || !enabled) {
           userId: otherUserId,
         });
 
-        await transaction((tx) =>
-          deleteConnectedCredentialsAndOAuthState(tx, targetUserId),
+        await transaction(
+          async (tx) =>
+            await deleteConnectedCredentialsAndOAuthState(tx, targetUserId),
         );
 
         expect(
@@ -234,12 +236,14 @@ if (!databaseUrl || !enabled) {
           organizationIds: [mintAuthProviderId<"organization">()],
         });
 
-        await transaction((tx) =>
-          deleteConnectedCredentialsAndOAuthState(tx, userId),
+        await transaction(
+          async (tx) =>
+            await deleteConnectedCredentialsAndOAuthState(tx, userId),
         );
         const afterFirstRun = await countsForUser({ transaction, userId });
-        await transaction((tx) =>
-          deleteConnectedCredentialsAndOAuthState(tx, userId),
+        await transaction(
+          async (tx) =>
+            await deleteConnectedCredentialsAndOAuthState(tx, userId),
         );
 
         expect(await countsForUser({ transaction, userId })).toEqual(
@@ -282,11 +286,22 @@ if (!databaseUrl || !enabled) {
           FOR EACH ROW EXECUTE FUNCTION ${sql.identifier(schema)}.fail_registration_delete()
         `);
 
-          await expect(
-            transaction((tx) =>
-              deleteConnectedCredentialsAndOAuthState(tx, userId),
-            ),
-          ).rejects.toThrow("account deletion fixture failure");
+          const interrupted = await Result.tryPromise({
+            try: async () =>
+              await transaction(
+                async (tx) =>
+                  await deleteConnectedCredentialsAndOAuthState(tx, userId),
+              ),
+            catch: (cause) => cause,
+          });
+          expect(Result.isError(interrupted)).toBe(true);
+          if (Result.isError(interrupted)) {
+            expect(interrupted.error).toBeInstanceOf(Error);
+            expect(interrupted.error).toHaveProperty(
+              "message",
+              expect.stringContaining("account deletion fixture failure"),
+            );
+          }
 
           expect(await countsForUser({ transaction, userId })).toEqual(
             credentialsBefore,

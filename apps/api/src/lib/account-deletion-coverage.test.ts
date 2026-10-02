@@ -214,10 +214,11 @@ const manualOwnershipProblems = (
       );
     }
     declaredTables.add(table);
+    const column = config.columns.find((candidate) => candidate === userColumn);
     if (
-      !config.columns.includes(userColumn) ||
-      userColumn.dataType !== authSchema.user.id.dataType ||
-      userColumn.getSQLType() !== authSchema.user.id.getSQLType()
+      !column ||
+      column.dataType !== authSchema.user.id.dataType ||
+      column.getSQLType() !== authSchema.user.id.getSQLType()
     ) {
       problems.push(
         `${config.name}: ownership column must be a user-id text column on the table`,
