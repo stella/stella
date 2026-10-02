@@ -8,6 +8,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { OrgAIConfigStatus } from "@/api/lib/ai-config-loader-core";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { logger } from "@/api/lib/observability/logger";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 import type {
@@ -101,15 +102,23 @@ export type DeriveAskGenerate = (input: {
   prompt: string;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
 }) => Promise<DeriveAskResult>;
 
 // Not destructured in the parameter: the ownership-id lint rule needs the
 // branded type visible on the binding, which the aliased object type hides.
 const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
-  const { system, prompt, organizationId, orgAIConfig, promptCachingEnabled } =
-    input;
+  const {
+    system,
+    prompt,
+    organizationId,
+    orgAIConfig,
+    managedAIResidency,
+    promptCachingEnabled,
+  } = input;
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "playbook.derive-ask",
     modelRole: DERIVE_ASK_ROLE,
     organizationId,
@@ -120,8 +129,10 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 
   try {
     return await generateTanStackObjectForRole({
+      dataClass: "customer",
       role: DERIVE_ASK_ROLE,
       orgAIConfig,
+      managedAIResidency,
       organizationId,
       // DeriveAskGenerate carries no workspace id; playbook grading runs at
       // organization scope.
@@ -149,6 +160,7 @@ const defaultDeriveAskGenerate: DeriveAskGenerate = async (input) => {
 export type DeriveAutoAsksDeps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   // Test seam; defaults to the real structured-output call.
@@ -180,6 +192,7 @@ const deriveOne = async (
         prompt: buildDeriveAskUserMessage(position),
         organizationId: deps.organizationId,
         orgAIConfig: deps.orgAIConfig,
+        managedAIResidency: deps.managedAIResidency,
         promptCachingEnabled: deps.promptCachingEnabled,
       }),
     catch: (error) => error,

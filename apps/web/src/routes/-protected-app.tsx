@@ -16,7 +16,7 @@ import { useTranslations } from "use-intl";
 import { Button } from "@stll/ui/button";
 import {
   CogIcon,
-  MessageSquarePlusIcon,
+  NewChatIcon,
   PanelRightIcon,
   PinIcon,
   PinOffIcon,
@@ -494,7 +494,7 @@ function ProtectedContent() {
           {/* oxlint-disable-next-line react/refs -- reads the imperatively-captured trigger anchor to position the menu; the menu-open state that gates this render is set in the same handler that captures the anchor */}
           <MenuPopup anchor={chatMenuAnchorRef.current ?? undefined}>
             <MenuItem onClick={handleOpenNewChatFromMenu}>
-              <MessageSquarePlusIcon />
+              <NewChatIcon />
               {t("chat.newChat")}
             </MenuItem>
           </MenuPopup>

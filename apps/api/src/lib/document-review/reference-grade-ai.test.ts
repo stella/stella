@@ -122,6 +122,7 @@ const grade = async () =>
     organizationId,
     workspaceId,
     orgAIConfig: null,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
     serviceTier: "standard",
     usageMetering,

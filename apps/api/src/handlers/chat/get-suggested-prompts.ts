@@ -122,6 +122,7 @@ const getSuggestedPrompts = createSafeRootHandler(
   async function* ({
     getWorkspaceAccess,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     params: { threadId },
     promptCachingEnabled,
@@ -133,6 +134,7 @@ const getSuggestedPrompts = createSafeRootHandler(
     if (
       Result.isError(
         requireTanStackAIAvailableForRole({
+          dataClass: "customer",
           configStatus: orgAIConfigStatus,
           orgConfig: orgAIConfig,
           role: "fast",
@@ -228,6 +230,7 @@ const getSuggestedPrompts = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -248,9 +251,11 @@ const getSuggestedPrompts = createSafeRootHandler(
 
     try {
       const text = await generateTanStackTextForRole({
+        dataClass: "customer",
         finishPolicy: "allow-incomplete",
         role: "fast",
         orgAIConfig,
+        managedAIResidency,
         organizationId: session.activeOrganizationId,
         analytics: aiAnalytics,
         caching: resolveCaching({

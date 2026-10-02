@@ -103,7 +103,7 @@ export const finalizeResponseCachePolicy = ({
   return output;
 };
 
-const SECURITY_HEADERS = {
+export const API_SECURITY_HEADERS = {
   [CACHE_CONTROL_HEADER]: PRIVATE_CACHE_CONTROL,
   "Strict-Transport-Security": "max-age=63072000; includeSubDomains; preload",
   "X-Content-Type-Options": "nosniff",
@@ -124,7 +124,7 @@ const SECURITY_HEADERS = {
 } as const;
 
 export const setSecurityHeaders = (set: Context["set"]) => {
-  for (const [key, value] of Object.entries(SECURITY_HEADERS)) {
+  for (const [key, value] of Object.entries(API_SECURITY_HEADERS)) {
     set.headers[key] = value;
   }
 };

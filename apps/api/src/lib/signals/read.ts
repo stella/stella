@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/pagination";
 import { hasMemberPermission } from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSignalId } from "@/api/lib/safe-id-boundaries";
 
 /** Unscoped signals are visible, and triageable, only with this permission. */
@@ -196,7 +197,9 @@ export const listSignalsHandler = async function* ({
   workspaceFilter,
   query,
 }: ListSignalsProps) {
-  const limit = query.limit ?? LIMITS.signalsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.signalsPageSizeDefault,
+  );
   const now = new Date();
   const conditions: (SQL | undefined)[] = [
     signalListConditions({
