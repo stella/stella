@@ -70,7 +70,6 @@ jobs:
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.changed-files.outputs.marketing_screenshots_required }}
-      migration_exact_base_required: ${{ steps.changed-files.outputs.migration_exact_base_required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -247,7 +246,6 @@ jobs:
               echo "dependency_malware_required=true"
               echo "lockfile_ages_required=false"
               echo "marketing_screenshots_required=true"
-              echo "migration_exact_base_required=false"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
               echo "model_catalog_drift_required=true"
@@ -281,7 +279,6 @@ jobs:
               echo "dependency_malware_required=false"
               echo "lockfile_ages_required=false"
               echo "marketing_screenshots_required=false"
-              echo "migration_exact_base_required=false"
               echo "migration_rehearsal_required=false"
               echo "mobile_build_required=false"
               echo "model_catalog_drift_required=false"
@@ -328,7 +325,6 @@ jobs:
           legal_atlas_image_required=false
           lockfile_ages_required=false
           migration_rehearsal_required=false
-          migration_exact_base_required=false
           mobile_build_required=false
           model_catalog_drift_required=false
           published_exports_required=false
@@ -377,11 +373,6 @@ jobs:
             case "$file" in
               VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/migration-rehearsal-db.ts|.github/workflows/ci.yml)
                 migration_rehearsal_required=true
-                ;;
-            esac
-            case "$file" in
-              VERSION|apps/api/drizzle/*|apps/api/src/db/*|apps/api/src/lib/db/*|apps/api/src/lib/decision-date-bounds-sql.ts|apps/api/src/handlers/case-law/citation-resolution.ts|apps/api/src/scripts/*|scripts/rehearse-migration-upgrade.sh|scripts/rehearse-exact-base-upgrade.sh|scripts/rehearse-exact-base-upgrade.test.ts|scripts/migration-rehearsal-db.ts|scripts/migration-catalog.ts|scripts/migration-catalog.test.ts|package.json|bun.lock|.github/workflows/ci.yml)
-                migration_exact_base_required=true
                 ;;
             esac
             case "$file" in
@@ -537,7 +528,6 @@ jobs:
             echo "dependency_malware_required=$dependency_malware_required"
             echo "lockfile_ages_required=$lockfile_ages_required"
             echo "marketing_screenshots_required=$marketing_screenshots_required"
-            echo "migration_exact_base_required=$migration_exact_base_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
             echo "mobile_build_required=$mobile_build_required"
             echo "model_catalog_drift_required=$model_catalog_drift_required"
@@ -1723,6 +1713,14 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ci-plan.test.ts
 
+      - name: Test nightly rehearsal and retry guards
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts
+
+      - name: Reject automatic test retries
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun scripts/check-test-retries.ts
+
       - name: Test dependency malware scanners
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/osv-scanner-install.test.ts scripts/scan-dependency-malware.test.ts scripts/report-dependency-malware-failure.test.ts
@@ -2637,90 +2635,6 @@ jobs:
           REHEARSAL_BASE_IMAGE_REPOSITORY: ghcr.io/${{ github.repository_owner }}/stella-api
           REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}
         run: bash scripts/rehearse-migration-upgrade.sh
-
-  migration-exact-base-upgrade:
-    # Reports only until a burn-in supports wiring it into ci-result.
-    # Compare the queued upgrade from main's exact schema with a clean
-    # install, using the event base before any grouped entries are applied.
-    needs: ci-plan
-    if: >-
-      github.event_name == 'merge_group'
-      && needs.ci-plan.outputs.trusted == 'true'
-      && needs.ci-plan.outputs.migration_exact_base_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
-    runs-on: ubuntu-latest
-    timeout-minutes: 20
-    continue-on-error: true
-    permissions:
-      contents: read
-    services:
-      postgres:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
-        env:
-          POSTGRES_USER: stella_owner
-          POSTGRES_PASSWORD: stella
-          POSTGRES_DB: stella
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-      postgres-clean:
-        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
-        env:
-          POSTGRES_USER: stella_owner
-          POSTGRES_PASSWORD: stella
-          POSTGRES_DB: stella
-        ports:
-          - 5433:5432
-        options: >-
-          --health-cmd "pg_isready -U stella_owner -d stella"
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install candidate dependencies
-        run: bash scripts/retry.sh bun ci --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
-      - name: Test exact-base rehearsal contracts
-        run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts
-
-      - name: Rehearse exact-base migration upgrade
-        id: rehearsal
-        env:
-          BASE_SHA: ${{ github.event.merge_group.base_sha }}
-          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
-          CLEAN_DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
-        run: bash scripts/rehearse-exact-base-upgrade.sh
-
-      - name: Report unavailable rehearsal
-        if: always() && steps.rehearsal.outcome == 'skipped'
-        env:
-          BASE_SHA: ${{ github.event.merge_group.base_sha }}
-          CANDIDATE_SHA: ${{ github.sha }}
-        run: |
-          {
-            echo "### Exact-base migration upgrade"
-            echo
-            echo "Verdict: infra failure (rehearsal could not start)."
-            echo "Base: $BASE_SHA; candidate: $CANDIDATE_SHA."
-            echo "Phase durations and rehearsal total: not run."
-          } >> "$GITHUB_STEP_SUMMARY"
 
   release-typecheck:
     needs: ci-plan
