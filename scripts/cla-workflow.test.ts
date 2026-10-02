@@ -590,8 +590,8 @@ const lastOutput = (run: ReturnType<typeof fixture>, name?: string) =>
 
 // bun-types declares `.rejects.toThrow` as void, so awaiting it trips
 // type-aware lint; capture the rejection explicitly instead.
-const rejectionOf = (promise: Promise<unknown>): Promise<unknown> =>
-  promise.then(
+const rejectionOf = async (promise: Promise<unknown>): Promise<unknown> =>
+  await promise.then(
     () => "resolved",
     (error: unknown) => error,
   );
