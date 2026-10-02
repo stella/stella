@@ -385,6 +385,7 @@ export const runMigrations = async ({
       remedy: "Migration completion requires every bundled migration hash.",
     });
     const onlineConnection: OnlineMigrationConnection = {
+      terminate: async () => await connection.close({ timeout: 0 }),
       execute: async (query, params = []) => {
         await connection.unsafe(query, [...params]);
       },

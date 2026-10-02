@@ -8,6 +8,9 @@ import { BackfillHeldError } from "./backfill-runtime";
 import { BETTER_AUTH_OAUTH_RESOURCE_REPAIR } from "./better-auth-oauth-resource-repair";
 import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-delete-receipt-repair";
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
+import { createOnlineIndexGate } from "./online-index-gate";
+import type { OnlineIndexGateOptions } from "./online-index-gate";
+import { openOnlineIndexObserver } from "./online-index-observer";
 import type {
   OnlineMigrationConnection,
   OnlineMigrationPool,
@@ -15,9 +18,8 @@ import type {
   OnlineRepairCompletion,
 } from "./online-migration-connection";
 
-// Sized for index builds: a DDL lock that queues behind live traffic fails
-// fast instead of holding the queue. A repair may set its own for its own
-// statements; the phase restores this one after it.
+// Fast DDL retains a short lock budget; guarded concurrent index work lifts it
+// and uses the observer watchdog for virtual transaction waits.
 const ONLINE_MIGRATION_LOCK_TIMEOUT_SQL = "SET lock_timeout = '1s'";
 const ONLINE_MIGRATIONS_LOCK_SQL =
   "SELECT pg_advisory_lock(hashtext('stella-online-migrations'))";
@@ -365,6 +367,8 @@ type OnlineMigrationOperation = "repair" | "validate";
 
 type OnlineMigrationOptions = {
   repairs?: readonly OnlineRepair[];
+  indexGate?: OnlineIndexGateOptions;
+  reserveObserver?: () => Promise<OnlineMigrationConnection>;
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -388,6 +392,15 @@ const processOnlineMigrations = async (
   options: OnlineMigrationOptions,
 ): Promise<void> => {
   const connection = await pool.reserve();
+  let sessionStatus: "active" | "terminated" = "active";
+  const sessionIsActive = () => sessionStatus === "active";
+  const terminate = connection.terminate;
+  if (terminate) {
+    connection.terminate = async () => {
+      sessionStatus = "terminated";
+      await terminate();
+    };
+  }
   let lockAcquired = false;
 
   try {
@@ -399,8 +412,8 @@ const processOnlineMigrations = async (
       await connection.execute("SET statement_timeout = '0'");
     }
 
-    await processOnlineIndexAt(connection, operation);
-    await processOnlineIndexCutoverAt(connection, operation);
+    await processOnlineIndexAt({ connection, operation, options });
+    await processOnlineIndexCutoverAt({ connection, operation, options });
     if (operation === "repair") {
       await retireReplacedIndexAt(connection);
     }
@@ -414,49 +427,73 @@ const processOnlineMigrations = async (
     });
   } finally {
     try {
-      if (lockAcquired) {
+      if (lockAcquired && sessionIsActive()) {
         await connection.execute(ONLINE_MIGRATIONS_UNLOCK_SQL);
       }
     } finally {
-      connection.release();
+      await connection.release();
     }
   }
 };
 
-const processOnlineIndexAt = async (
-  connection: OnlineMigrationConnection,
-  operation: OnlineMigrationOperation,
+type OnlineIndexWalkOptions = {
+  connection: OnlineMigrationConnection;
+  operation: OnlineMigrationOperation;
+  options: OnlineMigrationOptions;
+  offset?: number;
+};
+
+const processOnlineIndexAt = async ({
+  connection,
+  operation,
+  options,
   offset = 0,
-): Promise<void> => {
+}: OnlineIndexWalkOptions): Promise<void> => {
   const index = ONLINE_MIGRATION_INDEXES.at(offset);
   if (!index) {
     return;
   }
 
   if (operation === "repair") {
-    await ensureIndexValid(connection, index);
+    await ensureOnlineIndexValid({
+      connection,
+      index,
+      gate: options.indexGate,
+      reserveObserver: options.reserveObserver,
+    });
   } else {
     await assertIndexReady(connection, index);
   }
-  await processOnlineIndexAt(connection, operation, offset + 1);
+  await processOnlineIndexAt({
+    connection,
+    operation,
+    options,
+    offset: offset + 1,
+  });
 };
 
-const processOnlineIndexCutoverAt = async (
-  connection: OnlineMigrationConnection,
-  operation: OnlineMigrationOperation,
+const processOnlineIndexCutoverAt = async ({
+  connection,
+  operation,
+  options,
   offset = 0,
-): Promise<void> => {
+}: OnlineIndexWalkOptions): Promise<void> => {
   const cutover = ONLINE_MIGRATION_INDEX_CUTOVERS.at(offset);
   if (!cutover) {
     return;
   }
 
   if (operation === "repair") {
-    await completeIndexCutover(connection, cutover);
+    await completeIndexCutover({ connection, cutover, options });
   } else {
     await assertIndexReady(connection, cutover.final);
   }
-  await processOnlineIndexCutoverAt(connection, operation, offset + 1);
+  await processOnlineIndexCutoverAt({
+    connection,
+    operation,
+    options,
+    offset: offset + 1,
+  });
 };
 
 type OnlineRepairWalkOptions = {
@@ -716,34 +753,97 @@ const assertIndexReady = async (
   await assertNoReindexArtifacts(connection, index);
 };
 
-const ensureIndexValid = async (
-  connection: OnlineMigrationConnection,
-  index: OnlineIndex,
-): Promise<void> => {
-  await cleanupFailedReindexArtifacts(connection, index);
+type EnsureOnlineIndexOptions = {
+  connection: OnlineMigrationConnection;
+  index: OnlineIndex;
+  gate?: OnlineIndexGateOptions | undefined;
+  reserveObserver?: (() => Promise<OnlineMigrationConnection>) | undefined;
+};
+
+export const ensureOnlineIndexValid = async ({
+  connection,
+  index,
+  gate,
+  reserveObserver = openOnlineIndexObserver,
+}: EnsureOnlineIndexOptions): Promise<void> => {
   const initialState = await readIndexState(connection, index);
   if (initialState.type === "present") {
     assertIndexDefinition(index, initialState);
-    if (initialState.isValid && initialState.isReady) {
+    if (
+      initialState.isValid &&
+      initialState.isReady &&
+      (await readReindexArtifacts(connection, index)).length === 0
+    ) {
       return;
     }
-
-    await connection.execute(
-      `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
-    );
-  } else if (index.createSql) {
-    await connection.execute(index.createSql);
-  } else {
+  } else if (!index.createSql) {
     panic(`Required migration index ${index.name} is missing`);
   }
-
-  await assertIndexReady(connection, index);
+  const observer = await reserveObserver();
+  try {
+    let runtime = createOnlineIndexGate({
+      ...gate,
+      connection,
+      observer,
+      tableName: index.tableName,
+      name: index.name,
+      kind: initialState.type === "present" ? "index_repair" : "index_build",
+    });
+    try {
+      while (true) {
+        const outcome = await runtime.attempt(async (guardedConnection) => {
+          await cleanupFailedReindexArtifacts(guardedConnection, index);
+          const state = await readIndexState(guardedConnection, index);
+          if (state.type === "present") {
+            assertIndexDefinition(index, state);
+            if (state.isValid && state.isReady) {
+              return;
+            }
+            await guardedConnection.execute(
+              `DROP INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
+            );
+          }
+          await guardedConnection.execute(
+            index.createSql ??
+              `CREATE ${index.isUnique ? "UNIQUE " : ""}INDEX CONCURRENTLY ${quoteIdentifier(index.name)} ${index.definitionBody}`,
+          );
+        });
+        if (outcome === "done") {
+          await assertIndexReady(connection, index);
+          return;
+        }
+        await runtime.retry();
+        if (outcome === "retry") {
+          await runtime.close();
+          runtime = createOnlineIndexGate({
+            ...gate,
+            connection,
+            observer,
+            tableName: index.tableName,
+            name: index.name,
+            kind: "index_repair",
+          });
+        }
+      }
+    } finally {
+      await runtime.close();
+    }
+  } finally {
+    await observer.release();
+  }
 };
 
-const completeIndexCutover = async (
-  connection: OnlineMigrationConnection,
-  { final, staged }: OnlineIndexCutover,
-): Promise<void> => {
+type CompleteIndexCutoverOptions = {
+  connection: OnlineMigrationConnection;
+  cutover: OnlineIndexCutover;
+  options: OnlineMigrationOptions;
+};
+
+const completeIndexCutover = async ({
+  connection,
+  cutover: { final, staged },
+  options,
+}: CompleteIndexCutoverOptions): Promise<void> => {
   const finalState = await readIndexState(connection, final);
 
   if (finalState.type === "present") {
@@ -766,7 +866,12 @@ const completeIndexCutover = async (
     }
   }
 
-  await ensureIndexValid(connection, staged);
+  await ensureOnlineIndexValid({
+    connection,
+    index: staged,
+    gate: options.indexGate,
+    reserveObserver: options.reserveObserver,
+  });
 
   if (finalState.type === "present") {
     await connection.execute(

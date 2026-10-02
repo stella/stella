@@ -1,15 +1,60 @@
 import { describe, expect, test } from "bun:test";
 
+import { defaultConfig } from "@stll/db-load-gate/health";
+
 import { PROVISION_STATE_BACKFILL_STEPS } from "@/api/lib/case-law/provision-state-backfill/backfill";
 
+import { readOnlineIndexConfig } from "../env-online-index";
 import { BackfillHeldError } from "./backfill-runtime";
 import {
   assertOnlineMigrationsApplied,
   ONLINE_MIGRATION_INDEX_CUTOVERS,
   ONLINE_MIGRATION_INDEXES,
   ONLINE_MIGRATION_REPAIRS,
-  runOnlineMigrations,
+  runOnlineMigrations as runOnlineMigrationsWithGate,
 } from "./online-migrations";
+
+const testClock = () => Date.parse("2026-10-01T12:00:00.000Z");
+const runOnlineMigrations: typeof runOnlineMigrationsWithGate = async (
+  pool,
+  options,
+) =>
+  await runOnlineMigrationsWithGate(pool, {
+    ...options,
+    indexGate: {
+      config: {
+        ...readOnlineIndexConfig({}),
+        health: { ...defaultConfig, busyWindows: [] },
+      },
+      clock: testClock,
+      readEbs: async () => ({
+        indicator: "ebs_balance",
+        kind: "normal",
+        value: 100,
+        threshold: 70,
+        observedAt: new Date(testClock()).toISOString(),
+        reason: "Injected balance",
+      }),
+      log: () => undefined,
+    },
+    reserveObserver: async () => ({
+      execute: async () => undefined,
+      query: async (query) => {
+        if (query.includes("pg_backend_pid() AS pid")) {
+          return [{ pid: 2, database: "test" }];
+        }
+        if (query.includes("ageMs")) {
+          return [
+            { ageMs: 0, observedAt: new Date(testClock()).toISOString() },
+          ];
+        }
+        return [
+          { active: false, observedAt: new Date(testClock()).toISOString() },
+        ];
+      },
+      release: () => undefined,
+    }),
+  });
 
 const CREATE_INDEX_FRAGMENT = "CREATE INDEX CONCURRENTLY";
 const DROP_INDEX_FRAGMENT = "DROP INDEX CONCURRENTLY";
@@ -69,7 +114,7 @@ describe("online migrations", () => {
 
   test("creates a missing index online and verifies completion", async () => {
     const harness = createHarness({
-      indexStates: { [REPORT_EXPORT_INDEX]: [undefined, true] },
+      indexStates: { [REPORT_EXPORT_INDEX]: [undefined, undefined, true] },
     });
 
     await runOnlineMigrations(harness.pool);
@@ -82,7 +127,7 @@ describe("online migrations", () => {
 
   test("concurrently repairs an interrupted invalid build", async () => {
     const harness = createHarness({
-      indexStates: { [CREDENTIAL_INDEX]: [false, true] },
+      indexStates: { [CREDENTIAL_INDEX]: [false, false, true] },
     });
 
     await runOnlineMigrations(harness.pool);
@@ -90,7 +135,7 @@ describe("online migrations", () => {
     expect(
       indexOfStatement(
         harness.statements,
-        `${REINDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
+        `${DROP_INDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
       ),
     ).toBeGreaterThan(-1);
     expect(harness.released()).toBe(true);
@@ -102,7 +147,7 @@ describe("online migrations", () => {
       artifacts: {
         [CREDENTIAL_INDEX]: [{ isValid: false, name: artifactName }],
       },
-      indexStates: { [CREDENTIAL_INDEX]: [false, true] },
+      indexStates: { [CREDENTIAL_INDEX]: [false, false, true] },
     });
 
     await runOnlineMigrations(harness.pool);
@@ -116,7 +161,7 @@ describe("online migrations", () => {
     expect(
       indexOfStatement(
         harness.statements,
-        `${REINDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
+        `${DROP_INDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
       ),
     ).toBeGreaterThan(-1);
   });
@@ -130,7 +175,7 @@ describe("online migrations", () => {
       artifacts: {
         [CHAT_RUN_INDEX]: [{ isValid: false, name: artifactName }],
       },
-      indexStates: { [CHAT_RUN_INDEX]: [false, true] },
+      indexStates: { [CHAT_RUN_INDEX]: [false, false, true] },
     });
 
     await runOnlineMigrations(harness.pool);
@@ -141,7 +186,7 @@ describe("online migrations", () => {
     );
     const repair = indexOfStatement(
       harness.statements,
-      `${REINDEX_FRAGMENT} public."${CHAT_RUN_INDEX}"`,
+      `${DROP_INDEX_FRAGMENT} public."${CHAT_RUN_INDEX}"`,
     );
     expect(drop).toBeGreaterThan(-1);
     expect(repair).toBeGreaterThan(drop);
@@ -367,7 +412,7 @@ describe("online migrations", () => {
           },
           true,
         ],
-        [FILTER_INDEX_REPLACEMENT]: [false, true],
+        [FILTER_INDEX_REPLACEMENT]: [false, false, true],
       },
     });
 
@@ -375,7 +420,7 @@ describe("online migrations", () => {
 
     const reindexOffset = indexOfStatement(
       harness.statements,
-      `${REINDEX_FRAGMENT} public."${FILTER_INDEX_REPLACEMENT}"`,
+      `${DROP_INDEX_FRAGMENT} public."${FILTER_INDEX_REPLACEMENT}"`,
     );
     const dropOffset = indexOfStatement(
       harness.statements,
@@ -695,6 +740,12 @@ const createHarness = ({
         },
         query: async (query: string, params: readonly unknown[] = []) => {
           statements.push(`${query}\n-- params ${JSON.stringify(params)}`);
+          if (query.includes("pg_backend_pid() AS pid")) {
+            return [{ pid: 1, database: "test" }];
+          }
+          if (query.includes(" AS acquired")) {
+            return [{ acquired: true }];
+          }
           if (query.startsWith("SELECT set_config(")) {
             return [];
           }
@@ -802,6 +853,7 @@ const createHarness = ({
             indexRow(index, state.isValid, index.name, state.definitionBody),
           ];
         },
+        terminate: async () => undefined,
         release: () => {
           released = true;
         },
