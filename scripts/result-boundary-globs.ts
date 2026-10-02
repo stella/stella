@@ -214,6 +214,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // assertion failures to test runners.
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  "packages/property-testing/src/index.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

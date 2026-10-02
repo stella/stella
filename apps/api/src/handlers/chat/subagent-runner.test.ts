@@ -269,9 +269,9 @@ describe("a subagent run whose anonymization output lost its field structure", (
 });
 
 describe("a subagent request through the real anonymizer", () => {
-  // Short organization names in the deny-list are matched approximately, so
-  // identifier-like runs of letters and digits can be recognized as one. The
-  // request must still be built, with every field intact.
+  // A short deny-list name and an identifier-like run of letters and digits
+  // sit at the edges of a field. The request must still be built, with every
+  // field intact.
   test("is built with every field restorable when identifiers sit at field edges", async () => {
     const gazetteerEntry = (canonical: string) => ({
       canonical,
@@ -300,7 +300,7 @@ describe("a subagent request through the real anonymizer", () => {
     };
     const systemSafe = "Answer briefly.";
     const systemUntrusted =
-      "Return the clause text for matter 9b57-eacfeca0f10b";
+      "Acme A asks for the clause text for matter 9b57-eacfeca0f10b";
     const sent: { messages: string; systemPrompts: string }[] = [];
 
     const { result } = await runScriptedSubagent(

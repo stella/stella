@@ -872,6 +872,7 @@ type Messages = {
     };
     "viewer": {
       "abstract": "Abstract";
+      "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
