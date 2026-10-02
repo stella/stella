@@ -57,3 +57,28 @@ level and prevents execution.
 
 Pauses prevent subsequent executions. Existing executions stop cooperatively
 at cancellation checkpoints; pausing cannot undo side effects already performed.
+
+The recurring provision-state and expression-id backfills use the shared load
+runtime: yield below 65%, throttle below 80%, and resume a load-caused hold only
+at 75% or higher. Operator pause eligibility is checked by the runner before a
+task initializes its runtime. Automatic holds belong to
+`database_backfill_states`, never to `scheduler_jobs.paused_until`.
+
+Provision-state keeps one dedicated reserved session, its five-minute run
+budget, and the separate 25-minute CHECK validation budget. Its existing repair
+cursors and runtime status commit with each unit. Expression ids keep a
+1,000-row ceiling and at least one second between continuation runs; the initial
+runtime cursor adopts a previously persisted scheduler payload cursor only
+when its checkpoint does not yet exist. Later runs use the runtime checkpoint.
+
+EBS readers share a process cache for 120 seconds and coalesce concurrent
+requests. A failed refresh retains the last real datapoint with its original
+timestamp; the signal becomes unknown once that datapoint is older than 15 minutes.
+
+`backfill.heartbeat.minutely` emits one root EMF gauge per known backfill from
+its durable status and operator pause. Checkpoint age is not metric age: load
+freshness belongs to the signal reader, and a completed or long-running unit
+must not become yielded merely because its checkpoint is old. Batch transitions
+are ordinary structured logs, so they cannot inflate the minutely gauge.
+Completed provision-state work rechecks completion under the checkpoint lock
+before clearing status; an obsolete admission leaves current status alone.

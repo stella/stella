@@ -168,7 +168,10 @@ test("observed completion clears a durable hold without reading load or running 
     },
   });
   try {
-    await runtime.recordCompletion();
+    await runtime.recordCompletion(async () => false);
+    expect(persisted).toBeUndefined();
+    expect(records).toEqual([]);
+    await runtime.recordCompletion(async () => true);
     expect(persisted).toEqual({
       cursor: null,
       batch: initialBatchState(config),
@@ -183,4 +186,27 @@ test("observed completion clears a durable hold without reading load or running 
   } finally {
     await runtime.close();
   }
+});
+
+test("a legacy checkpoint without a hold cause decodes without inventing a load latch", () => {
+  const legacy = {
+    size: 100,
+    sleepMs: 100,
+    smoothedDurationMs: null,
+    stableBatches: 0,
+    holdCount: 1,
+    heldSince: 10,
+    holdUntil: 20,
+  };
+  expect(legacy).not.toHaveProperty("holdCause");
+  expect(decodeCheckpoint({ cursor: "legacy", batch: legacy })).toEqual({
+    cursor: "legacy",
+    batch: { ...legacy, holdCause: "other" },
+  });
+  expect(
+    decodeCheckpoint({
+      cursor: null,
+      batch: { ...legacy, holdCount: 0, heldSince: null, holdUntil: null },
+    }).batch.holdCause,
+  ).toBeNull();
 });

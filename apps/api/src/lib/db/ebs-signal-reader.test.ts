@@ -14,6 +14,7 @@ import { Temporal } from "@stll/time";
 import { envBaseServerSchema } from "../../env-base-schema";
 import { EbsBalanceReadError } from "./ebs-balance-reader";
 import {
+  createEbsReaderCache,
   createEbsSignalReader,
   resolveEbsConfiguration,
   type EbsConfigurationEvent,
@@ -211,4 +212,185 @@ test("an adapter Err remains an unknown blocking signal", async () => {
   const signal = await read();
   expect(signal.kind).toBe("unknown");
   expect(decideStart(combine([signal]), "index_build").decision).toBe("wait");
+});
+
+test("separate signal readers coalesce provider requests and refresh at exactly 120 seconds", async () => {
+  let instant = now;
+  let requests = 0;
+  let factories = 0;
+  const releases: (() => void)[] = [];
+  const startedResolvers: (() => void)[] = [];
+  const started = Array.from(
+    { length: 2 },
+    () =>
+      new Promise<void>((resolve) => {
+        startedResolvers.push(resolve);
+      }),
+  );
+  const shared = createEbsReaderCache({
+    clock: () => instant,
+    createReader: () => {
+      factories++;
+      return async () => {
+        requests++;
+        startedResolvers.at(requests - 1)?.();
+        await new Promise<void>((resolve) => {
+          releases.push(resolve);
+        });
+        return Result.ok({
+          byteBalancePct: 90,
+          ioBalancePct: 85,
+          observedAt: new Date(instant).toISOString(),
+        });
+      };
+    },
+  });
+  const makeReader = (startFloor: number) =>
+    createEbsSignalReader({
+      configuration: { type: "enabled", instanceIdentifier: "shared-instance" },
+      config: { ...defaultConfig, startFloor },
+      clock: () => instant,
+      createReader: shared,
+    });
+  const first = makeReader(70);
+  const second = makeReader(90);
+  const concurrent = [first(), second()];
+  await started.at(0);
+  expect(requests).toBe(1);
+  releases.at(0)?.();
+  expect((await Promise.all(concurrent)).map(({ kind }) => kind)).toEqual([
+    "normal",
+    "degraded",
+  ]);
+  expect(factories).toBe(1);
+  instant += 119_999;
+  expect((await makeReader(70)()).kind).toBe("normal");
+  expect(requests).toBe(1);
+  instant += 1;
+  const refreshed = second();
+  await started.at(1);
+  expect(requests).toBe(2);
+  releases.at(1)?.();
+  expect((await refreshed).kind).toBe("degraded");
+});
+
+test("failed refreshes retain the real timestamp until the outer signal becomes stale", async () => {
+  let instant = now;
+  let requests = 0;
+  const shared = createEbsReaderCache({
+    clock: () => instant,
+    createReader: () => async () => {
+      requests++;
+      if (requests > 1) {
+        return Result.err(
+          new EbsBalanceReadError({ message: "provider unavailable" }),
+        );
+      }
+      return Result.ok({
+        byteBalancePct: 80,
+        ioBalancePct: 90,
+        observedAt: new Date(now).toISOString(),
+      });
+    },
+  });
+  const read = createEbsSignalReader({
+    configuration: { type: "enabled", instanceIdentifier: "retained-instance" },
+    config: defaultConfig,
+    clock: () => instant,
+    createReader: shared,
+  });
+  expect((await read()).kind).toBe("normal");
+  instant += 120_000;
+  expect(await read()).toMatchObject({
+    kind: "normal",
+    observedAt: new Date(now).toISOString(),
+  });
+  expect(requests).toBe(2);
+  instant = now + defaultConfig.maxStalenessMs;
+  expect(await read()).toMatchObject({
+    kind: "normal",
+    observedAt: new Date(now).toISOString(),
+  });
+  expect(requests).toBe(3);
+  instant += 1;
+  expect((await read()).kind).toBe("unknown");
+  expect(requests).toBe(3);
+});
+
+test.each(["factory", "reader"] as const)(
+  "a thrown %s failure is cached as an error and retried after expiry",
+  async (failureAt) => {
+    let instant = now;
+    let attempts = 0;
+    const failure = new EbsBalanceReadError({ message: "provider threw" });
+    const shared = createEbsReaderCache({
+      clock: () => instant,
+      createReader: () => {
+        if (failureAt === "factory") {
+          attempts++;
+          throw failure;
+        }
+        return async () => {
+          attempts++;
+          throw failure;
+        };
+      },
+    });
+    const read = shared({
+      instanceIdentifier: "throwing-instance",
+      clock: () => instant,
+      timeoutMs: defaultConfig.readTimeoutMs,
+      maxStalenessMs: defaultConfig.maxStalenessMs,
+    });
+    expect((await read()).isErr()).toBe(true);
+    expect((await read()).isErr()).toBe(true);
+    expect(attempts).toBe(1);
+    instant += 120_000;
+    expect((await read()).isErr()).toBe(true);
+    expect(attempts).toBe(2);
+  },
+);
+
+test("unknown startup is cached without synthesizing a datapoint and raw reader configuration separates cache keys", async () => {
+  let instant = now;
+  let requests = 0;
+  const configurations: {
+    instanceIdentifier: string;
+    timeoutMs: number;
+    maxStalenessMs: number;
+  }[] = [];
+  const shared = createEbsReaderCache({
+    clock: () => instant,
+    createReader: (options) => {
+      configurations.push(options);
+      return async () => {
+        requests++;
+        return Result.err(
+          new EbsBalanceReadError({ message: "no real reading" }),
+        );
+      };
+    },
+  });
+  const options = {
+    instanceIdentifier: "startup-instance",
+    clock: () => instant,
+    timeoutMs: defaultConfig.readTimeoutMs,
+    maxStalenessMs: defaultConfig.maxStalenessMs,
+  };
+  const initial = shared(options);
+  expect((await initial()).isErr()).toBe(true);
+  expect((await shared({ ...options })()).isErr()).toBe(true);
+  expect(requests).toBe(1);
+  instant += 120_000;
+  expect((await initial()).isErr()).toBe(true);
+  expect(requests).toBe(2);
+  for (const different of [
+    { ...options, instanceIdentifier: "another-instance" },
+    { ...options, timeoutMs: options.timeoutMs + 1 },
+    { ...options, maxStalenessMs: options.maxStalenessMs + 1 },
+  ]) {
+    expect((await shared(different)()).isErr()).toBe(true);
+  }
+  expect(requests).toBe(5);
+  expect(configurations).toHaveLength(4);
 });

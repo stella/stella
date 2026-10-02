@@ -349,3 +349,65 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
     );
   });
 });
+
+describe.skipIf(!enabled)("operator compatibility alias correlation", () => {
+  test("a real index intent keeps precedence while two operators register aliases", async () => {
+    if (databaseUrl === undefined) {throw new TypeError("DATABASE_URL required");}
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const connections = await Promise.all(
+        Array.from({ length: 4 }, async () => await openClient().sql.reserve()),
+      );
+      const [
+        backfillConnection,
+        firstConnection,
+        secondConnection,
+        indexConnection,
+      ] = connections;
+      if (
+        !backfillConnection ||
+        !firstConnection ||
+        !secondConnection ||
+        !indexConnection
+      )
+        {throw new TypeError("Missing test connection");}
+      const backfill = createHeavyWorkSlot({
+        session: session(backfillConnection),
+        kind: "backfill_batch",
+      });
+      const first = createHeavyWorkSlot({
+        session: session(firstConnection),
+        kind: "operator_job",
+      });
+      const second = createHeavyWorkSlot({
+        session: session(secondConnection),
+        kind: "operator_job",
+      });
+      const index = createHeavyWorkSlot({
+        session: session(indexConnection),
+        kind: "index_build",
+      });
+      try {
+        expect((await backfill.tryAcquire()).unwrap()).toBe(true);
+        expect((await first.tryAcquire()).unwrap()).toBe(false);
+        expect((await second.tryAcquire()).unwrap()).toBe(false);
+        expect((await index.tryAcquire()).unwrap()).toBe(false);
+        await backfill.release();
+        // Only a key-2 intent on the SAME backend as key 4 is an alias.
+        expect((await first.tryAcquire()).unwrap()).toBe(false);
+        expect((await second.tryAcquire()).unwrap()).toBe(false);
+        expect((await index.tryAcquire()).unwrap()).toBe(true);
+        await index.close();
+        expect((await first.tryAcquire()).unwrap()).toBe(true);
+        expect((await second.tryAcquire()).unwrap()).toBe(false);
+        await first.release();
+        expect((await second.tryAcquire()).unwrap()).toBe(true);
+      } finally {
+        await backfill.close();
+        await first.close();
+        await second.close();
+        await index.close();
+        for (const connection of connections) {connection.release();}
+      }
+    });
+  });
+});

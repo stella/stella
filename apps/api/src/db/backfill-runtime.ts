@@ -330,9 +330,14 @@ const createRuntime = <BatchTransaction>({
       value: completion.result.value,
     };
   };
-  const recordCompletion = async () => {
+  const recordCompletion = async (
+    confirm: (tx: BatchTransaction) => Promise<boolean>,
+  ) => {
     const completed = await runInTransaction(async (tx) => {
       const checkpoint = await readCheckpoint(tx);
+      if (!(await confirm(tx))) {
+        return null;
+      }
       const batch = {
         ...initialBatchState(config),
         size: checkpoint.batch.size,
@@ -341,6 +346,9 @@ const createRuntime = <BatchTransaction>({
       await persistCheckpoint(tx, { cursor: null, batch });
       return { batch, previousHeldSince: checkpoint.batch.heldSince };
     });
+    if (completed === null) {
+      return;
+    }
     observeStatus?.(
       backfillHeartbeat({
         name,

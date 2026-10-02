@@ -185,12 +185,23 @@ export const createCaseLawProvisionStateBackfillTask =
                 now: clock,
                 signal,
               });
-              if (
-                run.isOk() &&
-                (run.value.type === "complete" ||
-                  run.value.type === "superseded")
-              ) {
-                await runtime.recordCompletion();
+              if (run.isOk() && run.value.type === "complete") {
+                // Recheck under the shared checkpoint lock: an older release
+                // cannot clear the current admission's durable hold.
+                await runtime.recordCompletion(async () => {
+                  signal.throwIfAborted();
+                  const confirmed = await runProvisionStateBackfill({
+                    connection: { ...raw, setTransactionBudget },
+                    deadline: clock(),
+                    now: clock,
+                    maxUnits: 0,
+                    signal,
+                  });
+                  if (confirmed.isErr()) {
+                    throw confirmed.error;
+                  }
+                  return confirmed.value.type === "complete";
+                });
               }
               return run;
             } finally {

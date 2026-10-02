@@ -2,7 +2,11 @@ import { panic, Result } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 
-import { type backfillHeartbeat,combine,type BatchState } from "@stll/db-load-gate/health";
+import {
+  type backfillHeartbeat,
+  combine,
+  type BatchState,
+} from "@stll/db-load-gate/health";
 import { ebsBalance } from "@stll/db-load-gate/indicators";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 
