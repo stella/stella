@@ -26,7 +26,7 @@ const runtimeImport = (
 ): node is ts.ImportDeclaration & { moduleSpecifier: ts.StringLiteral } =>
   ts.isImportDeclaration(node) &&
   ts.isStringLiteral(node.moduleSpecifier) &&
-  node.importClause?.isTypeOnly !== true;
+  node.importClause?.phaseModifier !== ts.SyntaxKind.TypeKeyword;
 const runtimeExport = (
   node: ts.Statement,
 ): node is ts.ExportDeclaration & { moduleSpecifier: ts.StringLiteral } =>
@@ -575,7 +575,7 @@ const inspectEndpoint = ({
         file,
         message: `source ownership requires featureAccess ${id}`,
       });
-    } else if (!types.has(declaration.type ?? "required") || types.size > 1) {
+    } else if (!types.has(declaration.type) || types.size > 1) {
       violations.push({
         file,
         message: `featureAccess ${id} must match source ownership (${[...types].toSorted().join(", ")})`,

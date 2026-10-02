@@ -33,11 +33,19 @@ for (const kind of CHAT_TOOL_ERROR_KINDS) {
       toolDefectMemo,
       read,
     } as const;
-    await expect(runChatScriptRead(props)).rejects.toBe(error);
+    const firstRead = await Result.tryPromise({
+      try: () => runChatScriptRead(props),
+      catch: (cause) => cause,
+    });
+    expect(firstRead.isErr() && firstRead.error).toBe(error);
     expect(toolDefectMemo.isKnownDefect("list_matters", args)).toBe(
       kind === "server-defect",
     );
-    await expect(runChatScriptRead(props)).rejects.toBeInstanceOf(
+    const repeatedRead = await Result.tryPromise({
+      try: () => runChatScriptRead(props),
+      catch: (cause) => cause,
+    });
+    expect(repeatedRead.isErr() && repeatedRead.error).toBeInstanceOf(
       ChatToolError,
     );
     expect(read).toHaveBeenCalledTimes(kind === "server-defect" ? 1 : 2);

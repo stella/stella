@@ -132,10 +132,10 @@ describe("feature access safe-handler admission", () => {
     const decisions = new Map(supplied.decisions);
     const mismatchedSnapshot = { ...supplied, decisions };
     const enabled = supplied.decisions.get(featureId);
-    expect(enabled?.status).toBe("enabled");
     if (enabled === undefined || enabled.status !== "enabled") {
       throw new Error("Expected an enabled fixture decision");
     }
+    expect(enabled.status).toBe("enabled");
     decisions.set(otherFeature, enabled);
     let executions = 0;
     const endpoint = createSafeRootHandler(
@@ -230,11 +230,11 @@ describe("feature access safe-handler admission", () => {
           set,
           request: new Request("https://example.test/fixture"),
           route: "/fixture",
-          user: { id: toSafeId<"user">(userId) },
+          user: { id: toSafeId<"user">(userId), email: "invited@example.test" },
           session: {
             activeOrganizationId: toSafeId<"organization">(organizationId),
           },
-          memberRole: { role: "owner" },
+          memberRole: "owner",
           featureAccessSnapshot: snapshot(userId, organizationId, invited),
           safeDb: async () => {
             reads += 1;
@@ -305,7 +305,10 @@ test.each([
             query,
             request,
             set,
-            user: { id: toSafeId<"user">(userId) },
+            user: {
+              id: toSafeId<"user">(userId),
+              email: "invited@example.test",
+            },
             session: {
               activeOrganizationId: toSafeId<"organization">("org_1"),
             },

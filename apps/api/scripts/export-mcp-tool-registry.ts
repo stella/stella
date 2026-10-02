@@ -50,7 +50,7 @@ import {
 type StaticMcpToolDefinition = (typeof DEFAULT_MCP_TOOL_DEFINITIONS)[number];
 
 const deriveCliAnnotation = (
-  tool: StaticMcpToolDefinition & McpToolDefinition,
+  tool: McpToolDefinition & { name: StaticMcpToolDefinition["name"] },
 ): McpCliToolAnnotation => {
   const declared = DEFAULT_MCP_CLI_ANNOTATIONS[tool.name];
   const annotation =

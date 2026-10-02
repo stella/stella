@@ -198,9 +198,14 @@ describe("feature descriptor discovery and admission", () => {
           (resource) => resource.uri === "stella://about",
         ),
       ).toBe(false);
-      await expect(
-        readMcpResource("stella://about", "default", context),
-      ).rejects.toThrow("Unknown resource");
+      const resourceRead = await Result.tryPromise({
+        try: () => readMcpResource("stella://about", "default", context),
+        catch: (cause) => cause,
+      });
+      expect(resourceRead).toMatchObject({
+        status: "error",
+        error: { message: expect.stringContaining("Unknown resource") },
+      });
       expect(getMcpInstructions("default", context)).not.toContain(
         "stella://about",
       );
@@ -312,7 +317,7 @@ for (const kind of [
       authenticateMcpRequest: async () =>
         Result.ok({
           organizationId: context.organizationId,
-          userId: context.userId ?? userId,
+          userId: context.userId,
           scopes: ["stella:read"],
         }),
       resolveMcpSessionContext: async () => context,

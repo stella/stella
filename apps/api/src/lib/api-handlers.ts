@@ -1012,7 +1012,9 @@ const createSafeScopedHandler = <
           : Result.ok(ctx.featureAccessSnapshot);
       if (Result.isError(snapshot)) {
         return await runSafeHandler(ctx, async function* () {
-          return yield* Result.err(snapshot.error);
+          return yield* Result.await(
+            Promise.resolve(Result.err(snapshot.error)),
+          );
         });
       }
       ctx.featureAccessSnapshot = snapshot.value;
@@ -1046,7 +1048,9 @@ const createSafeScopedHandler = <
               );
         if (Result.isError(usage)) {
           return await runSafeHandler(ctx, async function* () {
-            return yield* Result.err(usage.error);
+            return yield* Result.await(
+              Promise.resolve(Result.err(usage.error)),
+            );
           });
         }
         if (usage.value) {
