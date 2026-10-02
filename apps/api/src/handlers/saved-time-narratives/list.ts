@@ -17,6 +17,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSavedTimeNarrativeId } from "@/api/lib/safe-id-boundaries";
 
 import { toSavedTimeNarrativeItem } from "./schema";
@@ -58,7 +59,7 @@ const config = {
 const listSavedTimeNarratives = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user }) {
-    const limit = query.limit ?? 50;
+    const limit = normalizeTenantPageLimit(query.limit ?? 50);
     const conditions = [
       eq(savedTimeNarratives.organizationId, session.activeOrganizationId),
       eq(savedTimeNarratives.userId, user.id),

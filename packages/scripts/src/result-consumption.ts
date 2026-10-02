@@ -3,6 +3,11 @@ import { execFileSync } from "node:child_process";
 import path from "node:path";
 import ts from "typescript";
 
+import {
+  CODE_CHECK_LEGS,
+  ownsCodeCheckPath,
+  type CodeCheckLeg,
+} from "./code-quality-partition";
 import { createProgram } from "./typescript-program";
 
 const BETTER_RESULT_PACKAGE = `${path.sep}node_modules${path.sep}better-result${path.sep}`;
@@ -893,24 +898,33 @@ const createDiagnostic = ({
   };
 };
 
-type CliOptions =
+type CliOptions = (
   | { readonly mode: "all" }
-  | { readonly base: string; readonly mode: "changed" };
+  | { readonly base: string; readonly mode: "changed" }
+) & { readonly leg?: CodeCheckLeg };
 
-const parseCliOptions = (): CliOptions => {
-  if (process.argv.includes("--all")) {
-    return { mode: "all" };
+export const parseResultConsumptionArgs = (
+  args: readonly string[],
+): CliOptions => {
+  const legIndex = args.indexOf("--leg");
+  const requestedLeg = legIndex === -1 ? undefined : args.at(legIndex + 1);
+  const leg = CODE_CHECK_LEGS.find((candidate) => candidate === requestedLeg);
+  if (legIndex !== -1 && leg === undefined) {
+    panic("--leg requires api, web or rest");
+  }
+  if (args.includes("--all")) {
+    return { mode: "all", ...(leg === undefined ? {} : { leg }) };
   }
 
-  const baseIndex = process.argv.indexOf("--base");
-  const explicitBase =
-    baseIndex === -1 ? undefined : process.argv.at(baseIndex + 1);
+  const baseIndex = args.indexOf("--base");
+  const explicitBase = baseIndex === -1 ? undefined : args.at(baseIndex + 1);
   if (baseIndex !== -1 && explicitBase === undefined) {
     panic("--base requires a git ref");
   }
   return {
     base: explicitBase ?? process.env["TURBO_SCM_BASE"] ?? "origin/main",
     mode: "changed",
+    ...(leg === undefined ? {} : { leg }),
   };
 };
 
@@ -1053,9 +1067,31 @@ export const findResultWorkspaceConfigs = (
   return configs;
 };
 
+type PartitionResultProjectsOptions = {
+  projects: ReadonlyMap<string, string[] | undefined>;
+  repositoryRoot: string;
+  leg: CodeCheckLeg;
+};
+
+// Partition after the existing full/changed discovery. Keep each complete
+// program (including imported source) and its original changed-file filter.
+export const partitionResultProjects = ({
+  projects,
+  repositoryRoot,
+  leg,
+}: PartitionResultProjectsOptions): Map<string, string[] | undefined> =>
+  new Map(
+    [...projects].filter(([configPath]) =>
+      ownsCodeCheckPath(
+        path.relative(repositoryRoot, configPath).replaceAll(path.sep, "/"),
+        leg,
+      ),
+    ),
+  );
+
 const run = (): number => {
   const repositoryRoot = path.resolve(import.meta.dir, "../../..");
-  const cli = parseCliOptions();
+  const cli = parseResultConsumptionArgs(process.argv.slice(2));
   const changedFiles =
     cli.mode === "changed"
       ? changedSourceFiles(repositoryRoot, cli.base)
@@ -1067,12 +1103,21 @@ const run = (): number => {
 
   const diagnosticsByLocation = new Map<string, ResultConsumptionDiagnostic>();
 
-  const projects =
+  const discoveredProjects =
     changedFiles === undefined
       ? findResultWorkspaceConfigs(repositoryRoot)
       : groupChangedFilesByConfig(repositoryRoot, changedFiles);
+  const projects =
+    cli.leg === undefined
+      ? discoveredProjects
+      : partitionResultProjects({
+          projects: discoveredProjects,
+          repositoryRoot,
+          leg: cli.leg,
+        });
 
   for (const [configPath, rootNames] of projects) {
+    const started = performance.now();
     const program =
       rootNames === undefined
         ? createProgram({ configPath })
@@ -1089,6 +1134,9 @@ const run = (): number => {
       const key = `${diagnostic.file}:${diagnostic.line}:${diagnostic.column}:${diagnostic.rule}`;
       diagnosticsByLocation.set(key, diagnostic);
     }
+    console.log(
+      `result-consumption: ${path.relative(repositoryRoot, configPath)} checked in ${((performance.now() - started) / 1000).toFixed(1)}s`,
+    );
   }
 
   const diagnostics = [...diagnosticsByLocation.values()].toSorted((a, b) =>

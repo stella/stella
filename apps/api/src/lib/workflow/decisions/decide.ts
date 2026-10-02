@@ -25,6 +25,8 @@ import { panic, Result } from "better-result";
 
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
+import type { AIDataClass } from "@/api/lib/chat/ai-data-policy";
+import { isManagedProviderAvailable } from "@/api/lib/chat/provider-data-policy";
 import { logger } from "@/api/lib/observability/logger";
 import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
@@ -92,6 +94,7 @@ type DecideBaseOptions = {
   /** Stable name of the decision, for the log line and later replay: `case-law.polarity`. */
   id: string;
   orgAIConfig: OrgAIConfig | null | undefined;
+  dataClass: AIDataClass;
   state: SystemOneState;
   floor?: number | undefined;
   abortSignal?: AbortSignal | undefined;
@@ -184,6 +187,7 @@ const undecidedAll = <TQuestions extends SystemOneQuestions>(
 export const decideMany = async <TQuestions extends SystemOneQuestions>({
   id,
   orgAIConfig,
+  dataClass,
   state,
   questions,
   floor = DECISION_ACCEPT_CONFIDENCE,
@@ -193,12 +197,16 @@ export const decideMany = async <TQuestions extends SystemOneQuestions>({
   usageMetering,
 }: DecideManyOptions<TQuestions>): Promise<DecideManyResult<TQuestions>> => {
   const model =
-    client === undefined ? resolveDecisionModel(orgAIConfig) : client;
+    client === undefined
+      ? resolveDecisionModel(orgAIConfig, dataClass)
+      : client;
   // A generative BYOK preflight did not reserve platform funds. Never add an
   // instance-funded decision to that action just because its org has no key.
   if (
     model === null ||
     Object.keys(questions).length === 0 ||
+    (model.keySource === "instance" &&
+      !isManagedProviderAvailable("typesafe", dataClass)) ||
     (usageMetering && orgAIConfig && model.keySource === "instance")
   ) {
     return { decisions: undecidedAll(questions, "no-backend"), model: null };

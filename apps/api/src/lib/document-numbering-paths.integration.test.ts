@@ -517,6 +517,7 @@ describe("numbering paths preserve issued stamps across counter state", () => {
           memberRole: { role: "owner" },
           orgAIConfig: null,
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+          managedAIResidency: "eu" as const,
           request: new Request(
             `https://example.test/workspaces/${duplicateSource}/duplicate`,
           ),
