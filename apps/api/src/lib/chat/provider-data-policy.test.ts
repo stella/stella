@@ -230,20 +230,22 @@ describe("provider request policy", () => {
               });
               if (dataClass === "customer" && provider !== "openrouter") {
                 expect(result.isErr()).toBe(true);
-                if (Result.isError(result))
-                  {expect(result.error).toMatchObject({
+                if (Result.isError(result)) {
+                  expect(result.error).toMatchObject({
                     status: 503,
                     code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                  });}
+                  });
+                }
                 continue;
               }
               expect(result.isOk()).toBe(
                 resolveTanStackAIProviderSupport({ provider }).supported,
               );
-              if (Result.isError(result))
-                {expect(result.error).not.toMatchObject({
+              if (Result.isError(result)) {
+                expect(result.error).not.toMatchObject({
                   code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
-                });}
+                });
+              }
             }
           }
         }
@@ -716,12 +718,15 @@ describe("provider request policy", () => {
                 ? "google/gemini-2.5-flash"
                 : `${model}:online`,
             });
-            if (scenario.strict) {
+            if (!("apiKey" in scenario.options)) {
               expect(requests.at(0)?.body).not.toHaveProperty("models");
+            } else {
+              expect(requests.at(0)?.body).toMatchObject({ models: [model] });
+            }
+            if (scenario.strict) {
               expect(requests.at(0)?.body).not.toHaveProperty("plugins");
             } else {
               expect(requests.at(0)?.body).toMatchObject({
-                models: [model],
                 plugins: [{ id: "web" }],
               });
             }

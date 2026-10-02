@@ -12,6 +12,7 @@ import {
 import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import type { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { createManagedOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
+import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 
 const MODEL = "google/gemini-2.5-flash";
 const chatOptions = {
@@ -268,102 +269,119 @@ describe("managed request catalog checks", () => {
 for (const residency of MANAGED_AI_RESIDENCIES) {
   for (const path of ["chat", "structured", "structured-stream"] as const) {
     for (const enabled of [false, true]) {
-      test(`managed ${residency} ${path} refuses debug logging of provider failures with checks ${enabled}`, async () => {
-        const previous = saveSettings();
-        const originalFetch = globalThis.fetch;
-        const previousDebug = process.env["OPENROUTER_DEBUG"];
-        const logSpy = spyOn(console, "log").mockImplementation(() => {});
-        const groupSpy = spyOn(console, "group").mockImplementation(() => {});
-        const groupEndSpy = spyOn(console, "groupEnd").mockImplementation(
-          () => {},
-        );
-        const logged: unknown[] = [];
-        const record = (message: string, meta?: Record<string, unknown>) => {
-          logged.push({ message, meta });
-        };
-        const logger = resolveDebugOption({
-          logger: { debug: record, info: record, warn: record, error: record },
-        });
-        let requests = 0;
-        Object.assign(env, {
-          FEATURE_MANAGED_PROVIDER_CHECKS: enabled,
-          MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
-          MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 37,
-          OPENROUTER_API_KEY: "fixture-key",
-        });
-        const requestBodies: unknown[] = [];
-        let close: (() => Promise<void>) | undefined;
-        process.env["OPENROUTER_DEBUG"] = "true";
-        globalThis.fetch = Object.assign(
-          async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-            const request =
-              input instanceof Request
-                ? input
-                : new Request(input.toString(), init);
-            if (new URL(request.url).pathname.endsWith("/models"))
-              {return Response.json({ data: [{ id: MODEL }] });}
-            requestBodies.push(await request.json());
-            requests++;
-            // The first response exercises the 5xx body; the next ends SDK retries.
-            return Response.json(
-              {
-                error: {
-                  code: requests === 1 ? 503 : 400,
-                  message: "fixture response content",
-                },
-              },
-              { status: requests === 1 ? 503 : 400 },
-            );
-          },
-          { preconnect: originalFetch.preconnect },
-        );
-        try {
-          close = await startManagedProviderChecks();
-          const adapter = createManagedOpenRouterText({
-            model: MODEL,
-            apiKey: "fixture-key",
-            managedAIResidency: residency,
-          });
-          const options = {
-            ...chatOptions,
-            logger,
-            modelOptions: { models: ["fixture/fallback"] },
+      for (const dataClass of ["customer", "public_corpus"] as const) {
+        test(`managed ${residency} ${path} refuses debug logging of provider failures with checks ${enabled} and ${dataClass}`, async () => {
+          const previous = saveSettings();
+          const originalFetch = globalThis.fetch;
+          const previousDebug = process.env["OPENROUTER_DEBUG"];
+          const logSpy = spyOn(console, "log").mockImplementation(() => {});
+          const groupSpy = spyOn(console, "group").mockImplementation(() => {});
+          const groupEndSpy = spyOn(console, "groupEnd").mockImplementation(
+            () => {},
+          );
+          const logged: unknown[] = [];
+          const record = (message: string, meta?: Record<string, unknown>) => {
+            logged.push({ message, meta });
           };
-          const structured = { ...structuredOptions, chatOptions: options };
-          if (path === "structured") {
-            const result = await Result.tryPromise({
-              try: async () => await adapter.structuredOutput(structured),
-              catch: (error) => error,
-            });
-            expect(result.isErr()).toBe(true);
-          } else {
-            const chunks = [];
-            for await (const chunk of path === "chat"
-              ? adapter.chatStream(options)
-              : adapter.structuredOutputStream(structured)) {
-              chunks.push(chunk);
+          const logger = resolveDebugOption({
+            logger: {
+              debug: record,
+              info: record,
+              warn: record,
+              error: record,
+            },
+          });
+          let requests = 0;
+          Object.assign(env, {
+            FEATURE_MANAGED_PROVIDER_CHECKS: enabled,
+            MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
+            MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 37,
+            OPENROUTER_API_KEY: "fixture-key",
+          });
+          const requestBodies: unknown[] = [];
+          let close: (() => Promise<void>) | undefined;
+          process.env["OPENROUTER_DEBUG"] = "true";
+          globalThis.fetch = Object.assign(
+            async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+              const request =
+                input instanceof Request
+                  ? input
+                  : new Request(input.toString(), init);
+              if (new URL(request.url).pathname.endsWith("/models")) {
+                return Response.json({ data: [{ id: MODEL }] });
+              }
+              expect(new URL(request.url).hostname).toBe(
+                dataClass === "customer"
+                  ? `${residency}.openrouter.ai`
+                  : "openrouter.ai",
+              );
+              requestBodies.push(await request.json());
+              requests++;
+              // The first response exercises the 5xx body; the next ends SDK retries.
+              return Response.json(
+                {
+                  error: {
+                    code: requests === 1 ? 503 : 400,
+                    message: "fixture response content",
+                  },
+                },
+                { status: requests === 1 ? 503 : 400 },
+              );
+            },
+            { preconnect: originalFetch.preconnect },
+          );
+          try {
+            close = await startManagedProviderChecks();
+            const policy =
+              dataClass === "customer"
+                ? { dataClass, managedAIResidency: residency }
+                : { dataClass };
+            const adapter = createTanStackTextAdapterFactory({
+              provider: "openrouter",
+              ...policy,
+            })(MODEL);
+            const options = {
+              ...chatOptions,
+              logger,
+              modelOptions: { models: ["fixture/fallback"] },
+            };
+            const structured = { ...structuredOptions, chatOptions: options };
+            if (path === "structured") {
+              const result = await Result.tryPromise({
+                try: async () => await adapter.structuredOutput(structured),
+                catch: (error) => error,
+              });
+              expect(result.isErr()).toBe(true);
+            } else {
+              const chunks = [];
+              for await (const chunk of path === "chat"
+                ? adapter.chatStream(options)
+                : adapter.structuredOutputStream(structured)) {
+                chunks.push(chunk);
+              }
+              expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
             }
-            expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);
+            expect(requests).toBe(2);
+            for (const body of requestBodies) {
+              expect(body).not.toHaveProperty("models");
+            }
+            expect(logged).toEqual([]);
+            expect(logSpy).not.toHaveBeenCalled();
+          } finally {
+            await close?.();
+            logSpy.mockRestore();
+            groupSpy.mockRestore();
+            groupEndSpy.mockRestore();
+            globalThis.fetch = originalFetch;
+            if (previousDebug === undefined) {
+              delete process.env["OPENROUTER_DEBUG"];
+            } else {
+              process.env["OPENROUTER_DEBUG"] = previousDebug;
+            }
+            Object.assign(env, previous);
           }
-          expect(requests).toBe(2);
-          for (const body of requestBodies)
-            {expect(body).not.toHaveProperty("models");}
-          expect(logged).toEqual([]);
-          expect(logSpy).not.toHaveBeenCalled();
-        } finally {
-          await close?.();
-          logSpy.mockRestore();
-          groupSpy.mockRestore();
-          groupEndSpy.mockRestore();
-          globalThis.fetch = originalFetch;
-          if (previousDebug === undefined) {
-            delete process.env["OPENROUTER_DEBUG"];
-          } else {
-            process.env["OPENROUTER_DEBUG"] = previousDebug;
-          }
-          Object.assign(env, previous);
-        }
-      });
+        });
+      }
     }
   }
 }
