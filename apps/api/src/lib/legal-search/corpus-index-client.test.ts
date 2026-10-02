@@ -792,7 +792,7 @@ const settlementSplit = ({
   id: string;
   deleteOpstamp: number;
   publishedAtSeconds?: number;
-}) => ({
+}): CorpusIndexSettlementSplit => ({
   splitId: id,
   state: "Published",
   appliedOpstamp: deleteOpstamp,

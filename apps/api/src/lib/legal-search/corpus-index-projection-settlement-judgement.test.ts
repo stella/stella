@@ -266,7 +266,7 @@ test("settlement judgement is total and settles or re-deletes only on complete e
           case "delete_lagging": {
             // The proving splits while any lags; otherwise the excluded ones,
             // and only once a count found something they can hold.
-            expect(pending.laggingSplits).toEqual(
+            expect([...pending.laggingSplits]).toEqual(
               proofLags ? laggingProvingSplits : laggingExcludedSplits,
             );
             if (!proofLags) {
