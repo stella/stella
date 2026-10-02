@@ -10,6 +10,7 @@ import {
 } from "./decision-docket-grammar";
 import {
   decisionDocketTailSpellings,
+  docketFamilyKeyOf,
   readDecisionDocketReference,
 } from "./decision-docket-reference";
 import type { DecisionDocketSelector } from "./decision-docket-reference";
@@ -769,5 +770,175 @@ describe("resolving a reference to one decision or to its candidates", () => {
       ),
       propertyConfig(),
     );
+  });
+});
+
+/** A Slovak docket as a court files it: senate and registry glued, slashes. */
+const slovakDocketArbitrary = fc.record({
+  senate: fc.integer({ min: 1, max: 99 }),
+  registry: fc.constantFrom("Obo", "Cdo", "Tdo", "Sžo", "Ndc", "Co", "Ndt"),
+  number: fc.integer({ min: 1, max: 9999 }),
+  year: fc.integer({ min: 1993, max: 2030 }),
+});
+
+/** Every way a Slovak publisher stores one member of a file. */
+const slovakSpellingOf = ({
+  number,
+  registry,
+  senate,
+  year,
+}: {
+  number: number;
+  registry: string;
+  senate: number;
+  year: number;
+}) =>
+  fc
+    .record({
+      senateGap: fc.constantFrom("", " "),
+      numberGap: fc.constantFrom("/", " "),
+      tail: tailArbitrary,
+      dash: fc.constantFrom(...DASHES),
+      dashGap: fc.constantFrom(["", ""], [" ", " "]),
+      lower: fc.boolean(),
+    })
+    .map(
+      ({
+        dash,
+        dashGap: [before, after],
+        lower,
+        numberGap,
+        senateGap,
+        tail,
+      }) => {
+        const mark = lower ? registry.toLowerCase() : registry;
+        const docket = `${String(senate)}${senateGap}${mark}${numberGap}${String(number)}/${String(year)}`;
+        if (tail.kind === "sheet") {
+          return `${docket}${before}${dash}${after}${String(tail.value)}`;
+        }
+        if (tail.kind === "part") {
+          return `${docket}${before}${dash}${after}${tail.value}.`;
+        }
+        return docket;
+      },
+    );
+
+describe("the case-file key a stored docket is kept under", () => {
+  test("every stored spelling of a Czech file's member keys as the file", () => {
+    fc.assert(
+      fc.property(referenceArbitrary, ({ docket, entry }) => {
+        const key = docketFamilyKeyOf(entry, "CZE");
+        expect(key, entry).not.toBeNull();
+        expect(key, entry).toBe(docketFamilyKeyOf(filed(docket), "CZE"));
+      }),
+      propertyConfig(),
+    );
+  });
+
+  test("every part and junk tail a member is stored under keys as its file", () => {
+    fc.assert(
+      fc.property(docketArbitrary, (docket) => {
+        const family = filed(docket);
+        const key = docketFamilyKeyOf(family, "CZE");
+        for (const spelling of decisionDocketTailSpellings(family)) {
+          expect(docketFamilyKeyOf(spelling, "CZE"), spelling).toBe(key);
+        }
+      }),
+      propertyConfig(),
+    );
+  });
+
+  test("every stored spelling of a Slovak file's member keys as the file", () => {
+    fc.assert(
+      fc.property(
+        slovakDocketArbitrary.chain((docket) =>
+          slovakSpellingOf(docket).map((stored) => ({ docket, stored })),
+        ),
+        ({ docket, stored }) => {
+          const filedDocket = `${String(docket.senate)}${docket.registry}/${String(docket.number)}/${String(docket.year)}`;
+          const key = docketFamilyKeyOf(stored, "SVK");
+          expect(key, stored).not.toBeNull();
+          expect(key, stored).toBe(docketFamilyKeyOf(filedDocket, "SVK"));
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test("two different files never share a key", () => {
+    fc.assert(
+      fc.property(
+        docketArbitrary,
+        docketArbitrary,
+        tailArbitrary,
+        tailArbitrary,
+        (left, right, leftTail, rightTail) => {
+          fc.pre(filed(left).toLowerCase() !== filed(right).toLowerCase());
+          const spelled = (docket: Docket, tail: Tail): string =>
+            tail.kind === "none"
+              ? filed(docket)
+              : `${filed(docket)} - ${String(tail.value)}${tail.kind === "part" ? "." : ""}`;
+          expect(docketFamilyKeyOf(spelled(left, leftTail), "CZE")).not.toBe(
+            docketFamilyKeyOf(spelled(right, rightTail), "CZE"),
+          );
+        },
+      ),
+      propertyConfig(),
+    );
+  });
+
+  test.each([
+    ["1 Afs 27/2009", "1 Afs 27/2009 - 86"],
+    ["1 Afs 27/2009", "1 Afs 27/2009-98"],
+    ["1 Afs 27/2009", "1 Afs 27/2009–109"],
+    ["1 Afs 27/2009", "č. j. 1 Afs 27/2009-86"],
+    ["4 As 50/2012", "4 As 50/2012 - 33"],
+    ["4 As 50/2012", "4As 50/2012-33"],
+    ["4 As 50/2012", "4 As 50/2012-0033"],
+    ["6 Tdo 794/2021", "6 Tdo 794/2021- I."],
+    ["31 Cdo 2273/2022", "31 Cdo 2273/2022-150"],
+    ["31 Cdo 2273/2022", "sp. zn. 31 Cdo 2273/2022"],
+    ["II. ÚS 251/04", "II. ÚS 251/04-45"],
+    ["II. ÚS 251/04", "II.ÚS 251/04-45"],
+    ["Pl. ÚS 38/06", "Pl. ÚS 38/06-60"],
+  ])(
+    "a Czech member stored as %p's sibling %p keys as its file",
+    (family, stored) => {
+      expect(docketFamilyKeyOf(stored, "CZE")).toBe(
+        docketFamilyKeyOf(family, "CZE"),
+      );
+      expect(docketFamilyKeyOf(family, "CZE")).not.toBeNull();
+    },
+  );
+
+  test.each([
+    ["5Obo/12/2019", "5Obo/12/2019 - 45"],
+    ["5Obo/12/2019", "5 Obo 12/2019-45"],
+    ["5Obo/12/2019", "5Obo/12/2019 - II."],
+    ["2Sžo/45/2018", "2Szo/45/2018"],
+    ["III. ÚS 66/98", "III. ÚS 66/98-12"],
+  ])(
+    "a Slovak member stored as %p's sibling %p keys as its file",
+    (family, stored) => {
+      expect(docketFamilyKeyOf(stored, "SVK")).toBe(
+        docketFamilyKeyOf(family, "SVK"),
+      );
+      expect(docketFamilyKeyOf(family, "SVK")).not.toBeNull();
+    },
+  );
+
+  test("files that share a prefix stay apart", () => {
+    expect(docketFamilyKeyOf("1 Afs 27/2009", "CZE")).not.toBe(
+      docketFamilyKeyOf("1 Afs 2/2009", "CZE"),
+    );
+    expect(docketFamilyKeyOf("12Co/345/2017", "SVK")).not.toBe(
+      docketFamilyKeyOf("12Co/34/2017", "SVK"),
+    );
+  });
+
+  test("no key where the docket does not parse or the jurisdiction has no grammar", () => {
+    expect(docketFamilyKeyOf("KSCB 26 INS 8270/2018-A-15", "CZE")).toBeNull();
+    expect(docketFamilyKeyOf("1 Afs 27/2009", "XXX")).toBeNull();
+    expect(docketFamilyKeyOf("", "CZE")).toBeNull();
   });
 });

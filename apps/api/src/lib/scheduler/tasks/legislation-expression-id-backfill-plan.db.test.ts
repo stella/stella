@@ -255,7 +255,21 @@ beforeAll(
 );
 
 afterAll(async () => {
-  await client.close();
+  try {
+    // Dropping the fixture also releases its indexes before the next file runs.
+    await db.execute(sql`DROP TABLE legislation_documents CASCADE`);
+    const { rows: relations } = await db.execute(sql`
+      SELECT to_regclass('public.legislation_documents') AS relation
+    `);
+    expect(relations).toEqual([{ relation: null }]);
+  } finally {
+    rows.length = 0;
+    rowsById.clear();
+    orderedIds.length = 0;
+    workRows.clear();
+    await client.close();
+  }
+  expect(client.closed).toBe(true);
 });
 
 type PlanNode = Record<string, unknown>;

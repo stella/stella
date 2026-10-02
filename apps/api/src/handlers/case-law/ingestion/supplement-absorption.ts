@@ -396,6 +396,7 @@ export const absorbStandaloneSupplementRow = async ({
       .update(caseLawDecisions)
       .set({
         citationKey: null,
+        docketFamilyKey: null,
         // Should the supplement lose its judgment, the write that makes this
         // row a decision again carries the same publisher hash; without one
         // stored, the refresh check cannot skip it.

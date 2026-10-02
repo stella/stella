@@ -487,6 +487,15 @@ export const caseLawDecisions = p.pgTable(
      * identifiers.
      */
     citationKey: p.varchar("citation_key", { length: 128 }),
+    /**
+     * The case file `caseNumber` belongs to, keyed by its jurisdiction's
+     * docket grammar with any sheet or part the publisher printed after it
+     * cut away (`docketFamilyKeyOf`), so every decision of one file shares it
+     * however its own docket is spelled. Null when the docket does not parse,
+     * when the jurisdiction has no docket grammar, when the reference is not
+     * a docket, and on rows no write has keyed yet.
+     */
+    docketFamilyKey: p.text("docket_family_key"),
     slug: p.varchar({ length: 256 }),
     ecli: p.varchar({ length: 256 }),
     court: p.varchar({ length: 512 }).notNull(),
@@ -720,6 +729,12 @@ export const caseLawDecisions = p.pgTable(
       .on(t.country, t.language, t.id),
     p.index("case_law_decisions_date_idx").on(t.decisionDate),
     p.index("case_law_decisions_ecli_idx").on(t.ecli).where(isNotNull(t.ecli)),
+    // A bare docket's lookup reads its whole case file by this key, siblings
+    // stored with their sheet included.
+    p
+      .index("case_law_decisions_docket_family_key_idx")
+      .on(t.docketFamilyKey)
+      .where(isNotNull(t.docketFamilyKey)),
     p
       .index("case_law_decisions_lang_group_idx")
       .on(t.languageGroupKey)

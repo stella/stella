@@ -24,6 +24,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { insertAutomatedFlowRunWithinCap } from "@/api/lib/flows/automated-run-cap";
 import type { FlowStep, FlowTriggerSource } from "@/api/lib/flows/flow-types";
 import { MAX_AUTOMATED_FLOW_RUNS_PER_DEFINITION_PER_DAY } from "@/api/lib/flows/flow-types";
@@ -102,8 +103,11 @@ describe("insertAutomatedFlowRunWithinCap", () => {
     return definitionId;
   };
 
-  const attemptStart = async (definitionId: SafeId<"flowDefinition">) => {
-    const runId = createSafeId<"flowRun">();
+  const attemptStart = async (
+    definitionId: SafeId<"flowDefinition">,
+    reservePeriod?: () => Promise<void>,
+    runId: SafeId<"flowRun"> = createSafeId<"flowRun">(),
+  ) => {
     const rows = buildFlowRunRows({
       runId,
       workspaceId,
@@ -116,6 +120,7 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       definitionId,
       rows,
       database: capDatabase,
+      ...(reservePeriod && { reservePeriod }),
     });
     return { runId, result };
   };
@@ -195,6 +200,54 @@ describe("insertAutomatedFlowRunWithinCap", () => {
       .from(flowRunSteps)
       .where(eq(flowRunSteps.runId, runId));
     expect(stepRows).toHaveLength(1);
+  });
+
+  test("reserves one period slot for the accepted run and none for a capped retry", async () => {
+    const definitionId = await createDefinition();
+    await seedRuns(definitionId, CAP - 1, new Date());
+    let reserved = 0;
+    const reservePeriod = async () => {
+      reserved += 1;
+    };
+
+    const accepted = await attemptStart(definitionId, reservePeriod);
+    expect(accepted.result.outcome).toBe("started");
+    expect(reserved).toBe(1);
+
+    const cappedRetry = await attemptStart(definitionId, reservePeriod);
+    expect(cappedRetry.result.outcome).toBe("capped");
+    expect(reserved).toBe(1);
+  });
+
+  test("rolls run and step rows back when period reservation refuses", async () => {
+    const definitionId = await createDefinition();
+    const before = await countRunsForDefinition(definitionId);
+    const runId = createSafeId<"flowRun">();
+    const reservePeriod = async () => {
+      throw new HandlerError({
+        status: 429,
+        message: "Action period limit reached",
+      });
+    };
+
+    const operation = attemptStart(definitionId, reservePeriod, runId);
+
+    expect(await operation.catch((error: unknown) => error)).toMatchObject({
+      _tag: "HandlerError",
+      status: 429,
+      message: "Action period limit reached",
+    });
+    expect(await countRunsForDefinition(definitionId)).toBe(before);
+    const inserted = await testDb.query.flowRuns.findFirst({
+      where: { id: { eq: runId } },
+      columns: { id: true },
+    });
+    expect(inserted).toBeUndefined();
+    const stepRows = await testDb
+      .select({ id: flowRunSteps.id })
+      .from(flowRunSteps)
+      .where(eq(flowRunSteps.runId, runId));
+    expect(stepRows).toHaveLength(0);
   });
 
   test("counts only today's automated runs, not manual or prior-day runs", async () => {
