@@ -374,6 +374,11 @@ describe("install-free invocation classification", () => {
     "if false; then out=$(bun ci); fi",
     "if false; then (bun ci); fi",
     "(false && bun ci)",
+    ...["&& true", "|| true", "&", "| cat"].flatMap((operator) => [
+      `(bun ci) ${operator}`,
+      `{ bun ci; } ${operator}`,
+      `({ bun ci; }) ${operator}`,
+    ]),
     "false && bun ci",
     "bun ci || true",
     "for item in; do bun ci; done",
@@ -385,6 +390,61 @@ describe("install-free invocation classification", () => {
       "install",
       "files",
     ]);
+  });
+
+  test.each(["test -d node_modules || bun install", "bun install || true"])(
+    "nested script control flow cannot establish install coverage: %s",
+    (setup) => {
+      const root = repository(
+        [
+          "jobs:",
+          "  job:",
+          "    steps:",
+          "      - run: bun run setup; bun scripts/check.ts",
+          "      - run: bun scripts/check.ts",
+        ].join("\n"),
+        {
+          "package.json": JSON.stringify({
+            scripts: { setup: "bun run inner", inner: setup },
+          }),
+        },
+      );
+      expect(
+        installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+          ({ classification }) => classification.type,
+        ),
+      ).toEqual(["install", "files", "files"]);
+    },
+  );
+
+  test("straight-line nested installs retain coverage", () => {
+    expect(
+      classify("bun run setup; bun scripts/missing.ts", {
+        "package.json": JSON.stringify({
+          scripts: { setup: "bun run inner", inner: "bun ci" },
+        }),
+      }).map(({ classification }) => classification.type),
+    ).toEqual(["install"]);
+    expect(kinds("{ bun ci; }\nbun scripts/missing.ts")).toEqual(["install"]);
+  });
+
+  test.each([
+    'bash -c "bun scripts/check.ts"',
+    "sh -c 'bunx some-tool'",
+    "bash -lc 'env npx some-tool'",
+    `sh -c 'bash -c "bun scripts/check.ts"'`,
+    `bash -c 'bun "'`,
+    'sh -c "$SCRIPT"',
+  ])("reports Bun or unparseable shell command strings: %s", (command) => {
+    expect(kinds(command)).toEqual(["unclassified"]);
+  });
+
+  test.each([
+    'echo "bun scripts/check.ts"',
+    `bash -c 'echo "bun scripts/check.ts"'`,
+    "sh -c 'echo bunx some-tool'",
+  ])("ignores Bun names in shell output: %s", (command) => {
+    expect(kinds(command)).toEqual([]);
   });
 
   test("unconditional installs retain coverage across later control flow", () => {

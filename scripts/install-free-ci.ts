@@ -104,14 +104,60 @@ const appendShellCommand = ({
   commandStart,
   controlFlow,
 }: AppendShellCommandOptions) => {
-  if (words.length === 0) {
-    return;
-  }
   if (controlFlow || SHELL_CONTROL_FLOW.has(words[0] ?? "")) {
     // Precede substitutions too: they belong to this command's branch.
     events.splice(commandStart, 0, { type: "control-flow" });
   }
-  events.push({ type: "command", words });
+  if (words.length > 0) {
+    events.push({ type: "command", words });
+  }
+};
+
+/** The index just past a `${…}` expansion, which may nest and quote. */
+const parameterEnd = (source: string, index: number): number | undefined => {
+  let depth = 0;
+  for (let cursor = index + 1; cursor < source.length; cursor += 1) {
+    const character = source[cursor];
+    if (character === "\\") {
+      cursor += 1;
+    } else if (character === "'" || character === '"') {
+      const end = source.indexOf(character, cursor + 1);
+      cursor = end === -1 ? source.length : end;
+    } else if (character === "{") {
+      depth += 1;
+    } else if (character === "}") {
+      depth -= 1;
+      if (depth === 0) {
+        return cursor + 1;
+      }
+    }
+  }
+  return undefined;
+};
+
+type SkipHeredocBodiesOptions = {
+  source: string;
+  index: number;
+  pendingHeredocs: { delimiter: string; stripTabs: boolean }[];
+};
+
+const skipHeredocBodies = ({
+  source,
+  index: start,
+  pendingHeredocs,
+}: SkipHeredocBodiesOptions): number => {
+  let index = start;
+  for (const { delimiter, stripTabs } of pendingHeredocs.splice(0)) {
+    while (index < source.length) {
+      const end = source.indexOf("\n", index);
+      const line = source.slice(index, end === -1 ? source.length : end);
+      index = end === -1 ? source.length : end + 1;
+      if ((stripTabs ? line.replace(/^\t+/u, "") : line) === delimiter) {
+        break;
+      }
+    }
+  }
+  return index;
 };
 
 /**
@@ -127,19 +173,6 @@ export const lexShell = (source: string): ShellEvent[] => {
   let index = 0;
   let failure: string | undefined;
 
-  const skipHeredocBodies = () => {
-    for (const { delimiter, stripTabs } of pendingHeredocs.splice(0)) {
-      while (index < source.length) {
-        const end = source.indexOf("\n", index);
-        const line = source.slice(index, end === -1 ? source.length : end);
-        index = end === -1 ? source.length : end + 1;
-        if ((stripTabs ? line.replace(/^\t+/u, "") : line) === delimiter) {
-          break;
-        }
-      }
-    }
-  };
-
   const readSubstitution = (closing: ")" | "`"): void => {
     events.push({ type: "subshell-start" });
     readList(closing);
@@ -148,29 +181,6 @@ export const lexShell = (source: string): ShellEvent[] => {
     }
     index += 1;
     events.push({ type: "subshell-end" });
-  };
-
-  /** The index just past a `${…}` expansion, which may nest and quote. */
-  const parameterEnd = (): number => {
-    let depth = 0;
-    for (let cursor = index + 1; cursor < source.length; cursor += 1) {
-      const character = source[cursor];
-      if (character === "\\") {
-        cursor += 1;
-      } else if (character === "'" || character === '"') {
-        const end = source.indexOf(character, cursor + 1);
-        cursor = end === -1 ? source.length : end;
-      } else if (character === "{") {
-        depth += 1;
-      } else if (character === "}") {
-        depth -= 1;
-        if (depth === 0) {
-          return cursor + 1;
-        }
-      }
-    }
-    failure ??= "unterminated ${";
-    return source.length;
   };
 
   const readDoubleQuoted = (): string => {
@@ -191,9 +201,12 @@ export const lexShell = (source: string): ShellEvent[] => {
         readSubstitution("`");
         text += SUBSTITUTION;
       } else if (character === "$" && next === "{") {
-        const stop = parameterEnd();
-        text += source.slice(index, stop);
-        index = stop;
+        const stop = parameterEnd(source, index);
+        if (stop === undefined) {
+          failure ??= "unterminated ${";
+        }
+        text += source.slice(index, stop ?? source.length);
+        index = stop ?? source.length;
       } else {
         text += character;
         index += 1;
@@ -243,9 +256,12 @@ export const lexShell = (source: string): ShellEvent[] => {
         readSubstitution("`");
         text += SUBSTITUTION;
       } else if (character === "$" && next === "{") {
-        const stop = parameterEnd();
-        text += source.slice(index, stop);
-        index = stop;
+        const stop = parameterEnd(source, index);
+        if (stop === undefined) {
+          failure ??= "unterminated ${";
+        }
+        text += source.slice(index, stop ?? source.length);
+        index = stop ?? source.length;
       } else {
         text += character;
         index += 1;
@@ -278,25 +294,36 @@ export const lexShell = (source: string): ShellEvent[] => {
     }
   };
 
-  const readList = (closing: ")" | "`" | undefined): void => {
+  const readList = (closing: ")" | "`" | "}" | undefined): void => {
     let commandStart = events.length;
     let words: string[] = [];
     let wordEnd = -1;
+    let compoundStart: number | undefined;
     const flush = (controlFlow = false) => {
-      appendShellCommand({ events, words, commandStart, controlFlow });
+      appendShellCommand({
+        events,
+        words,
+        commandStart: compoundStart ?? commandStart,
+        controlFlow,
+      });
+      compoundStart = undefined;
       words = [];
       commandStart = events.length;
     };
     while (index < source.length) {
       const character = source[index] ?? "";
       // A nested read that fails stops the whole lex.
-      if (character === closing || failure !== undefined) {
+      if (
+        (character === closing &&
+          (closing !== "}" || /[\s;&|)]|^$/u.test(source[index + 1] ?? ""))) ||
+        failure !== undefined
+      ) {
         break;
       }
       if (character === "\n") {
         flush();
         index += 1;
-        skipHeredocBodies();
+        index = skipHeredocBodies({ source, index, pendingHeredocs });
       } else if (isBlank(character)) {
         index += 1;
       } else if (character === "\\" && source[index + 1] === "\n") {
@@ -310,7 +337,23 @@ export const lexShell = (source: string): ShellEvent[] => {
       } else if (character === "(") {
         flush();
         index += 1;
+        const start = events.length;
         readSubstitution(")");
+        compoundStart = start;
+      } else if (
+        character === "{" &&
+        words.length === 0 &&
+        (isBlank(source[index + 1] ?? "") || source[index + 1] === "\n")
+      ) {
+        flush();
+        index += 1;
+        const start = events.length;
+        readList("}");
+        if (source[index] !== "}") {
+          failure ??= "unterminated brace group";
+        }
+        index += 1;
+        compoundStart = start;
       } else if (character === ")") {
         // An unmatched `)`, as after a `case` pattern, ends the command.
         flush();
@@ -584,7 +627,10 @@ const unclassified = (reason: string): Classification => ({
   type: "unclassified",
 });
 
+type Coverage = "straight-line" | "control-flow";
+
 type Expansion = {
+  readonly coverage: Coverage;
   readonly command: string;
   readonly classification: Classification;
 };
@@ -726,7 +772,11 @@ const expandPackageScript = ({
   const key = `${dir === "" ? "." : dir}#${name}`;
   if (context.expanding.has(key)) {
     return [
-      { classification: unclassified(`${key} calls itself`), command: "" },
+      {
+        classification: unclassified(`${key} calls itself`),
+        command: "",
+        coverage: "control-flow",
+      },
     ];
   }
   const scripts = manifestScripts({ dir, root: context.root });
@@ -734,6 +784,7 @@ const expandPackageScript = ({
     // Bun would fall back to an installed binary of that name.
     return [
       {
+        coverage: "control-flow",
         classification: unclassified(`${key} is not a package.json script`),
         command: "",
       },
@@ -755,7 +806,8 @@ const expandPackageScript = ({
       events: lexShell(body),
       installed: new Set(),
       mode: "package-script",
-    }).expansions.map(({ classification, command }) => ({
+    }).expansions.map(({ classification, command, coverage }) => ({
+      coverage,
       classification,
       command: `${hook}: ${command}`,
     }));
@@ -900,10 +952,11 @@ const classifyBun = ({
 }: ClassifyBunOptions): Expansion[] => {
   const command = words.join(" ");
   const single = (classification: Classification): Expansion[] => [
-    { classification, command },
+    { classification, command, coverage: "straight-line" },
   ];
   const expanded = (script: Omit<ExpandPackageScriptOptions, "context">) =>
     expandPackageScript({ context, ...script }).map((item) => ({
+      coverage: item.coverage,
       classification: item.classification,
       command: `${command} › ${item.command}`,
     }));
@@ -976,7 +1029,46 @@ type WalkResult = {
 
 type ShellScope = {
   cwd: string;
-  coverage: "straight-line" | "control-flow";
+  coverage: Coverage;
+};
+
+type ClassifyShellStringOptions = Pick<
+  WalkCommandsOptions,
+  "context" | "cwd" | "mode"
+> & {
+  readonly words: readonly string[];
+};
+
+const classifyShellString = ({
+  context,
+  cwd,
+  words,
+  mode,
+}: ClassifyShellStringOptions): Expansion[] => {
+  const optionAt = words.findIndex((word) => /^-[a-z]*c[a-z]*$/u.test(word));
+  const script = words.at(optionAt + 1);
+  const nested =
+    script === undefined || isComputed(script)
+      ? undefined
+      : walkCommands({
+          context,
+          cwd,
+          events: lexShell(script),
+          installed: new Set(),
+          mode,
+        });
+  if (nested?.expansions.length === 0) {
+    return [];
+  }
+  return [
+    {
+      coverage: "control-flow",
+      classification: unclassified(
+        `${words.at(0) ?? "shell"} runs a shell string this check cannot follow`,
+      ),
+      command: words.join(" "),
+    },
+  ];
 };
 
 /** Classifies, in order, each Bun command that runs outside every install. */
@@ -1020,6 +1112,7 @@ const walkCommands = ({
       case "unparsed": {
         if (!isCovered(current)) {
           expansions.push({
+            coverage: "control-flow",
             classification: unclassified(event.reason),
             command: "",
           });
@@ -1054,16 +1147,35 @@ const walkCommands = ({
             const { classification } = expansion;
             if (
               scope.coverage === "straight-line" &&
+              expansion.coverage === "straight-line" &&
               classification.type === "install" &&
               !classification.global
             ) {
               covered.add(classification.dir);
               installs.push(classification.dir);
             }
-            expansions.push(expansion);
+            expansions.push({
+              ...expansion,
+              coverage:
+                scope.coverage === "control-flow"
+                  ? "control-flow"
+                  : expansion.coverage,
+            });
           }
-        } else if (words.some((word) => BUN_PROGRAMS.has(word))) {
+        } else if (
+          /^(?:bash|sh|zsh)$/u.test(program) &&
+          words.some((word) => /^-[a-z]*c[a-z]*$/u.test(word))
+        ) {
+          expansions.push(
+            ...classifyShellString({ context, cwd: current, words, mode }),
+          );
+        } else if (
+          program !== "echo" &&
+          program !== "printf" &&
+          words.some((word) => BUN_PROGRAMS.has(word))
+        ) {
           expansions.push({
+            coverage: "control-flow",
             classification: unclassified(
               `${program} runs Bun with arguments this check cannot follow`,
             ),
@@ -1071,6 +1183,7 @@ const walkCommands = ({
           });
         } else if (mode === "package-script" && !SCRIPT_BUILTINS.has(program)) {
           expansions.push({
+            coverage: "control-flow",
             classification: unclassified(
               `runs ${program}, which the dependency install may provide`,
             ),
