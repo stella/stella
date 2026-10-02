@@ -669,8 +669,12 @@
       },
       "peerDependencies": {
         "@base-ui/react": "^1.7.0",
+        "@types/react": ">=19",
         "react": ">=19",
       },
+      "optionalPeers": [
+        "@types/react",
+      ],
     },
     "packages/chat-limits": {
       "name": "@stll/chat-limits",
@@ -1164,10 +1168,16 @@
         "@atlaskit/pragmatic-drag-and-drop-auto-scroll": "^3.2.0",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-virtual": "^3.14.13",
+        "@types/react": ">=19",
+        "@types/react-dom": ">=19",
         "react": ">=19",
         "react-dom": ">=19",
         "tailwindcss": "^4.3.0",
       },
+      "optionalPeers": [
+        "@types/react",
+        "@types/react-dom",
+      ],
     },
     "packages/user-agent": {
       "name": "@stll/user-agent",
@@ -1236,10 +1246,16 @@
         "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
         "@base-ui/react": "^1.7.0",
         "@tanstack/react-table": "^9.1.2",
+        "@types/react": ">=19",
+        "@types/react-dom": ">=19",
         "react": ">=19",
         "react-dom": ">=19",
         "tailwindcss": "^4.3.0",
       },
+      "optionalPeers": [
+        "@types/react",
+        "@types/react-dom",
+      ],
     },
   },
   "trustedDependencies": [
