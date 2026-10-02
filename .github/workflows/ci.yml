@@ -930,7 +930,12 @@ jobs:
           bun scripts/check-published-exports.ts packages/time
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
-          bun scripts/check-published-exports.ts packages/mcp-kit
+
+      - name: MCP kit published export map guard
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.published_exports_required == 'true'
+        run: bun scripts/check-published-exports.ts packages/mcp-kit
 
   ci-checks-policy:
     needs: ci-plan
