@@ -407,7 +407,7 @@ describe("the Postgres search path", () => {
           languages: [],
         },
       ]),
-  } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[2]>;
+  } satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
 
   /** Every page of a query, `limit` hits at a time. */
   const allPages = async (query: string, limit: number) => {

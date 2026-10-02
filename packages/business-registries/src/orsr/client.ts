@@ -290,7 +290,6 @@ const parseErrorBody = (value: unknown): OrsrRawErrorResponse => {
 /** The timeout and caller cancellation of one request. */
 type RequestContext = RegistryClientOptions & {
   timeoutMs: number;
-  signal: AbortSignal | undefined;
 };
 
 type OrsrGetOptions<T> = {
