@@ -244,7 +244,10 @@ const bindsOwnedName = (
 // The export names a dynamic import is destructured into or read through, or
 // null when the module object is held in a shape that reaches every export
 // (bound whole, passed on, a rest element or a computed key).
-const dynamicImportNames = (node: AstNode): readonly string[] | null => {
+const dynamicImportNames = (node: unknown): readonly string[] | null => {
+  if (!isAstNode(node)) {
+    return null;
+  }
   let current = node;
   let parent = isAstNode(current.parent) ? current.parent : null;
   while (
