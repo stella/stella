@@ -1,8 +1,10 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import { PublicDecisionViewer } from "@/routes/law/-case-detail";
-import { publicDecisionSearchSchema } from "@/routes/law/-case-detail.logic";
+import {
+  fileMayHoldOthersOf,
+  publicDecisionSearchSchema,
+} from "@/routes/law/-case-detail.logic";
 import {
   loadPublicDecisionRoute,
   publicDecisionHead,
@@ -19,9 +21,7 @@ export const Route = createFileRoute("/law/$country/cases/$court/$slug")({
 function PublicDecisionRoute() {
   const decision = Route.useLoaderData();
   const initialSearchQuery = Route.useSearch({ select: (search) => search.q });
-  const fileMayHoldOthers = Route.useSearch({
-    select: (search) => search.match === PUBLIC_DECISION_MATCH.FILE_INCOMPLETE,
-  });
+  const fileMayHoldOthers = Route.useSearch({ select: fileMayHoldOthersOf });
 
   return (
     <PublicDecisionViewer
