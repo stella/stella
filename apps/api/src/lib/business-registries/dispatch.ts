@@ -141,8 +141,8 @@ import {
 import type { CountryCode } from "@stll/country-codes";
 
 import { captureError } from "@/api/lib/analytics/capture";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 export { BUSINESS_REGISTRY_SLUGS } from "@stll/api-contract";
 export type { BusinessRegistrySlug } from "@stll/api-contract";

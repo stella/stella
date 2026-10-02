@@ -7,12 +7,12 @@ import {
 } from "@stll/api-contract";
 
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   BUSINESS_REGISTRY_SLUGS,
   LOOKUP_DETAIL_DESCRIPTION,
 } from "@/api/lib/business-registries/dispatch";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,

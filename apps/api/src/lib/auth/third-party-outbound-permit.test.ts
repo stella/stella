@@ -9,7 +9,7 @@ import { isRecord } from "@/api/lib/type-guards";
 // and the packages' network calls are imported only by the API modules that
 // take a permit for them.
 
-const API_SRC = path.resolve(import.meta.dir, "..");
+const API_SRC = path.resolve(import.meta.dir, "../..");
 
 /** The API's production sources, by path relative to `src`. */
 const productionSources = async (): Promise<Map<string, string>> => {
@@ -60,7 +60,7 @@ const PERMIT_GRANTING_SOURCES = [
  * async functions, read from the module itself.
  */
 const NETWORK_CALL_OWNERS = {
-  "@stll/boe": ["lib/boe-client.ts"],
+  "@stll/boe": ["lib/legal-search/boe-client.ts"],
   "@stll/business-registries": [
     "lib/business-registries/dispatch.ts",
     "lib/business-registries/entity-checks.ts",
@@ -89,7 +89,7 @@ const IMPORT_STATEMENT =
   /^import\s+(?!type\s)(?<clause>[^;]*?)\s+from\s+"(?<specifier>[^"]+)";/gmsu;
 
 const valueImportsOf = (file: string, text: string): ValueImport[] =>
-  [...text.matchAll(IMPORT_STATEMENT)].flatMap((match) => {
+  [...text.matchAll(IMPORT_STATEMENT)].flatMap((match): ValueImport[] => {
     const clause = match.groups?.["clause"] ?? "";
     const specifier = match.groups?.["specifier"] ?? "";
     if (clause.startsWith("*")) {

@@ -9,12 +9,12 @@ import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode
 import { toRegistryChatToolError } from "@/api/handlers/chat/tools/registry-adapter/registry-tool-error";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckResult } from "@/api/lib/business-registries/entity-checks";
 import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   ACTION_COST_CALL_KIND,

@@ -1816,6 +1816,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
             values: input.values,
             scopedDb: context.scopedDb,
             organizationId: context.organizationId,
+            thirdPartyOutboundPermit: context.thirdPartyOutboundPermit,
             workspaceId,
             requiredFields: "enforce",
             useRecording: "caller",

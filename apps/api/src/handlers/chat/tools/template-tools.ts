@@ -15,6 +15,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { AuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -32,7 +33,6 @@ import {
   describeStoredTemplate,
   fillStoredTemplate,
 } from "@/api/lib/templates/template-fill-service";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 const LIST_TEMPLATES_TOOL_NAME = "list_templates" as const;
 const DESCRIBE_TEMPLATE_TOOL_NAME = "describe_template" as const;

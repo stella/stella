@@ -4,6 +4,7 @@ import type { BusinessRegistryLookupDetail } from "@stll/api-contract";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { getOrganizationRegistryHandler } from "@/api/lib/business-registries/credentials";
 import { executeRegistryLookup } from "@/api/lib/business-registries/dispatch";
@@ -12,7 +13,6 @@ import type {
   RegistryLookupResponse,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 type LookupBusinessRegistryProps = {
   observer: RegistryRequestObservation;

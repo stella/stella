@@ -32,6 +32,7 @@ import {
 import { RpoAPIError, RpoRequestError } from "@stll/business-registries/rpo";
 import { ViesAPIError, ViesRequestError } from "@stll/business-registries/vies";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   BUSINESS_REGISTRY_DISPATCH,
   BUSINESS_REGISTRY_SLUGS,
@@ -42,7 +43,6 @@ import {
   type RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 const permit = grantThirdPartyOutboundPermit();
 

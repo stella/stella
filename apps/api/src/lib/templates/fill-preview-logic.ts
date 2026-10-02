@@ -8,6 +8,7 @@ import type { Result as ResultType } from "better-result";
 import { Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import { extractDocxDocument } from "@/api/lib/docx/extract-text";
 import type { ResolvedAiCondition } from "@/api/lib/docx/resolve-ai-conditions";
@@ -23,7 +24,6 @@ import {
   loadStoredTemplateSource,
 } from "@/api/lib/templates/template-fill-service";
 import { buildTemplateFillAiWiring } from "@/api/lib/templates/template-fill-usage";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 export type FillPreviewLogicProps = {
   safeDb: SafeDb;

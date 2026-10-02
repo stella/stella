@@ -6,6 +6,7 @@ import { isCountryCode } from "@stll/country-codes";
 
 import { nationalityCodesSchema } from "@/api/handlers/contacts/person-details";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { dateOfBirthSchema } from "@/api/lib/business-registries/date-of-birth";
 import {
   COUNTERPARTY_CHECK_KINDS,
@@ -17,7 +18,6 @@ import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/ent
 import { SANCTIONS_COMPANY_ID_COUNTRIES } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,

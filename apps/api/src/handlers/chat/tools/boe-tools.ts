@@ -4,8 +4,8 @@ import * as v from "valibot";
 import { RELATION_TYPES } from "@stll/boe";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
-import { boeClient } from "@/api/lib/boe-client";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { boeClient } from "@/api/lib/legal-search/boe-client";
 
 // @valibot/to-json-schema rejects regex flags, so v.regex literals
 // in this file deliberately omit the `u` flag.

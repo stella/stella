@@ -12,6 +12,7 @@ import type { BusinessRegistryCredentialSlug } from "@stll/api-contract";
 import { businessRegistryCredentials } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import {
   bindRegistryCredential,
   encryptRegistryCredential,
@@ -22,7 +23,6 @@ import {
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,

@@ -7,6 +7,7 @@ import {
 } from "@stll/api-contract";
 
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   executeRegistryLookup,
@@ -14,7 +15,6 @@ import {
   LOOKUP_DETAIL_DESCRIPTION,
   type RegistryJurisdictionCode,
 } from "@/api/lib/business-registries/dispatch";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,

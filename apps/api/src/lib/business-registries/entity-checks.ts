@@ -13,6 +13,7 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import type { CountryCode } from "@stll/country-codes";
 import { Temporal } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type {
@@ -21,7 +22,6 @@ import type {
 } from "@/api/lib/business-registries/sanctions-check";
 import type { SanctionsCompanyIdCountry } from "@/api/lib/business-registries/sanctions-check-vocabulary";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 // Shared by the HTTP route, the check_counterparty MCP tool and the
 // counterparty_check chat tool.

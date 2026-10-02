@@ -14,7 +14,6 @@ import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { updateOrganizationSettingsHandler } from "@/api/handlers/organization-settings/update";
 import { addWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/add";
 import { removeWorkspaceMemberHandler } from "@/api/handlers/workspaces/members/remove";
-import { boeClient } from "@/api/lib/boe-client";
 import {
   type AssertNoExtraFields,
   type MANAGE_ORGANIZATION_ADD_MEMBER_PROJECTION,
@@ -23,6 +22,7 @@ import {
   MANAGE_ORGANIZATION_PROJECTION,
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
+import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { LIMITS } from "@/api/lib/limits";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {

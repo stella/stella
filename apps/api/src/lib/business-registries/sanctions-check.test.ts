@@ -4,6 +4,7 @@ import { describe, expect, mock, spyOn, test } from "bun:test";
 import type { CountryCode } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import type {
@@ -22,7 +23,6 @@ import type {
   SanctionsScreening,
 } from "@/api/lib/lists/sanctions/screening-service";
 import { sanctionsSourceIds } from "@/api/lib/lists/sanctions/source-config";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 // The register, the lists and the firm's settings are all replaced: these
 // tests pin how a subject becomes a name to screen, and what happens when it

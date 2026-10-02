@@ -7,7 +7,7 @@ import {
   searchConsolidatedLegislation,
 } from "@stll/boe";
 
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 
 /**
  * The BOE open-data client, for a caller that holds a third-party outbound

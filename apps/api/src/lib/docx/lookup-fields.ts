@@ -88,6 +88,7 @@ import { validateVatFormat } from "@stll/business-registries/vies";
 import { assertNever, resolvePath } from "@stll/template-conditions";
 import { parseIsoDateLocal } from "@stll/time";
 
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
   BusinessRegistryHit,
   RegistryHandler,
@@ -96,7 +97,6 @@ import {
   BUSINESS_REGISTRY_DISPATCH,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 import {
   mapRepeatablePath,

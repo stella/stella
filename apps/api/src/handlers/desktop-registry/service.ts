@@ -13,6 +13,7 @@ import { mapWithConcurrency } from "@stll/concurrency";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { templateLookupFormats } from "@/api/db/schema";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   getOrganizationRegistryDispatch,
@@ -32,7 +33,6 @@ import {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { resolveLookupFormatDefault } from "@/api/lib/templates/lookup-formats/resolve-default";
 import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import {
   ACTION_COST_CALL_KIND,
   actionRequestObserver,

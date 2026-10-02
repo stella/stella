@@ -3,8 +3,8 @@ import { t } from "elysia";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { boeClient } from "@/api/lib/boe-client";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { boeClient } from "@/api/lib/legal-search/boe-client";
 
 const paramsSchema = t.Object({
   date: t.String({ pattern: "^\\d{8}$" }),

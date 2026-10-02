@@ -12,6 +12,7 @@ import { KrsValidationError } from "@stll/business-registries/krs";
 import type { OrsrCompany } from "@stll/business-registries/orsr";
 import { filtersFromFieldConfig } from "@stll/template-conditions";
 
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type {
   BusinessRegistryHit,
   RegistryHandler,
@@ -21,7 +22,6 @@ import {
   BUSINESS_REGISTRY_SLUGS,
 } from "@/api/lib/business-registries/dispatch";
 import type { ScannedFile } from "@/api/lib/file-scan/scanned-file";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { testDocxFile } from "@/api/tests/helpers/scanned-file";
 
 import { discoverTemplate } from "./discover-template";

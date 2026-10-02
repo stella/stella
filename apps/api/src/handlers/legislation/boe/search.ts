@@ -5,9 +5,9 @@ import { BOE_SEARCH_PAGE_LIMITS, BoeValidationError } from "@stll/boe";
 
 import { mapBoeError } from "@/api/handlers/legislation/boe-error";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import { boeClient } from "@/api/lib/boe-client";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
+import { boeClient } from "@/api/lib/legal-search/boe-client";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 const querySchema = t.Object({
   text: t.Optional(

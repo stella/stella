@@ -30,6 +30,7 @@ import type { readWorkspaceHandler } from "@/api/handlers/workspaces/get";
 import type { readOverviewHandler } from "@/api/handlers/workspaces/read-overview";
 import type { readWorkspaceContactsHandler } from "@/api/handlers/workspaces/workspace-contacts-read";
 import type { readWorkspaceMembersHandler } from "@/api/handlers/workspaces/workspace-members-read";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { RegistryLookupResponse } from "@/api/lib/business-registries/dispatch";
 import { deriveRefMediationEntry } from "@/api/lib/chat/projection-schema";
@@ -38,7 +39,6 @@ import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { encryptContent } from "@/api/lib/content-encryption";
 import type { SearchResult } from "@/api/lib/search/types";
 import type { DescribeTemplateResult } from "@/api/lib/templates/template-fill-service";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { READ_CONTACT_COLUMNS } from "@/api/mcp/read-contact-columns";
 import { installRecordingAnalytics } from "@/api/tests/helpers/recording-telemetry";
@@ -259,12 +259,16 @@ const recordOutboundFetches = async <TResult>(
   run: () => Promise<TResult>,
 ): Promise<{ result: TResult; fetched: readonly string[] }> => {
   const fetched: string[] = [];
-  const spy = spyOn(globalThis, "fetch").mockImplementation(async (input) => {
-    fetched.push(input instanceof Request ? input.url : String(input));
-    return await Promise.reject(
-      new Error("A contract fixture read must not reach the network"),
-    );
-  });
+  const refuse = Object.assign(
+    async (input: Parameters<typeof fetch>[0]): Promise<Response> => {
+      fetched.push(input instanceof Request ? input.url : String(input));
+      return await Promise.reject(
+        new Error("A contract fixture read must not reach the network"),
+      );
+    },
+    { preconnect: globalThis.fetch.preconnect },
+  );
+  const spy = spyOn(globalThis, "fetch").mockImplementation(refuse);
   try {
     return { result: await run(), fetched };
   } finally {

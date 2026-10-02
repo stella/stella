@@ -36,6 +36,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import { createBackgroundAuditRecorder } from "@/api/lib/audit-log";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { BullMqWorkerContext } from "@/api/lib/bullmq-queue";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -73,7 +74,6 @@ import {
   fillStoredTemplateDocx,
   fillTemplateDocx,
 } from "@/api/lib/templates/template-fill-service";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { parseStoredViewLayout } from "@/api/lib/views-schema";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 

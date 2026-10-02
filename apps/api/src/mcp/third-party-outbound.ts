@@ -1,4 +1,4 @@
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type {
   TypedMcpToolHandler,

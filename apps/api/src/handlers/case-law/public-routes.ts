@@ -58,6 +58,7 @@ import {
   readDecisionDate,
 } from "@/api/handlers/case-law/provisions/previews-for-decision";
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
+import { grantThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import { caseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import { tSafeId } from "@/api/lib/custom-schema";
 import {
@@ -65,7 +66,6 @@ import {
   tPublicLawCountry,
 } from "@/api/lib/legal-search/public-law-country";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { grantThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 const listDecisions = createSafePublicHandler(

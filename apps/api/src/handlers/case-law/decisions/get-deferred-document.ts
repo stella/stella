@@ -24,10 +24,10 @@ import { onDemandDocumentDeps } from "@/api/handlers/case-law/decisions/document
 import { readDecisionHandler } from "@/api/handlers/case-law/decisions/get";
 import { transientDecisionAstProjection } from "@/api/handlers/case-law/decisions/served-ast";
 import { omitDerivablePlainText } from "@/api/handlers/case-law/document-ast";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
 import type { DecisionSubjectLocator } from "@/api/lib/case-law/public-subject";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 type DecisionRead = Awaited<ReturnType<typeof readDecisionHandler>>;
 type ReadableDecision = Extract<DecisionRead, { documentPending: boolean }>;

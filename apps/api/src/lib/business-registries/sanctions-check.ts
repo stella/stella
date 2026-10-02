@@ -4,6 +4,7 @@ import type { RegistryRequestObservation } from "@stll/business-registries/share
 import type { CountryCode } from "@stll/country-codes";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import type { ThirdPartyOutboundPermit } from "@/api/lib/auth/third-party-outbound-permit";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
@@ -25,7 +26,6 @@ import type {
   SanctionsScreeningSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
 import type { SanctionsUnavailableReason } from "@/api/lib/lists/sanctions/screening-vocabulary";
-import type { ThirdPartyOutboundPermit } from "@/api/lib/third-party-outbound-permit";
 
 // The sanctions check of the counterparty check: resolves the subject the
 // caller named into a name to screen, reads the firm's practice
