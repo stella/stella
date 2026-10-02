@@ -211,7 +211,14 @@ const ETAG_EQUALITY_ALLOWLIST: readonly {
   path: string;
   expression: string;
   reason: string;
-}[] = [];
+}[] = [
+  {
+    path: "apps/api/src/handlers/case-law/ingestion/adapters/sk-collections.ts",
+    expression: "current === previous",
+    reason:
+      "HTTP cache revalidation compares the cached validator with HEAD on the same publisher URL.",
+  },
+];
 
 const validatorName = (name: string): boolean =>
   /^(?:etag|content[-_]?md5)$/iu.test(name) ||
@@ -248,21 +255,53 @@ const isValidatorExpression = (
     return validatorName(memberPropertyName(expression) ?? "");
   }
   if (expression.type === "CallExpression") {
-    const callee = unwrapExpression(expression.callee);
-    if (isIdentifier(callee, "String")) {
-      return isValidatorExpression(context, firstArgument(expression), visited);
-    }
-    if (callee?.type === "MemberExpression") {
-      if (memberPropertyName(callee) === "get") {
-        return validatorName(
-          staticStringValue(firstArgument(expression)) ?? "",
-        );
-      }
-      // Normalizing a validator does not turn it into a content digest.
-      return isValidatorExpression(context, callee.object, visited);
-    }
+    return isValidatorCall(context, expression, visited);
   }
   return isValidatorBinding(context, expression, visited);
+};
+
+const resolvedStaticString = (
+  context: RuleContext,
+  node: unknown,
+  visited = new Set<Variable>(),
+): string | null => {
+  const direct = staticStringValue(unwrapExpression(node));
+  if (direct !== null) {
+    return direct;
+  }
+  const initializer = followLocal(context, unwrapExpression(node), visited);
+  return initializer === null
+    ? null
+    : resolvedStaticString(context, initializer, visited);
+};
+
+const isValidatorCall = (
+  context: RuleContext,
+  expression: Record<string, unknown>,
+  visited: Set<Variable>,
+): boolean => {
+  const callee = unwrapExpression(expression.callee);
+  if (callee?.type === "MemberExpression") {
+    if (
+      memberPropertyName(callee) === "get" &&
+      validatorName(
+        resolvedStaticString(context, firstArgument(expression)) ?? "",
+      )
+    ) {
+      return true;
+    }
+    if (isValidatorExpression(context, callee.object, new Set(visited))) {
+      return true;
+    }
+  }
+  // Helper calls preserve validator provenance: normalizing, wrapping or
+  // hashing a validator cannot establish identity of the object's bytes.
+  return (
+    Array.isArray(expression.arguments) &&
+    expression.arguments.some((argument) =>
+      isValidatorExpression(context, argument, new Set(visited)),
+    )
+  );
 };
 
 const isValidatorBinding = (

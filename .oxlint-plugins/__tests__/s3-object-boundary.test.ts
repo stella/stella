@@ -19,6 +19,10 @@ test("validator identity follows aliases and leaves presence and digest checks i
     'const source = { ContentMD5: "a" }; void (source.ContentMD5 === "b");',
     'const source = { ETag: "a" }; const renamed = source.ETag + ""; void (renamed === "b");',
     'function verify({ ETag: renamed }) { return renamed === "b"; }',
+    'const source = { ETag: "a" }; const wrapped = normalize(source.ETag); const alias = wrapped; void (alias === "b");',
+    'const source = { ETag: "a" }; void (helpers.normalize(source.ETag) === "b");',
+    'const header = "etag"; const alias = header; void (headers.get(alias) === "b");',
+    'const header = "Content-MD5"; void (headers.get(header) === "b");',
   ];
   const accepted = [
     'const source = { ETag: "a" }; void (source.ETag === null);',
@@ -35,4 +39,22 @@ test("validator identity follows aliases and leaves presence and digest checks i
       plugin: "s3-object-boundary",
     }),
   ).toEqual(rejected.map((_, index) => index + 1));
+});
+
+test("HTTP validator exception is limited to the reviewed path and expression", async () => {
+  const source = [
+    'const current = headers.get("etag"); const previous = cache.etag; void (current === previous);',
+    "const other = cache.etag; void (current === other);",
+  ].join("\n");
+  const rule = "no-etag-content-identity";
+  expect(
+    await lintSingleRule(rule, source, {
+      plugin: "s3-object-boundary",
+      sourcePath:
+        "apps/api/src/handlers/case-law/ingestion/adapters/sk-collections.ts",
+    }),
+  ).toEqual([2]);
+  expect(
+    await lintSingleRule(rule, source, { plugin: "s3-object-boundary" }),
+  ).toEqual([1, 2]);
 });

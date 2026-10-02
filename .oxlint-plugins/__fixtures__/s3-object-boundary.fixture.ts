@@ -209,7 +209,10 @@ export {
 };
 
 // Content identity must use a digest; validators and their aliases are opaque.
-declare const sourceMetadata: { ETag: string; ContentMD5: string };
+declare const sourceMetadata: {
+  ETag: string | null | undefined;
+  ContentMD5: string;
+};
 declare const copyMetadata: { ETag: string };
 declare const responseHeaders: Headers;
 // oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- opaque object validators
@@ -222,7 +225,7 @@ const { ETag: renamedValidator } = sourceMetadata;
 // oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- renamed destructuring keeps provenance
 void (renamedValidator === "known");
 // oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- normalized validator is still opaque
-void (sourceMetadata.ETag.replaceAll('"', "") === "known");
+void (copyMetadata.ETag.replaceAll('"', "") === "known");
 // oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- header validator is still opaque
 void (responseHeaders.get("etag") === "known");
 // oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- MD5 headers are not opaque ETag digests
@@ -235,3 +238,11 @@ declare const sourceSha256: string;
 declare const copySha256: string;
 // expect-clean: s3-object-boundary/no-etag-content-identity
 void (sourceSha256 === copySha256);
+
+declare const normalizeValidator: (value: string) => string;
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- a helper retains validator provenance
+void (normalizeValidator(copyMetadata.ETag) === "known");
+const ETAG_HEADER = "etag";
+const ALIASED_HEADER = ETAG_HEADER;
+// oxlint-disable-next-line s3-object-boundary/no-etag-content-identity -- constant header name retains provenance
+void (responseHeaders.get(ALIASED_HEADER) === "known");

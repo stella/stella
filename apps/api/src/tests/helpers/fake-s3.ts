@@ -118,6 +118,22 @@ const requestedSha256 = (headers: Headers, bytes: Uint8Array): string | null =>
     ? new Bun.CryptoHasher("sha256").update(bytes).digest("base64")
     : null;
 
+type CopiedSha256Options = {
+  headers: Headers;
+  bytes: Uint8Array;
+  inherited: string | undefined;
+};
+
+const copiedSha256 = ({
+  headers,
+  bytes,
+  inherited,
+}: CopiedSha256Options): string | null =>
+  headers.has("x-amz-checksum-algorithm") ||
+  headers.has("x-amz-sdk-checksum-algorithm")
+    ? requestedSha256(headers, bytes)
+    : (inherited ?? null);
+
 const errorResponse = (code: string, status: number, key: string): Response =>
   new Response(
     `${XML_HEADER}<Error><Code>${code}</Code><Message>${code}</Message><Key>${escapeXml(key)}</Key></Error>`,
@@ -414,12 +430,16 @@ export const startFakeS3 = ({ delayMs = 0 }: FakeS3Options = {}): FakeS3 => {
       if (sourceIfMatch !== null && sourceIfMatch !== etags.get(sourceId)) {
         return errorResponse("PreconditionFailed", 412, copySourceKey);
       }
+      // Capture the checksum before writing: source and destination may be
+      // the same key. Copies inherit an existing checksum unless replaced.
+      const checksum = copiedSha256({
+        headers: request.headers,
+        bytes: source.bytes,
+        inherited: checksums.get(sourceId),
+      });
       // Snapshot, as S3 does: the copy must not alias the source's bytes.
       objects.set(id, { ...source, bytes: source.bytes.slice() });
       addVersion(id);
-      // Encryption-aware copies receive independent validators. A checksum
-      // is available only when the caller explicitly requests one.
-      const checksum = requestedSha256(request.headers, source.bytes);
       if (checksum !== null) {
         checksums.set(id, checksum);
       }

@@ -65,7 +65,7 @@ describe("fake S3 carries the real s3 helpers", () => {
     expect(fake.objects.size).toBe(0);
   });
 
-  test("copies preserve bytes while validators change and checksums are opt-in", async () => {
+  test("copies preserve bytes while validators change and checksums are requested or inherited", async () => {
     const requestSignal = AbortSignal.timeout(5000);
     const bytes = new TextEncoder().encode("same content");
     fake.put(bucket, "source", bytes);
@@ -118,6 +118,25 @@ describe("fake S3 carries the real s3 helpers", () => {
     });
     expect(head.headers.get("x-amz-checksum-sha256")).toBe(expected);
     expect(head.headers.get("x-amz-checksum-type")).toBe("FULL_OBJECT");
+
+    const checkedValidator = head.headers.get("etag");
+    for (const key of ["copy-inherited", "copy-checked"]) {
+      const inherited = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal: requestSignal,
+        method: "PUT",
+        headers: { "x-amz-copy-source": `${bucket}/copy-checked` },
+      });
+      expect(await inherited.text()).toContain(
+        `<ChecksumSHA256>${expected}</ChecksumSHA256>`,
+      );
+      const inheritedHead = await fetch(`${fake.endpoint}/${bucket}/${key}`, {
+        signal: requestSignal,
+        method: "HEAD",
+        headers: { "x-amz-checksum-mode": "ENABLED" },
+      });
+      expect(inheritedHead.headers.get("x-amz-checksum-sha256")).toBe(expected);
+      expect(inheritedHead.headers.get("etag")).not.toBe(checkedValidator);
+    }
 
     fake.put(bucket, "source", bytes);
     const staleRead = await fetch(`${fake.endpoint}/${bucket}/source`, {
