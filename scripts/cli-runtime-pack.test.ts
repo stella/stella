@@ -72,7 +72,14 @@ const packedFiles = (root: string): string[] => {
   // Prepack must regenerate missing runtime sources before its normal build.
   const packed: unknown = JSON.parse(
     run(
-      ["npm", "pack", "--dry-run", "--json", "--foreground-scripts=false"],
+      [
+        "npm",
+        "pack",
+        "--dry-run",
+        "--json",
+        "--foreground-scripts=false",
+        "--ignore-scripts=false",
+      ],
       path.join(root, CLI_DIRECTORY),
     ),
   );
@@ -238,7 +245,10 @@ test.skipIf(!process.env["CI"] || !runtimeSourcesAtBase())(
         recursive: true,
         force: true,
       });
-      run(["npm", "run", "prepublishOnly"], path.join(head, CLI_DIRECTORY));
+      run(
+        ["npm", "--ignore-scripts=false", "run", "prepublishOnly"],
+        path.join(head, CLI_DIRECTORY),
+      );
       for (const file of RUNTIME_SOURCES) {
         expect(existsSync(path.join(head, CLI_DIRECTORY, file))).toBe(true);
       }
