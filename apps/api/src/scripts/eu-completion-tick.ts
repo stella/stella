@@ -341,7 +341,14 @@ const runCompletionSession = async (
     store,
     sourceLease: resources.getLease,
     signal,
-    check: resources.fence,
+    check: async () =>
+      await Result.tryPromise({
+        try: resources.fence,
+        catch: (error) => error,
+      }),
+    raiseFailure: (error) => {
+      throw error;
+    },
     onRequest: () => {
       requests++;
     },

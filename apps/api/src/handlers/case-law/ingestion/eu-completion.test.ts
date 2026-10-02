@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
@@ -85,11 +86,12 @@ const fixture = () => {
     runRow: async (
       row: EuCompletionReceipt,
       options: EuCompletionRowOptions,
-    ): Promise<EuCompletionRowOutcome> => {
-      await options.check();
+    ): Promise<Result<EuCompletionRowOutcome, unknown>> => {
+      const checked = await options.check();
+      if (checked.isErr()) {return checked;}
       events.push(`run:${row.id}`);
       requests++;
-      return { type: "dry-run" };
+      return Result.ok({ type: "dry-run" });
     },
   } satisfies RunEuCompletionTickOptions["dependencies"];
   const run = async (overrides: Partial<RunEuCompletionTickOptions> = {}) =>
@@ -175,7 +177,7 @@ describe("bounded EU completion orchestration", () => {
       const state = fixture();
       state.dependencies.runRow = async (row) => {
         state.events.push(`run:${row.id}`);
-        return { type };
+        return Result.ok({ type });
       };
       const report = await state.run();
       expect(report.status).toBe("completed");
@@ -187,20 +189,24 @@ describe("bounded EU completion orchestration", () => {
     async (type) => {
       const state = fixture();
       state.dependencies.runRow = async () =>
-        type === "publisher-refused"
-          ? { type, retryAt: new Date(1000) }
-          : { type };
+        Result.ok(
+          type === "publisher-refused"
+            ? { type, retryAt: new Date(1000) }
+            : { type },
+        );
       const report = await state.run();
       expect(report.status).toBe(type === "retryable" ? "failed" : type);
       expect(state.events).toEqual(["reserve", "pickup:first"]);
     },
   );
-  test("kill after pickup refunds its attempt and leaves following receipts untouched", async () => {
+  test("returned Err from a check after pickup stops effects, refunds its attempt and leaves following receipts untouched", async () => {
     const state = fixture();
     state.dependencies.runRow = async (_row, options) => {
       state.disable();
-      await options.check();
-      return { type: "applied" };
+      const checked = await options.check();
+      if (checked.isErr()) {return checked;}
+      state.events.push("unexpected-effect");
+      return Result.ok({ type: "applied" });
     };
     const report = await state.run();
     expect(report.status).toBe("off");
@@ -210,19 +216,21 @@ describe("bounded EU completion orchestration", () => {
     const state = fixture();
     state.dependencies.runRow = async () => {
       state.setTime(4 * 60_000);
-      return { type: "dry-run" };
+      return Result.ok({ type: "dry-run" });
     };
     expect((await state.run()).status).toBe("time-limit");
     expect(state.events).toEqual(["reserve", "pickup:first"]);
   });
   test("hard cancellation during work is durably refunded", async () => {
     const state = fixture();
-    state.dependencies.runRow = async () => {
-      throw new EuCompletionStop({
-        message: "fixture deadline",
-        reason: "cancelled",
-      });
-    };
+    state.dependencies.runRow = async () => 
+      Result.err(
+        new EuCompletionStop({
+          message: "fixture deadline",
+          reason: "cancelled",
+        }),
+      )
+    ;
     expect((await state.run()).status).toBe("cancelled");
     expect(state.events).toEqual(["reserve", "pickup:first", "refund:first"]);
   });

@@ -1,4 +1,4 @@
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError, type InferOk } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
 
 import { Temporal } from "@stll/time";
@@ -67,54 +67,69 @@ class CompletionStageFailure extends TaggedError("CompletionStageFailure")<{
 }> {}
 
 const MAX_COMPLETION_JUDGES = 1000;
-
 const digest = (payload: string) =>
   new Bun.CryptoHasher("sha256").update(payload).digest("hex");
-const loadDecisionTx = async (
-  tx: Transaction,
-  receipt: EuCompletionReceipt,
-) => {
-  const row = (
-    await tx
-      .select()
-      .from(caseLawDecisions)
-      .where(
-        and(
-          eq(caseLawDecisions.id, receipt.decisionId),
-          eq(caseLawDecisions.sourceId, receipt.sourceId),
-        ),
-      )
-      .for("update")
-      .limit(1)
-  ).at(0);
-  if (row === undefined || row.redactedAt !== null) {
-    throw new CompletionReviewRequired({
-      message: "Decision missing or redacted",
-    });
-  }
-  const judges = await tx
-    .select({
-      role: caseLawDecisionJudges.role,
-      nameAsPrinted: caseLawDecisionJudges.nameAsPrinted,
-    })
-    .from(caseLawDecisionJudges)
-    .where(eq(caseLawDecisionJudges.decisionId, row.id))
-    .orderBy(
-      asc(caseLawDecisionJudges.role),
-      asc(caseLawDecisionJudges.position),
-    )
-    .limit(MAX_COMPLETION_JUDGES + 1);
-  if (judges.length > MAX_COMPLETION_JUDGES) {
-    throw new CompletionReviewRequired({
-      message: "Stored bench exceeds the completion comparison budget",
-    });
-  }
-  return { row, judges };
-};
 
+/** The canonical writer and storage APIs still reject promises; this is their typed boundary. */
+const legacyOperation = <T>(operation: () => Promise<T>) =>
+  Result.tryPromise({ try: operation, catch: (error) => error });
+
+const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
+  Result.gen(async function* () {
+    const row = (yield* Result.await(
+      legacyOperation(
+        async () =>
+          await tx
+            .select()
+            .from(caseLawDecisions)
+            .where(
+              and(
+                eq(caseLawDecisions.id, receipt.decisionId),
+                eq(caseLawDecisions.sourceId, receipt.sourceId),
+              ),
+            )
+            .for("update")
+            .limit(1),
+      ),
+    )).at(0);
+    if (row === undefined || row.redactedAt !== null) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Decision missing or redacted",
+        }),
+      );
+    }
+    const judges = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await tx
+            .select({
+              role: caseLawDecisionJudges.role,
+              nameAsPrinted: caseLawDecisionJudges.nameAsPrinted,
+            })
+            .from(caseLawDecisionJudges)
+            .where(eq(caseLawDecisionJudges.decisionId, row.id))
+            .orderBy(
+              asc(caseLawDecisionJudges.role),
+              asc(caseLawDecisionJudges.position),
+            )
+            .limit(MAX_COMPLETION_JUDGES + 1),
+      ),
+    );
+    if (judges.length > MAX_COMPLETION_JUDGES) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Stored bench exceeds the completion comparison budget",
+        }),
+      );
+    }
+    return Result.ok({ row, judges });
+  });
+
+type DecisionSnapshot = InferOk<Awaited<ReturnType<typeof loadDecisionTx>>>;
 const matchesWrittenMarker = (
   receipt: EuCompletionReceipt,
-  row: typeof caseLawDecisions.$inferSelect,
+  row: DecisionSnapshot["row"],
 ) =>
   receipt.writtenAt !== null &&
   receipt.writtenSourceHash !== null &&
@@ -130,38 +145,32 @@ type CompletionRunnerOptions = {
   store: ReturnType<typeof createEuCompletionStore>;
   sourceLease: () => CaseLawSourceIngestionLease | null;
   signal: AbortSignal;
-  check: () => Promise<void>;
+  check: () => Promise<Result<void, unknown>>;
+  raiseFailure: (error: unknown) => never;
   onRequest: () => void;
 };
-
 type CompletionPublisherState = {
   requests: number;
   bytes: number;
   refusal: number | null;
   publisherFailure: { error: unknown } | null;
 };
-
 type CompletionContext = CompletionRunnerOptions &
   EuCompletionRowOptions & {
     receipt: EuCompletionReceipt;
-    ensure: () => Promise<void>;
+    ensure: () => Promise<Result<void, unknown>>;
     state: CompletionPublisherState;
   };
-
-type DecisionSnapshot = Awaited<ReturnType<typeof loadDecisionTx>>;
 type CandidateContext = CompletionContext & DecisionSnapshot;
 type CompletionCandidate =
   | { type: "candidate"; candidate: IngestionResult; target: "formex" | "full" }
   | { type: "unchanged" };
+type RowResult = Result<EuCompletionRowOutcome, unknown>;
 
-const readStoredRaw = async ({
-  row,
-  signal,
-  ensure,
-}: CandidateContext): Promise<Uint8Array | null> => {
-  const read = await Result.tryPromise({
-    try: async () => {
-      await ensure();
+const readStoredRaw = ({ row, signal, ensure }: CandidateContext) =>
+  Result.gen(async function* () {
+    yield* Result.await(ensure());
+    const read = await legacyOperation(async () => {
       if (row.sourceRawS3Key !== null) {
         const boundedSignal = AbortSignal.any([
           signal,
@@ -178,541 +187,726 @@ const readStoredRaw = async ({
       return row.sourceRaw === null
         ? null
         : new TextEncoder().encode(row.sourceRaw);
-    },
-    catch: (error) => error,
-  });
-  if (read.isErr() && read.error instanceof EuCompletionStop) {
-    throw read.error;
-  }
-  if (read.isErr()) {
-    throw new CompletionStageFailure({
-      message: "Stored raw read failed",
-      code: "storage",
-      scope: "systemic",
-      cause: read.error,
     });
-  }
-  return read.value;
-};
+    if (read.isErr() && signal.aborted) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
+    }
+    if (read.isErr()) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Stored raw read failed",
+          code: "storage",
+          scope: "systemic",
+          cause: read.error,
+        }),
+      );
+    }
+    return read;
+  });
 
-type FullCompletionCandidateOptions = Pick<
-  CandidateContext,
-  "row" | "signal" | "ensure"
->;
-const fetchFullCompletionCandidate = async (
-  { row, signal, ensure }: FullCompletionCandidateOptions,
+type FullCandidateOptions = Pick<CandidateContext, "row" | "signal" | "ensure">;
+const fetchFullCompletionCandidate = (
+  { row, signal, ensure }: FullCandidateOptions,
   raw: Uint8Array | null,
-): Promise<IngestionResult> => {
-  if (
-    raw !== null &&
-    Object.keys(decodeSourceRawEnvelopeObjects(new TextDecoder().decode(raw)))
-      .length > 0
-  ) {
-    throw new CompletionReviewRequired({
-      message: "Stored binary source parts require review",
-    });
-  }
-  const celex =
-    typeof row.metadata?.["celex"] === "string"
-      ? row.metadata["celex"]
-      : row.sourceDocumentId?.split(":").at(0);
-  const language = ECJ_LANGUAGES.find(
-    (value) => value.toLowerCase() === row.language.toLowerCase(),
-  );
-  if (
-    celex === undefined ||
-    !isValidCelex(celex) ||
-    language === undefined ||
-    row.sourceDocumentId === null
-  ) {
-    throw new CompletionReviewRequired({
-      message: "Full completion has no exact publisher identity",
-    });
-  }
-  const fetched = await fetchDecisionsByCelex({
-    celexNumbers: [celex],
-    languages: [language],
-    signal,
+) =>
+  Result.gen(async function* () {
+    if (
+      raw !== null &&
+      Object.keys(decodeSourceRawEnvelopeObjects(new TextDecoder().decode(raw)))
+        .length > 0
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Stored binary source parts require review",
+        }),
+      );
+    }
+    const celex =
+      typeof row.metadata?.["celex"] === "string"
+        ? row.metadata["celex"]
+        : row.sourceDocumentId?.split(":").at(0);
+    const language = ECJ_LANGUAGES.find(
+      (value) => value.toLowerCase() === row.language.toLowerCase(),
+    );
+    if (
+      celex === undefined ||
+      !isValidCelex(celex) ||
+      language === undefined ||
+      row.sourceDocumentId === null
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Full completion has no exact publisher identity",
+        }),
+      );
+    }
+    const fetched = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await fetchDecisionsByCelex({
+            celexNumbers: [celex],
+            languages: [language],
+            signal,
+          }),
+      ),
+    );
+    yield* Result.await(ensure());
+    const matches = fetched.filter(
+      (value) =>
+        value.sourceDocumentId === row.sourceDocumentId &&
+        value.language === row.language,
+    );
+    if (matches.length !== 1) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Publisher did not return exactly the selected identity",
+        }),
+      );
+    }
+    return Result.ok(
+      matches.at(0) ?? panic("Selected publisher candidate disappeared"),
+    );
   });
-  await ensure();
-  const matches = fetched.filter(
-    (value) =>
-      value.sourceDocumentId === row.sourceDocumentId &&
-      value.language === row.language,
-  );
-  if (matches.length !== 1) {
-    throw new CompletionReviewRequired({
-      message: "Publisher did not return exactly the selected identity",
-    });
-  }
-  return matches.at(0) ?? panic("Selected publisher candidate disappeared");
-};
 
-const fetchCompletionCandidate = async (
+const fetchCompletionCandidate = (
   { row, signal, ensure, state }: CandidateContext,
   raw: Uint8Array | null,
-): Promise<CompletionCandidate> => {
-  let candidate: IngestionResult;
-  let target: "formex" | "full";
-  const parts =
-    raw === null
-      ? null
-      : decodeSourceRawEnvelope(new TextDecoder().decode(raw));
-  if (
-    raw !== null &&
-    parts?.["notice"] !== undefined &&
-    parts["listing"] !== undefined &&
-    parts["document"] !== undefined
-  ) {
-    target = "formex";
-    const refreshed = await refreshEcjStoredFormex({
-      stored: { ...storedInput(row), raw },
-      signal,
-    });
-    await ensure();
+): Promise<Result<CompletionCandidate, unknown>> =>
+  Result.gen(async function* () {
+    const parts =
+      raw === null
+        ? null
+        : decodeSourceRawEnvelope(new TextDecoder().decode(raw));
+    if (raw === null || parts?.["notice"] === undefined) {
+      const candidate = yield* Result.await(
+        fetchFullCompletionCandidate({ row, signal, ensure }, raw),
+      );
+      return Result.ok({
+        type: "candidate",
+        candidate,
+        target: "full",
+      } satisfies CompletionCandidate);
+    }
+    const refreshed = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await refreshEcjStoredFormex({
+            stored: { ...storedInput(row), raw },
+            signal,
+          }),
+      ),
+    );
+    yield* Result.await(ensure());
     switch (refreshed.type) {
-      case "refreshed":
-        candidate = refreshed.decision;
-        break;
+      case "refreshed": {
+        const preserved = protectEcjFormexParts({
+          storedRaw: raw,
+          storedRawContentType: row.sourceRawContentType,
+          candidate: refreshed.decision,
+        });
+        if (preserved.type === "review-required") {
+          return Result.err(
+            new CompletionReviewRequired({
+              message: "Formex changed existing source parts",
+            }),
+          );
+        }
+        return Result.ok({
+          type: "candidate",
+          candidate: refreshed.decision,
+          target: "formex",
+        } satisfies CompletionCandidate);
+      }
       case "unchanged-already-current":
-        return { type: "unchanged" };
+        return Result.ok({
+          type: "unchanged",
+        } satisfies EuCompletionRowOutcome);
       case "rate-limited":
         state.refusal = refreshed.cooldownUntilEpochMs;
-        throw new EuCompletionStop({
-          message: "Publisher refused completion",
-          reason: "publisher-refused",
-        });
+        return Result.err(
+          new EuCompletionStop({
+            message: "Publisher refused completion",
+            reason: "publisher-refused",
+          }),
+        );
       case "retryable-exhausted":
-        throw new CompletionStageFailure({
-          message: "Formex fetch did not complete",
-          code: "publisher",
-          scope: "systemic",
-          cause: null,
-        });
+        return Result.err(
+          new CompletionStageFailure({
+            message: "Formex fetch did not complete",
+            code: "publisher",
+            scope: "systemic",
+            cause: null,
+          }),
+        );
       case "notice-missing":
       case "formex-not-located":
       case "formex-gone":
       case "write-rejected":
-        throw new CompletionReviewRequired({
-          message: `Formex completion requires review: ${refreshed.type}`,
-        });
+        return Result.err(
+          new CompletionReviewRequired({
+            message: `Formex completion requires review: ${refreshed.type}`,
+          }),
+        );
       default:
         refreshed satisfies never;
         return panic("Unknown Formex completion outcome");
     }
-  } else {
-    target = "full";
-    candidate = await fetchFullCompletionCandidate(
-      { row, signal, ensure },
-      raw,
-    );
-  }
-  if (target === "formex" && raw !== null) {
-    const preserved = protectEcjFormexParts({
-      storedRaw: raw,
-      storedRawContentType: row.sourceRawContentType,
-      candidate,
-    });
-    if (preserved.type === "review-required") {
-      throw new CompletionReviewRequired({
-        message: "Formex changed existing source parts",
-      });
-    }
-  }
+  });
 
-  return { type: "candidate", candidate, target };
-};
-
-const recoverCompletionCandidate = ({
-  row,
-  receipt,
-}: CandidateContext): IngestionResult => {
+const recoverCompletionCandidate = ({ row, receipt }: CandidateContext) => {
   const payload =
     receipt.payload ?? panic("Completion recovery has no payload");
   if (digest(payload) !== receipt.payloadHash) {
-    throw new CompletionReviewRequired({
-      message: "Fetched recovery payload hash mismatch",
-    });
+    return Result.err(
+      new CompletionReviewRequired({
+        message: "Fetched recovery payload hash mismatch",
+      }),
+    );
   }
-  const parsed = euEcjAdapter.reparseStoredRaw({
-    ...storedInput(row),
-    raw: new TextEncoder().encode(payload),
-    contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+  const parsed = Result.try({
+    try: () =>
+      euEcjAdapter.reparseStoredRaw({
+        ...storedInput(row),
+        raw: new TextEncoder().encode(payload),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      }),
+    catch: (error) => error,
   });
-  if (parsed.type !== "parsed") {
-    throw new CompletionReviewRequired({
-      message: "Fetched envelope cannot be reparsed",
-    });
+  if (parsed.isErr()) {
+    return parsed;
+  }
+  if (parsed.value.type !== "parsed") {
+    return Result.err(
+      new CompletionReviewRequired({
+        message: "Fetched envelope cannot be reparsed",
+      }),
+    );
   }
   if (receipt.target === null) {
-    panic("Fetched receipt has no target");
+    return panic("Fetched receipt has no target");
   }
-  return parsed.result;
+  return Result.ok(parsed.value.result);
 };
 
-const prepareCompletionCandidate = async (
+const prepareCompletionCandidate = (
   context: CandidateContext,
   fingerprint: string,
-): Promise<CompletionCandidate> => {
-  const { row, receipt, ensure, store } = context;
-  if (receipt.payload !== null) {
-    return {
-      type: "candidate",
-      candidate: recoverCompletionCandidate(context),
-      target: receipt.target ?? panic("Fetched receipt has no target"),
-    };
-  }
-  if (
-    row.sourceHash !== receipt.claimedSourceHash ||
-    row.sourceObservationOrder !== receipt.claimedObservationOrder
-  ) {
-    throw new CompletionReviewRequired({
-      message: "Decision source changed after reservation",
-    });
-  }
-  const fetched = await fetchCompletionCandidate(
-    context,
-    await readStoredRaw(context),
-  );
-  if (fetched.type === "unchanged") {
-    await ensure();
-    await store.finish({ id: receipt.id, status: "unchanged" });
-    return fetched;
-  }
-  const { candidate, target } = fetched;
-  const payload = candidate.sourceRaw;
-  if (
-    payload === undefined ||
-    candidate.sourceRawBytes !== undefined ||
-    candidate.sourceRawObjects !== undefined
-  ) {
-    throw new CompletionReviewRequired({
-      message: "Completion requires a recoverable textual envelope",
-    });
-  }
-  const parts = decodeSourceRawEnvelope(payload);
-  if (
-    parts === null ||
-    (target === "full"
-      ? ["listing", "notice", "document", "formex"]
-      : ["formex"]
-    ).some((part) => parts[part] === undefined)
-  ) {
-    throw new CompletionReviewRequired({
-      message: "Publisher did not supply the requested completion surfaces",
-    });
-  }
-  await ensure();
-  const saved = await store.markFetched({
-    id: receipt.id,
-    payload,
-    payloadHash: digest(payload),
-    claimedFingerprint: fingerprint,
-    target,
-    provenance: {
-      requestHashes: [digest(payload)],
-      requestedSurfaces:
-        target === "formex"
-          ? ["formex"]
-          : ["listing", "notice", "document", "formex"],
-    },
+): Promise<Result<CompletionCandidate, unknown>> =>
+  Result.gen(async function* () {
+    const { row, receipt, ensure, store } = context;
+    if (receipt.payload !== null) {
+      const candidate = yield* recoverCompletionCandidate(context);
+      return Result.ok({
+        type: "candidate",
+        candidate,
+        target: receipt.target ?? panic("Fetched receipt has no target"),
+      } satisfies CompletionCandidate);
+    }
+    if (
+      row.sourceHash !== receipt.claimedSourceHash ||
+      row.sourceObservationOrder !== receipt.claimedObservationOrder
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Decision source changed after reservation",
+        }),
+      );
+    }
+    const raw = yield* Result.await(readStoredRaw(context));
+    const fetched = yield* Result.await(fetchCompletionCandidate(context, raw));
+    if (fetched.type === "unchanged") {
+      yield* Result.await(ensure());
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.finish({ id: receipt.id, status: "unchanged" }),
+        ),
+      );
+      return Result.ok(fetched);
+    }
+    const { candidate, target } = fetched;
+    const payload = candidate.sourceRaw;
+    if (
+      payload === undefined ||
+      candidate.sourceRawBytes !== undefined ||
+      candidate.sourceRawObjects !== undefined
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Completion requires a recoverable textual envelope",
+        }),
+      );
+    }
+    const parts = decodeSourceRawEnvelope(payload);
+    if (
+      parts === null ||
+      (target === "full"
+        ? ["listing", "notice", "document", "formex"]
+        : ["formex"]
+      ).some((part) => parts[part] === undefined)
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Publisher did not supply the requested completion surfaces",
+        }),
+      );
+    }
+    yield* Result.await(ensure());
+    const saved = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await store.markFetched({
+            id: receipt.id,
+            payload,
+            payloadHash: digest(payload),
+            claimedFingerprint: fingerprint,
+            target,
+            provenance: {
+              requestHashes: [digest(payload)],
+              requestedSurfaces:
+                target === "formex"
+                  ? ["formex"]
+                  : ["listing", "notice", "document", "formex"],
+            },
+          }),
+      ),
+    );
+    if (saved === null) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Completion receipt moved before fetched persistence",
+        }),
+      );
+    }
+    return Result.ok(fetched);
   });
-  if (saved === null) {
-    throw new CompletionReviewRequired({
-      message: "Completion receipt moved before fetched persistence",
-    });
-  }
-  return fetched;
-};
 
 type CompletionWriteContext = CompletionContext & {
   candidate: IngestionResult;
   lease: CaseLawSourceIngestionLease;
-  observationOrder: Awaited<ReturnType<typeof allocateSourceObservationOrder>>;
+  observationOrder: bigint;
 };
-
-const createCompletionWriteDb = ({
-  rootDb,
-  signal,
-  store,
-  receipt,
-  lease,
-  observationOrder,
-  candidate,
-}: CompletionWriteContext) =>
+const checkCompletionWriteTx = (
+  tx: Transaction,
+  { signal, store, receipt, lease }: CompletionWriteContext,
+) =>
+  Result.gen(async function* () {
+    if (signal.aborted) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
+    }
+    const approved = yield* Result.await(
+      legacyOperation(async () => await store.assertApprovalTx(tx, receipt)),
+    );
+    if (!approved) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion approval or controls revoked",
+          reason: "off",
+        }),
+      );
+    }
+    const source = (yield* Result.await(
+      legacyOperation(
+        async () =>
+          await tx
+            .select({
+              token: caseLawSources.ingestionLeaseToken,
+              expiry: caseLawSources.ingestionLeaseExpiresAt,
+            })
+            .from(caseLawSources)
+            .where(eq(caseLawSources.id, receipt.sourceId))
+            .for("update")
+            .limit(1),
+      ),
+    )).at(0);
+    if (
+      source?.token !== lease.leaseToken ||
+      source.expiry === null ||
+      source.expiry.getTime() <= Temporal.Now.instant().epochMilliseconds
+    ) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion source lease lost",
+          reason: "cancelled",
+        }),
+      );
+    }
+    const currentReceipt = yield* Result.await(
+      legacyOperation(async () => await store.assertFetchedTx(tx, receipt.id)),
+    );
+    if (currentReceipt === null) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Completion receipt no longer fetched",
+        }),
+      );
+    }
+    const current = yield* Result.await(loadDecisionTx(tx, receipt));
+    if (
+      !matchesWrittenMarker(currentReceipt, current.row) &&
+      (current.row.sourceObservationOrder !==
+        currentReceipt.claimedObservationOrder ||
+        ecjCompletionFingerprint({
+          existing: current.row,
+          judges: current.judges,
+        }) !== currentReceipt.claimedFingerprint)
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Completion claimed statements changed before apply",
+        }),
+      );
+    }
+    return Result.ok();
+  });
+const markCompletionWriteTx = (
+  tx: Transaction,
+  {
+    signal,
+    receipt,
+    store,
+    observationOrder,
+    candidate,
+  }: CompletionWriteContext,
+) =>
+  Result.gen(async function* () {
+    if (signal.aborted) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
+    }
+    const current = yield* Result.await(loadDecisionTx(tx, receipt));
+    if (
+      current.row.sourceObservationOrder === observationOrder &&
+      current.row.sourceHash === candidate.rawHash
+    ) {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.markWrittenTx(tx, {
+              id: receipt.id,
+              decisionId: receipt.decisionId,
+            }),
+        ),
+      );
+    }
+    return Result.ok();
+  });
+const createCompletionWriteDb = (context: CompletionWriteContext) =>
   createIngestionDb(
-    markRlsDatabase({ transaction: rootDb.transaction.bind(rootDb) }),
+    markRlsDatabase({
+      transaction: context.rootDb.transaction.bind(context.rootDb),
+    }),
     {
       laneWaitMs: 0,
       maintenance: {
         before: async (tx) => {
-          signal.throwIfAborted();
-          if (!(await store.assertApprovalTx(tx, receipt))) {
-            throw new EuCompletionStop({
-              message: "Completion approval or controls revoked",
-              reason: "off",
-            });
-          }
-          const source = (
-            await tx
-              .select({
-                token: caseLawSources.ingestionLeaseToken,
-                expiry: caseLawSources.ingestionLeaseExpiresAt,
-              })
-              .from(caseLawSources)
-              .where(eq(caseLawSources.id, receipt.sourceId))
-              .for("update")
-              .limit(1)
-          ).at(0);
-          if (
-            source?.token !== lease.leaseToken ||
-            source.expiry === null ||
-            source.expiry.getTime() <= Temporal.Now.instant().epochMilliseconds
-          ) {
-            throw new EuCompletionStop({
-              message: "Completion source lease lost",
-              reason: "cancelled",
-            });
-          }
-          const currentReceipt = await store.assertFetchedTx(tx, receipt.id);
-          if (currentReceipt === null) {
-            throw new CompletionReviewRequired({
-              message: "Completion receipt no longer fetched",
-            });
-          }
-          const current = await loadDecisionTx(tx, receipt);
-          const alreadyWritten = matchesWrittenMarker(
-            currentReceipt,
-            current.row,
-          );
-          if (
-            !alreadyWritten &&
-            (current.row.sourceObservationOrder !==
-              currentReceipt.claimedObservationOrder ||
-              ecjCompletionFingerprint({
-                existing: current.row,
-                judges: current.judges,
-              }) !== currentReceipt.claimedFingerprint)
-          ) {
-            throw new CompletionReviewRequired({
-              message: "Completion claimed statements changed before apply",
-            });
+          const checked = await checkCompletionWriteTx(tx, context);
+          if (checked.isErr()) {
+            context.raiseFailure(checked.error);
           }
         },
         after: async (tx) => {
-          signal.throwIfAborted();
-          const current = await loadDecisionTx(tx, receipt);
-          if (
-            current.row.sourceObservationOrder === observationOrder &&
-            current.row.sourceHash === candidate.rawHash
-          ) {
-            await store.markWrittenTx(tx, {
-              id: receipt.id,
-              decisionId: receipt.decisionId,
-            });
+          const marked = await markCompletionWriteTx(tx, context);
+          if (marked.isErr()) {
+            context.raiseFailure(marked.error);
           }
         },
       },
     },
   );
 
-type GuardedLeaseOptions = {
-  lease: CaseLawSourceIngestionLease;
-  ensure: () => Promise<void>;
-};
+type GuardedLeaseOptions = Pick<
+  CompletionContext,
+  "ensure" | "raiseFailure"
+> & { lease: CaseLawSourceIngestionLease };
 const createGuardedLease = ({
   lease,
   ensure,
+  raiseFailure,
 }: GuardedLeaseOptions): CaseLawSourceIngestionLease => ({
   source: lease.source,
   leaseToken: lease.leaseToken,
   release: lease.release,
   beforeDatabaseMark: async () => {
-    await ensure();
+    const admitted = await ensure();
+    if (admitted.isErr()) {
+      raiseFailure(admitted.error);
+    }
     await lease.beforeDatabaseMark();
-    await ensure();
+    const checked = await ensure();
+    if (checked.isErr()) {
+      raiseFailure(checked.error);
+    }
   },
   beforeRemoteEffect: async (effect) => {
-    await ensure();
+    const admitted = await ensure();
+    if (admitted.isErr()) {
+      raiseFailure(admitted.error);
+    }
     return await lease.beforeRemoteEffect(async () => {
-      await ensure();
+      const checked = await ensure();
+      if (checked.isErr()) {
+        raiseFailure(checked.error);
+      }
       return await effect();
     });
   },
 });
 
-const applyCompletionCandidate = async (
+const applyCompletionCandidate = (
   context: CompletionContext,
   candidate: IngestionResult,
-): Promise<EuCompletionRowOutcome> => {
-  const {
-    ensure,
-    sourceLease,
-    receipt,
-    ingestionDb,
-    signal,
-    store,
-    healthyEvidence,
-  } = context;
-  await ensure();
-  const lease = sourceLease() ?? panic("Completion apply has no source lease");
-  const observationOrder = await allocateSourceObservationOrder({
-    leaseToken: lease.leaseToken,
-    scopedDb: ingestionDb,
-    sourceId: receipt.sourceId,
+): Promise<RowResult> =>
+  Result.gen(async function* () {
+    const {
+      ensure,
+      sourceLease,
+      receipt,
+      ingestionDb,
+      signal,
+      store,
+      healthyEvidence,
+      raiseFailure,
+    } = context;
+    yield* Result.await(ensure());
+    const lease =
+      sourceLease() ?? panic("Completion apply has no source lease");
+    const observationOrder = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await allocateSourceObservationOrder({
+            leaseToken: lease.leaseToken,
+            scopedDb: ingestionDb,
+            sourceId: receipt.sourceId,
+          }),
+      ),
+    );
+    const scopedDb = createCompletionWriteDb({
+      ...context,
+      lease,
+      observationOrder,
+      candidate,
+    });
+    const guardedLease = createGuardedLease({ lease, ensure, raiseFailure });
+    yield* Result.await(
+      legacyOperation(
+        async () =>
+          await processDecision({
+            input: candidate,
+            sourceId: receipt.sourceId,
+            scopedDb,
+            sourceLease: guardedLease,
+            signal,
+            s3Policy: { mode: "replay-strict", signal },
+            observedAt: new Date(),
+            observationOrder,
+            refresh: DECISION_REFRESH.ALWAYS,
+          }),
+      ),
+    );
+    yield* Result.await(ensure());
+    const settled = yield* Result.await(
+      legacyOperation(async () => await store.finalize(receipt.id)),
+    );
+    if (settled === "retryable") {
+      const type = yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.recordFailure(receipt, {
+              scope: "systemic",
+              code: "write",
+              healthyEvidence,
+            }),
+        ),
+      );
+      return Result.ok({ type } satisfies EuCompletionRowOutcome);
+    }
+    return Result.ok({ type: settled } satisfies EuCompletionRowOutcome);
   });
-  const scopedDb = createCompletionWriteDb({
-    ...context,
-    lease,
-    observationOrder,
-    candidate,
-  });
-  const guardedLease = createGuardedLease({ lease, ensure });
-  await processDecision({
-    input: candidate,
-    sourceId: receipt.sourceId,
-    scopedDb,
-    sourceLease: guardedLease,
-    signal,
-    s3Policy: { mode: "replay-strict", signal },
-    observedAt: new Date(),
-    observationOrder,
-    refresh: DECISION_REFRESH.ALWAYS,
-  });
-  await ensure();
-  const settled = await store.finalize(receipt.id);
-  if (settled === "retryable") {
-    return {
-      type: await store.recordFailure(receipt, {
-        scope: "systemic",
-        code: "write",
-        healthyEvidence,
-      }),
-    };
-  }
-  return { type: settled };
-};
 
-type HydrateCompletionStatementsOptions = Pick<
+type HydrateOptions = Pick<
   CandidateContext,
   "rootDb" | "signal" | "ensure" | "row"
 >;
-const hydrateCompletionStatements = async ({
+const hydrateCompletionStatements = ({
   rootDb,
   signal,
   ensure,
   row,
-}: HydrateCompletionStatementsOptions) => {
-  const readOptions = {
-    signal,
-    s3Policy: { mode: "replay-strict", signal },
-    readTombstones: async (locations) =>
-      await rootDb.transaction(
-        async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
-      ),
-  } satisfies CorpusByteSourceSeams;
-  const hydrated = await Result.tryPromise({
-    try: async () => {
-      await ensure();
-      const fulltext =
-        row.fulltext === null && row.textS3Key !== null
-          ? await readCorpusText(row.textS3Key, readOptions)
-          : row.fulltext;
-      await ensure();
-      const documentAst =
-        row.astS3Key !== null
-          ? await readCorpusAst(row.astS3Key, readOptions)
-          : row.documentAst;
-      await ensure();
-      return { ...row, fulltext, documentAst };
-    },
-    catch: (error) => error,
+}: HydrateOptions) =>
+  Result.gen(async function* () {
+    const readOptions = {
+      signal,
+      s3Policy: { mode: "replay-strict", signal },
+      readTombstones: async (locations) =>
+        await rootDb.transaction(
+          async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
+        ),
+    } satisfies CorpusByteSourceSeams;
+    yield* Result.await(ensure());
+    const text = await legacyOperation(async () =>
+      row.fulltext === null && row.textS3Key !== null
+        ? await readCorpusText(row.textS3Key, readOptions)
+        : row.fulltext,
+    );
+    if (text.isErr() && signal.aborted) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
+    }
+    if (text.isErr()) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Stored statements could not be read",
+          code: "storage",
+          scope: "systemic",
+          cause: text.error,
+        }),
+      );
+    }
+    yield* Result.await(ensure());
+    const ast = await legacyOperation(async () =>
+      row.astS3Key !== null
+        ? await readCorpusAst(row.astS3Key, readOptions)
+        : row.documentAst,
+    );
+    if (ast.isErr() && signal.aborted) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
+    }
+    if (ast.isErr()) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Stored statements could not be read",
+          code: "storage",
+          scope: "systemic",
+          cause: ast.error,
+        }),
+      );
+    }
+    yield* Result.await(ensure());
+    if (row.astS3Key !== null && ast.value === null) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Stored AST reference has no verifiable statement",
+        }),
+      );
+    }
+    return Result.ok({ ...row, fulltext: text.value, documentAst: ast.value });
   });
-  if (hydrated.isErr() && hydrated.error instanceof EuCompletionStop) {
-    throw hydrated.error;
-  }
-  if (hydrated.isErr()) {
-    throw new CompletionStageFailure({
-      message: "Stored statements could not be read",
-      code: "storage",
-      scope: "systemic",
-      cause: hydrated.error,
-    });
-  }
-  if (row.astS3Key !== null && hydrated.value.documentAst === null) {
-    throw new CompletionReviewRequired({
-      message: "Stored AST reference has no verifiable statement",
-    });
-  }
-  return hydrated.value;
-};
 
-const executeCompletionRow = async (
-  context: CompletionContext,
-): Promise<EuCompletionRowOutcome> => {
-  const { rootDb, receipt, ensure, store } = context;
-  await ensure();
-  const snapshot = await rootDb.transaction(
-    async (tx) => await loadDecisionTx(tx, receipt),
-  );
-  const { row, judges } = snapshot;
-  const fingerprint = ecjCompletionFingerprint({ existing: row, judges });
-  const ownWrite = matchesWrittenMarker(receipt, row);
-  if (
-    receipt.payload !== null &&
-    receipt.claimedFingerprint !== fingerprint &&
-    !ownWrite
-  ) {
-    throw new CompletionReviewRequired({
-      message: "Decision changed after completion claim",
+const executeCompletionRow = (context: CompletionContext): Promise<RowResult> =>
+  Result.gen(async function* () {
+    const { rootDb, receipt, ensure, store } = context;
+    yield* Result.await(ensure());
+    const loaded = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await rootDb.transaction(
+            async (tx) => await loadDecisionTx(tx, receipt),
+          ),
+      ),
+    );
+    const snapshot = yield* loaded;
+    const { row, judges } = snapshot;
+    const fingerprint = ecjCompletionFingerprint({ existing: row, judges });
+    if (
+      receipt.payload !== null &&
+      receipt.claimedFingerprint !== fingerprint &&
+      !matchesWrittenMarker(receipt, row)
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Decision changed after completion claim",
+        }),
+      );
+    }
+    const prepared = yield* Result.await(
+      prepareCompletionCandidate({ ...context, ...snapshot }, fingerprint),
+    );
+    if (prepared.type === "unchanged") {
+      return Result.ok({ type: "unchanged" } satisfies EuCompletionRowOutcome);
+    }
+    const { candidate } = prepared;
+    if (
+      candidate.sourceDocumentId !== row.sourceDocumentId ||
+      candidate.language !== row.language
+    ) {
+      return Result.err(
+        new CompletionReviewRequired({
+          message: "Completion candidate identity mismatch",
+        }),
+      );
+    }
+    if (candidate.parserVersion !== receipt.parserVersion) {
+      return Result.err(
+        new CompletionStageFailure({
+          message: "Completion candidate parser stamp mismatch",
+          code: "parse",
+          scope: "systemic",
+          cause: null,
+        }),
+      );
+    }
+    const existing = yield* Result.await(
+      hydrateCompletionStatements({ ...context, row }),
+    );
+    const protectedResult = protectEcjCompletion({
+      existing,
+      candidate,
+      judges,
     });
-  }
-  const prepared = await prepareCompletionCandidate(
-    { ...context, ...snapshot },
-    fingerprint,
-  );
-  if (prepared.type === "unchanged") {
-    return { type: "unchanged" };
-  }
-  const { candidate } = prepared;
-  if (
-    candidate.sourceDocumentId !== row.sourceDocumentId ||
-    candidate.language !== row.language
-  ) {
-    throw new CompletionReviewRequired({
-      message: "Completion candidate identity mismatch",
-    });
-  }
-  if (candidate.parserVersion !== receipt.parserVersion) {
-    throw new CompletionStageFailure({
-      message: "Completion candidate parser stamp mismatch",
-      code: "parse",
-      scope: "systemic",
-      cause: null,
-    });
-  }
-  const existing = await hydrateCompletionStatements({ ...context, row });
-  const protectedResult = protectEcjCompletion({
-    existing,
-    candidate,
-    judges,
+    if (protectedResult.type === "review-required") {
+      yield* Result.await(ensure());
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.finish({
+              id: receipt.id,
+              status: "review-required",
+              detail: protectedResult.fields.join(",").slice(0, 512),
+            }),
+        ),
+      );
+      return Result.ok({
+        type: "review-required",
+      } satisfies EuCompletionRowOutcome);
+    }
+    if (receipt.mode === "dry-run") {
+      yield* Result.await(ensure());
+      yield* Result.await(
+        legacyOperation(
+          async () => await store.finish({ id: receipt.id, status: "dry-run" }),
+        ),
+      );
+      return Result.ok({ type: "dry-run" } satisfies EuCompletionRowOutcome);
+    }
+    const applied = yield* Result.await(
+      applyCompletionCandidate(context, protectedResult.candidate),
+    );
+    return Result.ok(applied);
   });
-  if (protectedResult.type === "review-required") {
-    await ensure();
-    await store.finish({
-      id: receipt.id,
-      status: "review-required",
-      detail: protectedResult.fields.join(",").slice(0, 512),
-    });
-    return { type: "review-required" };
-  }
-  if (receipt.mode === "dry-run") {
-    await ensure();
-    await store.finish({ id: receipt.id, status: "dry-run" });
-    return { type: "dry-run" };
-  }
-  return await applyCompletionCandidate(context, protectedResult.candidate);
-};
 
 const completionResponseLimiter =
   (state: CompletionPublisherState) =>
@@ -743,88 +937,132 @@ const completionResponseLimiter =
       headers: response.headers,
     });
   };
-
-const runControlledCompletionRow = async (context: CompletionContext) => {
-  const { ensure, receipt, store, state, onRequest } = context;
-  return await Result.tryPromise({
-    try: async () =>
-      await withPublisherRequestRateLimit({
-        gateId: "cellar-eu",
-        requestsPerSecond: 1,
-        operation: async () => await executeCompletionRow(context),
-        controls: {
-          retry: "durable",
-          check: ensure,
-          chargeRequest: async () => {
-            if (
-              state.requests >= EU_COMPLETION_LIMITS.maxRequests ||
-              !(await store.reserveRequest({
-                sourceId: receipt.sourceId,
-                hour: new Date(
-                  Math.floor(
-                    Temporal.Now.instant().epochMilliseconds / 3_600_000,
-                  ) * 3_600_000,
-                ),
-              }))
-            ) {
-              throw new EuCompletionStop({
-                message: "Completion publisher request budget reached",
-                reason: "request-budget",
-              });
-            }
-            state.requests++;
-            onRequest();
-          },
-          onRefusal: (deadline) => {
-            state.refusal = deadline;
-          },
-          onFailure: (error) => {
-            state.publisherFailure = { error };
-          },
-          limitResponse: completionResponseLimiter(state),
-        },
-      }),
-    catch: (error) => error,
+const chargeCompletionRequest = (context: CompletionContext) =>
+  Result.gen(async function* () {
+    const { state, store, receipt, onRequest } = context;
+    if (state.requests >= EU_COMPLETION_LIMITS.maxRequests) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion publisher request budget reached",
+          reason: "request-budget",
+        }),
+      );
+    }
+    const reserved = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await store.reserveRequest({
+            sourceId: receipt.sourceId,
+            hour: new Date(
+              Math.floor(Temporal.Now.instant().epochMilliseconds / 3_600_000) *
+                3_600_000,
+            ),
+          }),
+      ),
+    );
+    if (!reserved) {
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion publisher request budget reached",
+          reason: "request-budget",
+        }),
+      );
+    }
+    state.requests++;
+    onRequest();
+    return Result.ok();
   });
-};
+const runControlledCompletionRow = (
+  context: CompletionContext,
+): Promise<RowResult> =>
+  Result.gen(async function* () {
+    const { ensure, state } = context;
+    const result = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await withPublisherRequestRateLimit({
+            gateId: "cellar-eu",
+            requestsPerSecond: 1,
+            operation: async () => await executeCompletionRow(context),
+            controls: {
+              retry: "durable",
+              raiseFailure: context.raiseFailure,
+              check: ensure,
+              chargeRequest: async () => await chargeCompletionRequest(context),
+              onRefusal: (deadline) => {
+                state.refusal = deadline;
+              },
+              onFailure: (error) => {
+                state.publisherFailure = { error };
+              },
+              limitResponse: completionResponseLimiter(state),
+            },
+          }),
+      ),
+    );
+    return result;
+  });
 
-type CompletionFailureContext = CompletionContext & { error: unknown };
-const settleCompletionFailure = async ({
+type FailureContext = CompletionContext & { error: unknown };
+const settleCompletionFailure = ({
   receipt,
   store,
   state,
   healthyEvidence,
   error,
-}: CompletionFailureContext): Promise<EuCompletionRowOutcome> => {
-  if (error instanceof CompletionReviewRequired) {
-    await store.finish({
-      id: receipt.id,
-      status: "review-required",
-      detail: error.message,
-    });
-    return { type: "review-required" };
-  }
-  if (error instanceof EuCompletionStop) {
-    await store.recordFailure(receipt, {
-      scope: "systemic",
-      code: "cancelled",
-      healthyEvidence,
-    });
-    return { type: "stopped", reason: error.reason };
-  }
-  return {
-    type: await store.recordFailure(
-      receipt,
-      error instanceof CompletionStageFailure
-        ? { scope: error.scope, code: error.code, healthyEvidence }
-        : {
-            scope: "systemic",
-            code: state.publisherFailure === null ? "unexpected" : "publisher",
-            healthyEvidence,
-          },
-    ),
-  };
-};
+}: FailureContext): Promise<RowResult> =>
+  Result.gen(async function* () {
+    if (error instanceof CompletionReviewRequired) {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.finish({
+              id: receipt.id,
+              status: "review-required",
+              detail: error.message,
+            }),
+        ),
+      );
+      return Result.ok({
+        type: "review-required",
+      } satisfies EuCompletionRowOutcome);
+    }
+    if (error instanceof EuCompletionStop) {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.recordFailure(receipt, {
+              scope: "systemic",
+              code: "cancelled",
+              healthyEvidence,
+            }),
+        ),
+      );
+      return Result.ok({
+        type: "stopped",
+        reason: error.reason,
+      } satisfies EuCompletionRowOutcome);
+    }
+    const type = yield* Result.await(
+      legacyOperation(
+        async () =>
+          await store.recordFailure(
+            receipt,
+            error instanceof CompletionStageFailure
+              ? { scope: error.scope, code: error.code, healthyEvidence }
+              : {
+                  scope: "systemic",
+                  code:
+                    state.publisherFailure === null
+                      ? "unexpected"
+                      : "publisher",
+                  healthyEvidence,
+                },
+          ),
+      ),
+    );
+    return Result.ok({ type } satisfies EuCompletionRowOutcome);
+  });
 
 /** Network results are durable raw envelopes; retries reparse stored bytes canonically. */
 export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
@@ -834,53 +1072,76 @@ export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
     refusal: null,
     publisherFailure: null,
   };
-  const runRow = async (
+  const runRow = (
     reserved: EuCompletionReceipt,
     rowOptions: EuCompletionRowOptions,
-  ): Promise<EuCompletionRowOutcome> => {
-    state.publisherFailure = null;
-    const receipt = await options.store.getReceipt(reserved.id);
-    const ensure = async () => {
-      if (state.refusal !== null) {
-        throw new EuCompletionStop({
-          message: "Publisher refused this run",
-          reason: "publisher-refused",
-        });
-      }
-      if (state.publisherFailure !== null) {
-        throw state.publisherFailure.error;
-      }
-      await rowOptions.check();
-      await options.check();
-      options.signal.throwIfAborted();
-    };
-    const context = { ...options, ...rowOptions, receipt, state, ensure };
-    const attempted = await runControlledCompletionRow(context);
-    if (state.refusal !== null) {
-      const retryAt = new Date(
-        Math.max(
-          state.refusal,
-          Temporal.Now.instant().epochMilliseconds + 1000,
+  ): Promise<RowResult> =>
+    Result.gen(async function* () {
+      state.publisherFailure = null;
+      const receipt = yield* Result.await(
+        legacyOperation(
+          async () => await options.store.getReceipt(reserved.id),
         ),
       );
-      await options.store.finish({
-        id: receipt.id,
-        status: "publisher-refused",
-        retryAt,
-      });
-      return { type: "publisher-refused", retryAt };
-    }
-    if (attempted.isOk()) {
-      return attempted.value;
-    }
-    return await settleCompletionFailure({
-      ...context,
-      error: attempted.error,
+      const ensure = () =>
+        Result.gen(async function* () {
+          if (state.refusal !== null) {
+            return Result.err(
+              new EuCompletionStop({
+                message: "Publisher refused this run",
+                reason: "publisher-refused",
+              }),
+            );
+          }
+          if (state.publisherFailure !== null) {
+            return Result.err(state.publisherFailure.error);
+          }
+          yield* Result.await(rowOptions.check());
+          yield* Result.await(options.check());
+          if (options.signal.aborted) {
+            return Result.err(
+              new EuCompletionStop({
+                message: "Completion cancelled",
+                reason: "cancelled",
+              }),
+            );
+          }
+          return Result.ok();
+        });
+      const context = { ...options, ...rowOptions, receipt, state, ensure };
+      const attempted = await runControlledCompletionRow(context);
+      if (state.refusal !== null) {
+        const retryAt = new Date(
+          Math.max(
+            state.refusal,
+            Temporal.Now.instant().epochMilliseconds + 1000,
+          ),
+        );
+        yield* Result.await(
+          legacyOperation(
+            async () =>
+              await options.store.finish({
+                id: receipt.id,
+                status: "publisher-refused",
+                retryAt,
+              }),
+          ),
+        );
+        return Result.ok({
+          type: "publisher-refused",
+          retryAt,
+        } satisfies EuCompletionRowOutcome);
+      }
+      if (attempted.isOk()) {
+        return attempted;
+      }
+      const settled = yield* Result.await(
+        settleCompletionFailure({ ...context, error: attempted.error }),
+      );
+      return Result.ok(settled);
     });
-  };
   return { runRow };
 };
-
 const storedInput = (
   row: typeof caseLawDecisions.$inferSelect,
 ): Omit<StoredRawReparseInput, "raw"> => ({

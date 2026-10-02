@@ -49,14 +49,19 @@ const fixture = (failCooldown = false) => {
     retry: "durable" as const,
     check: async () => {
       if (refused !== null) {
-        throw new TypeError("fixture publisher refused");
+        return Result.err(new TypeError("fixture publisher refused"));
       }
       if (!enabled) {
-        throw new TypeError("fixture disabled");
+        return Result.err(new TypeError("fixture disabled"));
       }
+      return Result.ok();
+    },
+    raiseFailure: (error: unknown): never => {
+      throw error;
     },
     chargeRequest: async () => {
       charges++;
+      return Result.ok();
     },
     onRefusal: (deadline: number) => {
       refused = deadline;
@@ -74,6 +79,47 @@ const fixture = (failCooldown = false) => {
   };
 };
 describe("completion request boundary", () => {
+  test.each(["check", "charge"] as const)(
+    "a returned %s Err prevents the HTTP effect",
+    async (stage) => {
+      const state = fixture();
+      const failure = new TypeError(`fixture ${stage} refused`);
+      let requests = 0;
+      globalThis.fetch = asFetchMock(
+        mock(async () => {
+          requests++;
+          return new Response("unexpected request");
+        }),
+      );
+      const result = await Result.tryPromise({
+        try: async () =>
+          await withPublisherRequestRateLimit({
+            gateId: "cellar-eu",
+            requestsPerSecond: 1,
+            dependencies: state.dependencies,
+            controls: {
+              ...state.controls,
+              check: async () =>
+                stage === "check" ? Result.err(failure) : Result.ok(),
+              chargeRequest: async () =>
+                stage === "charge"
+                  ? Result.err(failure)
+                  : await state.controls.chargeRequest(),
+            },
+            operation: async () =>
+              await fetchPublisher(target, {
+                adapterKey: ADAPTER_KEYS.EU_ECJ,
+                timeoutMs: 1000,
+              }),
+          }),
+        catch: (error) => error,
+      });
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {expect(result.error).toBe(failure);}
+      expect(requests).toBe(0);
+      expect(state.charges()).toBe(0);
+    },
+  );
   test("a refusal remains latched when cooldown persistence fails", async () => {
     const state = fixture(true);
     let requests = 0;
@@ -147,6 +193,42 @@ describe("completion request boundary", () => {
     expect(requests).toBe(1);
     expect(state.charges()).toBe(1);
     expect(state.refused()).toBeGreaterThanOrEqual(7_200_000);
+  });
+  test("publisher-backoff preserves refusal redirects before the redirect can be followed", async () => {
+    const state = fixture();
+    const visited: string[] = [];
+    globalThis.fetch = asFetchMock(
+      mock(async (input) => {
+        visited.push(String(input));
+        return new Response(null, {
+          status: 302,
+          headers: { Location: `${target}/final`, "Retry-After": "60" },
+        });
+      }),
+    );
+    const result = await Result.tryPromise({
+      try: async () =>
+        await withPublisherRequestRateLimit({
+          gateId: "cellar-eu",
+          requestsPerSecond: 1,
+          dependencies: state.dependencies,
+          controls: state.controls,
+          operation: async () =>
+            await fetchPublisher(target, {
+              adapterKey: ADAPTER_KEYS.EU_ECJ,
+              timeoutMs: 1000,
+              retryPolicy: "publisher-backoff",
+              isRateLimitRedirect: (response) => response.status === 302,
+            }),
+        }),
+      catch: (error) => error,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr())
+      {expect(result.error).toBeInstanceOf(PublisherRateLimitRefusalError);}
+    expect(visited).toEqual([target]);
+    expect(state.charges()).toBe(1);
+    expect(state.refused()).toBeGreaterThanOrEqual(60_000);
   });
   test("redirects consume separate paced and persisted requests", async () => {
     const state = fixture();

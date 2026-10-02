@@ -64,7 +64,7 @@ export type EuCompletionReport = {
 };
 
 export type EuCompletionRowOptions = {
-  check: () => Promise<void>;
+  check: () => Promise<Result<void, unknown>>;
   healthyEvidence: "adjacent-row" | "none";
 };
 
@@ -87,7 +87,7 @@ type EuCompletionDependencies = {
   runRow: (
     receipt: EuCompletionReceipt,
     options: EuCompletionRowOptions,
-  ) => Promise<EuCompletionRowOutcome>;
+  ) => Promise<Result<EuCompletionRowOutcome, unknown>>;
 };
 
 export type RunEuCompletionTickOptions = {
@@ -183,18 +183,22 @@ export const runEuCompletionTick = async ({
     report.noProgress = progress.ticksWithoutProgress;
     return report;
   };
-  const check = async () => {
+  const checkState = async () => {
     if (signal.aborted) {
-      throw new EuCompletionStop({
-        message: "Completion cancelled",
-        reason: "cancelled",
-      });
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );
     }
     if (now() - startedAt >= EU_COMPLETION_LIMITS.softDurationMs) {
-      throw new EuCompletionStop({
-        message: "Completion reached its soft deadline",
-        reason: "time-limit",
-      });
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion reached its soft deadline",
+          reason: "time-limit",
+        }),
+      );
     }
     const controls = await dependencies.store.loadControls(sourceId);
     if (
@@ -202,31 +206,52 @@ export const runEuCompletionTick = async ({
       controls.global !== "on" ||
       controls.source !== "on"
     ) {
-      throw new EuCompletionStop({
-        message: "Completion is disabled",
-        reason: "off",
-      });
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion is disabled",
+          reason: "off",
+        }),
+      );
     }
     const sourceState = await dependencies.store.loadSourceGateState(sourceId);
     if (sourceState.holdUntil !== null && now() < sourceState.holdUntil) {
-      throw new EuCompletionStop({
-        message: "Completion source is backing off",
-        reason: "held",
-      });
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion source is backing off",
+          reason: "held",
+        }),
+      );
     }
     if ((await dependencies.readGate()).kind !== "normal") {
-      throw new EuCompletionStop({
-        message: "Completion is held by load",
-        reason: "held",
-      });
+      return Result.err(
+        new EuCompletionStop({
+          message: "Completion is held by load",
+          reason: "held",
+        }),
+      );
     }
-    await dependencies.fence();
-    signal.throwIfAborted();
+    const fenced = await Result.tryPromise({
+      try: dependencies.fence,
+      catch: (error) => error,
+    });
+    if (fenced.isErr()) {return fenced;}
+    if (signal.aborted)
+      {return Result.err(
+        new EuCompletionStop({
+          message: "Completion cancelled",
+          reason: "cancelled",
+        }),
+      );}
+    return Result.ok();
   };
-  const admission = await Result.tryPromise({
-    try: check,
-    catch: (error) => error,
-  });
+  const check = async () =>
+    (
+      await Result.tryPromise({
+        try: checkState,
+        catch: (error) => error,
+      })
+    ).andThen((value) => value);
+  const admission = await check();
   if (admission.isErr()) {
     report.status =
       admission.error instanceof EuCompletionStop
@@ -248,10 +273,7 @@ export const runEuCompletionTick = async ({
     beforeCursor !== (await dependencies.store.readSweepCursor(scope)),
   );
   for (const receipt of rows) {
-    const admitted = await Result.tryPromise({
-      try: check,
-      catch: (error) => error,
-    });
+    const admitted = await check();
     if (admitted.isErr()) {
       report.status =
         admitted.error instanceof EuCompletionStop
@@ -269,11 +291,12 @@ export const runEuCompletionTick = async ({
       continue;
     }
     const healthyEvidence = report.applied > 0 ? "adjacent-row" : "none";
-    const result = await Result.tryPromise({
+    const attempted = await Result.tryPromise({
       try: async () =>
         await dependencies.runRow(receipt, { check, healthyEvidence }),
       catch: (error) => error,
     });
+    const result = attempted.andThen((value) => value);
     let outcome: EuCompletionRowOutcome;
     if (result.isErr()) {
       const stopped =

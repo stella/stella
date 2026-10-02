@@ -16,7 +16,7 @@
  * requests rather than a total.
  */
 
-import { panic } from "better-result";
+import { panic, type Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -355,8 +355,10 @@ type RunPublisherLimit = {
 };
 
 export type PublisherRunControls = {
-  check: () => Promise<void>;
-  chargeRequest: () => Promise<void>;
+  check: () => Promise<Result<void, unknown>>;
+  chargeRequest: () => Promise<Result<void, unknown>>;
+  /** The job boundary adapts typed failures to the adapter's Promise rejection contract. */
+  raiseFailure: (error: unknown) => never;
   retry: "durable";
   onRefusal?: (cooldownUntilEpochMs: number) => void;
   onFailure?: (error: unknown) => void;
