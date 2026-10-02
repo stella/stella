@@ -436,9 +436,7 @@ const configuredAccessOwner = sql`current_user = (SELECT pg_catalog.pg_get_userb
 export const organizationConfiguredAccess = p.pgTable(
   "organization_configured_access",
   {
-    organizationId: safeOrganizationId("organization_id")
-      .primaryKey()
-      .references(() => organization.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").primaryKey(),
     sourceSignature: p.text("source_signature").notNull(),
     sourceEventAt: timestamptz("source_event_at"),
     sourceEntitlementStatus: p
@@ -456,7 +454,14 @@ export const organizationConfiguredAccess = p.pgTable(
       .defaultNow()
       .$onUpdate(() => new Date()),
   },
-  () => [
+  (table) => [
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "configured_access_org_fk",
+      })
+      .onDelete("cascade"),
     p.check(
       "organization_configured_access_source_status",
       sql`source_entitlement_status IN (${sql.join(

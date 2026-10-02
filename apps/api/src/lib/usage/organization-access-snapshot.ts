@@ -14,7 +14,7 @@ import {
   type ConfiguredAccess,
 } from "@/api/lib/usage/configured-access";
 
-export const originalAccessSnapshotColumns = {
+const originalAccessSnapshotColumns = {
   state: organizationAccessStates.state,
   evaluationEndsAt: organizationAccessStates.evaluationEndsAt,
 };

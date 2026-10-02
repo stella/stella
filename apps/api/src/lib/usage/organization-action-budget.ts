@@ -75,10 +75,8 @@ export const resolveOrganizationActionBudget = ({
       limit = selfManagedActions;
       break;
     default:
-      state.state satisfies never;
-      return panic(
-        `Unhandled organization access state: ${String(state.state)}`,
-      );
+      state satisfies never;
+      return panic("Unhandled organization access state");
   }
   if (
     periodMs === undefined ||

@@ -217,8 +217,15 @@ const isStaleProviderEvent = ({
   if (eventTime !== lastTime) {
     return eventTime < lastTime;
   }
+  return equalVersionIsStale({ existing, payload });
+};
+
+const equalVersionIsStale = ({
+  existing,
+  payload,
+}: Pick<StaleProviderEventParams, "existing" | "payload">): boolean => 
   // At equal versions, terminal/cancellation facts dominate an active replay.
-  return (
+  (
     (env.FEATURE_CONFIGURED_ACCESS &&
       existing.status === "past_due" &&
       payload.status === "active" &&
@@ -233,8 +240,8 @@ const isStaleProviderEvent = ({
       payload.cancel_at_period_end !== true &&
       payload.status !== "canceled" &&
       !(env.FEATURE_CONFIGURED_ACCESS && payload.status === "past_due"))
-  );
-};
+  )
+;
 
 const cancellationFlagAtVersion = ({
   existing,

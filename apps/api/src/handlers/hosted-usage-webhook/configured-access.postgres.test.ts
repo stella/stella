@@ -11,7 +11,7 @@ import {
   usagePolicies,
   usageEntitlements,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { env } from "@/api/env";
 import {
   HOSTED_USAGE_WEBHOOK_HEADERS,
@@ -286,7 +286,7 @@ const hasConfiguredAccess = (prior: Prior) =>
   prior === "ending" ||
   prior === "payment_retry";
 
-(runPostgresTests && databaseUrl ? describe : describe.skip)(
+describe.skipIf(!runPostgresTests)(
   "configured access provider lifecycle",
   () => {
     for (const prior of priors) {
@@ -553,7 +553,12 @@ const hasConfiguredAccess = (prior: Prior) =>
               >({
                 memberRole: { role: "member" },
                 session: { activeOrganizationId: organizationId },
-                safeDb: createSafeDb(nested, [], organizationId, null),
+                safeDb: createSafeDb(
+                  markRlsDatabase(nested),
+                  [],
+                  organizationId,
+                  null,
+                ),
               });
               expect(await getAccess.handler(context)).toEqual(expected);
               // Scope SET LOCAL values must roll back with the savepoint before

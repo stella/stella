@@ -16,7 +16,7 @@ const config = {
     "Read the organization's current access notification and its deadline.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "internal", reason: "organization_access_ui" },
+  mcp: { type: "internal", reason: "hosted_billing" },
 } satisfies HandlerConfig;
 
 const getAccess = createSafeRootHandler(

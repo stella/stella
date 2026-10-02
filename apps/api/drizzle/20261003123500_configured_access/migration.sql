@@ -7,7 +7,7 @@ ALTER TABLE "usage_policies" ADD CONSTRAINT "usage_policies_service_actions_posi
 CHECK (service_actions_per_period IS NULL OR service_actions_per_period > 0) NOT VALID;
 --> statement-breakpoint
 CREATE TABLE "organization_configured_access" (
-  "organization_id" varchar(128) PRIMARY KEY NOT NULL REFERENCES "organization"("id") ON DELETE cascade,
+  "organization_id" varchar(128) PRIMARY KEY NOT NULL CONSTRAINT "configured_access_org_fk" REFERENCES "organization"("id") ON DELETE cascade,
   "source_signature" text NOT NULL,
   "source_event_at" timestamptz,
   "source_entitlement_status" text NOT NULL,

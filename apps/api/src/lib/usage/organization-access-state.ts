@@ -52,8 +52,8 @@ export const allowsInstanceModels = (
     case ORGANIZATION_ACCESS_STATE.evaluationPeriod:
       return row.evaluationEndsAt !== null && row.evaluationEndsAt > now;
     default: {
-      row.state satisfies never;
-      return panic(`Unhandled organization access state: ${String(row.state)}`);
+      row satisfies never;
+      return panic("Unhandled organization access state");
     }
   }
 };
