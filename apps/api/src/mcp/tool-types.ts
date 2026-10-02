@@ -358,6 +358,38 @@ export type McpCliToolAnnotation = {
    * envelope at a TTY, prompts and retries once with `confirm: true`.
    */
   confirmPassthrough?: true;
+  /**
+   * The result is one record that holds tables (a check answering per list),
+   * so neither a single row list nor a key/value dump shows all of it. Table
+   * output prints `summary` as key/value lines, then each section as a table;
+   * JSON and JSONL output print the payload as is. A payload with no array at
+   * the first section's rows (another outcome of the same tool) renders as a
+   * single record.
+   */
+  composite?: McpCliCompositeView;
+};
+
+/** One table of a composite result. */
+type McpCliCompositeSection = {
+  /** The heading printed above the table. */
+  title: string;
+  /**
+   * Dot path to an array of records. A segment ending in `[]` spreads an
+   * array, so `lists[].possibleMatches` gathers every list's matches into one
+   * table.
+   */
+  rows: string;
+  /**
+   * Dot paths read from each row. A path starting with `^.` reads the record
+   * the row was gathered from, so a gathered match can name its list.
+   */
+  columns: readonly string[];
+};
+
+type McpCliCompositeView = {
+  /** Dot paths printed as key/value lines above the tables; absent and null values are skipped. */
+  summary: readonly string[];
+  sections: readonly [McpCliCompositeSection, ...McpCliCompositeSection[]];
 };
 
 export type McpCliToolAnnotationMap<
