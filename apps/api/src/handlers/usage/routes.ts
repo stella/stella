@@ -26,7 +26,9 @@ const VERSIONED_USAGE_PATH = `${STELLA_API_VERSION_PREFIX}${USAGE_PATH}`;
 // land in a follow-up PR per the original plan.
 export const usageRoute = new Elysia({ prefix: USAGE_PATH })
   .onRequest(({ request, set }) => {
-    if (env.FEATURE_USAGE) {return;}
+    if (env.FEATURE_USAGE) {
+      return;
+    }
     const path = new URL(request.url).pathname;
     // Admission precedes body validation and authentication database access.
     // The root-mounted provider webhook retains its own delivery contract.
