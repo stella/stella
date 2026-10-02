@@ -100,8 +100,6 @@ export const DevSidebarGroup = () => {
       setTanstackDevtools: s.setTanstackDevtools,
       sourceInspector: s.sourceInspector,
       setSourceInspector: s.setSourceInspector,
-      reactGrab: s.reactGrab,
-      setReactGrab: s.setReactGrab,
       publicLawPreview: s.publicLawPreview,
       setPublicLawPreview: s.setPublicLawPreview,
       simulateSlowLoad: s.simulateSlowLoad,
@@ -262,17 +260,6 @@ export const DevSidebarGroup = () => {
           variant="switch"
         >
           Source Inspector
-        </MenuCheckboxItem>
-        <MenuCheckboxItem
-          checked={dev.reactGrab}
-          onClick={() => {
-            const next = !dev.reactGrab;
-            dev.setReactGrab(next);
-            window.location.reload();
-          }}
-          variant="switch"
-        >
-          React Grab
         </MenuCheckboxItem>
         <MenuCheckboxItem
           checked={dev.publicLawPreview}

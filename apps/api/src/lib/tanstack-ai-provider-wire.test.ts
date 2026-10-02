@@ -12,6 +12,7 @@ import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contr
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
 import { CHAT_ORACLE } from "@/api/tests/helpers/chat-oracles";
 import type { OracleViolation } from "@/api/tests/helpers/chat-oracles";
+import { findProviderRuleViolations } from "@/api/tests/helpers/provider-request-schema";
 import { findTranscriptViolations } from "@/api/tests/helpers/provider-request-transcript";
 import type { ProviderRequest } from "@/api/tests/helpers/provider-request-transcript";
 import {
@@ -60,6 +61,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const cassettes = loadProviderWireCassettes();
 
 const {
+  providerWireRequestRules: requestRules,
   providerWireRequestShape: requestShape,
   providerWireToolInput: toolInput,
 } = CHAT_ORACLE;
@@ -77,7 +79,7 @@ beforeAll(() => {
   previousBedrockEndpoint = process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"];
   process.env["AWS_ENDPOINT_URL_BEDROCK_RUNTIME"] =
     "https://bedrock-runtime.us-east-1.amazonaws.com.cassette.invalid";
-  replay = installProviderWireReplay();
+  replay = installProviderWireReplay({ retryAfterMs: 1 });
 });
 
 afterAll(() => {
@@ -139,10 +141,25 @@ const expectPinnedRequests = (
   }
 };
 
+/** Every request the adapter sent is one its provider accepts, as far as the
+ *  provider's published schema and documented rules say. */
+const expectProviderRules = (sent: readonly ReplayedRequest[]) => {
+  expect(
+    sent.flatMap((request) => findProviderRuleViolations(request)),
+    JSON.stringify({ oracle: requestRules }),
+  ).toEqual([]);
+};
+
 const checkCassette = async (cassette: ProviderWireCassette) => {
   const { findings, requests, run, sent, transcripts } =
     await replayWireScenario({
       cassette,
+      // One existing server-error case per SDK exercises its default first backoff.
+      recordedRetryResponses:
+        cassette.scenario === "server-error" &&
+        (cassette.provider === "openai" || cassette.provider === "anthropic")
+          ? 1
+          : 0,
       replay,
     });
   expectContract(
@@ -150,7 +167,16 @@ const checkCassette = async (cassette: ProviderWireCassette) => {
     findWireContractViolations({ cassette, replay: findings, run }),
   );
   expectSettledTranscripts({ requests, transcripts });
+  // The rules first: a request a provider would refuse names the rule it
+  // breaks before it shows as a changed shape.
+  expectProviderRules(sent);
   expectPinnedRequests(cassette, sent);
+  if (
+    (cassette.provider === "openai" || cassette.provider === "anthropic") &&
+    (cassette.scenario === "rate-limit" || cassette.scenario === "server-error")
+  ) {
+    expect(sent.map(({ exchange }) => exchange)).toEqual([0, 0, 0]);
+  }
 };
 
 const checkCancel = async (provider: ProviderWireProvider) => {
@@ -283,6 +309,43 @@ describe("provider wire corpus", () => {
       { index: 0, version: "sent" },
     ]);
   });
+
+  test.each(["openai", "anthropic"] as const)(
+    "%s retry hints preserve the recorded response and one default backoff",
+    async (provider) => {
+      const cassette = cassetteFor(cassettes, provider, "server-error");
+      const recorded = JSON.stringify(cassette);
+      const exchange =
+        cassette.exchanges.at(0) ?? panic("The retry cassette has an exchange");
+      replay.takeRequests();
+      replay.serve(cassette, { recordedRetryResponses: 1 });
+      const hints: (string | null)[] = [];
+      for (let attempt = 0; attempt < 2; attempt += 1) {
+        const response = await fetch(
+          `https://api.${provider}.com${exchange.request.path}`,
+          {
+            method: exchange.request.method,
+            body: JSON.stringify({ model: cassette.model }),
+          },
+        );
+        hints.push(response.headers.get("retry-after-ms"));
+        expect(response.status).toBe(exchange.response.status);
+        expect(new Uint8Array(await response.arrayBuffer())).toEqual(
+          new Uint8Array(bodyBytesOf(exchange.response.body)),
+        );
+        for (const [name, value] of Object.entries(exchange.response.headers)) {
+          expect(response.headers.get(name)).toBe(value);
+        }
+      }
+      expect(hints).toEqual([null, "1"]);
+      expect(replay.requests().map(({ exchange: index }) => index)).toEqual([
+        0, 0,
+      ]);
+      expect(replay.takeFindings()).toEqual({ unexpected: [], unconsumed: [] });
+      expect(replay.takeRequests()).toHaveLength(2);
+      expect(JSON.stringify(cassette)).toBe(recorded);
+    },
+  );
 
   test("a tool call ended twice is a finding", async () => {
     // The real adapter's run, with one TOOL_CALL_END repeated.
@@ -486,6 +549,7 @@ describe("a cancelled run rejects cleanly", () => {
 test("a cancelled structured Bedrock request never reaches the provider", async () => {
   const model = wireChatModel("bedrock");
   const adapter = createTanStackTextAdapterFactory({
+    dataClass: "public_corpus",
     apiKey: "cassette-replay-no-credentials",
     provider: "bedrock",
   })(model);

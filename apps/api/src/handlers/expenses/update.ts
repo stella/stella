@@ -45,7 +45,7 @@ const config = {
     "written-off expense is refused; use expenses.delete to write off an " +
     "unbilled one.",
   permissions: { expense: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   body: updateExpenseBodySchema,
 } satisfies WorkspaceHandlerConfig;
 

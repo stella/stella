@@ -8,6 +8,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSavedSearchId } from "@/api/lib/safe-id-boundaries";
 
 import { toSavedSearchResponse } from "./response";
@@ -28,7 +29,9 @@ export const savedSearchCursor = createTimestampIdCursorCodec({
 const listSavedSearches = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, query }) {
-    const limit = query.limit ?? LIMITS.savedSearchesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.savedSearchesPageSizeDefault,
+    );
     const organizationId = session.activeOrganizationId;
     const conditions = [
       eq(savedSearches.organizationId, organizationId),

@@ -39,7 +39,7 @@ import { detached } from "@/api/lib/analytics/capture";
 import { contentDisposition } from "@/api/lib/content-disposition";
 import { resolveS3Credentials, TEMP_UPLOAD_TAGGING } from "@/api/lib/s3";
 import { createS3CredentialGuard } from "@/api/lib/s3/credential-guard";
-import { RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS } from "@/api/lib/security-headers";
+import { PRIVATE_CACHE_CONTROL } from "@/api/lib/security-headers";
 
 export class S3PresignError extends TaggedError("S3PresignError")<{
   message: string;
@@ -966,8 +966,7 @@ export const presignDownloadUrl = async (
         new GetObjectCommand({
           Bucket: envBase.S3_BUCKET,
           Key: key,
-          ResponseCacheControl:
-            RAW_DOCUMENT_RESPONSE_SECURITY_HEADERS["Cache-Control"],
+          ResponseCacheControl: PRIVATE_CACHE_CONTROL,
           ...(fileName
             ? { ResponseContentDisposition: contentDisposition(fileName) }
             : {}),

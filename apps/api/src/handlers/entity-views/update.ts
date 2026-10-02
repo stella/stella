@@ -19,7 +19,11 @@ const config = {
   description:
     "Change the name or layout of one personal cross-matter view. Other users' views cannot be changed.",
   permissions: { view: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: entityViewParams,
   body: entityViewUpdateBody,
 } satisfies HandlerConfig;

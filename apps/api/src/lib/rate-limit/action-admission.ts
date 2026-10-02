@@ -1,19 +1,23 @@
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal as configuredActionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
+import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import {
   ACTION_PERIOD_ACQUIRE_SCRIPT,
   actionPeriodArguments,
   staleActionPeriodTime,
   resolveActionPeriodBudget,
   type ActionPeriodBudget,
-  type ActionPeriodIdentity,
   type ActionPeriodPolicy,
 } from "@/api/lib/rate-limit/action-period-budget";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
@@ -22,6 +26,14 @@ import {
   createRedisClient,
 } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import {
+  runObservedAction,
+  type ActionCostRecorder,
+} from "@/api/lib/usage/action-costs/context";
+import {
+  getActionCostRecorder,
+  reportMissingActionCostIdentity,
+} from "@/api/lib/usage/action-costs/recorder";
 
 type RedisCommands = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -45,13 +57,12 @@ const admissionRedis = createLazyRedisClient(() =>
 
 export const closeActionAdmissionRedis = () => admissionRedis.close();
 
-export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
-  message: string;
-  reason: "busy" | "unavailable";
-  cause?: unknown;
-}> {}
+export { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 
-export type ActionAdmissionPolicy = {
+export const actionAdmissionRefusal = (error: ActionAdmissionError) =>
+  configuredActionAdmissionRefusal(error, env.ACTION_LIMIT_CONTACT_URL);
+
+type ActionAdmissionPolicy = {
   organizationConcurrency: number;
   userConcurrency: number;
   leaseMs: number;
@@ -144,18 +155,20 @@ const configuredPolicy = (): Result<
   return Result.ok({ organizationConcurrency, userConcurrency, leaseMs });
 };
 
-type ActionAdmissionOptions = {
+type ActionAdmissionOptions<T = unknown> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  run: (signal: AbortSignal) => Promise<unknown>;
+  run: (signal: AbortSignal) => Promise<T>;
   enabled?: boolean;
+  scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
-  periodIdentity?: ActionPeriodIdentity;
+  periodIdentity?: AdmittedActionIdentity;
   periodPolicy?: ActionPeriodPolicy;
   redis?: RedisCommands;
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
   timing?: AdmissionTiming;
+  costRecorder?: ActionCostRecorder | null;
 };
 
 type AdmissionTiming = {
@@ -184,7 +197,7 @@ type AdmissionExecutorOptions = {
   keys: AdmissionKeys;
   budget: ActionPeriodBudget | null;
   organizationId: SafeId<"organization">;
-  periodIdentity: ActionPeriodIdentity | undefined;
+  periodIdentity: AdmittedActionIdentity | undefined;
   redis: RedisCommands | undefined;
   redisReady: () => Promise<RedisCommands>;
 };
@@ -285,6 +298,72 @@ const createAdmissionExecutor = ({
   return execute;
 };
 
+const validateAdmissionReply = (
+  reply: unknown,
+): Result<void, ActionAdmissionError> => {
+  if (reply === 0 || reply === -1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message:
+          reply === -1
+            ? "Action period limit reached"
+            : "Concurrent action limit reached",
+        reason: reply === -1 ? "period_exhausted" : "busy",
+      }),
+    );
+  }
+  if (reply !== 1) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Action admission returned an invalid response",
+        reason: "unavailable",
+      }),
+    );
+  }
+  return Result.ok(undefined);
+};
+
+type ObservedAdmissionRunOptions<T> = Pick<
+  ActionAdmissionOptions,
+  "organizationId" | "userId"
+> & {
+  periodIdentity: ActionAdmissionOptions["periodIdentity"];
+  costRecorder: ActionAdmissionOptions["costRecorder"];
+  run: (signal: AbortSignal) => Promise<T>;
+};
+
+const createObservedAdmissionRun = <T>({
+  organizationId,
+  userId,
+  periodIdentity,
+  costRecorder,
+  run,
+}: ObservedAdmissionRunOptions<T>) => {
+  const recorder =
+    costRecorder === null
+      ? undefined
+      : (costRecorder ?? getActionCostRecorder());
+  return async (signal: AbortSignal): Promise<T> => {
+    const executeRun = async () => {
+      signal.throwIfAborted();
+      return await run(signal);
+    };
+    if (recorder === undefined) {
+      return await executeRun();
+    }
+    if (periodIdentity === undefined) {
+      reportMissingActionCostIdentity();
+      return await executeRun();
+    }
+    return await runObservedAction({
+      identity: { organizationId, ...periodIdentity },
+      userId,
+      recorder,
+      run: executeRun,
+    });
+  };
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -295,6 +374,7 @@ export const withActionAdmission = async <T>({
   userId,
   run,
   enabled = env.FEATURE_ACTION_ADMISSION,
+  scope = "inherit",
   policy,
   periodIdentity,
   periodPolicy,
@@ -302,12 +382,18 @@ export const withActionAdmission = async <T>({
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
   timing = defaultTiming,
-}: Omit<ActionAdmissionOptions, "run"> & {
-  run: (signal: AbortSignal) => Promise<T>;
-}): Promise<Result<T, unknown>> => {
+  costRecorder,
+}: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
+  const observedRun = createObservedAdmissionRun({
+    organizationId,
+    userId,
+    periodIdentity,
+    costRecorder,
+    run,
+  });
   if (!enabled) {
     return await Result.tryPromise({
-      try: async () => await run(new AbortController().signal),
+      try: async () => await observedRun(new AbortController().signal),
       catch: (error: unknown) => error,
     });
   }
@@ -331,6 +417,7 @@ export const withActionAdmission = async <T>({
 
   const inherited = admissionScope.getStore();
   if (
+    scope === "inherit" &&
     inherited?.status === "active" &&
     inherited.organizationId === organizationId &&
     inherited.userId === userId
@@ -338,8 +425,7 @@ export const withActionAdmission = async <T>({
     return await Result.tryPromise({
       try: async () => {
         inherited.signal.throwIfAborted();
-        const value = await run(inherited.signal);
-        inherited.signal.throwIfAborted();
+        const value = await observedRun(inherited.signal);
         return value;
       },
       catch: (error: unknown) => error,
@@ -375,24 +461,9 @@ export const withActionAdmission = async <T>({
   if (Result.isError(admitted)) {
     return admitted;
   }
-  if (admitted.value === 0 || admitted.value === -1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message:
-          admitted.value === -1
-            ? "Action period limit reached"
-            : "Concurrent action limit reached",
-        reason: "busy",
-      }),
-    );
-  }
-  if (admitted.value !== 1) {
-    return Result.err(
-      new ActionAdmissionError({
-        message: "Action admission returned an invalid response",
-        reason: "unavailable",
-      }),
-    );
+  const validated = validateAdmissionReply(admitted.value);
+  if (Result.isError(validated)) {
+    return validated;
   }
 
   let leaseDeadline = initialAttemptAt + limits.leaseMs;
@@ -466,7 +537,7 @@ export const withActionAdmission = async <T>({
   }
 
   let outcome: Result<T, unknown>;
-  const scope: AdmissionScope = {
+  const executionScope: AdmissionScope = {
     organizationId,
     userId,
     signal: controller.signal,
@@ -475,14 +546,14 @@ export const withActionAdmission = async <T>({
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(scope, async () => {
-          controller.signal.throwIfAborted();
-          return await run(controller.signal);
-        }),
+        await admissionScope.run(
+          executionScope,
+          async () => await observedRun(controller.signal),
+        ),
       catch: (error: unknown) => error,
     });
   } finally {
-    scope.status = "settled";
+    executionScope.status = "settled";
     stopped = true;
     cancelScheduled();
     await Promise.resolve(renewal);
@@ -493,7 +564,14 @@ export const withActionAdmission = async <T>({
       observeFailure(released.error, { sink: RELEASE_FAILURE });
     }
   }
-  if (controller.signal.aborted) {
+  // A settled success may already have committed or charged. Losing the lease
+  // cannot replace it with an infrastructure error that invites duplicate work.
+  if (
+    Result.isError(outcome) &&
+    controller.signal.aborted &&
+    (outcome.error === controller.signal.reason ||
+      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
+  ) {
     return Result.err(controller.signal.reason);
   }
   return outcome;

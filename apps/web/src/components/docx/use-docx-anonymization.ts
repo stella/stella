@@ -1,8 +1,8 @@
 import { useCallback, useMemo, useRef, useState } from "react";
 
 import { useQuery } from "@tanstack/react-query";
+import type { EditorView } from "@tiptap/pm/view";
 import { Result } from "better-result";
-import type { EditorView } from "prosemirror-view";
 
 import { setAnonymizationTermsMeta } from "@stll/folio-react";
 import type { AnonymizationTerm } from "@stll/folio-react";

@@ -13,6 +13,8 @@ import {
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { arrayOrEmpty } from "@/api/lib/array";
+import { DEFAULT_MANAGED_AI_RESIDENCY } from "@/api/lib/chat/ai-data-policy";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   DEFAULT_MATTER_NUMBER_PADDING,
   DEFAULT_MATTER_NUMBER_PATTERN,
@@ -25,7 +27,11 @@ const config = {
     "caching, memory extraction, and time policy. An organization that has never saved " +
     "settings gets the defaults rather than an error.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 
@@ -35,6 +41,7 @@ type OrganizationSettingsRow = {
   matterNumberPattern: string;
   practiceJurisdictions: PracticeJurisdiction[];
   promptCachingEnabled: boolean;
+  managedAIResidency: ManagedAIResidency;
   memoryExtractionEnabled: boolean;
   timeMinimumUnitMinutes: number;
   timeEditWindowDays: number;
@@ -53,6 +60,7 @@ export const projectOrganizationSettingsRow = (
     row?.matterNumberPadding ?? DEFAULT_MATTER_NUMBER_PADDING,
   practiceJurisdictions: arrayOrEmpty(row?.practiceJurisdictions),
   promptCachingEnabled: row?.promptCachingEnabled ?? true,
+  managedAIResidency: row?.managedAIResidency ?? DEFAULT_MANAGED_AI_RESIDENCY,
   memoryExtractionEnabled: row?.memoryExtractionEnabled ?? false,
   timeMinimumUnitMinutes:
     row?.timeMinimumUnitMinutes ?? DEFAULT_TIME_MINIMUM_UNIT_MINUTES,
@@ -75,6 +83,7 @@ const readOrganizationSettings = createSafeRootHandler(
             matterNumberPadding: true,
             practiceJurisdictions: true,
             promptCachingEnabled: true,
+            managedAIResidency: true,
             memoryExtractionEnabled: true,
             timeMinimumUnitMinutes: true,
             timeEditWindowDays: true,

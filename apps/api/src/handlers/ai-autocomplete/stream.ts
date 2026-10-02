@@ -67,6 +67,7 @@ const autocompleteStream = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     session,
@@ -79,9 +80,11 @@ const autocompleteStream = createSafeRootHandler(
     const stream = yield* Result.try({
       try: () =>
         streamTanStackTextForRole({
+          dataClass: "customer",
           role: "fast",
           serviceTier: "standard",
           orgAIConfig,
+          managedAIResidency,
           organizationId: session.activeOrganizationId,
           // Root-scoped handler: no workspace id is available here.
           tenantWorkspaceIds: [],

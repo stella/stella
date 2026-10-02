@@ -27,7 +27,11 @@ const config = {
     "server-side from the version id, never supplied by the caller. Refused " +
     "when the clause is at its version limit.",
   permissions: { clause: ["update"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   params: restoreClauseVersionParamsSchema,
 } satisfies HandlerConfig;
 

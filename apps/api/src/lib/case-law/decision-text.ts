@@ -1,3 +1,4 @@
+// parser-output-unchanged: Reader tolerance changes no writer or canonical replay payload.
 import { panic } from "better-result";
 
 import {
@@ -287,9 +288,20 @@ type SplitStoredDecisionTextMetadataResult = {
   textFields: DecisionTextFields;
 };
 
+type ReadTextAbsence = {
+  readonly field: DecisionTextFieldKey;
+  readonly reason: TextAbsenceReason;
+};
+
 type StoredTextAbsenceParseResult =
   | { readonly type: "invalid" }
-  | { readonly type: "valid"; readonly entries: readonly StoredTextAbsence[] };
+  | { readonly type: "valid"; readonly entries: readonly ReadTextAbsence[] };
+
+const isReadTextAbsenceReason = (
+  reason: unknown,
+): reason is TextAbsenceReason =>
+  typeof reason === "string" &&
+  TEXT_ABSENCE_REASONS.some((candidate) => candidate === reason);
 
 const parseStoredTextAbsence = (
   value: unknown,
@@ -300,20 +312,30 @@ const parseStoredTextAbsence = (
   if (!Array.isArray(value)) {
     return { type: "invalid" };
   }
-  const entries: StoredTextAbsence[] = [];
+  const entries: ReadTextAbsence[] = [];
+  const seenFields = new Set<string>();
   for (const entry of value) {
-    if (!isRecord(entry) || Object.keys(entry).length !== 2) {
+    if (
+      !isRecord(entry) ||
+      Object.keys(entry).length !== 2 ||
+      !Object.hasOwn(entry, "field") ||
+      !Object.hasOwn(entry, "reason")
+    ) {
       return { type: "invalid" };
     }
     const field = entry["field"];
     const reason = entry["reason"];
     if (
       typeof field !== "string" ||
-      !isDecisionTextFieldKey(field) ||
-      !isStoredTextAbsenceReason(reason) ||
-      entries.some((candidate) => candidate.field === field)
+      !isReadTextAbsenceReason(reason) ||
+      seenFields.has(field)
     ) {
       return { type: "invalid" };
+    }
+    seenFields.add(field);
+    // New publisher fields must not poison text reads during a rolling deploy.
+    if (!isDecisionTextFieldKey(field)) {
+      continue;
     }
     entries.push({ field, reason });
   }

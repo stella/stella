@@ -57,6 +57,7 @@ const dependencies = ({
   screen?: typeof screenSanctionsSubject;
   jurisdictions?: CountryCode[];
 }): SanctionsCheckDependencies => ({
+  observer: "unobserved",
   scopedDb: noDatabase,
   organizationId: toSafeId<"organization">("org_1"),
   executeLookup:
@@ -77,15 +78,17 @@ describe("sanctions check", () => {
     const screen = mock<typeof screenSanctionsSubject>(async () =>
       Result.ok(CLEAR_SCREENING),
     );
+    const observer = { onRequest: () => undefined, onError: () => undefined };
     const result = await runSanctionsCheck({
       subject: { type: "company-id", value: " 26863154 ", country: "CZ" },
-      dependencies: dependencies({ executeLookup, screen }),
+      dependencies: { ...dependencies({ executeLookup, screen }), observer },
     });
 
     expect(executeLookup.mock.calls.at(0)?.at(0)).toMatchObject({
       handler: { slug: "ares" },
       query: "26863154",
     });
+    expect(executeLookup.mock.calls.at(0)?.at(0)?.observer).toBe(observer);
     expect(screen.mock.calls.at(0)?.at(0)).toMatchObject({
       subject: {
         type: "organization",
@@ -318,6 +321,7 @@ describe("counterparty check subject routing", () => {
 
   test("refuses a tax ID for the sanctions check and names the subjects it takes", async () => {
     const result = await runEntityCheckShared({
+      observer: "unobserved",
       check: "sanctions",
       subject: { type: "tax-id", value: "CZ45274649" },
       runCheck: neverRunCheck,
@@ -375,6 +379,7 @@ describe("counterparty check subject routing", () => {
     "asks the caller to correct $name for a register check",
     async ({ subject, message }) => {
       const result = await runEntityCheckShared({
+        observer: "unobserved",
         check: "cz-insolvency",
         subject,
         runCheck: neverRunCheck,
@@ -390,6 +395,7 @@ describe("counterparty check subject routing", () => {
 
   test("does not ask for a birth date the VAT check would not use", async () => {
     const result = await runEntityCheckShared({
+      observer: "unobserved",
       check: "cz-vat-reliability",
       subject: {
         type: "person",

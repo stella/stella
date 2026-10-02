@@ -6,7 +6,10 @@ import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
-import { parseDecisionQuery } from "@stll/api-contract/decision-query-intent";
+import {
+  isWholeEntryIdentifier,
+  parseDecisionQuery,
+} from "@stll/api-contract/decision-query-intent";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 
@@ -159,6 +162,7 @@ const expandCaseLawSearch = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     request,
@@ -188,17 +192,19 @@ const expandCaseLawSearch = createSafeRootHandler(
       return Result.ok(NO_ALTERNATIVES);
     }
 
-    // An identifier is matched as written, so there is nothing to expand.
+    // An entry that is an identifier is matched as written, so there is
+    // nothing to expand; words around an embedded one are still text.
     const intent = parseDecisionQuery(body.query, {
       grammar: decisionDocketGrammarForCountry(country),
       reporters: decisionReporterGrammarForJurisdiction(country),
     });
-    if (intent.type === "identifier") {
+    if (isWholeEntryIdentifier(intent)) {
       return Result.ok(NO_ALTERNATIVES);
     }
 
     // No AI for this organization means no expansion, not a failed search.
     const available = requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -229,6 +235,7 @@ const expandCaseLawSearch = createSafeRootHandler(
     }
 
     const analytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -246,11 +253,12 @@ const expandCaseLawSearch = createSafeRootHandler(
     const generated = await Result.tryPromise({
       try: async () =>
         await generateTanStackObjectForRole({
+          dataClass: "customer",
           role: "fast",
           serviceTier: "standard",
           orgAIConfig,
+          managedAIResidency,
           organizationId,
-          // Public law: no matter's data reaches the model.
           tenantWorkspaceIds: [],
           analytics,
           caching: resolveCaching({

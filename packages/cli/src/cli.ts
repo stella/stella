@@ -10,6 +10,10 @@ import { run } from "@stricli/core";
 import type { StricliProcess } from "@stricli/core";
 import { Result } from "better-result";
 
+import {
+  actionAdmissionRefusalOutput,
+  type CliActionAdmissionRefusal,
+} from "./action-admission-refusal.js";
 import { defaultConfigDir } from "./auth/config-dir.js";
 import { resolveAccessToken } from "./auth/resolve-access-token.js";
 import { resolveServerUrl } from "./auth/server-resolution.js";
@@ -19,7 +23,7 @@ import { commandNeedsRegistry } from "./command-locality.js";
 import { HOME, XDG_CACHE_HOME } from "./env.js";
 import { generatedRouteMap } from "./generated/route-map.js";
 import { reportFatalError } from "./main-error-boundary.js";
-import { EXIT_CODES } from "./mcp-constants.js";
+import { EXIT_CODES, resolveMcpErrorCodeExit } from "./mcp-constants.js";
 import { preparseServerFlag } from "./preparse-server-flag.js";
 import {
   formatRegistryDrift,
@@ -86,6 +90,24 @@ const resolvePreamble = async (
 // oxlint-disable-next-line no-unsafe-type-assertion -- see SAFETY comment above
 const stricliProcess = process as unknown as StricliProcess & typeof process;
 
+const refuseAdmission = (
+  refusal: CliActionAdmissionRefusal,
+  argv: readonly string[],
+): void => {
+  const outputIndex = argv.indexOf("--output");
+  const format =
+    argv.includes("--json") ||
+    argv.includes("--output=json") ||
+    argv.includes("--output=jsonl") ||
+    (outputIndex !== -1 &&
+      (argv.at(outputIndex + 1) === "json" ||
+        argv.at(outputIndex + 1) === "jsonl"))
+      ? "json"
+      : "table";
+  process.stderr.write(actionAdmissionRefusalOutput({ refusal, format }));
+  process.exitCode = resolveMcpErrorCodeExit(refusal.code) ?? EXIT_CODES.server;
+};
+
 const main = async (): Promise<void> => {
   const argv = process.argv.slice(2);
   const isAuthLogin = argv.at(0) === "auth" && argv.at(1) === "login";
@@ -113,6 +135,10 @@ const main = async (): Promise<void> => {
       token,
       env: cacheEnv,
     });
+    if (outcome.status === "admission-refused") {
+      refuseAdmission(outcome.refusal, argv);
+      return;
+    }
     if (outcome.status === "failed") {
       process.stderr.write(`${outcome.warning}\n`);
     } else if (outcome.status === "refreshed" && outcome.nudge !== undefined) {
@@ -175,6 +201,10 @@ const main = async (): Promise<void> => {
         env: cacheEnv,
         force: true,
       });
+      if (outcome.status === "admission-refused") {
+        refuseAdmission(outcome.refusal, argv);
+        return;
+      }
       if (outcome.status === "failed") {
         process.stderr.write(`${outcome.warning}\n`);
       } else if (

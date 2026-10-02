@@ -7,7 +7,7 @@ import {
   PdfStream,
 } from "@libpdf/core";
 import type { PdfObject } from "@libpdf/core";
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 import crypto from "node:crypto";
 
 import {
@@ -27,7 +27,13 @@ import type {
 } from "@/api/lib/files/pdf-signing/stamp";
 import { settled } from "@/api/tests/helpers/settled";
 import { readSignatureIntegrity } from "@/api/tests/helpers/signed-pdf";
-import { createTestCertificate } from "@/api/tests/helpers/test-pki";
+import {
+  createTestRsaKeyPool,
+  createTestCertificate,
+} from "@/api/tests/helpers/test-pki";
+
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
 
 const SIGNING_TIME = new Date("2026-06-01T12:00:00.000Z");
 /** DigestInfo header for SHA-256, RFC 8017 9.2 step 2. */
@@ -228,7 +234,10 @@ const signWithStamp = async (
   if (placed.status !== "placed") {
     throw new Error("fixture stamp did not place");
   }
-  const signer = await createTestCertificate({ commonName: signerName });
+  const signer = await createTestCertificate({
+    keyPool,
+    commonName: signerName,
+  });
   const invocation = {
     basePdf,
     certificate: signer.der,

@@ -115,6 +115,9 @@ export const isKnownVatCountry = (prefix: string): boolean =>
  * Whether the country still participates in VIES (GB does not).
  */
 export const isViesParticipant = (prefix: string): boolean => {
+  if (!Object.hasOwn(VAT_FORMAT_RULES, prefix)) {
+    return false;
+  }
   const rule = VAT_FORMAT_RULES[prefix];
   return rule !== undefined && rule.removed !== true;
 };

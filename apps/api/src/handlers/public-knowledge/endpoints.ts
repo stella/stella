@@ -135,7 +135,10 @@ export const createPublicKnowledgeEndpoints = (
   };
 
   const listPacks = createSafePublicHandler(
-    { mcp: { type: "internal", reason: "public_indexing" } },
+    {
+      cache: { kind: "public", maxAge: 300 },
+      mcp: { type: "internal", reason: "public_indexing" },
+    },
     async function* () {
       const packs = yield* fromBundle(Result.ok(catalogue().list()));
       return Result.ok({
@@ -146,6 +149,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readPack = createSafePublicHandler(
     {
+      cache: { kind: "public", maxAge: 300 },
       mcp: { type: "internal", reason: "public_indexing" },
       params: packParams,
     },
@@ -160,6 +164,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readTemplate = createSafePublicHandler(
     {
+      cache: { kind: "public", maxAge: 300 },
       mcp: { type: "internal", reason: "public_indexing" },
       params: templateParams,
     },
@@ -171,6 +176,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readTemplatePreview = createSafePublicHandler(
     {
+      cache: { kind: "public", maxAge: 300 },
       mcp: { type: "internal", reason: "public_indexing" },
       params: templateParams,
     },
@@ -246,7 +252,10 @@ export const createPublicKnowledgeEndpoints = (
   });
 
   const listStarters = createSafePublicHandler(
-    { mcp: { type: "internal", reason: "public_indexing" } },
+    {
+      cache: { kind: "public", maxAge: 300 },
+      mcp: { type: "internal", reason: "public_indexing" },
+    },
     async function* () {
       const starters = yield* fromBundle(Result.ok(STARTER_PLAYBOOKS));
       return Result.ok({ items: starters.map(starterMetadata) });
@@ -255,6 +264,7 @@ export const createPublicKnowledgeEndpoints = (
 
   const readStarter = createSafePublicHandler(
     {
+      cache: { kind: "public", maxAge: 300 },
       mcp: { type: "internal", reason: "public_indexing" },
       params: starterParams,
     },

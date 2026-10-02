@@ -13,7 +13,7 @@ const config = {
     "Archive an issuer profile so it is unavailable for new invoices. " +
     "The retained record remains available for historical references.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
   params: sellerProfileParams,
 } satisfies HandlerConfig;
 

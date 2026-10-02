@@ -15,6 +15,7 @@ import {
   DEFAULT_CURRENCY,
   formatCurrencyAmount,
 } from "@/components/billing/format-currency";
+import { GlobalTimer } from "@/features/time-timers/global-timer";
 import {
   formatDecimalHours,
   formatMinutes,
@@ -30,7 +31,6 @@ import { useMatterNameMap } from "@/routes/_protected.workspaces/$workspaceId/-c
 import { TimeEntryForm } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import type { TimeEntryFormValues } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-form";
 import { TimeEntryRow } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/time-entry-row";
-import { TimerControls } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/timer-controls";
 
 type TimesheetDayViewProps = {
   workspaceId: string;
@@ -184,7 +184,7 @@ export const TimesheetDayView = ({
   return (
     <div className="flex flex-col gap-3">
       {/* Timer */}
-      <TimerControls workspaceId={workspaceId} />
+      <GlobalTimer workspaceId={workspaceId} />
 
       {/* Summary bar */}
       <div className="flex items-center justify-between">

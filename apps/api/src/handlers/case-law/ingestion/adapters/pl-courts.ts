@@ -1973,6 +1973,29 @@ const readSaosRecord = (
 const storedListingPayload = (parts: SourceRawParts): string | undefined =>
   parts[RAW_PART.LISTING_DUMP] ?? parts[RAW_PART.LISTING_SEARCH];
 
+/** Re-read detail for a held textless row from the listing its raw envelope kept. */
+const rebuildTextlessPlCourtsFromStoredRaw = async (
+  stored: StoredRawReparseInput,
+  signal?: AbortSignal,
+): Promise<ReconciliationBuildOutcome> => {
+  if (
+    stored.contentType !== null &&
+    !PL_COURTS_REPARSABLE_CONTENT_TYPES.has(stored.contentType)
+  ) {
+    return { type: "unkeyable" };
+  }
+  const parts = plCourtsStoredRawParts(
+    new TextDecoder().decode(stored.raw),
+    stored.contentType,
+  );
+  const listingRecord =
+    parts === null ? null : readSaosRecord(storedListingPayload(parts));
+  if (listingRecord === null) {
+    return { type: "unkeyable" };
+  }
+  return await buildPlCourtsFromPayload(listingRecord, signal);
+};
+
 /**
  * Rebuild a decision from the responses already stored for it.
  *
@@ -2480,6 +2503,16 @@ export const plCourtsAdapter = defineSourceAdapter({
     recheckHeld: {
       metadataKey: PL_COURTS_DETAIL_READ_METADATA_KEY,
       values: [PL_COURTS_DETAIL_READ_STATE.FAILED],
+    },
+    textlessHeldRecheck: {
+      metadataKey: PL_COURTS_DETAIL_READ_METADATA_KEY,
+      values: [
+        PL_COURTS_DETAIL_READ_STATE.READ,
+        PL_COURTS_DETAIL_READ_STATE.ABSENT,
+      ],
+      minimumAgeDays: 7,
+      perWorkUnitLimit: 200,
+      buildDecisionFromStored: rebuildTextlessPlCourtsFromStoredRaw,
     },
     listSlicePage: listPlCourtsSlicePage,
     buildDecision: buildPlCourtsFromPayload,

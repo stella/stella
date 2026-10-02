@@ -40,6 +40,7 @@ test.each(["SVK", "POL", "DEU", "cze", "cz", "*"])(
     const result = await searchLegislationHandler(
       { jurisdiction, query: "nájemné" },
       db,
+      "unobserved",
     );
 
     expect(result).toMatchObject({
@@ -65,6 +66,7 @@ test("a cursor naming a dictionary is refused, and reads nothing", async () => {
   const result = await searchLegislationHandler(
     { cursor: CASE_LAW_CURSOR, query: "nájemné" },
     db,
+    "unobserved",
   );
 
   expect(result).not.toHaveProperty("items");

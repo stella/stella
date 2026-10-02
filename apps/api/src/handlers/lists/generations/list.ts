@@ -14,6 +14,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalListGenerationRunId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
@@ -33,7 +34,11 @@ const config = {
     "completed timestamps.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   params: paramsSchema,
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -46,7 +51,9 @@ const generationCursor = createTimestampIdCursorCodec({
 const readGenerations = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListGenerationRunsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListGenerationRunsPageSizeDefault,
+    );
     const cursor = query.cursor ? generationCursor.decode(query.cursor) : null;
     if (query.cursor && !cursor) {
       return Result.err(

@@ -68,7 +68,7 @@ import {
 import { HandlerError, TelemetryError } from "@/api/lib/errors/tagged-errors";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 
 type InsertMessagesProps = {
   acceptedSendMode: ChatSendMode | null;
@@ -336,7 +336,8 @@ export type PersistMessageProps = {
   persistencePlan: MessagePersistencePlan;
   deleteMessageIds?: SafeId<"chatMessage">[];
   dataScopeReplacement?: ChatDataScopeReplacement | undefined;
-  indexThread?: typeof upsertChatThreadSearchDocument | undefined;
+  /** Refreshes the thread's search document once its messages changed. */
+  indexThread: typeof upsertChatThreadSearchDocument;
 };
 
 export const persistMessage = async (props: PersistMessageProps) => {
@@ -345,9 +346,7 @@ export const persistMessage = async (props: PersistMessageProps) => {
   // actually changed. Fire-and-forget: indexing must never block or
   // fail a chat turn.
   if (Result.isOk(result) && props.persistencePlan.type !== "none") {
-    (props.indexThread ?? upsertChatThreadSearchDocument)(props.threadId).catch(
-      captureError,
-    );
+    props.indexThread(props.threadId).catch(captureError);
   }
   return result;
 };
@@ -565,7 +564,7 @@ export const finalizeAssistantTurn = async ({
   threadId,
   userId,
   workspaceId,
-  indexThread = upsertChatThreadSearchDocument,
+  indexThread,
 }: {
   acceptedSendMode: ChatSendMode | null;
   dataScopeExpansion?: ChatDataScopeExpansion | undefined;
@@ -581,7 +580,7 @@ export const finalizeAssistantTurn = async ({
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
-  indexThread?: typeof upsertChatThreadSearchDocument;
+  indexThread: typeof upsertChatThreadSearchDocument;
 }) => {
   const persistResult = await settleHonouringStop(
     async (
@@ -696,6 +695,7 @@ const reportStoredTurnDefects = ({
 
 type PersistTerminalAssistantTurnProps = {
   execution: ChatTurnExecution;
+  indexThread: PersistMessageProps["indexThread"];
   failure?:
     | {
         code: ChatTurnFailureCode;
@@ -711,8 +711,9 @@ type PersistTerminalAssistantTurnProps = {
   workspaceId: SafeId<"workspace"> | null;
 };
 
-const persistTerminalAssistantTurn = async ({
+export const persistTerminalAssistantTurn = async ({
   execution,
+  indexThread,
   failure,
   outcome,
   owningAssistantMessage,
@@ -730,6 +731,7 @@ const persistTerminalAssistantTurn = async ({
       stopped,
     });
     return await persistMessage({
+      indexThread,
       persistencePlan:
         owningAssistantMessage === undefined
           ? { type: "insert", message: settlement.message }
@@ -766,6 +768,7 @@ const persistTerminalAssistantTurn = async ({
 export const persistFailedChatTurn = async ({
   code,
   execution,
+  indexThread,
   recordAuditEvent,
   retryable,
   owningAssistantMessage,
@@ -776,6 +779,7 @@ export const persistFailedChatTurn = async ({
 }: {
   code: ChatTurnFailureCode;
   execution: ChatTurnExecution;
+  indexThread: PersistMessageProps["indexThread"];
   recordAuditEvent: AuditRecorder;
   retryable: boolean;
   owningAssistantMessage?: PersistableChatMessage | undefined;
@@ -788,6 +792,7 @@ export const persistFailedChatTurn = async ({
   return await persistTerminalAssistantTurn({
     execution,
     failure: { code, retryable },
+    indexThread,
     outcome,
     owningAssistantMessage,
     recordAuditEvent,
@@ -801,6 +806,7 @@ export const persistFailedChatTurn = async ({
 /** Persist a pre-stream client disconnect as a reloadable terminal turn. */
 export const persistInterruptedChatTurn = async ({
   execution,
+  indexThread,
   owningAssistantMessage,
   recordAuditEvent,
   safeDb,
@@ -810,6 +816,7 @@ export const persistInterruptedChatTurn = async ({
 }: Omit<PersistTerminalAssistantTurnProps, "failure" | "outcome">) =>
   await persistTerminalAssistantTurn({
     execution,
+    indexThread,
     outcome: { type: "interrupted", reason: "client-disconnected" },
     owningAssistantMessage,
     recordAuditEvent,
@@ -1179,9 +1186,7 @@ export const persistAcceptedMessageWithClaim = async ({
   if (Result.isError(result.value)) {
     return Result.err(result.value.error);
   }
-  (persistenceProps.indexThread ?? upsertChatThreadSearchDocument)(
-    persistenceProps.threadId,
-  ).catch(captureError);
+  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
   return Result.ok(result.value.value);
 };
 
@@ -1216,8 +1221,6 @@ export const persistClaimedReplayMessage = async ({
   if (result.value === null) {
     return Result.ok(null);
   }
-  (persistenceProps.indexThread ?? upsertChatThreadSearchDocument)(
-    persistenceProps.threadId,
-  ).catch(captureError);
+  persistenceProps.indexThread(persistenceProps.threadId).catch(captureError);
   return Result.ok(result.value.execution);
 };

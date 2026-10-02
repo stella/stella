@@ -1,0 +1,51 @@
+name: Staging response policy
+
+# Runs the post-deploy response policy checks against the running staging
+# environment without deploying: the declared cache and robots headers of
+# Knowledge responses. Deploy main to staging runs the same checks after each
+# promotion. Staging is off unless someone starts it; start it first.
+
+on:
+  workflow_dispatch:
+
+permissions: {}
+
+# Dispatch only while no staging deployment is running. This group stays
+# separate from Deploy main to staging so a queued run here never cancels a
+# pending deployment; the script stops early when web and API report
+# different build commits.
+concurrency:
+  group: staging-response-policy
+  cancel-in-progress: false
+
+jobs:
+  check:
+    name: Check staging response policy
+    if: github.ref == 'refs/heads/main'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    # The staging edge header is read where Deploy main to staging reads it.
+    environment: release-app
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Run staging response policy checks
+        run: bun apps/api/src/scripts/post-deploy-response-policy.ts
+        env:
+          E2E_WEB_URL: https://staging.stll.app
+          E2E_API_URL: https://api-staging.stll.app
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}

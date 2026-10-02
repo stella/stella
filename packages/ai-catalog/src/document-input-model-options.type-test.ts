@@ -3,6 +3,7 @@ import type { BedrockModelInputModalitiesByName } from "@tanstack/ai-bedrock";
 import type { GeminiModelInputModalitiesByName } from "@tanstack/ai-gemini";
 import type { MistralModelInputModalitiesByName } from "@tanstack/ai-mistral";
 import type { OpenRouterModelInputModalitiesByName } from "@tanstack/ai-openrouter";
+import { expectTypeOf } from "bun:test";
 
 import type {
   BYOKModelIdByProvider,
@@ -58,7 +59,7 @@ type TanStackModelInputModalitiesByProvider = {
 type AdapterDocumentInputModelOptions =
   typeof CHAT_PDF_ATTACHMENT_MODEL_OPTIONS;
 
-type Assert<T extends true> = T;
+// Unlike `toExtend`, this counts an empty (`never`) provider set as covered.
 type Extends<T, U> = [T] extends [U] ? true : false;
 
 type EveryKnownDocumentInputOptionIsSupported = {
@@ -81,10 +82,6 @@ type EveryOfferedTanStackDocumentModelIsIncluded = {
   >;
 }[keyof TanStackDocumentInputModelByProvider];
 
-export type EveryKnownDocumentInputOptionRemainsAdapterSupported = Assert<
-  Extends<EveryKnownDocumentInputOptionIsSupported, true>
->;
+expectTypeOf<EveryKnownDocumentInputOptionIsSupported>().toEqualTypeOf<true>();
 
-export type EveryOfferedAdapterDocumentModelRemainsIncluded = Assert<
-  Extends<EveryOfferedTanStackDocumentModelIsIncluded, true>
->;
+expectTypeOf<EveryOfferedTanStackDocumentModelIsIncluded>().toEqualTypeOf<true>();

@@ -1,3 +1,7 @@
+import type {
+  BusinessRegistryLookupDetail,
+  BusinessRegistrySlug,
+} from "@stll/api-contract";
 // Shared backend dispatch for business-registry lookups.
 //
 // Single source of truth for the per-registry "this is how you look
@@ -6,11 +10,6 @@
 // (`business_registry_lookup`) drive their lookups through
 // `executeRegistryLookup` so the two surfaces never drift in error
 // mapping, normalisation, or shape detection.
-
-import type {
-  BusinessRegistryLookupDetail,
-  BusinessRegistrySlug,
-} from "@stll/api-contract";
 import {
   AresAPIError,
   type AresAddress,
@@ -129,6 +128,7 @@ import {
   RpoValidationError,
   searchByName as searchRpoByName,
 } from "@stll/business-registries/rpo";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import {
   isKnownVatCountry,
   parseVatNumber,
@@ -251,6 +251,7 @@ export const LOOKUP_DETAIL_DESCRIPTION =
   "keeps them (ORSR, RPO). Default: standard.";
 
 type RegistryLookupOptions = {
+  observer: RegistryRequestObservation;
   credential?: string | undefined;
   /** Registers without more to read answer `full` with their standard record. */
   detail?: BusinessRegistryLookupDetail | undefined;
@@ -309,7 +310,7 @@ export type RegistryHandler = {
   /** Lookup by canonical ID. */
   lookup: (
     input: string,
-    options?: RegistryLookupOptions,
+    options: RegistryLookupOptions,
   ) => Promise<BusinessRegistryHit | null>;
   /**
    * Search by name. `null` when the upstream registry has no
@@ -321,7 +322,11 @@ export type RegistryHandler = {
   search:
     | ((
         input: string,
-        options?: { limit?: number; credential?: string },
+        options: {
+          observer: RegistryRequestObservation;
+          limit?: number;
+          credential?: string;
+        },
       ) => Promise<BusinessRegistryHit[]>)
     | null;
   /** Deployment-level gate for adapters that require server config. */
@@ -461,8 +466,9 @@ const ARES_HANDLER: RegistryHandler = {
   jurisdictionRole: { type: "primary" },
   nativeToolSlug: "ares",
   isCanonicalId: (input) => /^\d{8}$/u.test(normalizeIco(input)),
-  lookup: async (input) => {
+  lookup: async (input, options) => {
     const company = await lookupByIco(input, {
+      observer: options.observer,
       onVrError: (error) =>
         captureError(error, {
           operation: "vr-enrichment",
@@ -561,8 +567,8 @@ const BRREG_HANDLER: RegistryHandler = {
   jurisdictionRole: { type: "primary" },
   nativeToolSlug: "brreg",
   isCanonicalId: (input) => /^\d{9}$/u.test(normalizeOrgnr(input)),
-  lookup: async (input) => {
-    const entity = await lookupByOrgnr(input);
+  lookup: async (input, options) => {
+    const entity = await lookupByOrgnr(input, options);
     return entity ? brregEntityToHit(entity) : null;
   },
   search: async (input, options) => {
@@ -713,14 +719,18 @@ const COMPANIES_HOUSE_HANDLER: RegistryHandler = {
     /^(?:R0\d{6}|[A-Z]{2}\d{6}|\d{8})$/u.test(normalizeCompanyNumber(input)),
   lookup: async (input, options) => {
     const company = await lookupByCompanyNumber(input, {
-      apiKey: requireCompaniesHouseApiKey(options?.credential),
+      observer: options.observer,
+      apiKey: requireCompaniesHouseApiKey(options.credential),
     });
     return company ? companiesHouseCompanyToHit(company) : null;
   },
   search: async (input, options) => {
     const results = await searchCompaniesHouseByName(
       input,
-      { apiKey: requireCompaniesHouseApiKey(options?.credential) },
+      {
+        observer: options.observer,
+        apiKey: requireCompaniesHouseApiKey(options.credential),
+      },
       options,
     );
     return results.map(companiesHouseSearchResultToHit);
@@ -843,14 +853,18 @@ const DENUE_HANDLER = {
   isCanonicalId: (input) => /^\d{1,12}$/u.test(normalizeEstablishmentId(input)),
   lookup: async (input, options) => {
     const establishment = await lookupByEstablishmentId(input, {
-      token: requireDenueApiToken(options?.credential),
+      observer: options.observer,
+      token: requireDenueApiToken(options.credential),
     });
     return establishment ? denueEstablishmentToHit(establishment) : null;
   },
   search: async (input, options) => {
     const results = await searchDenueByName(
       input,
-      { token: requireDenueApiToken(options?.credential) },
+      {
+        observer: options.observer,
+        token: requireDenueApiToken(options.credential),
+      },
       options,
     );
     return results.map(denueSearchResultToHit);
@@ -956,7 +970,8 @@ const EDGAR_HANDLER: RegistryHandler = {
   isCanonicalId: (input) => /^\d{1,10}$/u.test(normalizeCik(input)),
   lookup: async (input, options) => {
     const company = await lookupByCik(input, {
-      userAgent: requireEdgarUserAgent(options?.credential),
+      observer: options.observer,
+      userAgent: requireEdgarUserAgent(options.credential),
     });
     return company ? edgarCompanyToHit(company) : null;
   },
@@ -1059,8 +1074,8 @@ const GCIS_HANDLER: RegistryHandler = {
   // Falling through to search would silently turn a bad-checksum
   // tongbian into an empty name-search result.
   isCanonicalId: (input) => /^\d{8}$/u.test(normalizeTaxId(input)),
-  lookup: async (input) => {
-    const company = await lookupByTaxId(input);
+  lookup: async (input, options) => {
+    const company = await lookupByTaxId(input, options);
     return company ? gcisCompanyToHit(company) : null;
   },
   search: async (input, options) => {
@@ -1110,13 +1125,14 @@ const orsrHit = (details: OrsrDetails): BusinessRegistryHit => ({
 // The full record costs three requests more, so only on request.
 const lookupOrsrHit = async (
   input: string,
-  detail: BusinessRegistryLookupDetail | undefined,
+  options: RegistryLookupOptions,
 ): Promise<BusinessRegistryHit | null> => {
+  const { detail } = options;
   if (detail === "full") {
-    const record = await lookupOrsrFullRecordByIco(input);
+    const record = await lookupOrsrFullRecordByIco(input, options);
     return record ? orsrHit({ registry: "orsr", detail, ...record }) : null;
   }
-  const company = await lookupOrsrByIco(input);
+  const company = await lookupOrsrByIco(input, options);
   return company
     ? orsrHit({ registry: "orsr", detail: "standard", company })
     : null;
@@ -1179,7 +1195,7 @@ const ORSR_HANDLER: RegistryHandler = {
   // Falling through to search would silently turn a bad-checksum IČO
   // into an empty name-search result.
   isCanonicalId: (input) => /^\d{8}$/u.test(normalizeOrsrIco(input)),
-  lookup: async (input, options) => await lookupOrsrHit(input, options?.detail),
+  lookup: async (input, options) => await lookupOrsrHit(input, options),
   search: async (input, options) => {
     const results = await searchOrsrByName(input, options);
     return results.map(orsrSearchResultToHit);
@@ -1282,7 +1298,8 @@ const RPO_HANDLER: RegistryHandler = {
   // throwing into `mapError`.
   lookup: async (input, options) => {
     const entity = await lookupRpoByIco(input, {
-      view: options?.detail === "full" ? "historical" : "current",
+      observer: options.observer,
+      view: options.detail === "full" ? "historical" : "current",
     });
     if (entity.isErr()) {
       throw entity.error;
@@ -1365,8 +1382,8 @@ const KRS_HANDLER: RegistryHandler = {
   // malformed KRS number into "unsupported name search" (KRS has no
   // name endpoint), which is a worse error message for the user.
   isCanonicalId: (input) => /^\d{10}$/u.test(normalizeKrsNumber(input)),
-  lookup: async (input) => {
-    const entity = await lookupByKrsNumber(input);
+  lookup: async (input, options) => {
+    const entity = await lookupByKrsNumber(input, options);
     return entity ? krsEntityToHit(entity) : null;
   },
   // KRS has no public name-search endpoint. Callers attempting a
@@ -1538,8 +1555,8 @@ const PRH_HANDLER: RegistryHandler = {
   // through to search would silently turn a bad-checksum Y-tunnus into an
   // empty name-search result.
   isCanonicalId: (input) => /^\d{7}-\d$/u.test(normalizeBusinessId(input)),
-  lookup: async (input) => {
-    const company = await lookupByBusinessId(input);
+  lookup: async (input, options) => {
+    const company = await lookupByBusinessId(input, options);
     return company ? prhCompanyToHit(company) : null;
   },
   search: async (input, options) => {
@@ -1576,8 +1593,8 @@ const VIES_HANDLER: RegistryHandler = {
     }
     return /[0-9]/u.test(parsed.vat) && /^[A-Z0-9+*]{2,}$/u.test(parsed.vat);
   },
-  lookup: async (input) => {
-    const validation = await validateVat(input);
+  lookup: async (input, options) => {
+    const validation = await validateVat(input, options);
     return viesValidationToHit(validation);
   },
   // VIES has no name-search endpoint — VAT-only validation. Returning
@@ -1678,15 +1695,15 @@ const RECHERCHE_ENTREPRISES_HANDLER: RegistryHandler = {
   // Falling through to search would silently turn a bad-checksum
   // SIREN/SIRET into an empty name-search result.
   isCanonicalId: (input) => hasRechercheEntreprisesShape(input),
-  lookup: async (input) => {
+  lookup: async (input, options) => {
     const normalized = normalizeSiren(input);
     // Dispatch by length: 9 = SIREN, 14 = SIRET. The shape check
     // above guarantees one of the two; anything else falls through to
     // name search and never reaches this branch.
     const company =
       normalized.length === 14
-        ? await lookupBySiret(normalized)
-        : await lookupBySiren(normalized);
+        ? await lookupBySiret(normalized, options)
+        : await lookupBySiren(normalized, options);
     return company ? rechercheEntreprisesCompanyToHit(company) : null;
   },
   search: async (input, options) => {
@@ -1776,8 +1793,10 @@ export const executeRegistryLookup = async ({
   query,
   limit,
   detail,
+  observer,
 }: {
   handler: RegistryHandler;
+  observer: RegistryRequestObservation;
   query: string;
   /** Forwarded to the canonical-ID lookup; ignored by name search. */
   detail?: BusinessRegistryLookupDetail | undefined;
@@ -1803,7 +1822,7 @@ export const executeRegistryLookup = async ({
   // checksum bindings, and a binding failure must map like any adapter error.
   try {
     if (handler.isCanonicalId(trimmed)) {
-      const hit = await handler.lookup(trimmed, { detail });
+      const hit = await handler.lookup(trimmed, { detail, observer });
       return { type: "lookup", registry: handler.slug, hit };
     }
     if (!searchFn) {
@@ -1812,10 +1831,10 @@ export const executeRegistryLookup = async ({
         message: `Registry '${handler.slug}' does not support name search; provide a canonical identifier`,
       });
     }
-    const hits = await searchFn(
-      trimmed,
-      limit === undefined ? undefined : { limit },
-    );
+    const hits = await searchFn(trimmed, {
+      observer,
+      ...(limit === undefined ? {} : { limit }),
+    });
     return { type: "search", registry: handler.slug, hits };
   } catch (error) {
     const mapped = handler.mapError(error);

@@ -47,7 +47,7 @@ jobs:
         provider: ${{ fromJSON(github.event_name == 'workflow_dispatch' && inputs.provider != 'all' && format('["{0}"]', inputs.provider) || '["google","openrouter","openai","anthropic","bedrock","mistral"]') }}
     concurrency:
       group: ai-provider-canary-${{ matrix.provider }}
-      cancel-in-progress: true
+      cancel-in-progress: false
     steps:
       - name: Check canary credential
         id: credential

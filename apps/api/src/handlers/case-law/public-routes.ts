@@ -73,6 +73,7 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 const listDecisions = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: listDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -89,6 +90,7 @@ const listDecisions = createSafePublicHandler(
 export const readStatuteCitationCounts = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: statuteCitationCountsQuerySchema,
   },
   async function* ({ query }) {
@@ -105,6 +107,7 @@ export const readStatuteCitationCounts = createSafePublicHandler(
 const listDecisionFacets = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: listDecisionFacetsQuerySchema,
   },
   async function* ({ query }) {
@@ -119,6 +122,7 @@ const listDecisionFacets = createSafePublicHandler(
 const listLatestDecisions = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: listLatestDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -136,6 +140,7 @@ const listLatestDecisions = createSafePublicHandler(
 const readCaseLawCorpusStatus = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: readCaseLawCorpusStatusQuerySchema,
   },
   async function* ({ query }) {
@@ -153,6 +158,7 @@ const readCaseLawCorpusStatus = createSafePublicHandler(
 const readDecision = createSafePublicSubjectFollowUpHandler({
   config: {
     mcp: { type: "tool", name: "read_case_law_decision" },
+    cache: { kind: "none" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     query: readDecisionQuerySchema,
   },
@@ -173,6 +179,7 @@ const readDecision = createSafePublicSubjectFollowUpHandler({
 const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
   config: {
     mcp: { type: "covered", by: "read_case_law_decision" },
+    cache: { kind: "none" },
     params: t.Object({ slug: t.String({ minLength: 1, maxLength: 256 }) }),
     query: t.Composite([
       readDecisionQuerySchema,
@@ -210,6 +217,7 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
 const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
   config: {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     params: t.Object({ decisionId: tSafeId("caseLawDecision") }),
     query: listDecisionProvisionsQuerySchema,
   },
@@ -236,6 +244,7 @@ const listDecisionProvisions = createSafePublicSubjectFollowUpHandler({
 const listCitingDecisions = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: listCitingDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -253,13 +262,15 @@ const listCitingDecisions = createSafePublicHandler(
 const searchDecisions = createSafePublicHandler(
   {
     mcp: { type: "tool", name: "search_case_law" },
+    cache: { kind: "none" },
     body: searchDecisionsBodySchema,
     response: searchDecisionsResponseSchema,
   },
   async function* ({ body }) {
     const response = yield* Result.await(
       Result.tryPromise(
-        async () => await searchDecisionsHandler(body, caseLawPublicReadDb),
+        async () =>
+          await searchDecisionsHandler(body, caseLawPublicReadDb, "unobserved"),
       ),
     );
 
@@ -270,6 +281,7 @@ const searchDecisions = createSafePublicHandler(
 const listSitemapShardDecisions = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: sitemapShardDecisionsQuerySchema,
   },
   async function* ({ query }) {
@@ -285,7 +297,10 @@ const listSitemapShardDecisions = createSafePublicHandler(
 );
 
 const listSitemapShards = createSafePublicHandler(
-  { mcp: { type: "internal", reason: "public_indexing" } },
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
+  },
   async function* () {
     const response = yield* Result.await(
       Result.tryPromise(

@@ -18,6 +18,7 @@ import { loadRecapMessageWindow } from "@/api/handlers/chat/thread-recap-window"
 import { captureError } from "@/api/lib/analytics/capture";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
+import { THREAD_STORED_CONTENT_SEND_MODE } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { requireTanStackAIAvailableForRole } from "@/api/lib/tanstack-ai-models";
@@ -36,6 +37,7 @@ const getThreadRecap = createSafeRootHandler(
   async function* ({
     getWorkspaceAccess,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     params: { threadId },
     promptCachingEnabled,
@@ -49,6 +51,7 @@ const getThreadRecap = createSafeRootHandler(
     if (
       Result.isError(
         requireTanStackAIAvailableForRole({
+          dataClass: "customer",
           configStatus: orgAIConfigStatus,
           orgConfig: orgAIConfig,
           role: "fast",
@@ -100,6 +103,9 @@ const getThreadRecap = createSafeRootHandler(
     const messageWindow = yield* Result.await(
       loadRecapMessageWindow({ safeDb, threadId, userId: user.id }),
     );
+    if (messageWindow.sendMode === THREAD_STORED_CONTENT_SEND_MODE.anonymized) {
+      return Result.ok<ThreadRecapResult>({ recap: null });
+    }
 
     // Only recap a completed exchange the user is returning to after a
     // gap: the latest persisted turn must be an assistant message and
@@ -136,6 +142,7 @@ const getThreadRecap = createSafeRootHandler(
       messages: recapMessages,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       threadId,
       workspaceId: persistedWorkspaceId,

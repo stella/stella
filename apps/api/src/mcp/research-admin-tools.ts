@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import {
+  BOE_SEARCH_PAGE_LIMITS,
   findRelatedLaws,
   getConsolidatedLaw,
   getLawStructure,
@@ -30,6 +31,7 @@ import {
   SEARCH_BOE_LEGISLATION_PROJECTION,
 } from "@/api/lib/chat/projections";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedUserId,
   brandPersistedWorkspaceId,
@@ -195,6 +197,7 @@ const listAuditLogArgsSchema = nullAsAbsent(
 );
 
 const LIST_AUDIT_LOG_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   annotations: {
     title: "List audit log",
     destructiveHint: false,
@@ -455,6 +458,7 @@ const searchBoeLegislationArgsSchema = nullAsAbsent(
 );
 
 const SEARCH_BOE_LEGISLATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   annotations: {
     title: "Search BOE legislation",
     destructiveHint: false,
@@ -574,7 +578,9 @@ const handleSearchBoeLegislationTool: TypedMcpToolHandler<
           : { matterCode: input.matter_code }),
         ...(input.date_from === undefined ? {} : { dateFrom: input.date_from }),
         ...(input.date_to === undefined ? {} : { dateTo: input.date_to }),
-        ...(input.limit === undefined ? {} : { limit: input.limit }),
+        limit: normalizeTenantPageLimit(
+          input.limit ?? BOE_SEARCH_PAGE_LIMITS.default,
+        ),
         ...(offset === undefined ? {} : { offset }),
       }),
     catch: mapBoeError,
@@ -866,6 +872,7 @@ const manageOrganizationArgsSchema = nullAsAbsent(
 );
 
 const MANAGE_ORGANIZATION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   description:
     "Manage organization members and non-secret settings. Member actions " +
     "require matter_id and user_id. update_org_settings controls matter " +

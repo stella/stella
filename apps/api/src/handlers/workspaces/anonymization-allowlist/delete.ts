@@ -14,7 +14,11 @@ const config = {
     "scoped to this matter can be removed here, never organization-wide ones, " +
     "and output already anonymized is not revisited.",
   permissions: { workspace: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   params: workspaceParams({
     entryId: tSafeId("anonymizationAllowlistEntry"),
   }),

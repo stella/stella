@@ -58,6 +58,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
@@ -509,6 +510,7 @@ const READ_DOCUMENT_TEXT_FIELD_PATHS = [
 ];
 
 const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: true,
   _meta: {
     "openai/fileParams": ["file"],
   },
@@ -532,6 +534,7 @@ const UPLOAD_DOCUMENT_VERSION_TOOL_DEFINITION = defineValibotMcpTool({
 });
 
 const OPEN_DOCUMENT_VERSION_UPLOAD_TOOL_DEFINITION = defineValibotMcpTool({
+  consumesServices: false,
   _meta: {
     ui: {
       resourceUri: DOCUMENT_UPLOAD_APP_RESOURCE_URI,
@@ -689,7 +692,9 @@ const handleListDocumentsTool: TypedMcpToolHandler<
     }
   }
 
-  const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_LIST_LIMIT,
+  );
 
   const parentCondition = documentsParentCondition({ mode, parentId });
 
@@ -834,7 +839,7 @@ const loadVersionHistory = async ({
     }
   }
 
-  const limit = LIMITS.versionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(LIMITS.versionsPageSizeDefault);
   const keyset = boundary
     ? or(
         lt(entityVersions.versionNumber, boundary.versionNumber),
@@ -2169,7 +2174,9 @@ const handleListPropertiesTool: TypedMcpToolHandler<
       return invalidCursorResult({ cursor: parsed.output.cursor });
     }
   }
-  const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_LIST_LIMIT,
+  );
 
   const boundaryCondition = boundary
     ? propertyPageCursorCodec.keysetAfter({
@@ -2393,6 +2400,7 @@ const handleSetFieldValueTool: TypedMcpToolHandler<
 
 export const DOCUMENT_TOOL_DEFINITIONS = [
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List documents",
       destructiveHint: false,
@@ -2422,6 +2430,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Read document",
       destructiveHint: false,
@@ -2453,6 +2462,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Create a document or folder, or update an existing one. Omit entity_id " +
       "to create: pass matter_id and name, optionally a parent_id folder " +
@@ -2487,6 +2497,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
   PREPARE_FILE_COMPARISON_FROM_LINKS_TOOL_DEFINITION,
   OPEN_FILE_COMPARISON_TOOL_DEFINITION,
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "Delete document",
       destructiveHint: true,
@@ -2507,6 +2518,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:documents_write",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     annotations: {
       title: "List properties",
       destructiveHint: false,
@@ -2529,6 +2541,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
     scope: "stella:read",
   }),
   defineValibotMcpTool({
+    consumesServices: false,
     description:
       "Set a document's value for a property (a cell in the matter's table). " +
       "Pass the document entity_id, the property_id (from list_properties), and " +
