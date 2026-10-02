@@ -32,6 +32,7 @@ import {
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
   installPgliteTimeEntryTimerSignals,
+  installPgliteSanctionsMonitoringTriggers,
   installPgliteWorkspaceAccessObjects,
 } from "@/api/tests/pglite-schema";
 
@@ -463,13 +464,13 @@ export const ROLE_GRANT_STATEMENTS = [
   // Global sanctions lists are readable by requests and writable by ingestion.
   `
     REVOKE INSERT, UPDATE, DELETE ON TABLE
-      "sanctions_sources", "sanctions_editions",
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts",
       "sanctions_entry_payloads", "sanctions_edition_entries"
     FROM stella
   `,
   `
     GRANT SELECT, INSERT, UPDATE ON TABLE
-      "sanctions_sources", "sanctions_editions"
+      "sanctions_sources", "sanctions_editions", "sanctions_edition_fanouts"
     TO stella_ingestion
   `,
   `
@@ -729,6 +730,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
     await db.execute(sql.raw(statement));
   }
   await installPgliteTimeEntryTimerSignals(db);
+  await installPgliteSanctionsMonitoringTriggers(db);
 
   return client;
 };
