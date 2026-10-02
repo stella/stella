@@ -527,3 +527,60 @@ test("public identity responses are never cached, including validation and serve
   expect(error.status).toBe(500);
   expect(error.headers.get(CACHE_CONTROL_HEADER)).toBe(PRIVATE_CACHE_CONTROL);
 });
+
+test.each([
+  {
+    label: "truncated JSON",
+    contentType: "application/json",
+    body: '{"subject":{"name":"PrivateParseQzxv"',
+    status: 400,
+  },
+  {
+    label: "malformed JSON",
+    contentType: "application/json",
+    body: '{"subject":"PrivateParseQzxv",}',
+    status: 400,
+  },
+  {
+    label: "unsupported content type",
+    contentType: "application/octet-stream",
+    body: "PrivateParseQzxv",
+    status: 422,
+  },
+])(
+  "malformed public identity bodies are sanitized, never cached, and consume admission ($label)",
+  async ({ contentType, body, status }) => {
+    const screen = clearScreen();
+    const validateRole = mock<SanctionsPublicReadDb["validateRole"]>(async () =>
+      Result.ok(undefined),
+    );
+    const { app } = appWith(screen, testDb(validateRole));
+    const response = await app.handle(
+      new Request("http://localhost/sanctions/search", {
+        method: "POST",
+        headers: { "content-type": contentType },
+        body,
+      }),
+    );
+    expect(response.status).toBe(status);
+    expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
+      PRIVATE_CACHE_CONTROL,
+    );
+    expect(await response.text()).not.toContain("PrivateParseQzxv");
+    expect(validateRole.mock.calls).toHaveLength(0);
+    expect(screen.mock.calls).toHaveLength(0);
+    for (let count = 1; count < 20; count += 1)
+      {expect(
+        (await app.handle(request({ type: "organization", name: "Example" })))
+          .status,
+      ).toBe(200);}
+    const refused = await app.handle(
+      request({ type: "organization", name: "Example" }),
+    );
+    expect(refused.status).toBe(429);
+    expect(refused.headers.get(CACHE_CONTROL_HEADER)).toBe(
+      PRIVATE_CACHE_CONTROL,
+    );
+    expect(screen.mock.calls).toHaveLength(19);
+  },
+);

@@ -231,8 +231,45 @@ describe.skipIf(!runPostgresTests || databaseUrl === undefined)(
                   JSON.stringify(body) === JSON.stringify(outcomes.at(0)),
               ),
             ).toBe(true);
+            let transportRequests = 0;
+            for (const cookie of [undefined, cookies.at(0)]) {
+              for (const malformed of [
+                {
+                  contentType: "application/json",
+                  body: '{"subject":"PrivateParseQzxv",}',
+                  status: 400,
+                },
+                {
+                  contentType: "application/json",
+                  body: '{"subject":{"name":"PrivateParseQzxv"',
+                  status: 400,
+                },
+                {
+                  contentType: "application/octet-stream",
+                  body: "PrivateParseQzxv",
+                  status: 422,
+                },
+              ]) {
+                const response = await api.handle(
+                  new Request("http://localhost/v1/sanctions/search", {
+                    method: "POST",
+                    headers: {
+                      "content-type": malformed.contentType,
+                      ...(cookie === undefined ? {} : { cookie }),
+                    },
+                    body: malformed.body,
+                  }),
+                );
+                expect(response.status).toBe(malformed.status);
+                expect(response.headers.get(CACHE_CONTROL_HEADER)).toBe(
+                  PRIVATE_CACHE_CONTROL,
+                );
+                expect(await response.text()).not.toContain("PrivateParseQzxv");
+                transportRequests += 1;
+              }
+            }
             for (
-              let count = outcomes.length;
+              let count = outcomes.length + transportRequests;
               count < API_RATE_LIMITS.publicSanctionsSearch.max;
               count += 1
             ) {
