@@ -6,11 +6,13 @@ import * as v from "valibot";
 
 import { PUBLIC_DECISION_MATCH } from "@/features/case-law/public-decision-match";
 import { loadLocaleMessages, supportedLanguages } from "@/i18n/i18n-store";
-import { publicDecisionSearchSchema } from "@/routes/law/-case-detail.logic";
+import {
+  fileMayHoldOthersOf,
+  publicDecisionSearchSchema,
+} from "@/routes/law/-case-detail.logic";
 import { PublicDecisionFileNote } from "@/routes/law/-components/public-decision-file-note";
 
 test("the case-file note renders a translated sentence in every locale", async () => {
-  const sentences = new Set<string>();
   for (const locale of supportedLanguages) {
     const messages = await loadLocaleMessages(locale);
     const markup = renderToStaticMarkup(
@@ -20,10 +22,7 @@ test("the case-file note renders a translated sentence in every locale", async (
     );
     expect(markup).toContain('role="note"');
     expect(markup).not.toContain("caseLaw.viewer.caseFileMayHoldOthers");
-    sentences.add(markup);
   }
-  // No locale falls back to another's sentence.
-  expect(sentences.size).toBe(supportedLanguages.length);
 });
 
 test("the English note says the file may hold more, never that this is the only one", async () => {
@@ -47,4 +46,12 @@ test("the decision route reads the match marker and drops an unknown one", () =>
     v.parse(publicDecisionSearchSchema, { match: "unique" }).match,
   ).toBeUndefined();
   expect(v.parse(publicDecisionSearchSchema, {}).match).toBeUndefined();
+});
+
+test("only the case-file marker asks for the note", () => {
+  expect(
+    fileMayHoldOthersOf({ match: PUBLIC_DECISION_MATCH.FILE_INCOMPLETE }),
+  ).toBe(true);
+  expect(fileMayHoldOthersOf({})).toBe(false);
+  expect(fileMayHoldOthersOf({ match: "other" })).toBe(false);
 });

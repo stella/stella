@@ -28,6 +28,7 @@ import { ChromeHeaderActions } from "@/lib/chrome-header-actions";
 import { detached } from "@/lib/detached";
 import {
   extractId,
+  fileMayHoldOthersOf,
   type PublicCaseLawDecision,
 } from "@/routes/law/-case-detail.logic";
 import { PublicDecisionFileNote } from "@/routes/law/-components/public-decision-file-note";
@@ -42,11 +43,6 @@ const AuthenticatedCaseLawWorkspace = lazy(async () => {
 
 type PublicDecisionViewerProps = {
   decision: PublicCaseLawDecision;
-  /**
-   * The reader arrived by a docket that found this decision alone in a case
-   * file whose other decisions the read may not have reached.
-   */
-  fileMayHoldOthers?: boolean | undefined;
   initialSearchQuery?: string | undefined;
   /** The decision route rendering the page, which owns its details tab. */
   routeId: InspectorOwnerRouteId;
@@ -54,7 +50,6 @@ type PublicDecisionViewerProps = {
 
 export function PublicDecisionViewer({
   decision,
-  fileMayHoldOthers = false,
   initialSearchQuery,
   routeId,
 }: PublicDecisionViewerProps) {
@@ -64,6 +59,11 @@ export function PublicDecisionViewer({
   const initialAnchorId = useRouterState({
     select: ({ location }) =>
       location.hash === "" ? undefined : location.hash,
+  });
+  // The reader arrived by a docket that found this decision alone in a case
+  // file whose other decisions the read may not have reached.
+  const fileMayHoldOthers = useRouterState({
+    select: ({ location }) => fileMayHoldOthersOf(location.search),
   });
   const authStatus = useClientAuthStatus();
   const inspector = useInspectorView();

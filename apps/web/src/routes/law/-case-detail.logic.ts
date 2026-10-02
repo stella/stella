@@ -71,9 +71,13 @@ export type PublicDecisionSearch = v.InferOutput<
   typeof publicDecisionSearchSchema
 >;
 
-/** Whether the decision page should note that its case file may hold others. */
-export const fileMayHoldOthersOf = (search: PublicDecisionSearch): boolean =>
-  search.match === PUBLIC_DECISION_MATCH.FILE_INCOMPLETE;
+/**
+ * Whether the decision page should note that its case file may hold others.
+ * Takes any route's search, so the viewer can read it from the location.
+ */
+export const fileMayHoldOthersOf = (search: {
+  readonly match?: unknown;
+}): boolean => search.match === PUBLIC_DECISION_MATCH.FILE_INCOMPLETE;
 
 export type PublicDecisionRouteParams = CaseLawDecisionRouteParams;
 
