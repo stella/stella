@@ -87,7 +87,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -123,7 +123,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -150,7 +150,7 @@ jobs:
           E2E_EXPECT_DEV_ROUTES: "false"
           E2E_NETWORK_BASELINE: write
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-network-baseline.zip
-        run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts
+        run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts
 
       - name: Limit baseline changes to new or edited routes
         env:

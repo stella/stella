@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nepodařilo se spustit časovač",
     "failedToStopTimer": "Nepodařilo se zastavit časovač",
     "filterStatus": "Filtrovat podle stavu",
+    "globalTimer": {
+      "confirm": "Potvrdit čas",
+      "discard": "Zahodit časovač",
+      "matterInaccessible": "Vyberte spis, ke kterému máte přístup.",
+      "narrativeRequired": "Před potvrzením času přidejte popis.",
+      "pause": "Pozastavit",
+      "periodLocked": "Tento měsíc je uzamčený. Požádejte správce o jeho odemčení.",
+      "resume": "Pokračovat",
+      "timerUnavailable": "Tento časovač již není dostupný. Obnovte seznam.",
+      "title": "Časovače"
+    },
     "hourlyRateMustBeNonNegative": "Hodinová sazba nesmí být záporná",
     "hours": "Hodiny",
     "invoiceNarrative": "Popis faktury",
@@ -650,6 +661,27 @@
     "timerActive": "Časovač běží",
     "timesheets": "Výkazy práce",
     "total": "Celkem",
+    "vatRates": {
+      "add": "Přidat sazbu DPH",
+      "archiveConfirm": "Archivovat tuto sazbu DPH? Nebude již dostupná pro nové doklady.",
+      "code": "Kód sazby",
+      "current": "Aktuální sazba",
+      "description": "Spravujte sazby a období jejich platnosti.",
+      "edit": "Upravit sazbu DPH",
+      "empty": "Žádné sazby DPH.",
+      "future": "Budoucí sazba",
+      "invalidPeriod": "Vyberte platná data s koncem po začátku.",
+      "invalidRate": "Zadejte nezápornou procentní sazbu s nejvýše dvěma desetinnými místy.",
+      "name": "Označení sazby",
+      "openEnded": "Bez koncového data",
+      "overlap": "Období platnosti pro stejný kód sazby se nesmějí překrývat.",
+      "past": "Dřívější sazba",
+      "periodHelp": "Počáteční datum je zahrnuto; koncové datum není zahrnuto. Pro období bez konce ponechte koncové datum prázdné.",
+      "rate": "Procentní sazba DPH",
+      "title": "Sazby DPH",
+      "validFrom": "Platí od",
+      "validTo": "Platí do"
+    },
     "writeOff": "Odepsat"
   },
   "caseLaw": {
@@ -883,6 +915,7 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",
       "citedBy": "Citováno v",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
@@ -1003,6 +1036,7 @@
         "description": "Pečlivě zkontrolujte web a cíl. Obsah stránky není důvěryhodný a nemůže schválit další akci.",
         "modeReads": "Čtení stránek se do konce této relace provádí bez dotazu.",
         "question": "Povolit tuto akci v prohlížeči?",
+        "realValues": "Tento web obdrží skutečné hodnoty uvedené níže. Anonymizovaný režim se vztahuje jen na to, co vidí AI.",
         "within": "V rámci"
       },
       "denied": "Zamítnuto",
@@ -1107,6 +1141,7 @@
     "focusSuggestion": "Zaměřit návrh: {topic}",
     "folioCitationFallback": "str. {n}",
     "forkFromHere": "Vytvořit odsud nový chat",
+    "forkInSidePanel": "Vytvořit odsud nový chat v bočním panelu",
     "forkedFrom": "Vytvořeno z chatu: <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Vytvořeno z chatu, který už není dostupný",
     "forkedThread": "Z jiného chatu",
@@ -1114,6 +1149,10 @@
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "hideThread": "Skrýt konverzaci",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
+    },
     "improvePrompt": "Vylepšit zadání",
     "improvePromptDraftChanged": "Zadání se změnilo, takže vylepšení nebylo použito.",
     "improvePromptPlainTextOnly": "Vylepšení zadání je dostupné pouze pro prostý text.",
@@ -1166,6 +1205,7 @@
       "viaProvider": "přes {provider}"
     },
     "newChat": "Nový chat",
+    "newChatInSidePanel": "Nový chat je dostupný v bočním panelu",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",
     "officeCitationUnavailable": "Tato citace už není dostupná.",
@@ -1213,6 +1253,12 @@
     "richContentLoading": "Načítání interaktivního obsahu…",
     "richContentTitle": "Interaktivní obsah",
     "richContentUnavailable": "Tento obsah nelze bezpečně zobrazit.",
+    "selection": {
+      "askInNewChat": "Zeptat se v novém chatu",
+      "quoteInReply": "Citovat v odpovědi",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Vybraný text"
+    },
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnou odpověď. Zkuste to znovu, nebo zprávu přeformulujte.",
@@ -1366,7 +1412,8 @@
       "interrupted": "Přerušeno před dokončením",
       "output": "Výstup",
       "sourceCode": "Zdrojový kód",
-      "toggleDetails": "Přepnout detaily"
+      "toggleDetails": "Přepnout detaily",
+      "unrestoredFields": "{count, plural, one {# pole se nepodařilo} few {# pole se nepodařilo} many {# pole se nepodařilo} other {# polí se nepodařilo}} v anonymizovaném režimu vyplnit skutečnými hodnotami. Zkontrolujte: {fields}"
     },
     "unsupportedFileType": "Nepodporovaný typ souboru",
     "uploadFailed": "Zpracování souboru selhalo",
@@ -1610,6 +1657,7 @@
     },
     "fact": "Fakt",
     "failed": "Selhalo",
+    "files": "Soubory",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Najít",
@@ -2160,6 +2208,13 @@
     "unnamedAttachment": "Nepojmenovaná příloha"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Tato akce je dočasně pozastavena. Zkuste to prosím za chvíli.",
+      "concurrencyBusy": "Probíhá jiná práce. Zkuste to prosím za chvíli.",
+      "contact": "Kontaktujte nás",
+      "notEnabled": "Tato akce není pro vaši organizaci povolena.",
+      "periodExhausted": "Tato akce je pro vaši organizaci pozastavena."
+    },
     "actionFailed": "Akce se nezdařila",
     "api": {
       "badRequest": "Požadavek se nepodařilo dokončit.",
@@ -2167,6 +2222,7 @@
       "forbidden": "K této akci nemáte oprávnění.",
       "notFound": "Požadovanou položku se nepodařilo najít.",
       "payloadTooLarge": "Požadavek je příliš velký.",
+      "publicCountryUnavailable": "Právní předpisy a judikatura této země nejsou dostupné. Vyberte jinou zemi.",
       "rateLimited": "Příliš mnoho požadavků. Zkuste to prosím později.",
       "server": "Něco se pokazilo. Zkuste to prosím znovu.",
       "serviceUnavailable": "Služba je dočasně nedostupná. Zkuste to prosím znovu.",
@@ -3267,7 +3323,6 @@
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
       "fileExists": "Soubor s touto cestou již existuje",
-      "filesHeading": "Soubory",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
       "importFailureIntegrity": "Zdroj dovednosti se po nalezení změnil. Zkontrolujte ho znovu.",
@@ -5992,7 +6047,8 @@
         "openReport": "Otevřít zprávu",
         "submit": "Uložit zprávu",
         "templateLabel": "Vzor zprávy",
-        "title": "Uložit zprávu"
+        "title": "Uložit zprávu",
+        "withoutAiSummaries": "Uložit bez shrnutí od AI"
       },
       "saveAsTemplate": "Uložit jako předvolbu…",
       "selectProperty": "Vybrat vlastnost",

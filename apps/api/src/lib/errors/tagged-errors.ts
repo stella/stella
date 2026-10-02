@@ -1,5 +1,6 @@
 import { panic, TaggedError } from "better-result";
 
+import type { ActionAdmissionRefusal } from "@stll/api-contract/action-admission";
 import { declareFailureClass } from "@stll/errors";
 import type { PersistedAstDegradation } from "@stll/legal-ast/document-ast";
 
@@ -114,6 +115,8 @@ export type HandlerErrorProps<
   message: string;
   /** Corrective action for agent and CLI clients; never requires parsing `message`. */
   hint?: string | undefined;
+  contactUrl?: ActionAdmissionRefusal["contactUrl"];
+  retryable?: boolean | undefined;
   /**
    * OAuth-style machine-readable error identifier (e.g. `login_required`,
    * `interaction_required`, `issuer_not_enabled`). Distinct from `code`
@@ -147,6 +150,8 @@ export class HandlerError<
   declare code?: HandlerErrorCode | undefined;
   declare status: TStatus;
   declare hint?: string | undefined;
+  declare contactUrl?: string | undefined;
+  declare retryable?: boolean | undefined;
   declare usage?: HandlerErrorUsageDetail | undefined;
   declare confirmation?: HandlerErrorConfirmationDetail | undefined;
   declare error?: string | undefined;
@@ -160,6 +165,8 @@ export class HandlerError<
     this.code = props.code;
     this.status = props.status;
     this.hint = props.hint;
+    this.contactUrl = props.contactUrl;
+    this.retryable = props.retryable;
     this.usage = props.usage;
     this.confirmation = props.confirmation;
     this.error = props.error;

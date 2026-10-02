@@ -65,6 +65,7 @@ type NavTo =
   | "/settings/organization/members"
   | "/settings/organization/matter-numbering"
   | "/settings/organization/number-series"
+  | "/settings/organization/vat-rates"
   | "/settings/organization/billing"
   | "/settings/organization/time-policy"
   | "/settings/organization/document-types"
@@ -136,6 +137,11 @@ const ORGANIZATION_SECTION = {
       to: "/settings/organization/number-series",
       labelKey: "billing.numberSeries.title",
       icon: HashIcon,
+    },
+    {
+      to: "/settings/organization/vat-rates",
+      labelKey: "billing.vatRates.title",
+      icon: BanknoteIcon,
     },
     {
       to: "/settings/organization/billing",
@@ -224,6 +230,7 @@ function SettingsLayout() {
       (item) =>
         (item.to !== "/settings/organization/number-series" ||
           billingAccessible) &&
+        (item.to !== "/settings/organization/vat-rates" || billingAccessible) &&
         (item.to !== "/settings/organization/billing" || billingAccessible) &&
         (item.to !== "/settings/organization/time-policy" ||
           timeBillingPreviewEnabled),

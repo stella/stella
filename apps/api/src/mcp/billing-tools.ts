@@ -40,6 +40,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedInvoiceId,
@@ -646,7 +647,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       return invalidCursorResult({ cursor: input.cursor });
     }
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
   const canReview = hasEffectiveAuthority(context, {
     timeEntry: ["approve"],
   });
@@ -1399,7 +1400,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   if (input.cursor !== undefined && cursor === null) {
     return invalidCursorResult({ cursor: input.cursor });
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
 
   const rows = await context.scopedDb((tx) =>
     tx
@@ -1518,6 +1519,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/time_entry_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -1604,6 +1606,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "rate applies.",
     inputSchema: resolveRateArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_TIME_BILLING",
     isVisibleToMemberRole: (memberRole) =>
@@ -1634,6 +1637,7 @@ export const BILLING_TOOL_DEFINITIONS = [
         "The matter_id/invoice_id cross-field requirement stays authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [
@@ -1662,6 +1666,7 @@ export const BILLING_TOOL_DEFINITIONS = [
       "Requires organization-settings management access.",
     inputSchema: getUsageArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_USAGE",
     isVisibleToMemberRole: (memberRole) =>

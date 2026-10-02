@@ -14,6 +14,8 @@
 // usage: bun scripts/check-published-exports.ts <package-dir>
 
 import { panic } from "better-result";
+import { mkdir, mkdtemp, realpath, rm, symlink } from "node:fs/promises";
+import { tmpdir } from "node:os";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
 
@@ -26,13 +28,16 @@ import {
   isExpectedPublishedExportResolution,
   isOwnDistLoadFailure,
   isPublishedTestArtifact,
+  resolvePublishedExport,
 } from "./published-export-guards";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
 
-const pkgDir = path.resolve(
-  process.argv[2] ??
-    panic("usage: bun scripts/check-published-exports.ts <package-dir>"),
+const pkgDir = await realpath(
+  path.resolve(
+    process.argv[2] ??
+      panic("usage: bun scripts/check-published-exports.ts <package-dir>"),
+  ),
 );
 const pkgPath = path.join(pkgDir, "package.json");
 
@@ -136,7 +141,15 @@ await run([process.execPath, "run", "--bun", "build"], pkgDir);
 
 const failures: string[] = [];
 const resolvedBySubpath = new Map<string, string>();
+const consumerDir = await mkdtemp(path.join(tmpdir(), "published-consumer-"));
 try {
+  const consumerPackage = path.join(
+    consumerDir,
+    "node_modules",
+    published.name,
+  );
+  await mkdir(path.dirname(consumerPackage), { recursive: true });
+  await symlink(pkgDir, consumerPackage, "dir");
   await run(
     [
       process.execPath,
@@ -207,10 +220,18 @@ try {
 
       // Resolve through the package name, so this exercises the export map a
       // consumer's resolver reads rather than the paths this script computed.
+      // The isolated fallback avoids package tsconfig aliases. Canonical paths
+      // keep symlinks out of comparisons.
       const specifier = `${published.name}${subpath.replace(/^\./u, "")}`;
       let resolved: string;
       try {
-        resolved = Bun.resolveSync(specifier, repoRoot);
+        resolved = await realpath(
+          resolvePublishedExport({
+            specifier,
+            repoRoot,
+            consumerDir,
+          }),
+        );
       } catch {
         failures.push(`${subpath}: "${specifier}" does not resolve`);
         return;
@@ -302,7 +323,10 @@ try {
     }
   }
 } finally {
-  await Bun.write(pkgPath, sourceManifest);
+  await Promise.all([
+    Bun.write(pkgPath, sourceManifest),
+    rm(consumerDir, { recursive: true, force: true }),
+  ]);
 }
 
 if (failures.length > 0) {

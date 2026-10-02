@@ -487,6 +487,17 @@
     "failedToStartTimer": "Falha ao iniciar o cronômetro",
     "failedToStopTimer": "Falha ao parar o cronômetro",
     "filterStatus": "Filtrar por status",
+    "globalTimer": {
+      "confirm": "Confirmar tempo",
+      "discard": "Descartar cronômetro",
+      "matterInaccessible": "Escolha um caso ao qual você tenha acesso.",
+      "narrativeRequired": "Adicione uma descrição antes de confirmar o tempo.",
+      "pause": "Pausar",
+      "periodLocked": "Este mês está bloqueado. Peça a um administrador para desbloqueá-lo.",
+      "resume": "Retomar",
+      "timerUnavailable": "Este cronômetro não está mais disponível. Atualize a lista.",
+      "title": "Cronômetros"
+    },
     "hourlyRateMustBeNonNegative": "O valor por hora não pode ser negativo",
     "hours": "Horas",
     "invoiceNarrative": "Narrativa da fatura",
@@ -650,6 +661,27 @@
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
+    "vatRates": {
+      "add": "Adicionar alíquota de IVA",
+      "archiveConfirm": "Arquivar esta alíquota de IVA? Ela não estará mais disponível para novos documentos.",
+      "code": "Código da alíquota",
+      "current": "Alíquota vigente",
+      "description": "Gerencie as alíquotas e seus períodos de validade.",
+      "edit": "Editar alíquota de IVA",
+      "empty": "Nenhuma alíquota de IVA.",
+      "future": "Alíquota futura",
+      "invalidPeriod": "Escolha datas válidas com a data final posterior à inicial.",
+      "invalidRate": "Insira um percentual não negativo com no máximo duas casas decimais.",
+      "name": "Nome da alíquota",
+      "openEnded": "Sem data final",
+      "overlap": "Os períodos de validade do mesmo código de alíquota não podem se sobrepor.",
+      "past": "Alíquota anterior",
+      "periodHelp": "A data inicial está incluída; a data final está excluída. Deixe a data final em branco para um período aberto.",
+      "rate": "Percentual de IVA",
+      "title": "Alíquotas de IVA",
+      "validFrom": "Válida desde",
+      "validTo": "Válida até"
+    },
     "writeOff": "Dar baixa"
   },
   "caseLaw": {
@@ -883,6 +915,7 @@
     },
     "viewer": {
       "abstract": "Resumo",
+      "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",
       "citedBy": "Citado por",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
@@ -1003,6 +1036,7 @@
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
         "modeReads": "A leitura de páginas é executada sem perguntar até o fim desta sessão.",
         "question": "Permitir esta ação no navegador?",
+        "realValues": "Este site recebe os valores reais mostrados abaixo. O modo anonimizado se aplica apenas ao que a IA vê.",
         "within": "Dentro de"
       },
       "denied": "Negado",
@@ -1107,6 +1141,7 @@
     "focusSuggestion": "Focar sugestão: {topic}",
     "folioCitationFallback": "pág. {n}",
     "forkFromHere": "Criar um novo chat a partir daqui",
+    "forkInSidePanel": "Criar um novo chat a partir daqui no painel lateral",
     "forkedFrom": "Criado a partir de <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Criado a partir de um chat que não está mais disponível",
     "forkedThread": "De outro chat",
@@ -1114,6 +1149,10 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
+    },
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
@@ -1166,6 +1205,7 @@
       "viaProvider": "pelo provedor {provider}"
     },
     "newChat": "Novo chat",
+    "newChatInSidePanel": "O novo chat está disponível no painel lateral",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -1213,6 +1253,12 @@
     "richContentLoading": "Carregando conteúdo interativo…",
     "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
+    "selection": {
+      "askInNewChat": "Perguntar em um novo chat",
+      "quoteInReply": "Citar na resposta",
+      "quotedText": "“{quote}”",
+      "toolbarLabel": "Texto selecionado"
+    },
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
@@ -1366,7 +1412,8 @@
       "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código-fonte",
-      "toggleDetails": "Alternar detalhes"
+      "toggleDetails": "Alternar detalhes",
+      "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
@@ -1610,6 +1657,7 @@
     },
     "fact": "Fato",
     "failed": "Falhou",
+    "files": "Arquivos",
     "filter": "Filtro",
     "filters": "Filtros",
     "find": "Localizar",
@@ -2160,6 +2208,13 @@
     "unnamedAttachment": "Anexo sem nome"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
+      "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
+      "contact": "Entre em contato",
+      "notEnabled": "Esta ação não está habilitada para sua organização.",
+      "periodExhausted": "Esta ação está pausada para sua organização."
+    },
     "actionFailed": "Falha na ação",
     "api": {
       "badRequest": "Não foi possível concluir a solicitação.",
@@ -2167,6 +2222,7 @@
       "forbidden": "Você não tem permissão para fazer isso.",
       "notFound": "Não encontramos o que você solicitou.",
       "payloadTooLarge": "A solicitação é grande demais.",
+      "publicCountryUnavailable": "A legislação e a jurisprudência deste país não estão disponíveis. Escolha outro país.",
       "rateLimited": "Muitas solicitações. Tente novamente mais tarde.",
       "server": "Algo deu errado. Tente novamente.",
       "serviceUnavailable": "O serviço está temporariamente indisponível. Tente novamente.",
@@ -3267,7 +3323,6 @@
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
-      "filesHeading": "Arquivos",
       "howItRuns": "Como funciona",
       "importFailureFetch": "Não foi possível carregar a origem da habilidade.",
       "importFailureIntegrity": "A origem da habilidade mudou após a descoberta. Revise-a novamente.",
@@ -5992,7 +6047,8 @@
         "openReport": "Abrir relatório",
         "submit": "Exportar relatório",
         "templateLabel": "Modelo de relatório",
-        "title": "Exportar relatório"
+        "title": "Exportar relatório",
+        "withoutAiSummaries": "Exportar sem resumos de IA"
       },
       "saveAsTemplate": "Salvar como predefinição…",
       "selectProperty": "Selecione a propriedade",

@@ -228,11 +228,13 @@ run_cli_registry_snapshot() {
   # regenerate all of them and fail on any diff so a registry change cannot
   # silently ship stale CLI, web approval, or skill behavior.
   (cd packages/cli && bun run codegen) || return 1
+  (cd packages/cli && bun run codegen:runtime) || return 1
   git diff --exit-code -- \
     chatgpt-app-submission.json \
     packages/api-contract/src/mcp-chat-tool-policy.gen.ts \
     packages/cli/src/generated \
-    packages/cli/skills
+    packages/cli/skills || return 1
+  bun scripts/check-cli-runtime-generation.ts
 }
 
 run_mcp_app_bundle() {
@@ -272,6 +274,7 @@ run_knip() {
       bun --no-env-file run knip --production --strict --no-progress \
       --include unlisted,unresolved --workspace "$workspace" || return 1
   done
+  bun run dependencies:check
 }
 
 run_knip_exports() {
@@ -345,6 +348,8 @@ run_step "i18n" bun run i18n:check
 run_step "Release changelog guard" bash scripts/check-release-changelog.sh --base "$base_ref"
 run_step "Format" run_format
 run_step "Rust format" run_rust_format
+run_step "Generate web sources" bun run generate
+run_step "Web API types determinism guard" bun --filter @stll/api gen:web-api-types --check
 run_step "Typecheck coverage" run_typecheck_coverage
 run_step "Code quality" run_code_check
 run_step "Query cache types" bun run check:query-cache-types
@@ -398,6 +403,7 @@ run_step "MCP coverage guard" run_mcp_coverage_guard
 # baseline; this proves the comparison it uses still fires.
 run_step "MCP surface baseline self-test" bun apps/api/scripts/mcp-surface-baseline.ts --self-test
 run_step "CLI registry snapshot" run_cli_registry_snapshot
+run_step "CLI runtime package parity" bun test scripts/cli-runtime-pack.test.ts scripts/cli-runtime-merge.test.ts
 run_step "CLI contract changeset guard" bun scripts/check-cli-contract-changeset.ts --base "$base_ref"
 run_step "MCP App bundle" run_mcp_app_bundle
 run_step "Capability catalog drift" run_capability_catalog
@@ -413,7 +419,8 @@ run_step "Desktop release promotion self-test" bash \
 run_step "Web container platform self-test" bun test \
   scripts/check-web-docker-platform.test.ts
 run_step "Published export artifact guard self-test" bun test \
-  scripts/published-export-guards.test.ts
+  scripts/published-export-guards.test.ts \
+  scripts/check-published-exports.test.ts
 run_step "API release contract self-test" bun test \
   --preload ./apps/api/src/tests/setup-env.ts \
   scripts/check-api-cli-contract.test.ts \

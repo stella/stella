@@ -10,6 +10,7 @@ import type { TanStackAIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { arrayOrEmpty } from "@/api/lib/array";
+import { withReasoningBoundToProvider } from "@/api/lib/chat/provider-bound-reasoning";
 import {
   refuseTurnPausingRequest,
   withDecidedStopReasons,
@@ -32,7 +33,7 @@ export const INCOMPLETE_STREAM_CODE = "stream_incomplete";
 const isTerminal = (chunk: StreamChunk): boolean =>
   chunk.type === EventType.RUN_FINISHED || chunk.type === EventType.RUN_ERROR;
 
-const runError = (
+export const runError = (
   model: string,
   error: { code?: string | undefined; message: string },
   rawEvent?: unknown,
@@ -354,7 +355,18 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
           provider,
           unfinishedCode: INCOMPLETE_STREAM_CODE,
         });
-  const chatStream: AnyTextAdapter["chatStream"] = (options) => {
+  const chatStream: AnyTextAdapter["chatStream"] = (requested) => {
+    // Signed reasoning reaches only the provider that signed it.
+    const options =
+      provider === undefined
+        ? requested
+        : {
+            ...requested,
+            messages: withReasoningBoundToProvider(
+              requested.messages,
+              provider,
+            ),
+          };
     refuseTurnPausingRequest(provider, options);
     return withOneTerminalEvent(
       withDeclaredToolInput(
@@ -397,7 +409,8 @@ const contracted = (contract: StreamContract): AnyTextAdapter => {
  * adapter's stop reasons are decided by (`provider-stop-reasons.ts`); an
  * adapter that reports none (a mock) passes its terminal event through. A
  * request whose turn could pause, which no run can continue yet, is refused
- * before it is sent (`refuseTurnPausingRequest`).
+ * before it is sent (`refuseTurnPausingRequest`), and reasoning another
+ * provider signed is left out of it (`provider-bound-reasoning.ts`).
  *
  * The contract holds an adapter once: two layers would each rename a reused
  * tool call id on their own.

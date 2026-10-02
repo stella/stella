@@ -1,7 +1,11 @@
-import { Panic, UnhandledException } from "better-result";
+import { Panic, Result, UnhandledException } from "better-result";
 
 import { DocxArchiveError } from "@stll/docx-utils";
 
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 /** How far a typed status is followed through transport wrappers. */
@@ -44,6 +48,34 @@ const archiveHandlerError = (error: unknown): HandlerError<422> | null => {
   return null;
 };
 
+const admissionHandlerError = (
+  error: unknown,
+  contactUrl?: string,
+): HandlerError | null => {
+  let candidate = error;
+  for (let depth = 0; depth <= MAX_TRANSPORT_WRAPPER_DEPTH; depth++) {
+    if (ActionAdmissionError.is(candidate)) {
+      return new HandlerError({
+        ...actionAdmissionRefusal(candidate, contactUrl),
+        cause: candidate,
+      });
+    }
+    if (HandlerError.is(candidate) && candidate.status !== 500) {
+      return null;
+    }
+    if (!(candidate instanceof Error)) {
+      return null;
+    }
+    const wrapper = candidate;
+    const cause = Result.try(() => wrapper.cause);
+    if (Result.isError(cause)) {
+      return null;
+    }
+    candidate = cause.value;
+  }
+  return null;
+};
+
 /**
  * The typed `HandlerError` an error carries, or null.
  *
@@ -55,7 +87,14 @@ const archiveHandlerError = (error: unknown): HandlerError<422> | null => {
  * Env-free, so the failure grader reads a status exactly as the request
  * pipeline answers it.
  */
-export const resolveHandlerError = (error: unknown): HandlerError | null => {
+export const resolveHandlerError = (
+  error: unknown,
+  contactUrl?: string,
+): HandlerError | null => {
+  const admission = admissionHandlerError(error, contactUrl);
+  if (admission !== null) {
+    return admission;
+  }
   const archive = archiveHandlerError(error);
   if (archive !== null) {
     return archive;

@@ -8,9 +8,11 @@ import { entities } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
 import type { AuthorizedToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
+import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import {
   extractAskContents,
@@ -27,7 +29,8 @@ import { isAISupportedFile } from "@/api/lib/workflow/generate-batch";
 import type { ResolvedFile } from "@/api/lib/workflow/generate-batch-shared";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 
-export const REVIEW_FOLDER_CONSISTENCY_TOOL_NAME = "review_folder_consistency";
+export const REVIEW_FOLDER_CONSISTENCY_TOOL_NAME =
+  "review_folder_consistency" satisfies RawModeOnlyChatToolName;
 
 const REVIEW_SOURCE_ID = "cross-document-consistency";
 
@@ -378,6 +381,7 @@ type CreateFolderConsistencyReviewToolsProps = {
   extractAskContentsFn?: typeof extractAskContents | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   refRegistry: ChatRefRegistry;
   safeDb: SafeDb;
@@ -391,6 +395,7 @@ export const createFolderConsistencyReviewTools = ({
   extractAskContentsFn = extractAskContents,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   refRegistry,
   safeDb,
@@ -494,6 +499,7 @@ export const createFolderConsistencyReviewTools = ({
           snapshot.reviewDocuments.at(0)?.entityVersionId ??
           panic("review document list unexpectedly became empty"),
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier: "standard",
         usageMetering: {

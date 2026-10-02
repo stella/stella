@@ -12,9 +12,10 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import {
   getActiveFileModelBinding,
@@ -48,11 +49,12 @@ import {
   appendAnonymizedModeHintToChatSafePrompt,
   buildChatPromptCacheKey,
   buildChatSystemPromptParts,
+  chatVolatilePromptSection,
   extendChatUntrustedPromptSuffix,
   extractTitle,
 } from "@/api/handlers/chat/chat-prompt";
 import type {
-  ChatSafePrompt,
+  ChatSafePromptLayers,
   ChatToolAvailability,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
@@ -84,6 +86,7 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
+  bindChatTurnRunId,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
@@ -93,8 +96,14 @@ import {
 } from "@/api/handlers/chat/chat-turn-persistence";
 import type { ChatTurnExecution } from "@/api/handlers/chat/chat-turn-persistence";
 import {
+  CHAT_TURN_BOUNDARY_MODE,
   ChatTurnRun,
+  countChatTurnSettlement,
   processChatTurnOwnership,
+} from "@/api/handlers/chat/chat-turn-run";
+import type {
+  ChatTurnObservation,
+  ChatTurnStoredSettlement,
 } from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
@@ -217,6 +226,7 @@ import {
   createGeneratedDocumentActiveDraftContext,
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -448,8 +458,11 @@ type ChatSendLifecycleOptions = {
   startAdmission?: typeof startChatExecutionAdmission;
   indexThread: typeof upsertChatThreadSearchDocument;
   externalMcpToolsLoader: LazyExternalMcpToolsLoader;
+  /** The boundary mode the turn's settlement is counted under. */
+  mode: ChatTurnObservation["mode"];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  scopedDb: ScopedDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -473,10 +486,75 @@ type CompletedTurnFollowUps = {
   resolvedResponseMessage: ChatMessage;
 };
 
+/**
+ * A streamed turn's `onFinish` boundary. The response is already streaming,
+ * so no outer catch settles the turn: without this it stays `running` until
+ * its lease lapses and the thread is dead. One boundary for every failure,
+ * expected or thrown, so the turn row is settled exactly once before the
+ * stream reports the error. Returns what the row now holds, for the run to
+ * count.
+ */
+const settleStreamedAssistantTurn = async ({
+  persist,
+  run,
+  runFollowUps,
+  threadId,
+}: {
+  persist: () => Promise<
+    Result<
+      {
+        followUps: CompletedTurnFollowUps | null;
+        settlement: ChatTurnStoredSettlement;
+      },
+      AssistantTurnFailure
+    >
+  >;
+  run: ChatTurnRun;
+  runFollowUps: (followUps: CompletedTurnFollowUps) => Promise<void>;
+  threadId: SafeId<"chatThread">;
+}): Promise<ChatTurnStoredSettlement> => {
+  const settled = (
+    await Result.tryPromise({
+      try: persist,
+      catch: (cause): AssistantTurnFailure => ({
+        code: "internal",
+        error: new HandlerError({
+          status: 500,
+          message: "Failed to settle assistant turn",
+          cause,
+        }),
+      }),
+    })
+  ).andThen((result) => result);
+  if (Result.isError(settled)) {
+    const { code, error } = settled.error;
+    await run.fail(code, true);
+    throw error;
+  }
+  // The turn is stored from here, so a follow-up that throws is reported and
+  // never reaches the boundary above: a completed turn cannot then read as
+  // failed.
+  const { followUps, settlement } = settled.value;
+  if (followUps !== null) {
+    const followedUp = await Result.tryPromise(
+      async () => await runFollowUps(followUps),
+    );
+    if (Result.isError(followedUp)) {
+      observeFailure(followedUp.error, {
+        sink: COMPLETED_TURN_FOLLOW_UPS_FAILED,
+        ctx: { threadId },
+      });
+    }
+  }
+  return settlement;
+};
+
 const CHECKPOINT_RESTORATION_FAILED = failureSink({
   event: "chat.send.checkpoint_restoration_failed",
   expected: [],
 });
+
+const CHAT_SEND_ACTION_KIND = "chat.send";
 
 /**
  * Owns every resource that must be settled when a send stops before its run
@@ -499,6 +577,27 @@ export class ChatSendLifecycle {
 
   constructor(options: ChatSendLifecycleOptions) {
     this.options = options;
+  }
+
+  /**
+   * Count a turn settled before its run started, once its row holds the
+   * outcome. No model is resolved yet. A turn another owner settled first is
+   * not this send's to count, and a settlement that failed leaves the turn
+   * claimed, for `cleanup` to store and count once.
+   */
+  private countPreflightSettlement(
+    outcome: "cancelled" | "failed" | "interrupted",
+    failureCode: ChatTurnFailureCode | null,
+    settlement: Result<unknown, unknown>,
+  ): void {
+    if (Result.isError(settlement)) {
+      return;
+    }
+    countChatTurnSettlement(
+      { mode: this.options.mode, provider: "none" },
+      outcome,
+      failureCode,
+    );
   }
 
   adoptThread(threadState: ChatThreadState): void {
@@ -545,6 +644,8 @@ export class ChatSendLifecycle {
     )({
       organizationId,
       userId: this.options.userId,
+      mode: "concurrency-only",
+      actionKind: "chat.send",
     });
     if (Result.isError(acquired)) {
       return acquired;
@@ -552,6 +653,24 @@ export class ChatSendLifecycle {
     this.admission = acquired.value;
     this.checkpoint = checkpoint;
     return Result.ok(undefined);
+  }
+
+  async reserveExecutionPeriod(
+    runId: string,
+  ): Promise<Result<void, HandlerError>> {
+    if (this.claimedTurn.status !== "preflight") {
+      panic("Cannot reserve a phase without a durable execution owner");
+    }
+    if (this.admission === undefined) {
+      return Result.ok(undefined);
+    }
+    return await this.admission.reservePeriod(
+      {
+        actionKind: CHAT_SEND_ACTION_KIND,
+        logicalPhaseId: JSON.stringify([this.claimedTurn.execution.id, runId]),
+      },
+      this.options.scopedDb,
+    );
   }
 
   get admissionSignal(): AbortSignal | undefined {
@@ -626,6 +745,7 @@ export class ChatSendLifecycle {
       checkpoint: this.checkpoint,
       connectors,
       deadlineMs: CHAT_METERED_PROVIDER_TIMEOUT_MS,
+      mode: this.options.mode,
       owner: {
         indexThread: this.options.indexThread,
         execution: this.claimedTurn.execution,
@@ -656,6 +776,7 @@ export class ChatSendLifecycle {
     const failureResult = await persistFailedChatTurn({
       code,
       execution: this.claimedTurn.execution,
+      indexThread: this.options.indexThread,
       recordAuditEvent: this.options.recordAuditEvent,
       retryable,
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
@@ -664,11 +785,50 @@ export class ChatSendLifecycle {
       userId: this.options.userId,
       workspaceId: this.options.workspaceId,
     });
+    this.countPreflightSettlement("failed", code, failureResult);
     if (Result.isError(failureResult)) {
       captureError(failureResult.error, { threadId: this.options.threadId });
       return;
     }
     this.claimedTurn = { status: "unclaimed" };
+  }
+
+  async refuseCurrentTurn(
+    error: HandlerError,
+  ): Promise<Result<void, HandlerError>> {
+    if (this.claimedTurn.status !== "preflight") {
+      panic("Cannot refuse a chat turn this send does not hold");
+    }
+    const settled = await persistTerminalAssistantTurn({
+      execution: this.claimedTurn.execution,
+      failure: { code: "boundary-refusal", retryable: false },
+      outcome: {
+        type: "failed",
+        error:
+          error.code === ACTION_ADMISSION_CODES.periodExhausted ||
+          error.status === 429
+            ? "quota_exhausted"
+            : "provider_unavailable",
+      },
+      owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+      recordAuditEvent: this.options.recordAuditEvent,
+      safeDb: this.options.safeDb,
+      threadId: this.options.threadId,
+      userId: this.options.userId,
+      workspaceId: this.options.workspaceId,
+      indexThread: this.options.indexThread,
+    });
+    if (Result.isError(settled)) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to store the refused chat turn",
+          cause: settled.error,
+        }),
+      );
+    }
+    this.claimedTurn = { status: "unclaimed" };
+    return Result.ok(undefined);
   }
 
   /** The user stopped the turn before its provider call started. */
@@ -678,6 +838,7 @@ export class ChatSendLifecycle {
     }
     const settlementResult = await persistStoppedChatTurn({
       execution: this.claimedTurn.execution,
+      indexThread: this.options.indexThread,
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
       recordAuditEvent: this.options.recordAuditEvent,
       safeDb: this.options.safeDb,
@@ -686,6 +847,7 @@ export class ChatSendLifecycle {
       workspaceId: this.options.workspaceId,
     });
     if (Result.isOk(settlementResult)) {
+      this.countPreflightSettlement("cancelled", null, settlementResult);
       this.claimedTurn = { status: "unclaimed" };
     }
     return settlementResult;
@@ -700,6 +862,7 @@ export class ChatSendLifecycle {
     }
     const settlementResult = await persistInterruptedChatTurn({
       execution: this.claimedTurn.execution,
+      indexThread: this.options.indexThread,
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
       recordAuditEvent: this.options.recordAuditEvent,
       safeDb: this.options.safeDb,
@@ -708,6 +871,7 @@ export class ChatSendLifecycle {
       workspaceId: this.options.workspaceId,
     });
     if (Result.isOk(settlementResult)) {
+      this.countPreflightSettlement("interrupted", null, settlementResult);
       this.claimedTurn = { status: "unclaimed" };
     }
     return settlementResult;
@@ -722,6 +886,7 @@ export class ChatSendLifecycle {
         const failureResult = await persistFailedChatTurn({
           code: "internal",
           execution: this.claimedTurn.execution,
+          indexThread: this.options.indexThread,
           owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
           recordAuditEvent: this.options.recordAuditEvent,
           retryable: true,
@@ -730,6 +895,7 @@ export class ChatSendLifecycle {
           userId: this.options.userId,
           workspaceId: this.options.workspaceId,
         });
+        this.countPreflightSettlement("failed", "internal", failureResult);
         if (Result.isError(failureResult)) {
           captureError(failureResult.error, {
             source: "send-message-claimed-turn-preflight-cleanup",
@@ -766,20 +932,19 @@ export class ChatSendLifecycle {
 }
 
 /**
- * The send's last step before its run starts. A closed connection ends the
- * turn here, the last time the send asks its request anything. Then the run
- * `runId` starts: bound to the turn, with its lease starting now, whatever
- * connector discovery and prompt assembly took. A stop recorded during
- * preflight ends the turn here, before any provider call. Every refusal leaves
- * the turn settled.
+ * Establish durable run ownership before pre-dispatch work, then recheck the
+ * connection and execution owner immediately before streaming. A stop during
+ * preparation ends the turn here. Every refusal leaves the turn settled.
  */
 const prepareDispatch = async ({
+  phase,
   execution,
   isClientConnectionAborted,
   lifecycle,
   runId,
   safeDb,
 }: {
+  phase: "bind" | "dispatch";
   execution: ChatTurnExecution;
   isClientConnectionAborted: () => boolean;
   lifecycle: ChatSendLifecycle;
@@ -795,7 +960,8 @@ const prepareDispatch = async ({
       }),
     );
   }
-  const leaseRenewal = await startChatTurnRun({
+  const writeRun = phase === "bind" ? bindChatTurnRunId : startChatTurnRun;
+  const leaseRenewal = await writeRun({
     execution,
     runId,
     safeDb,
@@ -805,7 +971,10 @@ const prepareDispatch = async ({
     return Result.err(
       new HandlerError({
         status: 500,
-        message: "Failed to renew chat execution lease",
+        message:
+          phase === "bind"
+            ? "Failed to bind chat run"
+            : "Failed to renew chat execution lease",
         cause: leaseRenewal.error,
       }),
     );
@@ -866,6 +1035,7 @@ type AcceptIncomingTurnOptions = {
   effectiveContextMatterIds: SafeId<"workspace">[];
   lifecycle: ChatSendLifecycle;
   organizationId: SafeId<"organization">;
+  managedAIResidency: ManagedAIResidency;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   thread: ChatThreadState;
@@ -884,6 +1054,7 @@ const acceptIncomingTurn = async ({
   effectiveContextMatterIds,
   lifecycle,
   organizationId,
+  managedAIResidency,
   recordAuditEvent,
   safeDb,
   thread,
@@ -1033,6 +1204,8 @@ const acceptIncomingTurn = async ({
         ? await Result.tryPromise({
             try: async () =>
               await resolveChatSandboxPlan({
+                dataClass: "customer",
+                managedAIResidency,
                 organizationId,
                 runId: Bun.randomUUIDv7(),
                 userId,
@@ -1281,6 +1454,7 @@ type PrepareValidatedIncomingMessageOptions = {
     organizationId: SafeId<"organization">;
     resume: Parameters<typeof validateMessage>[0]["resume"];
     userId: SafeId<"user">;
+    userEmail: string;
     workspaceId: SafeId<"workspace"> | null;
   };
   tools: {
@@ -1292,6 +1466,7 @@ type PrepareValidatedIncomingMessageOptions = {
     editApplyMode: NonNullable<ChatToolsInput["editApplyMode"]>;
     externalMcpToolsLoader: LazyExternalMcpToolsLoader;
     orgAIConfig: OrgAIConfig | null;
+    managedAIResidency: ManagedAIResidency;
     refRegistry: ReturnType<typeof createChatRefRegistry>;
     toolDefectMemo: ReturnType<typeof createChatToolDefectMemo>;
     usageLane: UsageLaneDecision | undefined;
@@ -1322,6 +1497,7 @@ const prepareValidatedIncomingMessage = async ({
     organizationId,
     resume,
     userId,
+    userEmail,
     workspaceId,
   },
   tools: {
@@ -1331,6 +1507,7 @@ const prepareValidatedIncomingMessage = async ({
     editApplyMode,
     externalMcpToolsLoader,
     orgAIConfig,
+    managedAIResidency,
     refRegistry,
     toolDefectMemo,
     usageLane,
@@ -1397,6 +1574,7 @@ const prepareValidatedIncomingMessage = async ({
       organizationId,
       memberRole: memberRole.role,
       orgAIConfig,
+      managedAIResidency,
       pinServerValidatedWorkspaceId,
       requestWorkspaceId: workspaceId,
       refRegistry,
@@ -1406,6 +1584,7 @@ const prepareValidatedIncomingMessage = async ({
       threadId: body.threadId,
       workspaceId,
       userId,
+      userEmail,
       pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
       // Schema validation runs against the user's full accessible
       // set; per-tool scope checks happen at execute time below.
@@ -1695,7 +1874,7 @@ const prepareValidatedIncomingMessage = async ({
 
 type AssembleTurnSystemPromptOptions = {
   chatContext: {
-    systemSafe: ChatSafePrompt;
+    systemSafe: ChatSafePromptLayers;
     systemUntrusted: ChatUntrustedPromptSuffix;
   };
   externalMcpTools: LoadedExternalMcpTools | undefined;
@@ -1726,11 +1905,12 @@ const assembleTurnSystemPrompt = ({
         externalMcpTools === undefined ? [] : externalMcpTools.connectors,
       ),
       requestedSkillsPrompt,
-    ],
+    ].map(chatVolatilePromptSection),
   ),
 });
 
 export type SendMessageDependencies = {
+  startAdmission?: typeof startChatExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
@@ -1786,6 +1966,7 @@ export const createSendMessage = (
       getWorkspaceAccess,
       memberRole,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       pinServerValidatedWorkspaceId,
@@ -1816,6 +1997,7 @@ export const createSendMessage = (
       }
 
       yield* requireTanStackAIAvailableForRole({
+        dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
         role: "chat",
@@ -2064,10 +2246,14 @@ export const createSendMessage = (
           }),
       );
       const lifecycle = new ChatSendLifecycle({
+        startAdmission:
+          dependencies.startAdmission ?? startChatExecutionAdmission,
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
+        mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
         recordAuditEvent,
         safeDb,
+        scopedDb,
         threadId: body.threadId,
         userId: user.id,
         workspaceId,
@@ -2111,6 +2297,7 @@ export const createSendMessage = (
               organizationId: session.activeOrganizationId,
               resume,
               userId: user.id,
+              userEmail: user.email,
               workspaceId,
             },
             tools: {
@@ -2120,6 +2307,7 @@ export const createSendMessage = (
               editApplyMode,
               externalMcpToolsLoader,
               orgAIConfig,
+              managedAIResidency,
               refRegistry: validationRefRegistry,
               toolDefectMemo,
               usageLane,
@@ -2160,6 +2348,7 @@ export const createSendMessage = (
         yield* lifecycle.checkAdmission();
 
         const acceptedTurnResult = await acceptIncomingTurn({
+          managedAIResidency,
           accessibleSet,
           accessibleWorkspaceIds,
           body,
@@ -2206,6 +2395,26 @@ export const createSendMessage = (
               message: "The run id already names another chat turn",
             }),
           );
+        }
+
+        yield* Result.await(
+          prepareDispatch({
+            phase: "bind",
+            execution: turnExecution,
+            isClientConnectionAborted,
+            lifecycle,
+            runId: body.runId,
+            safeDb,
+          }),
+        );
+        const phaseAdmission = await lifecycle.reserveExecutionPeriod(
+          body.runId,
+        );
+        if (Result.isError(phaseAdmission)) {
+          yield* Result.await(
+            lifecycle.refuseCurrentTurn(phaseAdmission.error),
+          );
+          return Result.err(phaseAdmission.error);
         }
 
         // Refs live as long as the thread, not the request: an interactive
@@ -2279,6 +2488,7 @@ export const createSendMessage = (
             messages: messagesForContextInput,
             organizationId: session.activeOrganizationId,
             orgAIConfig,
+            managedAIResidency,
             reasoningEffort: chatReasoningEffort,
             safeDb,
             tenantWorkspaceIds: accessibleWorkspaceIds,
@@ -2339,6 +2549,7 @@ export const createSendMessage = (
           organizationId: session.activeOrganizationId,
           memberRole: memberRole.role,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
           usageLane: turnLane.lane,
           pinServerValidatedWorkspaceId,
@@ -2356,6 +2567,7 @@ export const createSendMessage = (
             contextMatterIds: effectiveContextMatterIds,
           }),
           userId: user.id,
+          userEmail: user.email,
           toolWorkspaceIds,
           activeFile: activeFileForTools,
           hasActiveDocxEditClient,
@@ -2569,6 +2781,7 @@ export const createSendMessage = (
         yield* lifecycle.checkAdmission();
         yield* Result.await(
           prepareDispatch({
+            phase: "dispatch",
             execution: turnExecution,
             isClientConnectionAborted,
             lifecycle,
@@ -2612,10 +2825,12 @@ export const createSendMessage = (
           ) {
             const title = async () =>
               await generateThreadTitle({
+                indexThread: dependencies.indexThread,
                 initialTitle: initialThreadTitle,
                 messages: [parsedMessage.message, resolvedResponseMessage],
                 organizationId: session.activeOrganizationId,
                 orgAIConfig,
+                managedAIResidency,
                 promptCachingEnabled,
                 recordAuditEvent,
                 safeDb,
@@ -2649,13 +2864,19 @@ export const createSendMessage = (
                 // The streamed turn's persistence: every expected failure
                 // comes back as a `Result` naming the turn row's failure code,
                 // and nothing here settles the turn, which is the `onFinish`
-                // boundary's job. A completed turn returns what its
-                // follow-ups need.
+                // boundary's job. It returns what the turn row now holds, and
+                // for a completed turn what its follow-ups need.
                 const persistStreamedAssistantTurn = async ({
                   outcome,
                   responseMessage,
                 }: StreamChatFinishEvent): Promise<
-                  Result<CompletedTurnFollowUps | null, AssistantTurnFailure>
+                  Result<
+                    {
+                      followUps: CompletedTurnFollowUps | null;
+                      settlement: ChatTurnStoredSettlement;
+                    },
+                    AssistantTurnFailure
+                  >
                 > => {
                   const validatedToolParts = validateToolCallParts({
                     allowPartialInput: CUT_SHORT_OUTCOME[outcome.type],
@@ -2737,8 +2958,11 @@ export const createSendMessage = (
                   ) {
                     // Another execution or the reaper settled the turn
                     // first: its outcome stands, and this run has nothing
-                    // left to store.
-                    return Result.ok(null);
+                    // left to store or count.
+                    return Result.ok({
+                      followUps: null,
+                      settlement: { type: "not-owned" },
+                    });
                   }
                   if (Result.isError(persistResult)) {
                     captureError(persistResult.error, {
@@ -2761,14 +2985,18 @@ export const createSendMessage = (
                       messages: latestMessagePlan.messages,
                       persistencePlan,
                     });
-                  return Result.ok(
-                    storedOutcome.type === "completed"
-                      ? {
-                          messagesAfterAssistantPersist,
-                          resolvedResponseMessage,
-                        }
-                      : null,
-                  );
+                  return Result.ok({
+                    // A stop that won the race stored `cancelled`, whatever
+                    // the run proposed.
+                    followUps:
+                      storedOutcome.type === "completed"
+                        ? {
+                            messagesAfterAssistantPersist,
+                            resolvedResponseMessage,
+                          }
+                        : null,
+                    settlement: { type: "stored", outcome: storedOutcome },
+                  });
                 };
 
                 const chatResponse = await dependencies.streamResponse({
@@ -2782,50 +3010,17 @@ export const createSendMessage = (
                   ...(owningAssistantMessage === undefined
                     ? {}
                     : { owningAssistantMessageId: owningAssistantMessage.id }),
-                  onFinish: async (event) => {
-                    // The response is already streaming, so no outer catch
-                    // settles the turn: without this it stays `running`
-                    // until its lease lapses and the thread is dead. One
-                    // boundary for every failure, expected or thrown, so the
-                    // turn row is settled exactly once before the stream
-                    // reports the error.
-                    const settled = (
-                      await Result.tryPromise({
-                        try: async () =>
-                          await persistStreamedAssistantTurn(event),
-                        catch: (cause): AssistantTurnFailure => ({
-                          code: "internal",
-                          error: new HandlerError({
-                            status: 500,
-                            message: "Failed to settle assistant turn",
-                            cause,
-                          }),
-                        }),
-                      })
-                    ).andThen((result) => result);
-                    if (Result.isError(settled)) {
-                      const { code, error } = settled.error;
-                      await run.fail(code, true);
-                      throw error;
-                    }
-                    // The turn is stored from here, so a follow-up that
-                    // throws is reported and never reaches the boundary
-                    // above: a completed turn cannot then read as failed.
-                    if (settled.value !== null) {
-                      const followUps = settled.value;
-                      const followedUp = await Result.tryPromise(
-                        async () =>
-                          await runCompletedTurnFollowUps(run, followUps),
-                      );
-                      if (Result.isError(followedUp)) {
-                        observeFailure(followedUp.error, {
-                          sink: COMPLETED_TURN_FOLLOW_UPS_FAILED,
-                          ctx: { threadId: body.threadId },
-                        });
-                      }
-                    }
-                  },
+                  onFinish: async (event) =>
+                    await settleStreamedAssistantTurn({
+                      persist: async () =>
+                        await persistStreamedAssistantTurn(event),
+                      run,
+                      runFollowUps: async (followUps) =>
+                        await runCompletedTurnFollowUps(run, followUps),
+                      threadId: body.threadId,
+                    }),
                   orgAIConfig,
+                  managedAIResidency,
                   organizationId: session.activeOrganizationId,
                   devModelId: chatModelOverride,
                   reasoningEffort: chatReasoningEffort,
@@ -3003,7 +3198,7 @@ type PrepareChatContextResult = Result<
     /**
      * Server-built scaffold. Safe to send to the LLM verbatim.
      */
-    systemSafe: ChatSafePrompt;
+    systemSafe: ChatSafePromptLayers;
     /**
      * Dynamic user-supplied context (active file body, decision
      * text, external source, matter labels). Pass through the
@@ -3118,7 +3313,7 @@ const prepareChatContext = async ({
 
     return Result.ok({
       promptCacheKey: buildChatPromptCacheKey(systemPrompt.cacheStablePrefix),
-      systemSafe: systemPrompt.safePrompt,
+      systemSafe: systemPrompt.safeLayers,
       systemUntrusted: systemPrompt.untrustedSuffix,
       skillMetadata: systemPrompt.skillMetadata,
       activeSkillContext: systemPrompt.activeSkillContext,

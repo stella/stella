@@ -21,6 +21,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandValidatedAllowedSenderCursorId } from "@/api/lib/safe-id-boundaries";
 
 type AllowedSenderRow = typeof correspondenceAllowedSenders.$inferSelect;
@@ -105,7 +106,7 @@ const config = {
 const listAllowedSenders = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session }) {
-    const limit = query.limit ?? PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(query.limit ?? PAGE_SIZE_DEFAULT);
     const cursorParts = query.cursor
       ? decodePaginationCursor(query.cursor)
       : null;

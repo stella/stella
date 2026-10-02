@@ -35,7 +35,7 @@ jobs:
           persist-credentials: false
 
       - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@aff5017c264acce5a2bcdf15876da08835e6de70
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
 
       - name: Install dependencies
         run: bash scripts/retry.sh bun ci --ignore-scripts
@@ -47,5 +47,5 @@ jobs:
         env:
           E2E_WEB_URL: https://staging.stll.app
           E2E_API_URL: https://api-staging.stll.app
-          E2E_EDGE_HEADER_NAME: ${{ secrets.E2E_EDGE_HEADER_NAME }}
-          E2E_EDGE_HEADER_VALUE: ${{ secrets.E2E_EDGE_HEADER_VALUE }}
+          E2E_EDGE_HEADER_NAME: x-stella-edge-token
+          E2E_EDGE_HEADER_VALUE: ${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}

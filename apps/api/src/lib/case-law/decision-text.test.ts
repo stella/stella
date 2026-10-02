@@ -239,7 +239,6 @@ describe("decision text fields", () => {
     const malformedSidecars = [
       null,
       "invalid",
-      [{ field: "abstract", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED }],
       [
         {
           field: "abstract",
@@ -284,7 +283,7 @@ describe("decision text fields", () => {
         field: "abstract",
         reason: TEXT_ABSENCE_REASON.REDISTRIBUTION_WITHHELD,
       },
-      { field: "unknown", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
+      { field: "unknown", reason: "unknown_reason" },
     ];
 
     const preserved = preserveStoredTextAfterParseFailure({

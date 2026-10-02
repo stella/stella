@@ -62,7 +62,7 @@ import {
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
-import type { McpToolDefinition } from "../src/mcp/tool-types";
+import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import {
   type CapabilityDispatchRecord,
@@ -491,6 +491,7 @@ type CapabilityEntry = {
   description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
+  readClass?: McpReadClass;
   destructive: boolean;
   consumesServices: CatalogServiceClassification;
   scope: string;
@@ -852,6 +853,40 @@ const serviceConsumptionOf = (
   );
 };
 
+type ResolveReadClassificationOptions = {
+  id: string;
+  access: "read" | "write";
+  exposure: Extract<
+    ParsedExposure,
+    { type: "capability" | "tool" | "covered" }
+  >;
+  toolReadClassesByName: ReadonlyMap<string, McpToolDefinition["readClass"]>;
+};
+
+/** Resolve read ownership before projecting the generated transport contract. */
+const resolveReadClassification = ({
+  id,
+  access,
+  exposure,
+  toolReadClassesByName,
+}: ResolveReadClassificationOptions) => {
+  if (access === "write") {
+    return undefined;
+  }
+  if (exposure.readClass !== undefined) {
+    return exposure.readClass;
+  }
+  if (exposure.type === "capability") {
+    return panic(`Missing read classification for capability ${id}`);
+  }
+  const covering = exposure.type === "tool" ? exposure.name : exposure.by;
+  const classification = toolReadClassesByName.get(covering);
+  if (classification === undefined || typeof classification === "function") {
+    return panic(`Missing static read classification for capability ${id}`);
+  }
+  return classification;
+};
+
 type BuildCatalogEntryOptions = {
   id: string;
   /** Handler config's `description`, absent when the handler declares none. */
@@ -859,6 +894,7 @@ type BuildCatalogEntryOptions = {
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
   consumesServices: ServiceClassification;
+  readClass: McpReadClass | undefined;
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
@@ -889,6 +925,7 @@ const buildCatalogEntry = ({
   kind,
   access,
   consumesServices,
+  readClass,
   scope,
   additionalScopes,
   requestTimeoutMs,
@@ -903,6 +940,7 @@ const buildCatalogEntry = ({
   ...(description === undefined ? {} : { description }),
   handlerKind: kind,
   access: access.access,
+  ...(readClass === undefined ? {} : { readClass }),
   destructive: access.destructive,
   consumesServices:
     typeof consumesServices === "function"
@@ -1136,6 +1174,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const { DEFAULT_MCP_TOOL_DEFINITIONS: narrowToolDefinitions } =
     await import("../src/mcp/static-tool-definitions");
   const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
+  const toolReadClassesByName = new Map(
+    toolDefinitions.map((tool) => [tool.name, tool.readClass]),
+  );
   const toolServicesByName = new Map(
     toolDefinitions.map((tool) => [tool.name, tool.consumesServices]),
   );
@@ -1539,6 +1580,12 @@ const buildCatalog = async (): Promise<BuildResult> => {
         kind: kindResolution.kind,
         access: accessResolution,
         consumesServices,
+        readClass: resolveReadClassification({
+          id,
+          access: accessResolution.access,
+          exposure: endpoint.exposure,
+          toolReadClassesByName,
+        }),
         scope,
         additionalScopes,
         requestTimeoutMs,
@@ -1886,18 +1933,13 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  // Formatted here for the same reason as the dispatch module: an unformatted
-  // artifact fails CI's Format gate, and hand-formatting it afterwards makes it
-  // differ from what this exporter regenerates, which then fails the drift
-  // guard instead. Only generator-formatted output satisfies both.
-  const doc = await formatGeneratedArtifact(
-    serializeCoverageDoc({
-      entries,
-      cliCommandPathById,
-      internalWaiverCounts,
-    }),
-    "capability-coverage.md",
-  );
+  // Unpadded rows keep a wider cell from rewriting every other row. This
+  // generated document is excluded from the formatter for the same reason.
+  const doc = serializeCoverageDoc({
+    entries,
+    cliCommandPathById,
+    internalWaiverCounts,
+  });
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);

@@ -26,6 +26,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
 
 const listSkillsQuerySchema = t.Object({
@@ -50,6 +51,7 @@ const config = {
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "agent_tool_authoring",
     consumesServices: false,
   },
@@ -95,7 +97,9 @@ const decodeSkillCursor = (cursor: string): SkillCursor | null => {
 const listSkills = createSafeRootHandler(
   config,
   async function* ({ safeDb, session, user, memberRole, query }) {
-    const limit = query.limit ?? LIMITS.agentSkillsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.agentSkillsPageSizeDefault,
+    );
 
     const visibilityFilter = and(
       eq(agentSkills.organizationId, session.activeOrganizationId),

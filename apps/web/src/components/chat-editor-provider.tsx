@@ -9,8 +9,6 @@ import {
 } from "react";
 import type React from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
-import type { QueryKey } from "@tanstack/react-query";
 import Bold from "@tiptap/extension-bold";
 import HardBreak from "@tiptap/extension-hard-break";
 import Paragraph from "@tiptap/extension-paragraph";
@@ -46,29 +44,22 @@ import {
 } from "@/components/chat-editor-echo";
 import { createChatComposerDocument } from "@/components/chat-editor-markdown.logic";
 import type { ComposerSource } from "@/components/chat-editor-source";
-import {
-  ChatMention,
-  createChatSuggestion,
-} from "@/components/chat-mention-extension";
-import type {
-  ChatMentionOption,
-  ChatWorkspaceMentionOption,
-} from "@/components/chat-mention-extension";
-import {
-  buildEntityMentionOption,
-  CHAT_MENTION_ENTITY_RESULT_LIMIT,
-  CHAT_MENTION_SEARCH_DEBOUNCE_MS,
-  claimPendingMentionSearch,
-  getMentionViewScope,
-  insertChatMention,
-  settleLatestMentionSearch,
-} from "@/components/chat-mention-helpers";
+import { ChatMention } from "@/components/chat-mention-extension";
+import type { ChatMentionOption } from "@/components/chat-mention-extension";
+import { insertChatMention } from "@/components/chat-mention-helpers";
 import { shouldChipPaste } from "@/components/chat-pasted-text";
 import {
   insertPastedTextChip,
   PastedText,
+  pastedTextChipContent,
 } from "@/components/chat-pasted-text-extension";
+import type { PastedTextAttrs } from "@/components/chat-pasted-text-extension";
 import { ChatAnonDecorations } from "@/components/chat/chat-anon-decorations-extension";
+import {
+  mountedEditorFor,
+  mountEditor,
+} from "@/components/mounted-editors.logic";
+import type { MountedEditors } from "@/components/mounted-editors.logic";
 import { createPromptEditorDocument } from "@/components/prompt-editor.logic";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
@@ -86,8 +77,6 @@ import {
 import type { ChatThreadRef } from "@/lib/chat-thread-ref";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
-import { entitiesOptions } from "@/lib/workspaces/queries/entities";
-import { viewsOptions } from "@/lib/workspaces/queries/views";
 
 const CHAT_FILES_PER_MESSAGE = 5;
 const CHAT_MAX_FILE_BYTES = CHAT_CONTEXT_FILE_MAX_BYTES;
@@ -164,6 +153,7 @@ type RegisteredExtension = {
 type ActiveChatEditorHandle = {
   focus: () => void;
   insertMention: (mention: ChatMentionOption) => void;
+  insertPastedText: (attrs: PastedTextAttrs) => void;
   threadKey: string;
 };
 
@@ -224,6 +214,12 @@ type ChatEditorManagerContextValue = {
     threadRef: ChatThreadRef,
     mention: ChatMentionOption,
   ) => void;
+  /** A pasted-text chip (a quote) at the caret of the thread's live
+   *  composer, or at the end of its stored draft when none is live. */
+  insertPastedTextIntoThread: (
+    threadRef: ChatThreadRef,
+    attrs: PastedTextAttrs,
+  ) => void;
   registerActiveEditor: (handle: ActiveChatEditorHandle) => () => void;
   registerExtension: (
     id: string,
@@ -235,9 +231,9 @@ const ChatEditorManagerContext =
   createContext<ChatEditorManagerContextValue | null>(null);
 
 // Carries only the registration version counter. Bumped on every
-// register/unregister and consumed solely by the editor's plugin-sync effect
-// (via `useChatEditorExtensionVersion`), so a bump re-renders that one
-// subscriber instead of every holder of the manager API.
+// register/unregister and read via `useChatEditorExtensionVersion` (the
+// editor's plugin-sync effect, the Context picker's search key), so a bump
+// re-renders those subscribers instead of every holder of the manager API.
 const ChatEditorExtensionVersionContext = createContext<number>(0);
 
 const isSuggestionPluginState = (
@@ -292,7 +288,9 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
   const registrationsRef = useRef<Map<string, RegisteredExtension> | null>(
     null,
   );
-  const activeEditorRef = useRef<ActiveChatEditorHandle | null>(null);
+  // Every live composer, by thread (see `mounted-editors.logic`).
+  const mountedEditorsRef =
+    useRef<MountedEditors<ActiveChatEditorHandle> | null>(null);
   const [extensionVersion, setExtensionVersion] = useState(0);
 
   const getMentionItems = useCallback(async () => {
@@ -390,24 +388,21 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
-  const registerActiveEditor = useCallback((handle: ActiveChatEditorHandle) => {
-    activeEditorRef.current = handle;
-
-    return () => {
-      if (activeEditorRef.current?.threadKey !== handle.threadKey) {
-        return;
-      }
-
-      activeEditorRef.current = null;
-    };
-  }, []);
+  const registerActiveEditor = useCallback(
+    (handle: ActiveChatEditorHandle) =>
+      mountEditor(getOrCreateMap(mountedEditorsRef), handle.threadKey, handle),
+    [],
+  );
 
   const insertMentionIntoThread = useCallback(
     (threadRef: ChatThreadRef, mention: ChatMentionOption) => {
       const threadKey = getChatThreadKey(threadRef);
-      const activeEditor = activeEditorRef.current;
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        threadKey,
+      );
 
-      if (activeEditor?.threadKey === threadKey) {
+      if (activeEditor !== null) {
         activeEditor.insertMention(mention);
         return;
       }
@@ -417,15 +412,31 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
     [],
   );
 
+  const insertPastedTextIntoThread = useCallback(
+    (threadRef: ChatThreadRef, attrs: PastedTextAttrs) => {
+      const threadKey = getChatThreadKey(threadRef);
+      const activeEditor = mountedEditorFor(
+        mountedEditorsRef.current,
+        threadKey,
+      );
+
+      if (activeEditor !== null) {
+        activeEditor.insertPastedText(attrs);
+        return;
+      }
+
+      useChatDraftStore
+        .getState()
+        .insertInlineContent(threadKey, pastedTextChipContent(attrs));
+    },
+    [],
+  );
+
   const focusThread = useCallback((threadRef: ChatThreadRef) => {
-    const threadKey = getChatThreadKey(threadRef);
-    const activeEditor = activeEditorRef.current;
-
-    if (activeEditor?.threadKey !== threadKey) {
-      return;
-    }
-
-    activeEditor.focus();
+    mountedEditorFor(
+      mountedEditorsRef.current,
+      getChatThreadKey(threadRef),
+    )?.focus();
   }, []);
 
   const contextValue = useMemo<ChatEditorManagerContextValue>(
@@ -434,6 +445,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       getMentionItems,
       getPluginRegistrations,
       insertMentionIntoThread,
+      insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
       searchMentionItems,
@@ -443,6 +455,7 @@ export const ChatEditorProvider = ({ children }: React.PropsWithChildren) => {
       getMentionItems,
       getPluginRegistrations,
       insertMentionIntoThread,
+      insertPastedTextIntoThread,
       registerActiveEditor,
       registerExtension,
       searchMentionItems,
@@ -493,7 +506,7 @@ export const useChatEditorManager = () => {
 // Subscribes only to the registration version, so the editor's plugin-sync
 // effect re-runs when extensions change without dragging the whole manager API
 // into the volatile-value subscription (see `ChatEditorExtensionVersionContext`).
-const useChatEditorExtensionVersion = () =>
+export const useChatEditorExtensionVersion = () =>
   use(ChatEditorExtensionVersionContext);
 
 type UseChatComposerWiringOptions = {
@@ -588,7 +601,6 @@ export const useChatEditor = ({
   const suggestedFollowupPromptRef = useRef(suggestedFollowupPrompt);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: consumed by out-of-render editor handlers, must reflect this render's prop
   suggestedFollowupPromptRef.current = suggestedFollowupPrompt;
-  const queryClient = useQueryClient();
   const submitHandlerRef = useRef<(() => Promise<void>) | null>(null);
   const fileIdCounterRef = useRef(0);
   const activePluginKeysRef = useRef<(string | PluginKey)[]>([]);
@@ -615,12 +627,8 @@ export const useChatEditor = ({
   sentMessageHistoryHtmlRef.current =
     sentMessageHistoryHtml ?? EMPTY_SENT_MESSAGE_HISTORY;
   const threadKey = getChatThreadKey(threadRef);
-  const {
-    getMentionItems,
-    getPluginRegistrations,
-    registerActiveEditor,
-    searchMentionItems,
-  } = useChatEditorManager();
+  const { getPluginRegistrations, registerActiveEditor } =
+    useChatEditorManager();
   const extensionVersion = useChatEditorExtensionVersion();
   const draft = useChatDraftStore(
     (state) => state.draftsByThreadKey[threadKey] ?? null,
@@ -654,10 +662,6 @@ export const useChatEditor = ({
   const attachmentsRef = useRef(attachments);
   // oxlint-disable-next-line react/refs -- latest-ref mirror: read at submit time out-of-render, must hold this render's attachments
   attachmentsRef.current = attachments;
-  const pendingWorkspaceEntitySearchRef = useRef<{
-    queryKey: QueryKey | null;
-    resolve: (items: ChatMentionOption[]) => void;
-  } | null>(null);
 
   const markDraftStarted = useCallback(() => {
     if (draftStartedThreadKeyRef.current === threadKey) {
@@ -681,148 +685,6 @@ export const useChatEditor = ({
       committedThreadKeyRef.current = threadKey;
     }
   }, [sentMessageHistoryHtml, threadKey]);
-
-  const fetchWorkspaceEntities = useLatestCallback(
-    async (workspace: ChatWorkspaceMentionOption, query: string) => {
-      if (!workspace.sourceViewId) {
-        return [];
-      }
-
-      const views = await queryClient.query({
-        ...viewsOptions(workspace.resource.id),
-        staleTime: "static",
-      });
-      const activeView =
-        views.find((view) => view.id === workspace.sourceViewId) ?? null;
-
-      if (!activeView) {
-        return [];
-      }
-
-      const { filters, sorts } = getMentionViewScope(activeView.layout);
-      const search = query.trim();
-      const options = entitiesOptions({
-        workspaceId: workspace.resource.id,
-        filters,
-        sorts,
-        ...(search && { search }),
-        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-      });
-      if (pendingWorkspaceEntitySearchRef.current) {
-        pendingWorkspaceEntitySearchRef.current.queryKey = options.queryKey;
-      }
-      const data = await queryClient.query(options);
-      const sourceWorkspaceId =
-        threadRef.scope === "workspace" &&
-        threadRef.workspaceId === workspace.resource.id
-          ? undefined
-          : workspace.resource.id;
-
-      return data.entities.map((entity) =>
-        buildEntityMentionOption({ entity, sourceWorkspaceId }),
-      );
-    },
-  );
-  const debouncedFetchWorkspaceEntities = useDebouncedCallback(
-    async ({
-      query,
-      reject,
-      resolve,
-      workspace,
-    }: {
-      query: string;
-      reject: (error: unknown) => void;
-      resolve: (items: ChatMentionOption[]) => void;
-      workspace: ChatWorkspaceMentionOption;
-    }) => {
-      // A failed search rejects, so the mention list shows its load-error row.
-      await settleLatestMentionSearch({
-        search: async () => await fetchWorkspaceEntities(workspace, query),
-        claim: () =>
-          claimPendingMentionSearch(pendingWorkspaceEntitySearchRef, resolve),
-        resolve,
-        reject: (error) => {
-          getAnalytics().captureError(error);
-          reject(error);
-        },
-      });
-    },
-    CHAT_MENTION_SEARCH_DEBOUNCE_MS,
-  );
-  const loadWorkspaceEntities = useLatestCallback(
-    async (workspace: ChatWorkspaceMentionOption, query: string) => {
-      const previous = pendingWorkspaceEntitySearchRef.current;
-      if (previous) {
-        debouncedFetchWorkspaceEntities.cancel();
-        pendingWorkspaceEntitySearchRef.current = null;
-        if (previous.queryKey) {
-          await queryClient.cancelQueries({
-            exact: true,
-            queryKey: previous.queryKey,
-          });
-        }
-      }
-
-      if (!workspace.sourceViewId) {
-        return [];
-      }
-
-      const views = await queryClient.query({
-        ...viewsOptions(workspace.resource.id),
-        staleTime: "static",
-      });
-      const activeView =
-        views.find((view) => view.id === workspace.sourceViewId) ?? null;
-
-      if (!activeView) {
-        return [];
-      }
-
-      const { filters, sorts } = getMentionViewScope(activeView.layout);
-      const search = query.trim();
-      const options = entitiesOptions({
-        workspaceId: workspace.resource.id,
-        filters,
-        sorts,
-        ...(search && { search }),
-        pageSize: CHAT_MENTION_ENTITY_RESULT_LIMIT,
-      });
-      const cachedData = queryClient.getQueryData(options.queryKey);
-      if (cachedData) {
-        const sourceWorkspaceId =
-          threadRef.scope === "workspace" &&
-          threadRef.workspaceId === workspace.resource.id
-            ? undefined
-            : workspace.resource.id;
-
-        return cachedData.entities.map((entity) =>
-          buildEntityMentionOption({ entity, sourceWorkspaceId }),
-        );
-      }
-
-      return await new Promise<ChatMentionOption[]>((resolve, reject) => {
-        pendingWorkspaceEntitySearchRef.current = { queryKey: null, resolve };
-        detached(
-          debouncedFetchWorkspaceEntities({
-            query,
-            reject,
-            resolve,
-            workspace,
-          }),
-          "chat-editor-provider.debounced-fetch-workspace-entities",
-        );
-      });
-    },
-  );
-
-  useExternalSyncEffect(
-    () => () => {
-      debouncedFetchWorkspaceEntities.cancel();
-      pendingWorkspaceEntitySearchRef.current?.resolve([]);
-      pendingWorkspaceEntitySearchRef.current = null;
-    },
-    [debouncedFetchWorkspaceEntities],
-  );
 
   // Flush-time persist of the editor's live doc into the draft store. The
   // debounce is load-bearing, not cosmetic: the draft store is a mirror of
@@ -1039,14 +901,7 @@ export const useChatEditor = ({
       placeholder: () => placeholderRef.current,
     }),
     UndoRedo,
-    ChatMention.configure({
-      suggestion: createChatSuggestion(
-        getMentionItems,
-        searchMentionItems,
-        loadWorkspaceEntities,
-      ),
-      deleteTriggerWithBackspace: true,
-    }),
+    ChatMention.configure({ deleteTriggerWithBackspace: true }),
     PastedText,
     // Decorates nothing until a chat surface's anonymization layer
     // stores pairs via `setChatAnonDecorationPairs`. Installed here
@@ -1138,9 +993,9 @@ export const useChatEditor = ({
       }
 
       // Submit on Enter or Cmd/Ctrl+Enter. Shift+Enter falls
-      // through to the HardBreak extension (newline). The
-      // mention-suggestion plugin owns Enter while its popup is
-      // open — let it pick the highlighted item instead of
+      // through to the HardBreak extension (newline). A
+      // suggestion plugin a surface registers owns Enter while its
+      // popup is open — let it pick the highlighted item instead of
       // submitting the prompt.
       if (event.key !== "Enter" || event.isComposing) {
         return false;
@@ -1303,14 +1158,27 @@ export const useChatEditor = ({
     [editor, markDraftStarted],
   );
 
+  const insertPastedText = useCallback(
+    (attrs: PastedTextAttrs) => {
+      if (!isUsableEditor(editor)) {
+        return;
+      }
+
+      markDraftStarted();
+      insertPastedTextChip(editor, attrs);
+    },
+    [editor, markDraftStarted],
+  );
+
   useExternalSyncEffect(
     () =>
       registerActiveEditor({
         focus,
         insertMention,
+        insertPastedText,
         threadKey,
       }),
-    [focus, insertMention, registerActiveEditor, threadKey],
+    [focus, insertMention, insertPastedText, registerActiveEditor, threadKey],
   );
 
   const updateAttachments = useCallback(
@@ -1363,64 +1231,73 @@ export const useChatEditor = ({
     [updateAttachments],
   );
 
-  const removeFile = (id: string) => {
-    updateAttachments(
-      attachmentsRef.current.filter((attachment) => attachment.id !== id),
-    );
-  };
+  const removeFile = useCallback(
+    (id: string) => {
+      updateAttachments(
+        attachmentsRef.current.filter((attachment) => attachment.id !== id),
+      );
+    },
+    [updateAttachments],
+  );
 
-  const handleDrop = (event: React.DragEvent) => {
-    const passage = readDecisionPassage(event.dataTransfer);
-    const targetEditor = editorRef.current;
-    if (passage !== null && targetEditor !== null) {
-      event.preventDefault();
-      targetEditor
-        .chain()
-        .focus()
-        .insertContent(decisionPassageContent(passage))
-        .run();
-      targetEditor.commands.setTextSelection(targetEditor.state.selection.to);
-      return;
-    }
-    if (event.dataTransfer.files.length > 0) {
-      event.preventDefault();
-      addFiles(event.dataTransfer.files);
-    }
-    // Anything else (dragged text) is the editor's own drop to handle.
-  };
+  const handleDrop = useCallback(
+    (event: React.DragEvent) => {
+      const passage = readDecisionPassage(event.dataTransfer);
+      const targetEditor = editorRef.current;
+      if (passage !== null && targetEditor !== null) {
+        event.preventDefault();
+        targetEditor
+          .chain()
+          .focus()
+          .insertContent(decisionPassageContent(passage))
+          .run();
+        targetEditor.commands.setTextSelection(targetEditor.state.selection.to);
+        return;
+      }
+      if (event.dataTransfer.files.length > 0) {
+        event.preventDefault();
+        addFiles(event.dataTransfer.files);
+      }
+      // Anything else (dragged text) is the editor's own drop to handle.
+    },
+    [addFiles],
+  );
 
-  const handlePaste = (event: React.ClipboardEvent) => {
-    const files: File[] = [];
+  const handlePaste = useCallback(
+    (event: React.ClipboardEvent) => {
+      const files: File[] = [];
 
-    for (const item of event.clipboardData.items) {
-      if (item.kind !== "file") {
-        continue;
+      for (const item of event.clipboardData.items) {
+        if (item.kind !== "file") {
+          continue;
+        }
+
+        const file = item.getAsFile();
+        if (file !== null) {
+          files.push(file);
+        }
       }
 
-      const file = item.getAsFile();
-      if (file !== null) {
-        files.push(file);
+      if (files.length === 0) {
+        // Plain-text paste collapsing happens earlier inside
+        // ProseMirror via `editorProps.handlePaste`; nothing to do
+        // at the React layer here.
+        return;
       }
-    }
 
-    if (files.length === 0) {
-      // Plain-text paste collapsing happens earlier inside
-      // ProseMirror via `editorProps.handlePaste`; nothing to do
-      // at the React layer here.
-      return;
-    }
+      event.preventDefault();
+      addFiles(files);
+    },
+    [addFiles],
+  );
 
-    event.preventDefault();
-    addFiles(files);
-  };
-
-  const openFilePicker = () => {
+  const openFilePicker = useCallback(() => {
     openBrowserFilePicker({
       accept: CHAT_FILE_INPUT_ACCEPT,
       multiple: true,
       onPick: addFiles,
     });
-  };
+  }, [addFiles]);
 
   const submit = useCallback(
     async (send: (draft: ChatInputDraft) => Promise<void> | void) => {
@@ -1488,22 +1365,45 @@ export const useChatEditor = ({
     [],
   );
 
-  return {
-    attachments,
-    blur,
-    canSubmit,
-    editor,
-    focus,
-    handleDragOver,
-    handleDrop,
-    handlePaste,
-    isEmpty,
-    openFilePicker,
-    placeholder: resolvedPlaceholder,
-    removeFile,
-    setContent,
-    setEditable,
-    setSubmitHandler,
-    submit,
-  };
+  // React Compiler leaves this hook unmemoized, so the controller and the
+  // callbacks above are memoized by hand: the page calling this hook
+  // re-renders while a response streams, and a fresh controller would
+  // re-render the composer with it.
+  return useMemo(
+    () => ({
+      attachments,
+      blur,
+      canSubmit,
+      editor,
+      focus,
+      handleDragOver,
+      handleDrop,
+      handlePaste,
+      isEmpty,
+      openFilePicker,
+      placeholder: resolvedPlaceholder,
+      removeFile,
+      setContent,
+      setEditable,
+      setSubmitHandler,
+      submit,
+    }),
+    [
+      attachments,
+      blur,
+      canSubmit,
+      editor,
+      focus,
+      handleDrop,
+      handlePaste,
+      isEmpty,
+      openFilePicker,
+      resolvedPlaceholder,
+      removeFile,
+      setContent,
+      setEditable,
+      setSubmitHandler,
+      submit,
+    ],
+  );
 };

@@ -23,6 +23,7 @@ import {
   LEGISLATION_WINDOW_DISPOSITION_BASES,
   LEGISLATION_WINDOW_DISPOSITIONS,
 } from "@stll/api-contract/legislation-expression";
+import { publicCountryUnavailableSchema } from "@stll/api-contract/public-country-capability";
 import {
   CASE_LAW_SEARCH_WARNING_CODES,
   SEARCH_TOTAL_TYPE,
@@ -55,6 +56,7 @@ import {
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1461,94 +1463,99 @@ const decisionIdentifiersProjection = v.optional(
  * (`stella-tools.ts`) merging one `searchDecisionsHandler` page per query.
  * Decision ids are public case-law corpus ids, not tenant refs.
  */
-export const SEARCH_CASE_LAW_PROJECTION = v.strictObject({
-  // Page one of a single query only: the counts describe one query's whole
-  // result set, so they do not change as an agent pages, are null on every
-  // page after the first, and are null throughout for a call carrying
-  // several queries, whose merged result set no count describes.
-  facets: v.nullable(
+export const SEARCH_CASE_LAW_PROJECTION = v.union([
+  projectionBranch(publicCountryUnavailableSchema),
+  projectionBranch(
     v.strictObject({
-      court: v.array(caseLawCourtTierProjection),
-      // Civil years the result set spans, newest first. Empty where the search
-      // index cannot answer for them.
-      year: v.array(caseLawFacetBucketProjection),
-      decisionType: v.array(caseLawFacetBucketProjection),
-      // `value` is the source id `search_case_law` accepts as `source_id`.
-      source: v.array(caseLawFacetBucketProjection),
-      language: v.array(caseLawFacetBucketProjection),
-    }),
-  ),
-  // One query: the engine's own opaque `[score, decisionId]` cursor. Several
-  // queries: one sub-cursor per query, base64url-encoded together, so a
-  // continuation resumes each query where its own page ended. It carries no
-  // memory of what earlier pages emitted, so the deduplication `results`
-  // carries is within the page; a caller paging keys on `decisionId`.
-  nextCursor: v.nullable(passthroughId()),
-  // One entry per `queries[]` entry, in the same order. Per query rather than
-  // per call because each phrasing is interpreted on its own: one may carry
-  // function words and another none.
-  searches: v.array(
-    v.strictObject({
-      // The phrasing as sent, echoed so a caller reading `searches` alone
-      // does not have to hold its own request to know which entry is which.
-      query: v.string(),
-      // The words this phrasing actually required, itself a valid query:
-      // send it back as a `queries` entry to repeat the same search.
-      queryUsed: v.string(),
-      // What the search answered that the call did not ask for. Empty for a
-      // phrasing that required every word it carried and found something.
-      warnings: v.array(
+      // Page one of a single query only: the counts describe one query's whole
+      // result set, so they do not change as an agent pages, are null on every
+      // page after the first, and are null throughout for a call carrying
+      // several queries, whose merged result set no count describes.
+      facets: v.nullable(
         v.strictObject({
-          code: v.picklist([
-            ...CASE_LAW_SEARCH_WARNING_CODES,
-            ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
-          ]),
-          message: v.string(),
-          hint: v.string(),
+          court: v.array(caseLawCourtTierProjection),
+          // Civil years the result set spans, newest first. Empty where the search
+          // index cannot answer for them.
+          year: v.array(caseLawFacetBucketProjection),
+          decisionType: v.array(caseLawFacetBucketProjection),
+          // `value` is the source id `search_case_law` accepts as `source_id`.
+          source: v.array(caseLawFacetBucketProjection),
+          language: v.array(caseLawFacetBucketProjection),
         }),
       ),
+      // One query: the engine's own opaque `[score, decisionId]` cursor. Several
+      // queries: one sub-cursor per query, base64url-encoded together, so a
+      // continuation resumes each query where its own page ended. It carries no
+      // memory of what earlier pages emitted, so the deduplication `results`
+      // carries is within the page; a caller paging keys on `decisionId`.
+      nextCursor: v.nullable(passthroughId()),
+      // One entry per `queries[]` entry, in the same order. Per query rather than
+      // per call because each phrasing is interpreted on its own: one may carry
+      // function words and another none.
+      searches: v.array(
+        v.strictObject({
+          // The phrasing as sent, echoed so a caller reading `searches` alone
+          // does not have to hold its own request to know which entry is which.
+          query: v.string(),
+          // The words this phrasing actually required, itself a valid query:
+          // send it back as a `queries` entry to repeat the same search.
+          queryUsed: v.string(),
+          // What the search answered that the call did not ask for. Empty for a
+          // phrasing that required every word it carried and found something.
+          warnings: v.array(
+            v.strictObject({
+              code: v.picklist([
+                ...CASE_LAW_SEARCH_WARNING_CODES,
+                ...AGENT_CASE_LAW_SEARCH_WARNING_CODES,
+              ]),
+              message: v.string(),
+              hint: v.string(),
+            }),
+          ),
+        }),
+      ),
+      results: v.array(
+        v.strictObject({
+          // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
+          // is disabled (`isPublicLawAppUrlEnabled`), so the projected shape is
+          // nullable; a non-nullable declaration would fail the strict parse and
+          // take the tool off the chat surface on any deployment with the flag off.
+          appUrl: v.nullable(v.string()),
+          caseNumber: v.string(),
+          citationCount: v.number(),
+          // `ln(1 + weighted citations)`, the score the ranking blends in.
+          citationAuthority: v.number(),
+          country: v.string(),
+          court: v.string(),
+          // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
+          // derived from the decision's ECLI or the jurisdiction's apex-court
+          // names. Null where nothing states one: it is never guessed, so a
+          // caller quoting it is quoting the court's own abbreviation.
+          courtAbbreviation: v.nullable(v.string()),
+          decisionDate: v.nullable(v.string()),
+          decisionId: passthroughId(),
+          resourceName: passthroughId(),
+          decisionType: v.nullable(v.string()),
+          ecli: v.nullable(v.string()),
+          language: v.string(),
+          // Which of the call's `queries` returned this decision, by index,
+          // ascending. A decision several phrasings agree on carries several.
+          matchedQueries: v.array(v.number()),
+          // Passages of the decision that matched, within the scanned window.
+          matchingPassages: v.number(),
+          snippet: v.nullable(v.string()),
+          // The publisher's own decision URL, which may embed the publisher's
+          // own UUID — never a Stella tenant id, so it is forwarded unchanged.
+          sourceUrl: v.nullable(publicUrl()),
+        }),
+      ),
+      total: searchTotalProjection,
+      // Only on an empty result while the organization has no practice
+      // jurisdictions: how to set them.
+      nextStep: v.optional(v.string()),
     }),
   ),
-  results: v.array(
-    v.strictObject({
-      // `buildCaseLawDecisionAppUrl` returns null while the public-law surface
-      // is disabled (`isPublicLawAppUrlEnabled`), so the projected shape is
-      // nullable; a non-nullable declaration would fail the strict parse and
-      // take the tool off the chat surface on any deployment with the flag off.
-      appUrl: v.nullable(v.string()),
-      caseNumber: v.string(),
-      citationCount: v.number(),
-      // `ln(1 + weighted citations)`, the score the ranking blends in.
-      citationAuthority: v.number(),
-      country: v.string(),
-      court: v.string(),
-      // The court's short form as a lawyer writes it (ÚS, NS, NSS, SN, CJEU),
-      // derived from the decision's ECLI or the jurisdiction's apex-court
-      // names. Null where nothing states one: it is never guessed, so a
-      // caller quoting it is quoting the court's own abbreviation.
-      courtAbbreviation: v.nullable(v.string()),
-      decisionDate: v.nullable(v.string()),
-      decisionId: passthroughId(),
-      resourceName: passthroughId(),
-      decisionType: v.nullable(v.string()),
-      ecli: v.nullable(v.string()),
-      language: v.string(),
-      // Which of the call's `queries` returned this decision, by index,
-      // ascending. A decision several phrasings agree on carries several.
-      matchedQueries: v.array(v.number()),
-      // Passages of the decision that matched, within the scanned window.
-      matchingPassages: v.number(),
-      snippet: v.nullable(v.string()),
-      // The publisher's own decision URL, which may embed the publisher's
-      // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-      sourceUrl: v.nullable(publicUrl()),
-    }),
-  ),
-  total: searchTotalProjection,
-  // Only on an empty result while the organization has no practice
-  // jurisdictions: how to set them.
-  nextStep: v.optional(v.string()),
-});
+]);
 
 const decisionTextFieldProjection = v.variant("type", [
   projectionBranch(
@@ -1634,6 +1641,29 @@ const caseLawDecisionProjection = v.strictObject({
   // than leaving the caller to derive one from `source.adapterKey`.
   sourceAttributionUrl: v.optional(v.nullable(publicUrl())),
   text: v.nullable(v.string()),
+  outline: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          title: v.pipe(
+            v.string(),
+            v.description(
+              "Heading or numbered paragraph opening, in document order.",
+            ),
+          ),
+          cursor: v.pipe(
+            v.string(),
+            v.description(
+              "Pass as cursor with this decision id to read from this heading; citation lists are skipped.",
+            ),
+          ),
+        }),
+      ),
+      v.description(
+        'Navigation entries for one decision, supplied by default on the cursor-less window or requested with include: ["outline"], when AI use of the text is permitted.',
+      ),
+    ),
+  ),
   charCount: v.nullable(v.number()),
   truncated: v.boolean(),
   // Why there is no text, when there is none. At most one is present, and
@@ -1714,44 +1744,49 @@ const decisionLookupSubject = { identifier: v.string() } as const;
  * reported as such instead of one being chosen. All ids are public case-law
  * corpus ids.
  */
-export const LOOKUP_CASE_LAW_PROJECTION = v.strictObject({
-  items: v.array(
-    v.variant("status", [
-      projectionBranch(
-        v.strictObject({
-          ...decisionLookupSubject,
-          ...caseLawDecisionIdentityProjection.entries,
-          status: v.literal(DECISION_LOOKUP_STATUS.found),
-        }),
+export const LOOKUP_CASE_LAW_PROJECTION = v.union([
+  projectionBranch(publicCountryUnavailableSchema),
+  projectionBranch(
+    v.strictObject({
+      items: v.array(
+        v.variant("status", [
+          projectionBranch(
+            v.strictObject({
+              ...decisionLookupSubject,
+              ...caseLawDecisionIdentityProjection.entries,
+              status: v.literal(DECISION_LOOKUP_STATUS.found),
+            }),
+          ),
+          projectionBranch(
+            v.strictObject({
+              ...decisionLookupSubject,
+              // Bounded: past a handful the identifier names a list of decisions
+              // and the caller should search instead.
+              candidates: v.array(caseLawDecisionIdentityProjection),
+              message: v.string(),
+              status: v.literal(DECISION_LOOKUP_STATUS.ambiguous),
+            }),
+          ),
+          projectionBranch(
+            v.strictObject({
+              ...decisionLookupSubject,
+              hint: v.string(),
+              message: v.string(),
+              status: v.literal(DECISION_LOOKUP_STATUS.notFound),
+            }),
+          ),
+          projectionBranch(
+            v.strictObject({
+              ...decisionLookupSubject,
+              message: v.string(),
+              status: v.literal(DECISION_LOOKUP_STATUS.lookupFailed),
+            }),
+          ),
+        ]),
       ),
-      projectionBranch(
-        v.strictObject({
-          ...decisionLookupSubject,
-          // Bounded: past a handful the identifier names a list of decisions
-          // and the caller should search instead.
-          candidates: v.array(caseLawDecisionIdentityProjection),
-          message: v.string(),
-          status: v.literal(DECISION_LOOKUP_STATUS.ambiguous),
-        }),
-      ),
-      projectionBranch(
-        v.strictObject({
-          ...decisionLookupSubject,
-          hint: v.string(),
-          message: v.string(),
-          status: v.literal(DECISION_LOOKUP_STATUS.notFound),
-        }),
-      ),
-      projectionBranch(
-        v.strictObject({
-          ...decisionLookupSubject,
-          message: v.string(),
-          status: v.literal(DECISION_LOOKUP_STATUS.lookupFailed),
-        }),
-      ),
-    ]),
+    }),
   ),
-});
+]);
 
 /**
  * read_case_law_citations. Source of truth: `handleReadCaseLawCitationsTool`
@@ -1837,33 +1872,38 @@ const STATUTE_VERSION_PROJECTION = v.strictObject({
  * (`legislation-tools.ts`) mapping `searchLegislationHandler` hits. Document
  * ids are public legislation corpus ids, not tenant refs.
  */
-export const SEARCH_LEGISLATION_PROJECTION = v.strictObject({
-  // Opaque corpus-search cursor, base64url-encoded.
-  nextCursor: v.nullable(passthroughId()),
-  results: v.array(
+export const SEARCH_LEGISLATION_PROJECTION = v.union([
+  projectionBranch(publicCountryUnavailableSchema),
+  projectionBranch(
     v.strictObject({
-      // Null while the public-law surface is off (`isPublicLawAppUrlEnabled`)
-      // and null for a statute whose ELI carries no citation tail to mint a
-      // slug from: both are addresses that do not exist, not missing data.
-      appUrl: v.nullable(v.string()),
-      country: v.string(),
-      documentId: passthroughId(),
-      documentType: v.nullable(v.string()),
-      effectiveDate: v.nullable(v.string()),
-      eli: v.string(),
-      language: v.string(),
-      resourceName: passthroughId(),
-      score: v.number(),
-      snippet: v.nullable(v.string()),
-      // The publisher's own document URL, which may embed the publisher's
-      // own UUID — never a Stella tenant id, so it is forwarded unchanged.
-      sourceUrl: v.nullable(publicUrl()),
-      status: v.string(),
-      title: v.string(),
+      // Opaque corpus-search cursor, base64url-encoded.
+      nextCursor: v.nullable(passthroughId()),
+      results: v.array(
+        v.strictObject({
+          // Null while the public-law surface is off (`isPublicLawAppUrlEnabled`)
+          // and null for a statute whose ELI carries no citation tail to mint a
+          // slug from: both are addresses that do not exist, not missing data.
+          appUrl: v.nullable(v.string()),
+          country: v.string(),
+          documentId: passthroughId(),
+          documentType: v.nullable(v.string()),
+          effectiveDate: v.nullable(v.string()),
+          eli: v.string(),
+          language: v.string(),
+          resourceName: passthroughId(),
+          score: v.number(),
+          snippet: v.nullable(v.string()),
+          // The publisher's own document URL, which may embed the publisher's
+          // own UUID — never a Stella tenant id, so it is forwarded unchanged.
+          sourceUrl: v.nullable(publicUrl()),
+          status: v.string(),
+          title: v.string(),
+        }),
+      ),
+      total: searchTotalProjection,
     }),
   ),
-  total: searchTotalProjection,
-});
+]);
 
 /**
  * read_statute. Source of truth: `handleReadStatuteTool`
@@ -2616,6 +2656,7 @@ export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   promptCachingEnabled: v.optional(v.boolean()),

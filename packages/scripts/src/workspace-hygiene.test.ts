@@ -414,7 +414,6 @@ const createWorkspaceRoot = ({
       "@typescript/native": "npm:typescript@7.0.2",
       "oxlint-tsgolint": "7.0.2002",
       typescript: "catalog:",
-      ultracite: "catalog:",
       ...rootDevDependencies,
     },
   };
@@ -435,7 +434,10 @@ const createWorkspaceRoot = ({
     JSON.stringify({
       devDependencies: { "@astrojs/check": "^0.9.9" },
       name: "@stll/landing",
-      scripts: { typecheck: "bun --bun astro check" },
+      scripts: {
+        typecheck:
+          "bun --cwd=../../packages/cli run codegen:runtime && bun --bun astro check",
+      },
     }),
   );
   writeFileSync(

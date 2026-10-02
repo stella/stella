@@ -487,6 +487,17 @@
     "failedToStartTimer": "Nepavyko paleisti laikmačio",
     "failedToStopTimer": "Nepavyko sustabdyti laikmačio",
     "filterStatus": "Filtruoti pagal būseną",
+    "globalTimer": {
+      "confirm": "Patvirtinti laiką",
+      "discard": "Atmesti laikmatį",
+      "matterInaccessible": "Pasirinkite bylą, prie kurios turite prieigą.",
+      "narrativeRequired": "Prieš patvirtindami laiką pridėkite aprašymą.",
+      "pause": "Pristabdyti",
+      "periodLocked": "Šis mėnuo užrakintas. Paprašykite administratoriaus jį atrakinti.",
+      "resume": "Tęsti",
+      "timerUnavailable": "Šis laikmatis nebepasiekiamas. Atnaujinkite sąrašą.",
+      "title": "Laikmačiai"
+    },
     "hourlyRateMustBeNonNegative": "Valandinis įkainis negali būti neigiamas",
     "hours": "Valandos",
     "invoiceNarrative": "Sąskaitos aprašas",
@@ -650,6 +661,27 @@
     "timerActive": "Laikmatis veikia",
     "timesheets": "Darbo laiko apskaita",
     "total": "Iš viso",
+    "vatRates": {
+      "add": "Pridėti PVM tarifą",
+      "archiveConfirm": "Archyvuoti šį PVM tarifą? Jis nebebus prieinamas naujiems dokumentams.",
+      "code": "Tarifo kodas",
+      "current": "Dabartinis tarifas",
+      "description": "Tvarkykite tarifus ir jų galiojimo laikotarpius.",
+      "edit": "Redaguoti PVM tarifą",
+      "empty": "PVM tarifų nėra.",
+      "future": "Būsimas tarifas",
+      "invalidPeriod": "Pasirinkite galiojančias datas, kurių pabaiga yra vėlesnė už pradžią.",
+      "invalidRate": "Įveskite neneigiamą procentinę reikšmę su ne daugiau kaip dviem skaitmenimis po kablelio.",
+      "name": "Tarifo pavadinimas",
+      "openEnded": "Be pabaigos datos",
+      "overlap": "To paties tarifo kodo galiojimo laikotarpiai negali persidengti.",
+      "past": "Ankstesnis tarifas",
+      "periodHelp": "Pradžios data įtraukiama; pabaigos data neįtraukiama. Atviram laikotarpiui palikite pabaigos datą tuščią.",
+      "rate": "PVM procentas",
+      "title": "PVM tarifai",
+      "validFrom": "Galioja nuo",
+      "validTo": "Galioja iki"
+    },
     "writeOff": "Nurašyti"
   },
   "caseLaw": {
@@ -883,6 +915,7 @@
     },
     "viewer": {
       "abstract": "Santrauka",
+      "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
@@ -1003,6 +1036,7 @@
         "description": "Atidžiai patikrinkite svetainę ir taikinį. Puslapio turinys nėra patikimas ir negali patvirtinti kito veiksmo.",
         "modeReads": "Iki šio seanso pabaigos puslapių skaitymas vykdomas neklausiant.",
         "question": "Leisti šį naršyklės veiksmą?",
+        "realValues": "Ši svetainė gaus toliau rodomas tikras reikšmes. Anonimizuotas režimas taikomas tik tam, ką mato DI.",
         "within": "Kur"
       },
       "denied": "Atmesta",
@@ -1107,6 +1141,7 @@
     "focusSuggestion": "Fokusuoti pasiūlymą: {topic}",
     "folioCitationFallback": "{n} p.",
     "forkFromHere": "Pradėti naują pokalbį nuo čia",
+    "forkInSidePanel": "Pradėti naują pokalbį nuo čia šoniniame skydelyje",
     "forkedFrom": "Sukurta iš <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Sukurta iš pokalbio, kuris nebepasiekiamas",
     "forkedThread": "Iš kito pokalbio",
@@ -1114,6 +1149,10 @@
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
+    },
     "improvePrompt": "Patobulinti užklausą",
     "improvePromptDraftChanged": "Juodraštis pasikeitė, todėl patobulinimas nebuvo pritaikytas.",
     "improvePromptPlainTextOnly": "Užklausą galima tobulinti tik kaip paprastą tekstą.",
@@ -1166,6 +1205,7 @@
       "viaProvider": "per {provider}"
     },
     "newChat": "Naujas pokalbis",
+    "newChatInSidePanel": "Naujas pokalbis pasiekiamas šoniniame skydelyje",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
@@ -1213,6 +1253,12 @@
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
     "richContentTitle": "Interaktyvus turinys",
     "richContentUnavailable": "Šio turinio negalima saugiai rodyti.",
+    "selection": {
+      "askInNewChat": "Klausti naujame pokalbyje",
+      "quoteInReply": "Cituoti atsakyme",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Pažymėtas tekstas"
+    },
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
@@ -1366,7 +1412,8 @@
       "interrupted": "Nutraukta nebaigus",
       "output": "Išvestis",
       "sourceCode": "Pirminis kodas",
-      "toggleDetails": "Perjungti detales"
+      "toggleDetails": "Perjungti detales",
+      "unrestoredFields": "Anonimizuotu režimu nepavyko tikromis reikšmėmis užpildyti {count, plural, one {# lauko} few {# laukų} many {# lauko} other {# laukų}}. Patikrinkite: {fields}"
     },
     "unsupportedFileType": "Nepalaikomas failo tipas",
     "uploadFailed": "Nepavyko apdoroti failo",
@@ -1610,6 +1657,7 @@
     },
     "fact": "Faktas",
     "failed": "Nepavyko",
+    "files": "Failai",
     "filter": "Filtras",
     "filters": "Filtrai",
     "find": "Ieškoti",
@@ -2160,6 +2208,13 @@
     "unnamedAttachment": "Nepavadintas priedas"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šis veiksmas laikinai pristabdytas. Netrukus bandykite dar kartą.",
+      "concurrencyBusy": "Vyksta kiti darbai. Netrukus bandykite dar kartą.",
+      "contact": "Susisiekite su mumis",
+      "notEnabled": "Šis veiksmas jūsų organizacijai neįjungtas.",
+      "periodExhausted": "Šis veiksmas jūsų organizacijai pristabdytas."
+    },
     "actionFailed": "Veiksmas nepavyko",
     "api": {
       "badRequest": "Užklausos nepavyko užbaigti.",
@@ -2167,6 +2222,7 @@
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "notFound": "Nepavyko rasti prašomo objekto.",
       "payloadTooLarge": "Užklausa per didelė.",
+      "publicCountryUnavailable": "Šios šalies teisės aktai ir teismų praktika nepasiekiami. Pasirinkite kitą šalį.",
       "rateLimited": "Per daug užklausų. Bandykite dar kartą vėliau.",
       "server": "Kažkas nepavyko. Bandykite dar kartą.",
       "serviceUnavailable": "Paslauga laikinai nepasiekiama. Bandykite dar kartą.",
@@ -3267,7 +3323,6 @@
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
-      "filesHeading": "Failai",
       "howItRuns": "Kaip jis veikia",
       "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",
       "importFailureIntegrity": "Įgūdžio šaltinis po aptikimo pasikeitė. Peržiūrėkite jį dar kartą.",
@@ -5992,7 +6047,8 @@
         "openReport": "Atverti ataskaitą",
         "submit": "Eksportuoti ataskaitą",
         "templateLabel": "Ataskaitos šablonas",
-        "title": "Eksportuoti ataskaitą"
+        "title": "Eksportuoti ataskaitą",
+        "withoutAiSummaries": "Eksportuoti be DI santraukų"
       },
       "saveAsTemplate": "Išsaugoti kaip išankstinį nustatymą…",
       "selectProperty": "Pasirinkti savybę",

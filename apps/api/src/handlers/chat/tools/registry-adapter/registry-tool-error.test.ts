@@ -1,4 +1,11 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
+
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+  isActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 
 import type { InternalToolError } from "@/api/mcp/tool-types";
 
@@ -8,6 +15,58 @@ import {
 } from "./registry-tool-error";
 
 describe("registry tool error projection", () => {
+  test("preserves admission recovery fields when projecting to chat", () => {
+    for (const [code, metadata] of Object.entries(ACTION_ADMISSION_REFUSALS)) {
+      if (!isActionAdmissionCode(code)) {
+        panic("Unknown action admission code");
+      }
+      const error = {
+        type: "structured",
+        code,
+        message: metadata.message,
+        hint: metadata.hint,
+        retryable: metadata.retryable,
+        contactUrl: "https://example.test/contact",
+      } as const satisfies InternalToolError;
+      const projected = toRegistryChatToolError(error);
+      const permanentKind =
+        code === ACTION_ADMISSION_CODES.periodExhausted
+          ? "limit"
+          : "unavailable";
+      expect(projected.kind).toBe(
+        metadata.retryable ? "transient" : permanentKind,
+      );
+      expect(JSON.parse(projected.message)).toEqual({
+        error: {
+          code,
+          message: metadata.message,
+          hint: metadata.hint,
+          retryable: metadata.retryable,
+          contactUrl: error.contactUrl,
+        },
+      });
+    }
+  });
+  test("keeps oversized read results recoverable through a smaller request", () => {
+    const error = {
+      type: "structured",
+      code: "result_too_large",
+      message: "The result is too large.",
+      hint: "Request a smaller page.",
+    } as const satisfies InternalToolError;
+
+    expect(toRegistryChatToolError(error)).toMatchObject({
+      kind: "invalid-input",
+      message: JSON.stringify({
+        error: {
+          code: error.code,
+          message: error.message,
+          hint: error.hint,
+        },
+      }),
+    });
+  });
+
   test("preserves every structured recovery field at the chat boundary", () => {
     const error = {
       type: "structured",

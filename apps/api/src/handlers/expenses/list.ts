@@ -21,6 +21,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedExpenseId } from "@/api/lib/safe-id-boundaries";
 
 const readExpensesQuerySchema = t.Object({
@@ -45,7 +46,12 @@ const config = {
     "item carries the amount in minor currency units, currency, category, " +
     "markup percentage, status, and the recording user's name.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: readExpensesQuerySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -73,7 +79,9 @@ const decodeExpenseCursor = (cursor: string): ExpenseCursor | null => {
 const readExpenses = createSafeHandler(
   config,
   async function* ({ safeDb, session, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.expensesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.expensesPageSizeDefault,
+    );
 
     const conditions = [eq(expenses.workspaceId, workspaceId)];
 

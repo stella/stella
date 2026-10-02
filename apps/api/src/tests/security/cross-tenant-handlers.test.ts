@@ -156,6 +156,7 @@ type TestHandlerContext = {
   memberRole: { role: "owner" };
   orgAIConfig: null;
   orgAIConfigStatus: "ok";
+  managedAIResidency: "eu";
   promptCachingEnabled: false;
   recordAuditEvent: AuditRecorder;
   request: Request;
@@ -1249,7 +1250,7 @@ const isolationCases: IsolationCase[] = [
     name: "governed work queue",
     runAAgainstB: async ({ ids: testIds, workspaceA }) =>
       await runHandler(listMyWork, workspaceA, {
-        user: { id: testIds.userB1 },
+        user: { id: testIds.userB1, email: "user-b@example.test" },
         query: { queue: "to_acknowledge", limit: 100, asOf: "2026-08-24" },
       }),
     runBPositive: async ({ workspaceB }) =>
@@ -2226,6 +2227,7 @@ const createWorkspaceContext = ({
     memberRole: { role: "owner" },
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     request: new Request(`https://example.test/workspaces/${workspaceId}`),

@@ -1,5 +1,6 @@
 import type {
   APIRequestContext,
+  Browser,
   BrowserContext,
   Page,
   Request,
@@ -55,10 +56,10 @@ const DEFAULT_SETTLE_MS = 1000;
 const NONEXISTENT_VERIFICATION_CODE = "abcdmnp239";
 
 // Repo-root .playwright/storage-state.json — mirrors apps/web/e2e/playwright.config.ts
-// (seed-test-user.ts writes it there). The route walk owns its own browser
-// context and API request context (created in beforeAll) so setup/teardown are
-// no longer hostage to a per-test fixture lifecycle; both need the authenticated
-// storage state wired in explicitly.
+// (seed-test-user.ts writes it there). The route walk owns its API request
+// context (created in beforeAll) and opens a fresh browser context for every
+// page it loads, so setup/teardown are no longer hostage to a per-test fixture
+// lifecycle; both need the authenticated storage state wired in explicitly.
 const REPO_ROOT = path.resolve(import.meta.dirname, "../../../..");
 const STORAGE_STATE = path.resolve(REPO_ROOT, ".playwright/storage-state.json");
 
@@ -230,10 +231,13 @@ const SMOKE_ROUTE_DEFS: readonly SmokeRouteDef[] = [
       `/workspaces/${world.workspace.id}/correspondence/${world.correspondenceId}`,
   },
   staticRoute("/time"),
+  staticRoute("/settings/organization/time-policy"),
+  staticRoute("/settings/organization/vat-rates", {
+    expectation: { kind: "settles" },
+  }),
   staticRoute("/settings/organization/number-series", {
     expectation: { kind: "settles" },
   }),
-  staticRoute("/settings/organization/time-policy"),
 ];
 
 // Redirect targets for workspace-scoped aliases depend on the runtime view id,
@@ -289,7 +293,7 @@ const declareRouteSmokeGroup = ({
   // Playwright scheduling units and can run on different workers or CI shards.
   test.describe.serial(name, () => {
     let apiRequest: APIRequestContext;
-    let context: BrowserContext;
+    let browserForPages: Browser;
     let world: SmokeWorld | null = null;
     // Recorded the moment each fixture is created (not only after the whole
     // setup succeeds), so a registry failure still tears down what exists.
@@ -303,7 +307,7 @@ const declareRouteSmokeGroup = ({
       apiRequest = await apiRequestFactory.newContext({
         storageState: STORAGE_STATE,
       });
-      context = await browser.newContext({ storageState: STORAGE_STATE });
+      browserForPages = browser;
 
       const workspace = await createTestWorkspace(apiRequest, "route-smoke");
       createdWorkspace = workspace;
@@ -348,11 +352,6 @@ const declareRouteSmokeGroup = ({
         }
       }
       try {
-        await context.close();
-      } catch (error) {
-        failures.push(error);
-      }
-      try {
         await apiRequest.dispose();
       } catch (error) {
         failures.push(error);
@@ -367,7 +366,7 @@ const declareRouteSmokeGroup = ({
 
     // Declared via a helper (not a closure literal inside the loop) so each
     // parametrized `test()` is a plain call in the loop body. The shared
-    // context/world/results it closes over are group-scoped and assigned once in
+    // browser/world/results it closes over are group-scoped and assigned once in
     // beforeAll.
     const declareRouteTest = (def: SmokeRouteDef) => {
       test(def.template, async () => {
@@ -375,7 +374,7 @@ const declareRouteSmokeGroup = ({
           throw new Error("route-smoke world was not initialized in beforeAll");
         }
         await smokeRoute({
-          context,
+          browser: browserForPages,
           results: networkResults,
           route: resolveRoute(def, world),
         });
@@ -455,11 +454,11 @@ const createContact = async (request: APIRequestContext): Promise<string> => {
 };
 
 const smokeRoute = async ({
-  context,
+  browser,
   results,
   route,
 }: {
-  context: BrowserContext;
+  browser: Browser;
   results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
 }) => {
@@ -470,9 +469,9 @@ const smokeRoute = async ({
     // smoke the declared target directly so browser-error and network
     // collection belong to the page that actually renders. The alias page
     // itself is not recorded.
-    await assertRedirectRoute({ context, route, expectation });
+    await assertRedirectRoute({ browser, route, expectation });
     await smokeRouteTarget({
-      context,
+      browser,
       results,
       route: {
         template: `${route.template} target`,
@@ -484,15 +483,15 @@ const smokeRoute = async ({
     return;
   }
 
-  await smokeRouteTarget({ context, results, route });
+  await smokeRouteTarget({ browser, results, route });
 };
 
 const smokeRouteTarget = async ({
-  context,
+  browser,
   results,
   route,
 }: {
-  context: BrowserContext;
+  browser: Browser;
   results: Map<string, RouteNetworkMetrics>;
   route: SmokeRoute;
 }) => {
@@ -508,7 +507,7 @@ const smokeRouteTarget = async ({
     if (budget === null || metrics.depth <= budget || remaining === 0) {
       return metrics;
     }
-    const again = await measureRouteTarget({ context, route });
+    const again = await measureRouteTarget({ browser, route });
     return resampleDeeperReading(
       mergeResampledMetrics(metrics, again),
       remaining - 1,
@@ -516,7 +515,7 @@ const smokeRouteTarget = async ({
   };
 
   const metrics = await resampleDeeperReading(
-    await measureRouteTarget({ context, route }),
+    await measureRouteTarget({ browser, route }),
     WATERFALL_DEPTH_RESAMPLES,
   );
   // Stored under the template it received; redirect targets arrive as
@@ -525,13 +524,13 @@ const smokeRouteTarget = async ({
 };
 
 const measureRouteTarget = async ({
-  context,
+  browser,
   route,
 }: {
-  context: BrowserContext;
+  browser: Browser;
   route: SmokeRoute;
 }): Promise<RouteNetworkMetrics> => {
-  const page = await context.newPage();
+  const { context, page } = await openCleanPage(browser);
   const browserErrors = createBrowserErrorCollector({
     tolerateColdMountWarning: true,
   });
@@ -562,20 +561,20 @@ const measureRouteTarget = async ({
   } finally {
     detachNetwork();
     detachPage();
-    await page.close();
+    await context.close();
   }
 };
 
 const assertRedirectRoute = async ({
-  context,
+  browser,
   route,
   expectation,
 }: {
-  context: BrowserContext;
+  browser: Browser;
   route: SmokeRoute;
   expectation: { kind: "redirectsTo"; to: string };
 }) => {
-  const page = await context.newPage();
+  const { context, page } = await openCleanPage(browser);
   const redirectRoute = { ...route, expectation };
 
   try {
@@ -584,8 +583,55 @@ const assertRedirectRoute = async ({
     await waitForRedirectDestination(page, redirectRoute);
     assertFinalDestination(page, redirectRoute);
   } finally {
-    await page.close();
+    await context.close();
   }
+};
+
+// Browser storage the app writes on one route (for example the inspector tabs
+// it restores from localStorage) would otherwise replay on the next route and
+// fire the earlier route's requests inside this route's capture, at whatever
+// point the restore lands. Every page therefore gets its own context seeded only with the
+// authenticated storage state; server-side fixtures stay shared.
+const openCleanPage = async (
+  browser: Browser,
+): Promise<{ context: BrowserContext; page: Page }> => {
+  const context = await browser.newContext({ storageState: STORAGE_STATE });
+  try {
+    // Guards the clean start: the page must not inherit browser storage that
+    // an earlier route wrote into a shared context.
+    expect(
+      storedKeys(await context.storageState()),
+      "route-smoke pages must start from the seeded storage state only",
+    ).toEqual(await seededStorageKeys(browser));
+    return { context, page: await context.newPage() };
+  } catch (error) {
+    await context.close();
+    throw error;
+  }
+};
+
+const storedKeys = ({
+  origins,
+}: Awaited<ReturnType<BrowserContext["storageState"]>>): string[] =>
+  origins
+    .flatMap(({ origin, localStorage }) =>
+      localStorage.map(({ name }) => `${origin} ${name}`),
+    )
+    .toSorted();
+
+let seededStorageKeysPromise: Promise<string[]> | null = null;
+
+// Read once from a context no page has ever used.
+const seededStorageKeys = async (browser: Browser): Promise<string[]> => {
+  seededStorageKeysPromise ??= (async () => {
+    const pristine = await browser.newContext({ storageState: STORAGE_STATE });
+    try {
+      return storedKeys(await pristine.storageState());
+    } finally {
+      await pristine.close();
+    }
+  })();
+  return await seededStorageKeysPromise;
 };
 
 const renderSmokeRoute = async ({

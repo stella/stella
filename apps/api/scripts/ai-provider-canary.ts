@@ -967,6 +967,7 @@ const capabilityProbes = [
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
       await generateTanStackObjectForRole({
+        dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
         maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
@@ -1005,6 +1006,7 @@ const capabilityProbes = [
           `union parameters (${edge.budget.basis} budget, compiler=${edge.compiler})`,
       );
       await generateTanStackObjectForRole({
+        dataClass: "public_corpus",
         abortSignal: signal,
         caching: NO_CACHING,
         maxOutputTokens: structuredOutputBudgetEdgeMaxOutputTokens({
@@ -1068,6 +1070,7 @@ const capabilityProbes = [
     timeoutMs: CAPABILITY_PROBE_TIMEOUT_MS,
     run: async ({ config, provider }, signal) => {
       const output = await generateTanStackTextForRole({
+        dataClass: "public_corpus",
         abortSignal: signal,
         caching: CANARY_CACHING,
         finishPolicy: CANARY_TEXT_FINISH_POLICY,
@@ -1134,6 +1137,7 @@ const runModelRoleProbe = async ({
           },
         };
   const model = resolveTanStackTextModel({
+    dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: probeConfig,
     role: selection.role,
@@ -1145,6 +1149,7 @@ const runModelRoleProbe = async ({
   }
 
   const output = await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
@@ -1170,6 +1175,7 @@ const runStructuredOutputModelRoleProbe = async ({
   signal,
 }: RunModelRoleProbeOptions): Promise<void> => {
   await generateTanStackObjectForRole({
+    dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
@@ -1198,6 +1204,7 @@ const runWeeklyModelRoleProbe = async ({
   signal,
 }: RunWeeklyModelRoleProbeOptions): Promise<void> => {
   const model = resolveTanStackTextModel({
+    dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: rotatedConfig,
     role,
@@ -1209,6 +1216,7 @@ const runWeeklyModelRoleProbe = async ({
   }
 
   const output = await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     finishPolicy: CANARY_TEXT_FINISH_POLICY,
@@ -1234,6 +1242,7 @@ const runWeeklyStructuredOutputModelRoleProbe = async ({
   signal,
 }: RunWeeklyModelRoleProbeOptions): Promise<void> => {
   await generateTanStackObjectForRole({
+    dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     maxOutputTokens: structuredOutputModelRoleMaxOutputTokens({
@@ -1395,6 +1404,7 @@ const runToolProbe = async ({
   tool,
 }: RunToolProbeOptions): Promise<string> => {
   const model = resolveTextModel({
+    dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: config,
     role,
@@ -1818,6 +1828,7 @@ const runCatalogModelProbe = async ({
     rotatedModelId: modelId,
   });
   const model = resolveTanStackTextModel({
+    dataClass: "public_corpus",
     organizationId: null,
     orgAIConfig: config,
     role: CATALOG_PROBE_ROLE,
@@ -1829,6 +1840,7 @@ const runCatalogModelProbe = async ({
   }
 
   const output = await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     abortSignal: signal,
     caching: NO_CACHING,
     finishPolicy: CANARY_TEXT_FINISH_POLICY,

@@ -12,6 +12,12 @@ import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
 import {
+  DEFAULT_POLAR_API_VERSION,
+  polarApiVersionSchema,
+} from "@/api/lib/hosted-usage-provider/polar/contract";
+import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
+import { AUTH_PROVIDER_ID_PATTERN } from "@/api/lib/safe-id-boundaries";
+import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
 } from "@/api/lib/secure-service-url";
@@ -23,6 +29,9 @@ type EmailProviderInput = {
   SMTP_PORT?: number | undefined;
   SMTP_USERNAME?: string | undefined;
 };
+
+// Keep retention cutoffs in positive ISO years supported by timestamptz.
+const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
 
 export const resolveEmailProvider = ({
   EMAIL_PROVIDER,
@@ -147,14 +156,6 @@ export const envApiServerSchema = {
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
-   * Bearer token for the operator registrations endpoint
-   * (handlers/operator): lets an instance operator list recent
-   * account registrations over HTTP instead of opening a database
-   * shell. Unset disables the endpoint entirely (requests return
-   * 404), mirroring how other optional operational surfaces behave.
-   */
-  OPERATOR_METRICS_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
-  /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
    */
@@ -265,6 +266,9 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.trim(), v.toLowerCase(), v.email()),
   ),
   DEMO_ACCOUNT_OTP: v.optional(v.pipe(v.string(), v.digits(), v.length(6))),
+  DEMO_ACCOUNT_ORGANIZATION_ID: v.optional(
+    v.pipe(v.string(), v.regex(AUTH_PROVIDER_ID_PATTERN)),
+  ),
 
   /**
    * Plain-text token served at `/.well-known/openai-apps-challenge` so an
@@ -326,6 +330,7 @@ export const envApiServerSchema = {
   MICROSOFT_AUTH_CLIENT_ID: v.optional(v.string()),
   MICROSOFT_AUTH_CLIENT_SECRET: v.optional(v.string()),
   MICROSOFT_AUTH_TENANT_ID: v.optional(v.string()),
+  MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM: featureFlagSchema,
 
   // Launch feature flags. Keep default-off; deployment must opt in.
   FEATURE_CHAT: featureFlagSchema,
@@ -339,6 +344,122 @@ export const envApiServerSchema = {
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  FEATURE_MCP_READ_FENCE: featureFlagSchema,
+  MCP_READ_WINDOW_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_TENANT_ORG_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_TENANT_USER_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_PUBLIC_ORG_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_PUBLIC_USER_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_WINDOW_MAX_ENTRIES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MCP_READ_MAX_ENTRIES),
+    ),
+  ),
+  ACTION_LIMIT_CONTACT_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
+  ),
+  FEATURE_ACTION_COST_RECORDS: featureFlagSchema,
+  ACTION_COST_ESTIMATES: v.optional(v.string()),
+  ACTION_COST_CALL_RATES: v.optional(v.string()),
+  ACTION_COST_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_ACTION_COST_RETENTION_DAYS),
+    ),
+  ),
+  ACTION_REQUEST_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_RESPONSE_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_PAGE_SIZE_MAX: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  FEATURE_ORG_SERVICE_BUDGETS: featureFlagSchema,
+  SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
@@ -487,6 +608,10 @@ export const envApiServerSchema = {
   HOSTED_USAGE_WEBHOOK_SECRET_PREVIOUS: v.optional(
     v.pipe(v.string(), v.minLength(16)),
   ),
+  HOSTED_USAGE_PROVIDER_API_VERSION: v.optional(
+    polarApiVersionSchema,
+    DEFAULT_POLAR_API_VERSION,
+  ),
   HOSTED_USAGE_PROVIDER_API_KEY: v.optional(v.pipe(v.string(), v.minLength(8))),
   HOSTED_USAGE_PROVIDER_BASE_URL: v.optional(v.pipe(v.string(), v.url())),
   /**
@@ -602,7 +727,9 @@ type EnvApiInvariantInput = {
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
+  FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
@@ -626,7 +753,9 @@ export const envApiInvariantViolation = ({
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
+  FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
+  FEATURE_ORG_SERVICE_BUDGETS,
   FRONTEND_URL,
   GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
@@ -685,6 +814,9 @@ export const envApiInvariantViolation = ({
   }
   if (FEATURE_ORG_ACCESS_STATE && ORG_EVALUATION_PERIOD_DAYS === undefined) {
     return "ORG_EVALUATION_PERIOD_DAYS is required when FEATURE_ORG_ACCESS_STATE is true.";
+  }
+  if (FEATURE_ORG_SERVICE_BUDGETS && !FEATURE_ACTION_ADMISSION) {
+    return "FEATURE_ORG_SERVICE_BUDGETS requires FEATURE_ACTION_ADMISSION.";
   }
   if (
     (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&

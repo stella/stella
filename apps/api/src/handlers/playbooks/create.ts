@@ -23,6 +23,7 @@ const createPlaybookDefinition = createSafeRootHandler(
     body,
     recordAuditEvent,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
   }) {
@@ -30,6 +31,7 @@ const createPlaybookDefinition = createSafeRootHandler(
       safeDb,
       organizationId: session.activeOrganizationId,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       recordAuditEvent,

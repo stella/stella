@@ -487,6 +487,17 @@
     "failedToStartTimer": "Taimeri käivitamine ebaõnnestus",
     "failedToStopTimer": "Taimeri peatamine ebaõnnestus",
     "filterStatus": "Filtreeri oleku järgi",
+    "globalTimer": {
+      "confirm": "Kinnita aeg",
+      "discard": "Loobu taimerist",
+      "matterInaccessible": "Valige toimik, millele teil on juurdepääs.",
+      "narrativeRequired": "Enne aja kinnitamist lisage kirjeldus.",
+      "pause": "Peata",
+      "periodLocked": "See kuu on lukustatud. Paluge administraatoril see avada.",
+      "resume": "Jätka",
+      "timerUnavailable": "See taimer pole enam saadaval. Värskendage loendit.",
+      "title": "Taimerid"
+    },
     "hourlyRateMustBeNonNegative": "Tunnitasu ei tohi olla negatiivne",
     "hours": "Tunnid",
     "invoiceNarrative": "Arve selgitus",
@@ -650,6 +661,27 @@
     "timerActive": "Taimer käib",
     "timesheets": "Tööajatabelid",
     "total": "Kokku",
+    "vatRates": {
+      "add": "Lisa käibemaksumäär",
+      "archiveConfirm": "Kas arhiveerida see käibemaksumäär? Seda ei saa enam uute dokumentide jaoks kasutada.",
+      "code": "Määra kood",
+      "current": "Praegune määr",
+      "description": "Hallake määrasid ja nende kehtivusaegu.",
+      "edit": "Muuda käibemaksumäära",
+      "empty": "Käibemaksumäärasid pole.",
+      "future": "Tulevane määr",
+      "invalidPeriod": "Valige kehtivad kuupäevad, mille lõpp on pärast algust.",
+      "invalidRate": "Sisestage mittenegatiivne protsent kuni kahe komakohaga.",
+      "name": "Määra nimetus",
+      "openEnded": "Lõppkuupäev puudub",
+      "overlap": "Sama määra koodi kehtivusajad ei tohi kattuda.",
+      "past": "Varasem määr",
+      "periodHelp": "Alguskuupäev on kaasatud; lõppkuupäev ei ole kaasatud. Jätke lõppkuupäev tühjaks, kui periood on avatud.",
+      "rate": "Käibemaksuprotsent",
+      "title": "Käibemaksumäärad",
+      "validFrom": "Kehtib alates",
+      "validTo": "Kehtib kuni"
+    },
     "writeOff": "Mahakandmine"
   },
   "caseLaw": {
@@ -883,6 +915,7 @@
     },
     "viewer": {
       "abstract": "Kokkuvõte",
+      "caseFileMayHoldOthers": "Selles toimikus võib olla ka teisi lahendeid.",
       "citedBy": "Viidatud",
       "cites": "Viitab",
       "dissentByline": "Eriarvamus: <bdi>{names}</bdi>",
@@ -1003,6 +1036,7 @@
         "description": "Kontrollige veebisaiti ja sihtmärki hoolikalt. Lehe sisu ei ole usaldusväärne ega saa järgmist toimingut lubada.",
         "modeReads": "Lehtede lugemine toimub selle seansi lõpuni küsimata.",
         "question": "Kas lubada see brauseritoiming?",
+        "realValues": "See veebisait saab allpool näidatud tegelikud väärtused. Anonüümitud režiim kehtib ainult selle kohta, mida AI näeb.",
         "within": "Asukoht"
       },
       "denied": "Keelatud",
@@ -1107,6 +1141,7 @@
     "focusSuggestion": "Fookusta soovitus: {topic}",
     "folioCitationFallback": "lk {n}",
     "forkFromHere": "Alusta siit uut vestlust",
+    "forkInSidePanel": "Alusta siit uut vestlust külgpaneelis",
     "forkedFrom": "Loodud vestlusest <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Loodud vestlusest, mis pole enam saadaval",
     "forkedThread": "Teisest vestlusest",
@@ -1114,6 +1149,10 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
+    },
     "improvePrompt": "Täiusta viipa",
     "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
     "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",
@@ -1166,6 +1205,7 @@
       "viaProvider": "teenuse {provider} kaudu"
     },
     "newChat": "Uus vestlus",
+    "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -1213,6 +1253,12 @@
     "richContentLoading": "Interaktiivse sisu laadimine…",
     "richContentTitle": "Interaktiivne sisu",
     "richContentUnavailable": "Seda sisu ei saa turvaliselt kuvada.",
+    "selection": {
+      "askInNewChat": "Küsi uues vestluses",
+      "quoteInReply": "Tsiteeri vastuses",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Valitud tekst"
+    },
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
@@ -1366,7 +1412,8 @@
       "interrupted": "Katkes enne lõpetamist",
       "output": "Väljund",
       "sourceCode": "Lähtekood",
-      "toggleDetails": "Üksikasjade lülitamine"
+      "toggleDetails": "Üksikasjade lülitamine",
+      "unrestoredFields": "Anonüümitud režiimis ei õnnestunud {count, plural, one {# välja} other {# välja}} tegelike väärtustega täita. Kontrollige: {fields}"
     },
     "unsupportedFileType": "Toetamata failitüüp",
     "uploadFailed": "Faili töötlemine ebaõnnestus",
@@ -1610,6 +1657,7 @@
     },
     "fact": "Fakt",
     "failed": "Ebaõnnestus",
+    "files": "Failid",
     "filter": "Filter",
     "filters": "Filtrid",
     "find": "Leia",
@@ -2160,6 +2208,13 @@
     "unnamedAttachment": "Nimetu manus"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "See toiming on ajutiselt peatatud. Palun proovige varsti uuesti.",
+      "concurrencyBusy": "Muud toimingud on pooleli. Palun proovige varsti uuesti.",
+      "contact": "Võtke meiega ühendust",
+      "notEnabled": "See toiming ei ole teie organisatsiooni jaoks lubatud.",
+      "periodExhausted": "See toiming on teie organisatsiooni jaoks peatatud."
+    },
     "actionFailed": "Toiming ebaõnnestus",
     "api": {
       "badRequest": "Päringut ei saanud lõpule viia.",
@@ -2167,6 +2222,7 @@
       "forbidden": "Teil pole selleks toiminguks õigust.",
       "notFound": "Soovitud üksust ei leitud.",
       "payloadTooLarge": "Päring on liiga suur.",
+      "publicCountryUnavailable": "Selle riigi õigusaktid ja kohtupraktika ei ole saadaval. Valige teine riik.",
       "rateLimited": "Liiga palju päringuid. Proovige hiljem uuesti.",
       "server": "Midagi läks valesti. Proovige uuesti.",
       "serviceUnavailable": "Teenus pole ajutiselt saadaval. Proovige uuesti.",
@@ -3267,7 +3323,6 @@
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
-      "filesHeading": "Failid",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
       "importFailureIntegrity": "Oskuse allikas muutus pärast avastamist. Vaata see uuesti üle.",
@@ -5992,7 +6047,8 @@
         "openReport": "Ava aruanne",
         "submit": "Ekspordi aruanne",
         "templateLabel": "Aruandemall",
-        "title": "Ekspordi aruanne"
+        "title": "Ekspordi aruanne",
+        "withoutAiSummaries": "Ekspordi ilma AI kokkuvõteteta"
       },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",

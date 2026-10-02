@@ -22,6 +22,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeEntryId } from "@/api/lib/safe-id-boundaries";
 
 const DELETING_WORKSPACE_STATUS = "deleting" as const;
@@ -142,7 +143,12 @@ const config = {
     "in the active organization. Client rows include an accessible matter; internal rows have no matter. " +
     "Follow the cursor for the next page.",
   permissions: { timeEntry: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     date: t.String({
@@ -185,7 +191,9 @@ const listMyTimeEntries = createSafeRootHandler(
       );
     }
 
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx

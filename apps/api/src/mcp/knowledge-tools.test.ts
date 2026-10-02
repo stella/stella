@@ -211,6 +211,7 @@ const createPlaybookWriteContext = (
       loadOrgSettingsForAuth: async () => ({
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        managedAIResidency: "eu" as const,
         promptCachingEnabled: false,
       }),
     },
@@ -256,6 +257,7 @@ const createContext = ({
   safeDb: toSafeDbMock(scopedDb),
   scopedDb,
   userId: toSafeId<"user">("user_1"),
+  userEmail: "standard@example.test",
 });
 
 describe("MCP knowledge tools", () => {

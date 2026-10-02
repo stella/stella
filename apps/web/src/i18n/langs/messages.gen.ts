@@ -490,6 +490,17 @@ type Messages = {
     "failedToStartTimer": "Failed to start timer";
     "failedToStopTimer": "Failed to stop timer";
     "filterStatus": "Filter by status";
+    "globalTimer": {
+      "confirm": "Confirm time";
+      "discard": "Discard timer";
+      "matterInaccessible": "Choose a matter you can access.";
+      "narrativeRequired": "Add a description before confirming time.";
+      "pause": "Pause";
+      "periodLocked": "This month is locked. Ask an administrator to unlock it.";
+      "resume": "Resume";
+      "timerUnavailable": "This timer is no longer available. Refresh the list.";
+      "title": "Timers";
+    };
     "hourlyRateMustBeNonNegative": "Hourly rate cannot be negative";
     "hours": "Hours";
     "invoiceNarrative": "Invoice narrative";
@@ -653,6 +664,27 @@ type Messages = {
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
     "total": "Total";
+    "vatRates": {
+      "add": "Add VAT rate";
+      "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.";
+      "code": "Rate code";
+      "current": "Current rate";
+      "description": "Manage rates and their validity periods.";
+      "edit": "Edit VAT rate";
+      "empty": "No VAT rates.";
+      "future": "Upcoming rate";
+      "invalidPeriod": "Choose valid dates with the end after the start.";
+      "invalidRate": "Enter a non-negative percentage with at most two decimal places.";
+      "name": "Rate label";
+      "openEnded": "No end date";
+      "overlap": "Validity periods for the same rate code cannot overlap.";
+      "past": "Past rate";
+      "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.";
+      "rate": "VAT percentage";
+      "title": "VAT rates";
+      "validFrom": "Valid since";
+      "validTo": "Valid until";
+    };
     "writeOff": "Write off";
   };
   "caseLaw": {
@@ -886,6 +918,7 @@ type Messages = {
     };
     "viewer": {
       "abstract": "Abstract";
+      "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
@@ -1006,6 +1039,7 @@ type Messages = {
         "description": "Check the website and target carefully. Page content is untrusted and cannot approve another action.";
         "modeReads": "Page reads run without asking for the rest of this session.";
         "question": "Allow this browser action?";
+        "realValues": "This website receives the real values shown below. Anonymized mode applies only to what the AI sees.";
         "within": "Within";
       };
       "denied": "Denied";
@@ -1110,6 +1144,7 @@ type Messages = {
     "focusSuggestion": "Focus suggestion: {topic}";
     "folioCitationFallback": "p. {n}";
     "forkFromHere": "Start a new chat from here";
+    "forkInSidePanel": "Start a new chat from here in the side panel";
     "forkedFrom": "Created from <bdi>{title}</bdi>";
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
@@ -1117,6 +1152,10 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "historyContext": {
+      "overflow": "+{count, number}";
+      "unnamed": "{count, plural, one {and # more} other {and # more}}";
+    };
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1169,6 +1208,7 @@ type Messages = {
       "viaProvider": "via {provider}";
     };
     "newChat": "New chat";
+    "newChatInSidePanel": "The new chat is available in the side panel";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
     "officeCitationUnavailable": "This citation is no longer available.";
@@ -1216,6 +1256,12 @@ type Messages = {
     "richContentLoading": "Loading interactive content…";
     "richContentTitle": "Interactive content";
     "richContentUnavailable": "This content cannot be displayed safely.";
+    "selection": {
+      "askInNewChat": "Ask in new chat";
+      "quoteInReply": "Quote in reply";
+      "quotedText": "“{quote}”";
+      "toolbarLabel": "Selected text";
+    };
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
@@ -1370,6 +1416,7 @@ type Messages = {
       "output": "Output";
       "sourceCode": "Source code";
       "toggleDetails": "Toggle details";
+      "unrestoredFields": "{count, plural, one {# field} other {# fields}} could not be filled with real values in anonymized mode. Review: {fields}";
     };
     "unsupportedFileType": "Unsupported file type";
     "uploadFailed": "Failed to process file";
@@ -1613,6 +1660,7 @@ type Messages = {
     };
     "fact": "Fact";
     "failed": "Failed";
+    "files": "Files";
     "filter": "Filter";
     "filters": "Filters";
     "find": "Find";
@@ -2163,6 +2211,13 @@ type Messages = {
     "unnamedAttachment": "Unnamed attachment";
   };
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "This action is temporarily paused. Please try again shortly.";
+      "concurrencyBusy": "Other work is in progress. Please try again shortly.";
+      "contact": "Contact us";
+      "notEnabled": "This action is not enabled for your organization.";
+      "periodExhausted": "This action is paused for your organization.";
+    };
     "actionFailed": "Action failed";
     "api": {
       "badRequest": "The request could not be completed.";
@@ -2170,6 +2225,7 @@ type Messages = {
       "forbidden": "You do not have permission to do this.";
       "notFound": "We could not find what you requested.";
       "payloadTooLarge": "The request is too large.";
+      "publicCountryUnavailable": "Public law for this country is not available. Choose another country.";
       "rateLimited": "Too many requests. Please try again later.";
       "server": "The server could not complete the request. Please try again.";
       "serviceUnavailable": "The service is temporarily unavailable. Please try again.";
@@ -3270,7 +3326,6 @@ type Messages = {
       "editSkill": "Edit skill";
       "enableSkill": "Enable skill";
       "fileExists": "A file with this path already exists";
-      "filesHeading": "Files";
       "howItRuns": "How it runs";
       "importFailureFetch": "The skill source could not be loaded.";
       "importFailureIntegrity": "The skill source changed after discovery. Review it again.";
@@ -5996,6 +6051,7 @@ type Messages = {
         "submit": "Export report";
         "templateLabel": "Report template";
         "title": "Export report";
+        "withoutAiSummaries": "Export without AI summaries";
       };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";

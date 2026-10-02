@@ -487,6 +487,17 @@
     "failedToStartTimer": "Neizdevās palaist taimeri",
     "failedToStopTimer": "Neizdevās apturēt taimeri",
     "filterStatus": "Filtrēt pēc statusa",
+    "globalTimer": {
+      "confirm": "Apstiprināt laiku",
+      "discard": "Atmest taimeri",
+      "matterInaccessible": "Izvēlieties lietu, kurai jums ir piekļuve.",
+      "narrativeRequired": "Pirms laika apstiprināšanas pievienojiet aprakstu.",
+      "pause": "Pauzēt",
+      "periodLocked": "Šis mēnesis ir bloķēts. Lūdziet administratoram to atbloķēt.",
+      "resume": "Turpināt",
+      "timerUnavailable": "Šis taimeris vairs nav pieejams. Atsvaidziniet sarakstu.",
+      "title": "Taimeri"
+    },
     "hourlyRateMustBeNonNegative": "Stundas likme nedrīkst būt negatīva",
     "hours": "Stundas",
     "invoiceNarrative": "Rēķina apraksts",
@@ -650,6 +661,27 @@
     "timerActive": "Taimeris darbojas",
     "timesheets": "Darba laika uzskaite",
     "total": "Kopā",
+    "vatRates": {
+      "add": "Pievienot PVN likmi",
+      "archiveConfirm": "Arhivēt šo PVN likmi? Tā vairs nebūs pieejama jauniem dokumentiem.",
+      "code": "Likmes kods",
+      "current": "Pašreizējā likme",
+      "description": "Pārvaldiet likmes un to derīguma periodus.",
+      "edit": "Rediģēt PVN likmi",
+      "empty": "Nav PVN likmju.",
+      "future": "Nākamā likme",
+      "invalidPeriod": "Izvēlieties derīgus datumus, kur beigas ir pēc sākuma.",
+      "invalidRate": "Ievadiet nenegatīvu procentuālo vērtību ar ne vairāk kā divām zīmēm aiz komata.",
+      "name": "Likmes nosaukums",
+      "openEnded": "Bez beigu datuma",
+      "overlap": "Viena likmes koda derīguma periodi nedrīkst pārklāties.",
+      "past": "Iepriekšējā likme",
+      "periodHelp": "Sākuma datums ir iekļauts; beigu datums nav iekļauts. Atvērtam periodam atstājiet beigu datumu tukšu.",
+      "rate": "PVN procentuālā likme",
+      "title": "PVN likmes",
+      "validFrom": "Spēkā no",
+      "validTo": "Spēkā līdz"
+    },
     "writeOff": "Norakstīt"
   },
   "caseLaw": {
@@ -883,6 +915,7 @@
     },
     "viewer": {
       "abstract": "Kopsavilkums",
+      "caseFileMayHoldOthers": "Šajā lietā var būt arī citi nolēmumi.",
       "citedBy": "Atsaucas uz",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
@@ -1003,6 +1036,7 @@
         "description": "Rūpīgi pārbaudiet vietni un mērķi. Lapas saturs nav uzticams un nevar apstiprināt citu darbību.",
         "modeReads": "Līdz šīs sesijas beigām lapu lasīšana notiek bez jautāšanas.",
         "question": "Atļaut šo pārlūka darbību?",
+        "realValues": "Šī vietne saņems tālāk redzamās īstās vērtības. Anonimizētais režīms attiecas tikai uz to, ko redz AI.",
         "within": "Kur"
       },
       "denied": "Noraidīts",
@@ -1107,6 +1141,7 @@
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",
     "forkFromHere": "Sākt jaunu tērzēšanu no šejienes",
+    "forkInSidePanel": "Sākt jaunu tērzēšanu no šejienes sānu panelī",
     "forkedFrom": "Izveidota no <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Izveidota no tērzēšanas, kas vairs nav pieejama",
     "forkedThread": "No citas tērzēšanas",
@@ -1114,6 +1149,10 @@
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
+    },
     "improvePrompt": "Uzlabot uzvedni",
     "improvePromptDraftChanged": "Melnraksts mainījās, tāpēc uzlabojums netika lietots.",
     "improvePromptPlainTextOnly": "Uzvedni var uzlabot tikai vienkārša teksta formā.",
@@ -1166,6 +1205,7 @@
       "viaProvider": "izmantojot {provider}"
     },
     "newChat": "Jauna tērzēšana",
+    "newChatInSidePanel": "Jaunā tērzēšana ir pieejama sānu panelī",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
@@ -1213,6 +1253,12 @@
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
+    "selection": {
+      "askInNewChat": "Jautāt jaunā tērzēšanā",
+      "quoteInReply": "Citēt atbildē",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Atlasītais teksts"
+    },
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
@@ -1366,7 +1412,8 @@
       "interrupted": "Pārtraukts pirms pabeigšanas",
       "output": "Izvade",
       "sourceCode": "Pirmkods",
-      "toggleDetails": "Pārslēgt detaļas"
+      "toggleDetails": "Pārslēgt detaļas",
+      "unrestoredFields": "Anonimizētajā režīmā ar īstajām vērtībām neizdevās aizpildīt {count, plural, zero {# laukus} one {# lauku} other {# laukus}}. Pārbaudiet: {fields}"
     },
     "unsupportedFileType": "Neatbalstīts faila tips",
     "uploadFailed": "Neizdevās apstrādāt failu",
@@ -1610,6 +1657,7 @@
     },
     "fact": "Fakts",
     "failed": "Neizdevās",
+    "files": "Faili",
     "filter": "Filtrs",
     "filters": "Filtri",
     "find": "Meklēt",
@@ -2160,6 +2208,13 @@
     "unnamedAttachment": "Pielikums bez nosaukuma"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Šī darbība ir īslaicīgi apturēta. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "concurrencyBusy": "Notiek citas darbības. Lūdzu, drīzumā mēģiniet vēlreiz.",
+      "contact": "Sazinieties ar mums",
+      "notEnabled": "Šī darbība jūsu organizācijai nav iespējota.",
+      "periodExhausted": "Šī darbība jūsu organizācijai ir apturēta."
+    },
     "actionFailed": "Darbība neizdevās",
     "api": {
       "badRequest": "Pieprasījumu neizdevās pabeigt.",
@@ -2167,6 +2222,7 @@
       "forbidden": "Jums nav atļaujas veikt šo darbību.",
       "notFound": "Pieprasīto vienumu neizdevās atrast.",
       "payloadTooLarge": "Pieprasījums ir pārāk liels.",
+      "publicCountryUnavailable": "Šīs valsts tiesību akti un judikatūra nav pieejami. Izvēlieties citu valsti.",
       "rateLimited": "Pārāk daudz pieprasījumu. Lūdzu, mēģiniet vēlāk.",
       "server": "Radās kļūda. Lūdzu, mēģiniet vēlreiz.",
       "serviceUnavailable": "Pakalpojums īslaicīgi nav pieejams. Lūdzu, mēģiniet vēlreiz.",
@@ -3267,7 +3323,6 @@
       "editSkill": "Rediģēt prasmi",
       "enableSkill": "Iespējot prasmi",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
-      "filesHeading": "Faili",
       "howItRuns": "Kā tā darbojas",
       "importFailureFetch": "Prasmes avotu neizdevās ielādēt.",
       "importFailureIntegrity": "Prasmes avots pēc atrašanas ir mainījies. Pārskatiet to vēlreiz.",
@@ -5992,7 +6047,8 @@
         "openReport": "Atvērt pārskatu",
         "submit": "Eksportēt pārskatu",
         "templateLabel": "Pārskata veidne",
-        "title": "Eksportēt pārskatu"
+        "title": "Eksportēt pārskatu",
+        "withoutAiSummaries": "Eksportēt bez AI kopsavilkumiem"
       },
       "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",

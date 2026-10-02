@@ -78,6 +78,7 @@ afterEach(() => {
 });
 
 const baseOptions = {
+  observer: "unobserved" as const,
   url: "https://example.test/lookup",
   isExpectedShape: isShape,
   wrapRequestError: (cause: unknown) =>
@@ -100,6 +101,7 @@ describe("performRegistryRequest", () => {
     });
     const error = await captureThrown(
       performRegistryRequest({
+        observer: "unobserved",
         url: "https://example.test",
         wrapRequestError: (cause) =>
           new RequestMarkerError("wrapped", { cause }),
@@ -111,6 +113,7 @@ describe("performRegistryRequest", () => {
   test("returns the raw response on success", async () => {
     restore = installFetchStub(async () => jsonResponse({ ok: true }));
     const response = await performRegistryRequest({
+      observer: "unobserved",
       url: "https://example.test",
       wrapRequestError: (cause) => new RequestMarkerError("wrapped", { cause }),
     });
@@ -138,6 +141,7 @@ describe("performRegistryRequest", () => {
     });
 
     const request = performRegistryRequest({
+      observer: "unobserved",
       url: "https://example.test",
       signal: controller.signal,
       wrapRequestError: (cause) => new RequestMarkerError("wrapped", { cause }),
@@ -159,6 +163,7 @@ describe("performRegistryRequest", () => {
     });
 
     await performRegistryRequest({
+      observer: "unobserved",
       url: "https://example.test",
       signal: controller.signal,
       wrapRequestError: (cause) => new RequestMarkerError("wrapped", { cause }),
@@ -186,6 +191,7 @@ describe("performRegistryRequest", () => {
 
     const error = await captureThrown(
       performRegistryRequest({
+        observer: "unobserved",
         url: "https://example.test",
         timeoutMs: 1,
         wrapRequestError: (cause) =>

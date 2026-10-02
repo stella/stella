@@ -52,6 +52,7 @@ import { isLocalDevOpen } from "@/api/runtime-mode";
 const listStatutes = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: listStatutesQuerySchema,
   },
   async function* ({ query }) {
@@ -68,6 +69,7 @@ const listStatutes = createSafePublicHandler(
 const readLegislationShelf = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: legislationShelfQuerySchema,
   },
   async function* ({ query }) {
@@ -85,6 +87,7 @@ const readLegislationShelf = createSafePublicHandler(
 const readLegislationFacets = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: legislationFacetsQuerySchema,
   },
   async function* ({ query }) {
@@ -102,6 +105,7 @@ const readLegislationFacets = createSafePublicHandler(
 const readStatuteByEli = createSafePublicHandler(
   {
     mcp: { type: "covered", by: "read_statute" },
+    cache: { kind: "none" },
     query: readStatuteByEliQuerySchema,
   },
   async function* ({ query }) {
@@ -121,6 +125,7 @@ const resolveStatutes = createSafePublicHandler(
     // The batch form of `by-eli`: one read per Work is what `read_statute`
     // already answers, so an agent gains nothing from a second tool.
     mcp: { type: "covered", by: "read_statute" },
+    cache: { kind: "none" },
     body: resolveStatutesBodySchema,
   },
   async function* ({ body }) {
@@ -137,6 +142,7 @@ const resolveStatutes = createSafePublicHandler(
 const readStatuteBySlug = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     params: readStatuteBySlugParamsSchema,
     query: readStatuteBySlugQuerySchema,
   },
@@ -159,6 +165,7 @@ const readStatuteBySlug = createSafePublicHandler(
 const readStatute = createSafePublicHandler(
   {
     mcp: { type: "covered", by: "read_statute" },
+    cache: { kind: "none" },
     params: t.Object({ documentId: tSafeId("legislationDocument") }),
   },
   async function* ({ params: { documentId } }) {
@@ -179,6 +186,7 @@ const readStatute = createSafePublicHandler(
 const listStatuteVersions = createSafePublicHandler(
   {
     mcp: { type: "covered", by: "read_statute" },
+    cache: { kind: "none" },
     params: listStatuteVersionsParamsSchema,
     query: listStatuteVersionsQuerySchema,
   },
@@ -201,6 +209,7 @@ const listStatuteVersions = createSafePublicHandler(
 const readProvisionHistory = createSafePublicHandler(
   {
     mcp: { type: "tool", name: "read_provision_history" },
+    cache: { kind: "none" },
     params: provisionHistoryParamsSchema,
     query: provisionHistoryQuerySchema,
   },
@@ -222,7 +231,10 @@ const readProvisionHistory = createSafePublicHandler(
 );
 
 const listStatuteSitemapShards = createSafePublicHandler(
-  { mcp: { type: "internal", reason: "public_indexing" } },
+  {
+    mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
+  },
   async function* () {
     const response = yield* Result.await(
       Result.tryPromise(
@@ -238,6 +250,7 @@ const listStatuteSitemapShards = createSafePublicHandler(
 const listStatuteSitemapStatutes = createSafePublicHandler(
   {
     mcp: { type: "internal", reason: "public_indexing" },
+    cache: { kind: "none" },
     query: sitemapShardStatutesQuerySchema,
   },
   async function* ({ query }) {

@@ -14,6 +14,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSellerProfileId } from "@/api/lib/safe-id-boundaries";
 
 type SellerProfileRow = typeof sellerProfiles.$inferSelect;
@@ -63,7 +64,12 @@ const config = {
     "List active issuer profiles for the active organization, newest first, " +
     "with cursor pagination. Bank details are included for billing setup.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     limit: t.Optional(
@@ -81,7 +87,9 @@ const cursorCodec = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query }) {
-    const limit = query.limit ?? LIMITS.sellerProfilesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.sellerProfilesPageSizeDefault,
+    );
     const conditions = [
       eq(sellerProfiles.organizationId, session.activeOrganizationId),
       isNull(sellerProfiles.archivedAt),

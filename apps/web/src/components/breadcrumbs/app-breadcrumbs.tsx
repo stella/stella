@@ -176,6 +176,12 @@ export const AppBreadcrumbs = () => {
       </BreadcrumbLink>,
     ),
     defineBreadcrumb(
+      ["/settings/organization/vat-rates"],
+      <BreadcrumbLink to="/settings/organization/vat-rates">
+        {t("billing.vatRates.title")}
+      </BreadcrumbLink>,
+    ),
+    defineBreadcrumb(
       ["/settings/organization/billing"],
       <BreadcrumbLink to="/settings/organization/billing">
         {t("billing.settingsTitle")}
@@ -222,8 +228,8 @@ export const AppBreadcrumbs = () => {
   })();
 
   return (
-    <Breadcrumb className="min-w-0">
-      <BreadcrumbList className="flex-nowrap overflow-hidden">
+    <Breadcrumb className="min-w-0 has-[input]:flex-1">
+      <BreadcrumbList className="flex-nowrap overflow-hidden has-[input]:w-full">
         {breadcrumbs.map(([key, breadcrumb], index) => (
           <Fragment key={key}>
             {index !== 0 && <BreadcrumbSeparator className="shrink-0" />}

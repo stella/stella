@@ -1,4 +1,4 @@
-import { afterAll, beforeAll, describe, expect, mock, test } from "bun:test";
+import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -7,6 +7,8 @@ import { SKILL_REQUIRED_TOOLS_METADATA_KEY } from "@stll/skills";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { agentSkills, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import { chatSafePromptText } from "@/api/handlers/chat/chat-prompt";
+import type { ChatSafePromptLayers } from "@/api/handlers/chat/chat-prompt";
 import type { ChatSendRequest } from "@/api/handlers/chat/chat-schema";
 import { createSendMessage } from "@/api/handlers/chat/send-message";
 import { compactMessagesForContext } from "@/api/handlers/chat/send-message-compaction";
@@ -21,6 +23,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { createChatStreamMock } from "@/api/tests/helpers/chat-stream-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -30,12 +33,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-const streamChatMock = mock(
-  async () =>
-    new Response("stream started", {
-      headers: { "Content-Type": "text/event-stream" },
-    }),
-);
+const streamChatMock = createChatStreamMock();
 const loadExternalMcpToolsForTest = async () => {
   const close = async () => undefined;
   return {
@@ -201,6 +199,7 @@ const createContext = ({
     memberRole: { role: "owner" },
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     pinServerValidatedWorkspaceId: () => false,
     promptCachingEnabled: false,
     recordAuditEvent: async () => {},
@@ -284,7 +283,7 @@ describe("explicit skill references in a user message", () => {
     expect(result).toBeInstanceOf(Response);
     const call = asTestRaw<
       {
-        systemSafe?: string;
+        systemSafe?: ChatSafePromptLayers;
         systemUntrusted?: string;
         tools?: Record<string, unknown>;
       }[][]
@@ -292,7 +291,7 @@ describe("explicit skill references in a user message", () => {
       .at(0)
       ?.at(0);
     const systemUntrusted = call?.systemUntrusted ?? "";
-    const systemPrompt = `${call?.systemSafe ?? ""}${systemUntrusted}`;
+    const systemPrompt = `${call?.systemSafe === undefined ? "" : chatSafePromptText(call.systemSafe)}${systemUntrusted}`;
     // The catalog lists each skill with its description. It still offers the
     // skill that needs nothing, so the absence below is the filter, not an
     // empty catalog.
@@ -328,11 +327,11 @@ describe("explicit skill references in a user message", () => {
 
     expect(result).toBeInstanceOf(Response);
     const call = asTestRaw<
-      { systemSafe?: string; systemUntrusted?: string }[][]
+      { systemSafe?: ChatSafePromptLayers; systemUntrusted?: string }[][]
     >(streamChatMock.mock.calls)
       .at(0)
       ?.at(0);
-    const systemPrompt = `${call?.systemSafe ?? ""}${call?.systemUntrusted ?? ""}`;
+    const systemPrompt = `${call?.systemSafe === undefined ? "" : chatSafePromptText(call.systemSafe)}${call?.systemUntrusted ?? ""}`;
     expect(systemPrompt).toContain("ACTIVE SKILL CONTEXT");
     expect(systemPrompt).toContain("This skill cannot run in this chat.");
     expect(systemPrompt).toContain("use-browser");

@@ -19,7 +19,6 @@ import {
 import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
   createThirdPartyBoundaryRefusalPayload,
 } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
@@ -30,7 +29,9 @@ import { userFiles } from "@/api/db/schema";
 import type { UsageEventLane } from "@/api/db/schema";
 import { setSharedLockTimeout } from "@/api/db/shared-pool-timeouts";
 import { env } from "@/api/env";
+import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import { modelAcceptsDocumentAttachment } from "@/api/handlers/chat/attachment-modality";
+import { chunkCarriesAnswer } from "@/api/handlers/chat/attempt-answer";
 import {
   applyChatPartPersistenceBudget,
   attachTerminalTurnOutcome,
@@ -44,10 +45,15 @@ import {
   isChatPart,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
+import { chatSafePromptText } from "@/api/handlers/chat/chat-prompt";
 import type {
-  ChatSafePrompt,
+  ChatSafePromptLayers,
   ChatUntrustedPromptSuffix,
 } from "@/api/handlers/chat/chat-prompt";
+import {
+  chatAttemptRequestOptions,
+  chatSystemPrompts,
+} from "@/api/handlers/chat/chat-request";
 import { shadowChatRun } from "@/api/handlers/chat/chat-run-shadow";
 import {
   CHAT_RUN_MODE,
@@ -58,7 +64,10 @@ import {
   USER_STOP_OUTCOME,
 } from "@/api/handlers/chat/chat-turn-persistence";
 import { CHAT_TURN_OWNER_LOST_REASON } from "@/api/handlers/chat/chat-turn-run";
-import type { ChatTurnRun } from "@/api/handlers/chat/chat-turn-run";
+import type {
+  ChatTurnRun,
+  ChatTurnStoredSettlement,
+} from "@/api/handlers/chat/chat-turn-run";
 import {
   CUT_SHORT_OUTCOME,
   findHandedOutInteraction,
@@ -76,6 +85,7 @@ import {
 import { guardProviderHistory } from "@/api/handlers/chat/provider-history";
 import type { GuardedProviderHistory } from "@/api/handlers/chat/provider-history";
 import {
+  assistantMessageStartChunk,
   createTurnMessageIdMapper,
   ensureAssistantMessageStart,
   findDeniedApprovals,
@@ -116,8 +126,8 @@ import type {
   PersistableTerminalAssistantMessage,
 } from "@/api/handlers/chat/types";
 import { hydrateFilePart } from "@/api/handlers/chat/upload-files";
-import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
+import type { CachingDecision, OrgAIConfig } from "@/api/lib/ai-config";
+import { resolveCaching } from "@/api/lib/ai-config";
 import {
   classifyAIError,
   isAnticipatedAIFailure,
@@ -129,6 +139,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   chatToolMapToArray,
   type ChatTool,
@@ -147,13 +158,14 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
+import { imageInputUnsupportedError } from "@/api/lib/chat/provider-image-input";
 import {
   withProviderStreamContract,
   withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
-import { projectChatToolSchemasForProvider } from "@/api/lib/chat/provider-tool-projection";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
+import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import {
   createStreamMessageCapture,
   type ChatStreamProcessor,
@@ -170,19 +182,17 @@ import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import {
   ChatEmptyCompletionError,
   ChatLoopDetectedError,
+} from "@/api/lib/errors/tagged-errors";
+import type {
+  ChatTerminalError,
   HandlerError,
 } from "@/api/lib/errors/tagged-errors";
-import type { ChatTerminalError } from "@/api/lib/errors/tagged-errors";
 import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
+import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
-import {
-  chatTurnOutputTokens,
-  mergeGenerationOptions,
-  resolveTanStackTextModel,
-  systemPromptsPatch,
-} from "@/api/lib/tanstack-ai-generate";
+import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
 import { projectSchemaInputJsonSchema } from "@/api/lib/tanstack-ai-schema";
@@ -241,11 +251,16 @@ type StreamChatProps = {
   resume?: RunAgentResumeItem[] | undefined;
   messages: ChatMessage[];
   owningAssistantMessageId?: SafeId<"chatMessage"> | undefined;
-  onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
+  /**
+   * Store the finished turn, and say what its row now holds: the run counts
+   * that, not the outcome it proposed.
+   */
+  onFinish: (event: StreamChatFinishEvent) => Promise<ChatTurnStoredSettlement>;
   /** What the client is shown of the history `messages` came from. */
   storedHistory: StoredHistory;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   /**
@@ -266,7 +281,8 @@ type StreamChatProps = {
   /** The turn's run: it owns the abort, the stop and the settlement. */
   run: ChatTurnRun;
   safeDb: SafeDb;
-  systemSafe: ChatSafePrompt;
+  /** The prompt's cacheable layers, sent verbatim. */
+  systemSafe: ChatSafePromptLayers;
   systemUntrusted: ChatUntrustedPromptSuffix;
   /**
    * The org's accessible workspace ids, for the model-ingress guard: the
@@ -371,6 +387,7 @@ export const streamChat = async ({
   onFinish,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCacheKey,
   promptCachingEnabled,
   reasoningEffort,
@@ -403,9 +420,10 @@ export const streamChat = async ({
   if (agentBoundaryError !== null) {
     return thirdPartyBoundaryRefusalResponse(agentBoundaryError);
   }
+  const systemSafeText = chatSafePromptText(systemSafe);
   reserveThirdPartyBoundarySourcePlaceholders({
     boundary: thirdPartyBoundary,
-    value: [systemSafe, systemUntrusted, messages, resume, tools],
+    value: [systemSafeText, systemUntrusted, messages, resume, tools],
   });
   const preparedUntrusted = await prepareTextForThirdParty({
     boundary: thirdPartyBoundary,
@@ -416,8 +434,8 @@ export const streamChat = async ({
   }
   const system =
     preparedUntrusted.value.length > 0
-      ? `${systemSafe}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
-      : systemSafe;
+      ? `${systemSafeText}${preparedUntrusted.value.startsWith("\n") ? "" : "\n\n"}${preparedUntrusted.value}`
+      : systemSafeText;
   // The system prompt is entirely server-built; a tenant workspace id in it
   // is a Stella bug (matter scope, active-file, and connected-matter
   // sections must all speak in chat refs), so this fails closed.
@@ -452,12 +470,15 @@ export const streamChat = async ({
   });
 
   const primaryModel = resolveTanStackTextModel({
+    dataClass: "customer",
     modelId: devModelId,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     reasoningEffort,
     role: "chat",
   });
+  run.attributeProvider(primaryModel.provider);
 
   // Tool schemas are mostly server-built but may include org-configured
   // external MCP tool descriptions, so a hit here is telemetry, not a
@@ -483,10 +504,23 @@ export const streamChat = async ({
     documentAttachmentMimeTypes.some(
       (mimeType) => !modelAcceptsDocumentAttachment({ model, mimeType }),
     );
+  const hasImageAttachments = preparedMessageList.some((message) =>
+    message.parts.some((part) => part.type === "image"),
+  );
+  const modelRejectsImages = (model: ResolvedTanStackTextModel): boolean =>
+    hasImageAttachments && getModelImageCapability(model) === "unsupported";
   const modelRejectsStreamingTools = (
     model: ResolvedTanStackTextModel,
   ): boolean =>
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
+
+  if (modelRejectsImages(primaryModel)) {
+    const error = imageInputUnsupportedError();
+    return new Response(
+      JSON.stringify({ code: error.code, message: error.message }),
+      { status: error.status, headers: { "Content-Type": "application/json" } },
+    );
+  }
 
   if (modelRejectsAnyDocument(primaryModel)) {
     // A plain 422, NOT a third-party-boundary refusal: that code is the sole
@@ -516,6 +550,7 @@ export const streamChat = async ({
       ? resolveFallbackTextModel({
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           primaryModel,
           threadId,
         })
@@ -526,6 +561,7 @@ export const streamChat = async ({
   const fallbackModel =
     resolvedFallbackModel !== null &&
     (modelRejectsAnyDocument(resolvedFallbackModel) ||
+      modelRejectsImages(resolvedFallbackModel) ||
       modelRejectsStreamingTools(resolvedFallbackModel))
       ? null
       : resolvedFallbackModel;
@@ -543,6 +579,7 @@ export const streamChat = async ({
     fallbackModel,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     primaryModel,
     promptCacheKey,
     promptCachingEnabled,
@@ -560,6 +597,7 @@ export const streamChat = async ({
         workspaceIds: tenantWorkspaceIds,
       }),
       system: guardedSystem,
+      systemLayers: systemSafe,
       tenantWorkspaceIds,
       tools: modelTools,
     },
@@ -640,9 +678,7 @@ export const streamChat = async ({
     initialMessages: preparedMessageList,
     onFinish: async (event) => {
       await shadow.flush();
-      await run.settle(async () => {
-        await onFinish(event);
-      });
+      await run.settle(async () => await onFinish(event));
     },
     owningAssistantMessageId,
     restorationPairs,
@@ -688,11 +724,13 @@ export const resolveAgentRunBoundaryError = ({
     return null;
   }
 
-  return new HandlerError({
-    code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-    status: 422,
+  return refuseAnonymizedCrossing({
     message:
       "Agent sandbox access is not available in anonymized mode because its MCP tools can return raw workspace data.",
+    offerRawRetry: true,
+    reason: "mode_policy",
+    site: "agent_run",
+    status: 422,
   });
 };
 
@@ -719,11 +757,14 @@ export const chatTurnRejectsStreamingTools = ({
 type ChatAttemptState = {
   emptyCompletion: ChatEmptyCompletionError | null;
   finalLoopDetection: ChatLoopDetectedError | null;
+  /** Whether the attempt has streamed an answer (`chunkCarriesAnswer`). */
+  producedAnswer: boolean;
 };
 
 export const createChatAttemptState = (): ChatAttemptState => ({
   emptyCompletion: null,
   finalLoopDetection: null,
+  producedAnswer: false,
 });
 
 type ChatAttemptModelInfo = Pick<
@@ -738,7 +779,6 @@ type RecordChatAttemptFinishProps = {
   modelInfo: ChatAttemptModelInfo;
   state: ChatAttemptState;
   threadId: SafeId<"chatThread">;
-  usage: TokenUsage | undefined;
 };
 
 export const recordChatAttemptFinish = ({
@@ -748,7 +788,6 @@ export const recordChatAttemptFinish = ({
   modelInfo,
   state,
   threadId,
-  usage,
 }: RecordChatAttemptFinishProps): void => {
   const loopDetection = detectModelLoop(messages);
   if (shouldSurfaceFinalContentLoop(loopDetection)) {
@@ -757,7 +796,11 @@ export const recordChatAttemptFinish = ({
     });
   }
 
-  if (finishReason !== "stop" || usage?.completionTokens !== 0) {
+  // Emptiness is read from what the attempt streamed, never from the
+  // provider's token count: a model can spend completion tokens on an answer
+  // that holds nothing. Any other finish reason is left to the terminal
+  // guard, which settles the turn without trying the fallback model.
+  if (finishReason !== "stop" || state.producedAnswer) {
     return;
   }
 
@@ -875,6 +918,7 @@ const projectMcpToolSourceSchemasForProvider = ({
 type ResolveFallbackTextModelProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
   threadId: SafeId<"chatThread">;
 };
@@ -882,13 +926,16 @@ type ResolveFallbackTextModelProps = {
 const resolveFallbackTextModel = ({
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   primaryModel,
   threadId,
 }: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
   try {
     const fallbackModel = resolveTanStackTextModel({
+      dataClass: "customer",
       organizationId,
       orgAIConfig,
+      managedAIResidency,
       role: "reasoning",
     });
     if (
@@ -912,6 +959,7 @@ type CreateChatAttemptAnalyticsProps = {
   modelRole: ModelRole;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  promptCacheSurface?: PromptCacheMetricSurface | undefined;
   safeDb: SafeDb;
   /** Explicit per-turn model selection; undefined = role default. */
   selectedModelId: string | undefined;
@@ -927,6 +975,7 @@ const createChatAttemptAnalytics = ({
   modelRole,
   organizationId,
   orgAIConfig,
+  promptCacheSurface,
   safeDb,
   selectedModelId,
   usageLane,
@@ -935,6 +984,8 @@ const createChatAttemptAnalytics = ({
   workspaceId,
 }: CreateChatAttemptAnalyticsProps): TanStackAIAnalyticsCallbacks =>
   createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
+    promptCacheSurface,
     usageMetering: {
       actionType: "chat",
       lane: usageLane,
@@ -969,6 +1020,9 @@ export type GuardedChatSurfaces = {
    *  right after its step. */
   messages: GuardedProviderHistory;
   system: GuardedSystemPrompt;
+  /** The cacheable layers `system` begins with, where its cache markers go
+   *  (`chat-request.ts`). */
+  systemLayers: ChatSafePromptLayers;
   /**
    * The guard's own input, carried alongside its output because the surfaces
    * are not final: the runtime middleware rewrites messages and system prompt
@@ -987,6 +1041,7 @@ type RunChatAttemptsProps = {
   fallbackModel: ResolvedTanStackTextModel | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
@@ -1014,6 +1069,7 @@ const runChatAttempts = async function* ({
   fallbackModel,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   primaryModel,
   promptCacheKey,
   promptCachingEnabled,
@@ -1045,6 +1101,7 @@ const runChatAttempts = async function* ({
     modelId: devModelId,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
     runId,
@@ -1096,6 +1153,7 @@ const runChatAttempts = async function* ({
     modelId: undefined,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
     role: "reasoning",
@@ -1130,6 +1188,7 @@ type RunChatAttemptProps = {
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   runId?: string | undefined;
@@ -1164,6 +1223,7 @@ const runChatAttempt = async function* ({
   modelId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCacheKey,
   promptCachingEnabled,
   runId,
@@ -1186,6 +1246,7 @@ const runChatAttempt = async function* ({
   const {
     messages: preparedMessages,
     system: baseSystem,
+    systemLayers,
     tenantWorkspaceIds,
     tools: modelTools,
   } = surfaces;
@@ -1206,6 +1267,8 @@ const runChatAttempt = async function* ({
     modelRole: role,
     organizationId,
     orgAIConfig,
+    // The turn's own model calls; compaction below builds another prompt.
+    promptCacheSurface: sandboxRun ? undefined : "chat",
     safeDb,
     selectedModelId: servedModelId,
     usageLane: servedLane,
@@ -1261,14 +1324,17 @@ const runChatAttempt = async function* ({
         createChatRuntimeMiddleware({
           abortSignal,
           baseSystem,
+          caching,
           compactionAnalytics,
           compactionFeature,
           model,
           modelId,
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           role,
           state,
+          systemLayers,
           tenantWorkspaceIds,
           threadId,
         }),
@@ -1279,12 +1345,16 @@ const runChatAttempt = async function* ({
   }
 
   const stream = streamChatChunks({
-    adapter: withRunToolCallIds(model.adapter, toolCallIds),
-    messages: preparedMessages,
-    tools: projectChatToolSchemasForProvider({
+    ...chatAttemptRequestOptions({
+      caching,
+      model,
       modelTools,
-      provider: model.provider,
+      role,
+      system: baseSystem,
+      systemLayers,
+      toolCallIds,
     }),
+    messages: preparedMessages,
     ...(externalMcpToolSource
       ? {
           mcp: {
@@ -1305,27 +1375,22 @@ const runChatAttempt = async function* ({
     ...(runId === undefined ? {} : { runId }),
     ...(parentRunId === undefined ? {} : { parentRunId }),
     ...(resume === undefined ? {} : { resume }),
-    ...systemPromptsPatch({ caching, model, system: baseSystem }),
-    modelOptions: mergeGenerationOptions({
-      caching,
-      model,
-      maxOutputTokens: chatTurnOutputTokens(model),
-      serviceTier: "standard",
-      temperature: getTemperatureForRole(role),
-    }),
     middleware: [
       analytics.middleware,
       createChatRuntimeMiddleware({
         abortSignal,
         baseSystem,
+        caching,
         compactionAnalytics,
         compactionFeature,
         model,
         modelId,
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         role,
         state,
+        systemLayers,
         tenantWorkspaceIds,
         threadId,
       }),
@@ -1384,14 +1449,17 @@ export const guardedCompactedMessages = ({
 type ChatRuntimeMiddlewareProps = {
   abortSignal: AbortSignal;
   baseSystem: GuardedSystemPrompt;
+  caching: CachingDecision;
   compactionAnalytics: TanStackAIAnalyticsCallbacks;
   compactionFeature: string;
   model: ResolvedTanStackTextModel;
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   role: ChatAttemptRole;
   state: ChatAttemptState;
+  systemLayers: ChatSafePromptLayers;
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   threadId: SafeId<"chatThread">;
 };
@@ -1399,14 +1467,17 @@ type ChatRuntimeMiddlewareProps = {
 const createChatRuntimeMiddleware = ({
   abortSignal,
   baseSystem,
+  caching,
   compactionAnalytics,
   compactionFeature,
   model,
   modelId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   role,
   state,
+  systemLayers,
   tenantWorkspaceIds,
   threadId,
 }: ChatRuntimeMiddlewareProps): ChatMiddleware => {
@@ -1420,7 +1491,6 @@ const createChatRuntimeMiddleware = ({
           modelInfo: model,
           state,
           threadId,
-          usage: event.info.usage,
         });
         return;
       case "aborted":
@@ -1434,6 +1504,9 @@ const createChatRuntimeMiddleware = ({
   return {
     name: "stella-chat-runtime",
     ...terminalHooks,
+    onChunk: (_ctx, chunk) => {
+      state.producedAnswer ||= chunkCarriesAnswer(chunk);
+    },
     onConfig: async (ctx, config) => {
       if (ctx.phase !== "beforeModel") {
         return undefined;
@@ -1451,10 +1524,18 @@ const createChatRuntimeMiddleware = ({
         const recoveryKey = getLoopRecoveryKey(loopDetection);
         if (recoveryKey !== lastLoopRecoveryKey) {
           lastLoopRecoveryKey = recoveryKey;
-          patch.systemPrompts = guardedLoopRecoveryPrompts({
+          const [recoverySystem] = guardedLoopRecoveryPrompts({
             baseSystem,
             detection: loopDetection,
             tenantWorkspaceIds,
+          });
+          // The recovery section joins the turn layer, so the cached layers
+          // before it keep their markers.
+          patch.systemPrompts = chatSystemPrompts({
+            caching,
+            model,
+            system: recoverySystem ?? baseSystem,
+            systemLayers,
           });
         }
       }
@@ -1466,6 +1547,7 @@ const createChatRuntimeMiddleware = ({
         modelId,
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         role,
         tenantWorkspaceIds,
         onSummaryError: (error) => {
@@ -1514,9 +1596,10 @@ type ProcessServerChatStreamProps = {
    *  only one of the two causes that reaches this signal, so it is what tells
    *  a deadline apart from a disconnect. */
   deadlineSignal: AbortSignal;
-  existingMessageIds?: ReadonlySet<string> | undefined;
   flushPendingSource?: (() => PublicStreamChunk[]) | undefined;
   getResponseMessage: () => ChatMessage | null;
+  /** The history the run starts from: the messages it may continue. */
+  initialMessages: readonly ChatMessage[];
   mapMessageId: MessageIdMapper;
   onFinish: (event: StreamChatFinishEvent) => Promise<void> | void;
   processor: ChatStreamProcessor;
@@ -1783,6 +1866,8 @@ type AdmissionLossOutcomeOptions = Pick<
   "getRestorableCheckpoint" | "getResponseMessage" | "processor"
 > & {
   deferredRunFinishedChunks: readonly PublicStreamChunk[];
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  producedAnswer: boolean;
   toolCallsWithCompleteInput: ReadonlySet<string>;
 };
 
@@ -1791,6 +1876,7 @@ const resolveAdmissionLossOutcome = ({
   getRestorableCheckpoint,
   getResponseMessage,
   processor,
+  producedAnswer,
   toolCallsWithCompleteInput,
 }: AdmissionLossOutcomeOptions): ChatTurnOutcome => {
   const originalInteraction = getAwaitingUserInteraction(
@@ -1822,9 +1908,9 @@ const resolveAdmissionLossOutcome = ({
     finishReasonOf(lastFinish) !== "tool_calls" &&
     getAwaitingUserInteraction(response) === null
   ) {
-    return response === null || response.parts.length === 0
-      ? { type: "failed", error: "empty_completion" }
-      : { type: "completed" };
+    return producedAnswer
+      ? { type: "completed" }
+      : { type: "failed", error: "empty_completion" };
   }
   return { type: "failed", error: "provider_unavailable" };
 };
@@ -1854,6 +1940,8 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  getProducedAnswer: () => boolean;
   terminal: { state: "open" | "settled" };
 };
 
@@ -1871,6 +1959,7 @@ const createStreamSettlement = ({
   rawArgumentsByIncompleteToolCallId,
   toolCallsWithCompleteInput,
   getUsage,
+  getProducedAnswer,
   terminal,
 }: StreamSettlementOptions) => {
   const admissionLost = () =>
@@ -1892,6 +1981,7 @@ const createStreamSettlement = ({
       getRestorableCheckpoint,
       getResponseMessage,
       processor,
+      producedAnswer: getProducedAnswer(),
       toolCallsWithCompleteInput,
     });
   const terminalize = async ({
@@ -1913,18 +2003,17 @@ const createStreamSettlement = ({
     if (flushProcessor) {
       finalizeResponseProcessor(processor);
     }
-    // An empty completion is a provider outcome: the model produced no
-    // persistable part. A run that carried a complete tool call cannot be
-    // one; losing that call between the stream and the persistence
-    // processor is a defect in this pipeline, so it must not be graded as
-    // an anticipated provider state.
+    // An empty completion is a provider outcome: the model streamed no
+    // answer. A run that streamed one cannot be one; losing that answer
+    // between the stream and the persistence processor is a defect in this
+    // pipeline, so it must not be graded as an anticipated provider state.
     if (
       (outcome.type === "completed" || outcome.type === "awaiting-user") &&
-      toolCallsWithCompleteInput.size > 0 &&
+      getProducedAnswer() &&
       (getResponseMessage()?.parts.length ?? 0) === 0
     ) {
       panic(
-        "Persistence processor dropped an assistant turn that carried a complete tool call",
+        "Persistence processor dropped an assistant turn that streamed an answer",
       );
     }
     const responseMessage = CUT_SHORT_OUTCOME[outcome.type]
@@ -1941,6 +2030,7 @@ const createStreamSettlement = ({
         ? createTerminalResponseMessage({
             mapMessageId,
             outcome,
+            producedAnswer: getProducedAnswer(),
             responseMessage,
             usage: getUsage(),
           })
@@ -2065,9 +2155,9 @@ export const processServerChatStream = async function* ({
   runSignal = abortSignal,
   getRestorableCheckpoint,
   deadlineSignal,
-  existingMessageIds = new Set(),
   flushPendingSource,
   getResponseMessage,
+  initialMessages,
   mapMessageId,
   onFinish,
   processor,
@@ -2075,6 +2165,12 @@ export const processServerChatStream = async function* ({
 }: ProcessServerChatStreamProps): AsyncIterable<PublicStreamChunk> {
   const deferredRunFinishedChunks: PublicStreamChunk[] = [];
   const runState = { cancelled: false };
+  // Whether the run streamed an answer (`chunkCarriesAnswer`): the one
+  // measure of an empty run, read here from the chunks the persistence
+  // processor is fed and in the attempt middleware from the chunks the model
+  // sends. A continuation's message already holds the call the user
+  // answered; the chunks hold only what this run added.
+  let producedAnswer = false;
   const rawArgumentsByIncompleteToolCallId = new Map<string, string>();
   const toolCallsWithCompleteInput = new Set<string>();
   let usage: TokenUsage | undefined;
@@ -2105,6 +2201,7 @@ export const processServerChatStream = async function* ({
     rawArgumentsByIncompleteToolCallId,
     toolCallsWithCompleteInput,
     getUsage: () => usage,
+    getProducedAnswer: () => producedAnswer,
     terminal,
   });
   // Whether the client has been told which message this turn writes.
@@ -2117,19 +2214,16 @@ export const processServerChatStream = async function* ({
     announcedAssistantMessage
       ? []
       : [
-          {
-            type: EventType.TEXT_MESSAGE_START,
-            messageId: mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
-            role: "assistant",
-            timestamp: Temporal.Now.instant().epochMilliseconds,
-          },
+          assistantMessageStartChunk(
+            mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
+          ),
         ];
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
         mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
       source: remapOutgoingMessageIds({
-        existingMessageIds,
+        existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
         mapMessageId,
         source,
       }),
@@ -2143,6 +2237,7 @@ export const processServerChatStream = async function* ({
         sourceChunk,
         rawArgumentsByIncompleteToolCallId,
       );
+      producedAnswer ||= chunkCarriesAnswer(sourceChunk);
       if (sourceChunk.type === EventType.TOOL_CALL_END) {
         toolCallsWithCompleteInput.add(sourceChunk.toolCallId);
       }
@@ -2289,7 +2384,7 @@ export const processServerChatStream = async function* ({
 
 type ProcessTurnForPersistenceProps = Omit<
   ProcessServerChatStreamProps,
-  "existingMessageIds" | "getResponseMessage" | "mapMessageId" | "processor"
+  "getResponseMessage" | "initialMessages" | "mapMessageId" | "processor"
 > & {
   /** The history the run starts from: the messages it may continue. */
   initialMessages: ChatMessage[];
@@ -2326,8 +2421,8 @@ const processTurnForPersistence = ({
   });
   return processServerChatStream({
     ...stream,
-    existingMessageIds: new Set(initialMessages.map(({ id }) => id)),
     getResponseMessage: message,
+    initialMessages,
     mapMessageId: createTurnMessageIdMapper(owningAssistantMessageId),
     processor,
   });
@@ -2336,6 +2431,8 @@ const processTurnForPersistence = ({
 type FinishResponseMessageProps = {
   mapMessageId: MessageIdMapper;
   outcome: ChatTurnOutcome;
+  /** Whether the run streamed an answer (see `processServerChatStream`). */
+  producedAnswer: boolean;
   responseMessage: ChatMessage | null;
   usage: TokenUsage | undefined;
 };
@@ -2343,16 +2440,23 @@ type FinishResponseMessageProps = {
 const createTerminalResponseMessage = ({
   mapMessageId,
   outcome,
+  producedAnswer,
   responseMessage,
   usage,
 }: FinishResponseMessageProps): PersistableTerminalAssistantMessage => {
-  if (
-    (outcome.type === "completed" || outcome.type === "awaiting-user") &&
-    (!responseMessage || responseMessage.parts.length === 0)
-  ) {
+  if (outcome.type === "completed" && !producedAnswer) {
     throw new ChatEmptyCompletionError({
       message: CHAT_EMPTY_COMPLETION_MESSAGE,
     });
+  }
+  // A turn waits on the user only for a call its message holds
+  // (`drainedRunOutcome` reads the interaction off that message), so a
+  // waiting turn without a message is a defect here, not a provider outcome.
+  if (
+    outcome.type === "awaiting-user" &&
+    (responseMessage === null || responseMessage.parts.length === 0)
+  ) {
+    panic("A turn awaiting the user holds no message to wait on");
   }
 
   // A turn that failed before its first part still spent what the provider
@@ -3710,10 +3814,12 @@ export const hydrateMessages = async ({
           hydratedPart.type !== "anonymizable"
         ) {
           return Result.err(
-            new HandlerError({
-              code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-              status: 422,
+            refuseAnonymizedCrossing({
               message: THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE,
+              offerRawRetry: true,
+              reason: "unsupported_content",
+              site: "file_hydration",
+              status: 422,
             }),
           );
         }

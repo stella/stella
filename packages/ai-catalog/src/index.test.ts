@@ -16,6 +16,7 @@ import {
   getModelRate,
   getModelReasoningEfforts,
   isBYOKModelRoleSupported,
+  normalizeModelCatalogId,
   isBYOKProviderRoleSupported,
   DEFAULT_MODELS,
   MODEL_DEFAULT_REASONING_EFFORTS,
@@ -534,4 +535,13 @@ describe("supportsStreamingToolUse", () => {
       }
     }
   });
+});
+
+test("unrecognized model IDs survive normalization unchanged", () => {
+  for (const modelId of [
+    "unlisted-model",
+    ...Object.getOwnPropertyNames(Object.prototype),
+  ]) {
+    expect(normalizeModelCatalogId(modelId)).toBe(modelId);
+  }
 });

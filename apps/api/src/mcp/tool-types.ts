@@ -152,6 +152,21 @@ export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
   title: string;
 };
 
+export type McpReadClass = "tenant" | "public" | "both";
+
+export type McpReadClassResolver = (
+  args: unknown,
+) => McpReadClass | undefined | Promise<McpReadClass | undefined>;
+
+/** Reads declare their source; the generic gateway resolves its target instead. */
+export const resolveMcpReadClass = async (
+  definition: McpToolDefinition,
+  args: unknown,
+) =>
+  typeof definition.readClass === "function"
+    ? definition.readClass(args)
+    : definition.readClass;
+
 /**
  * `access` and `readOnlyHint` are one fact stated twice (the registry's
  * structural signal and the MCP client hint), so the type binds them: a
@@ -163,10 +178,13 @@ export type McpToolAnnotations = NonNullable<McpTool["annotations"]> & {
 export type McpToolAccessBranch =
   | {
       access: "read";
+      readClass: McpReadClass | McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: true };
     }
   | {
       access: "write";
+      /** Generic dispatch may invoke a read target despite its own write access. */
+      readClass?: McpReadClassResolver;
       annotations: McpToolAnnotations & { readOnlyHint: false };
     };
 
@@ -433,6 +451,7 @@ export type InternalToolStructuredError = {
   hint?: string;
   issues?: readonly McpValidationIssue[];
   retryable?: boolean;
+  contactUrl?: string;
   requestId?: string;
 };
 

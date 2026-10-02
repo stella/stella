@@ -487,6 +487,17 @@
     "failedToStartTimer": "Timer konnte nicht gestartet werden",
     "failedToStopTimer": "Timer konnte nicht gestoppt werden",
     "filterStatus": "Nach Status filtern",
+    "globalTimer": {
+      "confirm": "Zeit bestätigen",
+      "discard": "Timer verwerfen",
+      "matterInaccessible": "Wählen Sie eine Akte, auf die Sie zugreifen können.",
+      "narrativeRequired": "Fügen Sie eine Beschreibung hinzu, bevor Sie die Zeit bestätigen.",
+      "pause": "Pausieren",
+      "periodLocked": "Dieser Monat ist gesperrt. Bitten Sie einen Administrator, ihn zu entsperren.",
+      "resume": "Fortsetzen",
+      "timerUnavailable": "Dieser Timer ist nicht mehr verfügbar. Aktualisieren Sie die Liste.",
+      "title": "Timer"
+    },
     "hourlyRateMustBeNonNegative": "Der Stundensatz darf nicht negativ sein",
     "hours": "Stunden",
     "invoiceNarrative": "Rechnungstext",
@@ -650,6 +661,27 @@
     "timerActive": "Timer läuft",
     "timesheets": "Zeiterfassung",
     "total": "Gesamt",
+    "vatRates": {
+      "add": "Umsatzsteuersatz hinzufügen",
+      "archiveConfirm": "Diesen Umsatzsteuersatz archivieren? Er steht dann für neue Belege nicht mehr zur Verfügung.",
+      "code": "Steuersatzcode",
+      "current": "Aktueller Steuersatz",
+      "description": "Verwalten Sie Steuersätze und ihre Gültigkeitszeiträume.",
+      "edit": "Umsatzsteuersatz bearbeiten",
+      "empty": "Keine Umsatzsteuersätze.",
+      "future": "Künftiger Steuersatz",
+      "invalidPeriod": "Wählen Sie gültige Daten mit einem Enddatum nach dem Anfangsdatum.",
+      "invalidRate": "Geben Sie einen nicht negativen Prozentsatz mit höchstens zwei Nachkommastellen ein.",
+      "name": "Steuersatzbezeichnung",
+      "openEnded": "Kein Enddatum",
+      "overlap": "Gültigkeitszeiträume mit demselben Steuersatzcode dürfen sich nicht überschneiden.",
+      "past": "Früherer Steuersatz",
+      "periodHelp": "Das Anfangsdatum ist eingeschlossen; das Enddatum ist ausgeschlossen. Lassen Sie das Enddatum für einen offenen Zeitraum leer.",
+      "rate": "Umsatzsteuer in Prozent",
+      "title": "Umsatzsteuersätze",
+      "validFrom": "Gültig ab",
+      "validTo": "Gültig bis"
+    },
     "writeOff": "Abschreiben"
   },
   "caseLaw": {
@@ -883,6 +915,7 @@
     },
     "viewer": {
       "abstract": "Zusammenfassung",
+      "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
@@ -1003,6 +1036,7 @@
         "description": "Prüfen Sie Website und Ziel sorgfältig. Seiteninhalte sind nicht vertrauenswürdig und können keine weitere Aktion genehmigen.",
         "modeReads": "Das Lesen von Seiten läuft für den Rest dieser Sitzung ohne Rückfrage.",
         "question": "Diese Browseraktion erlauben?",
+        "realValues": "Diese Website erhält die unten angezeigten echten Werte. Der anonymisierte Modus gilt nur für das, was die KI sieht.",
         "within": "Innerhalb von"
       },
       "denied": "Abgelehnt",
@@ -1107,6 +1141,7 @@
     "focusSuggestion": "Vorschlag fokussieren: {topic}",
     "folioCitationFallback": "S. {n}",
     "forkFromHere": "Ab hier einen neuen Chat starten",
+    "forkInSidePanel": "Ab hier einen neuen Chat in der Seitenleiste starten",
     "forkedFrom": "Erstellt aus <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Erstellt aus einem nicht mehr verfügbaren Chat",
     "forkedThread": "Aus einem anderen Chat",
@@ -1114,6 +1149,10 @@
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
+    },
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
@@ -1166,6 +1205,7 @@
       "viaProvider": "über {provider}"
     },
     "newChat": "Neuer Chat",
+    "newChatInSidePanel": "Der neue Chat ist in der Seitenleiste verfügbar",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
@@ -1213,6 +1253,12 @@
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
     "richContentTitle": "Interaktiver Inhalt",
     "richContentUnavailable": "Dieser Inhalt kann nicht sicher angezeigt werden.",
+    "selection": {
+      "askInNewChat": "In neuem Chat fragen",
+      "quoteInReply": "In Antwort zitieren",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Markierter Text"
+    },
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
@@ -1366,7 +1412,8 @@
       "interrupted": "Vor Abschluss unterbrochen",
       "output": "Ausgabe",
       "sourceCode": "Quellcode",
-      "toggleDetails": "Details ein-/ausblenden"
+      "toggleDetails": "Details ein-/ausblenden",
+      "unrestoredFields": "{count, plural, one {# Feld konnte} other {# Felder konnten}} im anonymisierten Modus nicht mit echten Werten gefüllt werden. Bitte prüfen: {fields}"
     },
     "unsupportedFileType": "Nicht unterstützter Dateityp",
     "uploadFailed": "Datei konnte nicht verarbeitet werden",
@@ -1610,6 +1657,7 @@
     },
     "fact": "Tatsache",
     "failed": "Fehlgeschlagen",
+    "files": "Dateien",
     "filter": "Filtern",
     "filters": "Filter",
     "find": "Suchen",
@@ -2160,6 +2208,13 @@
     "unnamedAttachment": "Unbenannter Anhang"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Diese Aktion ist vorübergehend pausiert. Bitte versuchen Sie es in Kürze erneut.",
+      "concurrencyBusy": "Andere Vorgänge laufen noch. Bitte versuchen Sie es in Kürze erneut.",
+      "contact": "Kontaktieren Sie uns",
+      "notEnabled": "Diese Aktion ist für Ihre Organisation nicht aktiviert.",
+      "periodExhausted": "Diese Aktion ist für Ihre Organisation pausiert."
+    },
     "actionFailed": "Aktion fehlgeschlagen",
     "api": {
       "badRequest": "Die Anfrage konnte nicht abgeschlossen werden.",
@@ -2167,6 +2222,7 @@
       "forbidden": "Sie haben keine Berechtigung für diese Aktion.",
       "notFound": "Das Angeforderte konnte nicht gefunden werden.",
       "payloadTooLarge": "Die Anfrage ist zu groß.",
+      "publicCountryUnavailable": "Rechtsvorschriften und Rechtsprechung für dieses Land sind nicht verfügbar. Wählen Sie ein anderes Land.",
       "rateLimited": "Zu viele Anfragen. Bitte versuchen Sie es später erneut.",
       "server": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "serviceUnavailable": "Der Dienst ist vorübergehend nicht verfügbar. Bitte versuchen Sie es erneut.",
@@ -3267,7 +3323,6 @@
       "editSkill": "Skill bearbeiten",
       "enableSkill": "Skill aktivieren",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
-      "filesHeading": "Dateien",
       "howItRuns": "Ausführung",
       "importFailureFetch": "Die Skill-Quelle konnte nicht geladen werden.",
       "importFailureIntegrity": "Die Skill-Quelle hat sich nach der Erkennung geändert. Prüfen Sie sie erneut.",
@@ -5992,7 +6047,8 @@
         "openReport": "Bericht öffnen",
         "submit": "Bericht exportieren",
         "templateLabel": "Berichtsvorlage",
-        "title": "Bericht exportieren"
+        "title": "Bericht exportieren",
+        "withoutAiSummaries": "Ohne KI-Zusammenfassungen exportieren"
       },
       "saveAsTemplate": "Als Voreinstellung speichern…",
       "selectProperty": "Eigenschaft auswählen",

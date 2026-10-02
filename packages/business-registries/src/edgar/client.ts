@@ -1,12 +1,17 @@
-import { isRecord } from "../shared/guards.js";
-import { registryFetch } from "../shared/http.js";
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
+import { isOptionalRecord, isRecord } from "../shared/guards.js";
+import { type RegistryClientOptions, registryFetch } from "../shared/http.js";
 import {
   EdgarAPIError,
   EdgarRequestError,
   EdgarValidationError,
 } from "./errors.js";
 import { parseSubmission } from "./parse.js";
-import type { EdgarCompany, EdgarRawSubmission } from "./types.js";
+import type {
+  EdgarCompany,
+  EdgarRawRecentFilings,
+  EdgarRawSubmission,
+} from "./types.js";
 import { padCik, validateCik } from "./validation.js";
 
 const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
@@ -20,7 +25,7 @@ const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
 // blocked from EDGAR entirely.
 //
 // See: https://www.sec.gov/os/accessing-edgar-data
-export type EdgarClientConfig = {
+export type EdgarClientConfig = RegistryClientOptions & {
   /**
    * Identifying string sent in the `User-Agent` header on every
    * EDGAR request. The SEC asks for "<App name> <contact@email>";
@@ -42,8 +47,29 @@ const isOptionalStringArray = (value: unknown): boolean =>
   value === undefined ||
   (Array.isArray(value) && value.every((item) => typeof item === "string"));
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
+const RECENT_FILING_COLUMNS = {
+  accessionNumber: isOptionalStringArray,
+  filingDate: isOptionalStringArray,
+  reportDate: isOptionalStringArray,
+  acceptanceDateTime: isOptionalStringArray,
+  form: isOptionalStringArray,
+  primaryDocument: isOptionalStringArray,
+  primaryDocDescription: isOptionalStringArray,
+} as const satisfies Record<
+  keyof EdgarRawRecentFilings,
+  typeof isOptionalStringArray
+>;
+
+const isEdgarRecentFilings = (value: unknown): boolean =>
+  isRecord(value) &&
+  Object.entries(RECENT_FILING_COLUMNS).every(([key, guard]) =>
+    guard(value[key]),
+  );
+
+const isEdgarFilings = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    (value["recent"] === undefined || isEdgarRecentFilings(value["recent"])));
 
 const isEdgarFormerName = (value: unknown): boolean =>
   isRecord(value) && typeof value["name"] === "string";
@@ -58,17 +84,19 @@ const isEdgarRawSubmission = (value: unknown): value is EdgarRawSubmission =>
   (value["formerNames"] === undefined ||
     (Array.isArray(value["formerNames"]) &&
       value["formerNames"].every(isEdgarFormerName))) &&
-  isOptionalRecord(value["filings"]);
+  isEdgarFilings(value["filings"]);
 
 const edgarGet = async (
   url: string,
-  userAgent: string,
+  config: EdgarClientConfig,
 ): Promise<EdgarRawSubmission | null> =>
   await registryFetch({
     url,
+    observer: config.observer,
+    signal: config.signal,
     init: {
       headers: {
-        "User-Agent": userAgent,
+        "User-Agent": config.userAgent,
         Accept: "application/json",
         // The SEC docs recommend `Accept-Encoding: gzip, deflate` to
         // reduce bandwidth; Bun's fetch already negotiates this.
@@ -146,8 +174,8 @@ export const lookupByCik = async (
   }
 
   const padded = padCik(cik);
-  const url = `${SUBMISSIONS_BASE}/CIK${padded}.json`;
-  const raw = await edgarGet(url, config.userAgent);
+  const url = `${SUBMISSIONS_BASE}/CIK${encodeRegistryComponent(padded)}.json`;
+  const raw = await edgarGet(url, config);
   if (!raw) {
     return null;
   }

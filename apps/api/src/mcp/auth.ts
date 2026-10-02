@@ -5,7 +5,10 @@ import * as v from "valibot";
 
 import type { PermissionInput } from "@stll/permissions";
 
-import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import {
+  getAuthEndpointUrl,
+  getAuthIssuerUrl,
+} from "@/api/lib/auth/auth-paths";
 import {
   isMachineApiKeyCredential,
   machineApiKeyPermissionsSchema,
@@ -286,27 +289,29 @@ export const authenticateMcpRequest = async (
   {
     mode = "default",
     resolveApiKeySession = defaultResolveMachineApiKeySession,
+    verifyToken,
   }: {
     mode?: McpMode | undefined;
     resolveApiKeySession?:
       | typeof defaultResolveMachineApiKeySession
       | undefined;
+    verifyToken?: ReturnType<typeof getVerifyBearerToken>;
   } = {},
 ): Promise<Result<McpSession, McpAuthenticationFailure>> => {
-  if (isMachineApiKeyCredential(bearerToken)) {
-    return await Result.tryPromise({
-      try: async () => await resolveApiKeySession(bearerToken, { mode }),
-      catch: classifyMcpTokenVerificationError,
-    });
-  }
-
-  const payload = await Result.tryPromise({
-    try: async () =>
-      await getVerifyBearerToken()(
-        bearerToken,
-        getMcpAccessTokenVerificationOptions(mode),
-      ),
-    catch: classifyMcpTokenVerificationError,
-  });
-  return payload.andThen(extractMcpSession);
+  const authenticated = isMachineApiKeyCredential(bearerToken)
+    ? await Result.tryPromise({
+        try: async () => await resolveApiKeySession(bearerToken, { mode }),
+        catch: classifyMcpTokenVerificationError,
+      })
+    : (
+        await Result.tryPromise({
+          try: async () =>
+            await (verifyToken ?? getVerifyBearerToken())(
+              bearerToken,
+              getMcpAccessTokenVerificationOptions(mode),
+            ),
+          catch: classifyMcpTokenVerificationError,
+        })
+      ).andThen(extractMcpSession);
+  return authenticated;
 };
