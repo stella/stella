@@ -298,20 +298,21 @@ const chooseSource = async (
               .limit(1)
           ).length > 0,
       );
-      const probe = pending
-        ? true
-        : // db-await-in-loop: Only probe lag after this source has no pending receipt, before advancing to the next source in round-robin order.
-          await withReplayTransaction(
-            db,
-            async (tx) =>
-              (
-                await buildBackgroundReplayProbe(tx, {
-                  sourceId: candidate.id,
-                  currentParserVersion: candidate.currentParserVersion,
-                  mode: candidate.mode,
-                })
-              ).length > 0,
-          );
+      let probe = pending;
+      if (!pending) {
+        // db-await-in-loop: Only probe lag after this source has no pending receipt, before advancing to the next source in round-robin order.
+        probe = await withReplayTransaction(
+          db,
+          async (tx) =>
+            (
+              await buildBackgroundReplayProbe(tx, {
+                sourceId: candidate.id,
+                currentParserVersion: candidate.currentParserVersion,
+                mode: candidate.mode,
+              })
+            ).length > 0,
+        );
+      }
       if (!probe) {
         return null;
       }
