@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { InfoSoudClient } from "@stll/infosoud";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -90,7 +91,7 @@ type InfosoudCourtsContext = Parameters<typeof infosoudCourts.handler>[0];
 
 const createContext = (): InfosoudCourtsContext =>
   asTestRaw<InfosoudCourtsContext>({
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     query: {},
     request: new Request("https://example.test/infosoud-courts"),
     route: "/infosoud-courts",

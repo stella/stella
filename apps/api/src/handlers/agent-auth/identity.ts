@@ -157,6 +157,10 @@ const mapIdJagOutcome = (
     );
   }
 
+  if (HandlerError.is(outcome.error)) {
+    return Result.err(outcome.error);
+  }
+
   return Result.err(
     new HandlerError({
       status: ID_JAG_REJECTION_STATUS[outcome.error.code],
@@ -189,6 +193,9 @@ const agentIdentityHandler = createSafePublicHandler(
     if (body.type === "anonymous") {
       const result = await startAnonymousRegistration();
       if (Result.isError(result)) {
+        if (HandlerError.is(result.error)) {
+          return Result.err(result.error);
+        }
         return Result.err(
           new HandlerError({
             status: 502,
@@ -213,7 +220,9 @@ const agentIdentityHandler = createSafePublicHandler(
       });
     }
 
-    const ceremony = await startServiceAuthRegistration(body.login_hint.trim());
+    const ceremony = yield* await startServiceAuthRegistration(
+      body.login_hint.trim(),
+    );
 
     const verificationUri = getClaimVerificationUri();
     const verificationUriComplete = `${verificationUri}?user_code=${encodeURIComponent(ceremony.userCode)}`;
