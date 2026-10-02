@@ -230,7 +230,7 @@ test.each([
   "BM25 ranking rejects invalid engine scores $scores",
   async ({ scores, message }) => {
     stubRankingScores(scores);
-    const result = await Result.tryPromise(() =>
+    const result = await Result.tryPromise(async () =>
       readCorpusIndexSearchPage({
         ...rankingTestOptions,
         rankingMode: "bm25-ratio",
@@ -373,7 +373,7 @@ test("BM25 ranking refuses a transport without scores or a date order", async ()
       order: { type: "newest", timestampField: "decision_date_ts" } as const,
     },
   ]) {
-    const result = await Result.tryPromise(() =>
+    const result = await Result.tryPromise(async () =>
       readCorpusIndexSearchPage({ ...options, rankingMode: "bm25-ratio" }),
     );
     expect(result.isErr()).toBe(true);
@@ -391,7 +391,7 @@ test("client BM25 cursors require server eligibility and window zero", async () 
       if (rankingMode === "bm25-ratio" && windowStart === 0) {
         continue;
       }
-      const result = await Result.tryPromise(() =>
+      const result = await Result.tryPromise(async () =>
         readCorpusIndexSearchPage({
           ...rankingTestOptions,
           rankingMode,
@@ -440,7 +440,7 @@ test("with ranking OFF no client cursor can enter the BM25 path", async () => {
           },
           { preconnect: originalFetch.preconnect },
         );
-        const result = await Result.tryPromise(() =>
+        const result = await Result.tryPromise(async () =>
           readCorpusIndexSearchPage({
             ...rankingTestOptions,
             rankingMode: "off",
