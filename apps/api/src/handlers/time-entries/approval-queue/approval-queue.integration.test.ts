@@ -11,6 +11,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { pgTable, text, integer, boolean } from "drizzle-orm/pg-core";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
+import type { PermissionInput } from "@stll/permissions";
 import { Temporal } from "@stll/time";
 
 import type { SafeDb } from "@/api/db/safe-db";
@@ -27,6 +28,7 @@ import { DEFAULT_TIME_POLICY } from "@/api/lib/billing-time";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { withTenantActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -640,5 +642,72 @@ describe("internal work approvals", () => {
       results: [{ id, status: "refused", reason: "time_period_locked" }],
     });
     expect((await stored(id))?.status).toBe("draft");
+  });
+});
+
+describe("approval with a credential narrowed below its owner's role", () => {
+  const key = (
+    role: "member" | "owner",
+    permissions: PermissionInput,
+  ): AuthorizedMemberRole => ({
+    role,
+    credential: { type: "attenuated", permissions },
+  });
+  const approveWith = async (
+    selected: SafeId<"timeEntry">[],
+    actor: SafeId<"user">,
+    memberRole: AuthorizedMemberRole,
+  ) =>
+    await approve.handler(
+      asTestRaw<ApproveCtx>({
+        ...context(actor, memberRole.role === "owner" ? "owner" : "member"),
+        memberRole,
+        body: { ids: selected },
+      }),
+    );
+
+  test("an owner's read-only key approves nobody else's entry; the approve grant does", async () => {
+    const unassigned = await seedEntry({ approverUserId: null });
+
+    expect(
+      await approveWith(
+        [unassigned],
+        ids.userAdmin,
+        key("owner", { timeEntry: ["read"] }),
+      ),
+    ).toMatchObject({ results: [{ id: unassigned, status: "refused" }] });
+    expect(await stored(unassigned)).toMatchObject({
+      status: "draft",
+      approvedByUserId: null,
+    });
+
+    expect(
+      await approveWith(
+        [unassigned],
+        ids.userAdmin,
+        key("owner", { timeEntry: ["read", "approve"] }),
+      ),
+    ).toEqual({ results: [{ id: unassigned, status: "approved" }] });
+  });
+
+  test("the assigned approver's key needs update to approve its own queue", async () => {
+    const assigned = await seedEntry();
+
+    expect(
+      await approveWith(
+        [assigned],
+        ids.userA2,
+        key("member", { timeEntry: ["read"] }),
+      ),
+    ).toMatchObject({ results: [{ id: assigned, status: "refused" }] });
+    expect((await stored(assigned))?.status).toBe("draft");
+
+    expect(
+      await approveWith(
+        [assigned],
+        ids.userA2,
+        key("member", { timeEntry: ["read", "update"] }),
+      ),
+    ).toEqual({ results: [{ id: assigned, status: "approved" }] });
   });
 });

@@ -1,6 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { desc, eq } from "drizzle-orm";
 
+import type { PermissionInput } from "@stll/permissions";
+
 import type { SafeDb } from "@/api/db/safe-db";
 import {
   agentSkillComments,
@@ -12,6 +14,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -22,6 +25,7 @@ import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 import createSkillComment from "../comments/create";
+import deleteSkillComment from "../comments/delete";
 import createSkillProposal from "./create";
 import deleteSkillProposal from "./delete";
 import updateSkillProposal from "./update";
@@ -252,4 +256,105 @@ describe("an owner saving a team skill a member anchored to", () => {
       { revisionNumber: 3, body: "Owner edit after the proposal" },
     ]);
   });
+});
+
+describe("an owner's credential managing another author's proposal or comment", () => {
+  const ownerSafeDb = (): SafeDb =>
+    asTestRaw<SafeDb>(
+      createSafeDb(testDb, [ids.wsA1], ids.orgA, ids.userAdmin),
+    );
+  const ownerKey = (permissions: PermissionInput): AuthorizedMemberRole => ({
+    role: "owner",
+    credential: { type: "attenuated", permissions },
+  });
+  const asOwner = (memberRole: AuthorizedMemberRole) => ({
+    memberRole,
+    session: { activeOrganizationId: ids.orgA },
+    user: { id: ids.userAdmin },
+    safeDb: ownerSafeDb(),
+  });
+
+  test.each([
+    ["propose only", { agentSkill: ["propose"] }, false],
+    ["propose and update", { agentSkill: ["propose", "update"] }, true],
+  ] as const)(
+    "edits and withdraws a peer proposal only with update (%s)",
+    async (_name, permissions, allowed) => {
+      const edited = await insertTeamSkillWithProposal();
+      await updateSkillProposal.handler(
+        createTestHandlerContext<
+          Parameters<typeof updateSkillProposal.handler>[0]
+        >({
+          ...asOwner(ownerKey(permissions)),
+          params: { skillId: edited.skillId, proposalId: edited.proposalId },
+          body: { body: "Replacement proposal", status: "proposed" },
+        }),
+      );
+      expect(await proposalRow(edited.proposalId)).toEqual([
+        allowed
+          ? { body: "Replacement proposal", status: "proposed" }
+          : { body: "Proposed body", status: "draft" },
+      ]);
+
+      const withdrawn = await insertTeamSkillWithProposal();
+      await deleteSkillProposal.handler(
+        createTestHandlerContext<
+          Parameters<typeof deleteSkillProposal.handler>[0]
+        >({
+          ...asOwner(ownerKey(permissions)),
+          params: {
+            skillId: withdrawn.skillId,
+            proposalId: withdrawn.proposalId,
+          },
+        }),
+      );
+      expect(await proposalRow(withdrawn.proposalId)).toHaveLength(
+        allowed ? 0 : 1,
+      );
+    },
+  );
+
+  test.each([
+    ["comment only", { agentSkill: ["comment"] }, false],
+    ["comment and update", { agentSkill: ["comment", "update"] }, true],
+  ] as const)(
+    "removes a peer comment only with update (%s)",
+    async (_name, permissions, allowed) => {
+      const { skillId, revisionId } = await insertTeamSkillWithProposal();
+      await createSkillComment.handler(
+        createTestHandlerContext<
+          Parameters<typeof createSkillComment.handler>[0]
+        >({
+          memberRole: sessionMemberRole("member"),
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          safeDb: memberSafeDb(),
+          params: { skillId },
+          body: { revisionId, rangeStart: 0, rangeEnd: 4, body: "Peer note" },
+        }),
+      );
+      const [comment] = await testDb
+        .select({ id: agentSkillComments.id })
+        .from(agentSkillComments)
+        .where(eq(agentSkillComments.revisionId, revisionId));
+      if (!comment) {
+        throw new TypeError("expected the member's comment");
+      }
+
+      await deleteSkillComment.handler(
+        createTestHandlerContext<
+          Parameters<typeof deleteSkillComment.handler>[0]
+        >({
+          ...asOwner(ownerKey(permissions)),
+          params: { skillId, commentId: comment.id },
+        }),
+      );
+
+      const remaining = await testDb
+        .select({ id: agentSkillComments.id })
+        .from(agentSkillComments)
+        .where(eq(agentSkillComments.id, comment.id));
+      expect(remaining).toHaveLength(allowed ? 0 : 1);
+    },
+  );
 });
