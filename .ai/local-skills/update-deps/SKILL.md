@@ -68,6 +68,7 @@ included, follows these rules:
 
    and, from `packages/anonymize-chat`, `bun run test:property`. Report the
    per-class corpus tallies of the old and the new version in the pull request.
+
 3. **Bounds only tighten.** Never lower a recall floor or raise a
    false-positive ceiling in `name-matching-corpus.test.ts` (or relax a property
    test) to make the update pass, unless the pull request states the reason,
