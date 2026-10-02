@@ -182,9 +182,12 @@ export const serviceSuiteDependencies = (root = repositoryRoot) => {
     }
   }
   const packageError = expandWorkspaceScopes(packageScopes, root);
-  if (packageError !== undefined)
-    {return { status: "unresolved" as const, message: packageError };}
-  for (const scope of packageScopes) {dependencies.add(`${scope}package.json`);}
+  if (packageError !== undefined) {
+    return { status: "unresolved" as const, message: packageError };
+  }
+  for (const scope of packageScopes) {
+    dependencies.add(`${scope}package.json`);
+  }
   // Configuration and runner harnesses can change execution without an import.
   for (const app of ["api", "collab"]) {
     for (const file of new Bun.Glob(
