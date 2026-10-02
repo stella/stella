@@ -589,7 +589,7 @@ describe("stalled-source causes", () => {
         health?.adapterStuckCount,
         health?.deadlineCount,
         health?.internalErrorCount,
-      ]).toEqual(expectedCounts[stopKind]);
+      ]).toEqual([...expectedCounts[stopKind]]);
     }
   });
 
