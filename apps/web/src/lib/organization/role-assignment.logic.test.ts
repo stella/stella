@@ -5,6 +5,7 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { assignableRoles } from "@stll/permissions";
 
 import {
+  hasOrganizationManagementAccess,
   inviteMemberSchema,
   roleAssignmentOptions,
 } from "./role-assignment.logic";
@@ -13,6 +14,9 @@ describe("membership role control policy", () => {
   for (const actorRole of ORGANIZATION_ROLE_NAMES) {
     test(`${actorRole} sees and submits exactly the shared assignable roles`, () => {
       const expected = [...assignableRoles(actorRole)];
+      expect(hasOrganizationManagementAccess(actorRole)).toBe(
+        expected.length > 0,
+      );
       const options = roleAssignmentOptions(actorRole);
       expect(options.map(({ value }) => value)).toEqual(expected);
       expect(new Set(options.map(({ value }) => value)).size).toBe(
@@ -45,6 +49,8 @@ describe("membership role control policy", () => {
   }
 
   test("an unresolved actor cannot offer or submit a role", () => {
+    expect(hasOrganizationManagementAccess(undefined)).toBe(false);
+    expect(hasOrganizationManagementAccess("unknown")).toBe(false);
     expect(roleAssignmentOptions(undefined)).toEqual([]);
     for (const role of ORGANIZATION_ROLE_NAMES) {
       expect(

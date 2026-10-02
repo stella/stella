@@ -1,6 +1,5 @@
 import { createFileRoute } from "@tanstack/react-router";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
 import { Skeleton } from "@stll/ui/skeleton";
 
 import { chatThreadOptions } from "@/features/chat/queries";
@@ -9,6 +8,7 @@ import { roleOptions } from "@/lib/auth-queries";
 import { toChatThreadId } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
 import { mcpConnectorsOptions, skillsOptions } from "@/lib/knowledge/queries";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 import {
   ensureRouteQueryData,
   prefetchNonCriticalInfiniteQuery,
@@ -35,7 +35,7 @@ export const Route = createFileRoute("/_protected/chat/$threadId")({
       // before warming this manager-only endpoint.
       await prefetchRouteQuery(queryClient, roleOptions, onPrefetchError);
       const role = queryClient.getQueryData(roleOptions.queryKey);
-      if (role === undefined || !isOrganizationManagementRole(role)) {
+      if (!hasOrganizationManagementAccess(role)) {
         return;
       }
       await prefetchRouteQuery(

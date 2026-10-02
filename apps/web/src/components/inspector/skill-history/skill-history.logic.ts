@@ -1,7 +1,5 @@
 import { panic } from "better-result";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
-
 import type { SkillResourceOrigin } from "@/components/inspector/inspector-store-types";
 import type { TranslationKey } from "@/i18n/types";
 import type {
@@ -9,6 +7,7 @@ import type {
   skillProposalsOptions,
   skillRevisionsOptions,
 } from "@/lib/knowledge/queries";
+import { hasOrganizationManagementAccess } from "@/lib/organization/role-assignment.logic";
 
 // Row shapes are derived from the query factories rather than restated, so a
 // server-side field rename fails to compile here instead of drifting.
@@ -88,9 +87,7 @@ export const canManageSkill = ({
 }: CanManageSkillOptions): boolean => {
   switch (scope) {
     case "team":
-      return (
-        memberRole !== undefined && isOrganizationManagementRole(memberRole)
-      );
+      return hasOrganizationManagementAccess(memberRole);
     case "private":
       return ownerUserId === userId;
     default: {
