@@ -18,6 +18,10 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads, chatTurns } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import {
+  getAwaitingUserInteractions,
+  toPersistableChatMessage,
+} from "@/api/handlers/chat/chat-message-parts";
+import {
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   insertChatTurnAcceptanceOnTx,
@@ -28,13 +32,17 @@ import { ChatSendLifecycle } from "@/api/handlers/chat/send-message";
 import { createLazyExternalMcpToolsLoader } from "@/api/handlers/chat/tools/external-mcp-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import {
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
+import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   createApprovalHarness,
+  APPROVAL_TOOL_NAME,
+  approvalToolArguments,
   HARNESS_CHAT_MODEL_ID,
 } from "@/api/tests/helpers/chat-approval-harness";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -295,6 +303,158 @@ describe("chat turn outcome metrics", () => {
 });
 
 describe("a turn's settlement count", () => {
+  test("admission loss during a failed settlement write preserves the pending approval checkpoint", async () => {
+    const harness = createApprovalHarness({ ids, safeDb, scopedDb, testDb });
+    const threadId = toSafeId<"chatThread">(Bun.randomUUIDv7());
+    seededThreadIds.push(threadId);
+    const client = await harness.openWebClient(threadId);
+    const firstWriteStarted = Promise.withResolvers<undefined>();
+    const firstWriteMayFail = Promise.withResolvers<undefined>();
+    let lifecycle: ChatSendLifecycle | undefined;
+    try {
+      harness.script(threadId, [
+        {
+          type: "tool-call",
+          toolName: APPROVAL_TOOL_NAME,
+          toolCallId: "approval-race",
+          arguments: approvalToolArguments("test document"),
+        },
+      ]);
+      await client.sendUserMessage(
+        Bun.randomUUIDv7(),
+        "Delete the test document",
+        {
+          sendMode: CHAT_SEND_MODE.rawOverride,
+        },
+      );
+      await client.settle();
+      const checkpoint = toPersistableChatMessage(
+        await harness.lastAssistant(threadId),
+      );
+      const interaction = {
+        type: "approval",
+        toolCallId: "approval-race",
+      } as const;
+      expect(getAwaitingUserInteractions(checkpoint)).toEqual([interaction]);
+      expect(await turnStatusesOf(threadId)).toEqual([
+        { failureCode: null, status: "awaiting-user" },
+      ]);
+      const original =
+        (await testDb.query.chatMessages.findFirst({
+          where: { id: { eq: checkpoint.id } },
+          columns: { content: true },
+        })) ?? panic("Expected the approval message");
+      const execution =
+        unwrap(
+          await claimChatTurnForExecution({
+            acceptedTurnId: null,
+            continuationInteraction: interaction,
+            incomingMessageId: checkpoint.id,
+            incomingMessageRole: "assistant",
+            organizationId: ids.orgA,
+            safeDb,
+            threadId,
+            userId: ids.userA1,
+            workspaceId: null,
+          }),
+        ) ?? panic("Expected the continuation to claim the awaiting turn");
+      const admission = new AbortController();
+      let persistenceCalls = 0;
+      const flakyDb: SafeDb = async (work, retry) => {
+        persistenceCalls += 1;
+        if (persistenceCalls === 1) {
+          firstWriteStarted.resolve(undefined);
+          await firstWriteMayFail.promise;
+          return Result.err(
+            new DatabaseError({ message: "Transient settlement failure" }),
+          );
+        }
+        return await safeDb(work, retry);
+      };
+      lifecycle = new ChatSendLifecycle({
+        startAdmission: async () =>
+          Result.ok({
+            signal: admission.signal,
+            release: async () => undefined,
+          }),
+        externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () =>
+          { throw new DatabaseError({ message: "No connectors expected" }); },
+        ),
+        indexThread: async () => undefined,
+        mode: "raw",
+        recordAuditEvent: async () => undefined,
+        rollbackSideEffects: async () => Result.ok(undefined),
+        safeDb: flakyDb,
+        threadId,
+        userId: ids.userA1,
+        workspaceId: null,
+      });
+      lifecycle.claimTurn(execution, checkpoint);
+      unwrap(
+        await lifecycle.admitExecution({
+          organizationId: ids.orgA,
+          checkpoint,
+        }),
+      );
+      const lines = collectMetricLines();
+      const failing = lifecycle.failCurrentTurn("connector-discovery", true);
+      await firstWriteStarted.promise;
+      expect(admission.signal.aborted).toBe(false);
+      admission.abort(
+        new ActionAdmissionError({
+          message: "Admission lease lost",
+          reason: "unavailable",
+        }),
+      );
+      firstWriteMayFail.resolve(undefined);
+      await failing;
+      expect(persistenceCalls).toBe(1);
+      expect(await turnStatusesOf(threadId)).toEqual([
+        { failureCode: null, status: "running" },
+      ]);
+      expect(settlementsOf(lines)).toEqual([]);
+
+      await lifecycle.cleanup();
+
+      expect(persistenceCalls).toBe(2);
+      expect(await turnStatusesOf(threadId)).toEqual([
+        { failureCode: null, status: "awaiting-user" },
+      ]);
+      const restored =
+        (await testDb.query.chatMessages.findFirst({
+          where: { id: { eq: checkpoint.id } },
+          columns: { content: true },
+        })) ?? panic("Expected the restored approval message");
+      expect(restored.content).toEqual(original.content);
+      expect(
+        await testDb.query.chatTurns.findFirst({
+          where: { id: { eq: execution.id } },
+          columns: {
+            assistantMessageId: true,
+            failureRetryable: true,
+            interactionType: true,
+            interactionToolCallId: true,
+          },
+        }),
+      ).toEqual({
+        assistantMessageId: checkpoint.id,
+        failureRetryable: null,
+        interactionType: interaction.type,
+        interactionToolCallId: interaction.toolCallId,
+      });
+      expect(
+        getAwaitingUserInteractions(await harness.lastAssistant(threadId)),
+      ).toEqual([interaction]);
+      expect(harness.executions).toEqual([]);
+      expect(settlementsOf(lines)).toEqual([]);
+    } finally {
+      firstWriteMayFail.resolve(undefined);
+      await lifecycle?.cleanup();
+      client.dispose();
+      await harness.close();
+    }
+  });
+
   test("counts the stop that won the race, not the outcome the run proposed", async () => {
     const proposed: string[] = [];
     const harness = createApprovalHarness({

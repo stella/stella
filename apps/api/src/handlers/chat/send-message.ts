@@ -677,7 +677,8 @@ export class ChatSendLifecycle {
 
   private async restorePreExecutionCheckpoint(): Promise<boolean> {
     if (
-      this.claimedTurn.status !== "preflight" ||
+      (this.claimedTurn.status !== "preflight" &&
+        this.claimedTurn.status !== "failure-pending") ||
       !this.admission?.signal.aborted ||
       this.checkpoint === undefined
     ) {
@@ -836,13 +837,15 @@ export class ChatSendLifecycle {
   async cleanup(): Promise<void> {
     try {
       const failureToPersist = await (async () => {
+        // Admission can be lost while a failed settlement write is in flight.
+        // Its original pending interaction still owns the turn in that case.
+        if (await this.restorePreExecutionCheckpoint()) {
+          return undefined;
+        }
         switch (this.claimedTurn.status) {
           case "failure-pending":
             return this.claimedTurn;
           case "preflight":
-            if (await this.restorePreExecutionCheckpoint()) {
-              return undefined;
-            }
             return {
               status: "failure-pending" as const,
               execution: this.claimedTurn.execution,
