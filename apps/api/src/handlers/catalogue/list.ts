@@ -9,7 +9,6 @@ import {
   type CatalogueSetup,
   type LoadedCatalogueEntry,
 } from "@stll/catalogue";
-import { isOrganizationManagementRole } from "@stll/permissions";
 
 import {
   agentSkills,
@@ -30,6 +29,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { isBusinessRegistryNativeToolDeployAvailable } from "@/api/lib/business-registries/dispatch";
 import { LIMITS } from "@/api/lib/limits";
 import { NATIVE_TOOL_SLUGS } from "@/api/lib/mcp-connectors/catalog-metadata";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { resolveWebSearchProvidersFromOrgSettingsRow } from "@/api/lib/web-search/load-org-keys";
 
 import { resolveCatalogueSkillHandleMaps } from "./skill-handles";
@@ -325,7 +325,9 @@ const listCatalogue = createSafeRootHandler(
     // - MCP connectors: `DELETE /mcp/connectors/:slug` only deletes
     //   org-owned rows, so globally-curated connectors (organizationId
     //   = null) never produce a usable slug.
-    const canDeleteTeamSkills = isOrganizationManagementRole(memberRole.role);
+    const canDeleteTeamSkills = hasManagementPermission(memberRole, {
+      agentSkill: ["delete"],
+    });
     const skillHandles = resolveCatalogueSkillHandleMaps({
       canManageTeamSkills: canDeleteTeamSkills,
       rows: visibleSkillRows,

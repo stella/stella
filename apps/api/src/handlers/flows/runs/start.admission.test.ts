@@ -10,6 +10,7 @@ import startFlowRunHandler from "@/api/handlers/flows/runs/start";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -71,7 +72,7 @@ describe("manual flow start admission response", () => {
           workspaceId,
           user: { id: userId },
           session: { activeOrganizationId: organizationId },
-          memberRole: { role: "owner" },
+          memberRole: sessionMemberRole("owner"),
           safeDb,
           body: { definitionId, inputEntityIds: [] },
           orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,

@@ -180,6 +180,8 @@ export const envApiServerSchema = {
    * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
+  SESSION_TOKEN_ROTATION_ENABLED: featureFlagSchema,
+  SESSION_LIFETIME_CAP_ENABLED: featureFlagSchema,
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
