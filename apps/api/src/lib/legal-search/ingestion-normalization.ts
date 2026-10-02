@@ -1,3 +1,4 @@
+// parser-output-unchanged: threads an optional static metadata URL schema; ordinary text normalization is unchanged
 import { panic } from "better-result";
 
 import { storedDecisionDocketOf } from "@stll/api-contract/decision-docket-grammar";

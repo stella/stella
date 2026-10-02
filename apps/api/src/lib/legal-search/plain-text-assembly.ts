@@ -1,3 +1,4 @@
+// parser-output-unchanged: threads an optional static metadata URL schema; ordinary source assembly is unchanged
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
 
 import {

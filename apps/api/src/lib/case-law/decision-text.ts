@@ -1,4 +1,4 @@
-// parser-output-unchanged: Reader tolerance changes no writer or canonical replay payload.
+// parser-output-unchanged: adds explicit URL projection modes and reserves internal diagnostics; existing publisher metadata and public text fields are unchanged
 import { panic } from "better-result";
 
 import {
