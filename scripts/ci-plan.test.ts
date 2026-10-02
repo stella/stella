@@ -2298,7 +2298,7 @@ test("property-testing guards run only when dependencies are installed", () => {
     }
     for (const guard of guards) {
       expect(guard.if, `${job}: ${String(guard.name)}`).toBe(
-        `\${{ !cancelled() && steps.install.outcome != 'failure' && (${installCondition}) }}`,
+        `\${{ !cancelled() && steps.install.outcome == 'success' && (${installCondition}) }}`,
       );
     }
   }

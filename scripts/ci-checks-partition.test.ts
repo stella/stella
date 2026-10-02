@@ -90,7 +90,9 @@ const withoutActionRef = (step: Step): Step => {
 };
 const CONTINUATION_PREFIXES = {
   checkout: "${{ !cancelled() && steps.checkout.outcome == 'success'",
-  install: "${{ !cancelled() && steps.install.outcome != 'failure'",
+  install:
+    "${{ !cancelled() && steps.install.outcome != 'failure' && steps.standalone_lockfiles.outcome != 'failure' && steps.lockfile_ages.outcome != 'failure'",
+  installPackages: "${{ !cancelled() && steps.install.outcome == 'success'",
 } as const;
 const outcomeDependencies: Record<string, string> = {
   Format: "affected",
@@ -450,10 +452,18 @@ const expectContinuation = (steps: readonly Step[], leg: string) => {
       }),
       step,
     );
-    const prefix =
-      index <= installIndex
-        ? CONTINUATION_PREFIXES.checkout
+    const original = withoutContinuation(step);
+    const packageDependent =
+      typeof original["if"] === "string" &&
+      original["if"].includes(
+        "needs.ci-plan.outputs.package_checks_required == 'true'",
+      );
+    let prefix: string = CONTINUATION_PREFIXES.checkout;
+    if (index > installIndex) {
+      prefix = packageDependent
+        ? CONTINUATION_PREFIXES.installPackages
         : CONTINUATION_PREFIXES.install;
+    }
     expect(condition.startsWith(prefix), step.name).toBe(true);
     expect(withoutContinuation(step), step.name).not.toEqual(step);
     if (step.name === "Install dependencies") {
@@ -498,7 +508,7 @@ test("CI coverage strips only canonical continuation wrappers and preserves cond
         {
           ...wrapped,
           if: condition.replace(
-            /steps\.(?:checkout\.outcome == 'success'|install\.outcome != 'failure')/u,
+            /steps\.(?:checkout\.outcome == 'success'|install\.outcome (?:!= 'failure'|== 'success'))/u,
             "true",
           ),
         },
@@ -587,7 +597,7 @@ const conditionEvaluator = ({
     needs: { "ci-plan": { outputs: scopes } },
   });
   return (condition: string) => {
-    const expression = condition.startsWith('${{')
+    const expression = condition.startsWith("${{")
       ? condition.slice(4, -3)
       : condition;
     return v.parse(
@@ -668,7 +678,7 @@ test("an unrelated pre-install failure still runs planned safety, installation a
   }
 });
 
-test("a failed planned safety guard prevents installation", () => {
+test("a failed planned safety guard prevents installation and every post-install guard", () => {
   for (const guard of preInstallGuards.keys()) {
     const results = simulateRestLeg({
       failures: [guard],
@@ -676,6 +686,13 @@ test("a failed planned safety guard prevents installation", () => {
     });
     expect(results[guard]).toBe("failure");
     expect(results["Install dependencies"]).toBe("skipped");
+    const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+    const installIndex = steps.findIndex(
+      ({ name }) => name === "Install dependencies",
+    );
+    for (const step of steps.slice(installIndex + 1)) {
+      expect(results[step.name], step.name).toBe("skipped");
+    }
   }
 });
 
@@ -776,6 +793,28 @@ test("continued guard conditions preserve every previously runnable plan outcome
               step,
             ).if;
             expect(evaluate(condition), `${id}: ${step.name}`).toBe(true);
+          }
+          if (id !== "ci-checks-rest") {
+            continue;
+          }
+          const installIndex = steps.findIndex(
+            ({ name }) => name === "Install dependencies",
+          );
+          outcomes["install"] = { outcome: "skipped" };
+          for (const guard of preInstallGuards.keys()) {
+            const guardId = stepIds[guard];
+            if (guardId === undefined) {
+              panic("Safety guard has no outcome identifier");
+            }
+            outcomes[guardId] = { outcome: "failure" };
+            for (const step of steps.slice(installIndex + 1)) {
+              const condition = v.parse(
+                v.looseObject({ if: v.string() }),
+                step,
+              ).if;
+              expect(evaluate(condition), `${guard}: ${step.name}`).toBe(false);
+            }
+            outcomes[guardId] = { outcome: "success" };
           }
         }
       },
