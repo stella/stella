@@ -9,6 +9,7 @@ import { createStreamMessageCapture } from "@/api/lib/chat/stream-message-captur
 import { HandlerError, TimeoutError } from "@/api/lib/errors/tagged-errors";
 import {
   ActionAdmissionError,
+  actionAdmissionRefusal,
   withActionAdmission,
 } from "@/api/lib/rate-limit/action-admission";
 import type { withTimeout } from "@/api/lib/with-timeout";
@@ -109,6 +110,12 @@ describe("chat run admission follows owned settlement", () => {
           expect(outcome).toEqual({
             type: "failed",
             error: "provider_unavailable",
+            refusal: actionAdmissionRefusal(
+              new ActionAdmissionError({
+                reason: "unavailable",
+                message: "Admission lease lost",
+              }),
+            ),
           });
           expect(responseMessage.parts).toContainEqual({
             type: "text",

@@ -284,6 +284,9 @@ export const ROLE_GRANT_STATEMENTS = [
       ON ALL TABLES IN SCHEMA public TO stella
   `,
   `
+    REVOKE DELETE ON TABLE "time_daily_targets" FROM stella
+  `,
+  `
     REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
       FROM stella
   `,

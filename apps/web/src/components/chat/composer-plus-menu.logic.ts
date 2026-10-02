@@ -81,16 +81,12 @@ export const shouldDrainSkillPages = ({
   open && query.trim() !== "" && hasNextPage && !isFetchingNextPage;
 
 type ResolveComposerMenuShortcutOptions = {
-  altKey: boolean;
   /** From {@link charBeforeCaret}. */
   charBeforeCaret: string | null;
-  ctrlKey: boolean;
+  /** The keystroke's `typedCharacter` (`@stll/ui/typed-character`). */
+  character: string | null;
   hasContext: boolean;
   hasSkills: boolean;
-  isAltGraph: boolean;
-  isComposing: boolean;
-  key: string;
-  metaKey: boolean;
 };
 
 /** A trigger starts a word at the start of a block or after whitespace, so
@@ -99,27 +95,18 @@ const startsWord = (charBefore: string | null): boolean =>
   charBefore === null || /^\s$/u.test(charBefore);
 
 export const resolveComposerMenuShortcut = ({
-  altKey,
   charBeforeCaret: charBefore,
-  ctrlKey,
+  character,
   hasContext,
   hasSkills,
-  isAltGraph,
-  isComposing,
-  key,
-  metaKey,
 }: ResolveComposerMenuShortcutOptions): ComposerMenuShortcut | null => {
-  const hasBlockingModifier = metaKey || (!isAltGraph && (altKey || ctrlKey));
-  if (isComposing || hasBlockingModifier) {
-    return null;
-  }
   if (!startsWord(charBefore)) {
     return null;
   }
-  if (hasSkills && key === COMPOSER_MENU_SHORTCUT_CHAR.skills) {
+  if (hasSkills && character === COMPOSER_MENU_SHORTCUT_CHAR.skills) {
     return COMPOSER_MENU_SHORTCUT.skills;
   }
-  if (hasContext && key === COMPOSER_MENU_SHORTCUT_CHAR.context) {
+  if (hasContext && character === COMPOSER_MENU_SHORTCUT_CHAR.context) {
     return COMPOSER_MENU_SHORTCUT.context;
   }
   return null;

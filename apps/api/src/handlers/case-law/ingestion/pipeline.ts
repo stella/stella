@@ -618,6 +618,7 @@ export const runIngestionPipeline = async ({
         nextCursor: page.nextCursor ?? "",
         page: pagesProcessed + 1,
         decisions: page.decisions.length,
+        itemBuildFailures: page.itemBuildFailures?.count ?? 0,
         inserted: pageInserted,
         skipped: pageSkipped,
         durationMs: Math.round(performance.now() - pageT0),
