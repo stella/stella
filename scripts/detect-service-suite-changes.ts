@@ -122,6 +122,10 @@ const directlyRequired = (file: string, suite: ServiceSuite) => {
   );
 };
 
+// `@stll/<name>/subpath` → `<name>`.
+const workspacePackageName = (specifier: string): string =>
+  specifier.slice("@stll/".length).split("/", 1)[0] ?? "";
+
 const expandWorkspaceScopes = (packageScopes: Set<string>, root: string) => {
   // Referenced packages are units; follow their declared workspace dependencies
   // without parsing their sources or relying on installed workspace symlinks.
@@ -238,7 +242,7 @@ export const serviceSuiteDependencies = (
       source.replace(/^#![^\n]*/u, ""),
     )) {
       if (specifier.startsWith("@stll/")) {
-        const name = specifier.slice("@stll/".length).replace(/\/.*$/u, "");
+        const name = workspacePackageName(specifier);
         const scope = `packages/${name}/`;
         if (packageScopes.has(scope)) {
           continue;
