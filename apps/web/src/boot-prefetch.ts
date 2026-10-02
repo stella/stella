@@ -1,3 +1,4 @@
+import { AUTH_SESSION_STARTUP_HEADER } from "@stll/auth-model";
 import { Temporal } from "@stll/time";
 /**
  * Boot-time auth prefetch.
@@ -136,6 +137,7 @@ type StartBootPrefetchOptions = {
   fetchImpl?: FetchLike;
   now?: () => number;
   reportError?: ReportPrefetchError;
+  wasDiscarded?: boolean;
 };
 
 /** Exported for the unit test only; the module fires it at evaluation time
@@ -144,6 +146,9 @@ export const startBootPrefetch = ({
   fetchImpl = fetch,
   now = () => Temporal.Now.instant().epochMilliseconds,
   reportError = reportPrefetchError,
+  wasDiscarded = typeof document !== "undefined" &&
+    "wasDiscarded" in document &&
+    document.wasDiscarded === true,
 }: StartBootPrefetchOptions = {}): void => {
   // A second boot attempt supersedes, cancels, and invalidates every response
   // from the first one. This also keeps test and bfcache re-entry behavior
@@ -175,11 +180,17 @@ export const startBootPrefetch = ({
       controller.signal,
       AbortSignal.timeout(BOOT_PREFETCH_TIMEOUT_MS),
     ]);
-  const sessionResponse = fetchImpl(`${base}/get-session`, {
-    credentials: "include",
-    headers: { accept: "application/json" },
-    signal: requestSignal(),
-  }).catch(reportAndDrop);
+  const sessionResponse = fetchImpl(
+    `${base}/get-session?disableCookieCache=true`,
+    {
+      credentials: "include",
+      headers: {
+        accept: "application/json",
+        ...(!wasDiscarded ? { [AUTH_SESSION_STARTUP_HEADER]: "1" } : {}),
+      },
+      signal: requestSignal(),
+    },
+  ).catch(reportAndDrop);
   slots["/get-session"] = {
     controller,
     generation,
