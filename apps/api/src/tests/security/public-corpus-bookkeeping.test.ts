@@ -1,20 +1,34 @@
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
-import { pgPolicy, pgTable, pgView, text, uuid } from "drizzle-orm/pg-core";
+import {
+  pgPolicy,
+  pgTable,
+  pgSchema,
+  pgView,
+  text,
+  uuid,
+} from "drizzle-orm/pg-core";
 
 import * as schema from "@/api/db/schema";
-import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "@/api/lib/public-corpus-bookkeeping";
+import { PUBLIC_CORPUS_BOOKKEEPING_TABLES } from "@/api/lib/db/public-corpus-audit/membership";
 import {
   verifyPublicCorpusCatalog,
   verifyPublicCorpusSchema,
   type PublicCorpusCatalogPosture,
-} from "@/api/lib/public-corpus-bookkeeping-verification";
+} from "@/api/lib/db/public-corpus-audit/schema-verification";
 
 const declaration = {
+  purpose: "public-corpus-bookkeeping",
   schemaExport: "checkpoint",
   sqlName: "checkpoint",
   reason: "Public publisher crawl progress only",
-  columns: { cursor: "Next public publisher page number" },
+  columns: {
+    cursor: {
+      kind: "corpus-cursor",
+      reason:
+        "Contains only a page number from a public publisher crawl and never any tenant or user identifiers",
+    },
+  },
 };
 const ownerExpression = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.checkpoint'::regclass)`;
 const checkpoint = pgTable.withRLS("checkpoint", { cursor: text() }, () => [
@@ -36,6 +50,12 @@ const ownerPolicy = {
 };
 const posture = {
   name: "checkpoint",
+  schema: "public",
+  otherRolePrivileges: false,
+  rewriteRules: false,
+  inheritance: false,
+  accessibleViews: false,
+  securityDefiners: false,
   kind: "r",
   enabled: true,
   forced: true,
@@ -103,7 +123,7 @@ describe("public corpus bookkeeping admission", () => {
     });
     expect(
       verifyPublicCorpusSchema({ declaration, schema: { checkpoint: owned } }),
-    ).toContain("tenant or accountable-user ownership column/foreign key");
+    ).toContain("foreign keys require a separate admission design");
     const nullable = pgTable("checkpoint", {
       cursor: text(),
       workspaceId: uuid("workspace_id"),
@@ -113,7 +133,7 @@ describe("public corpus bookkeeping admission", () => {
         declaration,
         schema: { checkpoint: nullable },
       }),
-    ).toContain("tenant or accountable-user ownership column/foreign key");
+    ).toContain("reviewed columns must exactly match schema columns");
   });
 
   test("new columns require review and source content cannot enter", () => {
@@ -127,12 +147,16 @@ describe("public corpus bookkeeping admission", () => {
           ...declaration,
           columns: {
             ...declaration.columns,
-            content: "Reviewed source document full text",
+            content: {
+              kind: "source-content",
+              reason:
+                "This is source document full text with an explicitly unsupported data classification for a corpus bookkeeping table",
+            },
           },
         },
         schema: { checkpoint: added },
       }),
-    ).toContain("content-bearing column is not bookkeeping");
+    ).toContain("column classification does not match its schema type");
   });
 
   test("a policy named owner that admits PUBLIC is rejected", () => {
@@ -152,6 +176,67 @@ describe("public corpus bookkeeping admission", () => {
     ).toContain("schema policy must exclusively admit the table owner");
   });
 
+  test("generic maintenance state remains ineligible", () => {
+    expect(
+      verifyPublicCorpusSchema({
+        declaration: {
+          schemaExport: "databaseBackfillStates",
+          sqlName: "database_backfill_states",
+          purpose: "generic-maintenance",
+          reason: "generic maintenance state incl. tenant repairs",
+          columns: {},
+        },
+        schema,
+      }),
+    ).toContain("generic maintenance state incl. tenant repairs");
+  });
+
+  test("all schema and policy boundaries are checked", () => {
+    const policy = {
+      for: "all",
+      to: "public",
+      using: ownerExpression,
+      withCheck: ownerExpression,
+    } as const;
+    const tables = [
+      pgTable("checkpoint", { cursor: text() }),
+      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
+        pgPolicy("owner", { ...policy, for: "select" }),
+      ]),
+      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
+        pgPolicy("owner", { ...policy, as: "restrictive" }),
+      ]),
+      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
+        pgPolicy("owner", { ...policy, to: "stella" }),
+      ]),
+      pgTable.withRLS("checkpoint", { cursor: text() }, () => [
+        pgPolicy("owner1", policy),
+        pgPolicy("owner2", policy),
+      ]),
+      pgSchema("private").table("checkpoint", { cursor: text() }),
+      pgTable("different", { cursor: text() }),
+    ];
+    for (const candidate of tables) {
+      expect(
+        verifyPublicCorpusSchema({
+          declaration,
+          schema: { checkpoint: candidate },
+        }).length,
+      ).toBeGreaterThan(0);
+    }
+    const dependent = pgTable("dependent", {
+      parent: text().references(() => checkpoint.cursor, {
+        onUpdate: "cascade",
+      }),
+    });
+    expect(
+      verifyPublicCorpusSchema({
+        declaration,
+        schema: { checkpoint, dependent },
+      }),
+    ).toContain("incoming foreign key can mutate dependent rows");
+  });
+
   test("bookkeeping cannot cascade into dependent rows", () => {
     const dependent = pgTable("dependent", {
       parent: text().references(() => checkpoint.cursor, {
@@ -167,6 +252,11 @@ describe("public corpus bookkeeping admission", () => {
   });
 
   test.each([
+    { ...posture, otherRolePrivileges: true },
+    { ...posture, rewriteRules: true },
+    { ...posture, inheritance: true },
+    { ...posture, accessibleViews: true },
+    { ...posture, securityDefiners: true },
     { ...posture, forced: false },
     { ...posture, appPrivileges: true },
     { ...posture, kind: "v" },

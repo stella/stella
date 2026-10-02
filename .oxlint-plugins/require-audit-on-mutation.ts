@@ -42,10 +42,8 @@
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import type { Ranged, Variable } from "@oxlint/plugins";
 
-import {
-  PUBLIC_CORPUS_BOOKKEEPING_TABLES,
-  type PublicCorpusBookkeepingTable,
-} from "../apps/api/src/lib/public-corpus-bookkeeping.ts";
+import { readVerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/attestation.ts";
+import type { VerifiedCorpusMembership } from "../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
 import { isPublicCorpusMutation } from "./audit-on-mutation/public-corpus-mutations.ts";
 import {
   type ImportedFromOptions,
@@ -381,7 +379,7 @@ const asRange = (value: unknown): Range | null => {
 };
 
 export const createAuditOnMutationPlugin = (
-  tables: readonly PublicCorpusBookkeepingTable[],
+  verifiedTables: () => readonly VerifiedCorpusMembership[],
 ) =>
   eslintCompatPlugin({
     meta: { name: "require-audit-on-mutation" },
@@ -400,6 +398,7 @@ export const createAuditOnMutationPlugin = (
           },
         },
         createOnce(context) {
+          const tables = verifiedTables();
           const scopes: FunctionScope[] = [];
           // Justified `audit: skip - <reason>` comments, collected once per
           // file; each marks only the innermost function whose own body holds
@@ -513,4 +512,4 @@ export const createAuditOnMutationPlugin = (
     },
   });
 
-export default createAuditOnMutationPlugin(PUBLIC_CORPUS_BOOKKEEPING_TABLES);
+export default createAuditOnMutationPlugin(readVerifiedCorpusMembership);

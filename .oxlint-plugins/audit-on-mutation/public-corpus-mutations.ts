@@ -1,11 +1,13 @@
-import type { PublicCorpusBookkeepingTable } from "../../apps/api/src/lib/public-corpus-bookkeeping.ts";
+import type { VerifiedCorpusMembership } from "../../apps/api/src/lib/db/public-corpus-audit/migration-verification.ts";
 import {
   type ImportedFromOptions,
   isAstNode,
   isIdentifierReference,
   isImportedFrom,
   memberPropertyName,
-  resolveImport,
+  resolveImportedExpression,
+  exactModuleId,
+  repoRelativeFilename,
   resolveVariable,
   stableInitializer,
   unwrapExpression,
@@ -13,7 +15,7 @@ import {
 
 type Context = ImportedFromOptions["context"];
 type Membership = Pick<
-  PublicCorpusBookkeepingTable,
+  VerifiedCorpusMembership,
   "schemaExport" | "sqlName" | "moduleId"
 >;
 
@@ -24,7 +26,17 @@ type MutationArgs = {
 };
 
 const tableFor = ({ context, node, tables }: MutationArgs) => {
-  const imported = resolveImport(context, node);
+  const binding = resolveImportedExpression(context, node);
+  const imported =
+    binding === null
+      ? null
+      : {
+          imported: binding.imported,
+          moduleId: exactModuleId(
+            binding.source,
+            repoRelativeFilename(context),
+          ),
+        };
   return imported === null
     ? undefined
     : tables.find(
@@ -39,7 +51,7 @@ const tableFor = ({ context, node, tables }: MutationArgs) => {
 // fragments, quoted values, and unsupported syntax retain the audit requirement.
 // Every token is consumed; matching a write prefix cannot hide another write.
 export const staticCorpusWriteTargets = (text: string): string[] | null => {
-  if (!/^[a-zA-Z0-9_\s.,;=()]+$/u.test(text)) {
+  if (!/^[a-zA-Z0-9_ \t\r\n.,;=()]+$/u.test(text)) {
     return null;
   }
   const statements = text
@@ -124,6 +136,120 @@ const staticSql = ({
     : null;
 };
 
+const hasUnprovenRead = ({ context, node, tables }: MutationArgs): boolean => {
+  let current = unwrapExpression(node);
+  while (current !== null) {
+    const parent = isAstNode(current.parent) ? current.parent : null;
+    if (parent?.type !== "MemberExpression" || parent.object !== current) {
+      break;
+    }
+    const method = memberPropertyName(parent);
+    const invocation = isAstNode(parent.parent) ? parent.parent : null;
+    if (
+      invocation?.type !== "CallExpression" ||
+      !Array.isArray(invocation.arguments)
+    ) {
+      return true;
+    }
+    if (
+      method === "select" ||
+      method === "with" ||
+      method === "innerJoin" ||
+      method === "leftJoin" ||
+      method === "rightJoin" ||
+      method === "fullJoin"
+    ) {
+      return true;
+    }
+    if (
+      method === "from" &&
+      tableFor({ context, node: invocation.arguments.at(0), tables }) ===
+        undefined
+    ) {
+      return true;
+    }
+    // Expressions supplied to a builder may contain a subquery or opaque SQL.
+    const argumentsToCheck =
+      method === "from" ? invocation.arguments.slice(1) : invocation.arguments;
+    if (
+      argumentsToCheck.some((argument) =>
+        containsRead({ context, node: argument, tables }),
+      )
+    ) {
+      return true;
+    }
+    current = invocation;
+  }
+  const parent =
+    current !== null && isAstNode(current.parent) ? current.parent : null;
+  return (
+    parent !== null &&
+    [
+      "VariableDeclarator",
+      "AssignmentExpression",
+      "ReturnStatement",
+      "CallExpression",
+    ].includes(parent.type)
+  );
+};
+
+type ReadArgs = MutationArgs & { seen?: Set<unknown> };
+const containsRead = ({
+  context,
+  node,
+  tables,
+  seen = new Set(),
+}: ReadArgs): boolean => {
+  const expression = unwrapExpression(node);
+  if (expression === null || seen.has(expression)) {
+    return true;
+  }
+  seen.add(expression);
+  if (
+    expression.type === "Literal" ||
+    expression.type === "StringLiteral" ||
+    expression.type === "NumericLiteral" ||
+    expression.type === "BooleanLiteral" ||
+    expression.type === "NullLiteral"
+  ) {
+    return false;
+  }
+  if (
+    expression.type === "ObjectExpression" &&
+    Array.isArray(expression.properties)
+  ) {
+    return expression.properties.some(
+      (property) =>
+        !isAstNode(property) ||
+        property.type !== "Property" ||
+        property.computed === true ||
+        containsRead({ context, node: property.value, tables, seen }),
+    );
+  }
+  if (
+    expression.type === "ArrayExpression" &&
+    Array.isArray(expression.elements)
+  ) {
+    return expression.elements.some((element) =>
+      containsRead({ context, node: element, tables, seen }),
+    );
+  }
+  if (expression.type === "MemberExpression") {
+    return tableFor({ context, node: expression.object, tables }) === undefined;
+  }
+  if (isIdentifierReference(expression)) {
+    const variable = resolveVariable(context, expression);
+    const initializer = variable === null ? null : stableInitializer(variable);
+    return (
+      initializer === null ||
+      containsRead({ context, node: initializer, tables, seen })
+    );
+  }
+  // Opaque calls, SQL templates, spreads and other expressions cannot prove
+  // that their input contains only public corpus values.
+  return true;
+};
+
 export const isPublicCorpusMutation = ({
   context,
   node,
@@ -140,7 +266,11 @@ export const isPublicCorpusMutation = ({
   const method = memberPropertyName(callee);
   if (method === "insert" || method === "update" || method === "delete") {
     return (
-      tableFor({ context, node: call.arguments.at(0), tables }) !== undefined
+      tableFor({ context, node: call.arguments.at(0), tables }) !== undefined &&
+      !hasUnprovenRead({ context, node: call, tables }) &&
+      !call.arguments
+        .slice(1)
+        .some((argument) => containsRead({ context, node: argument, tables }))
     );
   }
   if (method !== "execute") {

@@ -5,18 +5,18 @@ type Declaration = {
   schemaExport: string;
   sqlName: string;
   reason: string;
-  columns: Readonly<Record<string, string>>;
+  purpose: string;
+  columns: Readonly<Record<string, { kind: string; reason: string }>>;
 };
 
-// Check presence, not nullability. Follow foreign keys too, so renamed or
-// indirect ownership references cannot conceal a tenant boundary.
-const OWNERSHIP_COLUMN =
-  /(?:^|_)(?:organization|organisation|org|workspace|matter|user|tenant|author|actor|requester)(?:_|$)|(?:^|_)(?:created|updated|requested|owned)_by(?:_|$)/iu;
-const OWNERSHIP_TABLE = /^(?:organization|user|member|workspaces)$/u;
-const CONTENT_COLUMN =
-  /(?:^|_)(?:body|content|document|payload|prompt|message|secret|token|credential)(?:_|$)/iu;
-const normalizedColumnName = (name: string): string =>
-  name.replace(/[A-Z]/gu, (letter) => `_${letter.toLowerCase()}`);
+const COLUMN_SQL_TYPES: Readonly<Record<string, readonly string[]>> = {
+  "public-corpus-id": ["uuid", "text", "varchar"],
+  counter: ["integer", "bigint", "numeric", "smallint"],
+  timestamp: ["timestamp", "date"],
+  enum: ["text", "varchar"],
+  "parser-version": ["integer", "smallint"],
+  "corpus-cursor": ["text", "varchar", "json", "jsonb", "bytea"],
+};
 
 const normalizedPolicy = (expression: string): string =>
   expression
@@ -31,7 +31,13 @@ export const isOwnerOnlyExpression = (
   tableName: string,
 ): boolean => {
   const normalized = normalizedPolicy(expression);
-  return [tableName, `public.${tableName}`].some(
+  const relations = tableName.includes(".")
+    ? [
+        tableName,
+        ...(tableName.startsWith("public.") ? [tableName.slice(7)] : []),
+      ]
+    : [tableName, `public.${tableName}`];
+  return relations.some(
     (relation) =>
       normalized ===
       `current_user=selectpg_get_userbyidrelownerfrompg_classwhereoid='${relation}'::regclass`,
@@ -62,7 +68,7 @@ export const verifyPublicCorpusSchema = ({
   if (
     declaration.reason.trim().split(/\s+/u).length < 3 ||
     Object.values(declaration.columns).some(
-      (reason) => reason.trim().split(/\s+/u).length < 3,
+      ({ reason }) => reason.trim().split(/\s+/u).length < 12,
     )
   ) {
     errors.push("reviewed table and column reasons are required");
@@ -74,28 +80,25 @@ export const verifyPublicCorpusSchema = ({
   ) {
     errors.push("reviewed columns must exactly match schema columns");
   }
-  if (names.some((name) => CONTENT_COLUMN.test(normalizedColumnName(name)))) {
-    errors.push("content-bearing column is not bookkeeping");
+  if (declaration.purpose !== "public-corpus-bookkeeping") {
+    errors.push("generic maintenance state incl. tenant repairs");
   }
-  const seen = new Set<PgTable>();
-  const hasOwnership = (current: PgTable): boolean => {
-    if (seen.has(current)) {
-      return false;
+  for (const column of config.columns) {
+    const classification = declaration.columns[column.name];
+    const sqlType = column.getSQLType().toLowerCase().split(/[ (]/u).at(0);
+    if (
+      classification === undefined ||
+      sqlType === undefined ||
+      !COLUMN_SQL_TYPES[classification.kind]?.includes(sqlType)
+    ) {
+      errors.push("column classification does not match its schema type");
     }
-    seen.add(current);
-    const currentConfig = getTableConfig(current);
-    return (
-      OWNERSHIP_TABLE.test(currentConfig.name) ||
-      currentConfig.columns.some((column) =>
-        OWNERSHIP_COLUMN.test(normalizedColumnName(column.name)),
-      ) ||
-      currentConfig.foreignKeys.some((key) =>
-        hasOwnership(key.reference().foreignTable),
-      )
-    );
-  };
-  if (hasOwnership(table)) {
-    errors.push("tenant or accountable-user ownership column/foreign key");
+    if (classification?.kind === "enum" && !column.enumValues?.length) {
+      errors.push("enum classification requires schema enum values");
+    }
+  }
+  if (config.foreignKeys.length !== 0) {
+    errors.push("foreign keys require a separate admission design");
   }
   if (!config.enableRLS) {
     errors.push("schema RLS is not enabled");
@@ -132,14 +135,7 @@ export const verifyPublicCorpusSchema = ({
     }
     if (
       getTableConfig(value).foreignKeys.some(
-        (key) =>
-          key.reference().foreignTable === table &&
-          ((key.onDelete !== undefined &&
-            key.onDelete !== "no action" &&
-            key.onDelete !== "restrict") ||
-            (key.onUpdate !== undefined &&
-              key.onUpdate !== "no action" &&
-              key.onUpdate !== "restrict")),
+        (key) => key.reference().foreignTable === table,
       )
     ) {
       errors.push("incoming foreign key can mutate dependent rows");
@@ -150,12 +146,18 @@ export const verifyPublicCorpusSchema = ({
 
 export type PublicCorpusCatalogPosture = {
   name: string;
+  schema: string;
   kind: string;
   enabled: boolean;
   forced: boolean;
   appPrivileges: boolean;
   userTriggers: boolean;
   cascadingDependents: boolean;
+  otherRolePrivileges: boolean;
+  rewriteRules: boolean;
+  inheritance: boolean;
+  accessibleViews: boolean;
+  securityDefiners: boolean;
   policies: readonly {
     command: string;
     publicOnly: boolean;
@@ -183,6 +185,21 @@ export const verifyPublicCorpusCatalog = (
   if (posture.appPrivileges) {
     errors.push("application role has table or column privileges");
   }
+  if (posture.otherRolePrivileges) {
+    errors.push("non-owner role has privileges");
+  }
+  if (posture.rewriteRules) {
+    errors.push("rewrite rule can redirect mutations");
+  }
+  if (posture.inheritance) {
+    errors.push("relation participates in inheritance");
+  }
+  if (posture.accessibleViews) {
+    errors.push("non-owner can read a dependent view");
+  }
+  if (posture.securityDefiners) {
+    errors.push("security definer may expose the relation");
+  }
   if (posture.userTriggers) {
     errors.push("user trigger could perform an unclassified write");
   }
@@ -198,8 +215,14 @@ export const verifyPublicCorpusCatalog = (
         !policy.permissive ||
         policy.using === null ||
         policy.check === null ||
-        !isOwnerOnlyExpression(policy.using, posture.name) ||
-        !isOwnerOnlyExpression(policy.check, posture.name),
+        !isOwnerOnlyExpression(
+          policy.using,
+          `${posture.schema}.${posture.name}`,
+        ) ||
+        !isOwnerOnlyExpression(
+          policy.check,
+          `${posture.schema}.${posture.name}`,
+        ),
     )
   ) {
     errors.push("catalog policy must exclusively admit the table owner");

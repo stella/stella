@@ -562,13 +562,16 @@ export type ImportedBinding = { source: string; imported: string };
 export const NAMESPACE_IMPORT = "*";
 
 // The module a `require("m")`, `import("m")` or `await import("m")` loads.
-export const dynamicModuleSource = (node: unknown): string | null => {
+export const dynamicModuleSource = (
+  node: unknown,
+  context?: ScopeContext,
+): string | null => {
   const expression = unwrapExpression(node);
   if (!isAstNode(expression)) {
     return null;
   }
   if (expression.type === "AwaitExpression") {
-    return dynamicModuleSource(expression.argument);
+    return dynamicModuleSource(expression.argument, context);
   }
   if (expression.type === "ImportExpression") {
     return isStringLiteral(expression.source) ? expression.source.value : null;
@@ -580,6 +583,13 @@ export const dynamicModuleSource = (node: unknown): string | null => {
     expression.arguments.length === 1 &&
     isStringLiteral(expression.arguments[0])
   ) {
+    if (context === undefined) {
+      return null;
+    }
+    const binding = resolveVariable(context, expression.callee);
+    if (binding !== null && binding.defs.length !== 0) {
+      return null;
+    }
     return expression.arguments[0].value;
   }
   return null;
@@ -691,7 +701,7 @@ const bindingFromVariable = (
   ) {
     return null;
   }
-  const loaded = dynamicModuleSource(node.init);
+  const loaded = dynamicModuleSource(node.init, context);
   const init =
     loaded === null
       ? resolveImportedExpression(context, node.init, seen)
@@ -727,7 +737,7 @@ export const resolveImportedExpression = (
       : bindingFromVariable(context, variable, seen);
   }
   if (expression.type === "MemberExpression") {
-    const loaded = dynamicModuleSource(expression.object);
+    const loaded = dynamicModuleSource(expression.object, context);
     const base =
       loaded === null
         ? resolveImportedExpression(context, expression.object, seen)
@@ -742,7 +752,7 @@ export const resolveImportedExpression = (
 // the importing file, the app path aliases expand to their source roots, and
 // extensions and a trailing `/index` drop. Bare package specifiers pass
 // through unchanged.
-export const canonicalModuleId = (
+export const exactModuleId = (
   specifier: string,
   importerRepoPath: string,
 ): string => {
@@ -765,8 +775,14 @@ export const canonicalModuleId = (
       resolved = `apps/${app}/src/${specifier.slice("@/".length)}`;
     }
   }
-  return resolved.replace(/\.[cm]?[jt]sx?$/u, "").replace(/\/index$/u, "");
+  return resolved.replace(/\.[cm]?[jt]sx?$/u, "");
 };
+
+export const canonicalModuleId = (
+  specifier: string,
+  importerRepoPath: string,
+): string =>
+  exactModuleId(specifier, importerRepoPath).replace(/\/index$/u, "");
 
 // A module an import may come from: a bare package specifier or a repository
 // path without extension (`apps/api/src/lib/escape-like`), or a predicate over
