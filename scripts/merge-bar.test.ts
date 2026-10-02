@@ -1816,6 +1816,47 @@ describe("green result freshness", () => {
     expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
   });
 
+  test("fast scopes override regular scopes, including null and absent scopes", () => {
+    const workflow = planWorkflow(SELECTING_RULE).replace(
+      "FAST_JOB_SCOPES: '{}'",
+      `FAST_JOB_SCOPES: '{"e2e-production-shard": null, "parser-version-guard": "e2e_production_required"}'`,
+    );
+    const jobs = readFastRequiredJobs(workflow);
+    expect(jobs).not.toBeNull();
+    const byId = new Map(jobs?.map((job) => [job.id, job]));
+    expect(byId.get("e2e-production-shard")?.scope).toEqual({ type: "always" });
+    expect(byId.get("parser-version-guard")?.scope).toEqual({
+      type: "selector",
+      variable: "e2e_production_required",
+    });
+    expect(
+      unrunPlannedJobs({
+        jobs: jobs ?? [],
+        plan: new Map([["e2e_production_required", false]]),
+        runJobs: [],
+      }),
+    ).toEqual(["e2e-production-shard"]);
+  });
+
+  test.each(["failure", "cancelled", "skipped", "neutral", null])(
+    "a similarly named successful job cannot satisfy a required job with conclusion %s",
+    (conclusion) => {
+      const jobs = readFastRequiredJobs(planWorkflow(SELECTING_RULE));
+      expect(jobs).not.toBeNull();
+      expect(
+        unrunPlannedJobs({
+          jobs: jobs ?? [],
+          plan: new Map([["e2e_production_required", true]]),
+          runJobs: [
+            guard,
+            { name: "e2e-production-shard-extra", conclusion: "success" },
+            { name: "e2e-production-shard (1)", conclusion },
+          ],
+        }),
+      ).toEqual(["e2e-production-shard"]);
+    },
+  );
+
   test("unrun planned jobs ignore jobs main plans from something other than files", () => {
     expect(
       unrunPlannedJobs({
