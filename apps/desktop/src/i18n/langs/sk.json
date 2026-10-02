@@ -52,6 +52,11 @@
     "takenOverTitle": "Úpravy presunuté na iné zariadenie"
   },
   "dialog": {
+    "accountWindowTitle": "Pripojiť účet",
+    "accountTitle": "Pripojiť tento účet?",
+    "accountSubtitle": "Pripojte stella desktop k tomuto účtu a organizácii.",
+    "accountEmail": "Účet",
+    "organizationName": "Organizácia",
     "allow": "Povoliť",
     "apiUrl": "Adresa API",
     "cancel": "Zrušiť",

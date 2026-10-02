@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { env } from "@/api/env";
 import { createSafeTokenHandler } from "@/api/lib/api-handlers";
 import type { TokenHandlerConfig } from "@/api/lib/api-handlers";
+import { authorizeDesktopAccount } from "@/api/lib/business-registries/desktop/auth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { redeemPdfSigningHandoff } from "@/api/lib/files/pdf-signing/sessions";
 import { permissiveBodySchema } from "@/api/lib/permissive-route-schema";
@@ -23,13 +24,16 @@ const config = {
 
 const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
   config,
-  async function* ({ body }) {
+  async function* ({ body, request }) {
+    const identity = yield* Result.await(authorizeDesktopAccount(request));
     const handoffToken = body?.handoffToken;
     const redeemed = yield* Result.await(
       Result.tryPromise({
         try: async () =>
           typeof handoffToken === "string"
-            ? await redeemPdfSigningHandoff(handoffToken, tokenScopedDatabase)
+            ? await redeemPdfSigningHandoff(handoffToken, tokenScopedDatabase, {
+                identity,
+              })
             : null,
         catch: (cause) =>
           new HandlerError({
@@ -53,6 +57,10 @@ const redeemPdfSigningHandoffEndpoint = createSafeTokenHandler(
 
     return Result.ok({
       apiBaseUrl: stripTrailingSlashes(env.PUBLIC_URL ?? env.BETTER_AUTH_URL),
+      identity: {
+        userId: identity.userId,
+        organizationId: identity.organizationId,
+      },
       documentName: redeemed.documentName,
       expiresAt: redeemed.expiresAt.toISOString(),
       sessionId: redeemed.sessionId,

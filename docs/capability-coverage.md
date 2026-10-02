@@ -660,7 +660,7 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 16 |
+| auth_plumbing | 17 |
 | billing_ui | 1 |
 | chat_thread_ui | 2 |
 | compound_consent | 1 |
@@ -670,7 +670,7 @@ mechanics, and similar), not gaps in coverage.
 | mcp_transport | 11 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |
-| public_indexing | 8 |
+| public_indexing | 7 |
 | realtime_stream | 4 |
 | search_ui | 15 |
 | session_token_exchange | 20 |

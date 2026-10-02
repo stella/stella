@@ -17,6 +17,7 @@ import {
   rollbackUnpersistedChatSideEffects,
   uploadMessageFilesWithRollback,
 } from "@/api/handlers/chat/send-message-side-effects";
+import { ChatTurnFailureResponse } from "@/api/handlers/chat/stream-chat";
 import * as externalMcpToolsModule from "@/api/handlers/chat/tools/external-mcp-tools";
 import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-names";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
@@ -260,4 +261,46 @@ describe("settling a turn whose generation fails after the stream opened", () =>
     });
     expect(turns.at(0)?.settledAt).not.toBeNull();
   });
+});
+
+describe("settling a refusal before streaming", () => {
+  test.each(["unsupported-input", "internal"] as const)(
+    "retains the %s code and retryability from the response",
+    async (failureCode) => {
+      const threadId = await seedEmptyThread();
+      const status = failureCode === "internal" ? 500 : 422;
+      const rejection = new ChatTurnFailureResponse({
+        failureCode,
+        payload: { message: "Cannot start this turn" },
+        status,
+      });
+      streamChatMock.mockImplementationOnce(async () => rejection);
+      const result = await sendMessage.handler(
+        createContext({
+          message: {
+            id: toSafeId<"chatMessage">(Bun.randomUUIDv7()),
+            parts: [{ content: "Hello", type: "text" }],
+            role: "user",
+          },
+          threadId,
+        }),
+      );
+      expect(result).toBe(rejection);
+      expect(await rejection.json()).toEqual({
+        message: "Cannot start this turn",
+      });
+      expect(
+        await testDb
+          .select({
+            failureCode: chatTurns.failureCode,
+            failureRetryable: chatTurns.failureRetryable,
+            status: chatTurns.status,
+          })
+          .from(chatTurns)
+          .where(eq(chatTurns.threadId, threadId)),
+      ).toEqual([
+        { failureCode, failureRetryable: status === 500, status: "failed" },
+      ]);
+    },
+  );
 });
