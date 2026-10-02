@@ -13,6 +13,10 @@ import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
 import { loadChatMessagePage } from "@/api/handlers/chat/message-page";
 import { readLatestChatCompactionOnTx } from "@/api/handlers/chat/persistent-compaction";
 import {
+  EMPTY_CHAT_THREAD_ATTACHED_FILES,
+  readChatThreadAttachedFiles,
+} from "@/api/handlers/chat/threads/list-context";
+import {
   areSubagentToolsRegistered,
   isWebSearchAvailable,
 } from "@/api/handlers/chat/tools/chat-tools";
@@ -267,6 +271,10 @@ const getMessages = createSafeRootHandler(
         const page = unwrapTxRead(
           await loadChatMessagePage({ tx, threadId, userId: user.id }),
         );
+        const attachedFiles = await readChatThreadAttachedFiles({
+          threadId,
+          tx,
+        });
 
         // Estimate the model context the next send would carry, mirroring the
         // send path: the active compaction summary plus the same windowed
@@ -302,6 +310,7 @@ const getMessages = createSafeRootHandler(
 
         return {
           kind: "ok" as const,
+          attachedFiles,
           webSearchAvailable,
           thread,
           page,
@@ -316,6 +325,7 @@ const getMessages = createSafeRootHandler(
       if (allowMissingThread) {
         return Result.ok({
           activeTurnId: null,
+          attachedFiles: EMPTY_CHAT_THREAD_ATTACHED_FILES,
           forkProvenance: { type: "none" } as const,
           messages: [],
           olderCursor: null,
@@ -359,6 +369,7 @@ const getMessages = createSafeRootHandler(
     }
 
     const {
+      attachedFiles,
       thread,
       webSearchAvailable,
       page,
@@ -392,6 +403,7 @@ const getMessages = createSafeRootHandler(
 
     return Result.ok({
       activeTurnId: page.activeTurnId,
+      attachedFiles,
       forkProvenance: resolveForkProvenance({
         forkedFromMessageId: thread.forkedFromMessageId,
         parent,

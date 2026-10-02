@@ -3099,6 +3099,7 @@ describe("acquireChatRuntime reconcile", () => {
     overrides: Partial<ChatThreadFetched> = {},
   ): ChatThreadFetched => ({
     activeTurnId: null,
+    attachedFiles: { fileCount: 0, files: [] },
     forkProvenance: { type: "none" },
     messages: [],
     olderCursor: null,

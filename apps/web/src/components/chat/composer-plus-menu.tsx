@@ -1202,9 +1202,13 @@ const ComposerContextMatterSub = ({
       return [];
     }
     return entitiesData.entities.map((entity) =>
-      buildEntityMentionOption({ entity, sourceWorkspaceId }),
+      buildEntityMentionOption({
+        entity,
+        matterId: matter.id,
+        sourceWorkspaceId,
+      }),
     );
-  }, [entitiesData, sourceWorkspaceId]);
+  }, [entitiesData, matter.id, sourceWorkspaceId]);
   const matterMentionOption = useMemo<ChatMentionOption | undefined>(
     () =>
       buildWorkspaceMentionOptions({

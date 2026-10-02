@@ -1165,6 +1165,7 @@
       "noSkills": "Oskusi veel pole",
       "pinnedMatters": "Kinnitatud toimikud",
       "recentChats": "Hiljutised vestlused",
+      "skillEditedBy": "Muutis {name} · {time}",
       "skills": "Oskused"
     },
     "loadEarlierMessages": "Laadi varasemad sõnumid",
@@ -1296,6 +1297,9 @@
     },
     "tabToAsk": "→ küsimiseks: \"{prompt}\"",
     "thinking": "Töötan kontekstiga",
+    "threadFiles": {
+      "title": "Selle vestluse failid"
+    },
     "tool": {
       "add_comment": "Kommentaari lisamine",
       "apply-active-docx-edits": "Dokumendi muudatuste ettevalmistamine",

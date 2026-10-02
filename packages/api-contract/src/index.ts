@@ -478,8 +478,10 @@ export {
 export type { ResourceName, ResourceRef, ResourceType } from "./resource-ref";
 export {
   CHAT_DECISION_HREF_TEMPLATE,
+  CHAT_MENTION_UUID_HREF_PATTERN,
   CHAT_RESOURCE_HREF_PREFIX,
   CHAT_RESOURCE_LINK_DISPOSITION,
+  CHAT_USER_HREF_TEMPLATE,
   findCanonicalChatResourceHrefs,
   parseCanonicalChatResourceHref,
   parseChatResourceHref,

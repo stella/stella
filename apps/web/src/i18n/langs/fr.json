@@ -1165,6 +1165,7 @@
       "noSkills": "Aucune compétence pour le moment",
       "pinnedMatters": "Dossiers épinglés",
       "recentChats": "Conversations récentes",
+      "skillEditedBy": "Modifié par {name} · {time}",
       "skills": "Compétences"
     },
     "loadEarlierMessages": "Charger les messages précédents",
@@ -1296,6 +1297,9 @@
     },
     "tabToAsk": "→ pour demander : « {prompt} »",
     "thinking": "Traitement du contexte",
+    "threadFiles": {
+      "title": "Fichiers de cette conversation"
+    },
     "tool": {
       "add_comment": "Ajout d’un commentaire",
       "apply-active-docx-edits": "Préparation des modifications",

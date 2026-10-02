@@ -198,6 +198,7 @@ const createRecordedServer = (recording: RecordedConversation) => {
   const threadPage = () =>
     Response.json({
       ...page,
+      attachedFiles: { fileCount: 0, files: [] },
       context: null,
       contextMatterIds: [],
       forkProvenance: { type: "none" },

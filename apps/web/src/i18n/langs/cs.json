@@ -1165,6 +1165,7 @@
       "noSkills": "Zatím žádné dovednosti",
       "pinnedMatters": "Připnuté spisy",
       "recentChats": "Nedávné chaty",
+      "skillEditedBy": "Upravil(a) {name} · {time}",
       "skills": "Dovednosti"
     },
     "loadEarlierMessages": "Načíst starší zprávy",
@@ -1296,6 +1297,9 @@
     },
     "tabToAsk": "→ pro dotaz: \"{prompt}\"",
     "thinking": "Pracuji s kontextem",
+    "threadFiles": {
+      "title": "Soubory v tomto chatu"
+    },
     "tool": {
       "add_comment": "Přidávání komentáře",
       "apply-active-docx-edits": "Připravuji úpravy dokumentu",
