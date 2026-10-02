@@ -281,6 +281,18 @@ test("the index only lists currently published jurisdictions", async () => {
   ]);
 });
 
-test("a stored statute in an unpublished jurisdiction has no sitemap entry", async () => {
-  expect(await listStatutes("svk")).toEqual([]);
+test("a pending public jurisdiction reports unavailability before reading its stored statutes", async () => {
+  const response = await listStatuteSitemapStatutesHandler(
+    { country: "svk" },
+    () => panic("A pending country must not read the statute database"),
+  );
+  expect(response).toMatchObject({
+    code: 503,
+    response: {
+      code: "public_country_unavailable",
+      status: "unavailable",
+      country: "SVK",
+      reason: "pending_public",
+    },
+  });
 });

@@ -680,7 +680,7 @@ const passThrough = async ({ args, env, script }: PassThroughOptions) => {
     stdin: "inherit",
     stdout: "inherit",
   });
-  process.exit(await child.exited);
+  return child.exited;
 };
 
 const main = async () => {
@@ -711,9 +711,19 @@ const main = async () => {
       return;
     }
     case "cli": {
-      await passThrough({
+      const env = await requireAgentEnv(root);
+      const generated = await passThrough({
+        args: ["--runtime-only"],
+        env: {},
+        script: path.join(root, "packages/cli/src/codegen.ts"),
+      });
+      if (generated !== 0) {
+        process.exitCode = generated;
+        return;
+      }
+      process.exitCode = await passThrough({
         args,
-        env: await requireAgentEnv(root),
+        env,
         script: path.join(root, "packages/cli/src/cli.ts"),
       });
       return;

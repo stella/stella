@@ -2179,6 +2179,7 @@ type Messages = {
       "forbidden": "You do not have permission to do this.";
       "notFound": "We could not find what you requested.";
       "payloadTooLarge": "The request is too large.";
+      "publicCountryUnavailable": "Public law for this country is not available. Choose another country.";
       "rateLimited": "Too many requests. Please try again later.";
       "server": "The server could not complete the request. Please try again.";
       "serviceUnavailable": "The service is temporarily unavailable. Please try again.";

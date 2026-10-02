@@ -13,7 +13,7 @@ import * as v from "valibot";
 import { apiKeysRoute } from "@/api/handlers/api-keys/routes";
 import { desktopRegistryRoute } from "@/api/handlers/desktop-registry/routes";
 import { getAuth } from "@/api/lib/auth";
-import { getAuthEndpointUrl } from "@/api/lib/auth-paths";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { authorizeDesktopRegistry } from "@/api/lib/business-registries/desktop/auth";
 import { resolveMachineApiKeySession } from "@/api/mcp/api-key-auth";
 import { authenticateMcpRequest } from "@/api/mcp/auth";

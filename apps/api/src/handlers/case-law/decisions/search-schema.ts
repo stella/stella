@@ -24,7 +24,10 @@ import {
   tSafeId,
 } from "@/api/lib/custom-schema";
 import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
-import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
+import {
+  tPublicCountryUnavailable,
+  tPublicLawCountry,
+} from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchTotalSchema } from "@/api/lib/search/total-schema";
 
@@ -236,6 +239,7 @@ export const searchDecisionsSuccessResponseSchema = t.Object(
 
 export const searchDecisionsResponseSchema = {
   ...safeHandlerResponseSchemas(searchDecisionsSuccessResponseSchema),
+  503: t.Union([safeHandlerErrorResponseSchema, tPublicCountryUnavailable]),
   404: t.Union([
     safeHandlerErrorResponseSchema,
     t.Object(

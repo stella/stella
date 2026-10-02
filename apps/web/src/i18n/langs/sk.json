@@ -2176,6 +2176,7 @@
       "forbidden": "Na túto akciu nemáte oprávnenie.",
       "notFound": "Požadovanú položku sa nepodarilo nájsť.",
       "payloadTooLarge": "Požiadavka je príliš veľká.",
+      "publicCountryUnavailable": "Právne predpisy a judikatúra tejto krajiny nie sú dostupné. Vyberte inú krajinu.",
       "rateLimited": "Príliš veľa požiadaviek. Skúste to prosím neskôr.",
       "server": "Niečo sa pokazilo. Skúste to prosím znova.",
       "serviceUnavailable": "Služba je dočasne nedostupná. Skúste to prosím znova.",

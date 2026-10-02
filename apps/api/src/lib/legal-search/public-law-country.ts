@@ -11,9 +11,10 @@
  *
  * Admission stays with the caller. `publicCaseLawCountry` and
  * `publicLegislationCountry` answer whether a country has a corpus here, and
- * that answer is a `not_found`, not a complaint about spelling.
+ * non-admitted advertised countries answer with typed unavailability.
  */
 
+import type { TSchema } from "@sinclair/typebox";
 import { t } from "elysia";
 
 import type { CountryAlpha3 } from "@stll/agent-input";
@@ -22,6 +23,28 @@ import {
   COUNTRY_INPUT_MAX_CHARS,
   normalizeCountry,
 } from "@stll/agent-input";
+import {
+  publicCountryUnavailable,
+  publicCountryUnavailableSchema,
+  type PublicCountryUnavailable,
+} from "@stll/api-contract/public-country-capability";
+
+const unavailableFields = publicCountryUnavailableSchema.entries;
+export const tPublicCountryUnavailable = t.Object(
+  {
+    code: t.Literal(unavailableFields.code.literal),
+    status: t.Literal(unavailableFields.status.literal),
+    country: t.Union(
+      unavailableFields.country.options.map((country) => t.Literal(country)),
+    ),
+    reason: t.Union(
+      unavailableFields.reason.options.map((reason) => t.Literal(reason)),
+    ),
+    message: t.String(),
+    hint: t.String(),
+  } satisfies Record<keyof typeof unavailableFields, TSchema>,
+  { additionalProperties: false },
+);
 
 /**
  * A declared country query property.
@@ -41,7 +64,8 @@ export const tPublicLawCountry = t.String({
 
 export type PublicLawCountryRead =
   | { kind: "read"; country: CountryAlpha3 }
-  | { kind: "unreadable"; message: string };
+  | { kind: "unreadable"; message: string }
+  | { kind: "unavailable"; response: PublicCountryUnavailable };
 
 type PublicLawCountryOptions = {
   /** The canonical codes this surface holds law for, named in the ask so a
@@ -68,6 +92,10 @@ export const readPublicLawCountry = (
     parameter,
   });
   if (normalized.ok) {
+    const unavailable = publicCountryUnavailable(normalized.value.alpha3);
+    if (unavailable !== null) {
+      return { kind: "unavailable", response: unavailable };
+    }
     return { kind: "read", country: normalized.value.alpha3 };
   }
   return {

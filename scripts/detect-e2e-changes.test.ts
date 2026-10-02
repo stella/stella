@@ -723,6 +723,7 @@ describe("detect-e2e-changes", () => {
         "    needs: [ci-plan, web-build]",
         "    if: >-",
         "      always()",
+        "      && (github.event_name != 'merge_group' || !cancelled())",
         "      && (needs.ci-plan.outputs.trusted == 'true'",
         "          || github.event_name == 'workflow_dispatch')",
         "      && needs.ci-plan.outputs.e2e_production_required == 'true'",

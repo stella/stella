@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { getSkCourtSuccessionEdges } from "@stll/api-contract/sk-court-succession";
 
+import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -17,10 +18,6 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
 import { requireReconciliation } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
-import {
-  ADAPTER_KEYS,
-  PARSER_VERSIONS,
-} from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const originalFetch = globalThis.fetch;

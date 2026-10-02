@@ -8,6 +8,7 @@ import {
   PUBLIC_LEGISLATION_COUNTRIES,
   isPublicLegislationCountry,
 } from "@stll/api-contract/legislation-publication";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import { SEARCH_TOTAL_NOT_COUNTED } from "@stll/api-contract/search";
 import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { isUuid } from "@stll/uuid-codec";
@@ -995,6 +996,13 @@ export const searchLegislationHandler = async (
   observer: RegistryRequestObservation,
   dependencies = defaultSearchLegislationDependencies,
 ) => {
+  const unavailable =
+    body.jurisdiction === undefined
+      ? null
+      : publicCountryUnavailable(body.jurisdiction);
+  if (unavailable !== null) {
+    return status(503, unavailable);
+  }
   // source_id and the cursor id reach Postgres as UUID comparisons in the
   // pg-fts path; reject malformed values at the boundary so a bad filter
   // is a 400, not a 500 from an invalid-uuid cast.
