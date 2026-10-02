@@ -435,7 +435,7 @@
       "apps/api/src/lib/hosted-usage-provider/client.ts": 6,
       "apps/api/src/lib/legal-search/case-law-corpus-upload-intents.ts": 3,
       "apps/api/src/lib/legal-search/case-law-source-ingestion-lease.ts": 1,
-      "apps/api/src/lib/legal-search/corpus-index-client.ts": 22,
+      "apps/api/src/lib/legal-search/corpus-index-client.ts": 2,
       "apps/api/src/lib/legal-search/corpus-index-pagination.ts": 1,
       "apps/api/src/lib/legal-search/corpus-index-projection-desired-state.ts": 4,
       "apps/api/src/lib/legal-search/corpus-storage.ts": 3,
