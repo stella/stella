@@ -12,9 +12,10 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
+import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
 import type { SkillMetadata } from "@stll/skills";
 
-import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
 import { chatMessages, chatThreads } from "@/api/db/schema";
 import {
   getActiveFileModelBinding,
@@ -84,6 +85,7 @@ import {
 } from "@/api/handlers/chat/chat-schema";
 import { resolveChatScope } from "@/api/handlers/chat/chat-scope";
 import {
+  bindChatTurnRunId,
   claimChatTurnForExecution,
   createChatTurnAcceptance,
   CHAT_METERED_PROVIDER_TIMEOUT_MS,
@@ -459,6 +461,7 @@ type ChatSendLifecycleOptions = {
   mode: ChatTurnObservation["mode"];
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
+  scopedDb: ScopedDb;
   threadId: SafeId<"chatThread">;
   userId: SafeId<"user">;
   workspaceId: SafeId<"workspace"> | null;
@@ -550,6 +553,8 @@ const CHECKPOINT_RESTORATION_FAILED = failureSink({
   expected: [],
 });
 
+const CHAT_SEND_ACTION_KIND = "chat.send";
+
 /**
  * Owns every resource that must be settled when a send stops before its run
  * starts. Starting the run hands the claimed turn over for good.
@@ -638,6 +643,8 @@ export class ChatSendLifecycle {
     )({
       organizationId,
       userId: this.options.userId,
+      mode: "concurrency-only",
+      actionKind: "chat.send",
     });
     if (Result.isError(acquired)) {
       return acquired;
@@ -645,6 +652,24 @@ export class ChatSendLifecycle {
     this.admission = acquired.value;
     this.checkpoint = checkpoint;
     return Result.ok(undefined);
+  }
+
+  async reserveExecutionPeriod(
+    runId: string,
+  ): Promise<Result<void, HandlerError>> {
+    if (this.claimedTurn.status !== "preflight") {
+      panic("Cannot reserve a phase without a durable execution owner");
+    }
+    if (this.admission === undefined) {
+      return Result.ok(undefined);
+    }
+    return await this.admission.reservePeriod(
+      {
+        actionKind: CHAT_SEND_ACTION_KIND,
+        logicalPhaseId: JSON.stringify([this.claimedTurn.execution.id, runId]),
+      },
+      this.options.scopedDb,
+    );
   }
 
   get admissionSignal(): AbortSignal | undefined {
@@ -767,6 +792,44 @@ export class ChatSendLifecycle {
     this.claimedTurn = { status: "unclaimed" };
   }
 
+  async refuseCurrentTurn(
+    error: HandlerError,
+  ): Promise<Result<void, HandlerError>> {
+    if (this.claimedTurn.status !== "preflight") {
+      panic("Cannot refuse a chat turn this send does not hold");
+    }
+    const settled = await persistTerminalAssistantTurn({
+      execution: this.claimedTurn.execution,
+      failure: { code: "boundary-refusal", retryable: false },
+      outcome: {
+        type: "failed",
+        error:
+          error.code === ACTION_ADMISSION_CODES.periodExhausted ||
+          error.status === 429
+            ? "quota_exhausted"
+            : "provider_unavailable",
+      },
+      owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+      recordAuditEvent: this.options.recordAuditEvent,
+      safeDb: this.options.safeDb,
+      threadId: this.options.threadId,
+      userId: this.options.userId,
+      workspaceId: this.options.workspaceId,
+      indexThread: this.options.indexThread,
+    });
+    if (Result.isError(settled)) {
+      return Result.err(
+        new HandlerError({
+          status: 500,
+          message: "Failed to store the refused chat turn",
+          cause: settled.error,
+        }),
+      );
+    }
+    this.claimedTurn = { status: "unclaimed" };
+    return Result.ok(undefined);
+  }
+
   /** The user stopped the turn before its provider call started. */
   async stopCurrentTurn() {
     if (this.claimedTurn.status !== "preflight") {
@@ -868,20 +931,19 @@ export class ChatSendLifecycle {
 }
 
 /**
- * The send's last step before its run starts. A closed connection ends the
- * turn here, the last time the send asks its request anything. Then the run
- * `runId` starts: bound to the turn, with its lease starting now, whatever
- * connector discovery and prompt assembly took. A stop recorded during
- * preflight ends the turn here, before any provider call. Every refusal leaves
- * the turn settled.
+ * Establish durable run ownership before pre-dispatch work, then recheck the
+ * connection and execution owner immediately before streaming. A stop during
+ * preparation ends the turn here. Every refusal leaves the turn settled.
  */
 const prepareDispatch = async ({
+  phase,
   execution,
   isClientConnectionAborted,
   lifecycle,
   runId,
   safeDb,
 }: {
+  phase: "bind" | "dispatch";
   execution: ChatTurnExecution;
   isClientConnectionAborted: () => boolean;
   lifecycle: ChatSendLifecycle;
@@ -897,7 +959,8 @@ const prepareDispatch = async ({
       }),
     );
   }
-  const leaseRenewal = await startChatTurnRun({
+  const writeRun = phase === "bind" ? bindChatTurnRunId : startChatTurnRun;
+  const leaseRenewal = await writeRun({
     execution,
     runId,
     safeDb,
@@ -907,7 +970,10 @@ const prepareDispatch = async ({
     return Result.err(
       new HandlerError({
         status: 500,
-        message: "Failed to renew chat execution lease",
+        message:
+          phase === "bind"
+            ? "Failed to bind chat run"
+            : "Failed to renew chat execution lease",
         cause: leaseRenewal.error,
       }),
     );
@@ -1840,6 +1906,7 @@ const assembleTurnSystemPrompt = ({
 });
 
 export type SendMessageDependencies = {
+  startAdmission?: typeof startChatExecutionAdmission;
   compactMessagesForContext: typeof compactMessagesForContext;
   createRefRegistry: typeof createChatRefRegistry;
   indexThread: typeof upsertChatThreadSearchDocument;
@@ -2175,11 +2242,14 @@ export const createSendMessage = (
           }),
       );
       const lifecycle = new ChatSendLifecycle({
+        startAdmission:
+          dependencies.startAdmission ?? startChatExecutionAdmission,
         indexThread: dependencies.indexThread,
         externalMcpToolsLoader,
         mode: CHAT_TURN_BOUNDARY_MODE[body.sendMode],
         recordAuditEvent,
         safeDb,
+        scopedDb,
         threadId: body.threadId,
         userId: user.id,
         workspaceId,
@@ -2320,6 +2390,26 @@ export const createSendMessage = (
               message: "The run id already names another chat turn",
             }),
           );
+        }
+
+        yield* Result.await(
+          prepareDispatch({
+            phase: "bind",
+            execution: turnExecution,
+            isClientConnectionAborted,
+            lifecycle,
+            runId: body.runId,
+            safeDb,
+          }),
+        );
+        const phaseAdmission = await lifecycle.reserveExecutionPeriod(
+          body.runId,
+        );
+        if (Result.isError(phaseAdmission)) {
+          yield* Result.await(
+            lifecycle.refuseCurrentTurn(phaseAdmission.error),
+          );
+          return Result.err(phaseAdmission.error);
         }
 
         // Refs live as long as the thread, not the request: an interactive
@@ -2685,6 +2775,7 @@ export const createSendMessage = (
         yield* lifecycle.checkAdmission();
         yield* Result.await(
           prepareDispatch({
+            phase: "dispatch",
             execution: turnExecution,
             isClientConnectionAborted,
             lifecycle,

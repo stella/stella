@@ -103,6 +103,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_STATEMENT_TIMEOUT_MS",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
+  "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+  "DB_LOAD_GATE_EBS_SIGNAL",
   "DB_HOST",
   "DB_NAME",
   "DB_PORT",
@@ -132,6 +134,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_MCP",
   "FEATURE_MCP_READ_FENCE",
   "FEATURE_ORG_ACCESS_STATE",
+  "FEATURE_ORG_SERVICE_BUDGETS",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_KNOWLEDGE",
   "FEATURE_PUBLIC_TOOLS",
@@ -214,6 +217,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
   FEEDBACK_GITHUB_REPO: "owner/repo",
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: "http://localhost:3000",
   GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
   GOTENBERG_PASSWORD: "gotenberg",
@@ -300,6 +304,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Corpus index read endpoint, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
+    "RDS instance whose EBS balances gate heavy maintenance. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
+  DB_LOAD_GATE_EBS_SIGNAL:
+    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.",
   DB_HOST:
     "Postgres hostname used with the component settings when DATABASE_URL is unset.",
   DB_NAME:

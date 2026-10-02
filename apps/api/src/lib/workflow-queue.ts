@@ -737,6 +737,7 @@ export const startWorkflow = async ({
       await kickoff({
         organizationId,
         userId,
+        organizationStateDb: scopedDb,
         actionKind: QUEUED_ACTION_KIND.extraction,
         logicalPhaseId: requestId,
         run: planAndEnqueue,

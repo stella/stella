@@ -263,6 +263,7 @@ export const startFlowRun = async ({
           await kickoff({
             organizationId,
             userId: brandPersistedUserId(actorId),
+            organizationStateDb: async (run) => (await safeDb(run)).unwrap(),
             actionKind: QUEUED_ACTION_KIND.flow,
             logicalPhaseId: runId,
             run: createAndEnqueue,

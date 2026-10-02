@@ -3,6 +3,7 @@ import { DelayedError } from "bullmq";
 
 import { Temporal } from "@stll/time";
 
+import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
 
 import {
@@ -38,6 +39,7 @@ export const admissionRetryDelayMs = (
 type QueuedKickoffOptions<T> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  organizationStateDb?: ScopedDb;
   actionKind: (typeof QUEUED_ACTION_KIND)[keyof typeof QUEUED_ACTION_KIND];
   logicalPhaseId: string;
   run: (signal: AbortSignal, reservePeriod: () => Promise<void>) => Promise<T>;
@@ -49,6 +51,7 @@ export const runQueuedKickoff = async <T>({
   organizationId,
   userId,
   actionKind,
+  organizationStateDb,
   logicalPhaseId,
   periodReservation,
   run,
@@ -57,6 +60,7 @@ export const runQueuedKickoff = async <T>({
   const result = await admission({
     organizationId,
     userId,
+    organizationStateDb,
     execution: "queued-kickoff",
     periodIdentity: { actionKind, logicalPhaseId },
     periodReservation,

@@ -61,7 +61,10 @@ for (const enabled of [true, false]) {
         },
         periodIdentity,
         costRecorder: recorderFor(observations),
-        run: async () => {
+        run: async (_signal, control) => {
+          expect(Result.isOk(await control.reservePeriod(periodIdentity))).toBe(
+            true,
+          );
           expect(currentActionCostIdentity(organizationId)).toEqual({
             organizationId,
             ...periodIdentity,

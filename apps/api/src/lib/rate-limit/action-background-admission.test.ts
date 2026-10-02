@@ -54,6 +54,12 @@ describe("background action admission", () => {
         enabled: true,
         policy,
         execution: "background-job",
+        serviceBudgetsEnabled: true,
+        readOrganizationState: async () => {
+          throw new Error(
+            "Background leases must not read organization budgets",
+          );
+        },
         actionKind,
         periodPolicy: { periodMs: 86_400_000, limit: 1 },
         redis,

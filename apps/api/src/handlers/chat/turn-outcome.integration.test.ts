@@ -156,14 +156,6 @@ type KnownRule = {
   oracles: readonly OracleViolation["oracle"][];
 };
 
-/** What the page shows of a whitespace-only answer on a new message is what
- *  a reload shows. Gemini's adapter hands the page no whitespace-only
- *  delta. */
-const WHITESPACE_RULE: KnownRule = {
-  name: "a whitespace-only answer reloads as the page showed it",
-  oracles: [CHAT_ORACLE.liveEqualsReload],
-};
-
 /** The page of a summarized thread shows the thread, never the summary the
  *  model reads in its place, including when the turn pauses on a card. */
 const COMPACTION_SUMMARY_RULE: KnownRule = {
@@ -179,21 +171,9 @@ const COMPACTION_SUMMARY_RULE: KnownRule = {
  */
 const knownTurnRulesOf = ({
   position,
-  provider,
   shape,
 }: TurnCombination): KnownRule[] => {
   const rules: KnownRule[] = [];
-  if (
-    shape === "whitespace" &&
-    provider !== "google" &&
-    (position === "fresh" ||
-      position === "after-compaction" ||
-      position === "resume-after-restart" ||
-      position === "skill-run" ||
-      position === "fallback")
-  ) {
-    rules.push(WHITESPACE_RULE);
-  }
   if (shape === "tool-call" && position === "after-compaction") {
     rules.push(COMPACTION_SUMMARY_RULE);
   }

@@ -187,7 +187,10 @@ describe("queued action admission", () => {
     const admission: typeof withActionAdmission = async (options) => {
       calls.push(options);
       return await Result.tryPromise({
-        try: async () => await options.run(new AbortController().signal),
+        try: async () =>
+          await options.run(new AbortController().signal, {
+            reservePeriod: async () => Result.ok(undefined),
+          }),
         catch: (error: unknown) => error,
       });
     };
