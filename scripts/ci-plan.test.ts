@@ -18,6 +18,7 @@ import { propertyConfig } from "@stll/property-testing";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+import { GENERATORS } from "./generated-files";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
@@ -1470,6 +1471,80 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
     expect(condition, name).toContain(
       "needs.ci-plan.outputs.package_checks_required == 'true'",
     );
+  }
+});
+
+const packageScopeStart = workflow.indexOf(
+  "          package_checks_required=false\n",
+);
+const packageScope = workflow.slice(packageScopeStart, selectorStart);
+
+const packageChecksPlan = (files: readonly string[]) => {
+  const process = Bun.spawnSync({
+    cmd: [
+      "bash",
+      "-e",
+      "-c",
+      `changed_files=("$@"); desktop_rust_checks_required=false
+${packageScope}
+printf "%s\\n" "$package_checks_required"`,
+      "ci-plan-test",
+      ...files,
+    ],
+    env: { PATH: Bun.env["PATH"] ?? "" },
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+  expect(process.exitCode, new TextDecoder().decode(process.stderr)).toBe(0);
+  return new TextDecoder().decode(process.stdout).trim();
+};
+
+test("CLI packaging parity runs whenever CLI sources, codegen or generated outputs change", () => {
+  expect(packageScopeStart).toBeGreaterThan(-1);
+  expect(packageScopeStart).toBeLessThan(selectorStart);
+  const parity = Object.entries(ciJobs).flatMap(([job, body]) =>
+    (v.is(v.object({ steps: v.array(v.unknown()) }), body)
+      ? jobSteps(body)
+      : []
+    )
+      .filter(({ run }) => run?.includes("scripts/cli-runtime-pack.test.ts"))
+      .map(({ name, if: condition }) => ({ job, name, condition })),
+  );
+  expect(parity.map(({ job, name }) => `${job}: ${String(name)}`)).toEqual([
+    "ci-checks-rest: Test CLI runtime package parity",
+  ]);
+  expect(parity.at(0)?.condition).toBe(
+    "needs.ci-plan.outputs.package_checks_required == 'true'",
+  );
+  expect(jobScopes["ci-checks-rest"]).toBeNull();
+
+  const generators = GENERATORS.filter(({ id }) =>
+    ["cli-registry", "cli-runtime"].includes(id),
+  );
+  expect(generators).toHaveLength(2);
+  const cliPaths = [
+    ...generators.flatMap(({ inputs }) => inputs),
+    ...generators.flatMap(({ outputs }) => outputs),
+    "packages/cli/src/cli.ts",
+    "packages/cli/src/codegen-version.ts",
+    "scripts/generated-files.ts",
+    "scripts/generated-imports.ts",
+    "scripts/cli-runtime-pack.test.ts",
+  ].map((glob) =>
+    glob.replaceAll("**", "example/generated.ts").replaceAll("*", "example"),
+  );
+  // The scope is not trivially on: provenance-only changes skip it.
+  expect(packageChecksPlan(["provenance/attestation.json"])).toBe("false");
+  // Every CLI path, alone and on either side of skipped provenance files.
+  const provenance = [".provenance.yml", "provenance/attestation.json"];
+  for (const cliPath of cliPaths) {
+    for (const files of [
+      [cliPath],
+      [cliPath, ...provenance],
+      [...provenance, cliPath],
+    ]) {
+      expect(packageChecksPlan(files), files.join(" ")).toBe("true");
+    }
   }
 });
 
