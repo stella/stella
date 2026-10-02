@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
@@ -11,7 +11,12 @@ import type { RecordingAnalytics } from "@/api/tests/helpers/recording-telemetry
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 
-import { buildChatCodeMode, chatScriptCallCatalog } from "./chat-code-mode";
+import {
+  buildChatCodeMode,
+  CHAT_READ_SCRIPT_POLICY,
+  chatScriptCallCatalog,
+  chatScriptReadToolNames,
+} from "./chat-code-mode";
 import { classifyScriptName } from "./script-call-guide";
 
 // Drives the real QuickJS sandbox through execute_typescript: share the sandbox
@@ -361,4 +366,58 @@ return "saved";`,
       reason: "anonymized mode is on",
     });
   });
+});
+
+describe("the chat read script policy", () => {
+  const directOnly = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
+    ([name, policy]) => (policy === "direct-only" ? [name] : []),
+  );
+
+  test("the script catalog follows each read's declared policy", () => {
+    const scriptReads = Object.entries(CHAT_READ_SCRIPT_POLICY).flatMap(
+      ([name, policy]) => (policy === "script" ? [name] : []),
+    );
+    expect(directOnly).toEqual([
+      "search_boe_legislation",
+      "lookup_business_registry",
+    ]);
+    expect(chatScriptReadToolNames().toSorted()).toEqual(
+      scriptReads.toSorted(),
+    );
+  });
+
+  test("direct-only reads are neither advertised nor discoverable in a chat script", async () => {
+    const codeMode = buildChatCodeMode(buildProps(selectScopedDb([])));
+    const discover =
+      codeMode.discoveryTool?.execute ??
+      expect.unreachable("discover_tools has no execute");
+    for (const name of directOnly) {
+      expect(codeMode.systemPrompt).not.toContain(`external_${name}`);
+      expect(
+        JSON.stringify(await discover({ toolNames: [name] })),
+      ).not.toContain("Returns:");
+    }
+  });
+
+  test.each([
+    ["search_boe_legislation", `{ title: "Synthetic Client Novák" }`],
+    ["lookup_business_registry", `{ query: "Synthetic Client Novák" }`],
+  ])(
+    "a script calling the direct-only read %s fails before any request",
+    async (name, args) => {
+      const fetchSpy = spyOn(globalThis, "fetch");
+      try {
+        const execute =
+          buildChatCodeMode(buildProps(selectScopedDb([]))).tool.execute ??
+          expect.unreachable("execute_typescript has no execute");
+        const output = await execute({
+          typescriptCode: `return await external_${name}(${args});`,
+        });
+        expect(output).toMatchObject({ success: false });
+        expect(fetchSpy).not.toHaveBeenCalled();
+      } finally {
+        fetchSpy.mockRestore();
+      }
+    },
+  );
 });

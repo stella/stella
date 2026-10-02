@@ -31,7 +31,10 @@ import {
   buildMcpContextFromChat,
   type ChatRegistryContextDeps,
 } from "@/api/handlers/chat/tools/registry-adapter/mcp-chat-context";
-import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
+import type {
+  ChatProjectableToolName,
+  RegistryReadToolName,
+} from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import { runRegistryReadTool } from "@/api/handlers/chat/tools/registry-adapter/run-registry-tool";
 import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/tool-input-schema";
@@ -63,25 +66,74 @@ import {
  * hand-written org/workspace manifests are not consulted here.
  */
 
+type ChatProjectableReadToolName = ChatProjectableToolName<
+  typeof READ_TOOL_REF_FIELD_MAP
+>;
+
+export const CHAT_READ_SCRIPT_POLICIES = ["script", "direct-only"] as const;
+
+export type ChatReadScriptPolicy = (typeof CHAT_READ_SCRIPT_POLICIES)[number];
+
 /**
- * The chat-projectable read tools, in registry order. Derived from the
- * `as const` registry array so each `access: "read"` element's `name` narrows
- * to the `RegistryReadToolName` union (no cast); the ref-field map then decides
- * chat projectability per tool.
+ * How each chat-projectable read is offered. `script` reads are script
+ * functions inside `execute_typescript`; `direct-only` reads are offered only
+ * as their direct tool. The map is total, so every projectable read declares
+ * one.
  */
-export const chatProjectableReadToolNames =
-  (): readonly RegistryReadToolName[] => {
-    const names: RegistryReadToolName[] = [];
-    for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
-      if (definition.access !== "read") {
-        continue;
-      }
-      if (READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable) {
-        names.push(definition.name);
-      }
+export const CHAT_READ_SCRIPT_POLICY = {
+  list_matters: "script",
+  list_contacts: "script",
+  search_across_matters: "script",
+  read_content_across_matters: "script",
+  read_contact: "script",
+  list_documents: "script",
+  read_document: "script",
+  list_properties: "script",
+  list_tasks: "script",
+  list_clauses: "script",
+  list_playbooks: "script",
+  list_reader_annotations: "script",
+  list_time_entries: "script",
+  list_invoices: "script",
+  get_usage: "script",
+  search_case_law: "script",
+  lookup_case_law: "script",
+  read_case_law_decision: "script",
+  read_case_law_citations: "script",
+  search_legislation: "script",
+  read_statute: "script",
+  read_statute_provisions: "script",
+  read_provision_history: "script",
+  search_boe_legislation: "direct-only",
+  lookup_business_registry: "direct-only",
+} as const satisfies Record<ChatProjectableReadToolName, ChatReadScriptPolicy>;
+
+const CHAT_READ_SCRIPT_POLICY_BY_NAME: Readonly<
+  Record<string, ChatReadScriptPolicy | undefined>
+> = CHAT_READ_SCRIPT_POLICY;
+
+/**
+ * The reads a chat script may call, in registry order. Derived from the
+ * `as const` registry array so each `access: "read"` element's `name` narrows
+ * to the `RegistryReadToolName` union (no cast); the ref-field map decides chat
+ * projectability and {@link CHAT_READ_SCRIPT_POLICY} which of those are script
+ * functions.
+ */
+export const chatScriptReadToolNames = (): readonly RegistryReadToolName[] => {
+  const names: RegistryReadToolName[] = [];
+  for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
+    if (definition.access !== "read") {
+      continue;
     }
-    return names;
-  };
+    if (
+      READ_TOOL_REF_FIELD_MAP[definition.name].chatProjectable &&
+      CHAT_READ_SCRIPT_POLICY_BY_NAME[definition.name] === "script"
+    ) {
+      names.push(definition.name);
+    }
+  }
+  return names;
+};
 
 /**
  * The `execute_typescript` runner that Stella's sandbox owns unchanged. Passed to
@@ -112,7 +164,7 @@ const chatReadToolDescription = (toolName: RegistryReadToolName): string => {
   const entry = READ_TOOL_REF_FIELD_MAP[toolName];
   if (!entry.chatProjectable) {
     // Non-projectable tools never enter the chat catalog
-    // (`chatProjectableReadToolNames` filters them out); the plain
+    // (`chatScriptReadToolNames` filters them out); the plain
     // description satisfies the type without inventing a shape.
     return definition.description;
   }
@@ -141,7 +193,7 @@ const buildChatReadTools = ({
     ...EAGER_CHAT_READ_TOOLS,
     ...documentedReads,
   ]);
-  return chatProjectableReadToolNames().map((toolName) => {
+  return chatScriptReadToolNames().map((toolName) => {
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat read tool ${toolName} is missing from the static registry`);
@@ -216,7 +268,7 @@ const SCRIPT_FUNCTION_PREFIX = "external_";
  * a script misspelled.
  */
 const CHAT_SCRIPT_READ_FUNCTIONS: ReadonlySet<string> = new Set(
-  chatProjectableReadToolNames().map(
+  chatScriptReadToolNames().map(
     (toolName) => `${SCRIPT_FUNCTION_PREFIX}${toolName}`,
   ),
 );

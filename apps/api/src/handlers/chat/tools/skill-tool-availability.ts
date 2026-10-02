@@ -5,7 +5,7 @@ import {
   type GetChatToolsProps,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
-  chatProjectableReadToolNames,
+  chatScriptReadToolNames,
   CODE_MODE_EXECUTE_TOOL_NAME,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
 import {
@@ -52,7 +52,7 @@ const chatOfferedToolNames = ({
     tool === undefined ? [] : [name],
   );
   if (names.includes(CODE_MODE_EXECUTE_TOOL_NAME)) {
-    names.push(...chatProjectableReadToolNames());
+    names.push(...chatScriptReadToolNames());
   }
   return new Set(
     names.filter((name) => isRegistryToolUsable(name, memberRole)),
