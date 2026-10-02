@@ -68,7 +68,9 @@ jobs:
         with:
           persist-credentials: false
           submodules: true
-          ref: ${{ inputs.ref }}
+          # Only the main-heavy caller forwards its already-validated SHA.
+          # Other check callers always test their event's own ref.
+          ref: ${{ github.workflow == 'Main heavy suites' && inputs.ref || '' }}
 
       - name: Capture marketing screenshots
         uses: ./.github/actions/marketing-capture

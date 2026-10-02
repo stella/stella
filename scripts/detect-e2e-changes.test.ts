@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   existsSync,
@@ -11,6 +12,8 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Script } from "node:vm";
+import * as v from "valibot";
 
 import { parseBunLockText } from "./bun-lock-text";
 
@@ -73,6 +76,70 @@ const marketingCapture = readFileSync(
   ),
   "utf-8",
 );
+
+const contractStepSchema = v.looseObject({
+  name: v.optional(v.string()),
+  uses: v.optional(v.string()),
+  run: v.optional(v.string()),
+  with: v.optional(v.record(v.string(), v.unknown())),
+});
+const contractWorkflowSchema = v.object({
+  jobs: v.record(
+    v.string(),
+    v.looseObject({
+      if: v.optional(v.string()),
+      needs: v.optional(v.union([v.string(), v.array(v.string())])),
+      with: v.optional(v.record(v.string(), v.unknown())),
+      outputs: v.optional(v.record(v.string(), v.string())),
+      steps: v.optional(v.array(contractStepSchema)),
+    }),
+  ),
+});
+const ciContract = v.parse(contractWorkflowSchema, Bun.YAML.parse(workflow));
+const marketingContract = v.parse(
+  contractWorkflowSchema,
+  Bun.YAML.parse(marketingWorkflow),
+);
+const mainHeavyContract = v.parse(
+  contractWorkflowSchema,
+  Bun.YAML.parse(
+    readFileSync(
+      path.join(import.meta.dirname, "../.github/workflows/main-heavy.yml"),
+      "utf-8",
+    ),
+  ),
+);
+const evaluateExpression = (expression: string, context: object) =>
+  new Script(
+    expression
+      .replace(/^\s*\$\{\{([\s\S]*)\}\}\s*$/u, "$1")
+      .replaceAll(
+        /needs\.([\w-]+)/gu,
+        (_, job: string) => `needs[${JSON.stringify(job)}]`,
+      ),
+  ).runInNewContext(context);
+const requiredExpression = (value: unknown) => {
+  if (typeof value !== "string") {
+    panic("Missing workflow expression");
+  }
+  return value;
+};
+const checkoutRefs = Object.values(ciContract.jobs).flatMap((job) =>
+  (job.steps ?? []).filter(
+    (step) =>
+      step.uses?.startsWith("actions/checkout@") &&
+      step.with?.["ref"] !== undefined,
+  ),
+);
+const marketingCheckout = (job: string) => {
+  const checkout = marketingContract.jobs[job]?.steps?.find(
+    ({ name }) => name === "Checkout",
+  );
+  if (!checkout) {
+    panic(`Missing marketing ${job} checkout`);
+  }
+  return requiredExpression(checkout.with?.["ref"]);
+};
 
 const jobOf = (source: string, jobId: string): string => {
   const marker = `\n  ${jobId}:\n`;
@@ -606,15 +673,109 @@ describe("detect-e2e-changes", () => {
       update.indexOf("- name: Mint App token"),
     );
 
-    // The checked-out code and the push target are the named branch, never
-    // the ref the workflow itself runs from. The check job takes no ref and
-    // stays on its triggering one.
+    // Updates capture the named branch; ordinary checks keep the event's
+    // ref. Only the validated main-heavy caller selects an explicit SHA.
     expect(workflowStep(update, "Checkout")).toContain(
       `ref: ${githubExpression("inputs.ref")}`,
     );
+    expect(checkoutRefs.length).toBeGreaterThan(0);
+    for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
+      const context = {
+        github: { event_name: event, workflow: "CI Checks", sha: "event-sha" },
+        inputs: {
+          heavy_only: false,
+          sha: "unvalidated-sha",
+          ref: "unvalidated-ref",
+        },
+      };
+      expect(evaluateExpression(marketingCheckout("check"), context)).toBe("");
+      expect(
+        evaluateExpression(
+          requiredExpression(
+            ciContract.jobs["marketing-screenshots"]?.with?.["ref"],
+          ),
+          context,
+        ),
+      ).toBe("");
+      for (const checkout of checkoutRefs) {
+        expect(
+          evaluateExpression(
+            requiredExpression(checkout.with?.["ref"]),
+            context,
+          ),
+        ).toBe("");
+      }
+      for (const job of Object.values(ciContract.jobs)) {
+        for (const item of job.steps ?? []) {
+          const expectedSha = item.with?.["expected-sha"];
+          if (expectedSha !== undefined) {
+            expect(
+              evaluateExpression(requiredExpression(expectedSha), context),
+            ).toBe("event-sha");
+          }
+        }
+      }
+    }
+    const validatedSha = "a".repeat(40);
+    const validationOutput = requiredExpression(
+      mainHeavyContract.jobs["validate"]?.outputs?.["sha"],
+    );
+    const forwardedSha = evaluateExpression(validationOutput, {
+      steps: { ancestor: { outputs: { sha: validatedSha } } },
+    });
+    const suites = mainHeavyContract.jobs["suites"];
+    expect(suites?.with?.["heavy_only"]).toBe(true);
+    expect(suites?.if).toBe("needs.validate.result == 'success'");
+    const callerSha = evaluateExpression(
+      requiredExpression(suites?.with?.["sha"]),
+      { needs: { validate: { outputs: { sha: forwardedSha } } } },
+    );
+    expect(callerSha).toBe(validatedSha);
+    const heavyContext = {
+      github: { workflow: "Main heavy suites", sha: "event-sha" },
+      inputs: { heavy_only: true, sha: callerSha, ref: callerSha },
+    };
+    for (const checkout of checkoutRefs) {
+      expect(
+        evaluateExpression(
+          requiredExpression(checkout.with?.["ref"]),
+          heavyContext,
+        ),
+      ).toBe(validatedSha);
+    }
     expect(
-      workflowStep(jobOf(marketingWorkflow, "check"), "Checkout"),
-    ).not.toContain("ref:");
+      evaluateExpression(
+        requiredExpression(
+          ciContract.jobs["marketing-screenshots"]?.with?.["ref"],
+        ),
+        heavyContext,
+      ),
+    ).toBe(validatedSha);
+    expect(evaluateExpression(marketingCheckout("check"), heavyContext)).toBe(
+      validatedSha,
+    );
+    for (const job of Object.values(ciContract.jobs)) {
+      for (const item of job.steps ?? []) {
+        const expectedSha = item.with?.["expected-sha"];
+        if (expectedSha !== undefined) {
+          expect(
+            evaluateExpression(requiredExpression(expectedSha), heavyContext),
+          ).toBe(validatedSha);
+        }
+      }
+    }
+    expect(
+      evaluateExpression(marketingCheckout("update"), {
+        inputs: { ref: "named-branch" },
+      }),
+    ).toBe("named-branch");
+    const validateSteps = mainHeavyContract.jobs["validate"]?.steps ?? [];
+    expect(
+      validateSteps.find(({ name }) => name === "Validate SHA format")?.run,
+    ).toContain("^[0-9a-f]{40}$");
+    expect(
+      validateSteps.find(({ name }) => name === "Verify main ancestry")?.run,
+    ).toContain("git merge-base --is-ancestor");
     // The push is an API commit appended to the named branch: GitHub signs
     // it, so it cannot leave a person's pull request behind the
     // signed-commits rule.
@@ -625,8 +786,7 @@ describe("detect-e2e-changes", () => {
     expect(push).toContain("mode: append");
     expect(push).toContain(`branch: ${githubExpression("inputs.ref")}`);
 
-    // Check-mode callers pass no ref and stay on their own triggering ref.
-    expect(workflowJob("marketing-screenshots")).not.toContain("ref:");
+    // Nightly checks continue to use their triggering ref.
     expect(nightlyWorkflow).not.toContain("ref: ");
   });
 
@@ -714,22 +874,69 @@ describe("detect-e2e-changes", () => {
     expect(e2eWebBuild).toContain("VITE_FEATURE_TIME_BILLING");
 
     const production = workflowJob("e2e-production-shard");
-    const productionHeader = production.slice(
-      0,
-      production.indexOf("\n    runs-on:"),
-    );
-    expect(productionHeader).toContain(
-      [
-        "    needs: [ci-plan, web-build]",
-        "    if: >-",
-        "      always()",
-        "      && (github.event_name != 'merge_group' || !cancelled())",
-        "      && (needs.ci-plan.outputs.trusted == 'true'",
-        "          || github.event_name == 'workflow_dispatch')",
-        "      && needs.ci-plan.outputs.e2e_production_required == 'true'",
-        "      && needs.web-build.result == 'success'",
-      ].join("\n"),
-    );
+    const productionJob = ciContract.jobs["e2e-production-shard"];
+    expect(productionJob?.needs).toEqual([
+      "ci-plan",
+      "web-build",
+      "heavy-web-build",
+    ]);
+    const predicate = requiredExpression(productionJob?.if);
+    for (const event of [
+      "pull_request",
+      "merge_group",
+      "workflow_dispatch",
+      "push",
+      "schedule",
+    ]) {
+      for (const depth of ["fast", "full"]) {
+        for (const planned of [false, true]) {
+          for (const trusted of [false, true]) {
+            for (const webResult of ["success", "skipped", "failure"]) {
+              for (const heavyResult of ["success", "skipped", "failure"]) {
+                for (const heavyOnly of [false, true]) {
+                  for (const cancelled of [false, true]) {
+                    const context = {
+                      github: { event_name: event },
+                      inputs: { heavy_only: heavyOnly },
+                      needs: {
+                        "ci-plan": {
+                          outputs: {
+                            queue_depth: "full",
+                            suite_depth: depth,
+                            trusted: String(trusted),
+                            e2e_production_required: String(planned),
+                          },
+                        },
+                        "web-build": { result: webResult },
+                        "heavy-web-build": { result: heavyResult },
+                      },
+                      always: () => true,
+                      cancelled: () => cancelled,
+                    };
+                    expect(
+                      Boolean(evaluateExpression(predicate, context)),
+                      `${event}/${depth}/${planned}/${trusted}/${webResult}/${heavyResult}/${heavyOnly}/${cancelled}`,
+                    ).toBe(
+                      planned &&
+                        (trusted || event === "workflow_dispatch") &&
+                        (webResult === "success" ||
+                          heavyResult === "success") &&
+                        (event !== "merge_group" || !cancelled),
+                    );
+                    if (predicate.includes("queue_depth")) {
+                      context.needs["ci-plan"].outputs.queue_depth = "thin";
+                      expect(
+                        Boolean(evaluateExpression(predicate, context)),
+                      ).toBe(false);
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
     expect(production).not.toContain("Build web for route checks");
     expect(production).not.toContain("Wait for production web build");
     expect(production).toContain(
