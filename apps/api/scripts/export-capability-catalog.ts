@@ -1811,25 +1811,13 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  // Formatted here for the same reason as the dispatch module: an unformatted
-  // artifact fails CI's Format gate, and hand-formatting it afterwards makes it
-  // differ from what this exporter regenerates, which then fails the drift
-  // guard instead. Only generator-formatted output satisfies both.
-  const formattedDoc = await formatGeneratedArtifacts(
-    new Map([
-      [
-        "capability-coverage.md",
-        serializeCoverageDoc({
-          entries,
-          cliCommandPathById,
-          internalWaiverCounts,
-        }),
-      ],
-    ]),
-  );
-  const doc =
-    formattedDoc.get("capability-coverage.md") ??
-    panic("Missing formatted capability coverage doc");
+  // Unpadded rows keep a wider cell from rewriting every other row. This
+  // generated document is excluded from the formatter for the same reason.
+  const doc = serializeCoverageDoc({
+    entries,
+    cliCommandPathById,
+    internalWaiverCounts,
+  });
 
   const mode = checkMode ? "check" : "write";
   const catalogDrift = await syncCapabilityShards({

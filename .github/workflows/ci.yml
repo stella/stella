@@ -69,7 +69,7 @@ jobs:
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
-      marketing_screenshots_required: ${{ steps.changed-files.outputs.marketing_screenshots_required }}
+      marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
       migration_rehearsal_required: ${{ steps.changed-files.outputs.migration_rehearsal_required }}
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
@@ -191,6 +191,37 @@ jobs:
         if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
         run: echo "image=$(cat .github/actions/setup-playwright/image.txt)" >> "$GITHUB_OUTPUT"
 
+      - name: Plan release marketing screenshots
+        id: marketing-release
+        if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          MERGE_GROUP_HEAD_REF: ${{ github.event.merge_group.head_ref }}
+          REPOSITORY: ${{ github.repository }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          required=false
+          number="$PR_NUMBER"
+          if [[ "$EVENT_NAME" == "merge_group" ]]; then
+            if [[ ! "$MERGE_GROUP_HEAD_REF" =~ /pr-([0-9]+)-[0-9a-f]+$ ]]; then
+              echo "::error::Merge group ref does not name a pull request" >&2
+              exit 1
+            fi
+            number="${BASH_REMATCH[1]}"
+          fi
+          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+            required=true
+          elif [[ -n "$number" ]]; then
+            state=$(bash scripts/release-pull-requests.sh --repo "$REPOSITORY" --number "$number")
+            required=$(sed -n 's/^current_is_release=//p' <<< "$state")
+            if [[ "$required" != true && "$required" != false ]]; then
+              echo "::error::Release classifier returned no verdict" >&2
+              exit 1
+            fi
+          fi
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+
       - name: Setup Bun for dependency scope
         if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
@@ -245,7 +276,6 @@ jobs:
               echo "legal_atlas_image_required=true"
               echo "dependency_malware_required=true"
               echo "lockfile_ages_required=false"
-              echo "marketing_screenshots_required=true"
               echo "migration_rehearsal_required=true"
               echo "mobile_build_required=true"
               echo "model_catalog_drift_required=true"
@@ -278,7 +308,6 @@ jobs:
               echo "legal_atlas_image_required=false"
               echo "dependency_malware_required=false"
               echo "lockfile_ages_required=false"
-              echo "marketing_screenshots_required=false"
               echo "migration_rehearsal_required=false"
               echo "mobile_build_required=false"
               echo "model_catalog_drift_required=false"
@@ -298,7 +327,6 @@ jobs:
           desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "${changed_files[@]}")
           e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "${changed_files[@]}")
           e2e_landing_required=$(bash scripts/detect-e2e-changes.sh landing "${changed_files[@]}")
-          marketing_screenshots_required=$(bash scripts/detect-e2e-changes.sh marketing "${changed_files[@]}")
           package_checks_required=false
           for file in "${changed_files[@]}"; do
             case "$file" in
@@ -527,7 +555,6 @@ jobs:
             echo "legal_atlas_image_required=$legal_atlas_image_required"
             echo "dependency_malware_required=$dependency_malware_required"
             echo "lockfile_ages_required=$lockfile_ages_required"
-            echo "marketing_screenshots_required=$marketing_screenshots_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
             echo "mobile_build_required=$mobile_build_required"
             echo "model_catalog_drift_required=$model_catalog_drift_required"
@@ -3452,8 +3479,9 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
-  # A UI change must fail the PR that makes it, not the next nightly run: the
-  # captured PNGs ship as landing-page assets, so a silent baseline
+  # Release candidates compare the captured PNGs before shipping, on the
+  # release pull request itself (fast depth) as well as its merge group. These
+  # images ship as landing-page assets, so a silent baseline
   # invalidation puts a stale product shot on the marketing site. Regeneration
   # happens on the runner (`marketing-screenshots-update.yml` dispatched on
   # main with `-f branch=<this branch>`), which is also why the comparison
@@ -3470,7 +3498,6 @@ jobs:
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
       && (needs.ci-plan.outputs.web_build_required != 'true'
           || needs.web-build.result == 'success')
-      && needs.ci-plan.outputs.suite_depth == 'full'
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
       actions: read
@@ -3971,7 +3998,7 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "parser-version-guard", "web-image-smoke"]
+            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "web-image-smoke"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled
