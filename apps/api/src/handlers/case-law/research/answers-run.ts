@@ -44,6 +44,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     recordAuditEvent,
@@ -57,6 +58,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
     // spend) and rejects only an unreadable stored config, so the role's
     // provider and model support is still decided here.
     const available = requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -149,6 +151,7 @@ const runResearchAnswersHandler = createSafeRootHandler(
           columns: runColumns,
           claim: queued.claim,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
         },
         {

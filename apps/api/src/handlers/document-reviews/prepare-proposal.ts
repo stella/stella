@@ -67,6 +67,7 @@ export const prepareReferenceProposal = async function* ({
     );
   }
   yield* requireTanStackAIAvailableForRole({
+    dataClass: "customer",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "pdf",

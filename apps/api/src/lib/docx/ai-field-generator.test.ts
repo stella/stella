@@ -16,6 +16,7 @@ import {
   buildAiOccurrenceAdapter,
 } from "@/api/lib/docx/ai-field-generator";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
+import { resolveDecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import type { DecisionModel } from "@/api/lib/workflow/decisions/decision-model";
 import { createSystemOneClient } from "@/api/lib/workflow/decisions/system-one";
 
@@ -225,6 +226,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("does not advertise skill tools for a ref to no available skill", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -248,6 +250,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
     async (_name, builtIn) => {
       const generate = buildTestAiFieldGenerator({
         orgAIConfig,
+        managedAIResidency: "eu" as const,
         organizationId,
         skillContext,
         tenantWorkspaceIds: [],
@@ -269,6 +272,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("passes no tools when the prompt has no skill reference", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -281,6 +285,7 @@ describe("buildAiFieldGenerator skill-tool wiring", () => {
   test("passes no tools without a skill context, even with a ref", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -298,6 +303,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   test("injects a Document section when documentText is supplied", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -316,6 +322,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   test("omits the Document section when no documentText is supplied", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -327,6 +334,7 @@ describe("buildAiFieldGenerator document-text injection", () => {
   test("omits the Document section for blank documentText", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -347,6 +355,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   test("does not advertise skill tools for a ref to no available skill", async () => {
     const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -366,6 +375,7 @@ describe("buildAiOccurrenceAdapter skill-tool wiring", () => {
   test("passes no tools when the instruction has no skill reference", async () => {
     const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       skillContext,
       tenantWorkspaceIds: [],
@@ -389,6 +399,7 @@ describe("buildAiFieldGenerator truncated output", () => {
   ) => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel: resolveModel,
       tenantWorkspaceIds: [],
@@ -461,6 +472,7 @@ describe("output budgets are sized from the work asked for", () => {
   test("a field's ceiling covers its declared maximum value length", async () => {
     const generate = buildTestAiFieldGenerator({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -491,6 +503,7 @@ describe("output budgets are sized from the work asked for", () => {
   test("an adaptation's ceiling scales with the number of occurrences", async () => {
     const adapt = buildTestAiOccurrenceAdapter({
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       tenantWorkspaceIds: [],
     });
@@ -543,6 +556,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: decisionModel(0.94),
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -560,6 +574,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: decisionModel(0.04),
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -578,6 +593,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: decisionModel(0.55),
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -594,6 +610,7 @@ describe("buildAiConditionDecider decision tier", () => {
     const decideCondition = buildAiConditionDecider({
       decisionModel: null,
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       organizationId,
       resolveTextModel,
       tenantWorkspaceIds: [],
@@ -605,30 +622,36 @@ describe("buildAiConditionDecider decision tier", () => {
     expect(decided?.decidedBy).toBe("generative_model");
   });
 
-  test("an instance TypeSafe model keeps conditions available without org AI config", async () => {
+  test("keeps conditions unavailable without an eligible customer-content model", () => {
+    const previousMock = env.USE_MOCK_AI;
     const previousApiKey = env.TYPESAFE_API_KEY;
     const previousRequirePersonalKey = env.REQUIRE_PERSONAL_AI_KEY;
+    const previousProvider = env.AI_PROVIDER;
+    const previousAnthropicKey = env.ANTHROPIC_API_KEY;
+    env.USE_MOCK_AI = false;
     env.TYPESAFE_API_KEY = "key-test";
     env.REQUIRE_PERSONAL_AI_KEY = false;
+    env.AI_PROVIDER = "anthropic";
+    env.ANTHROPIC_API_KEY = "key-test";
     try {
+      const customerDecisionModel = resolveDecisionModel(null, "customer");
+      expect(customerDecisionModel).toBeNull();
       const decideCondition = buildAiConditionDecider({
-        decisionModel: decisionModel(0.94),
+        decisionModel: customerDecisionModel,
         orgAIConfig: null,
+        managedAIResidency: "eu",
         organizationId,
         resolveTextModel,
         tenantWorkspaceIds: [],
       });
-
-      expect(decideCondition).toBeDefined();
-      expect(await decideCondition?.(input)).toEqual({
-        decidedBy: "decision_model",
-        value: true,
-        probability: 0.94,
-      });
+      expect(decideCondition).toBeUndefined();
       expect(capturedRequests).toEqual([]);
     } finally {
+      env.USE_MOCK_AI = previousMock;
       env.TYPESAFE_API_KEY = previousApiKey;
       env.REQUIRE_PERSONAL_AI_KEY = previousRequirePersonalKey;
+      env.AI_PROVIDER = previousProvider;
+      env.ANTHROPIC_API_KEY = previousAnthropicKey;
     }
   });
 });

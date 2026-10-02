@@ -31,8 +31,7 @@ const BOE_SUMMARY_PATH = "boe/sumario";
 const BORME_SUMMARY_PATH = "borme/sumario";
 
 const TIMEOUT_MS = 15_000;
-const DEFAULT_SEARCH_LIMIT = 25;
-const MAX_SEARCH_LIMIT = 100;
+export const BOE_SEARCH_PAGE_LIMITS = { default: 25, maximum: 100 } as const;
 
 // ---------------------------------------------------------------------------
 // Internal fetch helper
@@ -293,8 +292,8 @@ export const searchConsolidatedLegislation = async (
   options: SearchLegislationOptions,
 ): Promise<BoeSearchResponse> => {
   const limit = Math.min(
-    options.limit ?? DEFAULT_SEARCH_LIMIT,
-    MAX_SEARCH_LIMIT,
+    options.limit ?? BOE_SEARCH_PAGE_LIMITS.default,
+    BOE_SEARCH_PAGE_LIMITS.maximum,
   );
   const offset = options.offset ?? 0;
 

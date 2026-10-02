@@ -411,6 +411,13 @@ describe("applyChatModelChange", () => {
   });
 });
 
+const EMPTY_THREAD_CONTEXT = {
+  fileCount: 0,
+  files: [],
+  matterCount: 0,
+  matters: [],
+};
+
 describe("mergeGroupedChatThreadPages", () => {
   test("deduplicates threads while appending workspace groups across pages", () => {
     const result = mergeGroupedChatThreadPages([
@@ -423,6 +430,7 @@ describe("mergeGroupedChatThreadPages", () => {
             title: "Global A",
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
+            context: EMPTY_THREAD_CONTEXT,
           },
         ],
         nextCursor: "page-2",
@@ -438,6 +446,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace A",
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
             ],
           },
@@ -452,6 +461,7 @@ describe("mergeGroupedChatThreadPages", () => {
             title: "Global A duplicate",
             updatedAt: "2026-05-16T08:00:00.000Z",
             usedAnonymization: false,
+            context: EMPTY_THREAD_CONTEXT,
           },
           {
             createdAt: "2026-05-16T06:00:00.000Z",
@@ -460,6 +470,7 @@ describe("mergeGroupedChatThreadPages", () => {
             title: "Global B",
             updatedAt: "2026-05-16T06:00:00.000Z",
             usedAnonymization: false,
+            context: EMPTY_THREAD_CONTEXT,
           },
         ],
         nextCursor: null,
@@ -475,6 +486,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace A duplicate",
                 updatedAt: "2026-05-16T07:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
               {
                 createdAt: "2026-05-16T05:00:00.000Z",
@@ -483,6 +495,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace B",
                 updatedAt: "2026-05-16T05:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
             ],
           },
@@ -497,6 +510,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace D",
                 updatedAt: "2026-05-16T06:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
               {
                 createdAt: "2026-05-16T04:00:00.000Z",
@@ -505,6 +519,7 @@ describe("mergeGroupedChatThreadPages", () => {
                 title: "Workspace C",
                 updatedAt: "2026-05-16T04:00:00.000Z",
                 usedAnonymization: false,
+                context: EMPTY_THREAD_CONTEXT,
               },
             ],
           },

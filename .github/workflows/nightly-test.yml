@@ -5,6 +5,11 @@ on:
     # 04:17 UTC daily, after nightly typecheck.
     - cron: "17 4 * * *"
   workflow_dispatch:
+    inputs:
+      dry-run-issue:
+        description: Exercise migration failure reporting without writing an issue
+        type: boolean
+        default: true
 
 permissions: {}
 
@@ -379,3 +384,119 @@ jobs:
         run: >-
           bun test --preload ./src/tests/setup-env.ts
           src/handlers/case-law/ingestion/adapters/eu-ecj.smoke.test.ts
+
+  migration-exact-base-upgrade:
+    # Scheduled workflows run on main; dispatches rehearse main too.
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+    services:
+      postgres:
+        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      postgres-clean:
+        image: postgres:18.6@sha256:4ef4dbc939d61acea57712655ddb4b4ab27419c913f94cca0cd57cb3ea3c2280
+        env:
+          POSTGRES_USER: stella_owner
+          POSTGRES_PASSWORD: stella
+          POSTGRES_DB: stella
+        ports:
+          - 5433:5432
+        options: >-
+          --health-cmd "pg_isready -U stella_owner -d stella"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Resolve previous main state
+        id: base
+        run: |
+          git fetch --no-tags origin refs/heads/main
+          git checkout --detach FETCH_HEAD
+          base=$(git rev-list -1 --first-parent --before="$(date -u -d '24 hours ago' +%FT%TZ)" HEAD)
+          [[ "$base" =~ ^[0-9a-f]{40}$ ]] || { echo "::error::No main commit exists before the nightly window"; exit 1; }
+          echo "sha=$base" >> "$GITHUB_OUTPUT"
+          echo "candidate=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+
+      - name: Setup Bun
+        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
+        with:
+          save: ${{ github.ref == 'refs/heads/main' }}
+
+      - name: Install candidate dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Test exact-base rehearsal contracts
+        run: bun test scripts/migration-catalog.test.ts scripts/rehearse-exact-base-upgrade.test.ts
+
+      - name: Rehearse exact-base migration upgrade
+        id: rehearsal
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
+          CLEAN_DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5433/stella
+        run: bash scripts/rehearse-exact-base-upgrade.sh
+
+      - name: Report unavailable rehearsal
+        if: always() && steps.rehearsal.outcome == 'skipped'
+        env:
+          BASE_SHA: ${{ steps.base.outputs.sha }}
+          CANDIDATE_SHA: ${{ steps.base.outputs.candidate }}
+        run: |
+          {
+            echo "### Exact-base migration upgrade"
+            echo
+            echo "Verdict: infra failure (rehearsal could not start)."
+            echo "Base: $BASE_SHA; candidate: $CANDIDATE_SHA."
+            echo "Phase durations and rehearsal total: not run."
+          } >> "$GITHUB_STEP_SUMMARY"
+
+  report-failure:
+    needs: migration-exact-base-upgrade
+    if: >-
+      always() && (needs.migration-exact-base-upgrade.result == 'failure'
+      || (github.event_name == 'schedule' && needs.migration-exact-base-upgrade.result == 'cancelled')
+      || (github.event_name == 'workflow_dispatch' && inputs.dry-run-issue))
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    # Serialize issue discovery and creation to avoid duplicate open issues.
+    concurrency:
+      group: nightly-exact-base-failure-issue
+      cancel-in-progress: false
+    permissions:
+      contents: read
+      # Files or updates the routine failure issue, without publishing logs.
+      issues: write
+    steps:
+      - name: Checkout report script
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: File or update the routine failure issue
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          # Manual branch dispatches may exercise reporting but never write.
+          DRY_RUN: ${{ github.event_name == 'workflow_dispatch' && (inputs.dry-run-issue || github.ref != 'refs/heads/main') }}
+        run: bash scripts/report-exact-base-failure.sh
