@@ -1,6 +1,9 @@
 import type { Static } from "elysia";
 
-import type { DecisionQueryIntent } from "@stll/api-contract/decision-query-intent";
+import {
+  type DecisionQueryIntent,
+  isWholeEntryIdentifier,
+} from "@stll/api-contract/decision-query-intent";
 import type { CaseLawSearchWarning } from "@stll/api-contract/search";
 
 import type { searchDecisionsBodySchema } from "@/api/handlers/case-law/decisions/search-schema";
@@ -130,7 +133,9 @@ export const interpretDecisionQuery = (
   body: SearchDecisionsBody,
   intent: DecisionQueryIntent,
 ): DecisionQueryInterpretation => {
-  const verbatim = body.strict === true || intent.type === "identifier";
+  // An identifier found among other words leaves them a text search, read
+  // like any other should the reference name nothing.
+  const verbatim = body.strict === true || isWholeEntryIdentifier(intent);
   const functionWords = verbatim
     ? null
     : functionWordsFor(

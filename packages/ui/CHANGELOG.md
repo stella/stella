@@ -1,5 +1,11 @@
 # @stll/ui
 
+## 0.40.0
+
+### Minor Changes
+
+- [#4359](https://github.com/stella/stella/pull/4359) [`96a31ab`](https://github.com/stella/stella/commit/96a31abbb7f6ddae0aa4c1ea857559b714190ff1) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add `CopyButton`, which confirms a copy in place; semantic `NewChatIcon` and `AddCommentIcon`; and a centered slot in `ComposerStatusRow`.
+
 ## 0.39.0
 
 ### Minor Changes
