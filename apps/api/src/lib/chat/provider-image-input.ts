@@ -3,6 +3,7 @@ import { panic, Result } from "better-result";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 
+import { runError } from "@/api/lib/chat/provider-stream-contract";
 import {
   getModelImageCapability,
   getModelImageCapabilityUnknownReason,
@@ -51,7 +52,7 @@ type PreparedBedrockImages = {
 const prepareBedrockImage = async (
   part: ImagePart,
   preparedImages?: PreparedBedrockImages,
-): Promise<ImagePart> => {
+): Promise<Result<ImagePart, HandlerError>> => {
   let payload: string;
   if (part.source.type === "url") {
     const inline = validateDataUrl({
@@ -59,17 +60,17 @@ const prepareBedrockImage = async (
       url: part.source.value,
     });
     if (Result.isError(inline)) {
-      throw invalidBedrockImage(inline.error);
+      return Result.err(invalidBedrockImage(inline.error));
     }
     payload = inline.value.payload;
   } else if (part.source.type === "data") {
     payload = part.source.value;
   } else {
     // Nothing is fetched on the model's behalf, including file references.
-    throw invalidBedrockImage();
+    return Result.err(invalidBedrockImage());
   }
   if (payload.length > MAX_IMAGE_BASE64_LENGTH) {
-    throw invalidBedrockImage();
+    return Result.err(invalidBedrockImage());
   }
   // Inline URL and data sources share the same identity after validation.
   // Hashes retain no original attachment bytes; target settings are part of it.
@@ -86,28 +87,28 @@ const prepareBedrockImage = async (
   ) {
     preparedImages.sources.delete(cacheKey);
     preparedImages.sources.set(cacheKey, cached);
-    return { ...part, source: cached };
+    return Result.ok({ ...part, source: cached });
   }
   const source = Buffer.from(payload, "base64");
   if (source.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
-    throw invalidBedrockImage();
+    return Result.err(invalidBedrockImage());
   }
   Bun.Image.backend = "bun";
-  const image = new Bun.Image(source, { autoOrient: true });
   const prepared = await Result.tryPromise({
     try: async () =>
       await withTimeout(
         async () => {
+          const image = new Bun.Image(source, { autoOrient: true });
           const { width, height } = await image.metadata();
           if (
             source.byteLength <= BEDROCK_IMAGE_MAX_BYTES &&
             width <= BEDROCK_IMAGE_MAX_EDGE &&
             height <= BEDROCK_IMAGE_MAX_EDGE
           ) {
-            return part;
+            return Result.ok(part);
           }
           if (width * height > LIMITS.imageDerivativeSourcePixelsMax) {
-            throw invalidBedrockImage();
+            return Result.err(invalidBedrockImage());
           }
           // WebP preserves alpha; one bounded encode avoids repeated full decodes.
           const bytes = await image
@@ -118,25 +119,29 @@ const prepareBedrockImage = async (
             .webp({ quality: REENCODE_WEBP_QUALITY })
             .bytes();
           if (bytes.byteLength > BEDROCK_IMAGE_MAX_BYTES) {
-            throw invalidBedrockImage();
+            return Result.err(invalidBedrockImage());
           }
-          return {
+          return Result.ok({
             ...part,
             source: {
               type: "data",
               value: Buffer.from(bytes).toString("base64"),
               mimeType: "image/webp",
             },
-          } satisfies ContentPart;
+          } satisfies ImagePart);
         },
         { label: "bedrock-image", timeoutMs: LIMITS.imageDerivativeTimeoutMs },
       ),
     catch: (cause) => invalidBedrockImage(cause),
   });
   if (Result.isError(prepared)) {
-    throw prepared.error;
+    return prepared;
   }
-  const output = prepared.value;
+  const converted = prepared.value;
+  if (Result.isError(converted)) {
+    return converted;
+  }
+  const output = converted.value;
   if (
     output !== part &&
     output.source.type === "data" &&
@@ -159,7 +164,7 @@ const prepareBedrockImage = async (
     preparedImages.sources.set(cacheKey, output.source);
     preparedImages.bytes += bytes;
   }
-  return output;
+  return Result.ok(output);
 };
 
 type PrepareProviderImageMessagesOptions = {
@@ -174,18 +179,20 @@ export const prepareProviderImageMessages = async ({
   modelId,
   provider,
   preparedImages,
-}: PrepareProviderImageMessagesOptions): Promise<ModelMessage[]> => {
+}: PrepareProviderImageMessagesOptions): Promise<
+  Result<ModelMessage[], HandlerError>
+> => {
   const hasImages = messages.some(
     ({ content }) =>
       Array.isArray(content) && content.some((part) => part.type === "image"),
   );
   if (!hasImages) {
-    return messages;
+    return Result.ok(messages);
   }
   const capability = getModelImageCapability({ provider, modelId });
   switch (capability) {
     case "unsupported":
-      throw imageInputUnsupportedError();
+      return Result.err(imageInputUnsupportedError());
     case "unknown":
       logger.info("ai.image_capability_unknown", {
         provider,
@@ -200,7 +207,7 @@ export const prepareProviderImageMessages = async ({
       return panic(`Unhandled image capability: ${String(capability)}`);
   }
   if (provider !== "bedrock") {
-    return messages;
+    return Result.ok(messages);
   }
   // Sequential processing bounds peak decoded memory for multi-image messages.
   const prepared: ModelMessage[] = [];
@@ -211,15 +218,19 @@ export const prepareProviderImageMessages = async ({
     }
     const content: ContentPart[] = [];
     for (const part of message.content) {
-      content.push(
-        part.type === "image"
-          ? await prepareBedrockImage(part, preparedImages)
-          : part,
-      );
+      if (part.type !== "image") {
+        content.push(part);
+        continue;
+      }
+      const image = await prepareBedrockImage(part, preparedImages);
+      if (Result.isError(image)) {
+        return image;
+      }
+      content.push(image.value);
     }
     prepared.push({ ...message, content });
   }
-  return prepared;
+  return Result.ok(prepared);
 };
 
 /** Every adapter request, including structured output and later tool iterations. */
@@ -241,31 +252,41 @@ export const withProviderImageInput = (
       preparedImages,
     });
   const chatStream: AnyTextAdapter["chatStream"] = async function* (options) {
-    yield* adapter.chatStream({
-      ...options,
-      messages: await prepare(options.messages),
-    });
+    const messages = await prepare(options.messages);
+    if (Result.isError(messages)) {
+      yield runError(adapter.model, messages.error);
+      return;
+    }
+    yield* adapter.chatStream({ ...options, messages: messages.value });
   };
   const structuredOutput: AnyTextAdapter["structuredOutput"] = async (
     options,
-  ) =>
-    await adapter.structuredOutput({
+  ) => {
+    const messages = await prepare(options.chatOptions.messages);
+    if (Result.isError(messages)) {
+      // TanStack's non-streaming contract requires a rejected Promise, not Result.
+      return await Promise.reject(messages.error);
+    }
+    return await adapter.structuredOutput({
       ...options,
-      chatOptions: {
-        ...options.chatOptions,
-        messages: await prepare(options.chatOptions.messages),
-      },
+      chatOptions: { ...options.chatOptions, messages: messages.value },
     });
+  };
   const originalStream = adapter.structuredOutputStream;
   const structuredOutputStream: AnyTextAdapter["structuredOutputStream"] =
     originalStream === undefined
       ? undefined
       : async function* (options) {
+          const messages = await prepare(options.chatOptions.messages);
+          if (Result.isError(messages)) {
+            yield runError(adapter.model, messages.error);
+            return;
+          }
           yield* originalStream.call(adapter, {
             ...options,
             chatOptions: {
               ...options.chatOptions,
-              messages: await prepare(options.chatOptions.messages),
+              messages: messages.value,
             },
           });
         };

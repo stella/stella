@@ -1,5 +1,6 @@
 import type { AnyTextAdapter, ModelMessage } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
+import { Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 
 import { BYOK_MODEL_OPTIONS, TANSTACK_AI_PROVIDERS } from "@stll/ai-catalog";
@@ -32,6 +33,10 @@ const imageMessages = (bytes: Uint8Array = PNG) =>
       ],
     },
   ] satisfies ModelMessage[];
+const prepareImages = async (
+  options: Parameters<typeof prepareProviderImageMessages>[0],
+) => Result.unwrap(await prepareProviderImageMessages(options));
+
 const TEXT: ModelMessage[] = [{ role: "user", content: "Read this text." }];
 
 describe("image input preparation", () => {
@@ -42,7 +47,7 @@ describe("image input preparation", () => {
         "unknown-model",
       ]) {
         expect(
-          await prepareProviderImageMessages({
+          await prepareImages({
             messages: TEXT,
             provider,
             modelId,
@@ -50,17 +55,20 @@ describe("image input preparation", () => {
         ).toBe(TEXT);
         const messages = imageMessages();
         if (getModelImageCapability({ provider, modelId }) !== "unsupported") {
-          expect(
-            await prepareProviderImageMessages({ messages, provider, modelId }),
-          ).toEqual(messages);
+          expect(await prepareImages({ messages, provider, modelId })).toEqual(
+            messages,
+          );
           continue;
         }
         await expect(
           prepareProviderImageMessages({ messages, provider, modelId }),
-        ).rejects.toMatchObject({
-          _tag: "HandlerError",
-          code: "image_input_unsupported",
-          status: 422,
+        ).resolves.toMatchObject({
+          status: "error",
+          error: {
+            _tag: "HandlerError",
+            code: "image_input_unsupported",
+            status: 422,
+          },
         });
       }
     }
@@ -75,7 +83,7 @@ describe("image input preparation", () => {
           getModelImageCapability({ provider, modelId: "unknown-model" }),
         ).toBe("unknown");
         expect(
-          await prepareProviderImageMessages({
+          await prepareImages({
             messages,
             provider,
             modelId: "unknown-model",
@@ -91,7 +99,7 @@ describe("image input preparation", () => {
           .map(({ attributes }) => attributes?.["provider"]),
       ).toEqual([...TANSTACK_AI_PROVIDERS]);
       telemetry.records.length = 0;
-      await prepareProviderImageMessages({
+      await prepareImages({
         messages: TEXT,
         provider: "openai",
         modelId: "unknown-model",
@@ -113,7 +121,7 @@ describe("image input preparation", () => {
         }),
       ).toBe("unknown");
       expect(
-        await prepareProviderImageMessages({
+        await prepareImages({
           messages,
           provider: "mistral",
           modelId: "mistral-large-latest",
@@ -143,7 +151,7 @@ describe("image input preparation", () => {
       const bytes = new Uint8Array(size);
       bytes.set(PNG);
       const messages = imageMessages(bytes);
-      const result = await prepareProviderImageMessages({
+      const result = await prepareImages({
         messages,
         provider: "bedrock",
         modelId: "us.amazon.nova-lite-v1:0",
@@ -181,7 +189,7 @@ describe("image input preparation", () => {
         });
       }
       expect(
-        await prepareProviderImageMessages({
+        await prepareImages({
           messages,
           provider: "openai",
           modelId: "gpt-5.2",
@@ -199,7 +207,7 @@ describe("image input preparation", () => {
     expect(await new Bun.Image(bytes).metadata()).toMatchObject({
       width: 8001,
     });
-    const result = await prepareProviderImageMessages({
+    const result = await prepareImages({
       messages: imageMessages(bytes),
       provider: "bedrock",
       modelId: "us.amazon.nova-lite-v1:0",
@@ -238,7 +246,7 @@ describe("image input preparation", () => {
       width: 3,
       height: 2,
     });
-    const result = await prepareProviderImageMessages({
+    const result = await prepareImages({
       messages: [
         {
           role: "user",
@@ -283,10 +291,13 @@ describe("image input preparation", () => {
           provider: "bedrock",
           modelId: "us.amazon.nova-lite-v1:0",
         }),
-      ).rejects.toMatchObject({
-        _tag: "HandlerError",
-        code: "bedrock_image_invalid",
-        status: 422,
+      ).resolves.toMatchObject({
+        status: "error",
+        error: {
+          _tag: "HandlerError",
+          code: "bedrock_image_invalid",
+          status: 422,
+        },
       });
       expect(encode).toHaveBeenCalledTimes(1);
     } finally {
@@ -302,10 +313,13 @@ describe("image input preparation", () => {
         provider: "bedrock",
         modelId: "us.amazon.nova-lite-v1:0",
       }),
-    ).rejects.toMatchObject({
-      _tag: "HandlerError",
-      code: "bedrock_image_invalid",
-      status: 422,
+    ).resolves.toMatchObject({
+      status: "error",
+      error: {
+        _tag: "HandlerError",
+        code: "bedrock_image_invalid",
+        status: 422,
+      },
     });
   });
 
@@ -474,9 +488,11 @@ describe("image input preparation", () => {
         outputSchema: { type: "object" },
       };
       const consume = async (stream: AsyncIterable<unknown>) => {
-        for await (const _ of stream) {
-          /* Consume the request. */
+        const chunks: unknown[] = [];
+        for await (const chunk of stream) {
+          chunks.push(chunk);
         }
+        return chunks;
       };
       const calls = [
         () => consume(adapter.chatStream(chatOptions)),
@@ -488,12 +504,20 @@ describe("image input preparation", () => {
           return consume(adapter.structuredOutputStream(structuredOptions));
         },
       ];
-      for (const call of calls) {
-        if (messages === TEXT) {
+      if (messages === TEXT) {
+        for (const call of calls) {
           await call();
-          continue;
         }
-        await expect(call()).rejects.toBeInstanceOf(HandlerError);
+      } else {
+        for (const [index, call] of calls.entries()) {
+          if (index === 1) {
+            await expect(call()).rejects.toBeInstanceOf(HandlerError);
+            continue;
+          }
+          expect(await call()).toMatchObject([
+            { type: "RUN_ERROR", code: "image_input_unsupported" },
+          ]);
+        }
       }
       expect(sent.length).toBe(messages === TEXT ? 3 : 0);
     }
