@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import { Script } from "node:vm";
 import * as v from "valibot";
 
 import { mainHeavyJobs, THIN_JOBS } from "./main-heavy-plan";
@@ -43,6 +44,7 @@ const workflowSchema = v.looseObject({
 });
 const mainTriggersSchema = v.object({
   push: v.looseObject({ branches: v.array(v.string()) }),
+  schedule: v.array(v.object({ cron: v.string() })),
   workflow_dispatch: v.looseObject({
     inputs: v.record(
       v.string(),
@@ -80,6 +82,63 @@ const mainWorkflow = {
 const ciWorkflow = readWorkflow(".github/workflows/ci.yml");
 const mainTriggers = v.parse(mainTriggersSchema, mainWorkflow.on);
 const ciCall = v.parse(ciCallSchema, ciWorkflow.on).workflow_call;
+
+const assertTriggerBehavior = (validationCondition: string) => {
+  const cases = [
+    { event: "push", message: "fix: ordinary change", runs: false },
+    {
+      event: "push",
+      message: "fix: ordinary change\nchore: release v1.2.3",
+      runs: false,
+    },
+    {
+      event: "push",
+      message: "chore: release v1.2.3\n\nRelease notes",
+      runs: true,
+    },
+    { event: "schedule", message: "", runs: true },
+    { event: "workflow_dispatch", message: "", runs: true },
+  ];
+  for (const { event, message, runs } of cases) {
+    const context = {
+      github: { event_name: event, event: { head_commit: { message } } },
+      startsWith: (value: string, prefix: string) =>
+        value.toLowerCase().startsWith(prefix.toLowerCase()),
+      always: () => true,
+    };
+    const validates = new Script(
+      `Boolean(${validationCondition})`,
+    ).runInNewContext(context);
+    expect(validates, `${event}: ${message}`).toBe(runs);
+    // A reusable job without an override runs only after successful dependencies.
+    expect(mainWorkflow.jobs.suites.needs).toBe("validate");
+    expect(mainWorkflow.jobs.suites.if).toBeUndefined();
+    const publishes = new Script(
+      `Boolean(${mainWorkflow.jobs.status.if})`,
+    ).runInNewContext({
+      ...context,
+      needs: { validate: { result: validates ? "success" : "skipped" } },
+    });
+    expect(publishes, `${event} status`).toBe(runs);
+  }
+};
+
+test("nightly, release pushes and dispatches run suites; ordinary pushes skip suites and status", () => {
+  expect(mainTriggers.schedule).toHaveLength(1);
+  const cron = mainTriggers.schedule.at(0)?.cron.split(" ");
+  expect(cron?.slice(1)).toEqual(["2", "*", "*", "*"]);
+  expect(Number(cron?.at(0)) % 5).not.toBe(0);
+  expect(
+    mainWorkflow.jobs.validate.steps?.find(
+      ({ name }) => name === "Validate SHA format",
+    )?.env?.["SHA"],
+  ).toBe(`\${{ inputs.sha || github.sha }}`);
+  assertTriggerBehavior(mainWorkflow.jobs.validate.if ?? "true");
+});
+
+test("dropping the release filter breaks the trigger contract", () => {
+  expect(() => assertTriggerBehavior("true")).toThrow("expect(received)");
+});
 
 test("main heavy workflow dispatches exactly the validated commit through ci.yml's planner", () => {
   expect(mainWorkflow["run-name"]).toBe(

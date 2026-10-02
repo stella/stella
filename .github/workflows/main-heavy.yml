@@ -4,6 +4,8 @@ run-name: "Main heavy suites ${{ inputs.sha || github.sha }}"
 on:
   push:
     branches: [main]
+  schedule:
+    - cron: "17 2 * * *"
   workflow_dispatch:
     inputs:
       sha:
@@ -19,6 +21,8 @@ permissions: {}
 
 jobs:
   validate:
+    # Prefix matching also requires the release title to begin the first line.
+    if: "github.event_name != 'push' || startsWith(github.event.head_commit.message, 'chore: release v')"
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
@@ -82,7 +86,7 @@ jobs:
       DOCKERHUB_TOKEN: ${{ secrets.DOCKERHUB_TOKEN }}
 
   status:
-    if: always()
+    if: always() && needs.validate.result != 'skipped'
     needs: [validate, suites]
     runs-on: ubuntu-latest
     timeout-minutes: 5
