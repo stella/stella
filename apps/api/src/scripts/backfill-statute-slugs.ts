@@ -9,16 +9,61 @@
  * Slug derivation reuses the helper the ingestion pipeline uses, so there is
  * a single source of truth for the algorithm.
  */
-import { backfillStatuteSlugs } from "@/api/handlers/legislation/slug-backfill";
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import { backfillStatuteSlugsPage } from "@/api/handlers/legislation/slug-backfill";
 import { enterCaseLawMaintenanceLane } from "@/api/lib/case-law/maintenance-lane";
+import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
 
 // Hold the maintenance lane before the first statement: operator passes over
 // the corpus tables serialize here instead of deadlocking on row locks.
-const { ingestionDb } = await enterCaseLawMaintenanceLane();
+const plan = backfillEntrypoints["statute-slugs"]({
+  args: process.argv.slice(2),
+});
+
+const { rootDb } = await enterCaseLawMaintenanceLane();
 
 console.log("=== BACKFILL STATUTE SLUGS ===");
 
-const { written, skipped, failed } = await backfillStatuteSlugs(ingestionDb);
+const runtime = plan.open((options) =>
+  createScriptBackfillRuntime({ ...options, db: rootDb }),
+);
+let written = 0;
+let skipped = 0;
+let failed = 0;
+try {
+  const pass = await runBackfillPass({
+    sleep: Bun.sleep,
+    step: async () =>
+      await runtime.step(async ({ tx, size, cursor }) => {
+        const outcome = await backfillStatuteSlugsPage({
+          db: async (work) => await work(tx),
+          after:
+            cursor === null
+              ? null
+              : brandPersistedLegislationDocumentId(cursor),
+          size,
+        });
+        if (outcome.isErr()) {
+          throw outcome.error.cause;
+        }
+        const page = outcome.value;
+        return { cursor: page.cursor, done: page.done, value: page };
+      }),
+    onBatch: ({ value }) => {
+      written += value.written;
+      skipped += value.skipped;
+      failed += value.failed;
+    },
+  });
+  if (pass.isErr()) {
+    throw pass.error;
+  }
+} finally {
+  await runtime.close();
+}
 
 console.log(
   `Done. Wrote ${written} slugs, skipped ${skipped} (no citation in the ELI), ${failed} failed.`,

@@ -238,7 +238,12 @@ const config = {
     "range, status, and work item. Returns PDF bytes; use " +
     "time-entries.csv.export to get the same entries as text.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   transport: {
     type: "file-response",

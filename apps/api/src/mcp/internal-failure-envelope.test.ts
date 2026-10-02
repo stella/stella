@@ -68,6 +68,7 @@ const createFailingDbContext = (): McpRequestContext => ({
   safeDb: toSafeDbMock(throwingScopedDb),
   scopedDb: throwingScopedDb,
   userId: toSafeId<"user">("user_1"),
+  userEmail: "standard@example.test",
 });
 
 const asCallToolResult = (result: McpToolResponse) => {

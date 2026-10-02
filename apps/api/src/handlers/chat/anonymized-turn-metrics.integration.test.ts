@@ -373,9 +373,11 @@ describe("a turn's settlement count", () => {
         return await safeDb(work, retry);
       };
       lifecycle = new ChatSendLifecycle({
+        scopedDb,
         startAdmission: async () =>
           Result.ok({
             signal: admission.signal,
+            reservePeriod: async () => Result.ok(undefined),
             release: async () => undefined,
           }),
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
@@ -618,6 +620,7 @@ describe("a turn's settlement count", () => {
           return await work(tx);
         }, retry);
       const lifecycle = new ChatSendLifecycle({
+        scopedDb,
         externalMcpToolsLoader: createLazyExternalMcpToolsLoader(
           async () => await Promise.reject(new Error("No connectors expected")),
         ),

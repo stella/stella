@@ -28,6 +28,7 @@ import {
   isExpectedPublishedExportResolution,
   isOwnDistLoadFailure,
   isPublishedTestArtifact,
+  resolvePublishedExport,
 } from "./published-export-guards";
 
 const repoRoot = path.resolve(import.meta.dir, "..");
@@ -219,12 +220,18 @@ try {
 
       // Resolve through the package name, so this exercises the export map a
       // consumer's resolver reads rather than the paths this script computed.
-      // A consumer outside the repo sees neither package tsconfig aliases
-      // nor root dependencies. Canonical paths keep symlinks out of comparisons.
+      // The isolated fallback avoids package tsconfig aliases. Canonical paths
+      // keep symlinks out of comparisons.
       const specifier = `${published.name}${subpath.replace(/^\./u, "")}`;
       let resolved: string;
       try {
-        resolved = await realpath(Bun.resolveSync(specifier, consumerDir));
+        resolved = await realpath(
+          resolvePublishedExport({
+            specifier,
+            repoRoot,
+            consumerDir,
+          }),
+        );
       } catch {
         failures.push(`${subpath}: "${specifier}" does not resolve`);
         return;

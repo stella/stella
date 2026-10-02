@@ -356,6 +356,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       language: FILTER_NORMALIZATION,
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     // Backed by the public legislation corpus (legislationPublicReadDb), the
     // same surface the public routes gate behind the same feature flag.
@@ -384,6 +385,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readStatuteArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_statute",
@@ -419,6 +421,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
       },
     },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_statute_provisions",
@@ -442,6 +445,7 @@ const LEGISLATION_TOOL_DEFINITIONS = [
     inputSchema: readProvisionHistoryArgsSchema,
     inputNormalization: { eli: ELI_NORMALIZATION },
     access: "read",
+    readClass: "public",
     anonymized: { exposure: "passthrough" },
     feature: "FEATURE_PUBLIC_LAW",
     name: "read_provision_history",

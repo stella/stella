@@ -24,6 +24,7 @@
     "./case-law-judges": "./src/case-law-judges.ts",
     "./case-law-jurisdictions": "./src/case-law-jurisdictions.ts",
     "./case-law-text-field": "./src/case-law-text-field.ts",
+    "./decision-document-role": "./src/decision-document-role.ts",
     "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
     "./decision-docket-reference": "./src/decision-docket-reference.ts",
