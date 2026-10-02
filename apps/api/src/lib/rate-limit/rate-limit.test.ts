@@ -209,9 +209,9 @@ describe("RedisRateLimitContext", () => {
             delayNextIncrement
           ) {
             delayNextIncrement = false;
-            return await new Promise<unknown>((resolve) => {
+            return await new Promise<unknown>((resolve, reject) => {
               releaseLateReply = () => {
-                applyResultPromise.then(resolve).catch(() => undefined);
+                applyResultPromise.then(resolve).catch(reject);
               };
             });
           }

@@ -17,6 +17,7 @@
 # caught here.
 set -euo pipefail
 
+bun run generate
 bun --cwd=packages/cli run codegen:runtime
 bun apps/api/scripts/generate-capability-runtime.ts
 

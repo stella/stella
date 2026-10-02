@@ -20,7 +20,27 @@
   "globalDependencies": ["patches/**"],
   "tasks": {
     // Outputs are ignored by Git, but restored by Turbo on a cache hit.
+    "@stll/web#generate:route-tree": {
+      "inputs": [
+        "src/routes/**",
+        "vite.config.ts",
+        "route-tree.config.ts",
+        "scripts/generate-route-tree.ts",
+        "package.json",
+        "$TURBO_ROOT$/bun.lock"
+      ],
+      "outputs": ["src/routeTree.gen.ts"]
+    },
+    "@stll/web#build": {
+      "dependsOn": ["^build", "generate:route-tree", "generate:api-types"]
+    },
+    "@stll/web#dev": {
+      "dependsOn": ["generate:route-tree", "generate:api-types"],
+      "persistent": true,
+      "cache": false
+    },
     "@stll/web#generate:api-types": {
+      "dependsOn": ["generate:route-tree"],
       "inputs": [
         "$TURBO_ROOT$/apps/api/**",
         "$TURBO_ROOT$/apps/web/src/**",
@@ -45,14 +65,15 @@
         "!$TURBO_ROOT$/packages/**/.env*",
         "!$TURBO_ROOT$/packages/**/.turbo/**",
         "!$TURBO_ROOT$/packages/**/*.tsbuildinfo",
-        "!src/generated/api-routes.gen.ts"
+        "!src/generated/api-routes.gen.ts",
+        "!src/routeTree.gen.ts"
       ],
       "outputs": ["src/generated/api-routes.gen.ts"]
     },
     // Compiler scripts prepare direct invocations, but skip that cache restore
     // inside Turbo (TURBO_HASH): these dependencies already prepared the file.
     "@stll/web#typecheck": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -67,7 +88,7 @@
       "outputs": [".cache/tsbuildinfo*.json", "**/.cache/tsbuildinfo*.json"]
     },
     "@stll/web#lint": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",
@@ -92,7 +113,7 @@
       ]
     },
     "@stll/web#lint:fix": {
-      "dependsOn": ["transit", "generate:api-types"],
+      "dependsOn": ["transit", "generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/oxlint.config.ts",
@@ -111,7 +132,7 @@
       "cache": false
     },
     "@stll/web#test:property": {
-      "dependsOn": ["generate:api-types"],
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": ["$TURBO_DEFAULT$"],
       "cache": false
     },
@@ -179,6 +200,7 @@
     "//#typecheck:repo": {
       "dependsOn": [
         "@stll/web#generate:api-types",
+        "@stll/web#generate:route-tree",
         "@stll/cli#codegen:runtime",
         "@stll/api#generate:capability-runtime"
       ],
@@ -560,7 +582,7 @@
       ]
     },
     "@stll/web#test": {
-      "dependsOn": ["generate:api-types"],
+      "dependsOn": ["generate:api-types", "generate:route-tree"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.oxlint-plugins/**",

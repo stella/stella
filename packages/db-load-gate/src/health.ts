@@ -1,5 +1,7 @@
 import { panic, Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 export type VerdictKind = "normal" | "degraded" | "stop" | "unknown";
 export type HealthSignalKind = VerdictKind | "not_configured";
 export type WorkKind = "index_build" | "backfill_batch";
@@ -20,6 +22,7 @@ export type BusyWindow = { start: string; end: string; timeZone: string };
 export type HealthConfig = {
   startFloor: number;
   hardFloor: number;
+  resumeFloor?: number;
   maxStalenessMs: number;
   readTimeoutMs: number;
   longTxMaxAgeMs: number;
@@ -81,6 +84,14 @@ export const validateConfig = (config: HealthConfig) => {
     )
   ) {
     panic("Health floors must be ordered percentages");
+  }
+  if (
+    config.resumeFloor !== undefined &&
+    (!Number.isFinite(config.resumeFloor) ||
+      config.resumeFloor < config.hardFloor ||
+      config.resumeFloor > config.startFloor)
+  ) {
+    panic("Resume floor must lie between hard and start floors");
   }
   if (
     !(
@@ -206,6 +217,7 @@ export type BatchState = {
   stableBatches: number;
   holdCount: number;
   heldSince: number | null;
+  holdCause: "load" | "other" | null;
   holdUntil: number | null;
 };
 export type BatchOutcome = "success" | "statement_timeout";
@@ -227,11 +239,59 @@ export const initialBatchState = (
   stableBatches: 0,
   holdCount: 0,
   heldSince: null,
+  holdCause: null,
   holdUntil: null,
 });
 
 const clamp = (value: number, min: number, max: number) =>
   Math.min(max, Math.max(min, value));
+const isLowEbsSignal = (signal: Signal, hardFloor: number) =>
+  signal.indicator === "ebs_balance" &&
+  signal.kind === "stop" &&
+  signal.value !== null &&
+  Number.isFinite(signal.value) &&
+  signal.value < hardFloor;
+
+type ResumeCheckOptions = Pick<NextBatchOptions, "state" | "verdict"> & {
+  config: HealthConfig;
+  now: number;
+};
+
+const isAwaitingLoadResume = ({
+  state,
+  verdict,
+  config,
+  now,
+}: ResumeCheckOptions) => {
+  const resumeFloor = config.resumeFloor;
+  return (
+    state.heldSince !== null &&
+    state.holdCause === "load" &&
+    resumeFloor !== undefined &&
+    !verdict.signals.some(
+      (signal) =>
+        signal.indicator === "ebs_balance" && signal.kind === "not_configured",
+    ) &&
+    !verdict.signals.some((signal) => {
+      if (
+        signal.indicator !== "ebs_balance" ||
+        (signal.kind !== "normal" && signal.kind !== "degraded") ||
+        signal.value === null ||
+        !Number.isFinite(signal.value) ||
+        signal.value < resumeFloor ||
+        signal.observedAt === null
+      ) {
+        return false;
+      }
+      const observedAt = signal.observedAt;
+      const age = Result.try(
+        () => now - Temporal.Instant.from(observedAt).epochMilliseconds,
+      );
+      return age.isOk() && age.value >= 0 && age.value <= config.maxStalenessMs;
+    })
+  );
+};
+
 export const nextBatch = ({
   state,
   verdict,
@@ -250,8 +310,9 @@ export const nextBatch = ({
   ) {
     panic("Batch size must be an integer within configured bounds");
   }
-  if (verdict.kind === "stop" || verdict.kind === "unknown") {
-    const now = clock();
+  const now = clock();
+  const awaitingResume = isAwaitingLoadResume({ state, verdict, config, now });
+  if (verdict.kind === "stop" || verdict.kind === "unknown" || awaitingResume) {
     const backoff = Math.min(
       config.holdBackoffCapMs,
       config.holdBackoffMs * 2 ** Math.min(state.holdCount, 52),
@@ -263,6 +324,13 @@ export const nextBatch = ({
       stableBatches: 0,
       holdCount: state.holdCount + 1,
       heldSince: state.heldSince ?? now,
+      holdCause:
+        awaitingResume ||
+        verdict.signals.some((signal) =>
+          isLowEbsSignal(signal, config.hardFloor),
+        )
+          ? "load"
+          : "other",
       holdUntil: now + backoff,
     };
     return {
@@ -326,6 +394,7 @@ export const nextBatch = ({
     stableBatches,
     holdCount: 0,
     heldSince: null,
+    holdCause: null,
     holdUntil: null,
   };
   return {
@@ -389,4 +458,61 @@ export const isHeldTooLong = (
     cursor = minuteEnd;
   }
   return false;
+};
+
+type BackfillHeartbeatOptions = {
+  name: string;
+  state: Pick<BatchState, "heldSince">;
+  previousHeldSince: number | null;
+  verdict: Verdict;
+  now: number;
+  config?: HealthConfig;
+};
+
+/** Emit once per minute, including while no batch can run. */
+export const backfillHeartbeat = ({
+  name,
+  state,
+  previousHeldSince,
+  verdict,
+  now,
+  config = defaultConfig,
+}: BackfillHeartbeatOptions) => {
+  const yielded = state.heldSince !== null;
+  const event = (() => {
+    if (yielded && previousHeldSince === null) {
+      return "backfill.yielded";
+    }
+    if (!yielded && previousHeldSince !== null) {
+      return "backfill.resumed";
+    }
+    if (verdict.kind === "unknown") {
+      return "backfill.signal_unknown";
+    }
+    return !yielded && verdict.kind === "degraded"
+      ? "backfill.throttled"
+      : null;
+  })();
+  return {
+    _aws: {
+      Timestamp: now,
+      CloudWatchMetrics: [
+        {
+          Namespace: "Stella/Backfill",
+          Dimensions: [["Backfill"]],
+          Metrics: [{ Name: "BackfillYielded", Unit: "Count" }],
+        },
+      ],
+    },
+    Backfill: name,
+    BackfillYielded: yielded ? 1 : 0,
+    event,
+    signalEvent: verdict.kind === "unknown" ? "backfill.signal_unknown" : null,
+    band: verdict.kind,
+    class: "deferrable",
+    reason: verdict.signals.map(({ reason }) => reason).join("; "),
+    verdict,
+    heldSince: state.heldSince,
+    heldTooLong: isHeldTooLong(state, now, config),
+  };
 };

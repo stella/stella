@@ -10,6 +10,7 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   ActionAdmissionError,
   withActionAdmission,
@@ -27,7 +28,7 @@ const context = (signal?: AbortSignal) => ({
   route: "/action",
   user: { id: toSafeId<"user">("user_a") },
   session: { activeOrganizationId: toSafeId<"organization">("org_a") },
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
   managedAIResidency: "eu" as const,
@@ -461,7 +462,10 @@ describe("finite HTTP action admission", () => {
       );
       expect(
         await endpoint.handler(
-          asTestRaw({ ...context(), memberRole: { role: "external" } }),
+          asTestRaw({
+            ...context(),
+            memberRole: sessionMemberRole("external"),
+          }),
         ),
       ).toMatchObject({ code: 403 });
       expect(deps.counts()).toEqual({ acquisitions: 0, releases: 0 });
