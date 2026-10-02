@@ -63,6 +63,26 @@ describe("plain text preserves publisher wording without presentation syntax", (
     }
   });
 
+  test.each(["A\\~B", "\\{", "\\}"])(
+    "lone RTF control symbols remain literal publisher text: %s",
+    (raw) => {
+      expect(toPlainText(raw).unwrap().toString()).toBe(raw);
+    },
+  );
+
+  test.each([Number.NaN, Infinity, -Infinity])(
+    "non-finite metadata numbers are rejected at every nesting level: %s",
+    (value) => {
+      for (const metadata of [value, { nested: [{ value }] }]) {
+        const result = toPlainTextMetadata(metadata);
+        expect(result.isErr()).toBe(true);
+        if (result.isErr()) {
+          expect(result.error.reason).toBe("unsupported-metadata");
+        }
+      }
+    },
+  );
+
   test("a public brand name cannot construct the private plain-text proof", () => {
     const publicBrand = v.parse(
       v.pipe(v.string(), v.brand("PlainText")),

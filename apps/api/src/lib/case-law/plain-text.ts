@@ -95,7 +95,7 @@ export const toPlainTextMetadata = (
     value === null ||
     value === undefined ||
     typeof value === "boolean" ||
-    typeof value === "number"
+    (typeof value === "number" && Number.isFinite(value))
   ) {
     return Result.ok(value);
   }

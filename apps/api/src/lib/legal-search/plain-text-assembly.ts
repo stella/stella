@@ -1,4 +1,5 @@
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
+import { stableStringify } from "@stll/stable-stringify";
 
 import {
   absentDecisionTextFields,
@@ -23,8 +24,41 @@ export const plainTextIngestionResult = <T extends RawIngestionResult>(
     return result.value;
   }
   const error = result.error;
+  const binaryDigests =
+    raw.sourceRaw === undefined
+      ? {
+          bytes:
+            raw.sourceRawBytes === undefined
+              ? undefined
+              : new Bun.CryptoHasher("sha256")
+                  .update(raw.sourceRawBytes)
+                  .digest("hex"),
+          objects: Object.fromEntries(
+            Object.entries(raw.sourceRawObjects ?? {}).map(
+              ([name, { bytes, contentType }]) => [
+                name,
+                {
+                  digest: new Bun.CryptoHasher("sha256")
+                    .update(bytes)
+                    .digest("hex"),
+                  contentType,
+                },
+              ],
+            ),
+          ),
+        }
+      : undefined;
   const quarantineId = `plaintext-quarantine:${new Bun.CryptoHasher("sha256")
-    .update(JSON.stringify([raw.country, raw.rawHash, raw.sourceRaw]))
+    .update(
+      JSON.stringify([
+        raw.country,
+        raw.rawHash,
+        raw.sourceRaw,
+        ...(binaryDigests === undefined
+          ? []
+          : [stableStringify(binaryDigests)]),
+      ]),
+    )
     .digest("hex")}`;
   const sourceDocumentId =
     raw.sourceDocumentId !== undefined &&
