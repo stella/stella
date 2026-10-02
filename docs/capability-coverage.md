@@ -576,7 +576,9 @@ A compound action is a nested resource: `clauses.categories.create`, not
 | `time-entries.internal.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries internal-create` |
 | `time-entries.ledes.export` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries ledes-export` |
 | `time-entries.list` | read | stella:read | FEATURE_TIME_BILLING | curated tool `list_time_entries` |
+| `time-entries.me.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-daily-target-update` |
 | `time-entries.me.list` | read | stella:read | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries me-list` |
+| `time-entries.members.daily-target.update` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries members-daily-target-update` |
 | `time-entries.pdf.export` | read | stella:read | FEATURE_TIME_BILLING | not runnable over the generic transport: returns bytes, which the generic transport cannot serialize. time-entries.csv.export covers part of this: returns the same entries as CSV text (time-entries.ledes.export returns LEDES instead); the rendered PDF is not produced |
 | `time-entries.split` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries split` |
 | `time-entries.suggestions.decisions.create` | write | stella:billing_write | FEATURE_TIME_BILLING | generic invoke → `stella capability time-entries suggestions-decisions-create` |
@@ -666,7 +668,7 @@ mechanics, and similar), not gaps in coverage.
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
-| hosted_billing | 7 |
+| hosted_billing | 6 |
 | mcp_transport | 11 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |

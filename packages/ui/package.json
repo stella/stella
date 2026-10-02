@@ -106,6 +106,7 @@
     "./textarea": "./src/components/textarea.tsx",
     "./toast": "./src/components/toast.tsx",
     "./tooltip": "./src/components/tooltip.tsx",
+    "./typed-character": "./src/lib/typed-character.ts",
     "./use-contained-handler": "./src/hooks/use-contained-handler.ts",
     "./use-content-dir": "./src/hooks/use-content-dir.ts",
     "./use-latest": "./src/hooks/use-latest.ts",
