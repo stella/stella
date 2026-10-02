@@ -122,6 +122,7 @@ const generateProbeTextFinishing = async (finish: ProbeFinish) => {
   } as ResolvedTanStackTextModel;
 
   return await generateTanStackTextForRole({
+    dataClass: "public_corpus",
     caching: {
       enabled: false,
       reason: "org-disabled",

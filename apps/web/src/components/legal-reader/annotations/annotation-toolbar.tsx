@@ -1,6 +1,5 @@
 import { useRef, useState } from "react";
 import type { ReactNode, RefObject } from "react";
-import { createPortal } from "react-dom";
 
 import { panic, Result } from "better-result";
 import { useTranslations } from "use-intl";
@@ -13,7 +12,7 @@ import {
   CopyIcon,
   HighlighterIcon,
   LockIcon,
-  MessageSquarePlusIcon,
+  AddCommentIcon,
   SparklesIcon,
   StrikethroughIcon,
   Trash2Icon,
@@ -49,15 +48,11 @@ import {
 } from "@/components/legal-reader/annotations/selection-anchor";
 import type { SelectionAnchor } from "@/components/legal-reader/annotations/selection-anchor";
 import type { ReaderAnnotationController } from "@/components/legal-reader/annotations/use-reader-annotations";
+import { SelectionToolbar } from "@/components/selection-toolbar";
 import Tooltip from "@/components/tooltip";
 import { useExternalSyncEffect, useMountEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { detached } from "@/lib/detached";
-
-/** Room above the words for the bar, so it never covers what was selected. */
-const BAR_OFFSET_PX = 44;
-/** The least the bar keeps between itself and either window edge. */
-const BAR_EDGE_MARGIN_PX = 8;
 
 type AnnotationToolbarProps = {
   /** A mark the reader clicked; the bar edits it instead of the selection. */
@@ -195,12 +190,8 @@ export const AnnotationToolbar = ({
 }: AnnotationToolbarProps) => {
   const t = useTranslations();
   const barRef = useRef<HTMLDivElement | null>(null);
-  // The bar's rendered width, learned from the node as React attaches it,
-  // so the position can keep the whole bar inside the window.
-  const [barWidth, setBarWidth] = useState(0);
   const attachBar = (node: HTMLDivElement | null) => {
     barRef.current = node;
-    setBarWidth(node?.offsetWidth ?? 0);
   };
   const [selected, setSelected] = useState<Selected | null>(null);
   const [activeRect, setActiveRect] = useState<DOMRect | null>(null);
@@ -497,22 +488,6 @@ export const AnnotationToolbar = ({
     return null;
   }
 
-  // Centred on the selection, then held inside the window: a selection near
-  // the edge of a narrow inspector pane would otherwise put half the bar off
-  // screen. The bar's own width is known once it is on screen; until then
-  // the centre stands, and the measure re-renders it into place.
-  const viewportWidth =
-    doc?.defaultView?.innerWidth ?? Number.POSITIVE_INFINITY;
-  const halfBar = barWidth / 2;
-  const centred = rect.left + rect.width / 2;
-  const position = {
-    left: Math.max(
-      BAR_EDGE_MARGIN_PX + halfBar,
-      Math.min(centred, viewportWidth - BAR_EDGE_MARGIN_PX - halfBar),
-    ),
-    top: Math.max(8, rect.top - BAR_OFFSET_PX),
-  };
-
   const colorSwatches = (onPick: (color: AnnotationColor) => void) =>
     ANNOTATION_COLORS.map((color) => (
       <Tooltip
@@ -629,7 +604,7 @@ export const AnnotationToolbar = ({
                 size="sm"
                 variant="ghost"
               >
-                <MessageSquarePlusIcon className="size-3.5" />
+                <AddCommentIcon className="size-3.5" />
                 {t("folio.comment")}
               </Button>
               <span className="bg-border mx-1 h-4 w-px" />
@@ -800,7 +775,7 @@ export const AnnotationToolbar = ({
                   size="sm"
                   variant="ghost"
                 >
-                  <MessageSquarePlusIcon className="size-3.5" />
+                  <AddCommentIcon className="size-3.5" />
                   {t("folio.comment")}
                 </Button>
               </>
@@ -813,20 +788,15 @@ export const AnnotationToolbar = ({
     return null;
   }
 
-  const host = doc?.body ?? null;
-  if (host === null) {
-    return null;
-  }
-
-  return createPortal(
-    <div
-      className="reader-chrome bg-popover text-popover-foreground fixed z-[100] max-w-[calc(100vw-1rem)] -translate-x-1/2 rounded-md border p-1 text-xs shadow-md"
-      ref={attachBar}
-      style={position}
+  return (
+    <SelectionToolbar
+      anchorRect={rect}
+      className="reader-chrome"
+      doc={doc}
+      onAttach={attachBar}
     >
       {content}
-    </div>,
-    host,
+    </SelectionToolbar>
   );
 };
 

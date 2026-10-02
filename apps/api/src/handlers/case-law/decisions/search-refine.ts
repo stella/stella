@@ -54,6 +54,7 @@ const refineCaseLawSearch = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     request,
@@ -77,6 +78,7 @@ const refineCaseLawSearch = createSafeRootHandler(
     }
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -90,6 +92,7 @@ const refineCaseLawSearch = createSafeRootHandler(
     const functionWords = functionWordsFor(corpusLanguage);
     const organizationId = session.activeOrganizationId;
     const analytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -124,11 +127,12 @@ const refineCaseLawSearch = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
+            dataClass: "customer",
             role: "fast",
             serviceTier: "standard",
             orgAIConfig,
+            managedAIResidency,
             organizationId,
-            // Public law: no matter's data reaches the model.
             tenantWorkspaceIds: [],
             analytics,
             caching: resolveCaching({

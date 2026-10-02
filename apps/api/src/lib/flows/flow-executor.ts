@@ -14,7 +14,10 @@ import {
   workspaceMembers,
 } from "@/api/db/schema";
 import { resolveCaching } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadManagedAIResidency,
+  loadOrgAIConfig,
+} from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import {
@@ -416,10 +419,14 @@ const runAiStep = async ({
     ),
     "AI is not available for this organization.",
   );
+  const managedAIResidency = await scopedDb(
+    async (tx) => await loadManagedAIResidency(tx, organizationId),
+  );
   // Every step settles against the organization's usage as it runs; the
   // initiator pre-flighted the whole run's estimate under the same action
   // type before enqueueing it.
   const analytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "flows.ai-step",
     modelRole: "chat",
     orgAIConfig,
@@ -444,10 +451,12 @@ const runAiStep = async ({
   // unchanged under `USE_MOCK_AI` (model resolution short-circuits to the mock
   // adapter). No tools are ever passed.
   const markdown = await generateTextForRole({
+    dataClass: "customer",
     role: "chat",
     organizationId,
     tenantWorkspaceIds: [run.workspaceId],
     orgAIConfig,
+    managedAIResidency,
     analytics,
     system: FLOW_AI_SYSTEM_PROMPT,
     prompt,

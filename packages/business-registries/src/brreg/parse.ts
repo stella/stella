@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import type {
   BrregAddress,
   BrregEntity,
@@ -130,7 +131,7 @@ export const parseEnhet = (
       typeof raw.antallAnsatte === "number" ? raw.antallAnsatte : null,
     status: parseStatus(raw),
     vatRegistered: raw.registrertIMvaregisteret === true,
-    registryUrl: `${base}${raw.organisasjonsnummer}`,
+    registryUrl: `${base}${encodeRegistryComponent(raw.organisasjonsnummer)}`,
   };
 };
 

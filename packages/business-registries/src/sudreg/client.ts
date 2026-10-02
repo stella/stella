@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import {
   performRegistryRequest,
   type RegistryClientOptions,
@@ -12,7 +13,7 @@ import type { SudregCompany } from "./types.js";
 import { normalizeMbs, validateMbs } from "./validation.js";
 
 const companyUrl = (mbs: string): string =>
-  `https://sudreg.pravosudje.hr/ords/r/esudreg/public/28?p28_sbt_mbs=${encodeURIComponent(mbs)}`;
+  `https://sudreg.pravosudje.hr/ords/r/esudreg/public/28?p28_sbt_mbs=${encodeRegistryComponent(mbs)}`;
 
 export type LookupOptions = RegistryClientOptions;
 

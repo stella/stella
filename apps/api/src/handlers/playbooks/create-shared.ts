@@ -12,6 +12,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { createSafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import type {
@@ -47,6 +48,7 @@ type CreatePlaybookDefinitionArgs = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
@@ -58,6 +60,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   safeDb,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   recordAuditEvent,
@@ -95,6 +98,7 @@ export const createPlaybookDefinitionHandler = async function* ({
   const positions = await deriveAutoAsks(body.positions, {
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
   });

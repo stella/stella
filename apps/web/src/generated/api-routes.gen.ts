@@ -7977,26 +7977,12 @@ export type WebRoutes = {
           headers: Record<never, never>;
           response: {
             200: {
-              global: Array<{
-                id: string;
-                origin: stll_api_contract_ChatThreadOrigin;
-                title: string;
-                createdAt: string;
-                updatedAt: string;
-                usedAnonymization: Tfddd645dc8;
-              }>;
+              global: Array<T653096fc24>;
               nextCursor: Tbe0400fa4c;
               workspaces: Array<{
                 workspaceId: string;
                 workspaceName: string;
-                threads: Array<{
-                  id: string;
-                  origin: stll_api_contract_ChatThreadOrigin;
-                  title: string;
-                  createdAt: string;
-                  updatedAt: string;
-                  usedAnonymization: Tfddd645dc8;
-                }>;
+                threads: Array<T653096fc24>;
               }>;
             };
             400: T9a51b7d2bc;
@@ -18697,6 +18683,7 @@ export type WebRoutes = {
             matterNumberPadding: number;
             practiceJurisdictions: Array<T21e7b1b9fc>;
             promptCachingEnabled: Tfddd645dc8;
+            managedAIResidency: ("eu" | "us");
             memoryExtractionEnabled: Tfddd645dc8;
             timeMinimumUnitMinutes: number;
             timeEditWindowDays: number;
@@ -18859,6 +18846,7 @@ export type WebRoutes = {
     } & {
       post: {
         body: {
+          managedAIResidency?: never;
           matterNumberPattern?: string;
           matterNumberPadding?: number;
           promptCachingEnabled?: false | true;
@@ -18881,6 +18869,7 @@ export type WebRoutes = {
             memoryExtractionEnabled?: false | true;
             documentProcessingMode?: "off" | "searchable-text";
             promptCachingEnabled?: false | true;
+            managedAIResidency?: "eu" | "us";
             matterNumberPadding?: number;
             matterNumberPattern?: string;
           };
@@ -37761,6 +37750,30 @@ type T64f82fc86d = {
 };
 
 type T6500cff7d8 = "case-law" | "chat" | "contact" | "document" | "folder" | "link" | "matter" | "message" | "task";
+
+type T653096fc24 = {
+  context: {
+    fileCount: number;
+    files: Array<{
+      id: string;
+      kind: T334757ea46;
+      mimeType: Tbe0400fa4c;
+      name: string;
+    }>;
+    matterCount: number;
+    matters: Array<{
+      color: Tbe0400fa4c;
+      id: string;
+      name: string;
+    }>;
+  };
+  id: string;
+  origin: stll_api_contract_ChatThreadOrigin;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+  usedAnonymization: Tfddd645dc8;
+};
 
 type T653f0c375b = {
   id: string;

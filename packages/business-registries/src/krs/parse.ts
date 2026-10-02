@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { normalizeRegon } from "./regon.js";
 import {
   KRS_REGISTER_CODES,
@@ -252,7 +253,7 @@ const buildRegistryUrl = (
     rejestr: shortCode,
     format: "json",
   });
-  return `${KRS_API_BASE}/OdpisAktualny/${krsNumber}?${params.toString()}`;
+  return `${KRS_API_BASE}/OdpisAktualny/${encodeRegistryComponent(krsNumber)}?${params.toString()}`;
 };
 
 export const parseEntity = (

@@ -1,5 +1,5 @@
 import type { ModelMessage } from "@tanstack/ai";
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { inArray } from "drizzle-orm";
 import { readdirSync, readFileSync } from "node:fs";
@@ -175,6 +175,7 @@ const handlerContext = (
     memberRole: { role: "owner" },
     orgAIConfig: run.orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     promptCachingEnabled: run.caching,
     request: new Request("http://localhost/v1/chat"),
     safeDb: safeDbOf(),
@@ -255,10 +256,12 @@ const ROLE_REQUESTS = {
       const user = first ?? panic("The transcript opens with a user message");
       const assistant = second ?? panic("The transcript answers it");
       await generateThreadTitle({
+        indexThread: async () => await Promise.resolve(),
         initialTitle: "New chat",
         messages: [user, assistant],
         organizationId: ids.orgA,
         orgAIConfig: run.orgAIConfig,
+        managedAIResidency: "eu" as const,
         promptCachingEnabled: run.caching,
         recordAuditEvent: noAudit,
         safeDb: safeDbOf(),
@@ -308,6 +311,7 @@ const ROLE_REQUESTS = {
         messages: chatMessagesOf(TRANSCRIPT),
         organizationId: ids.orgA,
         orgAIConfig: run.orgAIConfig,
+        managedAIResidency: "eu" as const,
         promptCachingEnabled: run.caching,
         threadId: await seedThread(),
         workspaceId: null,
@@ -345,6 +349,7 @@ const ROLE_REQUESTS = {
         messages: chatMessagesOf(TRANSCRIPT),
         organizationId: ids.orgA,
         orgAIConfig: run.orgAIConfig,
+        managedAIResidency: "eu" as const,
         preserveTokens: 1,
         reasoningEffort: effortOf(run.effort),
         tenantWorkspaceIds: [],
@@ -365,6 +370,7 @@ const ROLE_REQUESTS = {
         })),
         organizationId: ids.orgA,
         orgAIConfig: run.orgAIConfig,
+        managedAIResidency: "eu" as const,
         preserveTokens: 1,
         role: "chat",
         tenantWorkspaceIds: [],
@@ -381,6 +387,7 @@ const ROLE_REQUESTS = {
         abortSignal: AbortSignal.timeout(ROLE_TIMEOUT_MS),
         dataWorkspaceIds: [],
         orgAIConfig: run.orgAIConfig,
+        managedAIResidency: "eu" as const,
         organizationId: ids.orgA,
         preserveTokens: 1,
         reasoningEffort: effortOf(run.effort),
@@ -411,6 +418,7 @@ const ROLE_REQUESTS = {
         },
         organizationId: ids.orgA,
         orgAIConfig: run.orgAIConfig,
+        managedAIResidency: "eu" as const,
         role: "fast",
         systemSafe: "Answer briefly.",
         systemUntrusted: "Return the clause text.",
@@ -680,18 +688,25 @@ const requestsOf = async (
   replay.serve({ exchanges: [], model: "no-queued-model" });
   replay.answerSideCalls(answer);
   try {
-    await ROLE_REQUESTS[combination.request]
-      .run({
-        caching: combination.caching === "on",
-        effort: combination.effort,
-        orgAIConfig,
-        sendMode: combination.sendMode,
-      })
-      // The answer is a text stream whatever the request asked for; a
-      // builder that reads it as something else fails after its request
-      // was captured.
-      .catch(() => undefined);
-    return [...replay.requests()];
+    const outcome = await Result.tryPromise(
+      async () =>
+        await ROLE_REQUESTS[combination.request].run({
+          caching: combination.caching === "on",
+          effort: combination.effort,
+          orgAIConfig,
+          sendMode: combination.sendMode,
+        }),
+    );
+    const requests = [...replay.requests()];
+    // The answer is a text stream whatever the request asked for, so a
+    // builder that reads it as something else fails after its request was
+    // captured. One that fails before sending anything is the defect itself.
+    if (Result.isError(outcome) && requests.length === 0) {
+      return panic(
+        `${combination.request} built no request: ${String(outcome.error.cause)}`,
+      );
+    }
+    return requests;
   } finally {
     replay.answerSideCalls(undefined);
     replay.takeFindings();

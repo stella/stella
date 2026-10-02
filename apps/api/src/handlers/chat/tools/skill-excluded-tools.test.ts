@@ -66,6 +66,7 @@ const turnProps = (
   memoryEnabled: false,
   organizationId,
   orgAIConfig: null,
+  managedAIResidency: "eu" as const,
   pinServerValidatedWorkspaceId: () => true,
   refRegistry: createChatRefRegistry(),
   registryDispatch: BUSINESS_REGISTRY_DISPATCH,
