@@ -271,7 +271,7 @@ jobs:
             const verifyGroup = async (group) => {
               const id = await startCheck(group?.head_sha);
               if (!validSha(group.base_sha) || typeof group.base_ref !== "string" || typeof group.head_ref !== "string") fail("CLA_INVALID_MERGE_GROUP");
-              const anchor = /\/pr-(\d+)-[0-9a-f]+$/u.exec(group.head_ref);
+              const anchor = group.head_ref.match(/\/pr-(\d+)-[0-9a-f]+$/u);
               if (!anchor || !positiveInteger(Number(anchor[1]))) fail("CLA_INVALID_QUEUE_REF");
               const baseRef = group.base_ref.replace(/^refs\/heads\//u, "");
               const entries = new Map();
