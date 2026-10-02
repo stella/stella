@@ -1,6 +1,8 @@
-/** Public route factories and the census of handlers they gate. */
 import { Result } from "better-result";
 import { status } from "elysia";
+
+/** Public route factories and the census of handlers they gate. */
+import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import type {
   PublicHandlerConfig,
@@ -26,7 +28,13 @@ type NotFoundStatus = ReturnType<typeof notFound>;
  * correct, so it carries the reader's ask instead of joining the one answer
  * missing and restricted subjects share.
  */
-type UnreadableSubjectAddress = { kind: "unreadable"; message: string };
+type UnreadableSubjectAddress =
+  | { kind: "unreadable"; message: string }
+  | { kind: "unavailable"; response: PublicCountryUnavailable };
+
+const unavailableAddress = (response: PublicCountryUnavailable) =>
+  status(503, response);
+type UnavailableAddressStatus = ReturnType<typeof unavailableAddress>;
 
 const unreadableAddress = (message: string) => status(400, { message });
 type UnreadableAddressStatus = ReturnType<typeof unreadableAddress>;
@@ -83,9 +91,15 @@ const buildGatedSubjectHandler = <
     async function* (
       ctx: PublicHandlerContext<TConfig>,
     ): SafeHandlerGenerator<
-      TResult | NotFoundStatus | UnreadableAddressStatus
+      | TResult
+      | NotFoundStatus
+      | UnreadableAddressStatus
+      | UnavailableAddressStatus
     > {
       const located = locate(ctx);
+      if (located.kind === "unavailable") {
+        return Result.ok(unavailableAddress(located.response));
+      }
       if (located.kind === "unreadable") {
         return Result.ok(unreadableAddress(located.message));
       }

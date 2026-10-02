@@ -31,6 +31,7 @@ import infosoudImportAgenda from "@/api/handlers/workspaces/infosoud-import-agen
 import infosoudLookup from "@/api/handlers/workspaces/infosoud-lookup";
 import readJustifications from "@/api/handlers/workspaces/justifications/list";
 import readWorkspaces from "@/api/handlers/workspaces/list";
+import listWorkspaceMemberPreviews from "@/api/handlers/workspaces/member-previews/list";
 import addWorkspaceMember from "@/api/handlers/workspaces/members/add";
 import removeWorkspaceMember from "@/api/handlers/workspaces/members/remove";
 import readActiveWorkspace from "@/api/handlers/workspaces/read-active";
@@ -170,6 +171,10 @@ export const workspacesRoute = new Elysia({ prefix: "/workspaces" })
   })
   .get("/", readWorkspaces.handler, {
     permissions: readWorkspaces.config.permissions,
+  })
+  .get("/member-previews", listWorkspaceMemberPreviews.handler, {
+    permissions: listWorkspaceMemberPreviews.config.permissions,
+    query: listWorkspaceMemberPreviews.config.query,
   })
   .get("/navigation", readWorkspaceNavigation.handler, {
     permissions: readWorkspaceNavigation.config.permissions,

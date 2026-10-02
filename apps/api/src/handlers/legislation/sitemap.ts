@@ -4,6 +4,7 @@ import { status, t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import { legislationDocuments, statuteSitemapShards } from "@/api/db/schema";
 import {
@@ -128,6 +129,11 @@ export const listStatuteSitemapStatutesHandler = async (
   query: SitemapShardStatutesQuery,
   legislationDb: LegislationReadDb,
 ) => {
+  const unavailable = publicCountryUnavailable(query.country);
+  if (unavailable !== null) {
+    return status(503, unavailable);
+  }
+
   const rows = await legislationDb(
     async (tx) => await statuteSitemapShardQuery({ query, tx }),
   );

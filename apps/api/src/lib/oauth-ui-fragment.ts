@@ -2,7 +2,7 @@ import {
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
-} from "@/api/lib/auth-paths";
+} from "@/api/lib/auth/auth-paths";
 
 const OAUTH_SIGNATURE_PARAM = "sig";
 const OAUTH_QUERY_HASH_PARAM = "oauth_query";

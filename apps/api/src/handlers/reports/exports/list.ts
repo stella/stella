@@ -12,6 +12,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "reporting_export",
     consumesServices: false,
   },
