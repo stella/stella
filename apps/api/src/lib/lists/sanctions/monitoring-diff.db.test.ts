@@ -4,6 +4,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
 
+import { compareCodeUnit } from "@stll/collation";
 import { SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry } from "@stll/sanctions";
 
@@ -35,6 +36,7 @@ import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-i
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
 import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -242,7 +244,8 @@ const eventsFor = async (contactId: typeof contacts.$inferSelect.id) =>
   await db
     .select()
     .from(sanctionsScreeningEvents)
-    .where(eq(sanctionsScreeningEvents.contactId, contactId));
+    .where(eq(sanctionsScreeningEvents.contactId, contactId))
+    .orderBy(sanctionsScreeningEvents.id);
 
 const screeningFor = async (contactId: typeof contacts.$inferSelect.id) =>
   (
@@ -806,6 +809,7 @@ test(
           }),
       )
     ).unwrap();
+    expect(excluded.lists).toHaveLength(sanctionsSourceIds().length);
     expect(excluded.lists.every((row) => row.status === "excluded")).toBe(true);
     expect(excluded.matches.items).toEqual([]);
     expect(excluded.matches.nextCursor).toBeNull();
@@ -857,20 +861,18 @@ test(
       commit(firmPrepared),
     ]);
     expect((await matchFor(included.id)).state).toBe("lapsed");
-    expect(
-      (
-        await scopedDb(
-          async (tx) =>
-            await readContactSanctions(tx, {
-              organizationId: orgId,
-              contactId: included.id,
-              now,
-            }),
-        )
+    const firmRead = (
+      await scopedDb(
+        async (tx) =>
+          await readContactSanctions(tx, {
+            organizationId: orgId,
+            contactId: included.id,
+            now,
+          }),
       )
-        .unwrap()
-        .lists.every((row) => row.status === "excluded"),
-    ).toBe(true);
+    ).unwrap();
+    expect(firmRead.lists).toHaveLength(sanctionsSourceIds().length);
+    expect(firmRead.lists.every((row) => row.status === "excluded")).toBe(true);
   },
   TIMEOUT,
 );
@@ -1017,6 +1019,7 @@ test(
           }),
       )
     ).unwrap();
+    expect(nextEvents.items).toHaveLength(2);
     expect(
       nextEvents.items.every(
         (row) => !eventPage.items.some((previous) => previous.id === row.id),
@@ -1377,11 +1380,11 @@ test(
     );
     expect(first.matches.items.at(-1)?.sourceEntryId).toBe("one");
     expect(second.matches.items.at(0)?.sourceEntryId).toBe("entry-000");
+    expect(second.matches.items).toHaveLength(100);
     expect(second.matches.items.every((row) => row.sourceId === "un")).toBe(
       true,
     );
     expect(third.matches.items.at(0)?.sourceId).toBe("un");
-    expect(second.matches.items).toHaveLength(100);
     expect(third.matches.items).toHaveLength(1);
     expect(third.truncated).toBe(false);
     expect(third.matches.nextCursor).toBeNull();
@@ -1759,6 +1762,135 @@ test(
       registrationNumber: null,
     });
     expect(withoutRegistration.outcome.possibleMatches).toEqual([]);
+  },
+  TIMEOUT,
+);
+
+const isolatedOrganization = async () => {
+  const id = mintAuthProviderId<"organization">();
+  await db
+    .insert(organization)
+    .values({ id, name: "Isolated monitoring", slug: id, createdAt: now });
+  return id;
+};
+
+test(
+  "event pages enumerate every eligible event exactly once including timestamp ties",
+  async () => {
+    const organizationId = await isolatedOrganization();
+    const tenantDb = scopedFor(organizationId);
+    const editionId = await activate("4");
+    const contact = await addContact(organizationId);
+    const excluded = await addContact(organizationId);
+    await db
+      .update(contacts)
+      .set({ sanctionsMonitoringMode: "excluded" })
+      .where(eq(contacts.id, excluded.id));
+    const eligible = Array.from({ length: 7 }, (_, index) => ({
+      id: toSafeId<"sanctionsScreeningEvent">(Bun.randomUUIDv7()),
+      organizationId,
+      contactId: contact.id,
+      sourceId: "eu",
+      sourceEntryId: `page-${index}`,
+      type: index % 2 === 0 ? ("new" as const) : ("reopened" as const),
+      newEditionId: editionId,
+      reason: "synthetic event",
+      createdAt: new Date(now.getTime() + Math.floor(index / 3) * 1000),
+    }));
+    await db.insert(sanctionsScreeningEvents).values(eligible);
+    await db.insert(sanctionsScreeningEvents).values([
+      ...(["changed", "dismissed", "confirmed", "lapsed"] as const).map(
+        (type) => ({
+          organizationId,
+          contactId: contact.id,
+          sourceId: "eu",
+          sourceEntryId: `hidden-${type}`,
+          type,
+          newEditionId: editionId,
+          reason: "ineligible type",
+          createdAt: now,
+        }),
+      ),
+      {
+        organizationId,
+        contactId: excluded.id,
+        sourceId: "eu",
+        sourceEntryId: "excluded",
+        type: "new",
+        newEditionId: editionId,
+        reason: "excluded contact",
+        createdAt: now,
+      },
+    ]);
+    const expectedIds = eligible
+      .toSorted(
+        (a, b) =>
+          a.createdAt.getTime() - b.createdAt.getTime() ||
+          compareCodeUnit(a.id, b.id),
+      )
+      .map(({ id }) => id);
+    const seen: string[] = [];
+    let cursor: string | undefined;
+    let finished = false;
+    for (const size of [2, 2, 2, 1]) {
+      const currentCursor = cursor;
+      const page = (
+        await tenantDb(
+          async (tx) =>
+            await listSanctionsMonitoringEvents(tx, {
+              organizationId,
+              limit: 2,
+              cursor: currentCursor,
+            }),
+        )
+      ).unwrap();
+      expect(page.items).toHaveLength(size);
+      seen.push(...page.items.map(({ id }) => id));
+      if (size === 1) {
+        expect(page.nextCursor).toBeNull();
+        finished = true;
+        break;
+      }
+      expect(page.nextCursor).not.toBeNull();
+      cursor = page.nextCursor ?? panic("Expected event cursor");
+    }
+    expect(finished).toBe(true);
+    expect(seen).toEqual(expectedIds);
+    expect(new Set(seen).size).toBe(eligible.length);
+    for (const invalidCursor of [
+      "not-a-cursor",
+      encodePaginationCursor([
+        otherOrg,
+        now.toISOString(),
+        expectedIds.at(0) ?? panic("Missing event"),
+      ]),
+      encodePaginationCursor([
+        organizationId,
+        "not-a-date",
+        expectedIds.at(0) ?? panic("Missing event"),
+      ]),
+      encodePaginationCursor([organizationId, now.toISOString(), "not-a-uuid"]),
+    ]) {
+      const result = await tenantDb(
+        async (tx) =>
+          await listSanctionsMonitoringEvents(tx, {
+            organizationId,
+            cursor: invalidCursor,
+          }),
+      );
+      expect(result.isErr() && result.error.code).toBe("invalid_cursor");
+    }
+    await db
+      .insert(organizationSettings)
+      .values({ organizationId, sanctionsMonitoringMode: "disabled" });
+    const disabledPage = (
+      await tenantDb(
+        async (tx) =>
+          await listSanctionsMonitoringEvents(tx, { organizationId }),
+      )
+    ).unwrap();
+    expect(disabledPage.items).toEqual([]);
+    expect(disabledPage.nextCursor).toBeNull();
   },
   TIMEOUT,
 );
