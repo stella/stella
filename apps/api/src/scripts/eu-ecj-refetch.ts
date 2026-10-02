@@ -9,10 +9,7 @@ import {
   isValidCelex,
   listCelexVariants,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import {
-  readPublisherCooldown,
-  withPublisherRequestRateLimit,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { withPublisherRequestRateLimit } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -34,6 +31,7 @@ import { operatorFlags } from "@/api/scripts/operator-flags";
  * Formex runs journal each outcome durably and release both the maintenance
  * lane and source ingestion lease between batches. Reuse --results-out to
  * recover after interruption, optionally with --after <row-id>.
+ * A publisher rate-limit stop exits 1, matching a halted full refetch.
  *
  * bun run src/scripts/eu-ecj-refetch.ts --formex-only --ids-file ids.txt \
  *   --apply --results-out results.jsonl --requests-per-second 1
@@ -61,7 +59,9 @@ const USAGE = `Usage: bun run src/scripts/eu-ecj-refetch.ts [options]
   --limit <n>          Maximum CELEX or stored rows to visit this run.
   --after <id>         Resume after a CELEX or Formex row id (sorted order).
   --delay-ms <n>       Pause between decisions (default ${DEFAULT_DELAY_MS}).
-  --failed-out <path>  Where failed CELEX are written (default ${DEFAULT_FAILED_OUT}).`;
+  --failed-out <path>  Where failed CELEX are written (default ${DEFAULT_FAILED_OUT}).
+
+A publisher rate-limit stop exits 1; resume after its reported cooldown.`;
 
 type FormexOnlyOptions = {
   flagValue: ReturnType<typeof operatorFlags>["flagValue"];
@@ -70,25 +70,16 @@ type FormexOnlyOptions = {
   after: string | null;
   resultsOut: string | undefined;
 };
-const runFormexOnly = async ({
-  flagValue,
+type StoredFormexRefreshOptions = Omit<FormexOnlyOptions, "flagValue"> & {
+  idsFile: string;
+};
+const runStoredFormexRefresh = async ({
+  idsFile,
   apply,
   limit,
   after,
   resultsOut,
-}: FormexOnlyOptions): Promise<number> => {
-  const idsFile = flagValue("ids-file");
-  if (
-    idsFile === undefined ||
-    ["celex", "celex-file", "census"].some(
-      (name) => flagValue(name) !== undefined,
-    )
-  ) {
-    console.error(
-      "--formex-only requires --ids-file and cannot use CELEX list flags",
-    );
-    return 1;
-  }
+}: StoredFormexRefreshOptions) => {
   const { ingestionDb } = await openCaseLawReadOnlySession();
   await refreshS3();
   if (apply) {
@@ -105,7 +96,7 @@ const runFormexOnly = async ({
   ).at(0);
   if (source === undefined) {
     console.error("No case-law source configured for adapter eu-ecj");
-    return 1;
+    return null;
   }
   const resultsPath = resultsOut ?? "eu-ecj-refetch-results.jsonl";
   const interruption = new AbortController();
@@ -113,9 +104,8 @@ const runFormexOnly = async ({
   process.once("SIGINT", interrupt);
   process.once("SIGTERM", interrupt);
   try {
-    const summary = await runEcjFormexRefresh({
+    return await runEcjFormexRefresh({
       signal: interruption.signal,
-      readPublisherCooldown,
       ingestionDb,
       sourceId: source.id,
       idsFile,
@@ -155,41 +145,69 @@ const runFormexOnly = async ({
         };
       },
     });
-    switch (summary.type) {
-      case "complete":
-        console.log(
-          JSON.stringify({
-            type: summary.type,
-            rows: summary.results.length,
-            resultsOut: resultsPath,
-          }),
-        );
-        break;
-      case "rate-limited":
-        console.log(
-          JSON.stringify({
-            type: summary.type,
-            rows: summary.results.length,
-            blockedId: summary.blockedId,
-            resumeAfter: summary.resumeAfter,
-            refusals: summary.refusals,
-          }),
-        );
-        console.log(
-          summary.resumeAfter === null
-            ? "Resume with the same arguments and no --after cursor."
-            : `Resume with the same arguments and --after ${summary.resumeAfter}.`,
-        );
-        break;
-      default:
-        summary satisfies never;
-        return panic("Unhandled Formex refresh summary");
-    }
   } finally {
     process.removeListener("SIGINT", interrupt);
     process.removeListener("SIGTERM", interrupt);
   }
-  return 0;
+};
+
+const runFormexOnly = async ({
+  flagValue,
+  apply,
+  limit,
+  after,
+  resultsOut,
+  refresh,
+}: FormexOnlyOptions & {
+  refresh: typeof runStoredFormexRefresh;
+}): Promise<number> => {
+  const idsFile = flagValue("ids-file");
+  if (
+    idsFile === undefined ||
+    ["celex", "celex-file", "census"].some(
+      (name) => flagValue(name) !== undefined,
+    )
+  ) {
+    console.error(
+      "--formex-only requires --ids-file and cannot use CELEX list flags",
+    );
+    return 1;
+  }
+  const summary = await refresh({ idsFile, apply, limit, after, resultsOut });
+  if (summary === null) {
+    return 1;
+  }
+  const resultsPath = resultsOut ?? "eu-ecj-refetch-results.jsonl";
+  switch (summary.type) {
+    case "complete":
+      console.log(
+        JSON.stringify({
+          type: summary.type,
+          rows: summary.results.length,
+          resultsOut: resultsPath,
+        }),
+      );
+      return 0;
+    case "rate-limited":
+      console.log(
+        JSON.stringify({
+          type: summary.type,
+          rows: summary.results.length,
+          blockedId: summary.blockedId,
+          resumeAfter: summary.resumeAfter,
+          cooldownUntilEpochMs: summary.cooldownUntilEpochMs,
+        }),
+      );
+      console.log(
+        summary.resumeAfter === null
+          ? "Resume with the same arguments and no --after cursor."
+          : `Resume with the same arguments and --after ${summary.resumeAfter}.`,
+      );
+      return 1;
+    default:
+      summary satisfies never;
+      return panic("Unhandled Formex refresh summary");
+  }
 };
 
 type CelexInputOptions = {
@@ -457,8 +475,12 @@ const runCelexRefresh = async ({
   return haltReason === null || haltReason === "interrupted" ? 0 : 1;
 };
 
+type EuEcjRefetchOptions = {
+  formexRefresh?: typeof runStoredFormexRefresh;
+};
 export const runEuEcjRefetch = async (
   argv: readonly string[],
+  { formexRefresh = runStoredFormexRefresh }: EuEcjRefetchOptions = {},
 ): Promise<number> => {
   if (argv.includes("--help") || argv.includes("-h")) {
     console.log(USAGE);
@@ -499,6 +521,7 @@ export const runEuEcjRefetch = async (
       }
       if (hasFlag("formex-only")) {
         return await runFormexOnly({
+          refresh: formexRefresh,
           flagValue,
           apply,
           limit,

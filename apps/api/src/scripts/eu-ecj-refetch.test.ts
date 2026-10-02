@@ -3,7 +3,70 @@ import { describe, expect, test } from "bun:test";
 import { runEuEcjRefetch } from "@/api/scripts/eu-ecj-refetch";
 import { rootPoolConnectionCount } from "@/api/tests/test-database-environment";
 
+import { runCli } from "../../../legal-atlas-runner/src/index";
+
 describe("EU refresh command boundaries", () => {
+  test("CLI dispatch returns exit 1 for a resumable publisher refusal", async () => {
+    const argv = [
+      "--formex-only",
+      "--ids-file",
+      "ids.txt",
+      "--results-out",
+      "results.jsonl",
+      "--apply",
+    ];
+    const calls: unknown[] = [];
+    for (const resumeAfter of [null, "last-completed-row"]) {
+      const exitCode = await runCli(["run", "eu-ecj-refetch", ...argv], {
+        refetch: async (args) =>
+          await runEuEcjRefetch(args, {
+            formexRefresh: async (options) => {
+              calls.push(options);
+              return {
+                type: "rate-limited",
+                blockedId: "blocked-row",
+                resumeAfter,
+                cooldownUntilEpochMs: 123_456,
+                results: [],
+              };
+            },
+          }),
+      });
+      expect(exitCode).toBe(1);
+    }
+    expect(calls).toEqual([
+      {
+        idsFile: "ids.txt",
+        resultsOut: "results.jsonl",
+        apply: true,
+        limit: null,
+        after: null,
+      },
+      {
+        idsFile: "ids.txt",
+        resultsOut: "results.jsonl",
+        apply: true,
+        limit: null,
+        after: null,
+      },
+    ]);
+    expect(rootPoolConnectionCount()).toBe(0);
+  });
+
+  test("CLI dispatch returns exit 0 after a completed Formex refresh", async () => {
+    const exitCode = await runCli(
+      ["run", "eu-ecj-refetch", "--formex-only", "--ids-file", "ids.txt"],
+      {
+        refetch: async (args) =>
+          await runEuEcjRefetch(args, {
+            formexRefresh: async () => ({ type: "complete", results: [] }),
+          }),
+      },
+    );
+    expect(exitCode).toBe(0);
+    expect(rootPoolConnectionCount()).toBe(0);
+  });
+
   test("rejects Formex-only flags in a full refetch", async () => {
     for (const flag of ["--ids-file", "--results-out"]) {
       expect(

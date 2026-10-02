@@ -1,10 +1,7 @@
 import { panic, Result, TaggedError } from "better-result";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 import { open, rename, unlink } from "node:fs/promises";
-import { setTimeout as waitTimeout } from "node:timers/promises";
 import * as v from "valibot";
-
-import { Temporal } from "@stll/time";
 
 import { caseLawDecisions } from "@/api/db/schema";
 import type { StoredRawReparseInput } from "@/api/handlers/case-law/ingestion/adapter";
@@ -13,8 +10,6 @@ import {
   isValidCelex,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
-import { readPublisherCooldown as readSharedPublisherCooldown } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { PROCESS_DECISION_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
@@ -94,12 +89,6 @@ type RunEcjFormexRefreshOptions = {
   leaseWaitMs?: number;
   now?: () => number;
   waitForLease?: (milliseconds: number) => Promise<void>;
-  readPublisherCooldown?: typeof readSharedPublisherCooldown;
-  publisherNow?: () => number;
-  waitForCooldown?: (
-    milliseconds: number,
-    signal: AbortSignal,
-  ) => Promise<void>;
 };
 
 type RequestedIdentity =
@@ -633,36 +622,6 @@ const acquireRefreshBatch = async ({
   }
 };
 
-type WaitPublisherCooldownOptions = {
-  publisherKey: PublisherGateId;
-  readPublisherCooldown: typeof readSharedPublisherCooldown;
-  publisherNow: () => number;
-  waitForCooldown: (milliseconds: number, signal: AbortSignal) => Promise<void>;
-  signal: AbortSignal;
-};
-const waitPublisherCooldown = async ({
-  publisherKey,
-  readPublisherCooldown,
-  publisherNow,
-  waitForCooldown,
-  signal,
-}: WaitPublisherCooldownOptions) => {
-  while (true) {
-    signal.throwIfAborted();
-    const expiry = await readPublisherCooldown(publisherKey);
-    if (expiry === null) {
-      return;
-    }
-    // Redis decides expiry. The local clock only schedules a bounded recheck,
-    // so clock skew cannot retry early or sleep through a cleared cooldown.
-    const recheckMs = Math.min(
-      PUBLISHER_COOLDOWN_POLL_MAX_MS,
-      Math.max(PUBLISHER_COOLDOWN_POLL_MIN_MS, expiry - publisherNow()),
-    );
-    await waitForCooldown(recheckMs, signal);
-  }
-};
-
 type VisitRefreshBatchOptions = Omit<
   RefreshStoredRowOptions,
   "row" | "pending"
@@ -677,8 +636,6 @@ type VisitRefreshBatchOptions = Omit<
     outcome: ResultOutcome,
     extra?: { formexShape?: "archive" | "xml"; bytes?: number },
   ) => Promise<void>;
-  rateState: { blockedId: string; refusals: number };
-  planPositions: Map<SafeId<"caseLawDecision">, number>;
 };
 const visitRefreshBatch = async ({
   identities,
@@ -695,8 +652,6 @@ const visitRefreshBatch = async ({
   persistIntent: writePending,
   intentPath,
   append,
-  rateState,
-  planPositions,
 }: VisitRefreshBatchOptions) => {
   for (const identity of identities) {
     signal.throwIfAborted();
@@ -725,15 +680,7 @@ const visitRefreshBatch = async ({
       persistIntent: writePending,
     });
     if (refreshed.type === "rate-limited") {
-      rateState.refusals =
-        rateState.blockedId === row.id ? rateState.refusals + 1 : 1;
-      rateState.blockedId = row.id;
-      return {
-        refusal: refreshed,
-        retryOffset:
-          planPositions.get(row.id) ??
-          panic("rate-limited row is absent from the plan"),
-      };
+      return { refusal: refreshed, blockedId: row.id };
     }
     const { outcome, formexShape, bytes } = refreshed;
     const extra = {
@@ -741,7 +688,6 @@ const visitRefreshBatch = async ({
       ...(bytes === undefined ? {} : { bytes }),
     };
     await append(row, outcome, extra);
-    rateState.refusals = 0;
 
     if (intentState.pending?.id === row.id) {
       await unlink(intentPath);
@@ -781,10 +727,6 @@ const durableResumeCursor = ({
   return cursor;
 };
 
-const MAX_CONSECUTIVE_RATE_REFUSALS = 3;
-const PUBLISHER_COOLDOWN_POLL_MAX_MS = 1000;
-const PUBLISHER_COOLDOWN_POLL_MIN_MS = 100;
-
 export type EcjFormexRefreshSummary =
   | { type: "complete"; results: EcjFormexRefreshResult[] }
   | {
@@ -792,7 +734,7 @@ export type EcjFormexRefreshSummary =
       results: EcjFormexRefreshResult[];
       blockedId: string;
       resumeAfter: string | null;
-      refusals: typeof MAX_CONSECUTIVE_RATE_REFUSALS;
+      cooldownUntilEpochMs: number;
     };
 
 /** Each row is acknowledged only after its pipeline write and durable journal append. */
@@ -814,11 +756,6 @@ export const runEcjFormexRefresh = async ({
   now = () => performance.now(),
   waitForLease = async (milliseconds) => {
     await Bun.sleep(milliseconds);
-  },
-  readPublisherCooldown = readSharedPublisherCooldown,
-  publisherNow = () => Temporal.Now.instant().epochMilliseconds,
-  waitForCooldown = async (milliseconds, waitSignal) => {
-    await waitTimeout(milliseconds, undefined, { signal: waitSignal });
   },
 }: RunEcjFormexRefreshOptions): Promise<EcjFormexRefreshSummary> => {
   validateRunOptions({
@@ -874,12 +811,8 @@ export const runEcjFormexRefresh = async ({
     journal.prior.set(row.id, result);
     journal.offset += Buffer.byteLength(line);
   };
-  const rateState = { blockedId: "", refusals: 0 };
-  const planPositions = new Map(
-    plan.map((row, position) => [row.id, position]),
-  );
   try {
-    for (let offset = 0; offset < plan.length;) {
+    for (let offset = 0; offset < plan.length; offset += batchSize) {
       signal.throwIfAborted();
       const batch = await acquireRefreshBatch({
         apply,
@@ -889,10 +822,7 @@ export const runEcjFormexRefresh = async ({
         now,
         waitForLease,
       });
-      const batchState: {
-        refusal: Extract<RefreshOutcome, { type: "rate-limited" }> | null;
-        retryOffset: number;
-      } = { refusal: null, retryOffset: offset + batchSize };
+      let refusal: Awaited<ReturnType<typeof visitRefreshBatch>> = null;
       try {
         journal = await readPriorResults({
           path: resultsOut,
@@ -906,7 +836,6 @@ export const runEcjFormexRefresh = async ({
           apply,
         });
         if (identities.length === 0) {
-          offset += batchSize;
           continue;
         }
         // db-await-in-loop: read only the current bounded batch while its source lease is held
@@ -928,7 +857,7 @@ export const runEcjFormexRefresh = async ({
               .limit(identities.length),
         );
         const currentById = new Map(currentRows.map((row) => [row.id, row]));
-        const visited = await visitRefreshBatch({
+        refusal = await visitRefreshBatch({
           identities,
           currentById,
           after,
@@ -943,41 +872,25 @@ export const runEcjFormexRefresh = async ({
           persistIntent: writePending,
           intentPath,
           append,
-          rateState,
-          planPositions,
         });
-        if (visited !== null) {
-          batchState.refusal = visited.refusal;
-          batchState.retryOffset = visited.retryOffset;
-        }
       } finally {
         await batch?.release();
       }
-      if (batchState.refusal !== null) {
-        if (rateState.refusals === MAX_CONSECUTIVE_RATE_REFUSALS) {
-          return {
-            type: "rate-limited",
-            results,
-            blockedId: rateState.blockedId,
-            resumeAfter: durableResumeCursor({
-              rows,
-              prior: journal.prior,
-              apply,
-              blockedId: rateState.blockedId,
-              after,
-            }),
-            refusals: MAX_CONSECUTIVE_RATE_REFUSALS,
-          };
-        }
-        await waitPublisherCooldown({
-          publisherKey: batchState.refusal.publisherKey,
-          readPublisherCooldown,
-          publisherNow,
-          waitForCooldown,
-          signal,
-        });
+      if (refusal !== null) {
+        return {
+          type: "rate-limited",
+          results,
+          blockedId: refusal.blockedId,
+          resumeAfter: durableResumeCursor({
+            rows,
+            prior: journal.prior,
+            apply,
+            blockedId: refusal.blockedId,
+            after,
+          }),
+          cooldownUntilEpochMs: refusal.refusal.cooldownUntilEpochMs,
+        };
       }
-      offset = batchState.retryOffset;
     }
   } finally {
     await file.close();
