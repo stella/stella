@@ -224,6 +224,7 @@ const createClauseDetailScopedDb = (clause: unknown) =>
     mock(
       async (run: (tx: unknown) => unknown) =>
         await run({
+          $count: async () => 0,
           query: {
             clauses: { findFirst: async () => clause },
           },

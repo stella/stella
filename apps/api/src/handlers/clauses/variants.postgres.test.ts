@@ -25,6 +25,10 @@ import {
 } from "@/api/tests/helpers/auth-provider-id";
 
 import { importHandler } from "./import";
+import type {
+  ClauseExportPayload,
+  ClauseExportVariant,
+} from "./import-export-schema";
 import { getClauseHandler } from "./read";
 import { insertClauseVariants } from "./variant-insert";
 import { createVariantHandler, listVariantsHandler } from "./variants";
@@ -210,15 +214,26 @@ const variantAuditCount = async (fixture: VariantFixture) =>
     ),
   );
 
-const importFile = (variants: { label: string; body: { text: string }[] }[]) =>
+const importFile = (variants: ClauseExportVariant[]) =>
   new File(
     [
       JSON.stringify({
         version: 1,
+        exportedAt: new Date().toISOString(),
         clauses: [
-          { title: "Imported variants", body: [{ text: "Primary" }], variants },
+          {
+            title: "Imported variants",
+            description: null,
+            usageNotes: null,
+            language: null,
+            body: [{ text: "Primary" }],
+            variants,
+            metadata: null,
+            categoryName: null,
+            categoryPath: null,
+          },
         ],
-      }),
+      } satisfies ClauseExportPayload),
     ],
     "clauses.json",
     { type: "application/json" },
@@ -235,9 +250,14 @@ const importVariants = async (fixture: VariantFixture, file: File) =>
     }),
   );
 
-describe.skipIf(!databaseUrl || !runPostgresTests)(
-  "clause variants (postgres)",
-  () => {
+if (!databaseUrl || !runPostgresTests) {
+  describe.skip("clause variants (postgres)", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
+      expect(true).toBe(true);
+    });
+  });
+} else {
+  describe("clause variants (postgres)", () => {
     test("two creates at the last slot admit exactly one and expose every saved variant", async () => {
       await withFixture(async (fixture) => {
         const clauseId = await seedClause(fixture);
@@ -549,5 +569,5 @@ describe.skipIf(!databaseUrl || !runPostgresTests)(
         expect(await variantAuditCount(fixture)).toBe(0);
       });
     });
-  },
-);
+  });
+}
