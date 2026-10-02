@@ -286,7 +286,7 @@ describe("detect-e2e-changes", () => {
       "needs.ci-plan.outputs.service_suites_required == 'true'",
     );
     expect(collabRedis).toContain(
-      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true'")}`,
+      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'")}`,
     );
     expect(collabRedis).toContain(
       "bun --filter @stll/collab test src/server.test.ts",
