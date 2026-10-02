@@ -15,7 +15,14 @@ All decisions carry the signal values, thresholds and effective configuration.
 
 `nextBatch` bounds each size step to 0.5–1.2, smooths duration, grows after stable
 batches and adjusts sleep. Holds preserve size and carry `heldSince` and
-`holdUntil`; consumers persist them. `isHeldTooLong` uses the first hold in a streak.
+`holdUntil`; consumers persist them. Optional `resumeFloor` keeps a held batch
+held until a fresh EBS reading reaches that floor; omitting it preserves degraded
+resumes. It must lie between `hardFloor` and `startFloor`. Deferrable backfills use
+65/75/80 for hard/resume/start floors. `isHeldTooLong` uses the first hold in a streak.
+`backfillHeartbeat` returns an EMF record for callers to emit every minute,
+including while held: `Stella/Backfill`, `BackfillYielded` (0/1), dimension
+`Backfill`. It includes the verdict, transition event and held-duration flag;
+callers supply the previous held timestamp to identify resumes.
 Readers, clocks and timeout scheduling are injectable; failures become unknown.
 The indicator timeout is logical: it returns unknown without cancelling an
 injected reader. SQL readers must cancel or bound their database work and await
@@ -24,7 +31,7 @@ serialized transactions with a local statement timeout and drains cancellation
 and rollback before returning its verdict. CloudWatch requests use the effective
 staleness window and an abort signal.
 
-The priority slot is database-wide: index repair, index build, backfill batch.
+The priority slot is database-wide: index repair, index build, operator job, backfill batch.
 Index sessions retain shared intent locks across unsuccessful attempts and close
 them when finished. Session death releases both intent and work ownership.
 Backfills can use transaction locks, so ownership ends with their batch's commit,

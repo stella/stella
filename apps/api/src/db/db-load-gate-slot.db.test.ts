@@ -15,63 +15,69 @@ const session = (connection: ReservedSQL) => ({
 });
 
 describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
-  for (const kind of ["transaction", "session"] as const) {
-    test(`${kind} acquisition yields when index intent arrives after the precheck`, async () => {
-      if (databaseUrl === undefined) {
-        throw new TypeError("DATABASE_URL required");
-      }
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
-        const lowerConnection = await openClient().sql.reserve();
-        const indexConnection = await openClient().sql.reserve();
-        const index = createHeavyWorkSlot({
-          session: session(indexConnection),
-          kind: "index_build",
-        });
-        let raced = false;
-        const barrierSession = {
-          query: async (statement: string, parameters: readonly number[]) => {
-            const result = await session(lowerConnection).query(
-              statement,
-              parameters,
-            );
-            if (
-              statement.includes("pg_try_advisory") &&
-              !statement.includes("shared")
-            ) {
-              expect(result.at(0)?.acquired).toBe(true);
-              expect((await index.tryAcquire()).unwrap()).toBe(false);
-              raced = true;
-            }
-            return result;
-          },
-        };
-        const lower = createHeavyWorkSlot({
-          session: barrierSession,
-          kind: "backfill_batch",
-        });
-        try {
-          if (kind === "transaction") {
-            await lowerConnection`BEGIN`;
-          }
-          expect(
-            await (kind === "transaction"
-              ? tryAcquireBackfillTransactionSlot(barrierSession)
-              : lower.tryAcquire().then((result) => result.unwrap())),
-          ).toBe(false);
-          expect(raced).toBe(true);
-          if (kind === "transaction") {
-            await lowerConnection`COMMIT`;
-          }
-          expect((await index.tryAcquire()).unwrap()).toBe(true);
-        } finally {
-          await lowerConnection`ROLLBACK`;
-          await lower.close();
-          await index.close();
-          lowerConnection.release();
-          indexConnection.release();
+  for (const priority of [
+    "index_repair",
+    "index_build",
+    "operator_job",
+  ] as const) {
+    for (const kind of ["transaction", "session"] as const) {
+      test(`${kind} acquisition yields when ${priority} intent arrives after the precheck`, async () => {
+        if (databaseUrl === undefined) {
+          throw new TypeError("DATABASE_URL required");
         }
+        await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+          const lowerConnection = await openClient().sql.reserve();
+          const indexConnection = await openClient().sql.reserve();
+          const index = createHeavyWorkSlot({
+            session: session(indexConnection),
+            kind: priority,
+          });
+          let raced = false;
+          const barrierSession = {
+            query: async (statement: string, parameters: readonly number[]) => {
+              const result = await session(lowerConnection).query(
+                statement,
+                parameters,
+              );
+              if (
+                statement.includes("pg_try_advisory") &&
+                !statement.includes("shared")
+              ) {
+                expect(result.at(0)?.acquired).toBe(true);
+                expect((await index.tryAcquire()).unwrap()).toBe(false);
+                raced = true;
+              }
+              return result;
+            },
+          };
+          const lower = createHeavyWorkSlot({
+            session: barrierSession,
+            kind: "backfill_batch",
+          });
+          try {
+            if (kind === "transaction") {
+              await lowerConnection`BEGIN`;
+            }
+            expect(
+              await (kind === "transaction"
+                ? tryAcquireBackfillTransactionSlot(barrierSession)
+                : lower.tryAcquire().then((result) => result.unwrap())),
+            ).toBe(false);
+            expect(raced).toBe(true);
+            if (kind === "transaction") {
+              await lowerConnection`COMMIT`;
+            }
+            expect((await index.tryAcquire()).unwrap()).toBe(true);
+          } finally {
+            await lowerConnection`ROLLBACK`;
+            await lower.close();
+            await index.close();
+            lowerConnection.release();
+            indexConnection.release();
+          }
+        });
       });
-    });
+    }
   }
   test("transactional batches serialize and yield to an index at their next commit", async () => {
     if (databaseUrl === undefined) {
@@ -129,10 +135,17 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
     }
     await withGatedTestClients(databaseUrl, async ({ openClient }) => {
       const connections = await Promise.all(
-        Array.from({ length: 4 }, async () => await openClient().sql.reserve()),
+        Array.from({ length: 5 }, async () => await openClient().sql.reserve()),
       );
-      const [a, b, indexConnection, repairConnection] = connections;
-      if (!a || !b || !indexConnection || !repairConnection) {
+      const [a, b, indexConnection, repairConnection, operatorConnection] =
+        connections;
+      if (
+        !a ||
+        !b ||
+        !indexConnection ||
+        !repairConnection ||
+        !operatorConnection
+      ) {
         throw new TypeError("Missing connection");
       }
       const backfill = createHeavyWorkSlot({
@@ -147,6 +160,10 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
         session: session(indexConnection),
         kind: "index_build",
       });
+      const operator = createHeavyWorkSlot({
+        session: session(operatorConnection),
+        kind: "operator_job",
+      });
       const repair = createHeavyWorkSlot({
         session: session(repairConnection),
         kind: "index_repair",
@@ -155,6 +172,7 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
         expect((await backfill.tryAcquire()).unwrap()).toBe(true);
         expect((await backfill.tryAcquire()).unwrap()).toBe(true);
         expect((await other.tryAcquire()).unwrap()).toBe(false);
+        expect((await operator.tryAcquire()).unwrap()).toBe(false);
         expect((await index.tryAcquire()).unwrap()).toBe(false);
         expect((await repair.tryAcquire()).unwrap()).toBe(false);
         await backfill.release();
@@ -165,8 +183,12 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
         await repair.close();
         await repair.close();
         expect((await other.tryAcquire()).unwrap()).toBe(false);
+        expect((await operator.tryAcquire()).unwrap()).toBe(false);
         expect((await index.tryAcquire()).unwrap()).toBe(true);
         await index.close();
+        expect((await other.tryAcquire()).unwrap()).toBe(false);
+        expect((await operator.tryAcquire()).unwrap()).toBe(true);
+        await operator.close();
         expect((await other.tryAcquire()).unwrap()).toBe(true);
         await other.release();
         expect((await backfill.tryAcquire()).unwrap()).toBe(true);
@@ -175,6 +197,7 @@ describe.skipIf(!enabled)("database-wide heavy-work priorities", () => {
         await other.close();
         await index.close();
         await repair.close();
+        await operator.close();
         for (const connection of connections) {
           connection.release();
         }

@@ -5,7 +5,11 @@ export class HeavyWorkSlotError extends TaggedError("HeavyWorkSlotError")<{
   cause: unknown;
 }> {}
 
-export type HeavyWorkKind = "index_repair" | "index_build" | "backfill_batch";
+export type HeavyWorkKind =
+  | "index_repair"
+  | "index_build"
+  | "operator_job"
+  | "backfill_batch";
 
 export type HeavyWorkSession = {
   /** A dedicated physical session, retained until close; never a pool query. */
@@ -21,8 +25,9 @@ const WORK_LOCK = 0;
 const PRIORITIES = {
   index_repair: 1,
   index_build: 2,
-  backfill_batch: 3,
-} as const;
+  operator_job: 3,
+  backfill_batch: 4,
+} as const satisfies Record<HeavyWorkKind, number>;
 const READ_HIGHER_PRIORITY_SQL = `SELECT NOT EXISTS (
   SELECT 1 FROM pg_locks
   WHERE locktype = 'advisory' AND granted AND mode = 'ShareLock'
