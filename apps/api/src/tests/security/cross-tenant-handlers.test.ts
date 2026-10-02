@@ -125,6 +125,8 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { SavedSearchCriteria } from "@/api/lib/saved-searches";
 import type { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 import { DOCX_MIME_TYPE } from "@/api/mime-types";
@@ -153,7 +155,7 @@ type TestHandlerContext = {
   getWorkspaceAccess: (
     workspaceId: SafeId<"workspace">,
   ) => Promise<{ id: SafeId<"workspace">; status: "active" } | null>;
-  memberRole: { role: "owner" };
+  memberRole: AuthorizedMemberRole;
   orgAIConfig: null;
   orgAIConfigStatus: "ok";
   managedAIResidency: "eu";
@@ -976,7 +978,7 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsA1,
         }),
-        { query: {}, memberRole: { role: "admin" } },
+        { query: {}, memberRole: sessionMemberRole("admin") },
       ),
     runBPositive: async ({ ids: testIds }) =>
       await runHandler(
@@ -987,7 +989,7 @@ const isolationCases: IsolationCase[] = [
           userId: testIds.userAdmin,
           workspaceId: testIds.wsB1,
         }),
-        { query: {}, memberRole: { role: "admin" } },
+        { query: {}, memberRole: sessionMemberRole("admin") },
       ),
     expectDenied: (result) => expectPageExcludesId(result, adminTimeTimerB),
     expectPositive: (result) => expectPageContainsId(result, adminTimeTimerB),
@@ -1006,7 +1008,7 @@ const isolationCases: IsolationCase[] = [
         {
           params: { id: stopTimeTimerB },
           body: {},
-          memberRole: { role: "admin" },
+          memberRole: sessionMemberRole("admin"),
         },
       ),
     runBPositive: async ({ ids: testIds }) =>
@@ -1021,7 +1023,7 @@ const isolationCases: IsolationCase[] = [
         {
           params: { id: stopTimeTimerB },
           body: {},
-          memberRole: { role: "admin" },
+          memberRole: sessionMemberRole("admin"),
         },
       ),
     expectDenied: expectStatus(404),
@@ -2224,7 +2226,7 @@ const createWorkspaceContext = ({
       activeWorkspaceIds.includes(targetWorkspaceId)
         ? { id: targetWorkspaceId, status: "active" }
         : null,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu" as const,

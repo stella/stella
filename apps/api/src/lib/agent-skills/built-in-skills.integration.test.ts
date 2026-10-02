@@ -18,6 +18,7 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeIdType } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -136,7 +137,7 @@ describe("shipped built-in skills in chat", () => {
         await resolveActiveSkillContext({
           ...callerWithoutRows(),
           activeSkill: { skillName: name },
-          memberRole: { role: "owner" },
+          memberRole: sessionMemberRole("owner"),
         }),
       );
 
@@ -171,7 +172,7 @@ describe("shipped built-in skills in chat", () => {
     const active = await resolveActiveSkillContext({
       ...callerWithoutRows(),
       activeSkill: { skillName: "no-such-built-in" },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
     });
 
     if (Result.isOk(active)) {
@@ -237,7 +238,7 @@ describe("an installed row and a built-in with the same slug", () => {
       await resolveActiveSkillContext({
         ...callerA(),
         activeSkill: { skillName: name },
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
       }),
     );
 
@@ -261,7 +262,7 @@ describe("an installed row and a built-in with the same slug", () => {
       await resolveActiveSkillContext({
         ...callerA(),
         activeSkill: { skillName: name },
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
       }),
     );
 
