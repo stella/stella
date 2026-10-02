@@ -88,7 +88,7 @@ describe("foldClaimReview", () => {
           );
           expect(full.note).toBe(notes.note);
           expect(full.noteSavedAt).toEqual(notes.noteSavedAt);
-          expect({ ...full, note: "", noteSavedAt: null }).toEqual(decisions);
+          expect(decisions).toEqual({ ...full, note: "", noteSavedAt: null });
           expect(events.map((event) => event.payload)).toEqual(
             originalPayloads,
           );
