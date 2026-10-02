@@ -1,11 +1,22 @@
 import * as v from "valibot";
 
+import { ARABIC_DIGIT_FOLDS } from "@stll/text-normalize";
 import { parsePlainDate, Temporal } from "@stll/time";
 
 export const MAX_VAT_RATE_BPS = 2_147_483_647;
 
+// NFKC folds full-width digits and separators; Arabic-Indic digits fold to
+// ASCII. The Arabic decimal separator (U+066B) joins "." and ",".
+const foldPercentText = (raw: string): string =>
+  Array.from(
+    raw.normalize("NFKC"),
+    (char) => ARABIC_DIGIT_FOLDS[char] ?? char,
+  ).join("");
+
 export const parseVatRatePercent = (raw: string): number | null => {
-  const parts = raw.trim().split(/[.,]/u);
+  const parts = foldPercentText(raw)
+    .trim()
+    .split(/[.,٫]/u);
   const wholeText = parts.at(0);
   const fractionText = parts.at(1);
   if (

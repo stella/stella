@@ -165,18 +165,24 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>{t("billing.vatRates.code")}</TableHead>
+                <TableHead className="max-sm:hidden">
+                  {t("billing.vatRates.code")}
+                </TableHead>
                 <TableHead>{t("billing.vatRates.name")}</TableHead>
                 <TableHead>{t("billing.vatRates.rate")}</TableHead>
-                <TableHead>{t("billing.vatRates.validFrom")}</TableHead>
-                <TableHead>{t("billing.vatRates.validTo")}</TableHead>
+                <TableHead className="max-sm:hidden">
+                  {t("billing.vatRates.validFrom")}
+                </TableHead>
+                <TableHead className="max-sm:hidden">
+                  {t("billing.vatRates.validTo")}
+                </TableHead>
                 <TableHead>{t("common.actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {rates.map((rate) => (
                 <TableRow key={rate.id}>
-                  <TableCell>
+                  <TableCell className="max-sm:hidden">
                     <BidiText>{rate.code}</BidiText>
                   </TableCell>
                   <TableCell>
@@ -184,14 +190,30 @@ const VatRatesCardBody = ({ organizationId }: { organizationId: string }) => {
                     <p className="text-muted-foreground text-xs">
                       {t(statusLabels[vatRateStatus({ rate, date: today })])}
                     </p>
+                    {/* Narrow screens hide the secondary columns; their values
+                    stay readable here so the actions column fits on screen. */}
+                    <dl className="text-muted-foreground mt-1 grid grid-cols-[auto_1fr] gap-x-2 text-xs sm:hidden">
+                      <dt>{t("billing.vatRates.code")}</dt>
+                      <dd>
+                        <BidiText>{rate.code}</BidiText>
+                      </dd>
+                      <dt>{t("billing.vatRates.validFrom")}</dt>
+                      <dd>
+                        <VatRateDate date={rate.validFrom} />
+                      </dd>
+                      <dt>{t("billing.vatRates.validTo")}</dt>
+                      <dd>
+                        <VatRateDate date={rate.validTo} />
+                      </dd>
+                    </dl>
                   </TableCell>
                   <TableCell>
                     <VatRatePercentage rateBps={rate.rateBps} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="max-sm:hidden">
                     <VatRateDate date={rate.validFrom} />
                   </TableCell>
-                  <TableCell>
+                  <TableCell className="max-sm:hidden">
                     <VatRateDate date={rate.validTo} />
                   </TableCell>
                   <TableCell>

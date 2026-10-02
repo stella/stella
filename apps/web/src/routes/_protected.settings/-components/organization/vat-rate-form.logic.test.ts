@@ -44,6 +44,36 @@ describe("VAT percentage input", () => {
       expect(parseVatRatePercent(text)).toBe(rateBps);
       expect(parseVatRatePercent(text.replace(".", ","))).toBe(rateBps);
     }
+  });
+
+  test("accepts locale-native digits and decimal separators", () => {
+    for (const [text, expected] of [
+      ["٢١٫٥", 2150],
+      ["٢١,٢٥", 2125],
+      ["۲۰", 2000],
+      ["۰٫۰۱", 1],
+      ["２１．５", 2150],
+      ["٢1٫5", 2150],
+    ] as const) {
+      expect(parseVatRatePercent(text)).toBe(expected);
+    }
+    const arabicIndic = (text: string) =>
+      text
+        .replaceAll(/\d/gu, (digit) =>
+          String.fromCodePoint(0x06_60 + Number(digit)),
+        )
+        .replace(".", "٫");
+    for (let rateBps = 0; rateBps <= 10_000; rateBps += 13) {
+      expect(
+        parseVatRatePercent(arabicIndic(vatRatePercentInput(rateBps))),
+      ).toBe(rateBps);
+    }
+  });
+
+  test("still rejects malformed locale-native input", () => {
+    for (const text of ["٢١٫٥٫٥", "٢١٫٥٥٥", "٢١٬٥", "-٢١", "٢١%"]) {
+      expect(parseVatRatePercent(text)).toBeNull();
+    }
     for (const rateBps of [
       10_001,
       999_999,
