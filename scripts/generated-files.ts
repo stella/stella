@@ -224,7 +224,7 @@ export const GENERATORS = [
   },
   {
     id: "route-tree",
-    outputKind: "committed",
+    outputKind: "derived",
     outputs: ["apps/web/src/routeTree.gen.ts"],
     inputs: [
       "apps/web/src/routes/**",

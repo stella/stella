@@ -1,4 +1,4 @@
-import { defineRelationsPart, sql } from "drizzle-orm";
+import { defineRelationsPart, inArray, sql } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import {
   boolean,
@@ -94,6 +94,8 @@ export const AUTH_USER_STELLA_SELECT_COLUMN_NAMES = Object.values(
   AUTH_USER_STELLA_SELECT_COLUMNS,
 );
 
+const SESSION_REFRESH_MODES = ["automatic", "fixed"] as const;
+
 export const session = pgTable(
   "session",
   {
@@ -110,12 +112,23 @@ export const session = pgTable(
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
     activeOrganizationId: text("active_organization_id"),
+    refreshMode: text("refresh_mode", { enum: SESSION_REFRESH_MODES })
+      .default("automatic")
+      .notNull(),
+    lastSeenAt: timestamptz("last_seen_at"),
+    priorTokenHash: text("prior_token_hash"),
+    priorTokenExpiresAt: timestamptz("prior_token_expires_at"),
   },
   (table) => [
+    check(
+      "session_refreshMode_check",
+      inArray(table.refreshMode, SESSION_REFRESH_MODES),
+    ),
     index("session_userId_activeOrgId_idx").on(
       table.userId,
       table.activeOrganizationId,
     ),
+    uniqueIndex("session_priorTokenHash_idx").on(table.priorTokenHash),
     ...denyStellaAccessPolicies(),
   ],
 );

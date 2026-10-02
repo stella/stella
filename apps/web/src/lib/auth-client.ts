@@ -22,8 +22,6 @@ import {
 import { getTranslator, useI18nStore } from "@/i18n/i18n-store";
 import { browserAuthBaseUrl } from "@/lib/api-url";
 import { getSignedOauthQueryFromHash } from "@/lib/oauth-provider";
-import { createSecretTokenBoundary } from "@/lib/secret-token";
-import type { SecretToken } from "@/lib/secret-token";
 
 export const HTTP_TOO_MANY_REQUESTS = 429;
 
@@ -48,11 +46,6 @@ export const HTTP_TOO_MANY_REQUESTS = 429;
  * stays one budget rather than four plus backoff.
  */
 const AUTH_REQUEST_TIMEOUT_MS = 8000;
-const SESSION_REVOCATION_TOKEN = "better-auth-session-revocation";
-const sessionRevocationTokenBoundary = createSecretTokenBoundary(
-  SESSION_REVOCATION_TOKEN,
-);
-
 const defineBetterAuthClientPlugin = <TPlugin extends BetterAuthClientPlugin>(
   plugin: TPlugin,
 ): TPlugin => plugin;
@@ -108,16 +101,6 @@ const withOauthQueryFromHash = (ctx: {
   ctx.headers.set("content-type", "application/json");
   ctx.body = JSON.stringify({ ...body, oauth_query: oauthQuery });
 };
-
-export type SessionRevocationToken = SecretToken<
-  typeof SESSION_REVOCATION_TOKEN
->;
-
-const createSessionRevocationToken = (value: string): SessionRevocationToken =>
-  sessionRevocationTokenBoundary.create(value);
-
-const revealSessionRevocationToken = (token: SessionRevocationToken): string =>
-  sessionRevocationTokenBoundary.reveal(token);
 
 const authClientPlugins = [
   emailOTPClient(),
@@ -201,20 +184,16 @@ export const listAuthSessions = async () => {
       ipAddress: session.ipAddress,
       updatedAt: session.updatedAt,
       userAgent: session.userAgent,
-      token: createSessionRevocationToken(session.token),
       userId: session.userId,
     })),
     error: null,
   };
 };
 
-export const revokeAuthSession = async ({
-  token,
-}: {
-  token: SessionRevocationToken;
-}) =>
-  await authClient.revokeSession({
-    token: revealSessionRevocationToken(token),
+export const revokeAuthSession = async ({ sessionId }: { sessionId: string }) =>
+  await authClient.$fetch("/revoke-session-by-id", {
+    method: "POST",
+    body: { sessionId },
   });
 
 // The two-factor server plugin rewrites a sign-in endpoint's response body to
