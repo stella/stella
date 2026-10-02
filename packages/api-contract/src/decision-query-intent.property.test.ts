@@ -148,7 +148,9 @@ test(
               jurisdiction,
             });
             expect(isWholeEntryIdentifier(standalone)).toBe(true);
-            if (standalone.type !== "identifier") {return;}
+            if (standalone.type !== "identifier") {
+              return;
+            }
             expect(parseDecisionQuery(standalone.value, options)).toEqual(
               standalone,
             );
@@ -188,8 +190,9 @@ test(
                 jurisdiction,
                 selector: { kind: "none" },
               });
-              if (intent.type !== "identifier" || intent.kind !== "docket")
-                {return;}
+              if (intent.type !== "identifier" || intent.kind !== "docket") {
+                return;
+              }
               expect(intent.family).toBe(
                 jurisdiction === "SVK"
                   ? `${senate.toUpperCase()}. ÚS ${number}/${year}`
@@ -305,7 +308,9 @@ test(
             kind: "docket",
             selector: { kind: "sheet", value: String(sheet) },
           });
-          if (intent.type !== "identifier") {return;}
+          if (intent.type !== "identifier") {
+            return;
+          }
           const hit = {
             caseNumber: family,
             ecli: null,
