@@ -83,8 +83,8 @@ export const enqueueCorpusMirror = async ({
         openCorpusPackBatch({
           scopedDb,
           transfer: corpus.transfer,
-          signal,
-          s3Policy,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
         });
       batch.enqueue({
         decisionId,

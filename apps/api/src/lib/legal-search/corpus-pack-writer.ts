@@ -113,7 +113,7 @@ const putPack = async (
     bytes,
     mimeType: PACK_CONTENT_TYPE,
     signal,
-    s3Policy,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
 
 /**

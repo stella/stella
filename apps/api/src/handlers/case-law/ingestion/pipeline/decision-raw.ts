@@ -185,8 +185,8 @@ export const acquireSourceRawArtifact = async ({
     Result<string | undefined, RawSourceWriteFailure>
   > =>
     await writeOwnedRawPayload({
-      signal,
-      s3Policy,
+      ...(signal === undefined ? {} : { signal }),
+      ...(s3Policy === undefined ? {} : { s3Policy }),
       result,
       sourceId,
       ownerId: decisionId,

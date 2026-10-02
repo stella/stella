@@ -137,7 +137,12 @@ const boundedCorpusIo = async <T>(
     signal,
     timeoutMs = CORPUS_IO_TIMEOUT_MS,
   }: { signal?: AbortSignal; timeoutMs?: number } = {},
-): Promise<T> => await withTimeout(operation, { label, signal, timeoutMs });
+): Promise<T> =>
+  await withTimeout(operation, {
+    label,
+    ...(signal === undefined ? {} : { signal }),
+    timeoutMs,
+  });
 
 type CorpusKeyInput = {
   documentId: string;
@@ -639,7 +644,7 @@ export const writeCorpusDocument = async (
           bytes: frames.text,
           mimeType: CONTENT_TYPE,
           signal: writeSignal,
-          s3Policy,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
         }),
       writeOptions,
     ),
@@ -651,7 +656,7 @@ export const writeCorpusDocument = async (
           bytes: frames.sections,
           mimeType: CONTENT_TYPE,
           signal: writeSignal,
-          s3Policy,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
         }),
       writeOptions,
     ),
@@ -663,7 +668,7 @@ export const writeCorpusDocument = async (
           bytes: frames.ast,
           mimeType: CONTENT_TYPE,
           signal: writeSignal,
-          s3Policy,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
         }),
       writeOptions,
     ),
@@ -772,7 +777,7 @@ const readPackedMember = async ({
     offset: location.offset,
     length: location.length,
     signal,
-    s3Policy,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   const digest = corpusMemberDigest(bytes);
   return digest === location.sha256
@@ -801,14 +806,14 @@ export const readCorpusBytesAt = async ({
         key: location.key,
         maxBytes,
         signal,
-        s3Policy,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
       });
     case "packed": {
       const member = await readPackedMember({
         location,
         maxBytes,
         signal,
-        s3Policy,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         readRange,
         readTombstones,
       });
@@ -853,7 +858,7 @@ const readStoredCorpusBytes = async ({
     location: parseCorpusLocation(storedKey),
     maxBytes: CORPUS_TRANSFER_MAX_BYTES,
     signal,
-    s3Policy,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     ...seams,
   });
 
@@ -879,7 +884,7 @@ export const readCorpusText = async (
         signal: requestSignal,
         ...seams,
       }),
-    { timeoutMs, signal },
+    { timeoutMs, ...(signal === undefined ? {} : { signal }) },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
@@ -896,7 +901,7 @@ export const readCorpusSections = async (
         signal: requestSignal,
         ...seams,
       }),
-    { signal },
+    { ...(signal === undefined ? {} : { signal }) },
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -926,7 +931,7 @@ export const readSizedCorpusAst = async (
         signal: requestSignal,
         ...seams,
       }),
-    { signal },
+    { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
   const parsed: unknown = JSON.parse(decoded);

@@ -1081,8 +1081,8 @@ const replayRow = async ({
 
   signal?.throwIfAborted();
   const processed = await processDecision({
-    signal,
-    s3Policy,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     // The payload travels with the result, always, whatever the adapter put
     // in it. The pipeline writes the row's raw-payload pointer from the
     // result it is handed, so a result that carried no payload would clear
@@ -1202,8 +1202,8 @@ const replayOneRow = async ({
   return await Result.tryPromise(
     async () =>
       await replayRow({
-        signal,
-        s3Policy,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         row,
         raw,
         reparsed: parsed.value,
@@ -1219,11 +1219,23 @@ const replayOneRow = async ({
 /** Bounded, printable context for a failure that halted the run. */
 const FAILURE_DETAIL_LIMIT = 300;
 
-const failureDetail = (error: unknown): string =>
-  (error instanceof Error ? error.message : String(error)).slice(
-    0,
-    FAILURE_DETAIL_LIMIT,
-  );
+const failureDetail = (error: unknown): string => {
+  let underlying = error;
+  // Stage wrappers classify background work; operator diagnostics retain the
+  // cause's message. Bound traversal so a malformed cause chain cannot loop.
+  for (let depth = 0; depth < 6; depth++) {
+    if (
+      !(underlying instanceof ReplayStageError) ||
+      underlying.cause === undefined
+    ) {
+      break;
+    }
+    underlying = underlying.cause;
+  }
+  return (
+    underlying instanceof Error ? underlying.message : String(underlying)
+  ).slice(0, FAILURE_DETAIL_LIMIT);
+};
 
 /** Pause between lease attempts while a replay waits for the source. */
 export const REPLAY_LEASE_RETRY_PAUSE_MS = 5000;
@@ -1459,8 +1471,8 @@ export const replayCaseLawSource = async ({
     const attempted = await Result.tryPromise({
       try: async () =>
         await replayOneRow({
-          signal,
-          s3Policy,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
           capability,
           readStoredRaw,
           row,

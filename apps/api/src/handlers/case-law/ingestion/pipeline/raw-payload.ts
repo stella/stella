@@ -165,8 +165,8 @@ export const writeOwnedRawPayload = async ({
         bytes,
         contentType: fileContentType,
         window,
-        signal,
-        s3Policy,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
       });
       if (Result.isError(file)) {
         return file;
@@ -176,7 +176,7 @@ export const writeOwnedRawPayload = async ({
       const copied = await copyRawObject({
         copy,
         window,
-        s3Policy,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         signal:
           signal === undefined
             ? AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS)
@@ -194,8 +194,8 @@ export const writeOwnedRawPayload = async ({
   // `writeRawSourcePayload` for why that is safe.
   signal?.throwIfAborted();
   return await writeCaseLawRawPayload({
-    signal,
-    s3Policy,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     owner,
     window,
     data: homed.value.payload,

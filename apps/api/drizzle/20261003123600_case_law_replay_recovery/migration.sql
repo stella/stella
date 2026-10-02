@@ -4,6 +4,8 @@ SET statement_timeout = '5s';--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches"
   ADD COLUMN "superseded_at" timestamptz,
   ADD COLUMN "attempts" integer DEFAULT 0 NOT NULL,
+  ADD COLUMN "systemic_failures" integer DEFAULT 0 NOT NULL,
+  ADD COLUMN "systemic_progress" bigint DEFAULT 0 NOT NULL,
   ADD COLUMN "attempt_state" text DEFAULT 'idle' NOT NULL,
   ADD COLUMN "retry_at" timestamptz,
   ADD COLUMN "failure_code" text,
@@ -13,21 +15,21 @@ ALTER TABLE "case_law_replay_batches" DROP CONSTRAINT "case_law_replay_batches_s
 ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_status_check" CHECK ("status" IN ('reserved', 'completed', 'superseded', 'failed', 'blocked'));--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_failure_code_check" CHECK ("failure_code" IS NULL OR "failure_code" IN ('stored-raw-timeout', 'stored-raw-too-large', 'stored-raw-read', 'adapter-exception', 'writer-retryable', 'receipt-write', 'tick-deadline', 'tick-cancelled', 'unexpected'));--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches" DROP CONSTRAINT "case_law_replay_batches_counts_check";--> statement-breakpoint
-ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_counts_check" CHECK ("attempts" >= 0 AND "attempted" > 0 AND "applied" >= 0 AND "blocked" >= 0 AND "failed" >= 0 AND "applied" + "blocked" + "failed" <= "attempted" AND "duration_ms" >= 0);--> statement-breakpoint
+ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_counts_check" CHECK ("systemic_failures" >= 0 AND "systemic_progress" >= 0 AND "attempts" >= 0 AND "attempted" > 0 AND "applied" >= 0 AND "blocked" >= 0 AND "failed" >= 0 AND "applied" + "blocked" + "failed" <= "attempted" AND "duration_ms" >= 0);--> statement-breakpoint
 ALTER TABLE "case_law_replay_blocked" DROP CONSTRAINT "case_law_replay_blocked_reason_check";--> statement-breakpoint
 ALTER TABLE "case_law_replay_blocked" ADD CONSTRAINT "case_law_replay_blocked_reason_check" CHECK ("reason" IN ('missing-payload', 'no-write-settled', 'redacted', 'superseded', 'retry-exhausted', 'incomplete-metadata', 'identity-mismatch', 'raw-fidelity-lost', 'unsupported-content', 'no-document', 'supplement'));--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_due_idx" ON "case_law_replay_batches" ("source_id", "status", "retry_at");--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_document_version_idx" ON "case_law_replay_batches" ("source_id", "first_decision_id", "parser_version_to");--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_retention_idx" ON "case_law_replay_batches" ("superseded_at", "id") WHERE "superseded_at" IS NOT NULL;--> statement-breakpoint
--- Large corpus indexes are built concurrently by the migrator's sanctioned
--- ONLINE_MIGRATION_INDEXES phase after transactional schema migrations.
+CREATE INDEX "case_law_replay_batches_retire_idx" ON "case_law_replay_batches" ("source_id", "parser_version_to", "id") WHERE "superseded_at" IS NULL AND "status" IN ('completed', 'superseded', 'failed', 'blocked');--> statement-breakpoint
 CREATE TABLE "case_law_replay_source_progress" (
   "source_id" uuid NOT NULL,
   CONSTRAINT "case_law_replay_source_progress_pkey" PRIMARY KEY ("source_id"),
   CONSTRAINT "case_law_replay_progress_source_fk" FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id") ON DELETE RESTRICT,
   "ticks_without_progress" integer DEFAULT 0 NOT NULL,
   "last_completed_at" timestamptz,
-  CONSTRAINT "case_law_replay_source_progress_ticks_check" CHECK ("ticks_without_progress" >= 0)
+  "completed_rows" bigint DEFAULT 0 NOT NULL,
+  CONSTRAINT "case_law_replay_source_progress_ticks_check" CHECK ("ticks_without_progress" >= 0 AND "completed_rows" >= 0)
 );--> statement-breakpoint
 ALTER TABLE "case_law_replay_source_progress" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "case_law_replay_source_progress" FORCE ROW LEVEL SECURITY;--> statement-breakpoint

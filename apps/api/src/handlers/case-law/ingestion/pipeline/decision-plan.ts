@@ -118,8 +118,8 @@ const storedScopeState = async ({
   const ast = row?.astS3Key
     ? await readCorpusAst(row.astS3Key, {
         ...corpus.readBytes,
-        signal,
-        s3Policy,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         readTombstones: async (locations) =>
           await scopedDb(
             async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
@@ -151,8 +151,8 @@ const verifyStoredCitationScopes = async ({
     return Result.ok(false);
   }
   const snapshot = await storedScopeState({
-    signal,
-    s3Policy,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     decisionId: existing.id,
     scopedDb,
     corpus,
@@ -529,8 +529,8 @@ export const planDecisionWrite = async ({
       ? existing.metadata[CITATION_SCOPE_METADATA_KEY]
       : undefined;
   const verified = await verifyStoredCitationScopes({
-    signal,
-    s3Policy,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     scopedDb,
     corpus,
     existing,

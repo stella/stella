@@ -192,10 +192,22 @@ const putRawSourcePayload = async ({
 }): Promise<void> => {
   signal?.throwIfAborted();
   if (key !== storedKey) {
-    await createS3ObjectIfAbsent({ contentType, data, key, signal, s3Policy });
+    await createS3ObjectIfAbsent({
+      contentType,
+      data,
+      key,
+      ...(signal === undefined ? {} : { signal }),
+      ...(s3Policy === undefined ? {} : { s3Policy }),
+    });
     return;
   }
-  await writeS3ObjectWithRetry({ contentType, data, key, signal, s3Policy });
+  await writeS3ObjectWithRetry({
+    contentType,
+    data,
+    key,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
+  });
 };
 
 /**
@@ -226,8 +238,8 @@ export const writeRawSourcePayload = async ({
       data,
       contentType,
       storedKey,
-      signal,
-      s3Policy,
+      ...(signal === undefined ? {} : { signal }),
+      ...(s3Policy === undefined ? {} : { s3Policy }),
     });
   }
   return key;
@@ -267,8 +279,8 @@ export const writeCaseLawRawPayload = async ({
     data,
     contentType,
     storedKey,
-    signal,
-    s3Policy,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   return Result.ok(key);
 };
@@ -341,8 +353,8 @@ export const writeSourceBinary = async ({
     contentType: input.contentType,
     data: input.bytes,
     key: location.key,
-    signal,
-    s3Policy,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   return Result.ok(ref);
 };
@@ -562,7 +574,7 @@ export const copyRawObject = async ({
     key: fromKey,
     maxBytes: RAW_COPY_VERIFY_MAX_BYTES,
     signal,
-    s3Policy,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   if (
     bytes === null ||
@@ -581,7 +593,9 @@ export const copyRawObject = async ({
     contentType: ref.contentType,
     data: bytes,
     key: location.key,
-    ...(s3Policy === undefined ? {} : { signal, s3Policy }),
+    ...(s3Policy === undefined
+      ? {}
+      : { signal, ...(s3Policy === undefined ? {} : { s3Policy }) }),
   });
   return Result.ok(undefined);
 };

@@ -54,6 +54,11 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     completedAt: timestamptz("completed_at"),
     supersededAt: timestamptz("superseded_at"),
     attempts: p.integer().default(0).notNull(),
+    systemicFailures: p.integer("systemic_failures").default(0).notNull(),
+    systemicProgress: p
+      .bigint("systemic_progress", { mode: "number" })
+      .default(0)
+      .notNull(),
     attemptState: p
       .text("attempt_state", { enum: REPLAY_ATTEMPT_STATES })
       .default("idle")
@@ -81,6 +86,12 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
       .index("case_law_replay_batches_retention_idx")
       .on(t.supersededAt, t.id)
       .where(sql`${t.supersededAt} IS NOT NULL`),
+    p
+      .index("case_law_replay_batches_retire_idx")
+      .on(t.sourceId, t.parserVersionTo, t.id)
+      .where(
+        sql`${t.supersededAt} IS NULL AND ${t.status} IN ('completed', 'superseded', 'failed', 'blocked')`,
+      ),
     p.check(
       "case_law_replay_batches_failure_code_check",
       sql`${t.failureCode} IS NULL OR ${t.failureCode} IN (${sql.join(
@@ -104,7 +115,7 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     ),
     p.check(
       "case_law_replay_batches_counts_check",
-      sql`${t.attempts} >= 0 AND ${t.attempted} > 0 AND ${t.applied} >= 0 AND ${t.blocked} >= 0 AND ${t.failed} >= 0 AND ${t.applied} + ${t.blocked} + ${t.failed} <= ${t.attempted} AND ${t.durationMs} >= 0`,
+      sql`${t.systemicFailures} >= 0 AND ${t.systemicProgress} >= 0 AND ${t.attempts} >= 0 AND ${t.attempted} > 0 AND ${t.applied} >= 0 AND ${t.blocked} >= 0 AND ${t.failed} >= 0 AND ${t.applied} + ${t.blocked} + ${t.failed} <= ${t.attempted} AND ${t.durationMs} >= 0`,
     ),
     p.pgPolicy("case_law_replay_batches_owner_access", {
       for: "all",
@@ -191,6 +202,10 @@ export const caseLawReplaySourceProgress = p.pgTable.withRLS(
       .default(0)
       .notNull(),
     lastCompletedAt: timestamptz("last_completed_at"),
+    completedRows: p
+      .bigint("completed_rows", { mode: "number" })
+      .default(0)
+      .notNull(),
   },
   (t) => [
     p.primaryKey({
@@ -206,7 +221,7 @@ export const caseLawReplaySourceProgress = p.pgTable.withRLS(
       .onDelete("restrict"),
     p.check(
       "case_law_replay_source_progress_ticks_check",
-      sql`${t.ticksWithoutProgress} >= 0`,
+      sql`${t.ticksWithoutProgress} >= 0 AND ${t.completedRows} >= 0`,
     ),
     p.pgPolicy("case_law_replay_source_progress_owner_access", {
       for: "all",

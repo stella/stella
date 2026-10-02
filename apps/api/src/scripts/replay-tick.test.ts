@@ -58,6 +58,32 @@ describe("scheduled replay entrypoint", () => {
     );
   });
 
+  test("production cannot acquire fixture overrides before database or storage setup", async () => {
+    const entry = new URL("replay-tick.ts", import.meta.url).pathname;
+    const child = Bun.spawn({
+      cmd: [
+        process.execPath,
+        "--no-env-file",
+        "--eval",
+        `const { getReplayTickFixtureRunner } = await import(${JSON.stringify(entry)}); getReplayTickFixtureRunner();`,
+      ],
+      cwd: new URL("../..", import.meta.url).pathname,
+      env: { PATH: process.env["PATH"], NODE_ENV: "production" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    const [stdout, stderr, exit] = await Promise.all([
+      new Response(child.stdout).text(),
+      new Response(child.stderr).text(),
+      child.exited,
+    ]);
+    expect(exit).not.toBe(0);
+    expect(stdout).toBe("");
+    expect(stderr).toContain("Replay tick fixtures require a local test run");
+    expect(stderr).not.toContain("DATABASE_URL");
+    expect(stderr).not.toContain("S3_BUCKET");
+  });
+
   test("committed enrolment remains disabled for every source", () => {
     expect(
       Object.values(REPLAY_ENROLMENT).every(({ mode }) => mode === "off"),

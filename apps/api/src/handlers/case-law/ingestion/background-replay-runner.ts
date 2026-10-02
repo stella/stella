@@ -21,6 +21,7 @@ import {
   replayCaseLawSource,
   replaySingleRowReport,
   type ReplayRowReport,
+  type ReplayCaseLawSourceOptions,
 } from "./replay";
 import { BACKGROUND_REPLAY_LIMITS } from "./replay-enrolment";
 
@@ -150,10 +151,10 @@ export const createBackgroundReplayRunner = ({
           return raw;
         },
         rejectionPolicy: REPLAY_REJECTION_POLICY.REPORT,
-        onRow: ({ report: rowReport }: { report: ReplayRowReport }) => {
+        onRow: ({ report: rowReport }) => {
           reports.set(batch.id, rowReport);
         },
-      };
+      } satisfies Omit<ReplayCaseLawSourceOptions, "sourceLease">;
       // Every apply is preceded by a preview; rejection never reaches the writer.
       const preview = await replayCaseLawSource({
         ...options,

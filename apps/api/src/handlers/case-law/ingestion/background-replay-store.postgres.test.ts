@@ -30,6 +30,7 @@ import type {
 import { createBackgroundReplayRunner } from "@/api/handlers/case-law/ingestion/background-replay-runner";
 import {
   buildReplayCompactionQuery,
+  buildReplayRetirementQuery,
   createBackgroundReplayStore,
 } from "@/api/handlers/case-law/ingestion/background-replay-store";
 import {
@@ -1186,6 +1187,7 @@ if (!databaseUrl || !enabled) {
       }
       const failure = {
         ...replayFailure("adapter-exception"),
+        healthyEvidence: "none",
         durationMs: 1,
         verdict: verdict(),
       } as const;
@@ -1304,6 +1306,7 @@ if (!databaseUrl || !enabled) {
         .where(eq(caseLawDecisions.id, first.batch.decisionId));
       const failure = {
         ...replayFailure("tick-deadline"),
+        healthyEvidence: "none" as const,
         durationMs: 1,
         verdict: verdict(),
       };
@@ -1333,6 +1336,134 @@ if (!databaseUrl || !enabled) {
       );
     });
 
+    test("systemic queue samples healthy rows and isolates poison only with fresh verified progress", async () => {
+      const { source } = await fixture(30);
+      let time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const poison = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (poison.type !== "reserved") {
+        throw new TypeError("Expected poison row");
+      }
+      const failure = {
+        ...replayFailure("stored-raw-timeout"),
+        healthyEvidence: "none" as const,
+        durationMs: 1,
+        verdict: verdict(),
+      };
+      expect(await store.pickUpBatch(poison.batch)).toBe("ready");
+      expect(await store.recordFailure(poison.batch, failure)).toBe(
+        "retryable",
+      );
+      time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+        type: "empty",
+      });
+      const healthy = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (healthy.type !== "reserved") {
+        throw new TypeError("Expected healthy sample");
+      }
+      expect(healthy.batch.decisionId).not.toBe(poison.batch.decisionId);
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: healthy.batch.targetParserVersion })
+        .where(eq(caseLawDecisions.id, healthy.batch.decisionId));
+      expect(
+        await store.completeBatch(healthy.batch, applied(healthy.batch)),
+      ).toBe("applied");
+      for (let attempt = 2; attempt <= 3; attempt++) {
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        expect(await store.pickUpBatch(poison.batch)).toBe("ready");
+        expect(await store.recordFailure(poison.batch, failure)).toBe(
+          attempt === 3 ? "isolated" : "retryable",
+        );
+      }
+      let receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, poison.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        attempts: 1,
+        systemicFailures: 0,
+        systemicProgress: 1,
+      });
+      // A later whole-system outage gets a fresh progress baseline; the old
+      // successful neighbour cannot keep charging the suspect row.
+      for (let attempt = 0; attempt < 6; attempt++) {
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        expect(await store.pickUpBatch(poison.batch)).toBe("ready");
+        expect(await store.recordFailure(poison.batch, failure)).toBe(
+          "retryable",
+        );
+      }
+      receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, poison.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        status: "reserved",
+        attempts: 1,
+        systemicFailures: 3,
+        systemicProgress: 1,
+      });
+      const progress = (
+        await db
+          .select()
+          .from(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+      ).at(0);
+      expect(progress?.completedRows).toBe(1);
+    });
+
+    test("a real systemic outage rotates the pending queue without exhausting any row", async () => {
+      const { source } = await fixture(30);
+      let time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const failure = {
+        ...replayFailure("stored-raw-read"),
+        healthyEvidence: "none" as const,
+        durationMs: 1,
+        verdict: verdict(),
+      };
+      const picked: string[] = [];
+      for (let tick = 0; tick < 9; tick++) {
+        const pending = await store.pendingBatch(source, "2026-10-01");
+        const admission =
+          pending.type === "empty"
+            ? await store.reserveBatch(source, "2026-10-01", verdict())
+            : pending;
+        if (admission.type !== "reserved") {
+          throw new TypeError("Expected outage sample");
+        }
+        picked.push(admission.batch.id);
+        expect(await store.pickUpBatch(admission.batch)).toBe("ready");
+        expect(await store.recordFailure(admission.batch, failure)).toBe(
+          "retryable",
+        );
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+      }
+      expect(new Set(picked.slice(0, 3)).size).toBe(3);
+      expect(picked.slice(3, 6)).toEqual(picked.slice(0, 3));
+      const receipts = await db
+        .select()
+        .from(caseLawReplayBatches)
+        .where(eq(caseLawReplayBatches.sourceId, source.id));
+      expect(
+        receipts.every(
+          ({ status, attempts }) => status === "reserved" && attempts === 0,
+        ),
+      ).toBe(true);
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.sourceId, source.id)),
+      ).toHaveLength(0);
+    });
+
     test("a moved stamp settles applied after a receipt failure on the final allowed attempt", async () => {
       const { source, store } = await fixture(10);
       const reserved = await store.reserveBatch(
@@ -1358,6 +1489,7 @@ if (!databaseUrl || !enabled) {
       expect(
         await store.recordFailure(reserved.batch, {
           ...replayFailure("receipt-write"),
+          healthyEvidence: "none",
           durationMs: 1,
           verdict: verdict(),
         }),
@@ -1452,7 +1584,7 @@ if (!databaseUrl || !enabled) {
       ).toHaveLength(0);
     });
 
-    test("old superseded receipts compact their daily FK rows while preserving the latest generation", async () => {
+    test("compaction generation retires never-reserved-again receipts while preserving the latest generation", async () => {
       const { source, store } = await fixture(10);
       const reserved = await store.reserveBatch(
         source,
@@ -1473,7 +1605,7 @@ if (!databaseUrl || !enabled) {
         sourceId: source.id,
         firstDecisionId: reserved.batch.decisionId,
         lastDecisionId: reserved.batch.decisionId,
-        parserVersionTo: 3,
+        parserVersionTo: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
         budgetDay: "2026-10-01",
         status: "completed",
         attempted: 1,
@@ -1481,9 +1613,9 @@ if (!databaseUrl || !enabled) {
         gateVerdict: verdict(),
       });
       await db
-        .update(caseLawReplayBatches)
-        .set({ supersededAt: new Date(Date.UTC(2025, 0, 1)) })
-        .where(eq(caseLawReplayBatches.id, reserved.batch.id));
+        .update(caseLawSources)
+        .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
+        .where(eq(caseLawSources.id, source.id));
       expect(await store.compact()).toBe(1);
       expect(
         await db
@@ -1497,6 +1629,10 @@ if (!databaseUrl || !enabled) {
           .from(caseLawReplayBatches)
           .where(eq(caseLawReplayBatches.sourceId, source.id)),
       ).toHaveLength(1);
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: `fixture-${source.id}` })
+        .where(eq(caseLawSources.id, source.id));
     });
 
     test("audit retention prunes a bounded old page and preserves recent observations", async () => {
@@ -1680,6 +1816,27 @@ if (!databaseUrl || !enabled) {
               "case_law_replay_batches",
               SYNTHETIC_SCALE_PROFILE,
             );
+            const retirement = buildReplayRetirementQuery(
+              tx,
+              BACKGROUND_REPLAY_LIMITS.maxCompactRows,
+            );
+            const retirementRoot = explainRoot(
+              await tx.execute(
+                sql`EXPLAIN (FORMAT JSON) ${retirement.getSQL()}`,
+              ),
+            );
+            const retiringScans = scanOccurrences(retirementRoot).filter(
+              ({ relation }) => relation === "case_law_replay_batches",
+            );
+            expect(retiringScans.length).toBeGreaterThan(0);
+            expect(
+              retiringScans.every(({ nodeType }) => nodeType.includes("Index")),
+            ).toBe(true);
+            expect(
+              retiringScans.some(
+                ({ index }) => index === "case_law_replay_batches_retire_idx",
+              ),
+            ).toBe(true);
             const query = buildReplayCompactionQuery(tx, {
               cutoff: new Date(Date.UTC(2026, 6, 1)),
               limit: BACKGROUND_REPLAY_LIMITS.maxCompactRows,
@@ -1734,6 +1891,14 @@ if (!databaseUrl || !enabled) {
       const rolledBack = await Result.tryPromise(
         async () =>
           await db.transaction(async (tx) => {
+            // Enrolment will ship these corpus indexes; the dormant feature
+            // creates them only inside this rolled-back planner fixture.
+            await tx.execute(
+              sql`CREATE INDEX IF NOT EXISTS case_law_decisions_replay_sparse_idx ON case_law_decisions (source_id, parser_version, id) WHERE redacted_at IS NULL AND source_raw_s3_key IS NOT NULL`,
+            );
+            await tx.execute(
+              sql`CREATE INDEX IF NOT EXISTS case_law_decisions_replay_walk_idx ON case_law_decisions (source_id, id, parser_version) WHERE redacted_at IS NULL AND source_raw_s3_key IS NOT NULL`,
+            );
             await tx.execute(sql`ANALYZE case_law_decisions`);
             await tx.execute(sql`ANALYZE case_law_replay_blocked`);
             await scaleTableToProfile(

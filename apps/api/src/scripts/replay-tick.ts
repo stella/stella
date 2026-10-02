@@ -8,6 +8,7 @@ import {
   isHeldTooLong,
   nextBatch,
   type BatchState,
+  type HealthConfig,
   type Verdict,
 } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
@@ -33,7 +34,11 @@ import {
   classifyReplayFailure,
   replayFailure,
 } from "@/api/handlers/case-law/ingestion/replay-failure";
-import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import {
+  enterCaseLawMaintenanceLane,
+  type CaseLawRootHandle,
+  type CaseLawScriptHandles,
+} from "@/api/lib/case-law/maintenance-lane";
 import type {
   CaseLawSourceIngestionLease,
   acquireCaseLawSourceIngestionLease,
@@ -43,6 +48,7 @@ import {
   PARSER_VERSIONS,
   type AdapterKey,
 } from "@/api/lib/legal-search/ingestion-constants";
+import { isLocalTestRun } from "@/api/runtime-mode";
 
 const now = () => Temporal.Now.instant().epochMilliseconds;
 const log = (record: unknown) => {
@@ -167,39 +173,29 @@ const releaseReplayDb: ScopedDb = async (work) => {
 const loadReplayTickRuntime = async () => {
   const [
     { withLongRunningConnection },
-    { runUnderCorpusSchemaLane },
     { createScriptBackfillHealthReader },
     { createHeavyWorkSlot },
     { runBackgroundReplayTick },
     { createBackgroundReplayRunner },
     { createBackgroundReplayStore },
     { acquireCaseLawSourceIngestionLease },
-    { CASE_LAW_MAINTENANCE_LANE },
-    { createIngestionDb, markRlsDatabase },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
-    import("@/api/db/corpus-schema-lane"),
     import("@/api/db/backfill-runtime"),
     import("@stll/db-load-gate/slot"),
     import("@/api/handlers/case-law/ingestion/background-replay"),
     import("@/api/handlers/case-law/ingestion/background-replay-runner"),
     import("@/api/handlers/case-law/ingestion/background-replay-store"),
     import("@/api/lib/legal-search/case-law-source-ingestion-lease"),
-    import("@/api/lib/case-law/maintenance-lane"),
-    import("@/api/db/scoped"),
   ]);
   return {
     withLongRunningConnection,
-    runUnderCorpusSchemaLane,
     createScriptBackfillHealthReader,
     createHeavyWorkSlot,
     runBackgroundReplayTick,
     createBackgroundReplayRunner,
     createBackgroundReplayStore,
     acquireCaseLawSourceIngestionLease,
-    CASE_LAW_MAINTENANCE_LANE,
-    createIngestionDb,
-    markRlsDatabase,
   };
 };
 
@@ -335,11 +331,12 @@ const createReplayLeaseOwner = ({
   };
 };
 
-type ReplayTickFixtureOptions = {
+type ReplayTickRuntimeOptions = {
   enrolment?: Readonly<Record<AdapterKey, ReplayEnrolment>>;
   adapterFor?: (key: string) => SourceAdapter | undefined;
   readStoredRaw?: StoredRawReader;
   gate?: () => Promise<Verdict>;
+  healthConfig?: Pick<HealthConfig, "busyWindows">;
   maxRows?: number;
   onIngestionTransaction?: (tx: Transaction) => Promise<void>;
   onRootTransaction?: (tx: Transaction) => Promise<void>;
@@ -348,60 +345,29 @@ type ReplayTickFixtureOptions = {
 type ReplayTickRuntime = Awaited<ReturnType<typeof loadReplayTickRuntime>>;
 
 type ReplaySessionHandlesOptions = {
-  db: Pick<CaseLawRootHandle, "transaction">;
-  runtime: ReplayTickRuntime;
-  signal: AbortSignal;
-  fixture: ReplayTickFixtureOptions;
+  handles: CaseLawScriptHandles;
+  fixture: ReplayTickRuntimeOptions;
 };
 
-const createReplaySessionHandles = ({
-  db,
-  runtime,
-  signal,
+const observeReplaySessionHandles = ({
+  handles,
   fixture,
 }: ReplaySessionHandlesOptions) => {
-  // Root indicators and canonical pipeline transactions share a reserved
-  // session, so serialize their short transactions before opening one.
-  let pending = Promise.resolve();
-  const queuedTransaction: CaseLawRootHandle["transaction"] = async (work) => {
-    const current = pending.then(async () => await db.transaction(work));
-    pending = Result.tryPromise(async () => await current).then(
-      () => undefined,
-    );
-    return await current;
-  };
-  const queuedDatabase = { transaction: queuedTransaction };
-  const transaction: CaseLawRootHandle["transaction"] = async (work) => {
-    signal.throwIfAborted();
-    return await runtime.runUnderCorpusSchemaLane({
-      database: queuedDatabase,
-      laneWaitMs: 0,
-      work: async (tx) => {
-        signal.throwIfAborted();
-        await fixture.onRootTransaction?.(tx);
-        const result = await work(tx);
-        signal.throwIfAborted();
-        return result;
-      },
+  const transaction: CaseLawRootHandle["transaction"] = async (work) =>
+    await handles.rootDb.transaction(async (tx) => {
+      await fixture.onRootTransaction?.(tx);
+      return await work(tx);
     });
-  };
   const rootDb: CaseLawRootHandle = {
     transaction,
     execute: async <TRow extends Record<string, unknown>>(
       query: SQLWrapper | string,
     ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
   };
-  const scopedIngestion = runtime.createIngestionDb(
-    runtime.markRlsDatabase(queuedDatabase),
-    { laneWaitMs: 0 },
-  );
   const ingestionDb: ScopedDb = async (work) =>
-    await scopedIngestion(async (tx) => {
-      signal.throwIfAborted();
+    await handles.ingestionDb(async (tx) => {
       await fixture.onIngestionTransaction?.(tx);
-      const result = await work(tx);
-      signal.throwIfAborted();
-      return result;
+      return await work(tx);
     });
   return { rootDb, ingestionDb };
 };
@@ -436,7 +402,7 @@ type ReplaySlotSessionOptions = {
   rootDb: CaseLawRootHandle;
   ingestionDb: ScopedDb;
   signal: AbortSignal;
-  fixture: ReplayTickFixtureOptions;
+  fixture: ReplayTickRuntimeOptions;
 };
 
 const runReplayOnSlotSession = async ({
@@ -469,6 +435,7 @@ const runReplayOnSlotSession = async ({
     db: rootDb,
     tableName: "case_law_decisions",
     clock: now,
+    config: { ...defaultConfig, ...fixture.healthConfig },
   });
   let lastVerdict: Verdict = { kind: "unknown", signals: [] };
   const leaseOwner = createReplayLeaseOwner({
@@ -612,37 +579,21 @@ const runReplayOnSlotSession = async ({
 };
 
 /** A bounded scheduled invocation: no waiting for leases, slots or health holds. */
-export const runEnabledReplayTick = async (
+const runReplayTickWithOptions = async (
   signal: AbortSignal,
-  fixture: ReplayTickFixtureOptions = {},
+  fixture: ReplayTickRuntimeOptions,
 ): Promise<BackgroundReplayTickReport | null> => {
   signal.throwIfAborted();
   const runtime = await loadReplayTickRuntime();
   signal.throwIfAborted();
-  return await runtime.withLongRunningConnection(
-    {
-      statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
-      lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
-      signal,
-    },
-    async ({ db, connection: maintenanceConnection }) => {
-      const acquired = (
-        await maintenanceConnection.unsafe<{ acquired: boolean }[]>(
-          "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
-          [
-            runtime.CASE_LAW_MAINTENANCE_LANE.domain,
-            runtime.CASE_LAW_MAINTENANCE_LANE.lane,
-          ],
-        )
-      ).at(0)?.acquired;
-      if (acquired !== true) {
-        log({ event: "case_law.replay.tick", status: "maintenance-held" });
-        return null;
-      }
-      const { rootDb, ingestionDb } = createReplaySessionHandles({
-        db,
-        runtime,
-        signal,
+  const report = await enterCaseLawMaintenanceLane({
+    mode: "bounded",
+    statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
+    lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
+    signal,
+    work: async (handles) => {
+      const { rootDb, ingestionDb } = observeReplaySessionHandles({
+        handles,
         fixture,
       });
       return await runtime.withLongRunningConnection(
@@ -662,7 +613,27 @@ export const runEnabledReplayTick = async (
           }),
       );
     },
-  );
+  });
+  if (report === null) {
+    log({ event: "case_law.replay.tick", status: "maintenance-held" });
+  }
+  return report;
+};
+
+export const runEnabledReplayTick = async (signal: AbortSignal) =>
+  await runReplayTickWithOptions(signal, {});
+
+/** Refuse fixture access before loading any database or storage runtime. */
+export const getReplayTickFixtureRunner = () => {
+  if (!isLocalTestRun()) {
+    return panic("Replay tick fixtures require a local test run");
+  }
+  return async (signal: AbortSignal, options: ReplayTickRuntimeOptions) => {
+    if (!isLocalTestRun()) {
+      return panic("Replay tick fixtures require a local test run");
+    }
+    return await runReplayTickWithOptions(signal, options);
+  };
 };
 
 type ResetReplayDryRunOptions = {
@@ -678,49 +649,27 @@ const resetReplayDryRun = async ({
   signal,
 }: ResetReplayDryRunOptions): Promise<boolean> => {
   signal.throwIfAborted();
-  const [
-    { withLongRunningConnection },
-    { runUnderCorpusSchemaLane },
-    { CASE_LAW_MAINTENANCE_LANE },
-    { createBackgroundReplayStore },
-    { caseLawSources },
-  ] = await Promise.all([
-    import("@/api/db/long-running-connection"),
-    import("@/api/db/corpus-schema-lane"),
-    import("@/api/lib/case-law/maintenance-lane"),
-    import("@/api/handlers/case-law/ingestion/background-replay-store"),
-    import("@/api/db/schema"),
-  ]);
+  const [{ createBackgroundReplayStore }, { caseLawSources }] =
+    await Promise.all([
+      import("@/api/handlers/case-law/ingestion/background-replay-store"),
+      import("@/api/db/schema"),
+    ]);
   signal.throwIfAborted();
-  return await withLongRunningConnection(
-    {
-      statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
-      lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
-      signal,
-    },
-    async ({ db, connection }) => {
-      const acquired = (
-        await connection.unsafe<{ acquired: boolean }[]>(
-          "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
-          [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
-        )
-      ).at(0)?.acquired;
-      if (acquired !== true) {
-        return false;
-      }
+  const reset = await enterCaseLawMaintenanceLane({
+    mode: "bounded",
+    statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
+    lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
+    signal,
+    work: async (handles) => {
       const transaction: CaseLawRootHandle["transaction"] = async (work) =>
-        await runUnderCorpusSchemaLane({
-          database: db,
-          laneWaitMs: 0,
-          work: async (tx) => {
-            signal.throwIfAborted();
-            if (replayKillRequested(adapterKey)) {
-              panic("Replay dry-run reset was disabled before database work");
-            }
-            const result = await work(tx);
-            signal.throwIfAborted();
-            return result;
-          },
+        await handles.rootDb.transaction(async (tx) => {
+          signal.throwIfAborted();
+          if (replayKillRequested(adapterKey)) {
+            panic("Replay dry-run reset was disabled before database work");
+          }
+          const result = await work(tx);
+          signal.throwIfAborted();
+          return result;
         });
       const rootDb: CaseLawRootHandle = {
         transaction,
@@ -750,7 +699,8 @@ const resetReplayDryRun = async ({
       });
       return true;
     },
-  );
+  });
+  return reset ?? false;
 };
 
 const parseReplayTickCommand = (args: readonly string[]) => {

@@ -46,6 +46,7 @@ type BackgroundReplayCompletion = {
   report: ReplayRunReport;
   durationMs: number;
   verdict: Verdict;
+  healthyEvidence?: "adjacent-row" | "none";
 };
 
 export type BackgroundReplayTickStatus =
@@ -106,11 +107,17 @@ export type BackgroundReplayDependencies = {
   completeBatch: (
     batch: BackgroundReplayBatch,
     completion: BackgroundReplayCompletion,
-  ) => Promise<"applied" | "blocked" | "unchanged" | "retryable">;
+  ) => Promise<
+    "applied" | "blocked" | "unchanged" | "retryable" | "isolated" | "failed"
+  >;
   recordFailure: (
     batch: BackgroundReplayBatch,
-    failure: ReplayFailure & { durationMs: number; verdict: Verdict },
-  ) => Promise<"retryable" | "failed" | "applied">;
+    failure: ReplayFailure & {
+      durationMs: number;
+      verdict: Verdict;
+      healthyEvidence: "adjacent-row" | "none";
+    },
+  ) => Promise<"retryable" | "failed" | "applied" | "isolated">;
   pickUpBatch: (
     batch: BackgroundReplayBatch,
   ) => Promise<"ready" | "failed" | "waiting">;
@@ -252,11 +259,21 @@ const runReplayBatch = async ({
           report: replayed,
           durationMs,
           verdict,
+          healthyEvidence: report.applied > 0 ? "adjacent-row" : "none",
         }),
     );
     if (completion.isOk()) {
       report.applied += Number(completion.value === "applied");
       report.blocked += Number(completion.value === "blocked");
+      report.failed += Number(completion.value === "failed");
+      report.errors += Number(
+        completion.value === "retryable" ||
+          completion.value === "isolated" ||
+          completion.value === "failed",
+      );
+      if (completion.value === "retryable") {
+        stop = "failed";
+      }
     } else {
       failure = replayFailure(
         signal?.aborted ? "tick-deadline" : "receipt-write",
@@ -264,6 +281,7 @@ const runReplayBatch = async ({
     }
   }
   if (failure !== null) {
+    let settledScope = failure.scope;
     const failureToRecord = failure;
     report.errors += 1;
     if (source.mode === "enrolled") {
@@ -273,16 +291,20 @@ const runReplayBatch = async ({
             ...failureToRecord,
             durationMs,
             verdict,
+            healthyEvidence: report.applied > 0 ? "adjacent-row" : "none",
           }),
       );
       if (settlement.isOk()) {
+        if (settlement.value === "isolated" || settlement.value === "failed") {
+          settledScope = "row";
+        }
         report.failed += Number(settlement.value === "failed");
         report.applied += Number(settlement.value === "applied");
       } else {
         stop = "failed";
       }
     }
-    if (failure.scope === "systemic" && stop !== "failed") {
+    if (settledScope === "systemic" && stop !== "failed") {
       stop = failure.code === "tick-deadline" ? "time-limit" : "failed";
     }
   }
@@ -308,17 +330,23 @@ const pickUpReplayBatch = async ({
   verdict,
 }: ReplayPickupOptions) => {
   const pickedUp = await dependencies.pickUpBatch(batch);
-  if (pickedUp === "waiting")
-    {return { type: "stopped", status: "retryable" } as const;}
-  if (pickedUp === "failed") {return { type: "failed" } as const;}
+  if (pickedUp === "waiting") {
+    return { type: "stopped", status: "retryable" } as const;
+  }
+  if (pickedUp === "failed") {
+    return { type: "failed" } as const;
+  }
   const afterPickup = await stopRequested();
-  if (afterPickup === null) {return { type: "ready" } as const;}
+  if (afterPickup === null) {
+    return { type: "ready" } as const;
+  }
   const cancelled = await Result.tryPromise(
     async () =>
       await dependencies.recordFailure(batch, {
         ...replayFailure(signal?.aborted ? "tick-deadline" : "tick-cancelled"),
         durationMs: 0,
         verdict,
+        healthyEvidence: "none",
       }),
   );
   return {
@@ -436,7 +464,9 @@ const runReplayLoop = async ({
           signal,
           verdict,
         });
-        if (pickedUp.type === "stopped") {return finish(pickedUp.status);}
+        if (pickedUp.type === "stopped") {
+          return finish(pickedUp.status);
+        }
         if (pickedUp.type === "failed") {
           report.attempted += 1;
           report.failed += 1;

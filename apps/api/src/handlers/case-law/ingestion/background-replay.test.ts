@@ -561,3 +561,34 @@ test("a crash-exhausted pickup yields to the next row without invoking its write
   expect(state.counts().leased).toBe(false);
   expect(state.counts().slotted).toBe(false);
 });
+
+test("an isolated systemic row yields while a real outage stops without exhausting a row", async () => {
+  for (const disposition of ["isolated", "retryable"] as const) {
+    const state = fixture(4);
+    const pending = state.dependencies.pendingBatch;
+    let deferred = false;
+    let work = 0;
+    state.dependencies.pendingBatch = async (...args) =>
+      deferred ? { type: "empty" } : await pending(...args);
+    state.dependencies.replay = async (batch) => {
+      work += 1;
+      if (work === 1) {
+        throw new ReplayStageError({
+          message: "fixture row timeout",
+          failure: replayFailure("stored-raw-timeout"),
+        });
+      }
+      return state.success(batch);
+    };
+    state.dependencies.recordFailure = async () => {
+      deferred = true;
+      return disposition;
+    };
+    const result = await state.run(4);
+    expect(result).toMatchObject(
+      disposition === "isolated"
+        ? { status: "row-limit", attempted: 4, applied: 3, failed: 0 }
+        : { status: "failed", attempted: 1, applied: 0, failed: 0 },
+    );
+  }
+});

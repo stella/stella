@@ -26,6 +26,7 @@ import {
   databaseBackfillStates,
 } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { envDbLoadGate } from "@/api/env-db-load-gate";
 import {
   EMPTY_AST,
   type SourceAdapter,
@@ -58,16 +59,30 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
-import { runEnabledReplayTick } from "@/api/scripts/replay-tick";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import { runReplayTickFixture } from "@/api/tests/helpers/replay-tick";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 const healthy = () => ({ kind: "normal", signals: [] }) satisfies Verdict;
+
+const startReplayFixtureStorage = () => {
+  expect(isUsableStaticCredential(envBase.S3_ACCESS_KEY_ID)).toBe(true);
+  expect(isUsableStaticCredential(envBase.S3_SECRET_ACCESS_KEY)).toBe(true);
+  const endpoint = envBase.S3_ENDPOINT;
+  const localCredentials =
+    envBase.S3_CREDENTIALS_PROVIDER === "env" ||
+    (envBase.S3_CREDENTIALS_PROVIDER === "auto" &&
+      endpoint !== undefined &&
+      ["localhost", "127.0.0.1", "[::1]"].includes(new URL(endpoint).hostname));
+  // Strict refresh must stay on static fixture credentials, never ECS/IMDS.
+  expect(localCredentials).toBe(true);
+  return startFakeS3();
+};
 
 const applied = (batch: BackgroundReplayBatch): ReplayRunReport => ({
   visited: 1,
@@ -223,7 +238,7 @@ if (!databaseUrl || !enabled) {
               assertSlot: async () => {},
               store: state.store,
               adapterFor: () => canonical.adapter,
-              signal,
+              ...(signal === undefined ? {} : { signal }),
               ...(canonical.readStoredRaw === "s3"
                 ? {}
                 : {
@@ -247,7 +262,7 @@ if (!databaseUrl || !enabled) {
             });
       return await runBackgroundReplayTick({
         maxRows,
-        signal,
+        ...(signal === undefined ? {} : { signal }),
         maxDurationMs: 60_000,
         healthConfig: { ...defaultConfig, minSleepMs: 0 },
         dependencies: {
@@ -385,6 +400,7 @@ if (!databaseUrl || !enabled) {
             fulltext: "Fixture judgment rederived from stored bytes.",
             documentAst: EMPTY_AST,
             rawHash: "fixture-parser-hash",
+            metadata: {},
           },
         }),
       } satisfies SourceAdapter;
@@ -401,7 +417,7 @@ if (!databaseUrl || !enabled) {
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
         .where(eq(caseLawDecisions.id, firstId));
-      const fake = startFakeS3();
+      const fake = startReplayFixtureStorage();
       try {
         await withSlots({
           run: async ([slot]) => {
@@ -476,7 +492,7 @@ if (!databaseUrl || !enabled) {
         if (id === undefined) {
           return panic("Expected first fixture decision");
         }
-        const fake = startFakeS3();
+        const fake = startReplayFixtureStorage();
         try {
           await withSlots({
             run: async ([slot]) => {
@@ -489,9 +505,14 @@ if (!databaseUrl || !enabled) {
                 slot,
                 maxRows: 1,
                 canonical: canonicalReplay(),
+                signal: AbortSignal.timeout(10_000),
               });
-              await held.reached;
               try {
+                const reached = await Promise.race([
+                  held.reached.then(() => "held" as const),
+                  running.then(() => "finished" as const),
+                ]);
+                expect(reached).toBe("held");
                 await db
                   .update(caseLawDecisions)
                   .set({
@@ -503,6 +524,7 @@ if (!databaseUrl || !enabled) {
                   .where(eq(caseLawDecisions.id, id));
               } finally {
                 held.release();
+                await running;
               }
               expect(await running).toMatchObject({
                 attempted: 1,
@@ -584,7 +606,7 @@ if (!databaseUrl || !enabled) {
         .select()
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.sourceId, state.source.id));
-      const fake = startFakeS3();
+      const fake = startReplayFixtureStorage();
       try {
         await withSlots({
           run: async ([slot]) => {
@@ -691,7 +713,7 @@ if (!databaseUrl || !enabled) {
       if (id === undefined) {
         return panic("Expected first fixture decision");
       }
-      const fake = startFakeS3();
+      const fake = startReplayFixtureStorage();
       fake.put(envBase.S3_BUCKET, `fixture/${id}`, "stored fixture bytes");
       const held = fake.holdNext({
         method: "GET",
@@ -780,18 +802,6 @@ if (!databaseUrl || !enabled) {
 
     test("the tick signal cancels a real blocked database query and releases its maintenance lane", async () => {
       expect(envBase.DATABASE_URL).toBe(databaseUrl);
-      expect(isUsableStaticCredential(envBase.S3_ACCESS_KEY_ID)).toBe(true);
-      expect(isUsableStaticCredential(envBase.S3_SECRET_ACCESS_KEY)).toBe(true);
-      const endpoint = envBase.S3_ENDPOINT;
-      const localCredentials =
-        envBase.S3_CREDENTIALS_PROVIDER === "env" ||
-        (envBase.S3_CREDENTIALS_PROVIDER === "auto" &&
-          endpoint !== undefined &&
-          ["localhost", "127.0.0.1", "[::1]"].includes(
-            new URL(endpoint).hostname,
-          ));
-      // Strict refresh must stay on static fixture credentials, never ECS/IMDS.
-      expect(localCredentials).toBe(true);
       const state = await fixture(3);
       const id = state.ids.at(0);
       if (id === undefined) {
@@ -891,136 +901,167 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("the real scheduled wiring runs canonical pipeline transactions through the ingestion role on its dedicated session", async () => {
-      expect(envBase.DATABASE_URL).toBe(databaseUrl);
-      const state = await fixture(3);
-      const id = state.ids.at(0);
-      if (id === undefined) {
-        return panic("Expected first fixture decision");
-      }
-      await db
-        .update(caseLawSources)
-        .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
-        .where(eq(caseLawSources.id, state.source.id));
-      const oldEnabled = process.env["CASE_LAW_REPLAY_ENABLED"];
-      const oldKill = process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
-      const oldDisabled = process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
-      process.env["CASE_LAW_REPLAY_ENABLED"] = "true";
-      process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = "false";
-      process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = "";
-      const fake = startFakeS3();
-      const roles: string[] = [];
-      const rootRoles: string[] = [];
-      try {
-        const canonical = canonicalReplay(
-          false,
-          PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
-        );
-        const enrolment = {
-          ...REPLAY_ENROLMENT,
-          [ADAPTER_KEYS.EU_ECJ]: {
-            mode: "enrolled",
-            dailyBudget: 3,
-            reviewedDryRun: "fixture",
-          },
-        } as const;
-        const result = await runEnabledReplayTick(AbortSignal.timeout(10_000), {
-          enrolment,
-          maxRows: 1,
-          adapterFor: () => canonical.adapter,
-          readStoredRaw: async () =>
-            new TextEncoder().encode("<html>stored fixture judgment</html>"),
-          gate: async () => healthy(),
-          onIngestionTransaction: async (tx) => {
-            roles.push(
-              (
-                await tx.execute<{ role: string }>(
-                  sql`SELECT current_user AS role`,
-                )
-              ).at(0)?.role ?? "missing",
-            );
-          },
-          onRootTransaction: async (tx) => {
-            rootRoles.push(
-              (
-                await tx.execute<{ role: string }>(
-                  sql`SELECT current_user AS role`,
-                )
-              ).at(0)?.role ?? "missing",
-            );
-          },
-        });
-        expect(result).toMatchObject({ applied: 1, blocked: 0, errors: 0 });
-        expect(roles.length).toBeGreaterThan(3);
-        expect(roles.every((role) => role === "stella_ingestion")).toBe(true);
-        expect(rootRoles.length).toBeGreaterThan(1);
+    test.each(["injected", "real"] as const)(
+      "the scheduled wiring uses %s indicators and stored raw on its dedicated ingestion session",
+      async (readerMode) => {
+        expect(envBase.DATABASE_URL).toBe(databaseUrl);
         expect(
-          rootRoles.every(
-            (role) => role !== "stella_ingestion" && role !== "missing",
-          ),
-        ).toBe(true);
-        const row = (
-          await db
-            .select()
-            .from(caseLawDecisions)
-            .where(eq(caseLawDecisions.id, id))
-        ).at(0);
-        expect(row).toMatchObject({
-          parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
-          fulltext: "Fixture judgment rederived from stored bytes.",
-          corpusMirrorStatus: "settled",
-        });
-        expect(row?.sourceRawS3Key).not.toBe(`fixture/${id}`);
-        expect(
-          (
-            await db
-              .select()
-              .from(caseLawReplayBatches)
-              .where(eq(caseLawReplayBatches.sourceId, state.source.id))
-          ).at(0),
-        ).toMatchObject({ status: "completed", applied: 1, attempts: 1 });
-        expect(fake.requests.some((request) => request.method === "PUT")).toBe(
-          true,
-        );
-        expect(
-          (
-            await db
-              .select()
-              .from(caseLawSources)
-              .where(eq(caseLawSources.id, state.source.id))
-          ).at(0)?.ingestionLeaseToken,
-        ).toBeNull();
-      } finally {
-        fake.stop();
-        if (oldEnabled === undefined) {
-          delete process.env["CASE_LAW_REPLAY_ENABLED"];
-        } else {
-          process.env["CASE_LAW_REPLAY_ENABLED"] = oldEnabled;
+          envDbLoadGate.DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER,
+        ).toBeUndefined();
+        expect(envDbLoadGate.DB_LOAD_GATE_EBS_SIGNAL).toBe("disabled");
+        const state = await fixture(3);
+        const id = state.ids.at(0);
+        if (id === undefined) {
+          return panic("Expected first fixture decision");
         }
-        if (oldKill === undefined) {
-          delete process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
-        } else {
-          process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = oldKill;
-        }
-        if (oldDisabled === undefined) {
-          delete process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
-        } else {
-          process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = oldDisabled;
-        }
-        await db
-          .delete(databaseBackfillStates)
-          .where(
-            eq(
-              databaseBackfillStates.name,
-              `case-law-replay:${state.source.id}:${PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ]}`,
-            ),
-          );
         await db
           .update(caseLawSources)
-          .set({ adapterKey: `engine-${state.source.id}` })
+          .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
           .where(eq(caseLawSources.id, state.source.id));
-      }
-    });
+        const oldEnabled = process.env["CASE_LAW_REPLAY_ENABLED"];
+        const oldKill = process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
+        const oldDisabled = process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
+        process.env["CASE_LAW_REPLAY_ENABLED"] = "true";
+        process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = "false";
+        process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = "";
+        const fake = startReplayFixtureStorage();
+        fake.put(
+          envBase.S3_BUCKET,
+          `fixture/${id}`,
+          "<html>stored fixture judgment</html>",
+          "text/html",
+        );
+        const roles: string[] = [];
+        const rootRoles: string[] = [];
+        try {
+          const canonical = canonicalReplay(
+            false,
+            PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+          );
+          const enrolment = {
+            ...REPLAY_ENROLMENT,
+            [ADAPTER_KEYS.EU_ECJ]: {
+              mode: "enrolled",
+              dailyBudget: 3,
+              reviewedDryRun: "fixture",
+            },
+          } as const;
+          const result = await runReplayTickFixture(
+            AbortSignal.timeout(10_000),
+            {
+              enrolment,
+              maxRows: 1,
+              healthConfig: { busyWindows: [] },
+              adapterFor: () => canonical.adapter,
+              ...(readerMode === "injected"
+                ? {
+                    readStoredRaw: async () =>
+                      new TextEncoder().encode(
+                        "<html>stored fixture judgment</html>",
+                      ),
+                    gate: async () => healthy(),
+                  }
+                : {}),
+              onIngestionTransaction: async (tx) => {
+                roles.push(
+                  (
+                    await tx.execute<{ role: string }>(
+                      sql`SELECT current_user AS role`,
+                    )
+                  ).at(0)?.role ?? "missing",
+                );
+              },
+              onRootTransaction: async (tx) => {
+                rootRoles.push(
+                  (
+                    await tx.execute<{ role: string }>(
+                      sql`SELECT current_user AS role`,
+                    )
+                  ).at(0)?.role ?? "missing",
+                );
+              },
+            },
+          );
+          expect(result).toMatchObject({ applied: 1, blocked: 0, errors: 0 });
+          if (readerMode === "real") {
+            expect(
+              fake.requests.some(
+                (request) =>
+                  request.method === "GET" && request.key === `fixture/${id}`,
+              ),
+            ).toBe(true);
+          }
+          expect(roles.length).toBeGreaterThan(3);
+          expect(roles.every((role) => role === "stella_ingestion")).toBe(true);
+          expect(rootRoles.length).toBeGreaterThan(1);
+          expect(
+            rootRoles.every(
+              (role) => role !== "stella_ingestion" && role !== "missing",
+            ),
+          ).toBe(true);
+          const row = (
+            await db
+              .select()
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, id))
+          ).at(0);
+          expect(row).toMatchObject({
+            parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+            fulltext: "Fixture judgment rederived from stored bytes.",
+            corpusMirrorStatus: "settled",
+          });
+          expect(row?.sourceRawS3Key).not.toBe(`fixture/${id}`);
+          expect(
+            (
+              await db
+                .select()
+                .from(caseLawReplayBatches)
+                .where(eq(caseLawReplayBatches.sourceId, state.source.id))
+            ).at(0),
+          ).toMatchObject({ status: "completed", applied: 1, attempts: 1 });
+          expect(
+            fake.requests.some((request) => request.method === "PUT"),
+          ).toBe(true);
+          expect(
+            (
+              await db
+                .select()
+                .from(caseLawSources)
+                .where(eq(caseLawSources.id, state.source.id))
+            ).at(0)?.ingestionLeaseToken,
+          ).toBeNull();
+        } finally {
+          fake.stop();
+          if (oldEnabled === undefined) {
+            delete process.env["CASE_LAW_REPLAY_ENABLED"];
+          } else {
+            process.env["CASE_LAW_REPLAY_ENABLED"] = oldEnabled;
+          }
+          if (oldKill === undefined) {
+            delete process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
+          } else {
+            process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = oldKill;
+          }
+          if (oldDisabled === undefined) {
+            delete process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
+          } else {
+            process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = oldDisabled;
+          }
+          await db
+            .delete(databaseBackfillStates)
+            .where(
+              eq(
+                databaseBackfillStates.name,
+                `case-law-replay:${state.source.id}:${PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ]}`,
+              ),
+            );
+          await db
+            .update(caseLawSources)
+            .set({ adapterKey: `engine-${state.source.id}` })
+            .where(eq(caseLawSources.id, state.source.id));
+        }
+      },
+    );
 
     test("two ticks use real source leases and session slots to admit one writer", async () => {
       const state = await fixture(3);

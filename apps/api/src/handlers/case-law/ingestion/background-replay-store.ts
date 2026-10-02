@@ -77,6 +77,7 @@ const withReplayTransaction = async <T>(
   });
 
 export const REPLAY_FAILED_READMISSION_DAYS = 7;
+export const REPLAY_SYSTEMIC_ISOLATION_THRESHOLD = 3;
 const PREFLIGHT_CHECKPOINT = "case-law-replay:preflight";
 
 const checkpointName = (source: BackgroundReplaySource) =>
@@ -475,11 +476,12 @@ type PendingInTransactionOptions = {
   source: BackgroundReplaySource;
   utcDay: string;
   now: number;
+  cursor: string | null;
 };
 
 const pendingInTransaction = async (
   tx: Transaction,
-  { source, utcDay, now }: PendingInTransactionOptions,
+  { source, utcDay, now, cursor }: PendingInTransactionOptions,
 ) => {
   const row = (
     await tx
@@ -499,13 +501,38 @@ const pendingInTransaction = async (
         ),
       )
       .orderBy(
-        asc(caseLawReplayBatches.createdAt),
+        ...(cursor === null
+          ? []
+          : [
+              sql`CASE WHEN ${caseLawReplayBatches.firstDecisionId} > ${cursor}::uuid THEN 0 ELSE 1 END`,
+            ]),
+        asc(caseLawReplayBatches.firstDecisionId),
         asc(caseLawReplayBatches.id),
       )
       .limit(1)
   ).at(0);
   if (!row) {
     return { type: "empty" } as const;
+  }
+  if (
+    row.status === "reserved" &&
+    (row.systemicFailures > 0 ||
+      row.failureCode === "tick-deadline" ||
+      row.failureCode === "tick-cancelled")
+  ) {
+    const cursorRow =
+      cursor === null
+        ? null
+        : (
+            await tx
+              .select({ id: caseLawDecisions.id })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, sql`${cursor}::uuid`))
+              .limit(1)
+          ).at(0);
+    if (await selectNext(tx, { source, after: cursorRow?.id ?? null })) {
+      return { type: "empty" } as const;
+    }
   }
   if (row.parserVersionTo > source.currentParserVersion) {
     panic("Pending replay targets a newer parser; this worker must stop");
@@ -546,6 +573,8 @@ const pendingInTransaction = async (
       .set({
         status: "reserved",
         attempts: 0,
+        systemicFailures: 0,
+        systemicProgress: 0,
         attemptState: "idle",
         failed: 0,
         retryAt: null,
@@ -598,8 +627,13 @@ const pendingBatch = async (
   { source, utcDay }: PendingBatchOptions,
 ) =>
   await withReplayTransaction(db, async (tx) => {
-    await lockCheckpoint(tx, source);
-    return await pendingInTransaction(tx, { source, utcDay, now: now() });
+    const state = await lockCheckpoint(tx, source);
+    return await pendingInTransaction(tx, {
+      source,
+      utcDay,
+      now: now(),
+      cursor: state.cursor,
+    });
   });
 const loadGateState = async (
   { db }: ReplayStoreContext,
@@ -656,6 +690,7 @@ const reserveBatch = async (
       source,
       utcDay,
       now: now(),
+      cursor: state.cursor,
     });
     if (pending.type !== "empty") {
       return pending;
@@ -721,26 +756,6 @@ const reserveBatch = async (
       });
       return { type: "empty" } as const;
     }
-    await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      .update(caseLawReplayBatches)
-      .set({
-        supersededAt: sql`coalesce(${caseLawReplayBatches.completedAt}, ${new Date(now())}::timestamptz)`,
-      })
-      .where(
-        and(
-          eq(caseLawReplayBatches.sourceId, source.id),
-          eq(caseLawReplayBatches.firstDecisionId, row.id),
-          lt(caseLawReplayBatches.parserVersionTo, source.currentParserVersion),
-          inArray(caseLawReplayBatches.status, [
-            "completed",
-            "superseded",
-            "failed",
-            "blocked",
-          ]),
-          isNull(caseLawReplayBatches.supersededAt),
-        ),
-      );
     await recordReplayMaintenanceAuditEvent(tx, {
       sourceId: source.id,
       action: "receipt-reserved",
@@ -836,6 +851,7 @@ type CompleteBatchOptions = {
   report: ReplayRowReport;
   durationMs: number;
   verdict: Verdict;
+  healthyEvidence?: "adjacent-row" | "none";
 };
 
 type VerifiedProgressOptions = {
@@ -850,10 +866,19 @@ const recordVerifiedProgress = async (
   await tx
     // audit: skip — public case-law corpus bookkeeping, no workspace data
     .insert(caseLawReplaySourceProgress)
-    .values({ sourceId, ticksWithoutProgress: 0, lastCompletedAt: completedAt })
+    .values({
+      sourceId,
+      ticksWithoutProgress: 0,
+      lastCompletedAt: completedAt,
+      completedRows: 1,
+    })
     .onConflictDoUpdate({
       target: caseLawReplaySourceProgress.sourceId,
-      set: { ticksWithoutProgress: 0, lastCompletedAt: completedAt },
+      set: {
+        ticksWithoutProgress: 0,
+        lastCompletedAt: completedAt,
+        completedRows: sql`${caseLawReplaySourceProgress.completedRows} + 1`,
+      },
     });
   await recordReplayMaintenanceAuditEvent(tx, {
     sourceId,
@@ -867,17 +892,66 @@ const recordVerifiedProgress = async (
 type ReplayFailureOptions = {
   code: ReplayFailure["code"];
   scope: ReplayFailure["scope"];
+  healthyEvidence: "adjacent-row" | "none";
   messageClass: ReplayFailure["messageClass"];
   haltReason?: string;
   durationMs: number;
   verdict: Verdict;
 };
 
+type ClassifyReplayFailureOptions = {
+  receipt: Pick<
+    typeof caseLawReplayBatches.$inferSelect,
+    "attemptState" | "attempts" | "systemicFailures" | "systemicProgress"
+  >;
+  failure: Pick<ReplayFailureOptions, "scope" | "code" | "healthyEvidence">;
+  progress: number;
+};
+
+const classifyReplayFailure = ({
+  receipt,
+  failure,
+  progress,
+}: ClassifyReplayFailureOptions) => {
+  // Fresh verified progress distinguishes an isolated row from an outage.
+  // Each conversion resets its baseline, so old success cannot spend later
+  // outage attempts; cancellation and duplicate persistence never count.
+  const countSystemic =
+    failure.scope === "systemic" &&
+    receipt.attemptState === "picked-up" &&
+    failure.code !== "tick-deadline" &&
+    failure.code !== "tick-cancelled";
+  const baseline =
+    receipt.systemicFailures === 0 ? progress : receipt.systemicProgress;
+  const systemicFailures = countSystemic
+    ? Math.min(
+        REPLAY_SYSTEMIC_ISOLATION_THRESHOLD,
+        receipt.systemicFailures + 1,
+      )
+    : receipt.systemicFailures;
+  const isolated =
+    countSystemic &&
+    systemicFailures >= REPLAY_SYSTEMIC_ISOLATION_THRESHOLD &&
+    (progress > baseline || failure.healthyEvidence === "adjacent-row");
+  const effectiveScope = isolated ? "row" : failure.scope;
+  const attempts =
+    effectiveScope === "systemic" && receipt.attemptState === "picked-up"
+      ? Math.max(0, receipt.attempts - 1)
+      : receipt.attempts;
+  return {
+    isolated,
+    effectiveScope,
+    attempts,
+    systemicFailures: isolated ? 0 : systemicFailures,
+    systemicProgress: isolated ? progress : baseline,
+  };
+};
+
 const recordFailure = async (
   { db, now, beforeComplete }: ReplayStoreContext,
   batch: BackgroundReplayBatch,
   failure: ReplayFailureOptions,
-): Promise<"retryable" | "failed" | "applied"> => {
+): Promise<"retryable" | "failed" | "applied" | "isolated"> => {
   await beforeComplete?.();
   return await withReplayTransaction(db, async (tx) => {
     const checkpoint = await lockCheckpoint(tx, batch.source);
@@ -893,10 +967,21 @@ const recordFailure = async (
     if (receipt.status !== "reserved") {
       return receipt.applied > 0 ? "applied" : "failed";
     }
-    const attempts =
-      failure.scope === "systemic" && receipt.attemptState === "picked-up"
-        ? Math.max(0, receipt.attempts - 1)
-        : receipt.attempts;
+    const progress =
+      (
+        await tx
+          .select({ completedRows: caseLawReplaySourceProgress.completedRows })
+          .from(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, batch.source.id))
+          .limit(1)
+      ).at(0)?.completedRows ?? 0;
+    const {
+      isolated,
+      effectiveScope,
+      attempts,
+      systemicFailures,
+      systemicProgress,
+    } = classifyReplayFailure({ receipt, failure, progress });
     const decision = (
       await tx
         .select({
@@ -957,7 +1042,7 @@ const recordFailure = async (
       return "applied";
     }
     const exhausted =
-      failure.scope === "row" &&
+      effectiveScope === "row" &&
       attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
     const retryDelay = Math.min(
       BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
@@ -969,6 +1054,8 @@ const recordFailure = async (
       .update(caseLawReplayBatches)
       .set({
         attempts,
+        systemicFailures,
+        systemicProgress,
         attemptState: "idle",
         failed: 1,
         status: exhausted ? "failed" : "reserved",
@@ -1008,7 +1095,7 @@ const recordFailure = async (
         2 ** Math.min(16, systemicHoldCount - 1),
     );
     const sourceBatch =
-      failure.scope === "systemic"
+      effectiveScope === "systemic"
         ? {
             ...checkpoint.batch,
             holdCount: systemicHoldCount,
@@ -1037,7 +1124,10 @@ const recordFailure = async (
       },
       createdAt: new Date(now()),
     });
-    return exhausted ? "failed" : "retryable";
+    if (exhausted) {
+      return "failed";
+    }
+    return isolated ? "isolated" : "retryable";
   });
 };
 
@@ -1077,8 +1167,16 @@ const completionBlockedReason = ({
 
 const completeBatch = async (
   context: ReplayStoreContext,
-  { batch, report, durationMs, verdict }: CompleteBatchOptions,
-): Promise<"applied" | "blocked" | "unchanged" | "retryable"> => {
+  {
+    batch,
+    report,
+    durationMs,
+    verdict,
+    healthyEvidence = "none",
+  }: CompleteBatchOptions,
+): Promise<
+  "applied" | "blocked" | "unchanged" | "retryable" | "isolated" | "failed"
+> => {
   const { db, now, beforeCheckpoint, beforeComplete } = context;
   if (report.id !== batch.decisionId) {
     panic("Replay report does not match its reservation");
@@ -1086,10 +1184,11 @@ const completeBatch = async (
   if (report.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
     const failure = await recordFailure(context, batch, {
       ...replayFailure("writer-retryable"),
+      healthyEvidence,
       durationMs,
       verdict,
     });
-    return failure === "failed" ? "blocked" : failure;
+    return failure;
   }
   if (
     report.outcome !== REPLAY_ROW_OUTCOME.APPLIED &&
@@ -1202,10 +1301,11 @@ const completeBatch = async (
   if (disposition === "mirror-pending") {
     const failure = await recordFailure(context, batch, {
       ...replayFailure("writer-retryable"),
+      healthyEvidence,
       durationMs,
       verdict,
     });
-    return failure === "failed" ? "blocked" : failure;
+    return failure;
   }
   return disposition;
 };
@@ -1283,6 +1383,48 @@ export const buildReplayCompactionQuery = (
     .limit(limit)
     .for("update");
 
+export const buildReplayRetirementQuery = (tx: Transaction, limit: number) => {
+  const staleReceipts = tx
+    .select({ id: caseLawReplayBatches.id })
+    .from(caseLawReplayBatches)
+    .where(
+      and(
+        eq(caseLawReplayBatches.sourceId, caseLawSources.id),
+        lt(
+          caseLawReplayBatches.parserVersionTo,
+          sql`current_parsers.parser_version`,
+        ),
+        isNull(caseLawReplayBatches.supersededAt),
+        inArray(caseLawReplayBatches.status, [
+          "completed",
+          "superseded",
+          "failed",
+          "blocked",
+        ]),
+      ),
+    )
+    .orderBy(
+      asc(caseLawReplayBatches.parserVersionTo),
+      asc(caseLawReplayBatches.id),
+    )
+    .limit(limit)
+    .as("stale_receipts");
+  return tx
+    .select({ id: staleReceipts.id })
+    .from(caseLawSources)
+    .innerJoin(
+      sql`(VALUES ${sql.join(
+        Object.entries(PARSER_VERSIONS).map(
+          ([key, version]) => sql`(${key}::text, ${version}::int)`,
+        ),
+        sql`, `,
+      )}) AS current_parsers(adapter_key, parser_version)`,
+      eq(caseLawSources.adapterKey, sql`current_parsers.adapter_key`),
+    )
+    .innerJoinLateral(staleReceipts, sql`true`)
+    .limit(limit);
+};
+
 const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
   if (
     !Number.isSafeInteger(limit) ||
@@ -1292,6 +1434,15 @@ const compact = async ({ db, now }: ReplayStoreContext, limit: number) => {
     panic("Replay compaction limit must be a bounded positive integer");
   }
   return await withReplayTransaction(db, async (tx) => {
+    const stale = buildReplayRetirementQuery(tx, limit);
+    // Discover older terminal generations independently of new reservations.
+    await tx
+      // audit: skip — public case-law corpus bookkeeping, no workspace data
+      .update(caseLawReplayBatches)
+      .set({
+        supersededAt: sql`coalesce(${caseLawReplayBatches.completedAt}, now())`,
+      })
+      .where(inArray(caseLawReplayBatches.id, stale));
     const old = await buildReplayCompactionQuery(tx, {
       cutoff: new Date(
         now() - BACKGROUND_REPLAY_LIMITS.receiptRetentionDays * DAY_IN_MS,
@@ -1490,7 +1641,7 @@ export const createBackgroundReplayStore = ({
       await advancePreview(context, batch),
     resetDryRunCursor: async (source: BackgroundReplaySource) =>
       await resetDryRunCursor(context, source),
-    compact: async (limit = BACKGROUND_REPLAY_LIMITS.maxCompactRows) =>
+    compact: async (limit: number = BACKGROUND_REPLAY_LIMITS.maxCompactRows) =>
       await compact(context, limit),
     previewBatch: async (
       source: BackgroundReplaySource,

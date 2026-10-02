@@ -173,7 +173,10 @@ const fetchEcsCredentials = async ({
     const token = await Result.tryPromise(async () =>
       signal === undefined
         ? await Bun.file(authorizationTokenFile).text()
-        : await readFile(authorizationTokenFile, { encoding: "utf-8", signal }),
+        : await readFile(authorizationTokenFile, {
+            encoding: "utf-8",
+            ...(signal === undefined ? {} : { signal }),
+          }),
     );
     signal?.throwIfAborted();
     if (token.isErr()) {
@@ -188,7 +191,11 @@ const fetchEcsCredentials = async ({
     headers["Authorization"] = token.value.trim();
   }
 
-  return await fetchCredentialJson(url, { fetchImpl, headers, signal });
+  return await fetchCredentialJson(url, {
+    fetchImpl,
+    headers,
+    ...(signal === undefined ? {} : { signal }),
+  });
 };
 
 /**
@@ -355,7 +362,7 @@ const resolveAwsRuntimeCredentials = async ({
   const ecsCredentials = await fetchEcsCredentials({
     fetchImpl,
     runtimeEnv,
-    signal,
+    ...(signal === undefined ? {} : { signal }),
   });
   if (ecsCredentials) {
     return ecsCredentials;
@@ -375,7 +382,10 @@ const resolveAwsRuntimeCredentials = async ({
     return null;
   }
 
-  const imdsCredentials = await fetchImdsCredentials({ fetchImpl, signal });
+  const imdsCredentials = await fetchImdsCredentials({
+    fetchImpl,
+    ...(signal === undefined ? {} : { signal }),
+  });
   if (imdsCredentials) {
     return imdsCredentials;
   }
@@ -404,21 +414,25 @@ export const resolveS3Credentials = async ({
     return await resolveAwsRuntimeCredentials({
       fetchImpl,
       runtimeEnv,
-      signal,
+      ...(signal === undefined ? {} : { signal }),
     });
   }
 
   if (!isAwsS3Endpoint(endpoint)) {
     return (
       staticCredentials ??
-      (await resolveAwsRuntimeCredentials({ fetchImpl, runtimeEnv, signal }))
+      (await resolveAwsRuntimeCredentials({
+        fetchImpl,
+        runtimeEnv,
+        ...(signal === undefined ? {} : { signal }),
+      }))
     );
   }
 
   const awsRuntimeCredentials = await resolveAwsRuntimeCredentials({
     fetchImpl,
     runtimeEnv,
-    signal,
+    ...(signal === undefined ? {} : { signal }),
   });
   if (awsRuntimeCredentials) {
     return awsRuntimeCredentials;
@@ -438,7 +452,9 @@ const resolveRefreshCredentials = async (
   s3Policy?: S3CredentialRefreshOptions,
 ) => {
   const signal = s3Policy?.signal;
-  const credentials = await resolveS3Credentials({ signal });
+  const credentials = await resolveS3Credentials({
+    ...(signal === undefined ? {} : { signal }),
+  });
   signal?.throwIfAborted();
   if (
     signal !== undefined &&
@@ -716,7 +732,9 @@ export const writeS3ObjectWithRetry = async (
         await withTimeout(
           async (signal) =>
             await write(
-              operationSignal === undefined ? object : { ...object, signal },
+              operationSignal === undefined
+                ? object
+                : { ...object, ...(signal === undefined ? {} : { signal }) },
             ),
           {
             signal: operationSignal,
@@ -770,7 +788,13 @@ export const createS3ObjectIfAbsent = async (
     async ({ contentType, data, key, signal, s3Policy }): Promise<void> => {
       signal?.throwIfAborted();
       if (!conditional) {
-        await writeViaClient({ contentType, data, key, signal, s3Policy });
+        await writeViaClient({
+          contentType,
+          data,
+          key,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        });
         return;
       }
       const written = await Result.tryPromise({
@@ -805,7 +829,13 @@ export const createS3ObjectIfAbsent = async (
       }
       if (code === "NotImplemented") {
         conditional = false;
-        await writeViaClient({ contentType, data, key, signal, s3Policy });
+        await writeViaClient({
+          contentType,
+          data,
+          key,
+          ...(signal === undefined ? {} : { signal }),
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        });
         return;
       }
       // `ConditionalRequestConflict` (a concurrent conditional write to the
@@ -1266,7 +1296,7 @@ export const readS3ObjectBoundedIfPresent = async ({
         key,
         maxBytes,
         signal,
-        s3Policy,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
       }),
   );
 

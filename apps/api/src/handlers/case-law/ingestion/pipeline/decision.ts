@@ -198,8 +198,8 @@ const runDecisionAttempt = async ({
 
   signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
-    signal,
-    s3Policy,
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     result,
     existing,
     preservesExistingDetail: shape.preservesExistingDetail,
@@ -222,8 +222,8 @@ const runDecisionAttempt = async ({
   const attempted = await Result.tryPromise({
     try: async () => {
       const planned = await planDecisionWrite({
-        signal,
-        s3Policy,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         result,
         existing,
         decisionId,
@@ -242,8 +242,8 @@ const runDecisionAttempt = async ({
       }
       signal?.throwIfAborted();
       const write: DecisionRowWrite = {
-        signal,
-        s3Policy,
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
         sourceId,
