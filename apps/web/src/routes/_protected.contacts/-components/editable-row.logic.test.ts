@@ -1,21 +1,15 @@
 import { describe, expect, test } from "bun:test";
 
 import {
+  buildContactRatePayload,
   buildNumericContactPayload,
+  contactRateInput,
   buildTextContactPayload,
   getEditableFieldInputAttributes,
 } from "@/routes/_protected.contacts/-components/editable-row.logic";
 
 describe("contact numeric editable fields", () => {
   test("builds exact payloads for valid integers and clearing", () => {
-    expect(buildNumericContactPayload("defaultHourlyRate", "0012")).toEqual({
-      status: "valid",
-      payload: { defaultHourlyRate: 12 },
-    });
-    expect(buildNumericContactPayload("defaultHourlyRate", "")).toEqual({
-      status: "valid",
-      payload: { defaultHourlyRate: null },
-    });
     expect(buildNumericContactPayload("paymentTermDays", "0")).toEqual({
       status: "valid",
       payload: { paymentTermDays: 0 },
@@ -31,7 +25,7 @@ describe("contact numeric editable fields", () => {
   });
 
   test("rejects partial, non-integer, negative, unsafe, and out-of-range tokens", () => {
-    const numericFields = ["defaultHourlyRate", "paymentTermDays"] as const;
+    const numericFields = ["paymentTermDays"] as const;
     const invalidInputs = [
       "12oops",
       "1e3",
@@ -57,7 +51,7 @@ describe("contact numeric editable fields", () => {
   test("preserves raw numeric tokens for validation", () => {
     expect(getEditableFieldInputAttributes("defaultHourlyRate")).toEqual({
       type: "text",
-      inputMode: "numeric",
+      inputMode: "decimal",
     });
     expect(getEditableFieldInputAttributes("paymentTermDays")).toEqual({
       type: "text",
@@ -119,5 +113,58 @@ describe("contact text editable fields", () => {
       { taxId: null },
       { currency: null },
     ]);
+  });
+});
+
+describe("contact hourly rates", () => {
+  for (const { currency, text, minorUnits, zeroText } of [
+    { currency: "EUR", text: "150.50", minorUnits: 15_050, zeroText: "0.00" },
+    { currency: "JPY", text: "150", minorUnits: 150, zeroText: "0" },
+    {
+      currency: "KWD",
+      text: "150.500",
+      minorUnits: 150_500,
+      zeroText: "0.000",
+    },
+  ]) {
+    test(`${currency} displays and saves major units`, () => {
+      const displayed = contactRateInput(minorUnits, currency);
+      expect(displayed).toBe(text);
+      expect(
+        buildContactRatePayload({ trimmedInput: displayed ?? "", currency }),
+      ).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: minorUnits },
+      });
+      expect(contactRateInput(0, currency)).toBe(zeroText);
+    });
+  }
+
+  test("requires currency for a nonempty rate and allows clearing", () => {
+    expect(contactRateInput(15_050, null)).toBeNull();
+    expect(contactRateInput(null, "EUR")).toBeNull();
+    expect(
+      buildContactRatePayload({ trimmedInput: "150.50", currency: null }),
+    ).toEqual({ status: "invalid" });
+    for (const currency of [null, "EUR", "JPY", "KWD"]) {
+      expect(buildContactRatePayload({ trimmedInput: "", currency })).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: null },
+      });
+    }
+  });
+
+  test("refuses invalid, negative and unsafe amounts", () => {
+    for (const trimmedInput of [
+      "oops",
+      "12oops",
+      "-1",
+      "9007199254740992",
+      "Infinity",
+    ]) {
+      expect(
+        buildContactRatePayload({ trimmedInput, currency: "EUR" }),
+      ).toEqual({ status: "invalid" });
+    }
   });
 });

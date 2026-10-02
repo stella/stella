@@ -1,11 +1,15 @@
 import { panic } from "better-result";
 
+import { tryToMinorUnits } from "@stll/money";
+
+import { majorUnitInput } from "@/components/billing/amount-input.logic";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { EditableField } from "@/routes/_protected.contacts/-components/types";
 
 type EditableFieldPolicy =
   | { valueKind: "text"; maxLength: number | null }
-  | { valueKind: "nonNegativeInteger"; maximum: number | null };
+  | { valueKind: "nonNegativeInteger"; maximum: number | null }
+  | { valueKind: "money" };
 
 export const EDITABLE_FIELD_POLICY = {
   prefix: { valueKind: "text", maxLength: 32 },
@@ -18,7 +22,7 @@ export const EDITABLE_FIELD_POLICY = {
   notes: { valueKind: "text", maxLength: null },
   registrationNumber: { valueKind: "text", maxLength: 64 },
   taxId: { valueKind: "text", maxLength: 64 },
-  defaultHourlyRate: { valueKind: "nonNegativeInteger", maximum: null },
+  defaultHourlyRate: { valueKind: "money" },
   currency: { valueKind: "text", maxLength: 3 },
   paymentTermDays: { valueKind: "nonNegativeInteger", maximum: 365 },
 } as const satisfies Record<EditableField, EditableFieldPolicy>;
@@ -31,7 +35,13 @@ type NumericEditableField = {
     : never;
 }[EditableField];
 
-type TextEditableField = Exclude<EditableField, NumericEditableField>;
+type TextEditableField = {
+  [
+    Field in EditableField
+  ]: (typeof EDITABLE_FIELD_POLICY)[Field]["valueKind"] extends "text"
+    ? Field
+    : never;
+}[EditableField];
 
 export const isNumericEditableField = (
   field: EditableField,
@@ -39,15 +49,21 @@ export const isNumericEditableField = (
   EDITABLE_FIELD_POLICY[field].valueKind === "nonNegativeInteger";
 
 export const getEditableFieldInputAttributes = (field: EditableField) => {
-  if (EDITABLE_FIELD_POLICY[field].valueKind === "nonNegativeInteger") {
-    return { type: "text", inputMode: "numeric" } as const;
+  const { valueKind } = EDITABLE_FIELD_POLICY[field];
+  switch (valueKind) {
+    case "money":
+      return { type: "text", inputMode: "decimal" } as const;
+    case "nonNegativeInteger":
+      return { type: "text", inputMode: "numeric" } as const;
+    case "text":
+      return { type: "text" } as const;
+    default:
+      valueKind satisfies never;
+      return panic(`Unhandled input kind: ${String(valueKind)}`);
   }
-  return { type: "text" } as const;
 };
 
-type NumericContactPayload =
-  | { defaultHourlyRate: number | null }
-  | { paymentTermDays: number | null };
+type NumericContactPayload = { paymentTermDays: number | null };
 
 type NumericContactPayloadResult =
   | { status: "valid"; payload: NumericContactPayload }
@@ -60,8 +76,6 @@ const buildNumericPayload = (
   value: number | null,
 ): NumericContactPayload => {
   switch (field) {
-    case "defaultHourlyRate":
-      return { defaultHourlyRate: value };
     case "paymentTermDays":
       return { paymentTermDays: value };
     default:
@@ -99,6 +113,35 @@ export const buildNumericContactPayload = (
     status: "valid",
     payload: buildNumericPayload(field, value),
   };
+};
+
+// Without a currency there is no unit scale for displaying or setting a rate.
+export const contactRateInput = (
+  amount: number | null,
+  currency: string | null,
+): string | null =>
+  amount === null || !currency ? null : majorUnitInput(amount, currency);
+
+type ContactRatePayloadOptions = {
+  trimmedInput: string;
+  currency: string | null;
+};
+
+export const buildContactRatePayload = ({
+  trimmedInput,
+  currency,
+}: ContactRatePayloadOptions) => {
+  if (trimmedInput === "") {
+    return { status: "valid", payload: { defaultHourlyRate: null } } as const;
+  }
+  if (!currency) {
+    return { status: "invalid" } as const;
+  }
+  const amount = tryToMinorUnits({ amount: trimmedInput, currency });
+  if (amount === null || amount < 0) {
+    return { status: "invalid" } as const;
+  }
+  return { status: "valid", payload: { defaultHourlyRate: amount } } as const;
 };
 
 export const buildTextContactPayload = (

@@ -327,11 +327,6 @@ function ContactDetailPage() {
                 contact={contact}
                 field="defaultHourlyRate"
                 label={t("contacts.fields.defaultHourlyRate")}
-                value={
-                  contact.defaultHourlyRate !== null
-                    ? String(contact.defaultHourlyRate)
-                    : null
-                }
               />
               <EditableRow
                 contact={contact}

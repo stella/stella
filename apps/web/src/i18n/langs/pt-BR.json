@@ -1877,6 +1877,7 @@
       "addBankAccount": "Adicionar conta bancária",
       "noBillingData": "Nenhum detalhe de faturamento definido.",
       "removeBankAccount": "Remover conta bancária",
+      "selectCurrencyForRate": "Selecione uma moeda para definir o valor por hora.",
       "title": "Dados de faturamento"
     },
     "columns": {

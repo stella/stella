@@ -1877,6 +1877,7 @@
       "addBankAccount": "Pievienot bankas kontu",
       "noBillingData": "Nav norēķinu datu.",
       "removeBankAccount": "Noņemt bankas kontu",
+      "selectCurrencyForRate": "Lai iestatītu stundas likmi, izvēlieties valūtu.",
       "title": "Norēķinu dati"
     },
     "columns": {
