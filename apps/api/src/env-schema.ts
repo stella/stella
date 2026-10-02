@@ -674,6 +674,8 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
 
+  AGENT_CLIENT_STORAGE_V1_ENABLED: featureFlagSchema,
+
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
 
