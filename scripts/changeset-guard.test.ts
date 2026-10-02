@@ -10,6 +10,7 @@ import {
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as v from "valibot";
 
 import { propertyConfig } from "@stll/property-testing";
 
@@ -832,6 +833,25 @@ const compareVersions = (
   return 0;
 };
 
+const expectChangesetConditions = (gate: string, stepCount: number) => {
+  const { steps } = v.parse(
+    v.object({
+      steps: v.array(v.object({ name: v.string(), if: v.string() })),
+    }),
+    Bun.YAML.parse(`steps:\n${gate}`),
+  );
+  expect(steps).toHaveLength(stepCount);
+  for (const step of steps) {
+    const suffix =
+      step.name === CHANGESET_GATE_LAST_STEP
+        ? " && steps.policy.outcome == 'success'"
+        : "";
+    expect(step.if, step.name).toBe(
+      `\${{ !cancelled() && steps.checkout.outcome == 'success' && (github.event_name == 'pull_request')${suffix} }}`,
+    );
+  }
+};
+
 describe("workflow and pre-push read the same policy", () => {
   test("the workflow gate feeds every list from the policy file", () => {
     const job = changesetJob();
@@ -874,9 +894,7 @@ describe("workflow and pre-push read the same policy", () => {
     const gate = changesetJob();
     const stepCount = gate.match(/^ {6}- name: /gmu)?.length ?? 0;
     expect(stepCount).toBeGreaterThan(0);
-    expect(
-      gate.match(/^ {8}if: github\.event_name == 'pull_request'$/gmu),
-    ).toHaveLength(stepCount);
+    expectChangesetConditions(gate, stepCount);
     const workflow = readFile(WORKFLOW_FILE);
     const job = workflow.indexOf("\n  ci-checks-rest:\n");
     const gateStart = workflow.indexOf(gate, job);
@@ -884,6 +902,17 @@ describe("workflow and pre-push read the same policy", () => {
     expect(gateStart).toBeLessThan(
       workflow.indexOf("      - name: Install dependencies\n", job),
     );
+  });
+
+  test("a wrapped changeset gate cannot drop its pull-request scope", () => {
+    const gate = changesetJob();
+    const stepCount = gate.match(/^ {6}- name: /gmu)?.length ?? 0;
+    const changed = gate.replace(
+      " && (github.event_name == 'pull_request')",
+      "",
+    );
+    expect(changed).not.toBe(gate);
+    expect(() => expectChangesetConditions(changed, stepCount)).toThrow("toBe");
   });
 
   test("pre-push runs the guard", () => {

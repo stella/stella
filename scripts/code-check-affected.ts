@@ -425,6 +425,47 @@ const run = (
   return stdout;
 };
 
+type ExecuteCheckCommandsOptions = {
+  commands: readonly (readonly string[])[];
+  runner?: (command: readonly string[]) => number;
+  write?: (output: string) => void;
+  dryRun?: boolean;
+};
+
+export const executeCheckCommands = ({
+  commands,
+  runner = (command) =>
+    Bun.spawnSync([...command], {
+      cwd: REPO_ROOT,
+      stdout: "inherit",
+      stderr: "inherit",
+    }).exitCode,
+  write = (output) => {
+    process.stdout.write(output);
+  },
+  dryRun = false,
+}: ExecuteCheckCommandsOptions): number => {
+  const failures: { command: readonly string[]; exitCode: number }[] = [];
+  for (const command of commands) {
+    if (dryRun) {
+      write(`  ${command.join(" ")}\n`);
+      continue;
+    }
+    const exitCode = runner(command);
+    if (exitCode !== 0) {
+      failures.push({ command, exitCode });
+    }
+  }
+  if (failures.length === 0) {
+    return 0;
+  }
+  write(`code-check: ${failures.length} failed command(s)\n`);
+  for (const { command, exitCode } of failures) {
+    write(`  (${exitCode}) ${command.join(" ")}\n`);
+  }
+  return 1;
+};
+
 const workspacePaths = (): Set<string> => {
   const workspaces = new Set<string>();
   for (const parent of WORKSPACE_PARENTS) {
@@ -508,6 +549,7 @@ const turboCommand = (tasks: readonly string[], scope: TaskScope): string[] => [
   "run",
   ...tasks,
   "--concurrency=2",
+  "--continue=dependencies-successful",
   ...(scope.type === "all"
     ? []
     : scope.targets.map((target) => `--filter=./${target}`)),
@@ -636,6 +678,7 @@ export const scopedCommands = (
       "run",
       "typecheck:repo",
       "--concurrency=2",
+      "--continue=dependencies-successful",
     ]);
   }
   return commands;
@@ -723,28 +766,23 @@ const main = () => {
       ? presentChangedPaths
       : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
   );
+  const commands: string[][] = [];
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");
-    if (options.dryRun) {
-      process.stdout.write(`  ${resultBoundaryCommand.join(" ")}\n`);
-    } else {
-      run(resultBoundaryCommand);
-    }
+    commands.push(resultBoundaryCommand);
   }
 
   if (plan.type === "fallback") {
     process.stdout.write(
       `code-check: full repository (${plan.changedPath} requires fallback)\n`,
     );
-    if (!options.dryRun) {
-      run([
-        "bun",
-        "run",
-        "code-check",
-        ...(leg === undefined ? [] : ["--leg", leg]),
-      ]);
-    }
-    return;
+    commands.push([
+      "bun",
+      "run",
+      "code-check",
+      ...(leg === undefined ? [] : ["--leg", leg]),
+    ]);
+    return executeCheckCommands({ commands, dryRun: options.dryRun });
   }
 
   const scopeLabel = (scope: TaskScope): string => {
@@ -759,21 +797,15 @@ const main = () => {
   process.stdout.write(
     `code-check: lint ${scopeLabel(plan.lint)}; typecheck ${scopeLabel(plan.typecheck)}\n`,
   );
-  const commands = scopedCommands(
-    plan,
-    leg === undefined ? undefined : { leg, workspaces: workspacePaths() },
+  commands.push(
+    ...scopedCommands(
+      plan,
+      leg === undefined ? undefined : { leg, workspaces: workspacePaths() },
+    ),
   );
-  if (options.dryRun) {
-    for (const command of commands) {
-      process.stdout.write(`  ${command.join(" ")}\n`);
-    }
-    return;
-  }
-  for (const command of commands) {
-    run(command);
-  }
+  return executeCheckCommands({ commands, dryRun: options.dryRun });
 };
 
 if (import.meta.main) {
-  main();
+  process.exitCode = main();
 }

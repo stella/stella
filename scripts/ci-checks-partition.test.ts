@@ -1,7 +1,11 @@
 import { panic } from "better-result";
 import { expect, test } from "bun:test";
+import fc from "fast-check";
 import { readFileSync } from "node:fs";
+import { createContext, runInContext } from "node:vm";
 import * as v from "valibot";
+
+import { assertProperty } from "@stll/property-testing";
 
 const jobSchema = v.looseObject({
   steps: v.array(v.looseObject({ name: v.string() })),
@@ -84,11 +88,83 @@ const withoutActionRef = (step: Step): Step => {
     ? step
     : { ...step, uses: uses.replace(PINNED_REF, "@<pinned>") };
 };
+const CONTINUATION_PREFIXES = {
+  checkout: "${{ !cancelled() && steps.checkout.outcome == 'success'",
+  install: "${{ !cancelled() && steps.install.outcome != 'failure'",
+} as const;
+const outcomeDependencies: Record<string, string> = {
+  Format: "affected",
+  "Changeset present for published package changes": "policy",
+};
+const preInstallGuards = new Map([
+  [
+    "Standalone lockfile guard",
+    "Reject alternate lockfiles before installing dependencies",
+  ],
+  [
+    "Lockfile release-age guard",
+    "Reject quarantined versions before installing dependencies",
+  ],
+]);
+const SAFETY_SUFFIX =
+  " && steps.standalone_lockfiles.outcome == 'success' && (!(github.event_name != 'workflow_dispatch' && needs.ci-plan.outputs.lockfile_ages_required == 'true') || steps.lockfile_ages.outcome == 'success')";
+const stepIds: Record<string, string> = {
+  Checkout: "checkout",
+  "Install dependencies": "install",
+  "Standalone lockfile guard": "standalone_lockfiles",
+  "Lockfile release-age guard": "lockfile_ages",
+};
+const withoutStepId = (step: Step): Step => {
+  if (stepIds[step.name] === undefined || step["id"] !== stepIds[step.name]) {
+    return step;
+  }
+  const original = { ...step };
+  delete original["id"];
+  return original;
+};
+const withoutContinuation = (step: Step): Step => {
+  const condition = v.parse(
+    v.looseObject({ if: v.optional(v.string()) }),
+    step,
+  ).if;
+  if (condition === undefined) {
+    return step;
+  }
+  const dependency = outcomeDependencies[step.name];
+  const suffixes =
+    dependency === undefined
+      ? [" }}"]
+      : [` && steps.${dependency}.outcome == 'success' }}`];
+  if (step.name === "Install dependencies") {
+    suffixes.push(`${SAFETY_SUFFIX} }}`);
+  }
+  for (const continuation of Object.values(CONTINUATION_PREFIXES)) {
+    for (const suffix of suffixes) {
+      if (condition === `${continuation}${suffix}`) {
+        const original = { ...step };
+        delete original["if"];
+        return original;
+      }
+      const prefix = `${continuation} && (`;
+      const ending = `)${suffix}`;
+      if (condition.startsWith(prefix) && condition.endsWith(ending)) {
+        return { ...step, if: condition.slice(prefix.length, -ending.length) };
+      }
+    }
+  }
+  return step;
+};
 const setupSteps = (steps: readonly Step[]) =>
-  steps.filter(({ name }) => prerequisites.has(name)).map(withoutActionRef);
+  steps
+    .filter(({ name }) => prerequisites.has(name))
+    .map(withoutContinuation)
+    .map(withoutStepId)
+    .map(withoutActionRef);
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
+    .map(withoutContinuation)
+    .map(withoutStepId)
     .map(withoutActionRef)
     .toSorted((left, right) => left.name.localeCompare(right.name));
 
@@ -186,6 +262,12 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
     } = base;
     const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps);
+    if (!baseJobs["ci-checks"]) {
+      const baseNames = new Set(originalSteps.map(({ name }) => name));
+      expect(
+        steps.filter(({ name }) => baseNames.has(name)).map(({ name }) => name),
+      ).toEqual(originalSteps.map(({ name }) => name));
+    }
     expect(originalSetup).toHaveLength(prerequisites.size);
     expect(scope).toEqual(originalScope);
     expect(timeout).toBe(
@@ -342,4 +424,362 @@ test("unrelated jobs may use unnamed steps or reusable workflows", () => {
     },
   });
   expect(readBaseline(parsed.jobs)).toEqual(partitions);
+});
+
+const expectContinuation = (steps: readonly Step[], leg: string) => {
+  const installIndex = steps.findIndex(
+    ({ name }) => name === "Install dependencies",
+  );
+  expect(installIndex).toBeGreaterThan(0);
+  expect(steps.find(({ name }) => name === "Checkout")?.["id"]).toBe(
+    "checkout",
+  );
+  expect(steps.at(installIndex)?.["id"]).toBe("install");
+  for (const [index, step] of steps.entries()) {
+    if (step.name === "Checkout") {
+      continue;
+    }
+    if (leg === "ci-checks-rest" && preInstallGuards.has(step.name)) {
+      expect(index, preInstallGuards.get(step.name)).toBeLessThan(installIndex);
+      expect(step["id"]).toBe(stepIds[step.name]);
+    }
+    const { if: condition, "continue-on-error": continueOnError } = v.parse(
+      v.looseObject({
+        if: v.string(),
+        "continue-on-error": v.optional(v.unknown()),
+      }),
+      step,
+    );
+    const prefix =
+      index <= installIndex
+        ? CONTINUATION_PREFIXES.checkout
+        : CONTINUATION_PREFIXES.install;
+    expect(condition.startsWith(prefix), step.name).toBe(true);
+    expect(withoutContinuation(step), step.name).not.toEqual(step);
+    if (step.name === "Install dependencies") {
+      const safety = leg === "ci-checks-rest" ? SAFETY_SUFFIX : "";
+      expect(condition).toBe(
+        `${CONTINUATION_PREFIXES.checkout} && (needs.ci-plan.outputs.package_checks_required == 'true')${safety} }}`,
+      );
+    }
+    expect(continueOnError, step.name).toBeUndefined();
+  }
+};
+
+test("every independent CI guard continues only after successful prerequisites", () => {
+  for (const [index, partition] of partitions.entries()) {
+    const id = partitionIds.at(index);
+    if (id === undefined) {
+      panic("CI check leg has no identifier");
+    }
+    expectContinuation(partition.steps, id);
+  }
+});
+
+test("CI coverage strips only canonical continuation wrappers and preserves condition, run and inputs", () => {
+  for (const CONTINUATION_PREFIX of Object.values(CONTINUATION_PREFIXES)) {
+    for (const original of [
+      { name: "Guard", run: "bun check" },
+      {
+        name: "Guard",
+        if: "github.event_name == 'pull_request'",
+        run: "bun check",
+        with: { mode: "strict" },
+      },
+    ]) {
+      const condition =
+        "if" in original
+          ? `${CONTINUATION_PREFIX} && (${original.if}) }}`
+          : `${CONTINUATION_PREFIX} }}`;
+      const wrapped = { ...original, if: condition };
+      expectCoverage({ current: [wrapped], base: [original], removed: [] });
+      for (const modified of [
+        { ...wrapped, if: condition.replace("!cancelled()", "always()") },
+        {
+          ...wrapped,
+          if: condition.replace(
+            /steps\.(?:checkout\.outcome == 'success'|install\.outcome != 'failure')/u,
+            "true",
+          ),
+        },
+        { ...wrapped, if: `${CONTINUATION_PREFIX} && (true) }}` },
+        { ...wrapped, run: "exit 0" },
+        { ...wrapped, with: { mode: "weak" } },
+      ]) {
+        expect(() =>
+          expectCoverage({
+            current: [modified],
+            base: [original],
+            removed: [],
+          }),
+        ).toThrow("toEqual");
+      }
+    }
+  }
+});
+
+test("continuation invariant rejects missing prerequisite gates and masked guard failures", () => {
+  const leg = partitions.at(0);
+  if (leg === undefined) {
+    panic("CI checks have no legs");
+  }
+  const guard = leg.steps.find(({ name }) => !prerequisites.has(name));
+  if (guard === undefined) {
+    panic("CI checks have no owned guard");
+  }
+  for (const changed of [
+    { ...guard, if: `\${{ !cancelled() }}` },
+    { ...guard, "continue-on-error": true },
+  ]) {
+    expect(() =>
+      expectContinuation(
+        leg.steps.map((step) => (step === guard ? changed : step)),
+        "ci-checks-generated",
+      ),
+    ).toThrow("expect(");
+  }
+});
+
+test("dependent CI guards require the producing step's successful outcome", () => {
+  for (const [name, dependency] of Object.entries(outcomeDependencies)) {
+    const base = { name, if: "scope == 'true'", run: "bun check" };
+    const CONTINUATION_PREFIX =
+      name === "Format"
+        ? CONTINUATION_PREFIXES.install
+        : CONTINUATION_PREFIXES.checkout;
+    const condition = `${CONTINUATION_PREFIX} && (${base.if}) && steps.${dependency}.outcome == 'success' }}`;
+    expectCoverage({
+      current: [{ ...base, if: condition }],
+      base: [base],
+      removed: [],
+    });
+    for (const weakened of [
+      `${CONTINUATION_PREFIX} && (${base.if}) }}`,
+      condition.replace(`steps.${dependency}.outcome == 'success'`, "true"),
+    ]) {
+      expect(() =>
+        expectCoverage({
+          current: [{ ...base, if: weakened }],
+          base: [base],
+          removed: [],
+        }),
+      ).toThrow("toEqual");
+    }
+  }
+});
+
+type ConditionContextOptions = {
+  outcomes: Record<string, { outcome: string }>;
+  scopes: Record<string, string>;
+  event: string;
+  cancelled: boolean;
+};
+const conditionEvaluator = ({
+  outcomes,
+  scopes,
+  event,
+  cancelled,
+}: ConditionContextOptions) => {
+  const context = createContext({
+    cancelled: () => cancelled,
+    github: { event_name: event },
+    steps: outcomes,
+    needs: { "ci-plan": { outputs: scopes } },
+  });
+  return (condition: string) => {
+    const expression = condition.startsWith('${{')
+      ? condition.slice(4, -3)
+      : condition;
+    return v.parse(
+      v.boolean(),
+      runInContext(
+        expression.replaceAll("needs.ci-plan", 'needs["ci-plan"]'),
+        context,
+      ),
+    );
+  };
+};
+
+type SimulateLegOptions = {
+  failures: readonly string[];
+  lockfileScope: "true" | "false";
+};
+const simulateRestLeg = ({ failures, lockfileScope }: SimulateLegOptions) => {
+  const { steps } = v.parse(jobSchema, jobs["ci-checks-rest"]);
+  const outcomes: Record<string, { outcome: string }> = {};
+  const results: Record<string, string> = {};
+  let failed = false;
+  const scopes = v.parse(
+    v.record(v.string(), v.string()),
+    Object.fromEntries(
+      steps.flatMap((step) => {
+        const condition =
+          v.parse(v.looseObject({ if: v.optional(v.string()) }), step).if ?? "";
+        return [
+          ...condition.matchAll(/needs\.ci-plan\.outputs\.([a-z_]+)/gu),
+        ].map((match) => [match.at(1), "true"]);
+      }),
+    ),
+  );
+  scopes["lockfile_ages_required"] = lockfileScope;
+  for (const step of steps) {
+    const { if: condition, id } = v.parse(
+      v.looseObject({ if: v.optional(v.string()), id: v.optional(v.string()) }),
+      step,
+    );
+    const enabled =
+      condition === undefined
+        ? !failed
+        : conditionEvaluator({
+            outcomes,
+            scopes,
+            event: "pull_request",
+            cancelled: false,
+          })(condition);
+    let outcome = "skipped";
+    if (enabled) {
+      outcome = failures.includes(step.name) ? "failure" : "success";
+    }
+    results[step.name] = outcome;
+    if (id !== undefined) {
+      outcomes[id] = { outcome };
+    }
+    if (outcome === "failure") {
+      failed = true;
+    }
+  }
+  return results;
+};
+
+test("an unrelated pre-install failure still runs planned safety, installation and later guards", () => {
+  for (const lockfileScope of ["true", "false"] as const) {
+    const results = simulateRestLeg({
+      failures: ["Changeset packages match changed files"],
+      lockfileScope,
+    });
+    expect(results["Changeset packages match changed files"]).toBe("failure");
+    expect(results["Standalone lockfile guard"]).toBe("success");
+    expect(results["Lockfile release-age guard"]).toBe(
+      lockfileScope === "true" ? "success" : "skipped",
+    );
+    expect(results["Install dependencies"]).toBe("success");
+    expect(results["Check i18n sync"]).toBe("success");
+    expect(results["Test remaining repository scripts"]).toBe("success");
+  }
+});
+
+test("a failed planned safety guard prevents installation", () => {
+  for (const guard of preInstallGuards.keys()) {
+    const results = simulateRestLeg({
+      failures: [guard],
+      lockfileScope: "true",
+    });
+    expect(results[guard]).toBe("failure");
+    expect(results["Install dependencies"]).toBe("skipped");
+  }
+});
+
+test("continued guard conditions preserve every previously runnable plan outcome", () => {
+  const scopeNames = [
+    ...new Set(
+      partitions.flatMap(({ steps }) =>
+        steps.flatMap((step) => {
+          const condition =
+            v.parse(v.looseObject({ if: v.optional(v.string()) }), step).if ??
+            "";
+          return [
+            ...condition.matchAll(/needs\.ci-plan\.outputs\.([a-z_]+)/gu),
+          ].map((match) => v.parse(v.string(), match.at(1)));
+        }),
+      ),
+    ),
+  ];
+  assertProperty(
+    "continued guard conditions preserve every previously runnable plan outcome",
+    fc.property(
+      fc.record({
+        event: fc.constantFrom(
+          "pull_request",
+          "merge_group",
+          "workflow_dispatch",
+        ),
+        scopes: fc.array(fc.boolean(), {
+          minLength: scopeNames.length,
+          maxLength: scopeNames.length,
+        }),
+      }),
+      (input) => {
+        const scopes = v.parse(
+          v.record(v.string(), v.string()),
+          Object.fromEntries(
+            scopeNames.map((name, index) => [
+              name,
+              input.scopes.at(index) ? "true" : "false",
+            ]),
+          ),
+        );
+        for (const [index, { steps }] of partitions.entries()) {
+          const id = partitionIds.at(index);
+          if (id === undefined) {
+            panic("CI check leg has no identifier");
+          }
+          const originals = v.parse(
+            jobSchema,
+            baseJobs["ci-checks"] ?? baseJobs[id],
+          ).steps;
+          const outcomes = Object.fromEntries(
+            steps.flatMap((step) => {
+              const stepId = v.parse(
+                v.looseObject({ id: v.optional(v.string()) }),
+                step,
+              ).id;
+              return stepId === undefined
+                ? []
+                : [[stepId, { outcome: "success" }]];
+            }),
+          );
+          outcomes["checkout"] = { outcome: "success" };
+          outcomes["install"] = {
+            outcome:
+              scopes["package_checks_required"] === "true"
+                ? "success"
+                : "skipped",
+          };
+          const evaluate = conditionEvaluator({
+            outcomes,
+            scopes,
+            event: input.event,
+            cancelled: false,
+          });
+          for (const step of steps) {
+            if (prerequisites.has(step.name)) {
+              continue;
+            }
+            const original = originals.find(({ name }) => name === step.name);
+            if (original === undefined) {
+              continue;
+            }
+            const originalCondition = v.parse(
+              v.looseObject({ if: v.optional(v.string()) }),
+              original,
+            ).if;
+            // Successful plans include intentionally skipped installation;
+            // every original runnable guard must survive either plan outcome.
+            if (
+              originalCondition !== undefined &&
+              !evaluate(originalCondition)
+            ) {
+              continue;
+            }
+            const condition = v.parse(
+              v.looseObject({ if: v.string() }),
+              step,
+            ).if;
+            expect(evaluate(condition), `${id}: ${step.name}`).toBe(true);
+          }
+        }
+      },
+    ),
+    { numRuns: 32 },
+  );
 });
