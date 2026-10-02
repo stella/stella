@@ -1221,9 +1221,6 @@ describe("dev env factories", () => {
     expect(
       readOrCreateDevContentEncryptionKey(otherRootDir).unwrap() === key,
     ).toBe(false);
-    expect(
-      statSync(devStatePath(rootDir, "content-encryption-key")).mode % 0o1_0000,
-    ).toBe(0o600);
     const steps = buildPersistentSteps({
       infraOffset: 0,
       infraPorts: infraPortsForOffset(0),
@@ -1235,6 +1232,19 @@ describe("dev env factories", () => {
       expect(step.env?.["CONTENT_ENCRYPTION_KEY"] === key).toBe(true);
     }
   });
+
+  // Windows reports synthetic permission bits; file ACLs are not modes.
+  test.skipIf(process.platform === "win32")(
+    "creates the content encryption key readable by its owner only",
+    () => {
+      const rootDir = createTempDir();
+      readOrCreateDevContentEncryptionKey(rootDir).unwrap();
+      expect(
+        statSync(devStatePath(rootDir, "content-encryption-key")).mode %
+          0o1_0000,
+      ).toBe(0o600);
+    },
+  );
 
   test("returns a typed error when local state cannot be created", () => {
     const rootDir = createTempDir();
