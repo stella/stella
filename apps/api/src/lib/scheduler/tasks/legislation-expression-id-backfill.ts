@@ -406,6 +406,7 @@ export const createLegislationExpressionIdBackfill =
         ),
       );
     }
+    return undefined;
   };
 
 export const backfillLegislationExpressionIds =

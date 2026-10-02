@@ -268,6 +268,7 @@ export const createCaseLawProvisionStateBackfillTask =
           ? run.value.step
           : run.value.type,
     });
+    return undefined;
   };
 
 export const backfillCaseLawProvisionState: SchedulerTask =

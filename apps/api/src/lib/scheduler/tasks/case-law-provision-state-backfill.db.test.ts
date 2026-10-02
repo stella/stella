@@ -250,25 +250,40 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     await client.query(
       "ALTER TABLE case_law_provision_citations ADD CONSTRAINT provision_citations_selection_values CHECK (selection IS NULL OR selection IN ('text', 'date-window')) NOT VALID",
     );
+    const timeout = Object.assign(
+      new Error("canceling statement due to statement timeout"),
+      { code: "57014" },
+    );
     try {
       const task = fixture({
         onQuery: (statement) => {
           if (statement.includes("VALIDATE CONSTRAINT")) {
-            throw Object.assign(
-              new Error("canceling statement due to statement timeout"),
-              { code: "57014" },
-            );
+            throw timeout;
           }
         },
       });
-      await task.run();
+      const outcome = await task.run();
+      if (outcome === undefined || outcome.isOk()) {
+        return panic("Expected a scheduler CHECK timeout failure result");
+      }
+      expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
+      expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
       expect(task.events).toEqual([]);
       expect(task.failures).toHaveLength(1);
       expect(task.failures.at(0)?.at(1)).toMatchObject({
         sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
       });
       const failure = task.failures.at(0)?.[0];
-      expect(failure).toMatchObject({ cause: expect.any(BackfillFailedError) });
+      expect(failure).toBeInstanceOf(ProvisionBackfillUnitError);
+      if (
+        !(failure instanceof ProvisionBackfillUnitError) ||
+        !(failure.cause instanceof BackfillFailedError)
+      ) {
+        return panic("Expected typed provision CHECK timeout failure");
+      }
+      expect(outcome.error.cause).toBe(failure);
+      expect(failure.cause.cause).toBe(timeout);
+      expect(timeout.code).toBe(PG_ERROR.QUERY_CANCELED);
       expect(isPgError(failure, PG_ERROR.QUERY_CANCELED)).toBe(true);
       expect(
         (
