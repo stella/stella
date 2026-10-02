@@ -669,3 +669,109 @@ test(
   },
   TIMEOUT,
 );
+
+test(
+  "contact birth precision and registration numbers reach the real screening evidence",
+  async () => {
+    const editionId = await activate("0", 0);
+    const base: SanctionsEntry = {
+      source: "eu",
+      issuer: SANCTIONS_SOURCES.eu.issuer,
+      sourceId: "precision-person",
+      referenceNumber: null,
+      entityType: "person",
+      names: [{ name: "Čeněk Šťastný", quality: "strong" }],
+      birthDates: [
+        { precision: "day", year: 1980, month: 4, day: 3, circa: false },
+      ],
+      nationalities: [],
+      identifiers: [],
+      addresses: [],
+      programme: null,
+      legalBasis: null,
+      listedOn: null,
+      sourceUrl: "https://example.test/precision",
+    };
+    const listedOrganization: SanctionsEntry = {
+      ...base,
+      sourceId: "registration-organization",
+      entityType: "organisation",
+      names: [{ name: "Listed Enterprise", quality: "strong" }],
+      birthDates: [],
+      identifiers: [
+        {
+          kind: "registration",
+          status: "listed",
+          label: "Registration",
+          number: "REG123",
+          country: null,
+        },
+      ],
+    };
+    const entries = [base, listedOrganization].map((payload) => ({
+      payload,
+      contentHash: createHash("sha256")
+        .update(JSON.stringify(payload))
+        .digest("hex"),
+    }));
+    await db.insert(sanctionsEntryPayloads).values(entries);
+    await db.insert(sanctionsEditionEntries).values(
+      entries.map(({ payload, contentHash }) => ({
+        editionId,
+        sourceEntryId: payload.sourceId,
+        contentHash,
+      })),
+    );
+    await db
+      .update(sanctionsEditions)
+      .set({ entryCount: entries.length })
+      .where(eq(sanctionsEditions.id, editionId));
+    const person = await addContact();
+    const full = {
+      ...person,
+      displayName: "Čeněk Šťastný",
+      dateOfBirthMonth: 4,
+      dateOfBirthDay: 3,
+    };
+    const matching = await prepare(full);
+    const dayMismatch = await prepare({ ...full, dateOfBirthDay: 4 });
+    const monthMismatch = await prepare({ ...full, dateOfBirthMonth: 5 });
+    const yearOnly = await prepare({
+      ...full,
+      dateOfBirthMonth: null,
+      dateOfBirthDay: null,
+    });
+    const hitFor = (work: Awaited<ReturnType<typeof prepare>>) =>
+      work.outcome.possibleMatches.find(
+        ({ sourceEntryId }) => sourceEntryId === "precision-person",
+      ) ?? panic("Precision fixture not matched");
+    expect(hitFor(matching).evidence.birthDate).toBe("match");
+    expect(hitFor(yearOnly).evidence.birthDate).toBe("match");
+    for (const mismatch of [dayMismatch, monthMismatch]) {
+      expect(hitFor(mismatch).evidence.birthDate).toBe("mismatch");
+      expect(hitFor(mismatch).score).toBeLessThan(hitFor(matching).score);
+    }
+    const contact = {
+      ...person,
+      type: "organization" as const,
+      displayName: "Other Display",
+      organizationName: "Distinct Trading",
+      registrationNumber: "REG123",
+    };
+    const byRegistration = await prepare(contact);
+    expect(
+      byRegistration.outcome.possibleMatches.map(
+        ({ sourceEntryId }) => sourceEntryId,
+      ),
+    ).toEqual(["registration-organization"]);
+    expect(
+      byRegistration.outcome.possibleMatches.at(0)?.evidence.identifier,
+    ).toBe("match");
+    const withoutRegistration = await prepare({
+      ...contact,
+      registrationNumber: null,
+    });
+    expect(withoutRegistration.outcome.possibleMatches).toEqual([]);
+  },
+  TIMEOUT,
+);
