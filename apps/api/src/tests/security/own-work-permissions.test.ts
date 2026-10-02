@@ -96,6 +96,7 @@ const contextForRole = (role: MemberRole): unknown => ({
   getWorkspaceAccess: async () => null,
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
   recordAuditEvent: async () => undefined,
   createAuditRecorder: () => async () => undefined,

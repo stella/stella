@@ -178,6 +178,7 @@ const produceUntilCut = ({
     heartbeat,
     ownership,
     owner: {
+      indexThread: async () => await Promise.resolve(),
       execution,
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
@@ -288,6 +289,7 @@ describe("a producing run", () => {
       deadlineMs: 60_000,
       heartbeat: { intervalMs: 1, renewEvery: 1 },
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution,
         owningAssistantMessage: undefined,
         recordAuditEvent: noAudit,
@@ -439,6 +441,7 @@ describe("a producing run", () => {
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership,
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution,
         owningAssistantMessage: undefined,
         recordAuditEvent: noAudit,

@@ -5,7 +5,12 @@ import { useNavigate } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
-import { DownloadIcon, EllipsisIcon, GitBranchIcon } from "@stll/ui/icons";
+import {
+  DownloadIcon,
+  EllipsisIcon,
+  GitBranchIcon,
+  PanelRightIcon,
+} from "@stll/ui/icons";
 import { Loader } from "@stll/ui/loader";
 import {
   DropdownMenu,
@@ -21,11 +26,22 @@ import { stellaToast } from "@stll/ui/toast";
 import type { PersistedChatMessage } from "@/components/chat/chat-ui-tools";
 import type { CreateDocumentDraft } from "@/components/chat/create-document-draft.logic";
 import { MessageExportMenu } from "@/components/chat/message-export-menu";
+import {
+  SidePanelChatAnnouncer,
+  SidePanelChatNote,
+} from "@/components/chat/side-panel-chat-status";
+import { useSidePanelChat } from "@/components/chat/use-request-chat-about";
 import { invalidateChatThreadLists } from "@/features/chat/queries";
+import type { TranslationKey } from "@/i18n/types";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import type { ChatThreadId, ChatThreadRef } from "@/lib/chat-thread-ref";
-import { chatThreadRoute, createChatThreadId } from "@/lib/chat-thread-ref";
+import {
+  chatThreadRoute,
+  createChatThreadId,
+  resolveChatContextMatterIds,
+  toChatThreadId,
+} from "@/lib/chat-thread-ref";
 import { unwrapEden } from "@/lib/errors/api";
 import { formatContextualTimestamp } from "@/lib/relative-time";
 import { toSafeId } from "@/lib/safe-id";
@@ -33,14 +49,39 @@ import { toSafeId } from "@/lib/safe-id";
 type ChatMessageActionsMenuProps = {
   canExport: boolean;
   canFork: boolean;
+  /** The chat's matter scope; the fork carries it, and an inspector tab
+   *  must be told it. Defaults to the thread's own matter. */
+  contextMatterIds?: readonly string[] | undefined;
   exportArtifact: CreateDocumentDraft | null;
   message: PersistedChatMessage;
   threadRef: ChatThreadRef;
 };
 
+/**
+ * Where a fork opens: in place of this chat, or beside it in the inspector.
+ * Two flat items rather than one item with a choice: the menu is a list of
+ * one-click actions, and each item keeps its own pending state in place.
+ */
+const FORK_DESTINATIONS = ["main", "inspector"] as const;
+type ForkDestination = (typeof FORK_DESTINATIONS)[number];
+
+const FORK_DESTINATION_LABELS = {
+  inspector: "chat.forkInSidePanel",
+  main: "chat.forkFromHere",
+} as const satisfies Record<ForkDestination, TranslationKey>;
+
+const FORK_DESTINATION_ICONS = {
+  inspector: PanelRightIcon,
+  main: GitBranchIcon,
+} as const satisfies Record<ForkDestination, unknown>;
+
+/** No matters beyond the thread's own: the fork keeps just that scope. */
+const NO_EXTRA_CONTEXT_MATTERS: readonly string[] = [];
+
 export const ChatMessageActionsMenu = ({
   canExport,
   canFork,
+  contextMatterIds = NO_EXTRA_CONTEXT_MATTERS,
   exportArtifact,
   message,
   threadRef,
@@ -48,6 +89,9 @@ export const ChatMessageActionsMenu = ({
   const t = useTranslations();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  // A fork to the side panel confirms on this action row: the menu closes
+  // on click, so the row is where the eye still is.
+  const sidePanelChat = useSidePanelChat();
   const triggerRef = useRef<HTMLButtonElement>(null);
   const pendingForkThreadId = useRef<ChatThreadId | null>(null);
   const [exportOpen, setExportOpen] = useState(false);
@@ -55,7 +99,7 @@ export const ChatMessageActionsMenu = ({
     threadRef.scope === "workspace" ? threadRef.workspaceId : undefined;
 
   const fork = useMutation({
-    mutationFn: async () => {
+    mutationFn: async (_destination: ForkDestination) => {
       if (pendingForkThreadId.current === null) {
         pendingForkThreadId.current = createChatThreadId();
       }
@@ -74,12 +118,29 @@ export const ChatMessageActionsMenu = ({
         );
       return unwrapEden(response);
     },
-    onSuccess: async ({ threadId }) => {
+    onMutate: (destination) => {
+      if (destination === "inspector") {
+        sidePanelChat.begin();
+      }
+    },
+    onSuccess: async ({ threadId }, destination) => {
       await invalidateChatThreadLists({ queryClient, workspaceId });
-      await navigate(chatThreadRoute({ threadId, workspaceId }));
+      if (destination === "inspector") {
+        sidePanelChat.open({
+          contextMatterIds: resolveChatContextMatterIds(
+            threadRef,
+            contextMatterIds,
+          ),
+          threadId: toChatThreadId(threadId),
+          workspaceId,
+        });
+      } else {
+        await navigate(chatThreadRoute({ threadId, workspaceId }));
+      }
       pendingForkThreadId.current = null;
     },
     onError: (error) => {
+      sidePanelChat.fail();
       getAnalytics().captureError(error);
       stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     },
@@ -119,23 +180,29 @@ export const ChatMessageActionsMenu = ({
               <DropdownMenuSeparator />
             </>
           )}
-          {canFork && (
-            <DropdownMenuItem
-              disabled={fork.isPending}
-              onClick={() => {
-                fork.mutate();
-              }}
-            >
-              {fork.isPending ? (
-                <Loader label={t("chat.forkingThread")} size="sm" />
-              ) : (
-                <GitBranchIcon aria-hidden="true" />
-              )}
-              {fork.isPending
-                ? t("chat.forkingThread")
-                : t("chat.forkFromHere")}
-            </DropdownMenuItem>
-          )}
+          {canFork &&
+            FORK_DESTINATIONS.map((destination) => {
+              const forking = fork.isPending && fork.variables === destination;
+              const Icon = FORK_DESTINATION_ICONS[destination];
+              return (
+                <DropdownMenuItem
+                  disabled={fork.isPending}
+                  key={destination}
+                  onClick={() => {
+                    fork.mutate(destination);
+                  }}
+                >
+                  {forking ? (
+                    <Loader label={t("chat.forkingThread")} size="sm" />
+                  ) : (
+                    <Icon aria-hidden="true" />
+                  )}
+                  {forking
+                    ? t("chat.forkingThread")
+                    : t(FORK_DESTINATION_LABELS[destination])}
+                </DropdownMenuItem>
+              );
+            })}
           {canExport && (
             <DropdownMenuItem onClick={() => setExportOpen(true)}>
               <DownloadIcon aria-hidden="true" />
@@ -144,6 +211,8 @@ export const ChatMessageActionsMenu = ({
           )}
         </DropdownMenuContent>
       </DropdownMenu>
+      <SidePanelChatNote status={sidePanelChat.status} />
+      <SidePanelChatAnnouncer status={sidePanelChat.status} />
       {canExport && (
         <MessageExportMenu
           anchor={triggerRef}

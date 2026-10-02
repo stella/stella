@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Focar sugestão: {topic}",
     "folioCitationFallback": "pág. {n}",
     "forkFromHere": "Criar um novo chat a partir daqui",
+    "forkInSidePanel": "Criar um novo chat a partir daqui no painel lateral",
     "forkedFrom": "Criado a partir de <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Criado a partir de um chat que não está mais disponível",
     "forkedThread": "De outro chat",
@@ -1101,6 +1102,10 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
+    },
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
@@ -1153,6 +1158,7 @@
       "viaProvider": "pelo provedor {provider}"
     },
     "newChat": "Novo chat",
+    "newChatInSidePanel": "O novo chat está disponível no painel lateral",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -1200,6 +1206,12 @@
     "richContentLoading": "Carregando conteúdo interativo…",
     "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
+    "selection": {
+      "askInNewChat": "Perguntar em um novo chat",
+      "quoteInReply": "Citar na resposta",
+      "quotedText": "“{quote}”",
+      "toolbarLabel": "Texto selecionado"
+    },
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
@@ -1598,6 +1610,7 @@
     },
     "fact": "Fato",
     "failed": "Falhou",
+    "files": "Arquivos",
     "filter": "Filtro",
     "filters": "Filtros",
     "find": "Localizar",
@@ -3262,7 +3275,6 @@
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
-      "filesHeading": "Arquivos",
       "howItRuns": "Como funciona",
       "importFailureFetch": "Não foi possível carregar a origem da habilidade.",
       "importFailureIntegrity": "A origem da habilidade mudou após a descoberta. Revise-a novamente.",
@@ -5986,7 +5998,8 @@
         "openReport": "Abrir relatório",
         "submit": "Exportar relatório",
         "templateLabel": "Modelo de relatório",
-        "title": "Exportar relatório"
+        "title": "Exportar relatório",
+        "withoutAiSummaries": "Exportar sem resumos de IA"
       },
       "saveAsTemplate": "Salvar como predefinição…",
       "selectProperty": "Selecione a propriedade",

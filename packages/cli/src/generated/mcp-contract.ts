@@ -47,6 +47,7 @@ export const MCP_ERROR_CODES = [
   "action_not_enabled",
   "action_admission_unavailable",
   "validation_error",
+  "result_too_large",
   "missing_scope",
   "feature_disabled",
   "not_found",

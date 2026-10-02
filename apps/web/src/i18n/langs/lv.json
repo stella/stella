@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Fokusēt ieteikumu: {topic}",
     "folioCitationFallback": "lpp. {n}",
     "forkFromHere": "Sākt jaunu tērzēšanu no šejienes",
+    "forkInSidePanel": "Sākt jaunu tērzēšanu no šejienes sānu panelī",
     "forkedFrom": "Izveidota no <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Izveidota no tērzēšanas, kas vairs nav pieejama",
     "forkedThread": "No citas tērzēšanas",
@@ -1101,6 +1102,10 @@
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
+    },
     "improvePrompt": "Uzlabot uzvedni",
     "improvePromptDraftChanged": "Melnraksts mainījās, tāpēc uzlabojums netika lietots.",
     "improvePromptPlainTextOnly": "Uzvedni var uzlabot tikai vienkārša teksta formā.",
@@ -1153,6 +1158,7 @@
       "viaProvider": "izmantojot {provider}"
     },
     "newChat": "Jauna tērzēšana",
+    "newChatInSidePanel": "Jaunā tērzēšana ir pieejama sānu panelī",
     "noPromptPresetOnly": "Nav ziņojuma, tikai sākotnējais iestatījums",
     "noThreads": "Sarunu vēl nav",
     "officeCitationUnavailable": "Šī atsauce vairs nav pieejama.",
@@ -1200,6 +1206,12 @@
     "richContentLoading": "Notiek interaktīvā satura ielāde…",
     "richContentTitle": "Interaktīvs saturs",
     "richContentUnavailable": "Šo saturu nevar droši parādīt.",
+    "selection": {
+      "askInNewChat": "Jautāt jaunā tērzēšanā",
+      "quoteInReply": "Citēt atbildē",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Atlasītais teksts"
+    },
     "sendError": "Nosūtot ziņu, radās problēma. Ja kļūda nepazūd, sazinieties ar atbalsta dienestu.",
     "sendErrorAnonymizationBlocked": "stella nevarēja anonimizēt vienu pielikumu, tāpēc nekas netika nosūtīts. Noņemiet failu vai nosūtiet šo ziņu bez anonimizācijas.",
     "sendErrorEmptyCompletion": "AI atgrieza tukšu atbildi. Mēģiniet vēlreiz vai pārfrāzējiet ziņu.",
@@ -1598,6 +1610,7 @@
     },
     "fact": "Fakts",
     "failed": "Neizdevās",
+    "files": "Faili",
     "filter": "Filtrs",
     "filters": "Filtri",
     "find": "Meklēt",
@@ -3262,7 +3275,6 @@
       "editSkill": "Rediģēt prasmi",
       "enableSkill": "Iespējot prasmi",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
-      "filesHeading": "Faili",
       "howItRuns": "Kā tā darbojas",
       "importFailureFetch": "Prasmes avotu neizdevās ielādēt.",
       "importFailureIntegrity": "Prasmes avots pēc atrašanas ir mainījies. Pārskatiet to vēlreiz.",
@@ -5986,7 +5998,8 @@
         "openReport": "Atvērt pārskatu",
         "submit": "Eksportēt pārskatu",
         "templateLabel": "Pārskata veidne",
-        "title": "Eksportēt pārskatu"
+        "title": "Eksportēt pārskatu",
+        "withoutAiSummaries": "Eksportēt bez AI kopsavilkumiem"
       },
       "saveAsTemplate": "Saglabāt kā iepriekšiestatījumu…",
       "selectProperty": "Izvēlieties rekvizītu",

@@ -1,3 +1,5 @@
+import { decodeRegistryNumericEntity } from "../shared/decode-registry-numeric-entity.js";
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { SudregParseError } from "./errors.js";
 import type { SudregAddress, SudregCompany, SudregWarning } from "./types.js";
 
@@ -23,12 +25,13 @@ const decodeHtmlEntities = (value: string): string => {
       continue;
     }
     decoded += value.slice(cursor, index);
-    if (entity.toLowerCase().startsWith("#x")) {
-      decoded += String.fromCodePoint(Number.parseInt(entity.slice(2), 16));
-    } else if (entity.startsWith("#")) {
-      decoded += String.fromCodePoint(Number.parseInt(entity.slice(1), 10));
+    if (entity.startsWith("#")) {
+      decoded += decodeRegistryNumericEntity(match[0]);
     } else {
-      decoded += NAMED_ENTITIES[entity.toLowerCase()] ?? match[0];
+      const name = entity.toLowerCase();
+      decoded += Object.hasOwn(NAMED_ENTITIES, name)
+        ? (NAMED_ENTITIES[name] ?? match[0])
+        : match[0];
     }
     cursor = index + match[0].length;
   }
@@ -217,7 +220,7 @@ export const parseAddress = (
 };
 
 const buildRegistryUrl = (mbs: string): string =>
-  `https://sudreg.pravosudje.hr/ords/r/esudreg/public/28?p28_sbt_mbs=${encodeURIComponent(mbs)}`;
+  `https://sudreg.pravosudje.hr/ords/r/esudreg/public/28?p28_sbt_mbs=${encodeRegistryComponent(mbs)}`;
 
 export const parseCompanyPage = (
   html: string,

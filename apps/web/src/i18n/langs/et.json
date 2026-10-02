@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Fookusta soovitus: {topic}",
     "folioCitationFallback": "lk {n}",
     "forkFromHere": "Alusta siit uut vestlust",
+    "forkInSidePanel": "Alusta siit uut vestlust külgpaneelis",
     "forkedFrom": "Loodud vestlusest <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Loodud vestlusest, mis pole enam saadaval",
     "forkedThread": "Teisest vestlusest",
@@ -1101,6 +1102,10 @@
     "greeting": "Millega soovite tegeleda?",
     "greetingSubtitle": "Alustage toimikust, dokumendist või lihtsast küsimusest.",
     "hideThread": "Peida vestlus",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {ja veel #} other {ja veel #}}"
+    },
     "improvePrompt": "Täiusta viipa",
     "improvePromptDraftChanged": "Mustand muutus, seega täiustust ei rakendatud.",
     "improvePromptPlainTextOnly": "Viipa saab täiustada ainult lihttekstina.",
@@ -1153,6 +1158,7 @@
       "viaProvider": "teenuse {provider} kaudu"
     },
     "newChat": "Uus vestlus",
+    "newChatInSidePanel": "Uus vestlus on külgpaneelis saadaval",
     "noPromptPresetOnly": "Sõnum puudub, ainult eelseadistus",
     "noThreads": "Vestlusi pole veel",
     "officeCitationUnavailable": "See viide pole enam saadaval.",
@@ -1200,6 +1206,12 @@
     "richContentLoading": "Interaktiivse sisu laadimine…",
     "richContentTitle": "Interaktiivne sisu",
     "richContentUnavailable": "Seda sisu ei saa turvaliselt kuvada.",
+    "selection": {
+      "askInNewChat": "Küsi uues vestluses",
+      "quoteInReply": "Tsiteeri vastuses",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Valitud tekst"
+    },
     "sendError": "Sõnumi saatmisel tekkis probleem. Kui viga püsib, võta ühendust toega.",
     "sendErrorAnonymizationBlocked": "stella ei saanud üht manust anonüümida, seega midagi ei saadetud. Eemalda fail või saada see sõnum anonüümimiseta.",
     "sendErrorEmptyCompletion": "AI tagastas tühja vastuse. Proovi uuesti või sõnasta oma sõnum ümber.",
@@ -1598,6 +1610,7 @@
     },
     "fact": "Fakt",
     "failed": "Ebaõnnestus",
+    "files": "Failid",
     "filter": "Filter",
     "filters": "Filtrid",
     "find": "Leia",
@@ -3262,7 +3275,6 @@
       "editSkill": "Muuda oskust",
       "enableSkill": "Luba oskus",
       "fileExists": "Selle teega fail on juba olemas",
-      "filesHeading": "Failid",
       "howItRuns": "Kuidas see käitub",
       "importFailureFetch": "Oskuse allikat ei saanud laadida.",
       "importFailureIntegrity": "Oskuse allikas muutus pärast avastamist. Vaata see uuesti üle.",
@@ -5986,7 +5998,8 @@
         "openReport": "Ava aruanne",
         "submit": "Ekspordi aruanne",
         "templateLabel": "Aruandemall",
-        "title": "Ekspordi aruanne"
+        "title": "Ekspordi aruanne",
+        "withoutAiSummaries": "Ekspordi ilma AI kokkuvõteteta"
       },
       "saveAsTemplate": "Salvesta eelseadena…",
       "selectProperty": "Valige omadus",

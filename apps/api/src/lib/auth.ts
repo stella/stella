@@ -117,6 +117,7 @@ import {
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { TENANT_ACTION_DETAIL } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   brandPersistedOrganizationId,
@@ -1995,7 +1996,12 @@ const resolveValidateAuth = async (
     organizationId: activeOrganizationId,
     userId,
   });
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = orgSettings;
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the
   // membership lookup for the lifetime of this request's transactions. This
@@ -2131,6 +2137,7 @@ const resolveValidateAuth = async (
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,
+      managedAIResidency,
       /**
        * Records audit rows in the supplied tx. Identity fields
        * (org/user/IP/UA) are bound from the request context;
@@ -2178,6 +2185,7 @@ const validateAuthResolutionCache = new WeakMap<
 
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
+    detail: { [TENANT_ACTION_DETAIL]: true },
     async resolve({ params, query, status, request, server }) {
       const initialWorkspaceId = readInitialWorkspaceId(params, query);
       const result = await memoizePerRequest(

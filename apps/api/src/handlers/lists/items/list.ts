@@ -27,6 +27,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 
 const paramsSchema = workspaceParams({ listId: tSafeId("legalList") });
@@ -75,7 +76,9 @@ const decodeCursor = (value: string): ItemCursor | null => {
 const readListItems = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, params, query }) {
-    const limit = query.limit ?? LIMITS.legalListItemsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListItemsPageSizeDefault,
+    );
     const conditions = [
       eq(legalListItems.workspaceId, workspaceId),
       eq(legalListItems.listId, params.listId),

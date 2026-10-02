@@ -54,7 +54,14 @@ const config = {
  */
 const prepareTemplate = createSafeRootHandler(
   config,
-  async function* ({ session, body, safeDb, orgAIConfig, user }) {
+  async function* ({
+    session,
+    body,
+    safeDb,
+    orgAIConfig,
+    managedAIResidency,
+    user,
+  }) {
     const organizationId = session.activeOrganizationId;
     const { file } = body;
     if (file.type !== DOCX_MIME_TYPE) {
@@ -67,6 +74,7 @@ const prepareTemplate = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -97,6 +105,7 @@ const prepareTemplate = createSafeRootHandler(
               await suggestTemplateFieldsOrEmpty({
                 documentText,
                 orgAIConfig,
+                managedAIResidency,
                 organizationId,
                 aiAnalytics,
               }),

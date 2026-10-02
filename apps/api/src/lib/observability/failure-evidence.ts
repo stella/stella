@@ -21,9 +21,14 @@
 
 import { Result } from "better-result";
 
+import {
+  ACTION_ADMISSION_REFUSALS,
+  isActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 import type { FailureBrand } from "@stll/errors";
 import { readFailureBrand } from "@stll/errors";
 
+import { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { errorClassNameFrom } from "@/api/lib/errors/error-tag";
 import {
   ExtractionWorkerError,
@@ -566,6 +571,11 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
   const fault = readKey(state, value, "$fault");
   const body = readKey(state, value, "error");
   const codeString = nonEmptyString(code);
+  const admission =
+    prototypes.includes(ActionAdmissionError.prototype) &&
+    isActionAdmissionCode(codeString)
+      ? ACTION_ADMISSION_REFUSALS[codeString]
+      : undefined;
   const sqlState = sqlStateFrom({ syscall, errno, code });
   const pgIdentifiers: Partial<Record<PgIdentifierProperty, string>> = {};
   if (sqlState !== undefined) {
@@ -581,6 +591,15 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
     ownStatus = statusCode;
   } else if (typeof status === "number") {
     ownStatus = status;
+  }
+  let handler: EvidenceNode["handler"];
+  if (isHandlerError) {
+    handler = {
+      status: typeof status === "number" ? status : 0,
+      code: codeString,
+    };
+  } else if (admission !== undefined) {
+    handler = { status: admission.status, code: codeString };
   }
   const node: EvidenceNode = {
     kind: nodeKind(isError, isTagged),
@@ -622,9 +641,7 @@ const readNode = (state: ReadState, value: object): ReadNodeResult => {
       bodyStatus: nestedKey(state, body, "status"),
       bodyCode: nestedKey(state, body, "code"),
     }),
-    handler: isHandlerError
-      ? { status: typeof status === "number" ? status : 0, code: codeString }
-      : undefined,
+    handler,
     brand: readFailureBrand(value, prototypes),
     prototypes,
     frame:

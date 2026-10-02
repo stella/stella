@@ -1094,6 +1094,7 @@
     "focusSuggestion": "Ustaw fokus na sugestii: {topic}",
     "folioCitationFallback": "s. {n}",
     "forkFromHere": "Utwórz stąd nowy czat",
+    "forkInSidePanel": "Utwórz stąd nowy czat w panelu bocznym",
     "forkedFrom": "Utworzono na podstawie <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Utworzono na podstawie czatu, który nie jest już dostępny",
     "forkedThread": "Z innego czatu",
@@ -1101,6 +1102,10 @@
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
+    },
     "improvePrompt": "Ulepsz prompt",
     "improvePromptDraftChanged": "Wersja robocza się zmieniła, więc ulepszenie nie zostało zastosowane.",
     "improvePromptPlainTextOnly": "Ulepszanie promptu jest dostępne tylko dla zwykłego tekstu.",
@@ -1153,6 +1158,7 @@
       "viaProvider": "przez {provider}"
     },
     "newChat": "Nowy czat",
+    "newChatInSidePanel": "Nowy czat jest dostępny w panelu bocznym",
     "noPromptPresetOnly": "Brak wiadomości, tylko ustawienie wstępne",
     "noThreads": "Brak rozmów",
     "officeCitationUnavailable": "To cytowanie nie jest już dostępne.",
@@ -1200,6 +1206,12 @@
     "richContentLoading": "Wczytywanie interaktywnej treści…",
     "richContentTitle": "Treść interaktywna",
     "richContentUnavailable": "Nie można bezpiecznie wyświetlić tej treści.",
+    "selection": {
+      "askInNewChat": "Zapytaj w nowym czacie",
+      "quoteInReply": "Zacytuj w odpowiedzi",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Zaznaczony tekst"
+    },
     "sendError": "Wystąpił problem podczas wysyłania wiadomości. Jeśli błąd będzie się powtarzał, skontaktuj się z pomocą techniczną.",
     "sendErrorAnonymizationBlocked": "stella nie mogła zanonimizować jednego załącznika, więc nic nie wysłano. Usuń plik albo wyślij tę wiadomość bez anonimizacji.",
     "sendErrorEmptyCompletion": "AI zwróciła pustą odpowiedź. Spróbuj ponownie lub przeformułuj wiadomość.",
@@ -1598,6 +1610,7 @@
     },
     "fact": "Fakt",
     "failed": "Niepowodzenie",
+    "files": "Pliki",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Znajdź",
@@ -3262,7 +3275,6 @@
       "editSkill": "Edytuj umiejętność",
       "enableSkill": "Włącz umiejętność",
       "fileExists": "Plik o tej ścieżce już istnieje",
-      "filesHeading": "Pliki",
       "howItRuns": "Jak działa",
       "importFailureFetch": "Nie udało się wczytać źródła umiejętności.",
       "importFailureIntegrity": "Źródło umiejętności zmieniło się po jego wykryciu. Przejrzyj je ponownie.",
@@ -5986,7 +5998,8 @@
         "openReport": "Otwórz raport",
         "submit": "Eksportuj raport",
         "templateLabel": "Szablon raportu",
-        "title": "Eksportuj raport"
+        "title": "Eksportuj raport",
+        "withoutAiSummaries": "Eksportuj bez podsumowań AI"
       },
       "saveAsTemplate": "Zapisz jako ustawienie wstępne…",
       "selectProperty": "Wybierz właściwość",
