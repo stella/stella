@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Résumé",
+      "caseFileMayHoldOthers": "Ce dossier peut également contenir d’autres décisions.",
       "citedBy": "Cité par",
       "cites": "Cite",
       "dissentByline": "Opinion dissidente : <bdi>{names}</bdi>",

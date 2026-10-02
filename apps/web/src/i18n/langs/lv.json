@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Kopsavilkums",
+      "caseFileMayHoldOthers": "Šajā lietā var būt arī citi nolēmumi.",
       "citedBy": "Atsaucas uz",
       "cites": "Citē",
       "dissentByline": "Atsevišķās domas: <bdi>{names}</bdi>",
