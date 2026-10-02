@@ -254,6 +254,7 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
     inputs: { heavy_only: true, sha: "a".repeat(40) },
     github: {
       sha: "b".repeat(40),
+      workflow_sha: "c".repeat(40),
       event_name: "workflow_dispatch",
       event: { pull_request: { draft: false } },
     },
@@ -306,12 +307,20 @@ const heavyCheckoutCensus = (workflow: CheckoutWorkflow) => {
         `Missing validated checkout ref: ${job}/${step.name ?? "checkout"}`,
       );
     }
-    expect(expressionValue(reference, context), job).toBe(context.inputs.sha);
+    const tooling = step.with?.["path"] === ".workflow-tooling";
+    if (tooling) {
+      expect(step.with?.["persist-credentials"], job).toBe(false);
+      expect(step.with?.["sparse-checkout"], job).toContain("scripts/retry.sh");
+      expect(step.with?.["sparse-checkout-cone-mode"], job).toBe(false);
+    }
+    expect(expressionValue(reference, context), job).toBe(
+      tooling ? context.github.workflow_sha : context.inputs.sha,
+    );
   }
   return checkouts;
 };
 
-test("every executed heavy checkout and dependency targets the validated SHA", () => {
+test("every executed heavy checkout targets the validated source or workflow tooling SHA", () => {
   const checkouts = heavyCheckoutCensus(ciWorkflow);
   expect(checkouts.some(({ job }) => job === "ci-plan")).toBe(true);
   expect(checkouts.some(({ job }) => job === "heavy-web-build")).toBe(true);
@@ -328,15 +337,26 @@ test("every executed heavy checkout and dependency targets the validated SHA", (
     expect(() => heavyCheckoutCensus(mutant)).toThrow(
       `Missing validated checkout ref: ${job}/`,
     );
+    if (step.with?.["path"] === ".workflow-tooling") {
+      checkout.with["ref"] = `\${{ inputs.sha }}`;
+      expect(() => heavyCheckoutCensus(mutant)).toThrow(
+        /Expected: "c{40}"\nReceived: "a{40}"/u,
+      );
+    }
   }
 });
 
-test("only main heavy forwards its validated SHA while ordinary checkouts use the event ref", () => {
+test("source checkouts use the selected event SHA while tooling uses the workflow SHA", () => {
   const validatedSha = "a".repeat(40);
   const eventSha = "b".repeat(40);
+  const workflowSha = "c".repeat(40);
   const mainContext = {
     inputs: { heavy_only: true, sha: validatedSha },
-    github: { sha: eventSha, workflow: mainWorkflow.name },
+    github: {
+      sha: eventSha,
+      workflow_sha: workflowSha,
+      workflow: mainWorkflow.name,
+    },
   };
   for (const [job, body] of Object.entries(ciWorkflow.jobs)) {
     for (const checkout of body.steps?.filter(({ uses }) =>
@@ -346,7 +366,10 @@ test("only main heavy forwards its validated SHA while ordinary checkouts use th
       if (reference === undefined) {
         continue;
       }
-      expect(expressionValue(reference, mainContext), job).toBe(validatedSha);
+      const tooling = checkout.with?.["path"] === ".workflow-tooling";
+      expect(expressionValue(reference, mainContext), job).toBe(
+        tooling ? workflowSha : validatedSha,
+      );
       for (const event of [
         "pull_request",
         "merge_group",
@@ -355,10 +378,15 @@ test("only main heavy forwards its validated SHA while ordinary checkouts use th
         expect(
           expressionValue(reference, {
             inputs: { heavy_only: false, sha: validatedSha },
-            github: { sha: eventSha, workflow: "CI Checks", event_name: event },
+            github: {
+              sha: eventSha,
+              workflow_sha: workflowSha,
+              workflow: "CI Checks",
+              event_name: event,
+            },
           }),
           job,
-        ).toBe("");
+        ).toBe(tooling ? workflowSha : "");
       }
     }
   }
