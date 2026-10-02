@@ -1,4 +1,4 @@
-import { Result, TaggedError } from "better-result";
+import { Result, TaggedError, type TaggedErrorClass } from "better-result";
 import { randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -9,7 +9,9 @@ type WriteGeneratedFileOptions = {
   write?: (path: string, content: string) => Promise<void>;
 };
 
-class GeneratedFileWriteError extends TaggedError("GeneratedFileWriteError")<{
+const GeneratedFileWriteErrorBase: TaggedErrorClass<"GeneratedFileWriteError"> =
+  TaggedError("GeneratedFileWriteError");
+class GeneratedFileWriteError extends GeneratedFileWriteErrorBase<{
   message: string;
   output: string;
   cause: unknown;
