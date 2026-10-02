@@ -104,7 +104,7 @@ const insertRevision = async ({
   });
 };
 
-const insertListedSkill = async (origin?: AgentSkillOrigin) =>
+const insertListedSkill = async (origin: AgentSkillOrigin) =>
   await insertTestSkill(testDb, {
     organizationId: ids.orgB,
     userId: ids.userB1,
@@ -145,7 +145,7 @@ const lastEditOf = async (skillId: SafeId<"agentSkill">) => {
 
 describe("a listed skill's last edit", () => {
   test("names the member who wrote the newest revision", async () => {
-    const skillId = await insertListedSkill();
+    const skillId = await insertListedSkill("authored");
     const at = new Date("2026-09-01T10:00:00.000Z");
     await insertRevision({
       skillId,
@@ -162,7 +162,7 @@ describe("a listed skill's last edit", () => {
   });
 
   test("follows the highest revision number, not the newest row", async () => {
-    const skillId = await insertListedSkill();
+    const skillId = await insertListedSkill("authored");
     const newest = new Date("2026-09-03T10:00:00.000Z");
     await insertRevision({
       skillId,
@@ -185,7 +185,7 @@ describe("a listed skill's last edit", () => {
   });
 
   test("is unattributed when a system write made the newest revision", async () => {
-    const skillId = await insertListedSkill();
+    const skillId = await insertListedSkill("authored");
     await insertRevision({
       skillId,
       revisionNumber: 2,
@@ -217,7 +217,7 @@ describe("a listed skill's last edit", () => {
       role: "member",
       createdAt: new Date(),
     });
-    const skillId = await insertListedSkill();
+    const skillId = await insertListedSkill("authored");
     const at = new Date("2026-09-01T10:00:00.000Z");
     await insertRevision({
       skillId,
@@ -231,7 +231,7 @@ describe("a listed skill's last edit", () => {
   });
 
   test("does not name an editor outside the organization", async () => {
-    const skillId = await insertListedSkill();
+    const skillId = await insertListedSkill("authored");
     const at = new Date("2026-09-01T10:00:00.000Z");
     // userA2 belongs to orgA only.
     await insertRevision({
