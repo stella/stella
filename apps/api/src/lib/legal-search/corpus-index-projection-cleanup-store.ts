@@ -25,6 +25,7 @@ import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-cont
 import type {
   CorpusIndexClient,
   CorpusIndexDeleteSettlement,
+  CorpusIndexDeleteSettlementRead,
   CorpusIndexError,
 } from "@/api/lib/legal-search/corpus-index-client";
 import {
@@ -324,9 +325,11 @@ export const retryCorpusProjectionCleanupTx = async (
   return rows.length;
 };
 
-type VerifyCorpusProjectionCleanupSettlementOptions = {
-  client: Pick<CorpusIndexClient, "readDeleteSettlement" | "search">;
-  lease: CorpusProjectionCleanupSettlementLease;
+type VerifyCorpusProjectionCleanupSettlementsOptions = {
+  client: Pick<CorpusIndexClient, "readDeleteSettlements" | "search">;
+  indexId: string;
+  /** Leases of `indexId`, all proved against one read of its split list. */
+  leases: readonly CorpusProjectionCleanupSettlementLease[];
 };
 
 export type CorpusProjectionCleanupSettlementLease = {
@@ -583,6 +586,17 @@ export type CorpusProjectionCleanupSettlementResult =
       proof: CorpusProjectionCleanupSettlementProof;
     };
 
+type CorpusProjectionCleanupSettlementVerdict = {
+  lease: CorpusProjectionCleanupSettlementLease;
+  result: Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>;
+};
+
+type ProveCorpusProjectionCleanupSettlementOptions = {
+  client: Pick<CorpusIndexClient, "search">;
+  lease: CorpusProjectionCleanupSettlementLease;
+  settlement: CorpusIndexDeleteSettlementRead;
+};
+
 /**
  * Opaque evidence that every split that could hold the deleted revisions
  * crossed the delete opstamp and that an exact revision query observed zero
@@ -606,26 +620,28 @@ export class CorpusProjectionCleanupSettlementProof {
     this.leaseToken = leaseToken;
   }
 
-  static async verify({
+  /**
+   * One verdict per lease, in lease order. The leases share one read of the
+   * index's split list, so a turn's listing cost does not grow with the
+   * number of delete tasks it proves; a failed read fails every lease.
+   */
+  static async verifyAll({
     client,
-    lease,
-  }: VerifyCorpusProjectionCleanupSettlementOptions): Promise<
-    Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>
+    indexId,
+    leases,
+  }: VerifyCorpusProjectionCleanupSettlementsOptions): Promise<
+    CorpusProjectionCleanupSettlementVerdict[]
   > {
-    const {
-      indexId,
-      intentIds,
-      deleteOpstamp,
-      deleteTaskCreatedAt,
-      leaseToken,
-    } = lease;
-    if (
-      intentIds.length === 0 ||
-      intentIds.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
-      !Number.isSafeInteger(deleteOpstamp) ||
-      deleteOpstamp < 0
-    ) {
-      return panic("Corpus projection settlement request is invalid");
+    for (const lease of leases) {
+      if (
+        lease.indexId !== indexId ||
+        lease.intentIds.length === 0 ||
+        lease.intentIds.length > CORPUS_PROJECTION_DELETE_MAX_REVISIONS ||
+        !Number.isSafeInteger(lease.deleteOpstamp) ||
+        lease.deleteOpstamp < 0
+      ) {
+        return panic("Corpus projection settlement request is invalid");
+      }
     }
     // Which splits the delete has to have reached, and why the rest are not
     // evidence of anything. The cleanup fence issues a delete only after the
@@ -639,12 +655,49 @@ export class CorpusProjectionCleanupSettlementProof {
     // after the task that inherited documents from an input published before
     // it; the exact revision count below is what refuses to settle then, and
     // it is the step that makes the proof exact rather than merely bounded.
-    const settlement = await client.readDeleteSettlement({
+    const settlements = await client.readDeleteSettlements({
       observer: "unobserved",
       indexId,
-      requiredOpstamp: deleteOpstamp,
-      deleteCreatedAt: deleteTaskCreatedAt,
+      tasks: leases.map(({ deleteOpstamp, deleteTaskCreatedAt }) => ({
+        requiredOpstamp: deleteOpstamp,
+        deleteCreatedAt: deleteTaskCreatedAt,
+      })),
     });
+    if (settlements.isErr()) {
+      return leases.map((lease) => ({
+        lease,
+        result: Result.err(settlements.error),
+      }));
+    }
+    if (settlements.value.length !== leases.length) {
+      return panic(
+        `Corpus index returned ${settlements.value.length} settlements for ${leases.length} delete tasks`,
+      );
+    }
+    const verdicts: CorpusProjectionCleanupSettlementVerdict[] = [];
+    for (const [index, lease] of leases.entries()) {
+      const settlement =
+        settlements.value.at(index) ??
+        panic("Corpus projection settlement lost its delete task");
+      verdicts.push({
+        lease,
+        result: await CorpusProjectionCleanupSettlementProof.prove({
+          client,
+          lease,
+          settlement,
+        }),
+      });
+    }
+    return verdicts;
+  }
+
+  private static async prove({
+    client,
+    lease: { indexId, intentIds, deleteOpstamp, leaseToken },
+    settlement,
+  }: ProveCorpusProjectionCleanupSettlementOptions): Promise<
+    Result<CorpusProjectionCleanupSettlementResult, CorpusIndexError>
+  > {
     if (settlement.isErr()) {
       return Result.err(settlement.error);
     }
