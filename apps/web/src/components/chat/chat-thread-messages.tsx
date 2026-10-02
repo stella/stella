@@ -1693,9 +1693,6 @@ const AssistantMessageParts = ({
   };
   return (
     <>
-      {firstThinkingPartIndex === -1 && reasoningTokenCount !== null && (
-        <AssistantReasoningTokenSummary count={reasoningTokenCount} />
-      )}
       {renderGroups.map((group) => {
         if (group.kind === "standard") {
           return renderEntry(group.entry, group.index);
@@ -1827,19 +1824,6 @@ const hasAssistantAnswerContent = (parts: readonly ChatPart[]): boolean => {
     }
   }
   return false;
-};
-
-const AssistantReasoningTokenSummary = ({ count }: { count: number }) => {
-  const t = useTranslations();
-  return (
-    <div className="text-muted-foreground flex items-center gap-1.5 text-xs">
-      <span>{t("chat.reasoning")}</span>
-      <span aria-hidden="true" className="text-foreground-placeholder">
-        ·
-      </span>
-      <ReasoningTokenCount count={count} />
-    </div>
-  );
 };
 
 const ReasoningTokenCount = ({ count }: { count: number }) => {

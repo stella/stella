@@ -102,7 +102,14 @@ const reviewSkillProposal = createSafeRootHandler(
           organizationId: session.activeOrganizationId,
           lock: "update",
         });
-        if (!canManageSkill({ skill, memberRole, userId: user.id })) {
+        if (
+          !canManageSkill({
+            skill,
+            memberRole,
+            userId: user.id,
+            spends: "update",
+          })
+        ) {
           throw new HandlerError({ status: 403, message: "Forbidden" });
         }
 

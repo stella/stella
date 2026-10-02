@@ -81,8 +81,8 @@ safety net before each structural extraction.
 - `apps/api/src/lib/observability/` — add an optional exporter interface,
   allowlisted record projection, trace/request correlation, configuration, and
   privacy regression tests.
-- `scripts/ratchet-baseline.json` — lower affected metrics only after the
-  implementation reduces them; never reseed upward.
+- `scripts/ratchet.ts --check` — compare affected metrics to the measured base;
+  increases require exact, justified allowances added in the same PR.
 
 **DB schema changes:** PR 3 adds a nullable usage-event idempotency key and a
 partial unique index scoped by organization. Historical rows and old API tasks

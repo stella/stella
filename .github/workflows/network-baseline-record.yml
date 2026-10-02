@@ -156,13 +156,24 @@ jobs:
         env:
           BASE_SHA: ${{ needs.resolve.outputs.base }}
           HEAD_SHA: ${{ needs.resolve.outputs.head }}
+          WORKFLOW_SHA: ${{ github.workflow_sha }}
           ALL_ROUTES: ${{ github.event_name == 'workflow_dispatch' && inputs.all || false }}
         run: |
           set -euo pipefail
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           git fetch --no-tags origin "$BASE_SHA"
           git show "$BASE_SHA:apps/web/e2e/network-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
-          git show "$BASE_SHA:apps/web/src/routeTree.gen.ts" > "$RUNNER_TEMP/base-route-tree.gen.ts"
+          # Use the workflow-owned physical-route projection as delivery. Revision
+          # routes are data; neither revision's scripts or configuration run.
+          git fetch --no-tags origin "$WORKFLOW_SHA"
+          trusted="$RUNNER_TEMP/record-route-validator"
+          mkdir -p "$trusted/apps/web/scripts"
+          git show "$WORKFLOW_SHA:apps/web/scripts/network-baseline-route-tree.ts" > "$trusted/apps/web/scripts/network-baseline-route-tree.ts"
+          git show "$WORKFLOW_SHA:apps/web/route-tree.config.ts" > "$trusted/apps/web/route-tree.config.ts"
+          git show "$WORKFLOW_SHA:apps/web/package.json" | jq '{private: true, type: "module", dependencies: {"@tanstack/router-generator": .devDependencies["@tanstack/router-generator"]}}' > "$trusted/package.json"
+          (cd "$trusted" && bun install --ignore-scripts --no-cache --no-save)
+          (cd "$trusted" && bun --no-install --no-env-file apps/web/scripts/network-baseline-route-tree.ts "$GITHUB_WORKSPACE" "$BASE_SHA" "$RUNNER_TEMP/base-route-tree.gen.ts")
+          (cd "$trusted" && bun --no-install --no-env-file apps/web/scripts/network-baseline-route-tree.ts "$GITHUB_WORKSPACE" "$HEAD_SHA" "$RUNNER_TEMP/head-route-tree.gen.ts")
           git diff --name-only --no-renames "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
           args=()
           if [[ "$ALL_ROUTES" == true ]]; then args+=(--all); fi
@@ -171,7 +182,7 @@ jobs:
             --recorded apps/web/e2e/network-baseline.json \
             --changed "$RUNNER_TEMP/changed-routes" \
             --base-route-tree "$RUNNER_TEMP/base-route-tree.gen.ts" \
-            --route-tree apps/web/src/routeTree.gen.ts "${args[@]}"
+            --route-tree "$RUNNER_TEMP/head-route-tree.gen.ts" "${args[@]}"
           unexpected=$(git diff --name-only "$HEAD_SHA" -- . ':(exclude)apps/web/e2e/network-baseline.json')
           untracked=$(git ls-files --others --exclude-standard)
           if [[ -n "${unexpected}${untracked}" ]]; then
