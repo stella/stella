@@ -86,7 +86,9 @@ describe("managed request catalog checks", () => {
         requests++;
         if (holding) {
           heldRequests++;
-          if (heldRequests === 2) {heldStarted.resolve(undefined);}
+          if (heldRequests === 2) {
+            heldStarted.resolve(undefined);
+          }
           return (await held.promise).clone();
         }
         return Response.json({ data: missing ? [] : [{ id: MODEL }] });

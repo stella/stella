@@ -165,10 +165,13 @@ describe("completed regional observations", () => {
       let waiting = false;
       let requests = 0;
       const monitor = fixture(async () => {
-        if (!waiting) {return catalog([MODEL]);}
+        if (!waiting) {
+          return catalog([MODEL]);
+        }
         requests++;
-        if (requests === MANAGED_AI_RESIDENCIES.length)
-          {started.resolve(undefined);}
+        if (requests === MANAGED_AI_RESIDENCIES.length) {
+          started.resolve(undefined);
+        }
         return (await pending.promise).clone();
       });
       let refreshing: ReturnType<typeof monitor.refresh> | undefined;
@@ -202,7 +205,9 @@ describe("completed regional observations", () => {
       const started = Promise.withResolvers<undefined>();
       let failing = false;
       const monitor = fixture(async () => {
-        if (!failing) {return catalog([MODEL]);}
+        if (!failing) {
+          return catalog([MODEL]);
+        }
         started.resolve(undefined);
         return (await pending.promise).clone();
       });
