@@ -7,7 +7,7 @@ type BrowserOriginGuardInput = {
   secFetchSite: string | null;
 };
 
-const originMatches = (
+export const isAllowedBrowserOrigin = (
   origin: string,
   allowedOrigins: BrowserOriginGuardInput["allowedOrigins"],
 ): boolean =>
@@ -29,7 +29,7 @@ export const shouldRejectBrowserMutation = ({
     return false;
   }
   if (origin !== null) {
-    return !originMatches(origin, allowedOrigins);
+    return !isAllowedBrowserOrigin(origin, allowedOrigins);
   }
   return secFetchSite === "same-site" || secFetchSite === "cross-site";
 };

@@ -136,6 +136,7 @@ import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   chatToolMapToArray,
   type ChatTool,
@@ -248,6 +249,7 @@ type StreamChatProps = {
   storedHistory: StoredHistory;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   /**
@@ -374,6 +376,7 @@ export const streamChat = async ({
   onFinish,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCacheKey,
   promptCachingEnabled,
   reasoningEffort,
@@ -456,9 +459,11 @@ export const streamChat = async ({
   });
 
   const primaryModel = resolveTanStackTextModel({
+    dataClass: "customer",
     modelId: devModelId,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     reasoningEffort,
     role: "chat",
   });
@@ -520,6 +525,7 @@ export const streamChat = async ({
       ? resolveFallbackTextModel({
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           primaryModel,
           threadId,
         })
@@ -547,6 +553,7 @@ export const streamChat = async ({
     fallbackModel,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     primaryModel,
     promptCacheKey,
     promptCachingEnabled,
@@ -885,6 +892,7 @@ const projectMcpToolSourceSchemasForProvider = ({
 type ResolveFallbackTextModelProps = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
   threadId: SafeId<"chatThread">;
 };
@@ -892,13 +900,16 @@ type ResolveFallbackTextModelProps = {
 const resolveFallbackTextModel = ({
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   primaryModel,
   threadId,
 }: ResolveFallbackTextModelProps): ResolvedTanStackTextModel | null => {
   try {
     const fallbackModel = resolveTanStackTextModel({
+      dataClass: "customer",
       organizationId,
       orgAIConfig,
+      managedAIResidency,
       role: "reasoning",
     });
     if (
@@ -947,6 +958,7 @@ const createChatAttemptAnalytics = ({
   workspaceId,
 }: CreateChatAttemptAnalyticsProps): TanStackAIAnalyticsCallbacks =>
   createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     promptCacheSurface,
     usageMetering: {
       actionType: "chat",
@@ -1003,6 +1015,7 @@ type RunChatAttemptsProps = {
   fallbackModel: ResolvedTanStackTextModel | null;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   primaryModel: ResolvedTanStackTextModel;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
@@ -1030,6 +1043,7 @@ const runChatAttempts = async function* ({
   fallbackModel,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   primaryModel,
   promptCacheKey,
   promptCachingEnabled,
@@ -1061,6 +1075,7 @@ const runChatAttempts = async function* ({
     modelId: devModelId,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
     runId,
@@ -1112,6 +1127,7 @@ const runChatAttempts = async function* ({
     modelId: undefined,
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     promptCacheKey,
     promptCachingEnabled,
     role: "reasoning",
@@ -1146,6 +1162,7 @@ type RunChatAttemptProps = {
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCacheKey: string;
   promptCachingEnabled: boolean;
   runId?: string | undefined;
@@ -1180,6 +1197,7 @@ const runChatAttempt = async function* ({
   modelId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCacheKey,
   promptCachingEnabled,
   runId,
@@ -1287,6 +1305,7 @@ const runChatAttempt = async function* ({
           modelId,
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           role,
           state,
           systemLayers,
@@ -1342,6 +1361,7 @@ const runChatAttempt = async function* ({
         modelId,
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         role,
         state,
         systemLayers,
@@ -1410,6 +1430,7 @@ type ChatRuntimeMiddlewareProps = {
   modelId: string | undefined;
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   role: ChatAttemptRole;
   state: ChatAttemptState;
   systemLayers: ChatSafePromptLayers;
@@ -1427,6 +1448,7 @@ const createChatRuntimeMiddleware = ({
   modelId,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   role,
   state,
   systemLayers,
@@ -1499,6 +1521,7 @@ const createChatRuntimeMiddleware = ({
         modelId,
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         role,
         tenantWorkspaceIds,
         onSummaryError: (error) => {

@@ -194,6 +194,12 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-offset-pagination.fixture.ts", [
     "no-offset-pagination/no-offset-pagination",
   ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.ts", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
     "no-optional-mutation-command/no-optional-mutation-command",
   ]),
@@ -883,6 +889,7 @@ export default defineConfig({
     "no-inline-timestamp-cursor-sql/no-inline-timestamp-cursor-sql": "error",
     "require-timestamp-id-cursor-codec/require-timestamp-id-cursor-codec":
       "error",
+    "require-tenant-page-limit/require-tenant-page-limit": "error",
     "no-direct-audit-log-insert/no-direct-audit-log-insert": "error",
     "no-ad-hoc-chat-request/no-ad-hoc-chat-request": "error",
     "scanned-file-boundary/scanned-file-boundary": "error",
@@ -1273,6 +1280,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-inline-timestamp-cursor-sql.ts",
     "./.oxlint-plugins/legislation-window.ts",
     "./.oxlint-plugins/require-timestamp-id-cursor-codec.ts",
+    "./.oxlint-plugins/require-tenant-page-limit.ts",
     "./.oxlint-plugins/require-pagination-cursor-schema.ts",
     "./.oxlint-plugins/require-bounded-request-schema.ts",
     "./.oxlint-plugins/no-unbounded-response-body.ts",

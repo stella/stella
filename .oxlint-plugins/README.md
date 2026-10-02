@@ -119,6 +119,7 @@ runtime validation, or integration tests.
 - [`require-query-limit`](./require-query-limit.ts) (`require-query-limit`): rejects potentially unbounded list queries without an explicit limit.
 - [`require-search-scope`](./require-search-scope.ts) (`require-search-scope`): requires search queries to carry their workspace or public-data scope.
 - [`require-timestamp-id-cursor-codec`](./require-timestamp-id-cursor-codec.ts) (`require-timestamp-id-cursor-codec`): requires the shared lossless codec for timestamp-and-ID cursors.
+- [`require-tenant-page-limit`](./require-tenant-page-limit.ts) (`require-tenant-page-limit`): requires resolved tenant `limit`, `pageSize`, and `windowSize` locals reading request pagination fields or canonical page defaults to wrap the complete expression with `normalizeTenantPageLimit`. Import aliases are supported, shadowed helpers are rejected, and schema maxima, mutation bounds, sentinel lookahead, anonymous public handlers, and public corpus readers stay out of scope.
 - [`require-timestamptz-column`](./require-timestamptz-column.ts) (`require-timestamptz-column`): requires timezone-aware PostgreSQL timestamp columns for instants.
 - [`require-transaction-abort`](./require-transaction-abort.ts) (`require-transaction-abort`): requires expected transaction failures to abort the transaction rather than return a partially committed result.
 

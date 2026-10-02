@@ -456,6 +456,7 @@ Continue drafting the termination analysis.
       ],
       organizationId: toSafeId<"organization">("org_compaction"),
       orgAIConfig: null,
+      managedAIResidency: "eu",
       preserveTokens: 20,
       role: "chat",
       tenantWorkspaceIds: [],

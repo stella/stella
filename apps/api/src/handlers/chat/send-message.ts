@@ -218,6 +218,7 @@ import {
   createGeneratedDocumentActiveDraftContext,
   hasPersistedGeneratedDocumentActiveDraftContext,
 } from "@/api/lib/chat/active-draft-context";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { isReadyGeneratedDocumentDraft } from "@/api/lib/chat/created-draft";
 import { expandThreadDataScope } from "@/api/lib/chat/data-scope";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
@@ -871,6 +872,7 @@ type AcceptIncomingTurnOptions = {
   effectiveContextMatterIds: SafeId<"workspace">[];
   lifecycle: ChatSendLifecycle;
   organizationId: SafeId<"organization">;
+  managedAIResidency: ManagedAIResidency;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
   thread: ChatThreadState;
@@ -889,6 +891,7 @@ const acceptIncomingTurn = async ({
   effectiveContextMatterIds,
   lifecycle,
   organizationId,
+  managedAIResidency,
   recordAuditEvent,
   safeDb,
   thread,
@@ -1038,6 +1041,8 @@ const acceptIncomingTurn = async ({
         ? await Result.tryPromise({
             try: async () =>
               await resolveChatSandboxPlan({
+                dataClass: "customer",
+                managedAIResidency,
                 organizationId,
                 runId: Bun.randomUUIDv7(),
                 userId,
@@ -1297,6 +1302,7 @@ type PrepareValidatedIncomingMessageOptions = {
     editApplyMode: NonNullable<ChatToolsInput["editApplyMode"]>;
     externalMcpToolsLoader: LazyExternalMcpToolsLoader;
     orgAIConfig: OrgAIConfig | null;
+    managedAIResidency: ManagedAIResidency;
     refRegistry: ReturnType<typeof createChatRefRegistry>;
     toolDefectMemo: ReturnType<typeof createChatToolDefectMemo>;
     usageLane: UsageLaneDecision | undefined;
@@ -1336,6 +1342,7 @@ const prepareValidatedIncomingMessage = async ({
     editApplyMode,
     externalMcpToolsLoader,
     orgAIConfig,
+    managedAIResidency,
     refRegistry,
     toolDefectMemo,
     usageLane,
@@ -1402,6 +1409,7 @@ const prepareValidatedIncomingMessage = async ({
       organizationId,
       memberRole: memberRole.role,
       orgAIConfig,
+      managedAIResidency,
       pinServerValidatedWorkspaceId,
       requestWorkspaceId: workspaceId,
       refRegistry,
@@ -1791,6 +1799,7 @@ export const createSendMessage = (
       getWorkspaceAccess,
       memberRole,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       pinServerValidatedWorkspaceId,
@@ -1821,6 +1830,7 @@ export const createSendMessage = (
       }
 
       yield* requireTanStackAIAvailableForRole({
+        dataClass: "customer",
         configStatus: orgAIConfigStatus,
         orgConfig: orgAIConfig,
         role: "chat",
@@ -2125,6 +2135,7 @@ export const createSendMessage = (
               editApplyMode,
               externalMcpToolsLoader,
               orgAIConfig,
+              managedAIResidency,
               refRegistry: validationRefRegistry,
               toolDefectMemo,
               usageLane,
@@ -2165,6 +2176,7 @@ export const createSendMessage = (
         yield* lifecycle.checkAdmission();
 
         const acceptedTurnResult = await acceptIncomingTurn({
+          managedAIResidency,
           accessibleSet,
           accessibleWorkspaceIds,
           body,
@@ -2284,6 +2296,7 @@ export const createSendMessage = (
             messages: messagesForContextInput,
             organizationId: session.activeOrganizationId,
             orgAIConfig,
+            managedAIResidency,
             reasoningEffort: chatReasoningEffort,
             safeDb,
             tenantWorkspaceIds: accessibleWorkspaceIds,
@@ -2344,6 +2357,7 @@ export const createSendMessage = (
           organizationId: session.activeOrganizationId,
           memberRole: memberRole.role,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
           usageLane: turnLane.lane,
           pinServerValidatedWorkspaceId,
@@ -2622,6 +2636,7 @@ export const createSendMessage = (
                 messages: [parsedMessage.message, resolvedResponseMessage],
                 organizationId: session.activeOrganizationId,
                 orgAIConfig,
+                managedAIResidency,
                 promptCachingEnabled,
                 recordAuditEvent,
                 safeDb,
@@ -2832,6 +2847,7 @@ export const createSendMessage = (
                     }
                   },
                   orgAIConfig,
+                  managedAIResidency,
                   organizationId: session.activeOrganizationId,
                   devModelId: chatModelOverride,
                   reasoningEffort: chatReasoningEffort,

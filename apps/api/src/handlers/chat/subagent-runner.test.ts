@@ -135,6 +135,7 @@ const runScriptedSubagent = async (
       },
       organizationId: ids.orgA,
       orgAIConfig,
+      managedAIResidency: "eu" as const,
       role: "fast",
       systemSafe: overrides.systemSafe ?? "Answer briefly.",
       systemUntrusted: overrides.systemUntrusted ?? "",

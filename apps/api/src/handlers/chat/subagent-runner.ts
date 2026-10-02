@@ -19,6 +19,7 @@ import type { AIRequestServiceTier, OrgAIConfig } from "@/api/lib/ai-config";
 import { getTemperatureForRole, resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   chatToolMapToArray,
   type ChatToolMap,
@@ -56,6 +57,7 @@ type RunSubagentMetering = {
 export type RunSubagentOptions = {
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   role: ModelRole;
   modelId?: string | undefined;
   /**
@@ -196,6 +198,8 @@ export const runSubagent = async (
   dependencies: RunSubagentDependencies = defaultRunSubagentDependencies,
 ): Promise<RunSubagentResult> => {
   const model = dependencies.resolveModel({
+    dataClass: "customer",
+    managedAIResidency: options.managedAIResidency,
     modelId: options.modelId,
     organizationId: options.organizationId,
     orgAIConfig: options.orgAIConfig,
@@ -205,6 +209,7 @@ export const runSubagent = async (
   const abortController = abortControllerFromSignal(options.abortSignal);
 
   const analytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "subagent",
       organizationId: options.organizationId,

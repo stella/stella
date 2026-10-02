@@ -140,6 +140,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       distinctId: "user_123",
       feature: "chat.stream",
@@ -234,6 +235,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     // organization id must group generation, completion, and failure events
     // exactly like the metering-derived id does.
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "case-law.analysis",
       organizationId: orgId,
@@ -306,6 +308,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
       modelRole: "chat",
@@ -391,6 +394,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     };
     const { safeDb } = createScopedDbMock(tx);
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics: {
         capture: () => undefined,
         flush: async () => undefined,
@@ -452,6 +456,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     };
     const { safeDb } = createScopedDbMock(tx);
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics: {
         capture: () => undefined,
         flush: async () => undefined,
@@ -537,6 +542,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
       modelRole: "chat",
@@ -630,6 +636,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
       modelRole: "chat",
@@ -674,6 +681,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
@@ -727,6 +735,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       env.REQUIRE_PERSONAL_AI_KEY = true;
 
       const callbacks = createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics,
         feature: "chat.suggested-prompts",
         traceId: "trace_missing_model",
@@ -773,6 +782,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       const { logger } = await import("@/api/lib/observability/logger");
       const errorSpy = spyOn(logger, "error");
       const callbacks = createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
           flush: async () => undefined,
@@ -870,6 +880,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     const { logger } = await import("@/api/lib/observability/logger");
     const errorSpy = spyOn(logger, "error");
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics: {
         capture: () => undefined,
         flush: async () => undefined,
@@ -977,6 +988,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
           flush: async () => undefined,
@@ -986,6 +998,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
         traceId: "trace_provider_unavailable",
       }).captureError({ status: 503 });
       createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
           flush: async () => undefined,
@@ -1043,6 +1056,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     });
     const events: Parameters<ServerAnalytics["capture"]>[0][] = [];
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics: {
         capture: (event) => {
           events.push(event);
@@ -1136,6 +1150,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
@@ -1284,6 +1299,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     // Template filling shares one callbacks instance across concurrent
     // field resolutions: each run's totals and tool count must stay its own.
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "templates.fill",
       orgAIConfig: createOpenAIOrgAIConfig(),
@@ -1373,6 +1389,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       identifyOrganizationGroup: () => undefined,
     };
     const callbacks = createTanStackAIAnalyticsCallbacks({
+      dataClass: "public_corpus",
       analytics,
       feature: "chat.stream",
       orgAIConfig: createOpenAIOrgAIConfig(),
@@ -1416,6 +1433,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
           flush: async () => undefined,
@@ -1474,6 +1492,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
     try {
       for (const error of anticipated) {
         createTanStackAIAnalyticsCallbacks({
+          dataClass: "public_corpus",
           analytics: silentAnalytics,
           feature: "templates.suggestFields",
           traceId: "trace_anticipated",
@@ -1483,6 +1502,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
       expect(recording.exceptions()).toEqual([]);
 
       createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: silentAnalytics,
         feature: "templates.suggestFields",
         traceId: "trace_defect",
@@ -1515,6 +1535,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
           flush: async () => undefined,
@@ -1546,6 +1567,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
           flush: async () => undefined,
@@ -1580,6 +1602,7 @@ describe("createTanStackAIAnalyticsCallbacks", () => {
 
     try {
       createTanStackAIAnalyticsCallbacks({
+        dataClass: "public_corpus",
         analytics: {
           capture: () => undefined,
           flush: async () => undefined,

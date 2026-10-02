@@ -181,7 +181,7 @@ const prepareWireRequest = ({
       chatModel: scenario === "bad-request" ? wireChatModel(provider) : model,
       provider,
     }),
-    { organizationId: null },
+    { dataClass: "public_corpus", organizationId: null },
   );
   // The chat attempt's own request options, so each cassette pins the
   // request a chat turn sends (its system prompt aside: the scenarios send
@@ -196,9 +196,11 @@ const prepareWireRequest = ({
         ? resolved
         : {
             ...resolved,
-            adapter: createTanStackTextAdapterFactory({ apiKey, provider })(
-              model,
-            ),
+            adapter: createTanStackTextAdapterFactory({
+              dataClass: "public_corpus",
+              apiKey,
+              provider,
+            })(model),
           },
     modelTools: chatToolMapToArray({ [WIRE_TOOL_NAME]: wireTool() }),
     role: "chat",

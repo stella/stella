@@ -9,6 +9,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedInvoiceId } from "@/api/lib/safe-id-boundaries";
 
 const readInvoicesQuerySchema = t.Object({
@@ -45,7 +46,9 @@ const readInvoices = createSafeHandler(
     query: readInvoicesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.invoicesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.invoicesPageSizeDefault,
+    );
     const conditions = [eq(invoices.workspaceId, workspaceId)];
 
     if (query.cursor) {

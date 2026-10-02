@@ -58,6 +58,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "ACTION_ADMISSION_LEASE_MS",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
+  "ACTION_REQUEST_MAX_BYTES",
+  "ACTION_RESPONSE_MAX_BYTES",
+  "ACTION_PAGE_SIZE_MAX",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -778,6 +781,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // ci-result evaluates each independently scoped suite in folded jobs.
+  "FOLDED_SUITES",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.
@@ -818,6 +823,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",
+  // Nightly issue reporter: suppress writes while exercising failure reporting.
+  "DRY_RUN",
   "E2E_API_URL",
   "E2E_EDGE_HEADER_NAME",
   "E2E_EDGE_HEADER_VALUE",
@@ -846,6 +853,11 @@ export const TOOLING_ENV_KEYS = new Set([
   "MERGE_GROUP_HEAD_REF",
   "MODE",
   "NETWORK_CANARY_URL",
+  "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY",
+  "OSV_SCANNER_MIRROR_RELEASE_URL",
+  "OSV_SCANNER_PRIMARY_RELEASE_URL",
+  "OSV_SCANNER_RELEASE_VERSION",
+  "OSV_SCANNER_SHA256",
   "PGLITE_TEST_SNAPSHOT",
   "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
@@ -879,6 +891,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "REPOSITORY",
   "RETRY_ATTEMPTS",
   "RETRY_DELAYS_SECONDS",
+  // Nightly issue reporter: workflow run linked from the failure issue.
+  "RUN_URL",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
