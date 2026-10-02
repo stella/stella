@@ -191,14 +191,15 @@ test(
       fc.asyncProperty(entity, async (raw) => {
         const baseline = await expectRegistryResponse(
           { totalResults: 1, companies: [raw] },
-          async () => lookupByBusinessId("0112038-9"),
+          async () =>
+            lookupByBusinessId("0112038-9", { observer: "unobserved" }),
         );
         expect(baseline?.businessId).toBe(raw.businessId.value);
         await forEachRegistryMutation(
           { totalResults: 1, companies: [raw] },
           async (mutated) => {
             const parsed = await expectRegistryResponse(mutated, async () =>
-              lookupByBusinessId("0112038-9"),
+              lookupByBusinessId("0112038-9", { observer: "unobserved" }),
             );
             if (parsed === undefined) {
               return;

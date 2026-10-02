@@ -6,6 +6,7 @@ import type {
   EntityCheckResult,
   EntityCheckSubject,
 } from "@stll/business-registries/entity-checks";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -13,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 // counterparty_check chat tool.
 
 export type RunEntityCheckSharedProps = {
+  observer: RegistryRequestObservation;
   check: EntityCheckKind;
   subject: EntityCheckSubject;
   signal?: AbortSignal | undefined;
@@ -26,13 +28,14 @@ export type RunEntityCheckSharedProps = {
  */
 export const runEntityCheckShared = async ({
   check,
+  observer,
   subject,
   signal,
   runCheck = runEntityCheck,
 }: RunEntityCheckSharedProps): Promise<
   Result<EntityCheckResult, HandlerError>
 > => {
-  const result = await runCheck({ kind: check, subject, signal });
+  const result = await runCheck({ kind: check, subject, signal, observer });
   if (result.isOk()) {
     return Result.ok(result.value);
   }

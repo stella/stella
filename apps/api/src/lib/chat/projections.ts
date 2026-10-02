@@ -1635,6 +1635,29 @@ const caseLawDecisionProjection = v.strictObject({
   // than leaving the caller to derive one from `source.adapterKey`.
   sourceAttributionUrl: v.optional(v.nullable(publicUrl())),
   text: v.nullable(v.string()),
+  outline: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          title: v.pipe(
+            v.string(),
+            v.description(
+              "Heading or numbered paragraph opening, in document order.",
+            ),
+          ),
+          cursor: v.pipe(
+            v.string(),
+            v.description(
+              "Pass as cursor with this decision id to read from this heading; citation lists are skipped.",
+            ),
+          ),
+        }),
+      ),
+      v.description(
+        'Navigation entries for one decision, supplied by default on the cursor-less window or requested with include: ["outline"], when AI use of the text is permitted.',
+      ),
+    ),
+  ),
   charCount: v.nullable(v.number()),
   truncated: v.boolean(),
   // Why there is no text, when there is none. At most one is present, and
