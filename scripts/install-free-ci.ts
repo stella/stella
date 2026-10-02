@@ -1151,6 +1151,7 @@ const walkSteps = ({
     const uses = step["uses"];
     const label = `${prefix}${stepTitle(step, position)}`;
     const condition = conditionOperands(step["if"]);
+    const stepInstalls: InstallRecord[] = [];
     const covered = new Set(
       installs
         .filter((install) =>
@@ -1184,7 +1185,7 @@ const walkSteps = ({
         invocations.push({ classification, command, job, step: label });
       }
       for (const dir of result.installs) {
-        installs.push({ condition, dir });
+        stepInstalls.push({ condition, dir });
       }
     } else if (typeof uses === "string" && uses.startsWith(LOCAL_ACTION)) {
       const actionFile = ["action.yml", "action.yaml"]
@@ -1216,9 +1217,17 @@ const walkSteps = ({
       // Only an unconditional install inside the action is sure to run.
       for (const install of inner.installs) {
         if (install.condition.length === 0 && !covered.has(install.dir)) {
-          installs.push({ condition, dir: install.dir });
+          stepInstalls.push({ condition, dir: install.dir });
         }
       }
+    }
+    // A failed optional install leaves later workflow steps executable.
+    // Expressions may permit failure too, so only literal false is trusted.
+    if (
+      step["continue-on-error"] === undefined ||
+      step["continue-on-error"] === false
+    ) {
+      installs.push(...stepInstalls);
     }
   }
   return { installs, invocations };

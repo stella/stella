@@ -434,6 +434,41 @@ describe("install-free invocation classification", () => {
     ).toEqual(["install", "install", "files"]);
   });
 
+  test.each([
+    { continuation: "true", kinds: ["install", "files"] },
+    { continuation: `\${{ inputs.optional }}`, kinds: ["install", "files"] },
+    { continuation: "false", kinds: ["install"] },
+  ])(
+    "an install with continue-on-error $continuation covers only successful steps",
+    ({ continuation, kinds: expectedKinds }) => {
+      for (const directive of [
+        "run: bun ci",
+        "uses: ./.github/actions/install",
+      ]) {
+        const root = repository(
+          [
+            "jobs:",
+            "  job:",
+            "    steps:",
+            `      - ${directive}`,
+            `        continue-on-error: ${continuation}`,
+            "      - run: bun scripts/check.ts",
+          ].join("\n"),
+          {
+            ".github/actions/install/action.yml":
+              "runs:\n  using: composite\n  steps:\n    - shell: bash\n      run: bun ci\n",
+          },
+        );
+        expect(
+          installFreeInvocations({ root, workflow: CI_WORKFLOW }).map(
+            ({ classification }) => classification.type,
+          ),
+          directive,
+        ).toEqual(expectedKinds);
+      }
+    },
+  );
+
   test("a later step is covered only by an install its condition implies", () => {
     const root = repository(
       [
