@@ -1629,7 +1629,7 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
     "ftp://example.org/new-type",
     "https://example.org/new-type?a=1&amp;amp;b=2",
   ]) {
-    test(`raw listing replaces older stored root URL and diagnostic: ${current}`, async () => {
+    test(`historical four-variable listing replaces older stored root URL and diagnostic: ${current}`, async () => {
       const envelope = encodeSourceRawEnvelope({
         listing: JSON.stringify({
           ...firstFixtureBinding,
@@ -1644,6 +1644,8 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
         metadata: {
           celex: "62013TO0488",
           cdmType: "https://example.org/old-type",
+          manifestationUri: "https://example.org/stored-item?a=1&amp;amp;b=2",
+          languageUri: "https://example.org/stored-language",
           metadataUrlDiagnostics: {
             entries: [{ address: "cdmType", reason: "invalid-url" }],
             overflowCount: 0,
@@ -1652,6 +1654,14 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
       });
       expect(outcome.type).toBe("parsed");
       if (outcome.type === "parsed") {
+        expect(outcome.result.metadata).toHaveProperty(
+          "manifestationUri",
+          "https://example.org/stored-item?a=1&amp;amp;b=2",
+        );
+        expect(outcome.result.metadata).toHaveProperty(
+          "languageUri",
+          "https://example.org/stored-language",
+        );
         if (current.startsWith("ftp:")) {
           expect(outcome.result.metadata).not.toHaveProperty("cdmType");
           expect(outcome.result.metadata).toHaveProperty(
@@ -1670,6 +1680,41 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
       }
     });
   }
+
+  test("a current six-variable listing replaces every owned stored URL with its stated spelling", async () => {
+    const manifestationUri = "https://example.org/new-item?a=1&amp;amp;b=2";
+    const languageUri = "https://example.org/new-language?a=1&amp;b=2";
+    const cdmType = "https://example.org/new-type?a=1&amp;amp;b=2";
+    const envelope = encodeSourceRawEnvelope({
+      listing: JSON.stringify({
+        ...enBinding,
+        manifestation: { type: "uri", value: manifestationUri },
+        language: { type: "uri", value: languageUri },
+        type: { type: "uri", value: cdmType },
+      }),
+      document: fulltextHtml,
+    });
+    const outcome = await reparse({
+      ...storedPayload(fulltextHtml),
+      raw: new TextEncoder().encode(envelope),
+      contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+      metadata: {
+        celex: "62013TO0488",
+        manifestationUri: "https://example.org/old-item",
+        languageUri: "https://example.org/old-language",
+        cdmType: "https://example.org/old-type",
+      },
+    });
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type === "parsed") {
+      expect(outcome.result.metadata).toMatchObject({
+        manifestationUri,
+        languageUri,
+        cdmType,
+      });
+      expect(outcome.result.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    }
+  });
 
   test("malformed stored URL shapes produce exact defects without rejecting replay", async () => {
     const outcome = await reparse({

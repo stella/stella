@@ -1412,19 +1412,36 @@ const ecjPublisherMetadata = (
           try: (): unknown => JSON.parse(rawBinding),
           catch: () => undefined,
         }).unwrapOr(undefined);
-  const binding = isSparqlResult(parsedBinding)
-    ? {
-        manifestationUri: toMetadataUrl(
-          parsedBinding.manifestation.value,
-          "transport-json",
-        ),
-        languageUri: toMetadataUrl(
-          parsedBinding.language.value,
-          "transport-json",
-        ),
-        cdmType: toMetadataUrl(parsedBinding.type.value, "transport-json"),
-      }
-    : {};
+  // Historical listings selected four variables; each stated URL owns its
+  // replay address even when another current listing variable was not stored.
+  const manifestation =
+    isRecord(parsedBinding) && isSparqlBinding(parsedBinding["manifestation"])
+      ? parsedBinding["manifestation"]
+      : undefined;
+  const language =
+    isRecord(parsedBinding) && isSparqlBinding(parsedBinding["language"])
+      ? parsedBinding["language"]
+      : undefined;
+  const cdmType =
+    isRecord(parsedBinding) && isSparqlBinding(parsedBinding["type"])
+      ? parsedBinding["type"]
+      : undefined;
+  const binding = {
+    ...(manifestation === undefined
+      ? {}
+      : {
+          manifestationUri: toMetadataUrl(
+            manifestation.value,
+            "transport-json",
+          ),
+        }),
+    ...(language === undefined
+      ? {}
+      : { languageUri: toMetadataUrl(language.value, "transport-json") }),
+    ...(cdmType === undefined
+      ? {}
+      : { cdmType: toMetadataUrl(cdmType.value, "transport-json") }),
+  };
   const source = checkedDecisionMetadata({
     ...binding,
     ...(facts === undefined ? {} : noticeMetadata(facts)),

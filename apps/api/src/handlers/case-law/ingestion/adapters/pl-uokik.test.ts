@@ -1378,6 +1378,29 @@ for (const name of [
     const page = $.html();
     const detail = parsePlUokikDetail(page) ?? panic("fixture has no detail");
     const decision = decisionOf(await buildFrom(entry, page));
+    if (name.includes("\\")) {
+      for (const label of labels) {
+        const files =
+          detail.fields.find((field) => field.label === label)?.files ?? [];
+        expect(files.length).toBeGreaterThan(0);
+        for (const file of files) {
+          expect(file.name).toBe(name);
+        }
+      }
+      expect(decision.plainTextOutcome.type).toBe("item_build_failed");
+      if (decision.plainTextOutcome.type === "item_build_failed") {
+        expect(decision.plainTextOutcome.error.reason).toBe("rtf-syntax");
+      }
+      expect(decision.metadata).toHaveProperty(
+        "plainTextFailureReason",
+        "rtf-syntax",
+      );
+      expect(decision.metadata["decisionFiles"]).toBeUndefined();
+      expect(decision.metadata["appealRulings"]).toBeUndefined();
+      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      expect(decision.documentUrl).toBeUndefined();
+      return;
+    }
     const expectedUrl = plUokikFileUrl(WITH_RULINGS, name);
     const diagnostics: { address: string; reason: string }[] = [];
     for (const [label, key] of [
@@ -1386,11 +1409,7 @@ for (const name of [
     ] as const) {
       const files =
         detail.fields.find((field) => field.label === label)?.files ?? [];
-      if (name.includes("\\")) {
-        expect(files).toEqual([]);
-      } else {
-        expect(files.length).toBeGreaterThan(0);
-      }
+      expect(files.length).toBeGreaterThan(0);
       const stored = decision.metadata[key];
       expect(Array.isArray(stored) ? stored.length : 0).toBe(files.length);
       for (const index of files.keys()) {

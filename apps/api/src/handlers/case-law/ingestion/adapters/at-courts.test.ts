@@ -18,6 +18,7 @@ import {
   createAtCourtsAdapter,
 } from "./at-courts";
 import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "./at-courts.metadata-urls";
+import { AT_UMSE_SOURCE } from "./at-umse";
 import { rejectionOf, requireReconciliation } from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
@@ -851,21 +852,30 @@ describe("RIS metadata URL provenance", () => {
 });
 
 it("RIS related decisions remain display text even when they resemble a URL", async () => {
-  const item = listingItem();
-  nestedValue(item, ["Data", "Metadaten", "Judikatur", "Justiz"])["Bezug"] =
-    "https://example.org/item?a=1&amp;b=2";
-  const decision = assembleAtRisDecision(AT_COURTS_SOURCE, item, {
-    documentXml: await fixtureXml(),
+  const listing: unknown = await Bun.file(
+    new URL("__fixtures__/at-ris-listing-umse.json", import.meta.url),
+  ).json();
+  const item = nestedValue(listing, [
+    "OgdSearchResult",
+    "OgdDocumentResults",
+    "OgdDocumentReference",
+  ]);
+  nestedValue(item, ["Data", "Metadaten", "Judikatur", "Umse", "Bezug"])[
+    "item"
+  ] = "https://example.org/item?a=1&amp;b=2";
+  const decision = assembleAtRisDecision(AT_UMSE_SOURCE, item, {
+    documentXml: await Bun.file(
+      new URL("../parsers/__fixtures__/at-ris-umse-text.xml", import.meta.url),
+    ).text(),
   });
   const projected = toPlainTextIngestionResult(
     decision,
     AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
   ).unwrap();
   for (const metadata of [decision.metadata, projected.metadata]) {
-    expect(metadata).toHaveProperty(
-      "relatedDecisions",
+    expect(metadata).toHaveProperty("relatedDecisions", [
       "https://example.org/item?a=1&b=2",
-    );
+    ]);
     expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
   }
 });

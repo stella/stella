@@ -41,9 +41,9 @@ test("source schemas require every constructed URL branch without accepting raw 
   // @ts-expect-error Constructed nested URL branches cannot be omitted.
   approveMetadataUrls(source, { url: "url", documents: { items: {} } });
   expect(() => {
-    // @ts-expect-error Scalar URL arrays have no metadata contract.
     approveMetadataUrls(
       { urls: [toMetadataUrl(raw.url, "decoded")] },
+      // @ts-expect-error Scalar URL arrays have no metadata contract.
       { urls: { items: "url" } },
     );
   }).toThrow("Scalar URL arrays have no metadata schema contract");
@@ -358,9 +358,9 @@ test("opaque source branches unwrap before storage without interpreting wrapper-
       ? { href: toMetadataUrl("https://example.test/?q=&amp;", "decoded") }
       : opaqueMetadataValue("Izba");
   const chamber = chamberBranch("opaque");
-  // @ts-expect-error Opaque alternatives cannot erase the constructed object branch.
   approveMetadataUrls(
     { chamber },
+    // @ts-expect-error Opaque alternatives cannot erase the constructed object branch.
     { chamber: { object: {}, preserve: "opaque" } },
   );
   expect(approveMetadataUrls({ chamber }, schema)).toEqual({ chamber: "Izba" });

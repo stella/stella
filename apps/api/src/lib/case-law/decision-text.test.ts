@@ -88,7 +88,7 @@ test("URL metadata provenance is explicit at the checked boundary", () => {
     },
     { type: "stored", schema },
   );
-  expect(current.url).toBe("https://example.test/?stated=&amp;");
+  expect(current["url"]).toBe("https://example.test/?stated=&amp;");
   const diagnostics = current[META_URL_DIAGNOSTICS];
   if (!isRecord(diagnostics) || !Array.isArray(diagnostics["entries"])) {
     throw new TypeError("Expected validated diagnostic sidecar");

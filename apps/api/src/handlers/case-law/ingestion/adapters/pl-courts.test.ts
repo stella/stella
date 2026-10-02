@@ -474,8 +474,12 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       ];
       for (const metadata of [decision.metadata, repeated, restored]) {
         for (const address of addresses) {
-          if ("expected" in entry && !(input === null && address === "href")) {
-            expect(metadata).toHaveProperty(address, entry.expected);
+          if ("expected" in entry) {
+            const expected =
+              input === null && address === "href"
+                ? recorded["href"]
+                : entry.expected;
+            expect(metadata).toHaveProperty(address, expected);
           } else {
             expect(metadata).not.toHaveProperty(address);
           }

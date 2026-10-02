@@ -688,12 +688,13 @@ describe("processDecision — canonical storage mode", () => {
         });
         const serialized = JSON.stringify(metadata);
         const reloaded = rehydrateMetadataUrls(JSON.parse(serialized), schema);
+        // The row write owns the partial-observation marker; projection omits it.
         expect({
           value: sanitizeResult(
             plainTextIngestionResult({ ...input, metadata: reloaded }, schema),
             schema,
           ).metadata,
-        }).toHaveProperty("value", metadata);
+        }).toHaveProperty("value", normalized.metadata);
       } finally {
         fake.stop();
       }

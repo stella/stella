@@ -1210,7 +1210,7 @@ for (const candidate of [
       expect(isRecord(link) && Object.hasOwn(link, "url")).toBe(false);
       expect(Object.hasOwn(decision.metadata, "wordDocumentUrl")).toBe(false);
       expect(decision.documentUrl).toBeUndefined();
-      expect(caseDocuments).toEqual([]);
+      expect(caseDocuments).toBeUndefined();
       expect(links).toEqual([]);
     }
     expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();

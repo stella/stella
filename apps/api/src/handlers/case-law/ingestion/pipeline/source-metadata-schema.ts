@@ -35,14 +35,14 @@ export const createSourceMetadataUrlSchemaResolver = (scopedDb: ScopedDb) => {
     SafeId<"caseLawSource">,
     ReturnType<typeof resolveSourceMetadataUrlSchema>
   >();
-  return (sourceId: SafeId<"caseLawSource">) => {
+  return async (sourceId: SafeId<"caseLawSource">) => {
     const cached = schemas.get(sourceId);
     if (cached !== undefined) {
-      return cached;
+      return await cached;
     }
     const pending = resolveSourceMetadataUrlSchema(sourceId, scopedDb);
     schemas.set(sourceId, pending);
-    return pending;
+    return await pending;
   };
 };
 

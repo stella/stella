@@ -37,15 +37,21 @@ type ContainsUrls<Value> = unknown extends Value
   : true extends UrlBranches<NonNullable<Value>>
     ? true
     : false;
-type ObjectUrlSchema<Value> = {
-  readonly [
-    Key in keyof Value as ContainsUrls<Value[Key]> extends true ? Key : never
-  ]-?: MetadataUrlSchema<Value[Key]>;
-} & {
-  readonly [
-    Key in keyof Value as ContainsUrls<Value[Key]> extends true ? never : Key
-  ]?: MetadataUrlSchema<Value[Key]>;
-};
+type ObjectUrlSchema<Value> = keyof Value extends never
+  ? Record<string, never>
+  : {
+      readonly [
+        Key in keyof Value as ContainsUrls<Value[Key]> extends true
+          ? Key
+          : never
+      ]-?: MetadataUrlSchema<Value[Key]>;
+    } & {
+      readonly [
+        Key in keyof Value as ContainsUrls<Value[Key]> extends true
+          ? never
+          : Key
+      ]?: MetadataUrlSchema<Value[Key]>;
+    };
 
 /** Constructed URL branches require a declaration; display strings never imply one. */
 export type MetadataUrlSchema<Value> = unknown extends Value
@@ -331,7 +337,7 @@ const projectMetadata = (
   }
   const previous =
     mode === "stored" ? readDiagnostics(projected[META_URL_DIAGNOSTICS]) : [];
-  delete projected.metadataUrlDiagnostics;
+  delete projected["metadataUrlDiagnostics"];
   const storedSidecar =
     mode === "stored" && isRecord(metadata)
       ? metadata[META_URL_DIAGNOSTICS]
