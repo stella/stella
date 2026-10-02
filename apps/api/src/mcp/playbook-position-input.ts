@@ -12,6 +12,7 @@
  * so the merge never touches a stored position the call does not address.
  */
 
+import { panic } from "better-result";
 import * as v from "valibot";
 
 import { arrayOrEmpty } from "@/api/lib/array";
@@ -615,23 +616,33 @@ export const mergePlaybookPositions = ({
       stored: storedPosition?.sources,
       readableSources,
     });
-    if (resolved.type === "unreadable") {
-      issues.push({
-        code: "unreadable_source",
-        path: `${path}.sources.${resolved.index}`,
-        message: "This id is not a document you can read",
-      });
-      continue;
+    let sources: PositionSource[] | undefined;
+    switch (resolved.type) {
+      case "resolved": {
+        sources = resolved.sources;
+        break;
+      }
+      case "unreadable": {
+        issues.push({
+          code: "unreadable_source",
+          path: `${path}.sources.${resolved.index}`,
+          message: "This id is not a document you can read",
+        });
+        continue;
+      }
+      case "too-many": {
+        issues.push({
+          code: "too_many_sources",
+          path: `${path}.sources`,
+          message: `A position holds at most ${POSITION_LIMITS.sourcesMaxItems} sources`,
+        });
+        continue;
+      }
+      default: {
+        resolved satisfies never;
+        return panic(`Unhandled source resolution: ${String(resolved)}`);
+      }
     }
-    if (resolved.type === "too-many") {
-      issues.push({
-        code: "too_many_sources",
-        path: `${path}.sources`,
-        message: `A position holds at most ${POSITION_LIMITS.sourcesMaxItems} sources`,
-      });
-      continue;
-    }
-    const { sources } = resolved;
 
     const sourceId = input.source_id ?? mintId();
     const position =

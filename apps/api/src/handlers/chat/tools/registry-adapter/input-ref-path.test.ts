@@ -62,10 +62,14 @@ describe("input ref path", () => {
     fc.assert(
       fc.property(shapeArbitrary, ({ path, input, locations }) => {
         const visited: string[] = [];
-        mapInputRefLeaves(input, path, (value, location) => {
-          expect(value).toBe(LEAF);
-          visited.push(location);
-          return value;
+        mapInputRefLeaves({
+          input,
+          path,
+          mapLeaf: (value, location) => {
+            expect(value).toBe(LEAF);
+            visited.push(location);
+            return value;
+          },
         });
         expect(visited).toEqual(locations);
         expect(new Set(visited).size).toBe(visited.length);
@@ -78,14 +82,20 @@ describe("input ref path", () => {
     fc.assert(
       fc.property(shapeArbitrary, ({ path, input }) => {
         const snapshot = structuredClone(input);
-        const there = mapInputRefLeaves(input, path, (value, location) =>
-          typeof value === "string" ? `${location}=${value}` : value,
-        );
-        const back = mapInputRefLeaves(there, path, (value, location) =>
-          typeof value === "string"
-            ? value.slice(`${location}=`.length)
-            : value,
-        );
+        const there = mapInputRefLeaves({
+          input,
+          path,
+          mapLeaf: (value, location) =>
+            typeof value === "string" ? `${location}=${value}` : value,
+        });
+        const back = mapInputRefLeaves({
+          input: there,
+          path,
+          mapLeaf: (value, location) =>
+            typeof value === "string"
+              ? value.slice(`${location}=`.length)
+              : value,
+        });
 
         expect(back).toEqual(snapshot);
         // The input itself is never written to.
@@ -101,14 +111,14 @@ describe("input ref path", () => {
   test("an absent key or a wrongly shaped container addresses nothing", () => {
     const visit = (input: Record<string, unknown>) => {
       const visited: string[] = [];
-      const output = mapInputRefLeaves(
+      const output = mapInputRefLeaves({
         input,
-        "positions[].sources[]",
-        (value, location) => {
+        path: "positions[].sources[]",
+        mapLeaf: (value, location) => {
           visited.push(location);
           return value;
         },
-      );
+      });
       expect(output).toEqual(input);
       return visited;
     };

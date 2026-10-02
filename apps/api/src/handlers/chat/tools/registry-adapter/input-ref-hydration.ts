@@ -170,28 +170,32 @@ export const resolveRegistryToolInputRefs = ({
 
   let resolved = input;
   for (const { kind, param } of inputRefs) {
-    resolved = mapInputRefLeaves(resolved, param, (value, location) => {
-      if (
-        typeof value === "string" &&
-        !isKnownRef({ kind, ref: value, refRegistry })
-      ) {
-        onRefUnresolved?.({ kind, param: location, ref: value });
-        return value;
-      }
-      if (
-        kind === "entity" &&
-        typeof value === "string" &&
-        onEntityRefResolved !== undefined
-      ) {
-        const target = refRegistry.resolveEntityRefTargets([value]);
-        if (Result.isOk(target)) {
-          const firstTarget = target.value.at(0);
-          if (firstTarget !== undefined) {
-            onEntityRefResolved(firstTarget);
+    resolved = mapInputRefLeaves({
+      input: resolved,
+      path: param,
+      mapLeaf: (value, location) => {
+        if (
+          typeof value === "string" &&
+          !isKnownRef({ kind, ref: value, refRegistry })
+        ) {
+          onRefUnresolved?.({ kind, param: location, ref: value });
+          return value;
+        }
+        if (
+          kind === "entity" &&
+          typeof value === "string" &&
+          onEntityRefResolved !== undefined
+        ) {
+          const target = refRegistry.resolveEntityRefTargets([value]);
+          if (Result.isOk(target)) {
+            const firstTarget = target.value.at(0);
+            if (firstTarget !== undefined) {
+              onEntityRefResolved(firstTarget);
+            }
           }
         }
-      }
-      return refRegistry.resolveRefId({ kind, value });
+        return refRegistry.resolveRefId({ kind, value });
+      },
     });
   }
   return resolved;
@@ -213,34 +217,38 @@ export const hydrateRegistryToolInputRefs = ({
   const matterWorkspaceId = findMatterWorkspaceId({ input, inputRefs });
   let hydrated = input;
   for (const { kind, param } of inputRefs) {
-    hydrated = mapInputRefLeaves(hydrated, param, (value, location) => {
-      const unresolvedInputRef = unresolvedInputRefs.find(
-        (context) => context.param === location,
-      );
-      if (unresolvedInputRef !== undefined) {
-        if (
-          unresolvedInputRef.kind !== kind ||
-          unresolvedInputRef.ref !== value
-        ) {
-          panic(
-            "Stored unresolved chat reference context does not match input",
-          );
+    hydrated = mapInputRefLeaves({
+      input: hydrated,
+      path: param,
+      mapLeaf: (value, location) => {
+        const unresolvedInputRef = unresolvedInputRefs.find(
+          (context) => context.param === location,
+        );
+        if (unresolvedInputRef !== undefined) {
+          if (
+            unresolvedInputRef.kind !== kind ||
+            unresolvedInputRef.ref !== value
+          ) {
+            panic(
+              "Stored unresolved chat reference context does not match input",
+            );
+          }
+          return value;
         }
-        return value;
-      }
-      return refRegistry.hydrateRefId({
-        inputState,
-        kind,
-        value,
-        workspaceId:
-          kind === "entity"
-            ? findEntityWorkspaceId({
-                contexts: entityContexts,
-                entityId: value,
-                matterWorkspaceId,
-              })
-            : matterWorkspaceId,
-      });
+        return refRegistry.hydrateRefId({
+          inputState,
+          kind,
+          value,
+          workspaceId:
+            kind === "entity"
+              ? findEntityWorkspaceId({
+                  contexts: entityContexts,
+                  entityId: value,
+                  matterWorkspaceId,
+                })
+              : matterWorkspaceId,
+        });
+      },
     });
   }
   return hydrated;

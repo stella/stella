@@ -31,12 +31,19 @@ const parseInputRefPath = (path: string): PathSegment[] =>
  */
 type MapInputRefLeaf = (value: unknown, location: string) => unknown;
 
-const mapSegments = (
-  container: Record<string, unknown>,
-  segments: readonly PathSegment[],
-  parentLocation: string,
-  mapLeaf: MapInputRefLeaf,
-): Record<string, unknown> => {
+type MapSegmentsArgs = {
+  container: Record<string, unknown>;
+  segments: readonly PathSegment[];
+  parentLocation: string;
+  mapLeaf: MapInputRefLeaf;
+};
+
+const mapSegments = ({
+  container,
+  segments,
+  parentLocation,
+  mapLeaf,
+}: MapSegmentsArgs): Record<string, unknown> => {
   const [segment, ...rest] = segments;
   if (segment === undefined || !(segment.key in container)) {
     return container;
@@ -48,7 +55,12 @@ const mapSegments = (
       return mapLeaf(value, valueLocation);
     }
     return isRecord(value)
-      ? mapSegments(value, rest, valueLocation, mapLeaf)
+      ? mapSegments({
+          container: value,
+          segments: rest,
+          parentLocation: valueLocation,
+          mapLeaf,
+        })
       : value;
   };
 
@@ -67,15 +79,26 @@ const mapSegments = (
   };
 };
 
+type MapInputRefLeavesArgs = {
+  input: Record<string, unknown>;
+  path: string;
+  mapLeaf: MapInputRefLeaf;
+};
+
 /**
  * A copy of `input` with every leaf the path addresses replaced by
  * `mapLeaf`'s answer. A leaf is visited whatever its type, and only when its
  * key is present; an absent key, or a container of the wrong shape on the
  * way, addresses nothing. Nothing off the path is touched.
  */
-export const mapInputRefLeaves = (
-  input: Record<string, unknown>,
-  path: string,
-  mapLeaf: MapInputRefLeaf,
-): Record<string, unknown> =>
-  mapSegments(input, parseInputRefPath(path), "", mapLeaf);
+export const mapInputRefLeaves = ({
+  input,
+  path,
+  mapLeaf,
+}: MapInputRefLeavesArgs): Record<string, unknown> =>
+  mapSegments({
+    container: input,
+    segments: parseInputRefPath(path),
+    parentLocation: "",
+    mapLeaf,
+  });

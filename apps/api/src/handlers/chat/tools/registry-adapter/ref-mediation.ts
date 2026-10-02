@@ -59,11 +59,17 @@ export const dehydrateRefs = ({
   const resolvedEntityParams: DehydratedInput["resolvedEntityParams"] = {};
   const dehydratedEntityRefs = new Map<string, string>();
 
-  const resolveLeaf = (
-    kind: InputRefParam["kind"],
-    raw: string,
-    location: string,
-  ): Result<string, ChatToolError> => {
+  type ResolveLeafArgs = {
+    kind: InputRefParam["kind"];
+    raw: string;
+    location: string;
+  };
+
+  const resolveLeaf = ({
+    kind,
+    raw,
+    location,
+  }: ResolveLeafArgs): Result<string, ChatToolError> => {
     if (kind === "matter") {
       return refRegistry.resolveMatterRefs([raw]).map((resolved) => {
         const workspaceId = takeSingle(resolved);
@@ -96,18 +102,22 @@ export const dehydrateRefs = ({
     // The first unknown ref fails the call; the walk has no early exit, so
     // the leaves after it are left as they are.
     let failure: ChatToolError | undefined;
-    nextArgs = mapInputRefLeaves(nextArgs, param, (raw, location) => {
-      if (failure !== undefined || typeof raw !== "string") {
-        // The param is optional and absent (or already a non-ref value);
-        // nothing to resolve.
-        return raw;
-      }
-      const resolved = resolveLeaf(kind, raw, location);
-      if (Result.isError(resolved)) {
-        failure = resolved.error;
-        return raw;
-      }
-      return resolved.value;
+    nextArgs = mapInputRefLeaves({
+      input: nextArgs,
+      path: param,
+      mapLeaf: (raw, location) => {
+        if (failure !== undefined || typeof raw !== "string") {
+          // The param is optional and absent (or already a non-ref value);
+          // nothing to resolve.
+          return raw;
+        }
+        const resolved = resolveLeaf({ kind, raw, location });
+        if (Result.isError(resolved)) {
+          failure = resolved.error;
+          return raw;
+        }
+        return resolved.value;
+      },
     });
     if (failure !== undefined) {
       return Result.err(failure);
