@@ -1751,6 +1751,25 @@ describe("contributor signature check", () => {
     }
   });
 
+  test("CLA verification errors fail closed before required-check configuration", () => {
+    for (const landing of ["merge", "merge-when-ready"] as const) {
+      const snapshot = passingSnapshot({
+        landing,
+        checkRuns: [
+          checkRun("ci-result", "completed", "success"),
+          checkRun("cla", "completed", "failure", {
+            id: 2,
+            outputTitle: "CLA_ERROR",
+          }),
+        ],
+      });
+      expect(failedGate(snapshot)).toEqual({
+        decision: "abort",
+        reasons: ["REQUIRED_CHECK_NOT_SUCCESSFUL"],
+      });
+    }
+  });
+
   test("verified authors and newest signed verdicts are accepted", () => {
     for (const landing of ["merge", "merge-when-ready"] as const) {
       const snapshot = passingSnapshot({

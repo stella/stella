@@ -385,6 +385,15 @@ const evaluateRequiredCheck = ({
           : "Read https://github.com/stella/cla/blob/main/CLA.md and post exactly: I have read the CLA Document and I hereby sign the CLA",
     };
   }
+  if (cla?.status === "completed" && cla.conclusion === "failure") {
+    return {
+      gate: "required-check",
+      status: "fail",
+      reason: MERGE_BAR_REASONS.requiredCheckNotSuccessful,
+      detail:
+        "cla verification failed; inspect the check output and rerun after fixing it.",
+    };
+  }
   const required = requiredCheckRuns.flatMap((name) => {
     const run = latestByName.get(name);
     return run === undefined ? [] : [run];
