@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
@@ -122,6 +122,7 @@ describe("regional catalog availability", () => {
               return Response.json({ data: [{ name: MODEL }] });
             default:
               fault satisfies never;
+              return panic("Unexpected catalog failure fixture.");
           }
         });
         await monitor.refresh();

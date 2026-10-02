@@ -358,9 +358,15 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
               expect(result.isErr()).toBe(true);
             } else {
               const chunks = [];
-              for await (const chunk of path === "chat"
-                ? adapter.chatStream(options)
-                : adapter.structuredOutputStream(structured)) {
+              const stream =
+                path === "chat"
+                  ? adapter.chatStream(options)
+                  : adapter.structuredOutputStream?.(structured);
+              if (stream === undefined)
+                {panic(
+                  "Provider adapter did not expose structured output streaming.",
+                );}
+              for await (const chunk of stream) {
                 chunks.push(chunk);
               }
               expect(chunks.at(-1)?.type).toBe(EventType.RUN_ERROR);

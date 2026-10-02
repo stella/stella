@@ -58,7 +58,7 @@ export const createManagedProviderAvailability = ({
       MANAGED_AI_RESIDENCIES.map(async (residency) => {
         availability[residency] = { status: "unavailable" };
         const expiresAt = now() + intervalMs;
-        const result = await Result.tryPromise({
+        const observed = await Result.tryPromise({
           try: async () =>
             await withTimeout(
               async (signal) => {
@@ -73,16 +73,18 @@ export const createManagedProviderAvailability = ({
                   redirect: "error",
                 });
                 if (!response.ok) {
-                  throw new ManagedProviderCheckError({
-                    message: `Regional catalog returned HTTP ${String(response.status)}`,
-                    residency,
-                  });
+                  return Result.err(
+                    new ManagedProviderCheckError({
+                      message: `Regional catalog returned HTTP ${String(response.status)}`,
+                      residency,
+                    }),
+                  );
                 }
                 const catalog = v.parse(
                   regionalCatalogSchema,
                   await response.json(),
                 );
-                return new Set(catalog.data.map(({ id }) => id));
+                return Result.ok(new Set(catalog.data.map(({ id }) => id)));
               },
               {
                 label: "Managed provider catalog check",
@@ -91,15 +93,15 @@ export const createManagedProviderAvailability = ({
               },
             ),
           catch: (cause) =>
-            classifyFailure(
-              new ManagedProviderCheckError({
-                message: "Managed provider catalog check failed",
-                residency,
-                cause,
-              }),
-              "model_unavailable",
-            ),
+            new ManagedProviderCheckError({
+              message: "Managed provider catalog check failed",
+              residency,
+              cause,
+            }),
         });
+        const result = Result.flatten(observed).mapError((error) =>
+          classifyFailure(error, "model_unavailable"),
+        );
         if (Result.isError(result)) {
           availability[residency] = {
             status: "unavailable",

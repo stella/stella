@@ -3,7 +3,6 @@ import { Result, panic } from "better-result";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
-import { captureError } from "@/api/lib/analytics/capture";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { createManagedProviderAvailability } from "@/api/lib/chat/managed-provider-availability";
 import {
@@ -11,6 +10,13 @@ import {
   fetchManagedProviderCatalog,
 } from "@/api/lib/chat/provider-data-policy";
 import { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
+
+const PROVIDER_CHECK_FAILURE_SINK = failureSink({
+  event: "ai.managed_provider_check.failed",
+  expected: [],
+});
 
 let availability:
   | ReturnType<typeof createManagedProviderAvailability>
@@ -67,8 +73,12 @@ export const startManagedProviderChecks = async (
     }
     for (const result of results) {
       if (Result.isError(result)) {
-        captureError(result.error, {
-          context: { residency: result.error.residency },
+        observeFailure(result.error, {
+          sink: PROVIDER_CHECK_FAILURE_SINK,
+          ctx: {
+            feature: "ai.managed_provider_check",
+            source: result.error.residency,
+          },
         });
       }
     }
@@ -78,7 +88,8 @@ export const startManagedProviderChecks = async (
     initialDelayMs: intervalMs,
     intervalMs,
     run: refresh,
-    onError: captureError,
+    onError: (error) =>
+      observeFailure(error, { sink: PROVIDER_CHECK_FAILURE_SINK }),
   });
   return async () => {
     availability = undefined;
