@@ -31,7 +31,10 @@ import {
   getAwaitingUserInteractions,
   getResumedUserInteraction,
 } from "@/api/handlers/chat/chat-message-parts";
-import type { ChatPart } from "@/api/handlers/chat/types";
+import type {
+  ChatPart,
+  PersistableChatMessageCandidate,
+} from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { LIMITS } from "@/api/lib/limits";
@@ -55,22 +58,24 @@ describe("persisted chat message parts", () => {
   test.each(["", " ", "\n\t", "\u00a0\u2003"])(
     "keeps invisible assistant text out of persistence: %j",
     (blank) => {
-      const message = {
+      const thinking: ChatPart = {
+        type: "thinking",
+        content: "Reviewing the clause.",
+      };
+      const answer = createChatTextPart(" \nAnswer.\t ");
+      const parts: ChatPart[] = [thinking, createChatTextPart(blank), answer];
+      const message: PersistableChatMessageCandidate = {
         id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
-        parts: [
-          { type: "thinking", content: "Reviewing the clause." },
-          createChatTextPart(blank),
-          createChatTextPart(" \nAnswer.\t "),
-        ],
+        parts,
         role: "assistant",
-      } as const;
+      };
       expect(toPersistableChatMessage(message).parts).toEqual([
-        message.parts[0],
-        message.parts[2],
+        thinking,
+        answer,
       ]);
       expect(
         toPersistableChatMessage({ ...message, role: "user" }).parts,
-      ).toEqual(message.parts);
+      ).toEqual(parts);
     },
   );
 
