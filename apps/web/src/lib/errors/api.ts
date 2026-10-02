@@ -9,6 +9,7 @@ import {
   ACTION_ADMISSION_REFUSALS,
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
+import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
 
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
@@ -34,6 +35,9 @@ export const shouldRetryAPIRequest = (
   failureCount: number,
   error: unknown,
 ): boolean => {
+  if (APIError.is(error) && error.code === PUBLIC_COUNTRY_UNAVAILABLE_CODE) {
+    return false;
+  }
   if (APIError.is(error) && isActionAdmissionCode(error.code)) {
     return (
       failureCount < MAX_API_RETRY_COUNT &&
@@ -93,6 +97,7 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
 } as const;
 
 const CODE_ERROR_KEYS = {
+  [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",
   account_deletion_otp_invalid: "errors.apiCodes.accountDeletionOtpInvalid",

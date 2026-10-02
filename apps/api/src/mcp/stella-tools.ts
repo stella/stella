@@ -14,6 +14,7 @@ import {
   parseDecisionQuery,
   resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import {
   DEFAULT_SEARCH_SORT,
   SEARCH_SORTS,
@@ -2107,6 +2108,10 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
   if (pageError !== undefined) {
     return pageError;
   }
+  const unavailable = publicCountryUnavailable(country);
+  if (unavailable !== null) {
+    return toolDataResult(unavailable);
+  }
   const publicCountry = publicCaseLawCountry(country);
   if (publicCountry === null) {
     return notFoundResult(
@@ -2747,8 +2752,9 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
 
 // --- lookup_case_law -------------------------------------------------------
 
-type DecisionLookupItem = v.InferInput<
-  typeof LOOKUP_CASE_LAW_PROJECTION
+type DecisionLookupItem = Extract<
+  v.InferInput<typeof LOOKUP_CASE_LAW_PROJECTION>,
+  { items: unknown[] }
 >["items"][number];
 
 const SEARCH_INSTEAD_HINT =
@@ -2891,6 +2897,10 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
   const { country, identifiers } = parsed.output;
+  const unavailable = publicCountryUnavailable(country);
+  if (unavailable !== null) {
+    return toolDataResult(unavailable);
+  }
   const publicCountry = publicCaseLawCountry(country);
   if (publicCountry === null) {
     return notFoundResult(
