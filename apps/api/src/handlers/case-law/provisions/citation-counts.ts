@@ -41,6 +41,9 @@ export const readStatuteCitationCountsHandler = async (
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
     parameter: "jurisdiction",
   });
+  if (countryRead.kind === "unavailable") {
+    return status(503, countryRead.response);
+  }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }

@@ -701,7 +701,7 @@ describe("detect-e2e-changes", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
       [
-        'if [[ "$e2e_core_required" == "true" ]]; then',
+        'if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then',
         "            web_build_required=true",
         "          fi",
       ].join("\n"),
@@ -723,6 +723,7 @@ describe("detect-e2e-changes", () => {
         "    needs: [ci-plan, web-build]",
         "    if: >-",
         "      always()",
+        "      && (github.event_name != 'merge_group' || !cancelled())",
         "      && (needs.ci-plan.outputs.trusted == 'true'",
         "          || github.event_name == 'workflow_dispatch')",
         "      && needs.ci-plan.outputs.e2e_production_required == 'true'",

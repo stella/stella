@@ -358,6 +358,207 @@ const resultJob = v.parse(
   ciJobs["ci-result"],
 );
 
+const FAIL_FAST_JOB = "merge-group-fail-fast";
+
+test("only the merge-group fail-fast job may cancel runs, and it runs no repository code", () => {
+  const jobSchema = v.object({
+    if: v.optional(v.string()),
+    permissions: v.optional(v.record(v.string(), v.string())),
+    steps: v.optional(
+      v.array(
+        v.looseObject({
+          uses: v.optional(v.string()),
+          run: v.optional(v.string()),
+        }),
+      ),
+    ),
+  });
+  for (const [id, value] of Object.entries(ciJobs)) {
+    const job = v.parse(jobSchema, value);
+    expect(job.permissions?.["actions"] === "write", id).toBe(
+      id === FAIL_FAST_JOB,
+    );
+  }
+  const watcher = v.parse(jobSchema, ciJobs[FAIL_FAST_JOB]);
+  expect(watcher.if).toBe("github.event_name == 'merge_group'");
+  expect(watcher.permissions).toEqual({ actions: "write" });
+  // No checkout, action or install: only the inline gh calls run here.
+  expect(watcher.steps?.map(({ uses }) => uses)).toEqual([undefined]);
+  // A failed lookup must never block the required result.
+  expect(resultJob.needs).not.toContain(FAIL_FAST_JOB);
+  // The API budget is shared by every workflow: poll no faster than every
+  // 30 s, and stop watching on its own before the job timeout could fail it.
+  const limits = v.parse(
+    v.looseObject({
+      "timeout-minutes": v.number(),
+      steps: v.tuple([
+        v.looseObject({
+          env: v.looseObject({
+            POLL_SECONDS: v.string(),
+            DEADLINE_SECONDS: v.string(),
+          }),
+        }),
+      ]),
+    }),
+    ciJobs[FAIL_FAST_JOB],
+  );
+  const [{ env }] = limits.steps;
+  expect(Number(env.POLL_SECONDS)).toBeGreaterThanOrEqual(30);
+  expect(Number(env.DEADLINE_SECONDS)).toBeLessThan(
+    limits["timeout-minutes"] * 60,
+  );
+  // Jobs that start under always() must not start after the cancellation.
+  for (const id of ["e2e-production-shard", "marketing-screenshots"]) {
+    expect(jobIf(ciJobs[id]), id).toContain(
+      "(github.event_name != 'merge_group' || !cancelled())",
+    );
+  }
+});
+
+test("the merge-group fail-fast job cancels only after a job failed", async () => {
+  const command = v.parse(
+    v.string(),
+    jobSteps(ciJobs[FAIL_FAST_JOB]).at(0)?.run,
+  );
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-fail-fast-"));
+  const bin = nodePath.join(directory, "bin");
+  mkdirSync(bin);
+  // Each request answers with the next recorded poll: its first line is the
+  // HTTP status (or ERROR for a failed request), the rest is the body. Every
+  // request's If-None-Match value is logged, one line per request.
+  writeFileSync(
+    nodePath.join(bin, "curl"),
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      'out=""; hdr=""; inm=""',
+      "while (($#)); do",
+      '  case "$1" in',
+      '    -o) out="$2"; shift 2 ;;',
+      '    -D) hdr="$2"; shift 2 ;;',
+      "    -w) shift 2 ;;",
+      `    -H) if [[ "$2" == If-None-Match:* ]]; then inm="\${2#If-None-Match: }"; fi; shift 2 ;;`,
+      "    *) shift ;;",
+      "  esac",
+      "done",
+      'count=$(cat "$FAKE_DIR/count" 2>/dev/null || echo 0)',
+      'echo $((count + 1)) > "$FAKE_DIR/count"',
+      'printf "%s\\n" "$inm" >> "$FAKE_DIR/conditional"',
+      'poll="$FAKE_DIR/poll-$count"',
+      '[[ -f "$poll" ]] || poll="$FAKE_DIR/poll-last"',
+      'status=$(head -n 1 "$poll")',
+      'if [[ "$status" == ERROR ]]; then exit 7; fi',
+      `printf 'HTTP/2 %s\\r\\netag: "e%s"\\r\\n\\r\\n' "$status" "$count" > "$hdr"`,
+      'tail -n +2 "$poll" > "$out"',
+      'printf "%s" "$status"',
+    ].join("\n"),
+  );
+  writeFileSync(
+    nodePath.join(bin, "gh"),
+    [
+      "#!/usr/bin/env bash",
+      'printf "%s\\n" "$*" >> "$FAKE_DIR/cancelled"',
+    ].join("\n"),
+  );
+  chmodSync(nodePath.join(bin, "curl"), 0o755);
+  chmodSync(nodePath.join(bin, "gh"), 0o755);
+  const job = (status: string, conclusion: string | null = null) => ({
+    name: "check",
+    status,
+    conclusion,
+  });
+  const ok = (jobs: readonly ReturnType<typeof job>[], total = jobs.length) =>
+    `200\n${JSON.stringify({
+      total_count: total + 1,
+      // The watcher's own job is listed too and must be ignored.
+      jobs: [
+        ...jobs,
+        { name: FAIL_FAST_JOB, status: "in_progress", conclusion: null },
+      ],
+    })}`;
+  const read = async (file: string): Promise<string> => {
+    const target = Bun.file(nodePath.join(directory, file));
+    return (await target.exists()) ? await target.text() : "";
+  };
+  const scenario = async (polls: readonly string[]) => {
+    for (const file of ["cancelled", "count", "conditional"]) {
+      rmSync(nodePath.join(directory, file), { force: true });
+    }
+    for (const [index, poll] of polls.entries()) {
+      writeFileSync(nodePath.join(directory, `poll-${index}`), poll);
+      writeFileSync(nodePath.join(directory, "poll-last"), poll);
+    }
+    const run = Bun.spawnSync(["bash", "-c", command], {
+      env: {
+        PATH: `${bin}:${process.env["PATH"] ?? ""}`,
+        FAKE_DIR: directory,
+        POLL_SECONDS: "0",
+        DEADLINE_SECONDS: "20",
+        GH_TOKEN: "token",
+        GITHUB_API_URL: "https://api.github.invalid",
+        GITHUB_REPOSITORY: "stella/stella",
+        GITHUB_RUN_ID: "42",
+        GITHUB_RUN_ATTEMPT: "1",
+        RUNNER_TEMP: directory,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+      timeout: 20_000,
+    });
+    // The watcher never fails, whatever it saw.
+    expect(run.exitCode, run.stderr.toString()).toBe(0);
+    return {
+      cancelled: await read("cancelled"),
+      conditional: (await read("conditional")).split("\n").slice(0, -1),
+      output: run.stdout.toString(),
+    };
+  };
+  const cancel = "run cancel 42 --repo stella/stella\n";
+  try {
+    // A failure cancels the run once. After the first answer, every poll is
+    // conditional on its ETag, and an unchanged (304) answer keeps the state.
+    const failed = await scenario([
+      ok([job("in_progress"), job("queued")]),
+      "304\n",
+      ok([job("completed", "failure"), job("in_progress")]),
+    ]);
+    expect(failed.cancelled).toBe(cancel);
+    expect(failed.conditional).toEqual(["", '"e0"', '"e0"']);
+    // A timeout counts as a failure.
+    expect(
+      (await scenario([ok([job("completed", "timed_out"), job("queued")])]))
+        .cancelled,
+    ).toBe(cancel);
+    // Success, skips and cancellations never cancel, and the watcher stops as
+    // soon as every other job is done.
+    const passed = await scenario([
+      ok([job("in_progress"), job("completed", "skipped")]),
+      ok([
+        job("completed", "success"),
+        job("completed", "skipped"),
+        job("completed", "cancelled"),
+      ]),
+      ok([job("completed", "failure")]),
+    ]);
+    expect(passed.cancelled).toBe("");
+    expect(passed.conditional).toHaveLength(2);
+    // Lookup errors, error statuses and a partial job page end the watch
+    // without cancelling anything.
+    for (const poll of [
+      "ERROR\n",
+      "500\n{}",
+      "403\n{}",
+      ok([job("completed", "failure")], 150),
+    ]) {
+      const ended = await scenario([poll]);
+      expect(ended.cancelled, poll).toBe("");
+      expect(ended.output, poll).toContain("finishes normally");
+    }
+  } finally {
+    rmSync(directory, { force: true, recursive: true });
+  }
+});
+
 const evaluationSteps = resultJob.steps.filter((step) =>
   v.is(v.object({ name: v.literal("Evaluate CI outcome") }), step),
 );
@@ -652,6 +853,9 @@ test("the result gate evaluates every job in the workflow", () => {
       Object.keys(ciJobs).filter(
         (job) =>
           job !== "ci-result" &&
+          // It only shortens a failing run; gating on it would let a failed
+          // lookup block the result (bound in its own tests above).
+          job !== FAIL_FAST_JOB &&
           !reportOnlyJobs.includes(job) &&
           !diagnosticJobs.includes(job),
       ),
@@ -744,6 +948,42 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
+
+test("a failed dependency cannot pass with cancelled siblings or supersession evidence", () => {
+  for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
+    for (const failedJob of resultJob.needs) {
+      for (const cancellationEvidence of ["missing", "superseded"] as const) {
+        const results = Object.fromEntries(
+          resultJob.needs.map((job) => [job, "cancelled"]),
+        );
+        results["ci-plan"] = "success";
+        results[failedJob] = "failure";
+        expect(
+          evaluateResult({ event, results, cancellationEvidence }),
+          `${event} ${failedJob} ${cancellationEvidence}`,
+        ).toBe(1);
+      }
+    }
+  }
+});
+
+test("a self-cancelled merge group fails even when GitHub marks the failing job cancelled", () => {
+  for (const cancellationEvidence of ["missing", "superseded"] as const) {
+    const results = Object.fromEntries(
+      resultJob.needs.map((job) => [
+        job,
+        job === "ci-plan" ? "success" : "cancelled",
+      ]),
+    );
+    expect(
+      evaluateResult({
+        event: EVENT.mergeGroup,
+        results,
+        cancellationEvidence,
+      }),
+    ).toBe(1);
+  }
+});
 
 test.each(resultJob.needs)(
   "cancelled %s passes only with a newer run in the same group and no timeout",
@@ -2344,5 +2584,153 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
         1,
       );
     }
+  }
+});
+
+test("route-relevant pull requests plan the required route smoke job", () => {
+  const scope = "route_smoke_required";
+  const selectedBy = jobIf(ciJobs["route-smoke"]);
+  expect(selectedBy).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
+  expect(selectedBy).toContain("github.event_name == 'pull_request'");
+  expect(selectedBy).toContain("needs.web-build.result == 'success'");
+  expect(heavyJobs).not.toContain("route-smoke");
+  expect(jobScopes["route-smoke"]).toBe(scope);
+  expect(fastRequired).toContain("route-smoke");
+  for (const file of [
+    "apps/web/src/routes/_authenticated/matters.tsx",
+    "apps/web/src/routeTree.gen.ts",
+    "apps/web/src/lib/react-query.ts",
+    "apps/web/src/components/new-query-component.tsx",
+    "apps/api/src/handlers/tasks/get.ts",
+    "packages/ui/src/button.tsx",
+    "apps/web/e2e/network-baseline.json",
+    "scripts/network-baseline-scope.ts",
+    "scripts/network-baseline-scope.test.ts",
+    "apps/web/e2e/specs/route-smoke.spec.ts",
+    "apps/web/e2e/helpers/network.ts",
+    "apps/web/e2e/helpers/workspace.ts",
+    "apps/web/e2e/playwright.config.ts",
+  ]) {
+    expect(runSelector([file], [scope]), file).toEqual(["true"]);
+  }
+  expect(runSelector(["docs/example.md"], [scope])).toEqual(["false"]);
+  expect(runSelector([], [scope])).toEqual(["false"]);
+  for (const event of [EVENT.mergeGroup, EVENT.workflowDispatch]) {
+    expect(
+      runSelector(
+        ["apps/web/src/routes/new.tsx"],
+        [scope],
+        "full",
+        "false",
+        event,
+      ),
+    ).toEqual(["false"]);
+  }
+  const event = EVENT.pullRequest;
+  expect(evaluateResult({ event, results: { "route-smoke": "skipped" } })).toBe(
+    1,
+  );
+  expect(
+    evaluateResult({
+      event,
+      results: { "route-smoke": "skipped" },
+      unplannedScopes: [scope],
+    }),
+  ).toBe(0);
+});
+
+test("route smoke consumes the production build and fails when its stack cannot run", () => {
+  const plan = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Check changed file scope",
+  );
+  // Keep the dependency implication executable: baseline-scope edits need a
+  // build even when the ordinary app-source build filter would not select it.
+  const implicationStart = workflow.indexOf(
+    "          # The production e2e shards",
+  );
+  const implicationEnd = workflow.indexOf(
+    "          printf 'Changed files:",
+    implicationStart,
+  );
+  expect(implicationEnd).toBeGreaterThan(implicationStart);
+  const implication = workflow.slice(implicationStart, implicationEnd);
+  const result = Bun.spawnSync([
+    "bash",
+    "-e",
+    "-c",
+    `e2e_core_required=false; route_smoke_required=true; web_build_required=false
+${implication}
+[[ "$web_build_required" == true ]]`,
+  ]);
+  expect(result.exitCode).toBe(0);
+  expect(plan?.run).toContain(
+    'echo "route_smoke_required=$route_smoke_required"',
+  );
+  expect(workflow).toContain(
+    [
+      "route_smoke_required: $",
+      "{{ steps.changed-files.outputs.route_smoke_required }}",
+    ].join(""),
+  );
+  const upload = jobSteps(ciJobs["web-build"]).find(
+    ({ name }) => name === "Upload production E2E web build",
+  );
+  expect(upload?.if).toContain(
+    "needs.ci-plan.outputs.route_smoke_required == 'true'",
+  );
+  const steps = jobSteps(ciJobs["route-smoke"]);
+  const smoke = steps.find(
+    ({ name }) => name === "Check route network baseline",
+  );
+  expect(smoke?.run).toContain("route-smoke.spec.ts --project=route-smoke");
+  const ready = steps.find(
+    ({ name }) => name === "Require production browser stack",
+  );
+  expect(ready?.run).toBeDefined();
+  for (const status of ["ready", "rate-limited", ""]) {
+    const check = Bun.spawnSync(["bash", "-e", "-c", ready?.run ?? "exit 2"], {
+      env: { STACK_STATUS: status },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(check.exitCode, status).toBe(status === "ready" ? 0 : 1);
+  }
+});
+
+test("an unreadable PR diff requires route smoke while manual and queue runs retain their suites", () => {
+  const start = workflow.indexOf(
+    "          # An unreadable diff must widen every scope",
+  );
+  const end = workflow.indexOf(
+    "          desktop_rust_checks_required=$(",
+    start,
+  );
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "route-smoke-plan-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    for (const event of Object.values(EVENT)) {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(
+        ["bash", "-e", "-c", workflow.slice(start, end)],
+        {
+          env: {
+            EVENT_NAME: event,
+            SUITE_DEPTH: "full",
+            scope_unknown: "true",
+            GITHUB_OUTPUT: output,
+          },
+          stdout: "ignore",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8"))
+        .toContain(`route_smoke_required=${event === EVENT.pullRequest}
+`);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });

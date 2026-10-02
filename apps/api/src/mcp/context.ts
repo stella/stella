@@ -49,6 +49,7 @@ import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import { resolveCredentialMemberAuthorization } from "@/api/lib/auth";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
 import type { createTimeEntryHandler } from "@/api/lib/billing/time-entry-insert";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
@@ -265,6 +266,7 @@ export type McpRequestContext = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
+  userEmail: string;
 };
 
 /**
@@ -333,19 +335,23 @@ export const loadAccessibleMcpWorkspaces = async ({
 
 export const resolveMcpSessionContext = async (
   session: McpSession,
-  { clientIp = null, request }: { clientIp?: string | null; request: Request },
+  {
+    clientIp = null,
+    request,
+    resolveAuthorization = resolveCredentialMemberAuthorization,
+    checkAccountOperation = checkDemoAccountOperation,
+  }: {
+    clientIp?: string | null;
+    request: Request;
+    resolveAuthorization?: typeof resolveCredentialMemberAuthorization;
+    checkAccountOperation?: typeof checkDemoAccountOperation;
+  },
 ): Promise<McpRequestContext> => {
   const { organizationId, userId } = brandActorSessionIdentity({
     organizationId: session.organizationId,
     userId: session.userId,
   });
-  const auditExecution = await resolveAgentAuditExecution({
-    credential: session.credential,
-    organizationId,
-    userId,
-  });
-
-  const authorization = await resolveCredentialMemberAuthorization({
+  const authorization = await resolveAuthorization({
     organizationId,
     userId,
   });
@@ -353,6 +359,13 @@ export const resolveMcpSessionContext = async (
   if (!authorization) {
     throw new McpOrganizationAccessError({
       message: "User is not a member of this organization",
+    });
+  }
+
+  const accountOperation = checkAccountOperation(authorization.email);
+  if (Result.isError(accountOperation)) {
+    throw new McpOrganizationAccessError({
+      message: accountOperation.error.message,
     });
   }
 
@@ -372,6 +385,12 @@ export const resolveMcpSessionContext = async (
   if (!isMemberRole(authorization.role)) {
     panic("User has an invalid member role");
   }
+
+  const auditExecution = await resolveAgentAuditExecution({
+    credential: session.credential,
+    organizationId,
+    userId,
+  });
 
   const memberRole = authorization.role;
   const bootstrapScopedDb = createMembershipScopedDb(rlsDb, {
@@ -499,6 +518,7 @@ export const resolveMcpSessionContext = async (
     safeDb: requestDatabaseScope.safeDb,
     scopedDb: requestDatabaseScope.scopedDb,
     userId,
+    userEmail: authorization.email,
   };
 };
 
