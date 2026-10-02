@@ -20,6 +20,30 @@ import {
   runSkUsRawBatch,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 
+const NOT_REJECTED = Symbol("not rejected");
+
+/**
+ * bun-types declares `.rejects` matchers as void, so the rejection is captured
+ * and asserted directly: its class, or a message substring or pattern.
+ */
+const expectRejection = async (
+  pending: Promise<unknown>,
+  expected: string | RegExp | (new (...args: never[]) => Error),
+) => {
+  const thrown = await pending.then(
+    () => NOT_REJECTED,
+    (error: unknown) => error,
+  );
+  expect(thrown).toBeInstanceOf(Error);
+  if (typeof expected === "function") {
+    expect(thrown).toBeInstanceOf(expected);
+    return;
+  }
+  expect(thrown instanceof Error ? thrown.message : String(thrown)).toMatch(
+    expected,
+  );
+};
+
 /** A fixture row that must exist; a missing one fails loudly, never as `undefined`. */
 const rowAt = <T>(items: readonly T[], index: number): T => {
   const item = items.at(index);
@@ -269,23 +293,23 @@ test("checkpoint reload accepts terminal records and rejects ambiguous or foreig
         outcome,
       });
       if (forbidden.includes(outcome)) {
-        await expect(
+        await expectRejection(
           persistSkUsRawCheckpoint({
             checkpointPath,
             sourceId,
             cursor,
             outcome,
           }),
-        ).rejects.toThrow(
+
           "Checkpoint does not record a terminal applied outcome",
         );
         await writeFile(
           checkpointPath,
           JSON.stringify({ version: 1, sourceId, cursor, outcome }),
         );
-        await expect(
+        await expectRejection(
           readSkUsRawCheckpoint({ checkpointPath, sourceId }),
-        ).rejects.toThrow(
+
           "Checkpoint does not record a terminal applied outcome",
         );
       } else {
@@ -307,19 +331,22 @@ test("checkpoint reload accepts terminal records and rejects ambiguous or foreig
         (outcome) => SK_US_RAW_OUTCOME_DISPOSITIONS[outcome],
       ),
     );
-    await expect(
+    await expectRejection(
       readSkUsRawCheckpoint({
         checkpointPath,
         sourceId: createSafeId<"caseLawSource">(),
       }),
-    ).rejects.toThrow("Checkpoint belongs to a different source");
+      "Checkpoint belongs to a different source",
+    );
     await writeFile(checkpointPath, "{");
-    await expect(
+    await expectRejection(
       readSkUsRawCheckpoint({ checkpointPath, sourceId }),
-    ).rejects.toThrow(SyntaxError);
-    await expect(
+      SyntaxError,
+    );
+    await expectRejection(
       readSkUsRawCheckpoint({ checkpointPath: directory, sourceId }),
-    ).rejects.toThrow(/EISDIR/u);
+      /EISDIR/u,
+    );
   } finally {
     await rm(directory, { recursive: true, force: true });
   }
@@ -398,7 +425,7 @@ test("an oversized unterminated journal tail is refused, never truncated", async
   const content = `{"version":1}\n${"x".repeat(64 * 1024 + 1)}`;
   try {
     await writeFile(journalPath, content);
-    await expect(
+    await expectRejection(
       journalSkUsRawOutcome({
         checkpointPath,
         sourceId,
@@ -408,7 +435,7 @@ test("an oversized unterminated journal tail is refused, never truncated", async
         },
         outcome: "completed",
       }),
-    ).rejects.toThrow(
+
       "Outcome journal ends with an oversized unterminated record",
     );
     expect(await readFile(journalPath, "utf-8")).toBe(content);
@@ -536,7 +563,7 @@ test("journal persistence failure prevents checkpoint advancement and later rows
   const visited: string[] = [];
   let checkpoints = 0;
   try {
-    await expect(
+    await expectRejection(
       runSkUsRawBatch({
         rows,
         pageSize: 1,
@@ -557,7 +584,8 @@ test("journal persistence failure prevents checkpoint advancement and later rows
           checkpoints += 1;
         },
       }),
-    ).rejects.toThrow(/ENOENT/u);
+      /ENOENT/u,
+    );
     expect(visited).toEqual(rows.slice(0, 1).map(({ id }) => id));
     expect(checkpoints).toBe(0);
     expect(
