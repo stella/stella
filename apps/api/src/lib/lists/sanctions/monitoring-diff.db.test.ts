@@ -29,6 +29,7 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-input";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -223,6 +224,87 @@ const matchFor = async (contactId: typeof contacts.$inferSelect.id) =>
       .from(sanctionsContactMatches)
       .where(eq(sanctionsContactMatches.contactId, contactId))
   ).at(0) ?? panic("Expected current match");
+
+const stateFor = async (contactId: typeof contacts.$inferSelect.id) => ({
+  matches: await db
+    .select()
+    .from(sanctionsContactMatches)
+    .where(eq(sanctionsContactMatches.contactId, contactId))
+    .orderBy(sanctionsContactMatches.sourceEntryId),
+  events: await db
+    .select()
+    .from(sanctionsScreeningEvents)
+    .where(eq(sanctionsScreeningEvents.contactId, contactId))
+    .orderBy(sanctionsScreeningEvents.id),
+  coverage: await screeningFor(contactId),
+});
+
+test(
+  "incomplete monitoring outcomes preserve matches events and coverage at the result bound",
+  async () => {
+    const editionId = await activate("5");
+    const contact = await addContact();
+    const work = await prepare(contact);
+    const outcome = work.outcome;
+    if (outcome.status !== "possible-match") {
+      panic("Expected matching fixture");
+    }
+    const hit = outcome.possibleMatches[0];
+    const outcomeWithHits = (
+      possibleMatches: [SanctionsPossibleMatch, ...SanctionsPossibleMatch[]],
+      truncated = false,
+    ) => ({
+      ...outcome,
+      possibleMatches,
+      truncated,
+      totalMatches: possibleMatches.length,
+    });
+    const hits = Array.from({ length: 1001 }, (_, index) => ({
+      ...hit,
+      sourceEntryId: `bound-${index.toString().padStart(4, "0")}`,
+    }));
+    await db.insert(sanctionsEditionEntries).values(
+      hits.map(({ sourceEntryId }) => ({
+        editionId,
+        sourceEntryId,
+        contentHash: "5".repeat(64),
+      })),
+    );
+    const first = hits.at(0) ?? panic("First hit missing");
+    const second = hits.at(1) ?? panic("Second hit missing");
+    expect(
+      await commit({ ...work, outcome: outcomeWithHits([first, second]) }),
+    ).toEqual([contact.id]);
+    const initial = await stateFor(contact.id);
+    expect(initial.matches.map(({ state }) => state)).toEqual([
+      "active",
+      "active",
+    ]);
+    expect(initial.events).toHaveLength(2);
+    for (const incompleteOutcome of [
+      outcomeWithHits([first], true),
+      outcomeWithHits([first, ...hits.slice(1)]),
+    ]) {
+      await expectFailure(
+        async () => await commit({ ...work, outcome: incompleteOutcome }),
+        "Monitoring requires the complete sanctions result set",
+      );
+      expect(await stateFor(contact.id)).toEqual(initial);
+    }
+    const complete = {
+      ...work,
+      outcome: outcomeWithHits([first, ...hits.slice(1, 1000)]),
+    };
+    expect(await commit(complete)).toEqual([contact.id]);
+    const boundary = await stateFor(contact.id);
+    expect(boundary.matches).toHaveLength(1000);
+    expect(boundary.events).toHaveLength(1000);
+    expect(boundary.coverage.status).toBe("possible-match");
+    await commit(complete);
+    expect(await stateFor(contact.id)).toEqual(boundary);
+  },
+  TIMEOUT,
+);
 
 test(
   "full-edition diff converges across replay, unchanged review, changed entries, lapse and reopen",
