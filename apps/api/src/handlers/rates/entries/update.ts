@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { and, eq, gte, isNull, lte, ne, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, ne, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockMatterRates } from "@/api/lib/billing/rate-lock";
 import {
   tMinorUnitAmount,
   tSafeId,
@@ -68,11 +69,10 @@ const updateRateEntry = createSafeHandler(
 
     const txResult = yield* Result.await(
       safeDb(async (tx) => {
+        // A rate-only change takes the lock too: a currency change checks
+        // every rate in the table and then restates it.
+        await lockMatterRates(tx, workspaceId);
         if (datesChanged) {
-          await tx.execute(
-            sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
-          );
-
           const locked = await tx.query.rateEntries.findFirst({
             where: {
               id: { eq: body.id },

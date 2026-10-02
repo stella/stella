@@ -7,6 +7,7 @@ import { currencyMinorUnitDigits } from "@stll/money";
 import { rateEntries, rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockMatterRates } from "@/api/lib/billing/rate-lock";
 import {
   tCurrencyCode,
   tDefaultVarchar,
@@ -68,9 +69,7 @@ const updateRateTable = createSafeHandler(
 
     const outcome = yield* Result.await(
       safeDb(async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
+        await lockMatterRates(tx, workspaceId);
         // The currency the rates are currently stored in, read under a row
         // lock BEFORE anything is written. The `existing` read above happened
         // outside this transaction, so a currency change that landed in
@@ -127,7 +126,9 @@ const updateRateTable = createSafeHandler(
         // inside the old currency's range can leave the range where a stored
         // integer still names itself. Refused here, before any write: the
         // column is `bigint` and would take the value, but the API reads it
-        // back as a JSON number.
+        // back as a JSON number. Every writer of a rate line holds the matter
+        // lock taken above, so the rates checked here are the rates scaled
+        // below.
         if (exponentShift > 0) {
           const beyondRange = await tx
             .select({ id: rateEntries.id })

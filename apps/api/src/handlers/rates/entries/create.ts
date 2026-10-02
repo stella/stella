@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { and, eq, gte, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, gte, isNull, lte, or } from "drizzle-orm";
 import { t } from "elysia";
 
 import type { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
@@ -8,6 +8,7 @@ import { abortableTx } from "@/api/db/safe-db";
 import { rateEntries } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockMatterRates } from "@/api/lib/billing/rate-lock";
 import {
   tMinorUnitAmount,
   tSafeId,
@@ -159,9 +160,7 @@ const createRateEntry = createSafeHandler(
 
     const txResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${params.rateTableId}))`,
-        );
+        await lockMatterRates(tx, workspaceId);
 
         const totalEntries = await tx.$count(
           rateEntries,

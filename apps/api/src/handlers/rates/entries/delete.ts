@@ -6,6 +6,7 @@ import { rateEntries } from "@/api/db/schema";
 import { loadRateEntry } from "@/api/handlers/rates/existing-rate-entry";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockMatterRates } from "@/api/lib/billing/rate-lock";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 
 const deleteRateEntryBodySchema = t.Object({
@@ -43,6 +44,7 @@ const deleteRateEntry = createSafeHandler(
 
     yield* Result.await(
       safeDb(async (tx) => {
+        await lockMatterRates(tx, workspaceId);
         await tx
           .delete(rateEntries)
           .where(

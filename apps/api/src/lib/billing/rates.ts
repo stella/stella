@@ -7,7 +7,7 @@ import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { member } from "@/api/db/auth-schema";
 import type { Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
-import { rateEntries } from "@/api/db/schema";
+import { rateEntries, rateTables } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 
@@ -42,7 +42,7 @@ export const resolveRatesInTransaction = async ({
 
   const defaultTable = await tx.query.rateTables.findFirst({
     where: { workspaceId: { eq: workspaceId }, isDefault: true },
-    columns: { id: true, currency: true, organizationId: true },
+    columns: { id: true, organizationId: true },
   });
   if (!defaultTable) {
     return resolved;
@@ -88,6 +88,11 @@ export const resolveRatesInTransaction = async ({
       ] as const;
     }),
   );
+  // A rate is stored in its table's currency's minor units, and a currency
+  // change restates every rate. Each statement here sees its own snapshot, so
+  // the currency is read in the statement that reads the rates: a change
+  // committed between two statements cannot pair one side's code with the
+  // other side's amounts.
   const entries = await tx
     .select({
       effectiveFrom: rateEntries.effectiveFrom,
@@ -95,8 +100,10 @@ export const resolveRatesInTransaction = async ({
       hourlyRate: rateEntries.hourlyRate,
       userId: rateEntries.userId,
       role: rateEntries.role,
+      currency: rateTables.currency,
     })
     .from(rateEntries)
+    .innerJoin(rateTables, eq(rateTables.id, rateEntries.rateTableId))
     .where(
       and(
         eq(rateEntries.rateTableId, defaultTable.id),
@@ -169,7 +176,7 @@ export const resolveRatesInTransaction = async ({
     if (entry) {
       resolved.set(rateLookupKey(lookup), {
         hourlyRate: entry.hourlyRate,
-        currency: defaultTable.currency,
+        currency: entry.currency,
       });
     }
   }

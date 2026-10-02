@@ -5,6 +5,7 @@ import { t } from "elysia";
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockMatterRates } from "@/api/lib/billing/rate-lock";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
@@ -36,7 +37,6 @@ const deleteRateTable = createSafeHandler(
             id: true,
             name: true,
             currency: true,
-            isDefault: true,
           },
         }),
       ),
@@ -48,27 +48,37 @@ const deleteRateTable = createSafeHandler(
       );
     }
 
-    if (existing.isDefault) {
-      return Result.err(
-        new HandlerError({
-          status: 400,
-          message:
-            "Cannot delete the default rate table. " +
-            "Set another table as default first.",
-        }),
-      );
-    }
-
-    yield* Result.await(
+    const outcome = yield* Result.await(
       safeDb(async (tx) => {
-        await tx
+        await lockMatterRates(tx, workspaceId);
+        // The flag is decided under the lock that promoting a table takes, and
+        // the delete repeats it, so a table promoted after the read above is
+        // kept.
+        const deleted = await tx
           .delete(rateTables)
           .where(
             and(
               eq(rateTables.id, body.id),
               eq(rateTables.workspaceId, workspaceId),
+              eq(rateTables.isDefault, false),
             ),
-          );
+          )
+          .returning({ id: rateTables.id });
+        if (deleted.length === 0) {
+          const remaining = await tx
+            .select({ id: rateTables.id })
+            .from(rateTables)
+            .where(
+              and(
+                eq(rateTables.id, body.id),
+                eq(rateTables.workspaceId, workspaceId),
+              ),
+            )
+            .limit(1);
+          return remaining.length === 0
+            ? { status: "rate-not-found" as const }
+            : { status: "is-default" as const };
+        }
 
         await recordAuditEvent(tx, {
           action: AUDIT_ACTION.DELETE,
@@ -84,8 +94,25 @@ const deleteRateTable = createSafeHandler(
             },
           },
         });
+        return { status: "deleted" as const };
       }),
     );
+
+    if (outcome.status === "rate-not-found") {
+      return Result.err(
+        new HandlerError({ status: 404, message: "Rate table not found" }),
+      );
+    }
+    if (outcome.status === "is-default") {
+      return Result.err(
+        new HandlerError({
+          status: 400,
+          message:
+            "Cannot delete the default rate table. " +
+            "Set another table as default first.",
+        }),
+      );
+    }
 
     return Result.ok({ deleted: true });
   },

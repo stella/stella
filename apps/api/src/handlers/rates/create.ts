@@ -1,11 +1,12 @@
 import { Result } from "better-result";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
 import { abortableTx } from "@/api/db/safe-db";
 import { rateTables } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import { lockMatterRates } from "@/api/lib/billing/rate-lock";
 import { tCurrencyCode, tDefaultVarchar } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -36,9 +37,7 @@ const createRateTable = createSafeHandler(
     const txResult = yield* Result.await(
       abortableTx(safeDb, async (tx) => {
         // Row locks cannot serialize the first table in an empty matter.
-        await tx.execute(
-          sql`SELECT pg_advisory_xact_lock(hashtext(${workspaceId}))`,
-        );
+        await lockMatterRates(tx, workspaceId);
         // Lock rows then count to serialize concurrent adds.
         // PG rejects FOR UPDATE with aggregate functions.
         const lockedRows = await tx
