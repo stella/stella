@@ -144,7 +144,7 @@ test("impossible plans fail before running and name their files and class cap", 
 });
 test("calibrated splitting preserves every file and never exceeds its composition model", () => {
   assertProperty(
-    "api-test.memory-batch-composition",
+    "calibrated splitting preserves every file and never exceeds its composition model",
     fc.property(
       fc.integer({ min: 500, max: 5000 }),
       fc.integer({ min: 1, max: 400 }),
