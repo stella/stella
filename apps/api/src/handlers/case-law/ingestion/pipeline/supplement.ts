@@ -8,6 +8,7 @@ import {
   PROCESS_DECISION_RETRY_REASON,
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { resolveSourceMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import { rebuildStoredJudgment } from "@/api/handlers/case-law/ingestion/pipeline/stored-judgment";
 import { DECISION_SUPPLEMENT_DOCUMENT_ROLE } from "@/api/handlers/case-law/ingestion/pipeline/supplement-document-role";
 import {
@@ -90,7 +91,6 @@ const leaveFormerHolder = async (
     };
   }
   const rewritten = await processDecision({
-    metadataUrlSchema: placement.metadataUrlSchema,
     input: rebuiltFormer.result,
     sourceId,
     scopedDb,
@@ -163,7 +163,6 @@ const leaveFormerHolder = async (
  * document.
  */
 export const processSupplement = async ({
-  metadataUrlSchema,
   supplement,
   sourceId,
   scopedDb,
@@ -175,6 +174,10 @@ export const processSupplement = async ({
   polarityRules,
   absorb = absorbStandaloneSupplementRow,
 }: ProcessSupplementOptions): Promise<ProcessSupplementResult> => {
+  const metadataUrlSchema = await resolveSourceMetadataUrlSchema(
+    sourceId,
+    scopedDb,
+  );
   const { sourceDocumentId } = supplement.document;
   const expectedRole = DECISION_SUPPLEMENT_DOCUMENT_ROLE[supplement.kind];
   if (
@@ -309,7 +312,6 @@ export const processSupplement = async ({
     );
   }
   const written = await processDecision({
-    metadataUrlSchema: placement.metadataUrlSchema,
     input: rebuilt.result,
     sourceId,
     scopedDb,

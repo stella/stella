@@ -1415,10 +1415,10 @@ for (const name of [
       if (diagnostics.length === 0) {
         expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
       } else {
-        expect(decision.metadata).toHaveProperty(
-          "metadataUrlDiagnostics",
-          diagnostics,
-        );
+        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+          entries: diagnostics,
+          overflowCount: 0,
+        });
       }
     } else {
       expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();

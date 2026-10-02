@@ -301,11 +301,14 @@ test("legacy persisted URI fields reject unsafe values without losing or multipl
   for (const key of ["manifestationUri", "languageUri", "cdmType"]) {
     expect(Object.hasOwn(replayed.result.metadata, key)).toBe(false);
   }
-  expect(replayed.result.metadata).toHaveProperty("metadataUrlDiagnostics", [
-    { address: "manifestationUri", reason: "invalid-url" },
-    { address: "languageUri", reason: "unsafe-protocol" },
-    { address: "cdmType", reason: "unsafe-protocol" },
-  ]);
+  expect(replayed.result.metadata).toHaveProperty("metadataUrlDiagnostics", {
+    entries: [
+      { address: "manifestationUri", reason: "invalid-url" },
+      { address: "languageUri", reason: "unsafe-protocol" },
+      { address: "cdmType", reason: "unsafe-protocol" },
+    ],
+    overflowCount: 0,
+  });
   const second = await reparse(storedFrom(replayed.result));
   if (second.type !== "parsed") {
     throw new TypeError(`Expected parsed, got ${second.type}`);

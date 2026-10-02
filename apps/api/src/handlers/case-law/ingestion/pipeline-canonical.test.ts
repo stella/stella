@@ -13,6 +13,7 @@ import {
 } from "@/api/db/schema";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline as runIngestionPipelineWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline";
 import { caseLawCanonicalPayload } from "@/api/handlers/case-law/ingestion/pipeline/corpus-mirror";
 import { processDecision as processDecisionWithDependencies } from "@/api/handlers/case-law/ingestion/pipeline/decision";
@@ -32,6 +33,7 @@ import {
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
 import type { putCorpusPacks } from "@/api/lib/legal-search/corpus-pack-writer";
 import * as realCorpusStorage from "@/api/lib/legal-search/corpus-storage";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   sanitizeResult,
   partialObservationFromMetadata,
@@ -148,6 +150,7 @@ const testSourceLease = (
   source,
 });
 
+let persistedAdapterKey: string = "canonical-unregistered-fixture";
 let persistedCursor: string | null | undefined;
 /**
  * How the decision insert behaves. `fault` is an unambiguous failure;
@@ -169,6 +172,7 @@ afterEach(() => {
   insertedRows.length = 0;
   updatedDecisionRows.length = 0;
   transferredPacks.length = 0;
+  persistedAdapterKey = "canonical-unregistered-fixture";
   persistedCursor = undefined;
   rowWrite = "ok";
   existingDecision = undefined;
@@ -234,6 +238,9 @@ const scopedDb: ScopedDb = async (callback) => {
     select: (selection: Record<string, unknown>) => ({
       from: (table: unknown) => {
         const rows = async () => {
+          if (table === caseLawSources && "adapterKey" in selection) {
+            return [{ adapterKey: persistedAdapterKey }];
+          }
           if (table === caseLawSources && "sourceDescriptor" in selection) {
             return [
               {
@@ -624,26 +631,26 @@ describe("processDecision — canonical storage mode", () => {
       const fake = startFakeS3();
       try {
         const stated = `https://example.org/?a=1${queryEncoding}b=2`;
-        const schema = {
-          href: "url",
-          referencedLegislation: { items: { url: "url" } },
-        } as const;
+        const schema = PL_COURTS_METADATA_URL_SCHEMA;
+        persistedAdapterKey = ADAPTER_KEYS.PL_COURTS;
         const input = plainTextIngestionResult(
           {
             ...decision,
+            country: "POL",
+            language: "pl",
             fulltext: undefined,
             sourceRaw: JSON.stringify({ url: stated, invalid: "/relative" }),
             metadata: approveMetadataUrls(
               {
                 href: toMetadataUrl(stated, "transport-json"),
-                referencedLegislation: [
+                chambers: [
                   {
-                    url: toMetadataUrl(stated, "transport-json"),
-                    nazov: "Law &amp; order",
+                    href: toMetadataUrl(stated, "transport-json"),
+                    name: "Law &amp; order",
                   },
                   {
-                    url: toMetadataUrl("/relative", "transport-json"),
-                    nazov: "Invalid link",
+                    href: toMetadataUrl("/relative", "transport-json"),
+                    name: "Invalid link",
                   },
                 ],
                 ordinaryText: stated,
@@ -658,7 +665,6 @@ describe("processDecision — canonical storage mode", () => {
           normalized.metadata,
         );
         const outcome = await processDecision({
-          metadataUrlSchema: schema,
           input,
           observationOrder: 1n,
           sourceId: createSafeId<"caseLawSource">(),
@@ -671,22 +677,23 @@ describe("processDecision — canonical storage mode", () => {
           href: stated,
           ordinaryText:
             queryEncoding === "%26" ? stated : "https://example.org/?a=1&b=2",
-          referencedLegislation: [
-            { url: stated, nazov: "Law & order" },
-            { nazov: "Invalid link" },
+          chambers: [
+            { href: stated, name: "Law & order" },
+            { name: "Invalid link" },
           ],
-          metadataUrlDiagnostics: [
-            { address: "referencedLegislation[1].url", reason: "invalid-url" },
-          ],
+          metadataUrlDiagnostics: {
+            entries: [{ address: "chambers[1].href", reason: "invalid-url" }],
+            overflowCount: 0,
+          },
         });
         const serialized = JSON.stringify(metadata);
         const reloaded = rehydrateMetadataUrls(JSON.parse(serialized), schema);
-        expect(
-          sanitizeResult(
+        expect({
+          value: sanitizeResult(
             plainTextIngestionResult({ ...input, metadata: reloaded }, schema),
             schema,
           ).metadata,
-        ).toEqual(metadata);
+        }).toHaveProperty("value", metadata);
       } finally {
         fake.stop();
       }

@@ -1189,6 +1189,10 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
 
 test("registered replay and its pipeline write preserve URLs and cloned diagnostic snapshots", async () => {
   const fixture = await replayConvergenceFixture("Replay URL schema fixture.");
+  await db
+    .update(caseLawSources)
+    .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
+    .where(eq(caseLawSources.id, fixture.sourceId));
   const href = "https://example.test/?stated=&amp;amp;&other=&#x26;";
   const approved = approveMetadataUrls(
     {
@@ -1241,9 +1245,10 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
     expect(row?.metadata).toMatchObject({
       manifestationUri: href,
       manifestations: [{ uri: href }],
-      metadataUrlDiagnostics: [
-        { address: "languageUri", reason: "unsafe-protocol" },
-      ],
+      metadataUrlDiagnostics: {
+        entries: [{ address: "languageUri", reason: "unsafe-protocol" }],
+        overflowCount: 0,
+      },
     });
     expect(row?.metadata).not.toHaveProperty("languageUri");
     const second = await replay();
@@ -1253,5 +1258,8 @@ test("registered replay and its pipeline write preserve URLs and cloned diagnost
     expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
   } finally {
     await sourceLease.release();
+    await db
+      .delete(caseLawSources)
+      .where(eq(caseLawSources.id, fixture.sourceId));
   }
 });

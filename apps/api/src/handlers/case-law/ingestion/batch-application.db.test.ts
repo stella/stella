@@ -444,14 +444,16 @@ test("the registered batch clones and persists declared URL scalars and diagnost
       division: { href: nestedUrl, court: { href: null } },
       chambers: [{ href: null }],
       source: {},
-      [META_URL_DIAGNOSTICS]: [
-        { address: "source.judgmentUrl", reason: "unsafe-protocol" },
-      ],
+      [META_URL_DIAGNOSTICS]: {
+        entries: [{ address: "source.judgmentUrl", reason: "unsafe-protocol" }],
+        overflowCount: 0,
+      },
     });
     expect(row?.metadata?.["source"]).toEqual({});
-    expect(row?.metadata?.[META_URL_DIAGNOSTICS]).toEqual([
-      { address: "source.judgmentUrl", reason: "unsafe-protocol" },
-    ]);
+    expect(row?.metadata?.[META_URL_DIAGNOSTICS]).toEqual({
+      entries: [{ address: "source.judgmentUrl", reason: "unsafe-protocol" }],
+      overflowCount: 0,
+    });
     const replayed = await applyPrepared({
       sourceId,
       batch,

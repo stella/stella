@@ -70,12 +70,15 @@ describe.skipIf(!enabled)(
             { nazov: "Unpublished", url: null },
             { nazov: "Rejected" },
           ]);
-          expect(replayed[META_URL_DIAGNOSTICS]).toEqual([
-            {
-              address: "referencedLegislation[2].url",
-              reason: "unsafe-protocol",
-            },
-          ]);
+          expect(replayed[META_URL_DIAGNOSTICS]).toEqual({
+            entries: [
+              {
+                address: "referencedLegislation[2].url",
+                reason: "unsafe-protocol",
+              },
+            ],
+            overflowCount: 0,
+          });
           expect(
             readDecisionTextMetadata(replayed).metadata,
           ).not.toHaveProperty(META_URL_DIAGNOSTICS);

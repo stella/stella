@@ -125,7 +125,11 @@ export type ProcessDecisionAttemptOptions = {
 
 export type ProcessDecisionOptions = Omit<
   ProcessDecisionAttemptOptions,
-  "contentionReconciliation" | "corpus" | "judges" | "refresh"
+  | "contentionReconciliation"
+  | "corpus"
+  | "judges"
+  | "refresh"
+  | "metadataUrlSchema"
 > & {
   /** Defaults to `WHEN_SOURCE_CHANGED`, which is what a crawl wants. */
   refresh?: DecisionRefresh;

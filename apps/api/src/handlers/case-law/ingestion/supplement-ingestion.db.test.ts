@@ -8,7 +8,7 @@ import {
   expect,
   test,
 } from "bun:test";
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
 import { DECISION_DOCUMENT_ROLE } from "@stll/api-contract/decision-document-role";
@@ -1112,6 +1112,56 @@ describe("the reasons' stored payload", () => {
     expect(again.fulltext).not.toContain(REASONS_TEXT);
     expect(JSON.stringify(again.documentAst)).not.toContain(REASONS_TEXT);
     expect(await citationsOf(ruling.id)).toEqual([]);
+  });
+
+  test("supplement erasure persists the registered judgment URL spelling through the pipeline entry", async () => {
+    const fixture = await newSource();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: sql`'retired-' || ${caseLawSources.id}` })
+      .where(eq(caseLawSources.adapterKey, ADAPTER_KEYS.PL_COURTS));
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.PL_COURTS })
+      .where(eq(caseLawSources.id, fixture.sourceId));
+    const rootUrl = "https://example.test/?root=&amp;amp;&encoded=%26";
+    const nestedUrl = "https://example.test/?nested=&amp;lt;b&amp;gt;";
+    const rulingRow = {
+      ...RULING,
+      href: rootUrl,
+      division: { id: 1083, href: nestedUrl, court: { id: 42, name: COURT } },
+    };
+    await ingestSupplement(fixture, supplementOf(REASONS));
+    await ingestDecision(fixture, decisionOf(rulingRow));
+    const absorbed = await decisionBy(fixture.sourceId, "339001");
+    const ruling = await decisionBy(fixture.sourceId, "339002");
+    expect(ruling.fulltext).toContain(REASONS_TEXT);
+    expect(ruling.metadata).toMatchObject({
+      href: rootUrl,
+      division: { href: nestedUrl },
+    });
+    await advanceSourceCounter(fixture.sourceId);
+
+    const erased = await redactCaseLawDecisionWithSupplementHolders({
+      decisionId: absorbed.id,
+      scopedDb,
+      readStoredRaw,
+      reparseStoredRaw,
+      leaseWaitMs: 0,
+    });
+    expect(Result.isOk(erased) && erased.value.holders).toEqual([
+      { type: "recomposed", judgmentId: ruling.id },
+    ]);
+    const rebuilt = await decisionBy(fixture.sourceId, "339002");
+    expect(rebuilt.fulltext).toContain(RULING_TEXT);
+    expect(rebuilt.fulltext).not.toContain(REASONS_TEXT);
+    expect(rebuilt.metadata).toMatchObject({
+      href: rootUrl,
+      division: { href: nestedUrl },
+    });
+    expect(
+      rebuilt.metadata?.[DOCUMENT_SUPPLEMENTS_METADATA_KEY],
+    ).toBeUndefined();
   });
 
   test("erased after joining a ruling whose payload cannot be read withhold that ruling", async () => {

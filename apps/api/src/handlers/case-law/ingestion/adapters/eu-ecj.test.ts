@@ -1609,9 +1609,10 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
         celex: "62013TO0488",
         manifestationUri:
           "https://publications.europa.eu/resource/item?a=1&amp;amp;b=2",
-        metadataUrlDiagnostics: [
-          { address: "manifestationUri", reason: "invalid-url" },
-        ],
+        metadataUrlDiagnostics: {
+          entries: [{ address: "manifestationUri", reason: "invalid-url" }],
+          overflowCount: 0,
+        },
       },
     });
     expect(outcome.type).toBe("parsed");
@@ -1643,9 +1644,10 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
         metadata: {
           celex: "62013TO0488",
           cdmType: "https://example.org/old-type",
-          metadataUrlDiagnostics: [
-            { address: "cdmType", reason: "invalid-url" },
-          ],
+          metadataUrlDiagnostics: {
+            entries: [{ address: "cdmType", reason: "invalid-url" }],
+            overflowCount: 0,
+          },
         },
       });
       expect(outcome.type).toBe("parsed");
@@ -1654,7 +1656,10 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
           expect(outcome.result.metadata).not.toHaveProperty("cdmType");
           expect(outcome.result.metadata).toHaveProperty(
             "metadataUrlDiagnostics",
-            [{ address: "cdmType", reason: "unsafe-protocol" }],
+            {
+              entries: [{ address: "cdmType", reason: "unsafe-protocol" }],
+              overflowCount: 0,
+            },
           );
         } else {
           expect(outcome.result.metadata).toHaveProperty("cdmType", current);
@@ -1677,10 +1682,13 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
     });
     expect(outcome.type).toBe("parsed");
     if (outcome.type === "parsed") {
-      expect(outcome.result.metadata).toHaveProperty("metadataUrlDiagnostics", [
-        { address: "manifestationUri", reason: "unsafe-protocol" },
-        { address: "manifestations", reason: "unsupported-url-value" },
-      ]);
+      expect(outcome.result.metadata).toHaveProperty("metadataUrlDiagnostics", {
+        entries: [
+          { address: "manifestationUri", reason: "unsafe-protocol" },
+          { address: "manifestations", reason: "unsupported-url-value" },
+        ],
+        overflowCount: 0,
+      });
     }
   });
 

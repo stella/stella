@@ -474,7 +474,7 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       ];
       for (const metadata of [decision.metadata, repeated, restored]) {
         for (const address of addresses) {
-          if ("expected" in entry) {
+          if ("expected" in entry && !(input === null && address === "href")) {
             expect(metadata).toHaveProperty(address, entry.expected);
           } else {
             expect(metadata).not.toHaveProperty(address);
@@ -485,7 +485,7 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
         }
         if ("reason" in entry) {
           expect(metadata).toHaveProperty(
-            "metadataUrlDiagnostics",
+            "metadataUrlDiagnostics.entries",
             expect.arrayContaining(
               addresses.map((address) => ({ address, reason: entry.reason })),
             ),
@@ -507,24 +507,24 @@ test("SAOS preserves publisher nulls and an opaque string division chamber", asy
       chambers: null,
     },
   });
-  expect(decision.metadata).toHaveProperty("href", null);
+  expect(decision.metadata).not.toHaveProperty("href");
   expect(decision.metadata).toHaveProperty("division.href", null);
   expect(decision.metadata).toHaveProperty("division.chamber", "Izba");
   expect(decision.metadata).toHaveProperty("chambers", null);
   expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
 });
 
-test("SAOS detail-only null URL and chambers override an omitted listing value", async () => {
+test("SAOS detail null URLs and chambers fall back to the listing", async () => {
   const recorded = await detailRecord(CHAMBER_DETAIL);
-  const listing = Object.fromEntries(
-    Object.entries(recorded).filter(
-      ([key]) => key !== "href" && key !== "chambers",
-    ),
-  );
+  const url = "https://publisher.example/item?a=1&amp;b=2";
   const decision = decisionFrom({
-    listingRow: listing,
+    listingRow: {
+      ...recorded,
+      href: url,
+      chambers: [{ id: 1, name: "Chamber", href: url }],
+    },
     detail: { ...recorded, href: null, chambers: null },
   });
-  expect(decision.metadata).toHaveProperty("href", null);
-  expect(decision.metadata).toHaveProperty("chambers", null);
+  expect(decision.metadata).toHaveProperty("href", url);
+  expect(decision.metadata).toHaveProperty("chambers[0].href", url);
 });

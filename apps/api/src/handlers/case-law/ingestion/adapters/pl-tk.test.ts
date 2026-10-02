@@ -28,6 +28,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import type { PlTkListingRow } from "@/api/handlers/case-law/ingestion/adapters/pl-tk";
 import { plConstitutionalTribunalRulingKeys } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
+import { sanitizeMetadata } from "@/api/lib/legal-search/corpus-sanitize";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -1192,18 +1193,6 @@ for (const candidate of [
       : undefined;
     const links = isRecord(publication) ? publication["links"] : undefined;
     const link = Array.isArray(links) ? links.at(0) : undefined;
-    if (candidate.includes("\n") || candidate.includes("\u200b")) {
-      expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", [
-        { address: "caseDocuments[0].url", reason: "control-character" },
-        {
-          address: "publications[0].links[0].url",
-          reason: "control-character",
-        },
-        { address: "wordDocumentUrl", reason: "control-character" },
-      ]);
-      expect(decision.documentUrl).toBeUndefined();
-      return;
-    }
     if (
       URL.canParse(candidate, "https://ipo.trybunal.gov.pl/ipo/") &&
       candidate.trim().length > 0 &&
@@ -1227,3 +1216,21 @@ for (const candidate of [
     expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
   });
 }
+
+test("ordinary tribunal rows omit undefined metadata from stored JSON", async () => {
+  const decision = decisionOf(
+    rowFor({}),
+    await caseFixture("pl-tk-case-k-2-26.html.gz"),
+  );
+  const stored = sanitizeMetadata(decision.metadata);
+  for (const key of [
+    "listingDefect",
+    "originatesFrom",
+    "joinedCases",
+    "signalledCase",
+  ]) {
+    expect(stored).not.toHaveProperty(key);
+  }
+  const noDocket = decisionOf(rowFor({ caseNumber: undefined }), undefined);
+  expect(sanitizeMetadata(noDocket.metadata)).not.toHaveProperty("rulingKeys");
+});

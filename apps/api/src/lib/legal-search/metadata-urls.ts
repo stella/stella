@@ -101,11 +101,11 @@ const recordDefect = (state: DiagnosticState, diagnostic: UrlDiagnostic) => {
   }
 };
 const readDiagnostics = (value: unknown): UrlDiagnostic[] => {
-  if (!Array.isArray(value)) {
+  if (!isRecord(value) || !Array.isArray(value["entries"])) {
     return [];
   }
   const diagnostics: UrlDiagnostic[] = [];
-  for (const entry of value) {
+  for (const entry of value["entries"]) {
     if (diagnostics.length === MAX_METADATA_URL_DIAGNOSTICS) {
       break;
     }
@@ -323,9 +323,10 @@ const projectMetadata = (
   });
   if (!isRecord(projected)) {
     return {
-      [META_URL_DIAGNOSTICS]: [
-        { address: "", reason: "unsupported-url-value" },
-      ],
+      [META_URL_DIAGNOSTICS]: {
+        entries: [{ address: "", reason: "unsupported-url-value" }],
+        overflowCount: 0,
+      },
     };
   }
   const previous =
@@ -335,10 +336,10 @@ const projectMetadata = (
     mode === "stored" && isRecord(metadata)
       ? metadata[META_URL_DIAGNOSTICS]
       : undefined;
-  const tail = Array.isArray(storedSidecar) ? storedSidecar.at(-1) : undefined;
-  const priorOverflow: unknown = isRecord(tail)
-    ? tail["overflowCount"]
-    : undefined;
+  const priorOverflow: unknown =
+    isRecord(storedSidecar) && Array.isArray(storedSidecar["entries"])
+      ? storedSidecar["overflowCount"]
+      : undefined;
   // Persisted omissions retain their bounded diagnostic snapshot; a current value supersedes it.
   for (const diagnostic of previous) {
     if (!diagnostics.present.has(diagnostic.address)) {
@@ -357,10 +358,10 @@ const projectMetadata = (
     );
   }
   if (diagnostics.entries.length > 0 || diagnostics.overflow > 0) {
-    projected[META_URL_DIAGNOSTICS] =
-      diagnostics.overflow > 0
-        ? [...diagnostics.entries, { overflowCount: diagnostics.overflow }]
-        : diagnostics.entries;
+    projected[META_URL_DIAGNOSTICS] = {
+      entries: diagnostics.entries,
+      overflowCount: diagnostics.overflow,
+    };
   }
   return projected;
 };

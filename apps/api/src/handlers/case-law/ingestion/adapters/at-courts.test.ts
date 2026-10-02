@@ -5,6 +5,7 @@ import {
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
 
 import {
@@ -16,6 +17,7 @@ import {
   atRisPreviousMonth,
   createAtCourtsAdapter,
 } from "./at-courts";
+import { AT_RIS_HEADNOTE_METADATA_URL_SCHEMA } from "./at-courts.metadata-urls";
 import { rejectionOf, requireReconciliation } from "./test-utils";
 
 const SOURCE_ID = "JJT_20260115_OGH0002_0010OB00001_26A0000_000";
@@ -814,47 +816,56 @@ describe("RIS metadata URL provenance", () => {
         expect(isRecord(summary) && Object.hasOwn(summary, "documentUrl")).toBe(
           false,
         );
-        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", [
-          {
-            address: "decisionTextDocument",
-            reason: candidate.startsWith("/")
-              ? "invalid-url"
-              : "unsafe-protocol",
-          },
-          {
-            address: "documentParts[0].formats[0].url",
-            reason: candidate.startsWith("/")
-              ? "invalid-url"
-              : "unsafe-protocol",
-          },
-          {
-            address: "documentParts[0].formats[1].url",
-            reason: candidate.startsWith("/")
-              ? "invalid-url"
-              : "unsafe-protocol",
-          },
-          {
-            address: "headnotes[0].documentUrl",
-            reason: candidate.startsWith("/")
-              ? "invalid-url"
-              : "unsafe-protocol",
-          },
-        ]);
+        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", {
+          entries: [
+            {
+              address: "decisionTextDocument",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "documentParts[0].formats[0].url",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "documentParts[0].formats[1].url",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+            {
+              address: "headnotes[0].documentUrl",
+              reason: candidate.startsWith("/")
+                ? "invalid-url"
+                : "unsafe-protocol",
+            },
+          ],
+          overflowCount: 0,
+        });
       }
     });
   }
 });
 
-test("RIS related decisions remain display text even when they resemble a URL", async () => {
+it("RIS related decisions remain display text even when they resemble a URL", async () => {
   const item = listingItem();
   nestedValue(item, ["Data", "Metadaten", "Judikatur", "Justiz"])["Bezug"] =
     "https://example.org/item?a=1&amp;b=2";
   const decision = assembleAtRisDecision(AT_COURTS_SOURCE, item, {
     documentXml: await fixtureXml(),
   });
-  expect(decision.metadata).toHaveProperty(
-    "relatedDecisions",
-    "https://example.org/item?a=1&b=2",
-  );
-  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+  const projected = toPlainTextIngestionResult(
+    decision,
+    AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+  ).unwrap();
+  for (const metadata of [decision.metadata, projected.metadata]) {
+    expect(metadata).toHaveProperty(
+      "relatedDecisions",
+      "https://example.org/item?a=1&b=2",
+    );
+    expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+  }
 });

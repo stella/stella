@@ -14,6 +14,7 @@ import {
   rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
 import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
+import { isRecord } from "@/api/lib/type-guards";
 
 const SCHEMA = { url: "url", documents: { items: { href: "url" } } } as const;
 
@@ -117,10 +118,13 @@ test("invalid approval diagnostics survive cloned approved metadata and storage 
   );
   const expected = {
     documents: [{}],
-    metadataUrlDiagnostics: [
-      { address: "url", reason: "unsafe-protocol" },
-      { address: "documents[0].href", reason: "control-character" },
-    ],
+    metadataUrlDiagnostics: {
+      entries: [
+        { address: "url", reason: "unsafe-protocol" },
+        { address: "documents[0].href", reason: "control-character" },
+      ],
+      overflowCount: 0,
+    },
   };
   expect(approved).toEqual(expected);
   expect(JSON.stringify(approved)).not.toContain("private-invalid-value");
@@ -189,7 +193,10 @@ test("fresh source approval recomputes diagnostics instead of merging stale stor
     {
       url: toMetadataUrl("https://example.test/new", "decoded"),
       documents: [],
-      metadataUrlDiagnostics: [{ address: "url", reason: "unsafe-protocol" }],
+      metadataUrlDiagnostics: {
+        entries: [{ address: "url", reason: "unsafe-protocol" }],
+        overflowCount: 0,
+      },
     },
     SCHEMA,
   );
@@ -198,7 +205,10 @@ test("fresh source approval recomputes diagnostics instead of merging stale stor
     rehydrateMetadataUrls(
       {
         ...approved,
-        metadataUrlDiagnostics: [{ address: "url", reason: "unsafe-protocol" }],
+        metadataUrlDiagnostics: {
+          entries: [{ address: "url", reason: "unsafe-protocol" }],
+          overflowCount: 0,
+        },
       },
       SCHEMA,
     ),
@@ -217,12 +227,19 @@ test("diagnostics are bounded under one reserved key and retain their overflow t
     SCHEMA,
   );
   const diagnostics = approved["metadataUrlDiagnostics"];
-  expect(Array.isArray(diagnostics)).toBe(true);
-  if (!Array.isArray(diagnostics)) {
-    throw new TypeError("Expected diagnostic array");
+  if (!isRecord(diagnostics) || !Array.isArray(diagnostics["entries"])) {
+    throw new TypeError("Expected diagnostic sidecar");
   }
-  expect(diagnostics).toHaveLength(MAX_METADATA_URL_DIAGNOSTICS + 1);
-  expect(diagnostics.at(-1)).toEqual({ overflowCount: 4 });
+  expect(diagnostics["entries"]).toHaveLength(MAX_METADATA_URL_DIAGNOSTICS);
+  expect(
+    diagnostics["entries"].every(
+      (entry) =>
+        isRecord(entry) &&
+        typeof entry["address"] === "string" &&
+        entry["reason"] === "unsafe-protocol",
+    ),
+  ).toBe(true);
+  expect(diagnostics["overflowCount"]).toBe(4);
   expect({
     value: toPlainTextMetadataObject(
       rehydrateMetadataUrls(jsonReload(approved), SCHEMA),
@@ -240,26 +257,69 @@ test("hostile persisted overflow counts saturate safely and reach a JSON fixed p
     documents: Array.from({ length: MAX_METADATA_URL_DIAGNOSTICS + 4 }, () => ({
       href: "ftp://example.test/",
     })),
-    metadataUrlDiagnostics: [{ overflowCount: Number.MAX_SAFE_INTEGER }],
+    metadataUrlDiagnostics: {
+      entries: [],
+      overflowCount: Number.MAX_SAFE_INTEGER,
+    },
   };
   const first = rehydrateMetadataUrls(stored, SCHEMA);
   const sidecar = first["metadataUrlDiagnostics"];
-  expect(Array.isArray(sidecar)).toBe(true);
-  if (!Array.isArray(sidecar)) {
-    throw new TypeError("Expected bounded diagnostics");
-  }
-  expect(sidecar.at(-1)).toEqual({ overflowCount: Number.MAX_SAFE_INTEGER });
+  expect(sidecar).toMatchObject({ overflowCount: Number.MAX_SAFE_INTEGER });
   expect(rehydrateMetadataUrls(jsonReload(first), SCHEMA)).toEqual(first);
+});
+
+test("stored diagnostic sidecars validate homogeneous entries and safe overflow counts", () => {
+  for (const sidecar of [
+    [],
+    { entries: "bad", overflowCount: 3 },
+    { entries: [], overflowCount: -1 },
+    { entries: [], overflowCount: 1.5 },
+  ]) {
+    expect(
+      rehydrateMetadataUrls(
+        { documents: [], metadataUrlDiagnostics: sidecar },
+        SCHEMA,
+      ),
+    ).toEqual({ documents: [] });
+  }
+  const projected = rehydrateMetadataUrls(
+    {
+      documents: [],
+      metadataUrlDiagnostics: {
+        entries: [
+          null,
+          { overflowCount: 9 },
+          { address: "missing", reason: "made-up" },
+          { address: "missing", reason: "invalid-url" },
+        ],
+        overflowCount: 2,
+      },
+    },
+    SCHEMA,
+  );
+  expect(projected).toEqual({
+    documents: [],
+    metadataUrlDiagnostics: {
+      entries: [{ address: "missing", reason: "invalid-url" }],
+      overflowCount: 2,
+    },
+  });
+  expect(rehydrateMetadataUrls(jsonReload(projected), SCHEMA)).toEqual(
+    projected,
+  );
 });
 
 test("malformed stored arrays and objects produce bounded defects, with stable mixed-array addresses", () => {
   expect(
     rehydrateMetadataUrls({ url: {}, documents: "bad shape" }, SCHEMA),
   ).toEqual({
-    metadataUrlDiagnostics: [
-      { address: "url", reason: "unsupported-url-value" },
-      { address: "documents", reason: "unsupported-url-value" },
-    ],
+    metadataUrlDiagnostics: {
+      entries: [
+        { address: "url", reason: "unsupported-url-value" },
+        { address: "documents", reason: "unsupported-url-value" },
+      ],
+      overflowCount: 0,
+    },
   });
   const first = rehydrateMetadataUrls(
     {
@@ -273,10 +333,13 @@ test("malformed stored arrays and objects produce bounded defects, with stable m
   );
   expect(first).toEqual({
     documents: [{ href: "https://example.test/?a=&amp;" }, null, {}],
-    metadataUrlDiagnostics: [
-      { address: "documents[1]", reason: "unsupported-url-value" },
-      { address: "documents[2].href", reason: "unsafe-protocol" },
-    ],
+    metadataUrlDiagnostics: {
+      entries: [
+        { address: "documents[1]", reason: "unsupported-url-value" },
+        { address: "documents[2].href", reason: "unsafe-protocol" },
+      ],
+      overflowCount: 0,
+    },
   });
   expect({
     value: toPlainTextMetadataObject(

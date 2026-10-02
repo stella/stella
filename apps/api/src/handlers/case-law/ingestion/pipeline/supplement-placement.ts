@@ -52,6 +52,7 @@ export type SupplementPlacement = Required<
   Pick<ProcessSupplementOptions, "absorb" | "corpus">
 > &
   Omit<ProcessSupplementOptions, "absorb" | "corpus"> & {
+    metadataUrlSchema: unknown;
     /** The publisher's id for the supplement, as the adapter stated it. */
     sourceDocumentId: string;
     /** The supplement's document, sanitized. */
@@ -432,7 +433,6 @@ export const keepSupplementStandalone = async (
     )
   ).at(0);
   const written = await processDecision({
-    metadataUrlSchema: placement.metadataUrlSchema,
     input: supplement.document,
     sourceId,
     scopedDb,

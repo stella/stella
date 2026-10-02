@@ -35,6 +35,7 @@ import {
   PROCESS_DECISION_STATUS,
 } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
 import type { ProcessResult } from "@/api/handlers/case-law/ingestion/pipeline/outcomes";
+import { resolveSourceMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import {
   CONTENTION_RECONCILIATION,
   DECISION_REFRESH,
@@ -352,11 +353,17 @@ export const processDecision = async ({
   corpus = CASE_LAW_CORPUS_DEPENDENCIES,
   judges = CASE_LAW_JUDGE_DEPENDENCIES,
   ...options
-}: ProcessDecisionOptions): Promise<ProcessResult> =>
-  await processDecisionAttempt({
+}: ProcessDecisionOptions): Promise<ProcessResult> => {
+  const metadataUrlSchema = await resolveSourceMetadataUrlSchema(
+    options.sourceId,
+    options.scopedDb,
+  );
+  return await processDecisionAttempt({
     ...options,
+    metadataUrlSchema,
     contentionReconciliation: CONTENTION_RECONCILIATION.INITIAL,
     refresh,
     corpus,
     judges,
   });
+};

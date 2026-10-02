@@ -1366,11 +1366,12 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
           }
         }
         if ("reason" in entry) {
-          expect(metadata["metadataUrlDiagnostics"]).toEqual(
-            expect.arrayContaining(
+          expect(metadata["metadataUrlDiagnostics"]).toEqual({
+            entries: expect.arrayContaining(
               addresses.map((address) => ({ address, reason: entry.reason })),
             ),
-          );
+            overflowCount: 0,
+          });
         }
       }
     });

@@ -54,7 +54,6 @@ import {
   startCycleDeadline,
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { StartCycleDeadlineOptions } from "@/api/lib/legal-search/cycle-deadline";
-import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
 
@@ -485,7 +484,6 @@ export const runIngestionPipeline = async ({
         try: async () =>
           // db-await-in-loop: each supplement locks its docket and may rewrite its judgment, ordered per observation
           await processSupplement({
-            metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
             supplement,
             sourceId: source.id,
             scopedDb,

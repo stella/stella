@@ -1454,8 +1454,7 @@ export const buildPlDecision = ({
   const effectiveCourtCases = item.courtCases ?? dumpItem.courtCases;
   const effectiveJudges = item.judges ?? dumpItem.judges;
   const effectiveDivision = item.division ?? dumpItem.division;
-  const effectiveChambers =
-    item.chambers === undefined ? dumpItem.chambers : item.chambers;
+  const effectiveChambers = item.chambers ?? dumpItem.chambers;
   const metadataChambers = (() => {
     if (effectiveChambers === null || effectiveChambers === undefined) {
       return effectiveChambers;
@@ -1598,7 +1597,7 @@ export const buildPlDecision = ({
           decisionType: storedDecisionType,
           saosId,
           href: toMetadataUrl(
-            item.href === undefined ? dumpItem.href : item.href,
+            detailOrListing(item.href, dumpItem.href),
             "transport-json",
           ),
           courtType: detailOrListing(item.courtType, dumpItem.courtType),

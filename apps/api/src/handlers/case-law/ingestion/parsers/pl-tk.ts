@@ -34,7 +34,7 @@ import {
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import {
   toMetadataUrl,
-  MetadataUrlDefect,
+  type MetadataUrlDefect,
   type SafeHref,
   sanitizeUrl,
 } from "@/api/lib/sanitize-url";
@@ -103,13 +103,8 @@ const absoluteUrl = (href: string | undefined): string | undefined => {
 };
 
 const metadataUrlOf = (href: string | undefined) => {
-  const stated = toMetadataUrl(href, "decoded");
-  if (
-    stated === undefined ||
-    (stated instanceof MetadataUrlDefect &&
-      stated.reason === "control-character")
-  ) {
-    return stated;
+  if (href?.trim().length === 0) {
+    return undefined;
   }
   const resolved = absoluteUrl(href);
   return resolved === undefined

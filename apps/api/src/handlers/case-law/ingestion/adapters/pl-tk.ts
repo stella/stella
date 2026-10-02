@@ -855,6 +855,14 @@ const rulingMetadata = (ruling: PlTkRuling | null) =>
         wordDocumentUrl: ruling.wordDocumentUrl,
       };
 
+/** Metadata without the keys a source left blank. */
+const definedEntries = (
+  metadata: Record<string, unknown>,
+): Record<string, unknown> =>
+  Object.fromEntries(
+    Object.entries(metadata).filter(([, value]) => value !== undefined),
+  );
+
 /** The parts of the stored raw envelope; a replay reads exactly these. */
 export const PL_TK_RAW_PART = {
   LISTING: "listing",
@@ -974,34 +982,39 @@ export const assemblePlTkDecision = ({
       // subject line it states is kept as metadata.
       textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       metadata: checkedDecisionMetadata(
-        {
-          documentId: id,
-          caseId: row.caseId,
-          stage: row.stage,
-          listingDefect: row.defect,
-          ...(deciding.type === "unknown"
-            ? {
-                quarantineReason: "court-not-stated",
-                courtAsPrinted: deciding.courtAsPrinted,
-              }
-            : {}),
-          decisionForm,
-          subject: ruling?.subject ?? row.subject,
-          ...recordMetadata(page?.record),
-          ...rulingMetadata(ruling),
-          // A quarantined row keys as nothing: the fallback court name would
-          // otherwise pair it with the Tribunal's rulings from another source.
-          rulingKeys:
-            statedCaseNumber === undefined || deciding.type !== "stated"
-              ? undefined
-              : plConstitutionalTribunalRulingKeys({
-                  caseNumber: statedCaseNumber,
-                  court: deciding.court,
-                  decisionDate,
-                  decisionType,
-                }),
-        },
-        PL_TK_METADATA_URL_SCHEMA,
+        definedEntries(
+          checkedDecisionMetadata(
+            {
+              documentId: id,
+              caseId: row.caseId,
+              stage: row.stage,
+              listingDefect: row.defect,
+              ...(deciding.type === "unknown"
+                ? {
+                    quarantineReason: "court-not-stated",
+                    courtAsPrinted: deciding.courtAsPrinted,
+                  }
+                : {}),
+              decisionForm,
+              subject: ruling?.subject ?? row.subject,
+              ...recordMetadata(page?.record),
+              ...rulingMetadata(ruling),
+              // A quarantined row keys as nothing: the fallback court name would
+              // otherwise pair it with the Tribunal's rulings from another source.
+              rulingKeys:
+                statedCaseNumber === undefined || deciding.type !== "stated"
+                  ? undefined
+                  : plConstitutionalTribunalRulingKeys({
+                      caseNumber: statedCaseNumber,
+                      court: deciding.court,
+                      decisionDate,
+                      decisionType,
+                    }),
+            },
+            PL_TK_METADATA_URL_SCHEMA,
+          ),
+        ),
+        { type: "stored", schema: PL_TK_METADATA_URL_SCHEMA },
       ),
       rawHash: hashContent(sourceRaw),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_TK],

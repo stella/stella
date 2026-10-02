@@ -920,7 +920,6 @@ const replayRow = async ({
   });
 
   const processed = await processDecision({
-    metadataUrlSchema,
     // The payload travels with the result, always, whatever the adapter put
     // in it. The pipeline writes the row's raw-payload pointer from the
     // result it is handed, so a result that carried no payload would clear

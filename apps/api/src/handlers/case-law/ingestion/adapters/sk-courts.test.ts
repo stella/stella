@@ -660,7 +660,7 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
         }
         if ("reason" in entry) {
           expect(metadata).toHaveProperty(
-            "metadataUrlDiagnostics",
+            "metadataUrlDiagnostics.entries",
             expect.arrayContaining(
               addresses.map((address) => ({ address, reason: entry.reason })),
             ),
