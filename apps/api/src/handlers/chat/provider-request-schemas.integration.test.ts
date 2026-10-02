@@ -858,6 +858,14 @@ const checkImageRequest = async ({
             attributes?.["image_capability_unknown"] === true,
         ),
       ).toBe(true);
+      if (provider === "mistral" && modelId === "mistral-large-latest") {
+        expect(
+          unknownLogs.every(
+            ({ attributes }) =>
+              attributes?.["reason"] === "conflicting_sources",
+          ),
+        ).toBe(true);
+      }
     } else {
       expect(unknownLogs).toEqual([]);
     }
@@ -907,6 +915,18 @@ const checkImageRefusal = async ({
 // modality refuses before dispatch. Offered models and unlisted choices both
 // go through the real send path and adapter here.
 describe("image input at the provider request boundary", () => {
+  test(
+    "conflicting sources: Mistral images reach the provider and record the reason",
+    async () => {
+      await checkImageRequest({
+        provider: "mistral",
+        modelId: "mistral-large-latest",
+        status: "unknown",
+      });
+    },
+    CONVERSATION_TIMEOUT_MS,
+  );
+
   for (const provider of TANSTACK_AI_PROVIDERS) {
     const models: readonly string[] = BYOK_MODEL_OPTIONS[provider];
     const capable = models.find(

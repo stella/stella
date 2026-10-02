@@ -602,6 +602,24 @@ type GetModelImageCapabilityOptions = {
   modelId: string;
 };
 
+// https://models.dev/api.json snapshot, 2026-10-02: mistral-large-latest lists
+// modalities.input ["text", "image"], but the installed SDK lists only text.
+// Preserve image sending until the sources agree; this is not catalog metadata.
+const IMAGE_CAPABILITY_SOURCE_CONFLICTS = [
+  { provider: "mistral", modelId: "mistral-large-latest" },
+] as const satisfies readonly GetModelImageCapabilityOptions[];
+
+export const getModelImageCapabilityUnknownReason = ({
+  provider,
+  modelId,
+}: GetModelImageCapabilityOptions) =>
+  IMAGE_CAPABILITY_SOURCE_CONFLICTS.some(
+    (conflict) =>
+      conflict.provider === provider && conflict.modelId === modelId,
+  )
+    ? "conflicting_sources"
+    : "missing_sdk_metadata";
+
 export const getModelImageCapability = ({
   provider,
   modelId,
@@ -609,7 +627,15 @@ export const getModelImageCapability = ({
   const decisions: Readonly<
     Record<string, "accepts" | "unsupported" | undefined>
   > = SDK_IMAGE_CAPABILITY[provider];
-  return Object.hasOwn(decisions, modelId)
+  const capability = Object.hasOwn(decisions, modelId)
     ? (decisions[modelId] ?? "unknown")
     : "unknown";
+  if (
+    capability === "unsupported" &&
+    getModelImageCapabilityUnknownReason({ provider, modelId }) ===
+      "conflicting_sources"
+  ) {
+    return "unknown";
+  }
+  return capability;
 };

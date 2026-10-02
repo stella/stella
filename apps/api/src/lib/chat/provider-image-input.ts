@@ -3,7 +3,10 @@ import { panic, Result } from "better-result";
 
 import type { TanStackAIProvider } from "@stll/ai-catalog";
 
-import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
+import {
+  getModelImageCapability,
+  getModelImageCapabilityUnknownReason,
+} from "@/api/lib/chat/sdk-image-capability";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { FILE_SIZE_LIMIT_BYTES, LIMITS } from "@/api/lib/limits";
@@ -135,6 +138,7 @@ export const prepareProviderImageMessages = async ({
       logger.info("ai.image_capability_unknown", {
         provider,
         image_capability_unknown: true,
+        reason: getModelImageCapabilityUnknownReason({ provider, modelId }),
       });
       break;
     case "accepts":

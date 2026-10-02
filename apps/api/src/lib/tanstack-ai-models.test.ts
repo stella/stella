@@ -236,7 +236,7 @@ describe("SDK image-attachment capability", () => {
     expect(
       getModelImageCapability({
         provider: "mistral",
-        modelId: "mistral-large-latest",
+        modelId: "codestral-latest",
       }),
     ).toBe("unsupported");
   });

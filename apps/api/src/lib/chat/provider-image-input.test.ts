@@ -101,6 +101,38 @@ describe("image input preparation", () => {
     }
   });
 
+  test("conflicting sources preserve images and log the unknown reason", async () => {
+    const telemetry = installRecordingLogger();
+    try {
+      const messages = imageMessages();
+      expect(
+        getModelImageCapability({
+          provider: "mistral",
+          modelId: "mistral-large-latest",
+        }),
+      ).toBe("unknown");
+      expect(
+        await prepareProviderImageMessages({
+          messages,
+          provider: "mistral",
+          modelId: "mistral-large-latest",
+        }),
+      ).toBe(messages);
+      expect(telemetry.records).toContainEqual(
+        expect.objectContaining({
+          message: "ai.image_capability_unknown",
+          attributes: expect.objectContaining({
+            provider: "mistral",
+            image_capability_unknown: true,
+            reason: "conflicting_sources",
+          }),
+        }),
+      );
+    } finally {
+      telemetry.restore();
+    }
+  });
+
   test("Bedrock bounds encoded bytes, preserves originals within the limit, and leaves other providers unchanged", async () => {
     for (const size of [
       BEDROCK_IMAGE_MAX_BYTES,
