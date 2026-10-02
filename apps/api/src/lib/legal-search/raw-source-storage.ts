@@ -74,7 +74,12 @@ const PAYLOADS_SEGMENT = "payloads/";
  * is still addressed per source, since nothing erases one.
  */
 export type RawSourcePayloadOwner =
-  | { family: typeof RAW_SOURCE_FAMILY.LEGISLATION; sourceId: string }
+  | {
+      family:
+        | typeof RAW_SOURCE_FAMILY.LEGISLATION
+        | typeof RAW_SOURCE_FAMILY.SOFT_LAW;
+      sourceId: string;
+    }
   | (RawDocumentOwner & { family: typeof RAW_SOURCE_FAMILY.CASE_LAW });
 
 const sha256Of = (data: Uint8Array | string): string =>
@@ -98,6 +103,7 @@ export const rawSourcePayloadKey = ({
     case RAW_SOURCE_FAMILY.CASE_LAW:
       return rawDocumentPayloadKey(owner, sha256Of(data));
     case RAW_SOURCE_FAMILY.LEGISLATION:
+    case RAW_SOURCE_FAMILY.SOFT_LAW:
       return `${owner.family}/raw/${owner.sourceId}/${sha256Of(data)}`;
     default:
       owner satisfies never;
@@ -164,7 +170,11 @@ type RawSourcePayloadWrite = {
 export type WriteRawSourcePayloadOptions = RawSourcePayloadWrite & {
   owner: Extract<
     RawSourcePayloadOwner,
-    { family: typeof RAW_SOURCE_FAMILY.LEGISLATION }
+    {
+      family:
+        | typeof RAW_SOURCE_FAMILY.LEGISLATION
+        | typeof RAW_SOURCE_FAMILY.SOFT_LAW;
+    }
   >;
 };
 
