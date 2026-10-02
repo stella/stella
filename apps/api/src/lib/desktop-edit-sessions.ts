@@ -126,14 +126,22 @@ export const DESKTOP_EDIT_SESSION_TAKEN_OVER_MESSAGE =
 type AuthorizeDesktopEditSessionOptions = {
   sessionId: SafeId<"desktopEditSession">;
   sessionToken: string;
-  db?: Pick<typeof rootDb, "select">;
 };
 
-export const authorizeDesktopEditSession = async ({
-  sessionId,
-  sessionToken,
-  db = rootDb,
-}: AuthorizeDesktopEditSessionOptions): Promise<DesktopEditSessionAuthorizationResult> => {
+export const authorizeDesktopEditSession = async (
+  options: AuthorizeDesktopEditSessionOptions,
+): Promise<DesktopEditSessionAuthorizationResult> => {
+  const authorization = await authorizeDesktopEditSessionWithDb(
+    options,
+    rootDb,
+  );
+  return authorization;
+};
+
+export const authorizeDesktopEditSessionWithDb = async (
+  { sessionId, sessionToken }: AuthorizeDesktopEditSessionOptions,
+  db: Pick<Transaction, "select">,
+): Promise<DesktopEditSessionAuthorizationResult> => {
   const tokenHash = hashDesktopEditSessionToken(sessionToken);
 
   const rows = await db

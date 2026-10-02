@@ -3,9 +3,13 @@ import { is } from "drizzle-orm";
 import { getTableConfig, PgTable } from "drizzle-orm/pg-core";
 import nodePath from "node:path";
 
+import * as agentAuthSchema from "@/api/db/agent-auth-schema";
 import * as authSchema from "@/api/db/auth-schema";
 import * as schema from "@/api/db/schema";
-import { ACCOUNT_DELETION_MANUAL_TABLES } from "@/api/lib/account-deletion-steps";
+import {
+  ACCOUNT_DELETION_MANUAL_TABLES,
+  ACCOUNT_DELETION_NON_FK_OWNERSHIP,
+} from "@/api/lib/account-deletion-steps";
 
 // ── Account-deletion FK coverage guard ──────────────────────────────────
 //
@@ -134,6 +138,7 @@ const isAutoCoveredByDb = (onDelete: string | undefined): boolean =>
 const isPgTable = (value: unknown): value is PgTable => is(value, PgTable);
 
 const allSchemaExports: Record<string, unknown> = {
+  ...agentAuthSchema,
   ...authSchema,
   ...schema,
 };
@@ -186,6 +191,48 @@ const findUserForeignKeys = (): UserForeignKey[] => {
   }
 
   return results;
+};
+
+type NonFkOwnershipDeclaration =
+  (typeof ACCOUNT_DELETION_NON_FK_OWNERSHIP)[number];
+
+const manualOwnershipProblems = (
+  declarations: readonly NonFkOwnershipDeclaration[],
+): string[] => {
+  const problems: string[] = [];
+  const tablesWithUserFk = new Set(
+    findUserForeignKeys().map((fk) => fk.tableName),
+  );
+  const manualTables = new Set<PgTable>(ACCOUNT_DELETION_MANUAL_TABLES);
+  const declaredTables = new Set<PgTable>();
+
+  for (const { table, userColumn } of declarations) {
+    const config = getTableConfig(table);
+    if (!manualTables.has(table) || declaredTables.has(table)) {
+      problems.push(
+        `${config.name}: unexpected or duplicate ownership declaration`,
+      );
+    }
+    declaredTables.add(table);
+    if (
+      !config.columns.includes(userColumn) ||
+      userColumn.table !== table ||
+      userColumn.dataType !== authSchema.user.id.dataType ||
+      userColumn.getSQLType() !== authSchema.user.id.getSQLType()
+    ) {
+      problems.push(
+        `${config.name}: ownership column must be a user-id text column on the table`,
+      );
+    }
+  }
+
+  for (const table of ACCOUNT_DELETION_MANUAL_TABLES) {
+    const name = getTableConfig(table).name;
+    if (tablesWithUserFk.has(name) === declaredTables.has(table)) {
+      problems.push(`${name}: expected exactly one user ownership path`);
+    }
+  }
+  return problems;
 };
 
 describe("account deletion FK coverage", () => {
@@ -273,26 +320,24 @@ describe("account deletion FK coverage", () => {
     expect(unpurged).toEqual([]);
   });
 
-  test("every table in ACCOUNT_DELETION_MANUAL_TABLES still has a foreign key to the user table", () => {
-    const userForeignKeys = findUserForeignKeys();
-    const tablesWithUserFk = new Set(userForeignKeys.map((fk) => fk.tableName));
-
-    const staleEntries = ACCOUNT_DELETION_MANUAL_TABLES.filter(
-      (table) => !tablesWithUserFk.has(getTableConfig(table).name),
+  test("every manual table has exactly one declared user ownership path", () => {
+    expect(manualOwnershipProblems(ACCOUNT_DELETION_NON_FK_OWNERSHIP)).toEqual(
+      [],
     );
+  });
 
-    if (staleEntries.length === 0) {
-      return;
+  test("every non-FK ownership declaration is required", () => {
+    expect(manualOwnershipProblems(ACCOUNT_DELETION_NON_FK_OWNERSHIP)).toEqual(
+      [],
+    );
+    for (const declaration of ACCOUNT_DELETION_NON_FK_OWNERSHIP) {
+      const remaining = ACCOUNT_DELETION_NON_FK_OWNERSHIP.filter(
+        (entry) => entry !== declaration,
+      );
+      expect(manualOwnershipProblems(remaining)).toEqual([
+        `${getTableConfig(declaration.table).name}: expected exactly one user ownership path`,
+      ]);
     }
-
-    const names = staleEntries
-      .map((table) => getTableConfig(table).name)
-      .join(", ");
-    throw new Error(
-      `ACCOUNT_DELETION_MANUAL_TABLES lists table(s) [${names}] that no longer have a foreign ` +
-        "key to the user table. Remove the stale entry from its step's `*_TABLES` constant in " +
-        "account-deletion-steps.ts, or confirm the FK was intentionally dropped elsewhere.",
-    );
   });
 
   test("ACCOUNT_DELETION_KNOWN_GAPS only lists FKs that are still actually uncovered", () => {

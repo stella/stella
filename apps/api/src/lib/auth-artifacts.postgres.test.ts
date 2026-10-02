@@ -30,7 +30,7 @@ import {
 import { removeOrganizationMemberWithAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
-  authorizeDesktopEditSession,
+  authorizeDesktopEditSessionWithDb,
   hashDesktopEditSessionToken,
 } from "@/api/lib/desktop-edit-sessions";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
@@ -317,11 +317,13 @@ if (!databaseUrl || !enabled) {
               await transaction(
                 async (tx) =>
                   (
-                    await authorizeDesktopEditSession({
-                      db: tx,
-                      sessionId: scope.sessionId,
-                      sessionToken: scope.token,
-                    })
+                    await authorizeDesktopEditSessionWithDb(
+                      {
+                        sessionId: scope.sessionId,
+                        sessionToken: scope.token,
+                      },
+                      tx,
+                    )
                   ).status,
               ),
             ).toBe("authorized");
@@ -439,6 +441,9 @@ if (!databaseUrl || !enabled) {
             }
             expect(current.status).toBe("expired");
             expect(current.closedAt).toBeInstanceOf(Date);
+            if (current.closedAt === null) {
+              panic("Missing desktop close time");
+            }
             expect(current.tokenExpiresAt).toEqual(current.closedAt);
             expect(current.tokenExpiresAt.getTime()).toBeLessThan(
               future.getTime(),
@@ -455,11 +460,13 @@ if (!databaseUrl || !enabled) {
             await transaction(
               async (tx) =>
                 (
-                  await authorizeDesktopEditSession({
-                    db: tx,
-                    sessionId: target.sessionId,
-                    sessionToken: target.token,
-                  })
+                  await authorizeDesktopEditSessionWithDb(
+                    {
+                      sessionId: target.sessionId,
+                      sessionToken: target.token,
+                    },
+                    tx,
+                  )
                 ).status,
             ),
           ).toBe("missing");
@@ -468,11 +475,13 @@ if (!databaseUrl || !enabled) {
               await transaction(
                 async (tx) =>
                   (
-                    await authorizeDesktopEditSession({
-                      db: tx,
-                      sessionId: scope.sessionId,
-                      sessionToken: scope.token,
-                    })
+                    await authorizeDesktopEditSessionWithDb(
+                      {
+                        sessionId: scope.sessionId,
+                        sessionToken: scope.token,
+                      },
+                      tx,
+                    )
                   ).status,
               ),
             ).toBe("authorized");

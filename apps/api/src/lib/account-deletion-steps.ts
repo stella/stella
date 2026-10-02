@@ -1263,8 +1263,7 @@ export const recordAccountDeletionRequest = async ({
 };
 
 /**
- * Every table with a direct foreign key to the auth `user` table that is
- * explicitly deleted, cleared, or reassigned by a step in
+ * Every table explicitly deleted, cleared, or reassigned by a step in
  * `verifyAndDeleteUser`. Derived from the `*_TABLES` constants declared
  * next to each step above, rather than maintained as a free-floating list,
  * so it cannot silently drift from the actual deletion code.
@@ -1289,3 +1288,24 @@ export const ACCOUNT_DELETION_MANUAL_TABLES = [
   ...DELETE_WORKSPACE_VIEW_TEMPLATES_TABLES,
   ...DELETE_BILLING_RATES_TABLES,
 ] as const satisfies readonly PgTable[];
+
+type AccountDeletionNonFkOwnership = {
+  [
+    Table in (typeof ACCOUNT_DELETION_MANUAL_TABLES)[number] as Table["_"]["name"]
+  ]: {
+    table: Table;
+    userColumn: {
+      [
+        Key in keyof Table["_"]["columns"]
+      ]: Table["_"]["columns"][Key]["_"]["data"] extends string
+        ? Table["_"]["columns"][Key]
+        : never;
+    }[keyof Table["_"]["columns"]];
+  };
+}[(typeof ACCOUNT_DELETION_MANUAL_TABLES)[number]["_"]["name"]];
+
+// These ownership columns are application bindings without a database FK.
+export const ACCOUNT_DELETION_NON_FK_OWNERSHIP = [
+  { table: agentRegistration, userColumn: agentRegistration.boundUserId },
+  { table: agentDelegation, userColumn: agentDelegation.userId },
+] as const satisfies readonly AccountDeletionNonFkOwnership[];

@@ -260,6 +260,7 @@ export default eslintCompatPlugin({
             const hookName = getPropertyName(node.key);
             if (
               hookName === "organizationHooks" &&
+              isAstNode(node) &&
               isAstNode(node.value) &&
               node.value.type === "ObjectExpression"
             ) {
