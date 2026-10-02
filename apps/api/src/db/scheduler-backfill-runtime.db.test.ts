@@ -110,6 +110,7 @@ const withFixture = async (
               await session.unsafe<unknown[]>(statement, [...parameters]),
           },
           name: NAME,
+          reporting: "changes",
           tableName: `${schema}.rows`,
           initialSize: 4,
           initialCursor: "0",

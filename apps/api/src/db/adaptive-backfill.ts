@@ -86,8 +86,8 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
   log(start);
   const slotState = { acquired: false };
   try {
-    const outcome = await Result.tryPromise(
-      async () =>
+    const outcome = await Result.tryPromise({
+      try: async () =>
         await runInTransaction(async (tx) => {
           const checkpoint = await readCheckpoint(tx);
           if (
@@ -183,7 +183,8 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
             written: items.length,
           };
         }),
-    );
+      catch: (cause: unknown) => cause,
+    });
     if (Result.isOk(outcome)) {
       return outcome.value;
     }
@@ -207,6 +208,7 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
       await persistCheckpoint(tx, held);
       return {
         status: "retry" as const,
+        error: outcome.error,
         verdict,
         checkpoint: held,
         scanned: 0,

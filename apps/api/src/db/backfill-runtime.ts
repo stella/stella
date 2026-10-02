@@ -1,7 +1,10 @@
 import { panic, Result } from "better-result";
 import { sql, type SQL } from "drizzle-orm";
 
-import { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
+import {
+  BackfillFailedError,
+  BackfillHeldError,
+} from "@stll/db-load-gate/backfill-pass";
 import {
   backfillHeartbeat,
   combine,
@@ -42,9 +45,16 @@ import type { OnlineMigrationConnection } from "./online-migration-connection";
 import type { Transaction } from "./root";
 import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
-export { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
+export {
+  BackfillFailedError,
+  BackfillHeldError,
+} from "@stll/db-load-gate/backfill-pass";
 
 type Query = IndicatorQuery;
+export type BackfillRunStatus = ReturnType<typeof backfillHeartbeat> & {
+  transitionEvent?: "backfill.yielded" | "backfill.resumed";
+};
+
 type RuntimeOptions = {
   name: string;
   tableName: string;
@@ -54,9 +64,8 @@ type RuntimeOptions = {
   clock?: (() => number) | undefined;
   readVerdict?: (() => Promise<Verdict>) | undefined;
   log?: ((record: unknown) => void) | undefined;
-  observeStatus?:
-    | ((record: ReturnType<typeof backfillHeartbeat>) => void)
-    | undefined;
+  reporting?: "detailed" | "changes";
+  observeStatus?: ((record: BackfillRunStatus) => void) | undefined;
 };
 type BatchWork<BatchTransaction, Value> = (options: {
   tx: BatchTransaction;
@@ -179,6 +188,7 @@ const createVerdictReader = ({
 };
 
 type RuntimeReportingOptions = {
+  reporting: NonNullable<RuntimeOptions["reporting"]>;
   log: NonNullable<RuntimeOptions["log"]>;
   observeStatus: RuntimeOptions["observeStatus"];
 };
@@ -191,11 +201,17 @@ type RuntimeDecision = {
 const createRuntimeReporter = ({
   log,
   observeStatus,
+  reporting,
 }: RuntimeReportingOptions) => {
   let previousDecision: string | undefined;
-  let summary: ReturnType<typeof backfillHeartbeat> | undefined;
+  let summary: BackfillRunStatus | undefined;
+  let firstTransition: BackfillRunStatus["transitionEvent"];
   return {
+    logBatch: reporting === "detailed" ? log : () => undefined,
     logDecision: ({ status, verdict, holdCause }: RuntimeDecision) => {
+      if (reporting === "detailed") {
+        return;
+      }
       const settledStatus = status === "done" ? "advanced" : status;
       const identity = JSON.stringify({
         status: settledStatus,
@@ -219,7 +235,25 @@ const createRuntimeReporter = ({
       previousDecision = identity;
     },
     recordStatus: (record: ReturnType<typeof backfillHeartbeat>) => {
-      summary = record;
+      if (reporting === "detailed") {
+        observeStatus?.(record);
+        return;
+      }
+      if (
+        firstTransition === undefined &&
+        (record.event === "backfill.yielded" ||
+          record.event === "backfill.resumed")
+      ) {
+        firstTransition = record.event;
+      }
+      summary =
+        firstTransition === undefined
+          ? record
+          : {
+              ...record,
+              event: record.event ?? firstTransition,
+              transitionEvent: firstTransition,
+            };
     },
     flush: () => {
       if (summary === undefined) {
@@ -230,6 +264,28 @@ const createRuntimeReporter = ({
       observeStatus?.(record);
     },
   };
+};
+
+type BackfillBatchResult = Awaited<ReturnType<typeof runAdaptiveBackfillBatch>>;
+
+const throwIfBackfillDeferred = (name: string, result: BackfillBatchResult) => {
+  if (result.status === "retry") {
+    throw new BackfillFailedError({
+      message: `Backfill ${name} batch failed (statement timeout)`,
+      cause: result.error,
+      holdUntil: result.checkpoint.batch.holdUntil,
+      heldSince: result.checkpoint.batch.heldSince,
+    });
+  }
+  if (result.status === "held") {
+    throw new BackfillHeldError({
+      message: `Backfill ${name} deferred (${result.status})`,
+      holdUntil:
+        result.checkpoint.batch.holdUntil ??
+        panic("Held backfill requires a hold deadline"),
+      heldSince: result.checkpoint.batch.heldSince,
+    });
+  }
 };
 
 const createRuntime = <BatchTransaction>({
@@ -245,6 +301,7 @@ const createRuntime = <BatchTransaction>({
   clock = () => Temporal.Now.instant().epochMilliseconds,
   readVerdict,
   observeStatus,
+  reporting = "detailed",
   log = (record) =>
     process.stderr.write(
       `${JSON.stringify({ event: "database_backfill_decision", name, record })}\n`,
@@ -328,7 +385,7 @@ const createRuntime = <BatchTransaction>({
       [name, checkpoint.cursor, JSON.stringify(checkpoint.batch)],
     );
   };
-  const reporter = createRuntimeReporter({ log, observeStatus });
+  const reporter = createRuntimeReporter({ log, observeStatus, reporting });
   const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
     const completion: { result?: { value: Value } } = {};
     let previousHeldSince: number | null = null;
@@ -336,11 +393,7 @@ const createRuntime = <BatchTransaction>({
       runInTransaction,
       config,
       clock,
-      // The adaptive controller reports intermediate decisions and sizing on
-      // every unit. Log the settled decision below, once when policy changes.
-      log: () => {
-        // Intermediate controller decisions are superseded by the settled log.
-      },
+      log: reporter.logBatch,
       readVerdict: readSettledVerdict,
       slot,
       readCheckpoint: async (tx) => {
@@ -381,13 +434,7 @@ const createRuntime = <BatchTransaction>({
         config,
       }),
     );
-    if (result.status === "held" || result.status === "retry") {
-      throw new BackfillHeldError({
-        message: `Backfill ${name} deferred (${result.status})`,
-        holdUntil: result.checkpoint.batch.holdUntil,
-        heldSince: result.checkpoint.batch.heldSince,
-      });
-    }
+    throwIfBackfillDeferred(name, result);
     const completedBatch =
       completion.result ?? panic("Backfill batch completed without a result");
     return {
@@ -409,10 +456,13 @@ const createRuntime = <BatchTransaction>({
       // so a hold left by another worker must not survive completed work.
       // During a rolling deploy an older replica may confirm its older unit
       // set and clear a newer replica's hold. This can reset heldSince/backoff
-      // until the next run, but cannot admit SQL: every new unit reads load and
-      // acquires the heavy slot again. A cleared load latch uses startFloor,
-      // which is stricter than resumeFloor. Holds and their duration therefore
-      // converge once replicas agree on the unit set after the bounded rollout.
+      // until the next run. Every new unit still reads load and acquires its
+      // heavy slot, but a cleared latch can admit throttled work from hardFloor
+      // upward instead of waiting for resumeFloor; startFloor separates normal
+      // from throttled work. Holds may flap each minute during the rollout,
+      // resetting heldSince/backoff, so held-too-long cannot fire until the
+      // newer build records its first admission. This bounded rollout tradeoff
+      // prevents a concurrent worker's hold from surviving completed work.
       const batch = {
         ...initialBatchState(config),
         size: checkpoint.batch.size,

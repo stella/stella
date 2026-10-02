@@ -1,7 +1,11 @@
 import { TaggedError } from "better-result";
 import { expect, test } from "bun:test";
 
-import { BackfillHeldError, runBackfillPass } from "./backfill-pass";
+import {
+  BackfillFailedError,
+  BackfillHeldError,
+  runBackfillPass,
+} from "./backfill-pass";
 
 class DeferredPassError extends TaggedError("DeferredPassError")<{
   message: string;
@@ -148,11 +152,18 @@ for (const reason of ["hold", "retry"] as const) {
       step: async () => {
         attempts++;
         if (attempts === 1) {
-          throw new BackfillHeldError({
-            message: "deferred",
-            holdUntil: reason === "hold" ? 5100 : null,
-            heldSince: reason === "hold" ? 100 : null,
-          });
+          throw reason === "hold"
+            ? new BackfillHeldError({
+                message: "deferred",
+                holdUntil: 5100,
+                heldSince: 100,
+              })
+            : new BackfillFailedError({
+                message: "deferred",
+                cause: { code: "57014" },
+                holdUntil: null,
+                heldSince: null,
+              });
         }
         expect(checkpoint).toBe("saved-cursor");
         checkpoint = "finished";
@@ -195,8 +206,9 @@ test("a maximum wait exits cleanly with resume instructions and leaves the check
     },
     step: async () => {
       attempts++;
-      throw new BackfillHeldError({
+      throw new BackfillFailedError({
         message: "retry",
+        cause: { code: "57014" },
         holdUntil: null,
         heldSince: null,
       });
@@ -252,11 +264,20 @@ test("a hold beyond the caller's wait budget exits before sleeping or stepping a
 
 for (const reason of ["hold", "retry"] as const) {
   test(`online ${reason} propagates without waiting or advancing another batch`, async () => {
-    const failure = new BackfillHeldError({
-      message: "repair pending",
-      holdUntil: reason === "hold" ? 5100 : null,
-      heldSince: reason === "hold" ? 100 : null,
-    });
+    const databaseError = { code: "57014" };
+    const failure =
+      reason === "hold"
+        ? new BackfillHeldError({
+            message: "repair pending",
+            holdUntil: 5100,
+            heldSince: 100,
+          })
+        : new BackfillFailedError({
+            message: "repair pending",
+            cause: databaseError,
+            holdUntil: null,
+            heldSince: null,
+          });
     let attempts = 0;
     let sleeps = 0;
     const result = await runBackfillPass({
@@ -274,8 +295,48 @@ for (const reason of ["hold", "retry"] as const) {
     expect(result.isErr()).toBe(true);
     if (result.isErr()) {
       expect(result.error).toBe(failure);
+      if (result.error instanceof BackfillFailedError) {
+        expect(result.error.cause).toBe(databaseError);
+      }
     }
     expect(attempts).toBe(1);
     expect(sleeps).toBe(0);
   });
 }
+
+test("an operator retry retains its failure cause while waiting for a durable hold deadline", async () => {
+  const cause = { code: "57014" };
+  const failure = new BackfillFailedError({
+    message: "statement timeout",
+    cause,
+    holdUntil: 5100,
+    heldSince: 100,
+  });
+  let attempts = 0;
+  const waits: number[] = [];
+  const records: unknown[] = [];
+  const result = await runBackfillPass({
+    clock: () => 100,
+    step: async () => {
+      attempts += 1;
+      if (attempts === 1) {
+        throw failure;
+      }
+      return { done: true, sleepMs: 0, value: "complete" };
+    },
+    sleep: async (milliseconds) => {
+      waits.push(milliseconds);
+    },
+    log: (record) => {
+      records.push(record);
+    },
+  });
+  expect(result.isOk()).toBe(true);
+  expect(attempts).toBe(2);
+  expect(waits).toEqual([5000]);
+  expect(records).toEqual([
+    expect.objectContaining({ reason: "retry", holdUntil: 5100 }),
+  ]);
+  expect(failure.cause).toBe(cause);
+  expect(failure.cause).toMatchObject({ code: "57014" });
+});

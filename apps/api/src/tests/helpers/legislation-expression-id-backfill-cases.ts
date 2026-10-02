@@ -4,7 +4,10 @@ import { asc, eq, inArray, sql } from "drizzle-orm";
 
 import { initialBatchState } from "@stll/db-load-gate/health";
 
-import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
+import {
+  BackfillFailedError,
+  createScriptBackfillRuntime,
+} from "@/api/db/backfill-runtime";
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
   databaseBackfillStates,
@@ -18,6 +21,7 @@ import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { planCorpusDocumentWrite } from "@/api/lib/legal-search/corpus-storage";
 import { logger } from "@/api/lib/observability/logger";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
@@ -475,6 +479,49 @@ export const registerExpressionBackfillCases = ({
       expect(await idsOf([documentId(16)])).toEqual([`esel:${iri(16)}`]);
     });
 
+    test.each([null, 105_000])(
+      "a timeout failure propagates its database cause even with hold deadline %p",
+      async (holdUntil) => {
+        const cause = Object.assign(new Error("statement timeout"), {
+          code: "57014",
+        });
+        const failure = new BackfillFailedError({
+          message: "expression batch statement timeout",
+          cause,
+          holdUntil,
+          heldSince: holdUntil === null ? null : 100_000,
+        });
+        const { lines, logger: recording } = recordingLogger();
+        const task = createTask({
+          createRuntime: (options) => ({
+            ...createRuntime(options),
+            step: async () => {
+              throw failure;
+            },
+          }),
+        });
+        const rejected = await run(task, recording).then(
+          () => panic("Expected expression scheduler failure"),
+          (error: unknown) => error,
+        );
+        expect(rejected).toBe(failure);
+        expect(isPgError(rejected, PG_ERROR.QUERY_CANCELED)).toBe(true);
+        expect(continuationAt).toBeUndefined();
+        expect(
+          lines.some(
+            ({ message }) =>
+              message === "scheduler.legislation_expression_ids_held",
+          ),
+        ).toBe(false);
+        expect(
+          lines.some(
+            ({ message }) =>
+              message === "scheduler.legislation_expression_ids_backfilled",
+          ),
+        ).toBe(false);
+      },
+    );
+
     test.skipIf(engine !== "postgres")(
       "a statement timeout fails the scheduler run, rolls back the page, and is never logged as held",
       async () => {
@@ -491,23 +538,26 @@ export const registerExpressionBackfillCases = ({
         );
         const { lines, logger: recording } = recordingLogger();
         try {
-          await expect(
-            run(
-              createTask({
-                pageRows: 1,
-                createRuntime: (options) =>
-                  createRuntime({
-                    ...options,
-                    config: {
-                      ...SCHEDULER_BACKFILL_CONFIG,
-                      ...options.config,
-                      batchStatementTimeoutMs: 100,
-                    },
-                  }),
-              }),
-              recording,
-            ),
-          ).rejects.toThrow(/deferred \(retry\)/u);
+          const rejected = await run(
+            createTask({
+              pageRows: 1,
+              createRuntime: (options) =>
+                createRuntime({
+                  ...options,
+                  config: {
+                    ...SCHEDULER_BACKFILL_CONFIG,
+                    ...options.config,
+                    batchStatementTimeoutMs: 100,
+                  },
+                }),
+            }),
+            recording,
+          ).then(
+            () => panic("Expected real expression statement timeout"),
+            (error: unknown) => error,
+          );
+          expect(rejected).toBeInstanceOf(BackfillFailedError);
+          expect(isPgError(rejected, PG_ERROR.QUERY_CANCELED)).toBe(true);
           expect(await cursor()).toBe(documentId(17));
           expect(await idsOf([documentId(18)])).toEqual([null]);
           expect(continuationAt).toBeUndefined();

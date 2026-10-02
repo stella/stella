@@ -4,6 +4,14 @@ import { Temporal } from "@stll/time";
 
 export class BackfillHeldError extends TaggedError("BackfillHeldError")<{
   message: string;
+  holdUntil: number;
+  heldSince: number | null;
+}> {}
+
+/** A batch failed; a persisted hold or retry adjustment does not undo its failure. */
+export class BackfillFailedError extends TaggedError("BackfillFailedError")<{
+  message: string;
+  cause: unknown;
   holdUntil: number | null;
   heldSince: number | null;
 }> {}
@@ -62,7 +70,10 @@ export const runBackfillPass = async <Value>({
     });
     if (outcome.isErr()) {
       if (
-        !(outcome.error instanceof BackfillHeldError) ||
+        !(
+          outcome.error instanceof BackfillHeldError ||
+          outcome.error instanceof BackfillFailedError
+        ) ||
         holdPolicy === "propagate"
       ) {
         return Result.err(outcome.error);
@@ -72,7 +83,7 @@ export const runBackfillPass = async <Value>({
       const sleepMs =
         holdUntil === null ? RETRY_BACKOFF_MS : Math.max(0, holdUntil - now);
       const record = {
-        reason: holdUntil === null ? "retry" : "hold",
+        reason: outcome.error instanceof BackfillFailedError ? "retry" : "hold",
         now,
         holdUntil,
         heldSince,

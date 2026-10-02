@@ -7,12 +7,14 @@ import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
+import { BackfillFailedError } from "@/api/db/backfill-runtime";
 import {
   withDedicatedReservedSession,
   type withLongRunningConnection,
 } from "@/api/db/long-running-connection";
 import { logger } from "@/api/lib/observability/logger";
 import type { observeFailure } from "@/api/lib/observability/observe-failure";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -205,6 +207,9 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
       expect(task.failures.at(0)?.at(1)).toMatchObject({
         sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
       });
+      const failure = task.failures.at(0)?.[0];
+      expect(failure).toMatchObject({ cause: expect.any(BackfillFailedError) });
+      expect(isPgError(failure, PG_ERROR.QUERY_CANCELED)).toBe(true);
       expect(
         await operator.unsafe(
           `SELECT name FROM ${schema}.case_law_provision_repair_cursors`,
@@ -241,6 +246,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         ),
       ).toHaveLength(2);
       expect((await checkpoint()).batch.stableBatches).toBe(0);
+      expect((await checkpoint()).batch.heldSince).toBeNull();
     });
   });
 

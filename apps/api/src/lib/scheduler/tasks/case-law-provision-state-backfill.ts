@@ -154,6 +154,7 @@ export const createCaseLawProvisionStateBackfillTask =
               clock,
               readVerdict,
               observeStatus,
+              reporting: "changes",
             });
             try {
               const run = await runProvisionStateBackfill({
@@ -230,10 +231,7 @@ export const createCaseLawProvisionStateBackfillTask =
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
         return;
       }
-      if (
-        run.error.cause instanceof BackfillHeldError &&
-        run.error.cause.holdUntil !== null
-      ) {
+      if (run.error.cause instanceof BackfillHeldError) {
         logger.info("scheduler.case_law_provision_state_backfill_held", {
           holdUntil: run.error.cause.holdUntil,
           heldSince: run.error.cause.heldSince,

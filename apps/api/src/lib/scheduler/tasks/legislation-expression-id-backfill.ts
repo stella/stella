@@ -322,31 +322,32 @@ export const createLegislationExpressionIdBackfill =
       clock,
       readVerdict,
       observeStatus,
+      reporting: "changes",
     });
-    const settled = await Result.tryPromise(async () => {
-      try {
-        return await runtime.step(async ({ tx, cursor, size }) => {
-          signal.throwIfAborted();
-          const claimedPage = await claimExpressionIdPageTx(
-            tx,
-            backfillCursor({ cursor }),
-            size,
-          );
-          return {
-            cursor: claimedPage.type === "page" ? claimedPage.last : null,
-            done: claimedPage.type === "cycle-complete",
-            value: claimedPage,
-          };
-        });
-      } finally {
-        await runtime.close();
-      }
+    const settled = await Result.tryPromise({
+      try: async () => {
+        try {
+          return await runtime.step(async ({ tx, cursor, size }) => {
+            signal.throwIfAborted();
+            const claimedPage = await claimExpressionIdPageTx(
+              tx,
+              backfillCursor({ cursor }),
+              size,
+            );
+            return {
+              cursor: claimedPage.type === "page" ? claimedPage.last : null,
+              done: claimedPage.type === "cycle-complete",
+              value: claimedPage,
+            };
+          });
+        } finally {
+          await runtime.close();
+        }
+      },
+      catch: (cause: unknown) => cause,
     });
     if (settled.isErr()) {
-      if (
-        settled.error instanceof BackfillHeldError &&
-        settled.error.holdUntil !== null
-      ) {
+      if (settled.error instanceof BackfillHeldError) {
         logger.info("scheduler.legislation_expression_ids_held", {
           holdUntil: settled.error.holdUntil,
           heldSince: settled.error.heldSince,

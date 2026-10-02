@@ -139,6 +139,7 @@ test("observed completion clears a durable hold without reading load or running 
   const records: unknown[] = [];
   const runtime = createBackfillRuntime({
     name: "completed",
+    reporting: "changes",
     tableName: "rows",
     initialSize: 1,
     config,
@@ -215,26 +216,129 @@ test("a legacy checkpoint without a hold cause decodes without inventing a load 
   ).toBeNull();
 });
 
-test("policy changes emit one decision each and closing emits only the final summary", async () => {
-  const config = { ...defaultConfig, minSize: 1, maxSize: 2, busyWindows: [] };
+test.each(["default", "changes"] as const)(
+  "%s reporting preserves its per-batch or quiet contract",
+  async (reporting) => {
+    const config = {
+      ...defaultConfig,
+      minSize: 1,
+      maxSize: 2,
+      busyWindows: [],
+    };
+    let checkpoint = decodeCheckpoint({
+      cursor: null,
+      batch: initialBatchState(config),
+    });
+    let now = 0;
+    let verdict: Verdict = { kind: "normal", signals: [] };
+    const decisions: unknown[] = [];
+    const summaries: unknown[] = [];
+    const runtime = createBackfillRuntime({
+      name: "changing-policy",
+      ...(reporting === "changes" ? { reporting } : {}),
+      tableName: "rows",
+      initialSize: 1,
+      config,
+      clock: () => now,
+      readVerdict: async () => verdict,
+      log: (record) => {
+        decisions.push(record);
+      },
+      observeStatus: (record) => {
+        summaries.push(record);
+      },
+      connection: {
+        execute: async () => {},
+        query: async (statement, parameters = []) => {
+          if (statement.startsWith("SELECT cursor, batch")) {
+            return [checkpoint];
+          }
+          if (statement.startsWith("UPDATE database_backfill_states")) {
+            checkpoint = decodeCheckpoint({
+              cursor: parameters.at(1),
+              batch: JSON.parse(String(parameters.at(2))),
+            });
+          }
+          return [{ acquired: true }];
+        },
+      },
+    });
+    const batch = async () => {
+      now += 10;
+      return { cursor: "next", done: false, value: 1 };
+    };
+    try {
+      await runtime.step(batch);
+      await runtime.step(batch);
+      expect(decisions).toHaveLength(reporting === "changes" ? 1 : 6);
+      if (reporting === "default") {
+        expect(decisions).toContainEqual(
+          expect.objectContaining({
+            action: "run",
+            lastDurationMs: 10,
+            state: expect.objectContaining({
+              size: 1,
+              sleepMs: config.minSleepMs,
+            }),
+          }),
+        );
+      }
+      verdict = { kind: "unknown", signals: [] };
+      await expect(runtime.step(batch)).rejects.toBeInstanceOf(
+        BackfillHeldError,
+      );
+      const held = checkpoint;
+      await expect(runtime.step(batch)).rejects.toBeInstanceOf(
+        BackfillHeldError,
+      );
+      expect(decisions).toHaveLength(reporting === "changes" ? 2 : 10);
+      expect(summaries).toHaveLength(reporting === "changes" ? 0 : 4);
+      await runtime.recordCompletion(async () => false);
+      expect(checkpoint).toEqual(held);
+      await runtime.recordCompletion(async () => true);
+      expect(checkpoint.cursor).toBeNull();
+      expect(checkpoint.batch.heldSince).toBeNull();
+      await runtime.close();
+      expect(summaries).toHaveLength(reporting === "changes" ? 1 : 5);
+      expect(summaries.at(-1)).toMatchObject({
+        BackfillYielded: 0,
+        heldSince: null,
+      });
+      if (reporting === "changes") {
+        expect(summaries.at(-1)).toMatchObject({
+          transitionEvent: "backfill.yielded",
+        });
+      }
+      await runtime.close();
+      expect(summaries).toHaveLength(reporting === "changes" ? 1 : 5);
+    } finally {
+      await runtime.close();
+    }
+  },
+);
+
+test("a quiet multi-unit run retains its first resume transition in the final status", async () => {
+  const config = { ...defaultConfig, minSize: 1, maxSize: 1, busyWindows: [] };
   let checkpoint = decodeCheckpoint({
-    cursor: null,
-    batch: initialBatchState(config),
+    cursor: "held-cursor",
+    batch: {
+      ...initialBatchState(config),
+      heldSince: 0,
+      holdUntil: 1,
+      holdCount: 1,
+      holdCause: "other",
+    },
   });
-  let now = 0;
-  let verdict: Verdict = { kind: "normal", signals: [] };
-  const decisions: unknown[] = [];
   const summaries: unknown[] = [];
   const runtime = createBackfillRuntime({
-    name: "changing-policy",
+    name: "resuming-pass",
     tableName: "rows",
     initialSize: 1,
+    reporting: "changes",
     config,
-    clock: () => now,
-    readVerdict: async () => verdict,
-    log: (record) => {
-      decisions.push(record);
-    },
+    clock: () => 100,
+    readVerdict: async () => ({ kind: "normal", signals: [] }),
+    log: () => {},
     observeStatus: (record) => {
       summaries.push(record);
     },
@@ -254,31 +358,22 @@ test("policy changes emit one decision each and closing emits only the final sum
       },
     },
   });
-  const batch = async () => {
-    now += 10;
-    return { cursor: "next", done: false, value: 1 };
-  };
   try {
+    const batch = async () => ({ cursor: "continued", done: false, value: 1 });
     await runtime.step(batch);
-    await runtime.step(batch);
-    expect(decisions).toHaveLength(1);
-    verdict = { kind: "unknown", signals: [] };
-    await expect(runtime.step(batch)).rejects.toBeInstanceOf(BackfillHeldError);
-    const held = checkpoint;
-    await expect(runtime.step(batch)).rejects.toBeInstanceOf(BackfillHeldError);
-    expect(decisions).toHaveLength(2);
-    expect(summaries).toEqual([]);
-    await runtime.recordCompletion(async () => false);
-    expect(checkpoint).toEqual(held);
-    await runtime.recordCompletion(async () => true);
-    expect(checkpoint.cursor).toBeNull();
     expect(checkpoint.batch.heldSince).toBeNull();
+    await runtime.step(batch);
+    await runtime.recordCompletion(async () => true);
+    expect(summaries).toEqual([]);
     await runtime.close();
     expect(summaries).toEqual([
-      expect.objectContaining({ BackfillYielded: 0, heldSince: null }),
+      expect.objectContaining({
+        event: "backfill.resumed",
+        transitionEvent: "backfill.resumed",
+        BackfillYielded: 0,
+        heldSince: null,
+      }),
     ]);
-    await runtime.close();
-    expect(summaries).toHaveLength(1);
   } finally {
     await runtime.close();
   }

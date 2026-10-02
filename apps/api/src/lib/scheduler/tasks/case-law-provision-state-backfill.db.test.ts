@@ -14,10 +14,13 @@ import {
   PROVISION_EXTRACTION_ADMISSION_REVISION,
 } from "@stll/legal-atlas/provision-extraction-admission";
 
+import { BackfillFailedError } from "@/api/db/backfill-runtime";
 import type { withLongRunningConnection } from "@/api/db/long-running-connection";
 import { abortableSleep } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import { logger } from "@/api/lib/observability/logger";
 import type { observeFailure } from "@/api/lib/observability/observe-failure";
+import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -176,13 +179,14 @@ describe("provision scheduler wiring through the real backfill steps", () => {
   });
 
   test("a statement timeout rolls back the real page and emits the existing failure event", async () => {
+    const timeout = Object.assign(
+      new Error("canceling statement due to statement timeout"),
+      { code: "57014" },
+    );
     const task = fixture({
       onQuery: (statement) => {
         if (statement.includes("ORDER BY case_law_decisions.id LIMIT")) {
-          throw Object.assign(
-            new Error("canceling statement due to statement timeout"),
-            { code: "57014" },
-          );
+          throw timeout;
         }
       },
     });
@@ -192,6 +196,16 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     expect(task.failures.at(0)?.at(1)).toMatchObject({
       sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
     });
+    const failure = task.failures.at(0)?.[0];
+    expect(failure).toBeInstanceOf(ProvisionBackfillUnitError);
+    if (
+      !(failure instanceof ProvisionBackfillUnitError) ||
+      !(failure.cause instanceof BackfillFailedError)
+    ) {
+      return panic("Expected typed provision timeout failure");
+    }
+    expect(failure.cause.cause).toBe(timeout);
+    expect(isPgError(failure, PG_ERROR.QUERY_CANCELED)).toBe(true);
     expect(task.sleeps).toEqual([]);
     expect(await cursorRows()).toEqual([]);
     expect((await checkpoint()).batch).toMatchObject({
@@ -225,6 +239,9 @@ describe("provision scheduler wiring through the real backfill steps", () => {
       expect(task.failures.at(0)?.at(1)).toMatchObject({
         sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
       });
+      const failure = task.failures.at(0)?.[0];
+      expect(failure).toMatchObject({ cause: expect.any(BackfillFailedError) });
+      expect(isPgError(failure, PG_ERROR.QUERY_CANCELED)).toBe(true);
       expect(
         (
           await client.query(
