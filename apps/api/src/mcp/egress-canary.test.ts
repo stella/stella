@@ -1663,6 +1663,7 @@ describe("MCP anonymization canary corpus", () => {
       const variantBodySeed = mkSeed(tool, 9);
       const metadataSeed = mkSeed(tool, 10);
       const tx = {
+        $count: async () => 0,
         query: {
           clauses: {
             findFirst: async () => ({
@@ -1758,6 +1759,7 @@ describe("MCP anonymization canary corpus", () => {
   test("list_clauses fails closed (no leak) when a clause body has an unrecognized format", async () => {
     const titleSeed = mkSeed("list_clauses_fail_closed", 0);
     const tx = {
+      $count: async () => 0,
       query: {
         clauses: {
           findFirst: async () => ({
