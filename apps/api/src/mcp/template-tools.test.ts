@@ -254,6 +254,7 @@ const createContext = ({
     configureTemplateFields: configureTemplateFieldsMock,
     templateDecideConditionsLogic: templateDecideConditionsLogicMock,
     loadOrgAIConfig: loadOrgAIConfigMock,
+    loadManagedAIResidency: async () => "eu",
     anonymizeTextFields: anonymizeTextFieldsMock,
     loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
     loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,

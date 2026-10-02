@@ -244,17 +244,10 @@ test("both readings fail closed on malformed absence sidecars", async () => {
     [
       {
         field: "abstract",
-        reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-      },
-    ],
-    [
-      {
-        field: "abstract",
         reason: TEXT_ABSENCE_REASON.PARSE_FAILED,
         unexpected: true,
       },
     ],
-    [{ field: "unknown", reason: TEXT_ABSENCE_REASON.PARSE_FAILED }],
     [{ field: "abstract", reason: "unknown" }],
     [
       { field: "abstract", reason: TEXT_ABSENCE_REASON.PARSE_FAILED },
@@ -356,5 +349,29 @@ test("both readings of the classification agree, term by term", async () => {
       metadata,
       expected,
     ]);
+  }
+});
+
+test("future publication sidecars preserve publisher summaries in both runtimes", async () => {
+  for (const field of ["ecli", "sourceUrl", "futurePublisherField"]) {
+    for (const reason of [
+      "not_published",
+      "parse_failed",
+      "publisher_placeholder",
+      "redistribution_withheld",
+    ]) {
+      const metadata = {
+        legalSentence: "Published sentence",
+        _stellaDecisionTextAbsenceVersion: 2,
+        [DECISION_TEXT_ABSENCE_METADATA_KEY]: [
+          { field: "abstract", reason: TEXT_ABSENCE_REASON.NOT_PUBLISHED },
+          { field, reason },
+        ],
+      };
+      expect(publisherSummaryOf({ documentAst: null, metadata })).toBe(
+        "Published sentence",
+      );
+      expect(await readMetadataSummary(metadata)).toBe("Published sentence");
+    }
   }
 });

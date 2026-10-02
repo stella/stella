@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import type { SQL } from "drizzle-orm";
 import { and, desc, eq, ilike, or, sql } from "drizzle-orm";
+import { alias } from "drizzle-orm/pg-core";
 import { t } from "elysia";
 
 import {
@@ -17,20 +18,45 @@ import {
   chatThreadListCursorCodec,
   encodeChatThreadListCursor,
 } from "@/api/handlers/chat/thread-list-pagination";
+import {
+  CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT,
+  EMPTY_CHAT_THREAD_CONTEXT,
+  readChatThreadContexts,
+} from "@/api/handlers/chat/threads/list-context";
+import type { ChatThreadContext } from "@/api/handlers/chat/threads/list-context";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { tPaginationCursor } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { escapeLike } from "@/api/lib/escape-like";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
+
+/** The matters a thread's pinned or embedded matter ids name, for search. */
+const contextMatterWorkspaces = alias(
+  workspacesTable,
+  "context_matter_workspaces",
+);
+
+type ChatThreadListItem = {
+  context: ChatThreadContext;
+  id: string;
+  origin: ChatThreadOrigin;
+  title: string;
+  createdAt: Date;
+  updatedAt: Date;
+  usedAnonymization: boolean;
+};
 
 const config = {
   description:
     "List your own chat threads, most recently active first, split into " +
     "global threads and groups per matter. Threads with no messages, and " +
     "threads belonging to a matter that is being deleted, are left out. " +
-    "search matches the thread title or the matter name; paginate with limit " +
-    "and cursor.",
+    "Each thread carries a bounded preview of its context: the matters and " +
+    "files it drew on, with their total counts. search matches the thread " +
+    "title, the matter it lives in, or a matter pinned to it; paginate with " +
+    "limit and cursor.",
   permissions: { chat: ["create"] },
   access: "read",
   mcp: {
@@ -53,7 +79,9 @@ const config = {
 const getThreads = createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session, user }) {
-    const limit = query.limit ?? LIMITS.chatThreadListPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.chatThreadListPageSizeDefault,
+    );
     const cursor = query.cursor
       ? chatThreadListCursorCodec.decode(query.cursor)
       : null;
@@ -77,16 +105,7 @@ const getThreads = createSafeRootHandler(
       )`,
     ];
     const search = query.search?.trim();
-    if (search) {
-      const pattern = `%${escapeLike(search)}%`;
-      const searchCondition = or(
-        ilike(chatThreads.title, pattern),
-        ilike(workspacesTable.name, pattern),
-      );
-      if (searchCondition) {
-        conditions.push(searchCondition);
-      }
-    }
+    const searchPattern = search ? `%${escapeLike(search)}%` : null;
     // Membership-mode RLS filters workspace-scoped threads and verifies every
     // data_workspace_ids entry on global threads without materializing an
     // application-side workspace allowlist. The joined status predicate keeps
@@ -102,9 +121,45 @@ const getThreads = createSafeRootHandler(
       }
     }
 
-    const rows = yield* Result.await(
-      safeDb((tx) =>
-        tx
+    const { contexts, rows } = yield* Result.await(
+      safeDb(async (tx) => {
+        const listConditions = [...conditions];
+        // A matter pinned to a thread, or whose data it embedded, matches by
+        // name too. The lateral probe looks up that thread's own matter ids
+        // (bounded like its context preview) by primary key, so no matching
+        // matter is dropped and the result never depends on how many matters
+        // match the term. RLS keeps it to matters the user can open.
+        const contextMatterMatch =
+          searchPattern === null
+            ? null
+            : tx
+                .select({
+                  matched: sql<boolean>`true`.as("context_matter_matched"),
+                })
+                .from(contextMatterWorkspaces)
+                .where(
+                  and(
+                    sql`${contextMatterWorkspaces.id} = ANY(
+                      ${chatThreads.contextMatterIds}[1:${CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT}::int]
+                      || ${chatThreads.dataWorkspaceIds}[1:${CHAT_THREAD_CONTEXT_MATTER_SCAN_LIMIT}::int]
+                    )`,
+                    ilike(contextMatterWorkspaces.name, searchPattern),
+                  ),
+                )
+                .limit(1)
+                .as("context_matter_match");
+        if (searchPattern !== null && contextMatterMatch !== null) {
+          const searchCondition = or(
+            ilike(chatThreads.title, searchPattern),
+            ilike(workspacesTable.name, searchPattern),
+            sql`${contextMatterMatch.matched} IS TRUE`,
+          );
+          if (searchCondition) {
+            listConditions.push(searchCondition);
+          }
+        }
+
+        let listQuery = tx
           .select({
             createdAt: chatThreads.createdAt,
             forkedFromMessageId: chatThreads.forkedFromMessageId,
@@ -122,10 +177,22 @@ const getThreads = createSafeRootHandler(
             workspacesTable,
             eq(workspacesTable.id, chatThreads.workspaceId),
           )
-          .where(and(...conditions))
+          .$dynamic();
+        if (contextMatterMatch !== null) {
+          listQuery = listQuery.leftJoinLateral(contextMatterMatch, sql`true`);
+        }
+        const listedRows = await listQuery
+          .where(and(...listConditions))
           .orderBy(desc(chatThreads.updatedAt), desc(chatThreads.id))
-          .limit(limit + 1),
-      ),
+          .limit(limit + 1);
+
+        // One bounded read for the whole page's context, never one per row.
+        const threadContexts = await readChatThreadContexts({
+          threadIds: listedRows.slice(0, limit).map((row) => row.id),
+          tx,
+        });
+        return { contexts: threadContexts, rows: listedRows };
+      }),
     );
 
     const hasMore = rows.length > limit;
@@ -139,28 +206,14 @@ const getThreads = createSafeRootHandler(
           })
         : null;
 
-    const global: {
-      id: string;
-      origin: ChatThreadOrigin;
-      title: string;
-      createdAt: Date;
-      updatedAt: Date;
-      usedAnonymization: boolean;
-    }[] = [];
+    const global: ChatThreadListItem[] = [];
 
     const groupedWorkspaceThreads = new Map<
       string,
       {
         workspaceId: string;
         workspaceName: string;
-        threads: {
-          id: string;
-          origin: ChatThreadOrigin;
-          title: string;
-          createdAt: Date;
-          updatedAt: Date;
-          usedAnonymization: boolean;
-        }[];
+        threads: ChatThreadListItem[];
       }
     >();
 
@@ -169,8 +222,10 @@ const getThreads = createSafeRootHandler(
         thread.forkedFromMessageId === null
           ? CHAT_THREAD_ORIGIN.original
           : CHAT_THREAD_ORIGIN.fork;
+      const context = contexts.get(thread.id) ?? EMPTY_CHAT_THREAD_CONTEXT;
       if (thread.workspaceId === null) {
         global.push({
+          context,
           id: thread.id,
           origin,
           title: thread.title,
@@ -186,6 +241,7 @@ const getThreads = createSafeRootHandler(
       }
 
       const slice = {
+        context,
         id: thread.id,
         origin,
         title: thread.title,

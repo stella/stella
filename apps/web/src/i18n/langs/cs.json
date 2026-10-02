@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "caseFileMayHoldOthers": "Tento spis může obsahovat i další rozhodnutí.",
       "citedBy": "Citováno v",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
@@ -1094,6 +1095,7 @@
     "focusSuggestion": "Zaměřit návrh: {topic}",
     "folioCitationFallback": "str. {n}",
     "forkFromHere": "Vytvořit odsud nový chat",
+    "forkInSidePanel": "Vytvořit odsud nový chat v bočním panelu",
     "forkedFrom": "Vytvořeno z chatu: <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Vytvořeno z chatu, který už není dostupný",
     "forkedThread": "Z jiného chatu",
@@ -1101,6 +1103,10 @@
     "greeting": "Na čem chcete pracovat?",
     "greetingSubtitle": "Začněte spisem, dokumentem nebo obyčejnou otázkou.",
     "hideThread": "Skrýt konverzaci",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {a # další} few {a # další} other {a # dalších}}"
+    },
     "improvePrompt": "Vylepšit zadání",
     "improvePromptDraftChanged": "Zadání se změnilo, takže vylepšení nebylo použito.",
     "improvePromptPlainTextOnly": "Vylepšení zadání je dostupné pouze pro prostý text.",
@@ -1153,6 +1159,7 @@
       "viaProvider": "přes {provider}"
     },
     "newChat": "Nový chat",
+    "newChatInSidePanel": "Nový chat je dostupný v bočním panelu",
     "noPromptPresetOnly": "Bez zprávy, pouze předvolba",
     "noThreads": "Zatím žádné konverzace",
     "officeCitationUnavailable": "Tato citace už není dostupná.",
@@ -1200,6 +1207,12 @@
     "richContentLoading": "Načítání interaktivního obsahu…",
     "richContentTitle": "Interaktivní obsah",
     "richContentUnavailable": "Tento obsah nelze bezpečně zobrazit.",
+    "selection": {
+      "askInNewChat": "Zeptat se v novém chatu",
+      "quoteInReply": "Citovat v odpovědi",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Vybraný text"
+    },
     "sendError": "Při odesílání zprávy došlo k problému. Pokud chyba přetrvává, kontaktujte podporu.",
     "sendErrorAnonymizationBlocked": "stella nedokázala anonymizovat jednu přílohu, takže se nic neodeslalo. Odeberte soubor, nebo odešlete zprávu bez anonymizace.",
     "sendErrorEmptyCompletion": "AI vrátila prázdnou odpověď. Zkuste to znovu, nebo zprávu přeformulujte.",
@@ -1598,6 +1611,7 @@
     },
     "fact": "Fakt",
     "failed": "Selhalo",
+    "files": "Soubory",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Najít",
@@ -3262,7 +3276,6 @@
       "editSkill": "Upravit dovednost",
       "enableSkill": "Zapnout dovednost",
       "fileExists": "Soubor s touto cestou již existuje",
-      "filesHeading": "Soubory",
       "howItRuns": "Jak se spouští",
       "importFailureFetch": "Zdroj dovednosti se nepodařilo načíst.",
       "importFailureIntegrity": "Zdroj dovednosti se po nalezení změnil. Zkontrolujte ho znovu.",
@@ -5987,7 +6000,8 @@
         "openReport": "Otevřít zprávu",
         "submit": "Uložit zprávu",
         "templateLabel": "Vzor zprávy",
-        "title": "Uložit zprávu"
+        "title": "Uložit zprávu",
+        "withoutAiSummaries": "Uložit bez shrnutí od AI"
       },
       "saveAsTemplate": "Uložit jako předvolbu…",
       "selectProperty": "Vybrat vlastnost",

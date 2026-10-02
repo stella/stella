@@ -18,6 +18,8 @@ import { ChatThreadTestRouter } from "@/lib/chat-thread-test-router";
 const previousApiUrl = process.env["VITE_API_URL"];
 process.env["VITE_API_URL"] = previousApiUrl ?? "https://api.example.test";
 
+const { ChatEditorProvider } =
+  await import("@/components/chat-editor-provider");
 const { ChatThreadMessages } =
   await import("@/components/chat/chat-thread-messages");
 const { buildMessageTurns } =
@@ -53,7 +55,7 @@ const renderWithProviders = (children: ReactNode) =>
                 handleDeny: () => {},
               }}
             >
-              {children}
+              <ChatEditorProvider>{children}</ChatEditorProvider>
             </ChatApprovalContext>
           </ChatMattersContext>
         </IntlProvider>

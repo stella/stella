@@ -28,6 +28,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalReaderAnnotationId } from "@/api/lib/safe-id-boundaries";
 
 const querySchema = t.Object({
@@ -120,7 +121,9 @@ export const listReaderAnnotationsHandler = async function* ({
   safeDb,
   userId,
 }: ListReaderAnnotationsProps) {
-  const limit = query.limit ?? LIMITS.readerAnnotationsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.readerAnnotationsPageSizeDefault,
+  );
   const conditions = [
     eq(legalReaderAnnotations.organizationId, organizationId),
     eq(

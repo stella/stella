@@ -2427,6 +2427,8 @@ const resolveModels = async (
   return modelIds.map((id) => ({
     id,
     model: getTanStackTextModelById(id, null, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       role: "chat",
       organizationId: null,
     }),

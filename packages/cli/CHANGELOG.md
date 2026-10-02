@@ -1,5 +1,25 @@
 # @stll/cli
 
+## 3.3.2
+
+### Patch Changes
+
+- [#4320](https://github.com/stella/stella/pull/4320) [`4b5541c`](https://github.com/stella/stella/commit/4b5541c7b58b20c85b295529f66b5f4f058a6461) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Handle bounded tool results.
+
+- [#4268](https://github.com/stella/stella/pull/4268) [`4b8dd20`](https://github.com/stella/stella/commit/4b8dd20fda7d1164c62d6831bbe3bf23d1fa804a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Add decision outline cursors and a configurable text window to case-law reads. Return longer passage snippets in case-law search.
+
+- [#4361](https://github.com/stella/stella/pull/4361) [`c8dd98e`](https://github.com/stella/stella/commit/c8dd98e60b24f697089bb9610f42e8914c5ff9a8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Describe the context preview the chat thread list returns.
+
+- [#4389](https://github.com/stella/stella/pull/4389) [`fdbca67`](https://github.com/stella/stella/commit/fdbca672990989bd90926567bab9ab43c8e196f8) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Update organization settings request metadata.
+
+- [#4378](https://github.com/stella/stella/pull/4378) [`2d1357e`](https://github.com/stella/stella/commit/2d1357ecfd17ff24c888bf78cc8adc537ca4dcbe) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Write the bundled skill tables without column padding.
+
+## 3.3.1
+
+### Patch Changes
+
+- [#4324](https://github.com/stella/stella/pull/4324) [`5abf3bf`](https://github.com/stella/stella/commit/5abf3bf5e5e46be267eaca68edba2fcdc552495a) Thanks [@jan-kubica](https://github.com/jan-kubica)! - Handle structured action refusal codes.
+
 ## 3.3.0
 
 ### Minor Changes

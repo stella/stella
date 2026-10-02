@@ -548,7 +548,6 @@
     "apps/api/src/handlers/contacts/contact-import-file.ts": 1,
     "apps/api/src/handlers/hosted-usage-webhook/dispatch.ts": 1,
     "apps/api/src/handlers/legislation/ingestion.ts": 1,
-    "apps/api/src/handlers/organization-settings/update.ts": 1,
     "apps/api/src/handlers/work-obligations/update.ts": 1,
     "apps/api/src/handlers/workspaces/update.ts": 1,
     "apps/api/src/lib/document-processing-request.ts": 1,

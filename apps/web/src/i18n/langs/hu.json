@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Kivonat",
+      "caseFileMayHoldOthers": "Az ügy iratai további határozatokat is tartalmazhatnak.",
       "citedBy": "Hivatkozik rá",
       "cites": "Hivatkozásai",
       "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
@@ -1094,6 +1095,7 @@
     "focusSuggestion": "Javaslat fókuszálása: {topic}",
     "folioCitationFallback": "o. {n}",
     "forkFromHere": "Új csevegés indítása innen",
+    "forkInSidePanel": "Új csevegés indítása innen az oldalsó panelen",
     "forkedFrom": "Ebből a csevegésből létrehozva: <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Egy már nem elérhető csevegésből létrehozva",
     "forkedThread": "Másik csevegésből",
@@ -1101,6 +1103,10 @@
     "greeting": "Min szeretne dolgozni?",
     "greetingSubtitle": "Kezdje egy üggyel, dokumentummal vagy egyszerű kérdéssel.",
     "hideThread": "Beszélgetés elrejtése",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {és még #} other {és még #}}"
+    },
     "improvePrompt": "Prompt javítása",
     "improvePromptDraftChanged": "A piszkozat megváltozott, ezért a javítás nem lett alkalmazva.",
     "improvePromptPlainTextOnly": "A prompt javítása csak egyszerű szövegnél érhető el.",
@@ -1153,6 +1159,7 @@
       "viaProvider": "a(z) {provider} szolgáltatáson keresztül"
     },
     "newChat": "Új csevegés",
+    "newChatInSidePanel": "Az új csevegés elérhető az oldalsó panelen",
     "noPromptPresetOnly": "Nincs üzenet, csak előbeállítás",
     "noThreads": "Még nincsenek beszélgetések",
     "officeCitationUnavailable": "Ez a hivatkozás már nem érhető el.",
@@ -1200,6 +1207,12 @@
     "richContentLoading": "Interaktív tartalom betöltése…",
     "richContentTitle": "Interaktív tartalom",
     "richContentUnavailable": "Ez a tartalom nem jeleníthető meg biztonságosan.",
+    "selection": {
+      "askInNewChat": "Kérdés új csevegésben",
+      "quoteInReply": "Idézés a válaszban",
+      "quotedText": "„{quote}”",
+      "toolbarLabel": "Kijelölt szöveg"
+    },
     "sendError": "Probléma történt az üzenet elküldésekor. Ha a hiba továbbra is fennáll, lépjen kapcsolatba az ügyfélszolgálattal.",
     "sendErrorAnonymizationBlocked": "A stella nem tudta anonimizálni az egyik mellékletet, ezért semmi sem lett elküldve. Távolítsa el a fájlt, vagy küldje el az üzenetet anonimizálás nélkül.",
     "sendErrorEmptyCompletion": "Az AI üres választ adott. Próbálja újra, vagy fogalmazza át az üzenetet.",
@@ -1598,6 +1611,7 @@
     },
     "fact": "Tény",
     "failed": "Sikertelen",
+    "files": "Fájlok",
     "filter": "Szűrő",
     "filters": "Szűrők",
     "find": "Keresés",
@@ -3262,7 +3276,6 @@
       "editSkill": "Készség szerkesztése",
       "enableSkill": "Készség bekapcsolása",
       "fileExists": "Ezen az útvonalon már létezik fájl",
-      "filesHeading": "Fájlok",
       "howItRuns": "Működés",
       "importFailureFetch": "A készség forrását nem sikerült betölteni.",
       "importFailureIntegrity": "A készség forrása a felderítés után megváltozott. Ellenőrizze újra.",
@@ -5987,7 +6000,8 @@
         "openReport": "Jelentés megnyitása",
         "submit": "Jelentés exportálása",
         "templateLabel": "Jelentéssablon",
-        "title": "Jelentés exportálása"
+        "title": "Jelentés exportálása",
+        "withoutAiSummaries": "Exportálás AI-összefoglalók nélkül"
       },
       "saveAsTemplate": "Mentés előbeállításként…",
       "selectProperty": "Tulajdonság kiválasztása",

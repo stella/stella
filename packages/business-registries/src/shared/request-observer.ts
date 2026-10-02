@@ -1,31 +1,24 @@
 import { Result } from "better-result";
 
-type RegistryRequestObserver = {
-  onRequest: () => void;
-  onError: (error: unknown) => void;
-};
-const observers = new Set<RegistryRequestObserver>();
+export type RegistryRequestObservation =
+  | { onRequest: () => void; onError: (cause: unknown) => void }
+  | "unobserved";
 
-// Registration is explicit; importing a registry client starts no observer.
-export const observeRegistryRequests = (
-  observer: RegistryRequestObserver,
-): (() => boolean) => {
-  observers.add(observer);
-  return () => observers.delete(observer);
-};
-
-export const notifyRegistryRequest = (): void => {
-  for (const observer of observers) {
-    const result = Result.try({
-      try: observer.onRequest,
-      catch: (error: unknown) => error,
-    });
-    if (Result.isError(result)) {
-      // A failing last-resort reporter must not prevent requests or observers.
-      Result.try({
-        try: () => observer.onError(result.error),
-        catch: (error: unknown) => error,
-      }).unwrapOr(undefined);
-    }
+export const observeRegistryRequest = (
+  observer: RegistryRequestObservation,
+): void => {
+  if (observer === "unobserved") {
+    return;
+  }
+  const result = Result.try({
+    try: observer.onRequest,
+    catch: (cause: unknown) => cause,
+  });
+  if (Result.isError(result)) {
+    // A failing last-resort reporter must not prevent the request.
+    Result.try({
+      try: () => observer.onError(result.error),
+      catch: (cause: unknown) => cause,
+    }).unwrapOr(undefined);
   }
 };
