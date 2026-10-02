@@ -60,6 +60,7 @@ describe.skipIf(!runPostgresTests || databaseUrl === undefined)(
           await admin`INSERT INTO sanctions_sources (id, issuer, marker_url) VALUES (${source}, 'EU', 'https://lists.example/reader')`;
           await admin`INSERT INTO sanctions_editions (id, source_id, marker_key, published_at, content_hash, entry_count, state)
           VALUES (${edition}, ${source}, ${contentHash}, '2026-09-20', ${contentHash}, 1, 'ready')`;
+          await admin`UPDATE sanctions_sources SET active_edition_id = ${edition} WHERE id = ${source}`;
           await admin`INSERT INTO sanctions_entry_payloads (content_hash, payload) VALUES (${contentHash}, '{"name":"Reader corpus"}'::jsonb)`;
           await admin`INSERT INTO sanctions_edition_entries (edition_id, source_entry_id, content_hash) VALUES (${edition}, 'reader-entry', ${contentHash})`;
           for (const [index, organization] of organizations.entries()) {
@@ -106,7 +107,7 @@ describe.skipIf(!runPostgresTests || databaseUrl === undefined)(
             async (tx) =>
               await tx.execute(sql`
           SELECT s.id, e.id AS edition, p.payload, link.source_entry_id FROM sanctions_sources s
-          JOIN sanctions_editions e ON e.source_id = s.id
+          JOIN sanctions_editions e ON e.id = s.active_edition_id
           JOIN sanctions_edition_entries link ON link.edition_id = e.id
           JOIN sanctions_entry_payloads p ON p.content_hash = link.content_hash WHERE s.id = ${source}
         `),
@@ -218,6 +219,7 @@ describe.skipIf(!runPostgresTests || databaseUrl === undefined)(
           await admin`DELETE FROM workspaces WHERE id IN (${workspaces.at(0)}, ${workspaces.at(1)})`;
           await admin`DELETE FROM contacts WHERE id IN (${contacts.at(0)}, ${contacts.at(1)})`;
           await admin`DELETE FROM organization WHERE id IN (${organizations.at(0)}, ${organizations.at(1)})`;
+          await admin`UPDATE sanctions_sources SET active_edition_id = NULL WHERE id = ${source}`;
           await admin`DELETE FROM sanctions_edition_entries WHERE edition_id = ${edition}`;
           await admin`DELETE FROM sanctions_entry_payloads WHERE content_hash = ${contentHash}`;
           await admin`DELETE FROM sanctions_editions WHERE id = ${edition}`;
