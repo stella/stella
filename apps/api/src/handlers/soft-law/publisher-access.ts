@@ -30,7 +30,9 @@ const readPublisherBytes = async (
   let size = 0;
   while (true) {
     const next = await reader.read();
-    if (next.done) {break;}
+    if (next.done) {
+      break;
+    }
     size += next.value.byteLength;
     if (size > SOFT_LAW_RESPONSE_MAX_BYTES) {
       return Result.err(
@@ -152,6 +154,7 @@ export const createSoftLawFetch = ({
   let blocked: SoftLawBlockReason | null = null;
   let windowState: "open" | "deferred_window" = "open";
   let leaseState: "active" | "lost" = "active";
+  const getLeaseState = () => leaseState;
   const stop = (reason: SoftLawBlockReason) => {
     blocked = reason;
     return Result.err(
@@ -165,7 +168,7 @@ export const createSoftLawFetch = ({
     rawUrl: string,
     options?: { expectedContentTypes: readonly string[] },
   ) => {
-    if (leaseState === "lost") {
+    if (getLeaseState() === "lost") {
       return Result.err(
         new SoftLawAccessError({ message: "Ingestion lease was lost" }),
       );
@@ -225,7 +228,7 @@ export const createSoftLawFetch = ({
       );
     }
     signal.throwIfAborted();
-    if (leaseState === "lost") {
+    if (getLeaseState() === "lost") {
       return Result.err(
         new SoftLawAccessError({ message: "Ingestion lease was lost" }),
       );
@@ -268,7 +271,9 @@ export const createSoftLawFetch = ({
     }
     const bodyRead = async () => {
       const read = await readPublisherBytes(reader);
-      if (Result.isError(read)) {return read;}
+      if (Result.isError(read)) {
+        return read;
+      }
       const bytes = read.value;
       const contentType =
         response.headers.get("content-type") ?? "application/octet-stream";
@@ -326,7 +331,7 @@ export const createSoftLawFetch = ({
     {
       getBlockReason: () => blocked,
       getWindowState: () => windowState,
-      getLeaseState: () => leaseState,
+      getLeaseState,
     },
   );
   return Object.freeze(fetch);
