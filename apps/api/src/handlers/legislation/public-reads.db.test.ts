@@ -3,6 +3,7 @@ import { eq, inArray, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import { publicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import type { Block, DocumentAst } from "@stll/legal-ast/document-ast";
 import { propertyConfig, propertyTestTimeout } from "@stll/property-testing";
 import { foldToAscii } from "@stll/text-normalize";
@@ -1792,11 +1793,15 @@ describe("statute country publication", () => {
   test.each(unpublishedStatutes)(
     "$country cannot be enumerated or reached through a document or work identifier",
     async ({ id, country, eli }) => {
-      const page = expectPage(
-        await listStatutesHandler({ country }, legislationDb),
-      );
-      expect(page.items).toEqual([]);
-      expect(page.nextCursor).toBeNull();
+      const unavailable = publicCountryUnavailable(country);
+      const listed = await listStatutesHandler({ country }, legislationDb);
+      if (unavailable === null) {
+        const page = expectPage(listed);
+        expect(page.items).toEqual([]);
+        expect(page.nextCursor).toBeNull();
+      } else {
+        expect(listed).toMatchObject({ code: 503, response: unavailable });
+      }
       expect(
         await readPublicLegislationHandler(id, legislationDb),
       ).toMatchObject({ code: 404 });

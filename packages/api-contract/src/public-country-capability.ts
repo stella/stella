@@ -1,3 +1,4 @@
+// parser-output-unchanged: public admission metadata does not change parsed decision records.
 import * as v from "valibot";
 
 export type PublicCountryCapability =

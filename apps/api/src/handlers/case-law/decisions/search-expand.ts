@@ -1,5 +1,6 @@
 import { Result } from "better-result";
 import { status, t } from "elysia";
+import type { ElysiaCustomStatusResponse } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -10,6 +11,7 @@ import {
   isWholeEntryIdentifier,
   parseDecisionQuery,
 } from "@stll/api-contract/decision-query-intent";
+import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 import { decisionReporterGrammarForJurisdiction } from "@stll/api-contract/us-reporter-citation";
 import { Temporal } from "@stll/time";
 
@@ -17,7 +19,10 @@ import { envBase } from "@/api/env-base";
 import { resolveCaching } from "@/api/lib/ai-config";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { decisionDocketGrammarForCountry } from "@/api/lib/legal-search/adapter-manifest";
 import {
@@ -169,7 +174,9 @@ const expandCaseLawSearch = createSafeRootHandler(
     safeDb,
     session,
     user,
-  }) {
+  }): SafeHandlerGenerator<
+    ExpansionAnswer | ElysiaCustomStatusResponse<503, PublicCountryUnavailable>
+  > {
     const countryRead = readPublicLawCountry(body.country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
     });

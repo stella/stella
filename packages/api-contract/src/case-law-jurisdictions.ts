@@ -1,3 +1,4 @@
+// parser-output-unchanged: public admission metadata does not change parsed decision records.
 import { PUBLIC_COUNTRIES } from "./public-country-capability";
 
 /**

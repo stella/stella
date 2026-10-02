@@ -17,10 +17,10 @@ import {
 
 describe("public country availability contract", () => {
   test("advertised countries and serving lists derive from the capability map", () => {
-    expect(CASE_LAW_JURISDICTIONS).toEqual(
-      Object.keys(PUBLIC_COUNTRY_CAPABILITIES),
+    expect(Object.keys(PUBLIC_COUNTRY_CAPABILITIES)).toEqual(
+      CASE_LAW_JURISDICTIONS,
     );
-    expect(PUBLIC_CASE_LAW_COUNTRIES).toEqual(ADMITTED_PUBLIC_COUNTRIES);
+    expect(ADMITTED_PUBLIC_COUNTRIES).toEqual(PUBLIC_CASE_LAW_COUNTRIES);
     expect(PUBLIC_LEGISLATION_COUNTRIES).toEqual(ADMITTED_PUBLIC_COUNTRIES);
     expect(PUBLIC_COUNTRY_CAPABILITIES.CZE).toBe("admitted");
     expect(PUBLIC_COUNTRY_CAPABILITIES.SVK).toBe("pending_public");
