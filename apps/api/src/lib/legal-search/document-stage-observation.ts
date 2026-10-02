@@ -139,7 +139,7 @@ const writeDocumentStageObservation = async ({
 };
 
 /** Load the operational sink only when emitting, so pure ingestion utilities stay import-safe. */
-export const logDocumentStageObservation = async (
+const logDocumentStageObservation = async (
   observation: DocumentStageObservation,
 ): Promise<void> => {
   await observeDocumentStageSafely({

@@ -1,2 +1,2 @@
-// parser-output-unchanged: TimeoutError and withTimeout reexports preserve their behavior.
-export { TimeoutError, withTimeout } from "@stll/concurrency/with-timeout";
+// parser-output-unchanged: the withTimeout reexport preserves its behavior.
+export { withTimeout } from "@stll/concurrency/with-timeout";
