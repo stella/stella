@@ -158,7 +158,7 @@ if KEYS[3] then
 end
 `;
 
-// Checked only while acquiring, never while renewing already-admitted work.
+// Checked when admitting a new phase, never while renewing already-admitted work.
 export const ACTION_SERVICE_DEADLINE_EXPIRED = -4;
 export const ACTION_SERVICE_DEADLINE_SCRIPT = `
 if ARGV[9] and now >= tonumber(ARGV[9]) then return ${ACTION_SERVICE_DEADLINE_EXPIRED} end
