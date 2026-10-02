@@ -1,11 +1,9 @@
 // parser-output-unchanged: query reference lookup; stored title derivation is unchanged
+import { panic } from "better-result";
 import { and, eq, inArray, isNotNull, isNull, ne, or } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
 
-import {
-  STATUTE_ALIASES,
-  isStatuteQueryCountry,
-} from "@stll/api-contract/statute-aliases";
+import { isStatuteQueryCountry } from "@stll/api-contract/statute-aliases";
 import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 import {
   splitStatuteTitleCitation,
@@ -482,7 +480,7 @@ export const readNamedLegislationWorks = async (
   // Explicit act identities outrank titles of amendments that mention them.
   const countries =
     country === undefined
-      ? Object.keys(STATUTE_ALIASES).filter(isStatuteQueryCountry).toSorted()
+      ? []
       : [country.toLowerCase()].filter(isStatuteQueryCountry);
   const references = countries.flatMap((jurisdiction) =>
     readStatuteQueryReferences(jurisdiction, query),
@@ -499,18 +497,24 @@ export const readNamedLegislationWorks = async (
         and(
           redistributableLegislationVersion,
           or(
-            ...references.map((reference) =>
-              and(
+            ...references.map((reference) => {
+              const actCondition = actNumberCondition({
+                number: `${reference.number}/${reference.year}`,
+                collection: reference.collection ?? undefined,
+              });
+              if (actCondition === null) {
+                return panic(
+                  "Parsed statute reference has no act-number condition",
+                );
+              }
+              return and(
                 eq(
                   legislationDocuments.country,
                   reference.country.toUpperCase(),
                 ),
-                actNumberCondition({
-                  number: `${reference.number}/${reference.year}`,
-                  collection: reference.collection ?? undefined,
-                }),
-              ),
-            ),
+                actCondition,
+              );
+            }),
           ),
         ),
       )

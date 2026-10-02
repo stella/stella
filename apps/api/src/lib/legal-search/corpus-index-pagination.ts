@@ -97,7 +97,7 @@ type CorpusIndexRanking<TContext> = {
  *   beside it. Relevance order only: a score says nothing about a date order.
  */
 export type CorpusIndexScanTransport =
-  | { type: "native"; snippets?: "inline" | undefined }
+  | { type: "native" }
   | { type: "scored"; fields: readonly string[] };
 
 export const NATIVE_SCAN_TRANSPORT = {
@@ -120,7 +120,7 @@ type CorpusIndexSearchPageInput<TContext> = {
   parsedCursor: SearchCursor | null;
   /** Defaults to `native`. */
   scanTransport?: CorpusIndexScanTransport | undefined;
-  /** A coverage fallback spends one native round, including snippets. */
+  /** A coverage fallback spends one scan round; only emitted hits are highlighted. */
   maxRounds?: number | undefined;
   /**
    * Order the engine returns candidates in, and with it the meaning of the
@@ -415,7 +415,6 @@ type ScanRound = {
   hits: readonly CorpusIndexHit[];
   /** BM25 per hit, index-aligned with `hits`; null on the native transport. */
   scores: readonly number[] | null;
-  snippets: readonly Record<string, unknown>[];
 };
 
 type ReadScanRoundOptions = {
@@ -425,7 +424,6 @@ type ReadScanRoundOptions = {
   query: string;
   order: CorpusSearchOrder;
   transport: CorpusIndexScanTransport;
-  snippetFields: string[];
   startOffset: number;
   maxHits: number;
 };
@@ -442,7 +440,6 @@ const readScanRound = async ({
   query,
   order,
   transport,
-  snippetFields,
   startOffset,
   maxHits,
 }: ReadScanRoundOptions): Promise<ScanRound> => {
@@ -455,8 +452,6 @@ const readScanRound = async ({
         maxHits,
         startOffset,
         sortBy: corpusEngineSortBy(order),
-        snippetFields:
-          transport.snippets === "inline" ? snippetFields : undefined,
       });
       if (result.isErr()) {
         throw corpusIndexSearchFailure(result.error);
@@ -465,7 +460,6 @@ const readScanRound = async ({
         numHits: result.value.numHits,
         hits: result.value.hits,
         scores: null,
-        snippets: result.value.snippets,
       };
     }
     case "scored": {
@@ -485,7 +479,6 @@ const readScanRound = async ({
         numHits: result.numHits,
         hits: result.hits.map((hit) => hit.fields),
         scores: result.hits.map((hit) => hit.score),
-        snippets: [],
       };
     }
     default:
@@ -719,7 +712,6 @@ export const readCorpusIndexSearchPage = async <TContext>({
   CorpusIndexSearchPageResult<TContext>
 > => {
   const candidates: ScoredCandidate[] = [];
-  const inlineSnippets = new Map<string, string>();
   const scores = scanScoreRecorder();
   /** Best passage per document, as the clause a snippet round addresses it by. */
   const passageClauseById = new Map<string, string>();
@@ -793,7 +785,6 @@ export const readCorpusIndexSearchPage = async <TContext>({
       query,
       order,
       transport: scanTransport,
-      snippetFields,
       startOffset,
       maxHits,
     });
@@ -832,15 +823,6 @@ export const readCorpusIndexSearchPage = async <TContext>({
         continue;
       }
       passageCountById.set(id, 1);
-      if (
-        scanTransport.type === "native" &&
-        scanTransport.snippets === "inline"
-      ) {
-        const snippet = extractSnippet(round.snippets.at(index), hit);
-        if (snippet !== null) {
-          inlineSnippets.set(id, snippet);
-        }
-      }
 
       candidates.push({
         id,
@@ -898,21 +880,16 @@ export const readCorpusIndexSearchPage = async <TContext>({
     unseenScoreUpperBound,
   });
 
-  const snippets =
-    scanTransport.type === "native" && scanTransport.snippets === "inline"
-      ? { snippetById: inlineSnippets, rounds: 0, indexMs: 0 }
-      : await readPageSnippets({
-          observer,
-          clauses: pageRanked.flatMap(
-            (hit) => passageClauseById.get(hit.id) ?? [],
-          ),
-          cluster,
-          extractId,
-          extractSnippet,
-          indexId,
-          query,
-          snippetFields,
-        });
+  const snippets = await readPageSnippets({
+    observer,
+    clauses: pageRanked.flatMap((hit) => passageClauseById.get(hit.id) ?? []),
+    cluster,
+    extractId,
+    extractSnippet,
+    indexId,
+    query,
+    snippetFields,
+  });
 
   return {
     pageRanked,

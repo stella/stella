@@ -364,6 +364,17 @@ describe.skipIf(!runEngineTests)(
       );
       expect(cursor?.phase?.type).toBe("relaxed");
       expect(cursor?.phase?.generation).toBe(MANIFEST.generation);
+      if (cursor?.phase?.type !== "relaxed") {
+        return panic(
+          "short exhausted fixture did not produce a relaxed cursor",
+        );
+      }
+      expect(cursor.phase.strictWorkTokens).toHaveLength(2);
+      expect(
+        cursor.phase.strictWorkTokens.some((token) =>
+          cursor.excludedGroups?.includes(token),
+        ),
+      ).toBe(false);
     });
 
     test("a short first strict page with a continuation defers relaxation", async () => {

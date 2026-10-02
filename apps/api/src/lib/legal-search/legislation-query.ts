@@ -1,4 +1,7 @@
-import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
+import {
+  corpusFreeTextClause,
+  quoteCorpusValue,
+} from "@/api/lib/legal-search/corpus-query";
 import {
   corpusMorphologyLanguage,
   documentMorphologyLanguage,
@@ -9,7 +12,7 @@ import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-wor
 const NUMERIC_VALUE =
   /(?<![\p{L}\p{M}\p{N}])\d+(?:[.,/–-]\d+)*(?![\p{L}\p{M}\p{N}])/gu;
 const SECTION_DESIGNATION =
-  /(?:§|\bodst\.?|\bp[íi]sm\.?)\s*(\d+[a-z]*|[a-z]\b)/giu;
+  /(?<![\p{L}\p{M}\p{N}])(?:§|odst\.?|p[íi]sm\.?)\s*(\d+[a-z]*|[a-z])(?![\p{L}\p{M}\p{N}])/giu;
 
 type RelaxedLegislationClauseOptions = {
   query: string;
@@ -29,8 +32,8 @@ export const relaxedLegislationClause = ({
       designations.push(value);
       return " ";
     });
-  // Designations get the first leaves, so a long question cannot budget them away.
-  const text = `${designations.join(" ")} ${rest.replace(NUMERIC_VALUE, " ")}`;
+  // Quoted designations survive function-word filtering and take the first leaves.
+  const text = `${designations.map(quoteCorpusValue).join(" ")} ${rest.replace(NUMERIC_VALUE, " ")}`;
   return corpusFreeTextClause(text, {
     match: "any",
     functionWords: functionWordsFor(

@@ -79,6 +79,10 @@ import {
   type SearchSort,
 } from "@/api/lib/legal-search/corpus-search-order";
 import {
+  CORPUS_INDEX_GENERATION_MAX_LENGTH,
+  isCorpusIndexGeneration,
+} from "@/api/lib/legal-search/index-naming";
+import {
   type ExpansionDictionaryIdentity,
   NO_EXPANSION_DICTIONARY_IDENTITY,
   parseExpansionDictionaryIdentity,
@@ -112,7 +116,7 @@ export type CorpusSearchCursor = SearchCursor & {
    * whose cursors keep the form they always had.
    */
   target: string | null;
-  phase?: CorpusSearchPhase;
+  phase?: CorpusSearchPhase | undefined;
 };
 
 /** Hex characters of a read target's identity (`corpusIndexReadTarget`). */
@@ -140,31 +144,26 @@ const GROUP_TOKEN_PATTERN = new RegExp(
 const GROUPS_SEGMENT_PREFIX = "x";
 const PHASE_SEGMENT_PREFIX = "p";
 const PHASE_FINGERPRINT_PATTERN = /^[0-9a-f]{64}$/u;
-const PHASE_GENERATION_MAX_CHARS = 64;
-const PHASE_GENERATION_PATTERN = new RegExp(
-  `^[a-z][a-z0-9_-]{0,${String(PHASE_GENERATION_MAX_CHARS - 1)}}$`,
-  "u",
-);
 
 const readPhase = (value: unknown): CorpusSearchPhase | null => {
   if (
     !isRecord(value) ||
-    typeof value.fingerprint !== "string" ||
-    !PHASE_FINGERPRINT_PATTERN.test(value.fingerprint) ||
-    typeof value.generation !== "string" ||
-    !PHASE_GENERATION_PATTERN.test(value.generation)
+    typeof value["fingerprint"] !== "string" ||
+    !PHASE_FINGERPRINT_PATTERN.test(value["fingerprint"]) ||
+    typeof value["generation"] !== "string" ||
+    !isCorpusIndexGeneration(value["generation"])
   ) {
     return null;
   }
   const { fingerprint, generation } = value;
-  switch (value.type) {
+  switch (value["type"]) {
     case "strict": {
       return Object.keys(value).length === 3
         ? { type: "strict", fingerprint, generation }
         : null;
     }
     case "relaxed": {
-      const tokens = value.strictWorkTokens;
+      const tokens = value["strictWorkTokens"];
       if (
         Object.keys(value).length !== 4 ||
         !Array.isArray(tokens) ||
@@ -268,7 +267,7 @@ const PHASE_SEGMENT_MAX_CHARS =
     JSON.stringify({
       type: "relaxed",
       fingerprint: "a".repeat(DICTIONARY_IDENTITY_MAX_CHARS),
-      generation: "a".repeat(PHASE_GENERATION_MAX_CHARS),
+      generation: "a".repeat(CORPUS_INDEX_GENERATION_MAX_LENGTH),
       strictWorkTokens: Array.from(
         { length: LIMITS.corpusIndexSearchMaxExcludedGroups },
         () => "a".repeat(CORPUS_CURSOR_GROUP_TOKEN_CHARS),
@@ -363,13 +362,13 @@ type CursorRanking = {
   sort: SearchSort;
   target?: string | null;
   excludedGroups?: readonly string[];
-  phase?: CorpusSearchPhase;
+  phase?: CorpusSearchPhase | undefined;
 };
 
 type OptionalSegments = {
   target: string | null;
   excludedGroups: readonly string[];
-  phase?: CorpusSearchPhase;
+  phase?: CorpusSearchPhase | undefined;
 };
 
 /**
@@ -501,7 +500,7 @@ type CorpusSearchRanking = {
   sort: SearchSort;
   /** The read's target identity; a cursor must carry exactly this one. */
   target: string | null;
-  phase?: CorpusSearchPhase;
+  phase?: CorpusSearchPhase | undefined;
 };
 
 /**

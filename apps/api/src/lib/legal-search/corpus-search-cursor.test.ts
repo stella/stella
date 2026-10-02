@@ -14,6 +14,7 @@ import {
   type CorpusSearchPhase,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { SEARCH_SORTS } from "@/api/lib/legal-search/corpus-search-order";
+import { isCorpusIndexGeneration } from "@/api/lib/legal-search/index-naming";
 import {
   type ExpansionDictionaryIdentity,
   NO_EXPANSION_DICTIONARY_IDENTITY,
@@ -585,32 +586,38 @@ test("relaxed continuation exclusions are payload, rather than a second phase id
   ).toBe(false);
 });
 
-test.each([
-  null,
-  [],
-  { ...STRICT_PHASE, type: "other" },
-  { ...STRICT_PHASE, fingerprint: HASH_A.slice(1) },
-  { ...STRICT_PHASE, fingerprint: HASH_A.toUpperCase() },
-  { ...STRICT_PHASE, generation: "" },
-  { ...STRICT_PHASE, generation: "../legislation_v2" },
-  { ...STRICT_PHASE, generation: "a".repeat(65) },
-  { ...STRICT_PHASE, extra: "unexpected" },
-  { ...STRICT_PHASE, strictWorkTokens: [] },
-  { ...STRICT_PHASE, type: "relaxed" },
-  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: "AbC_1-" },
-  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["short"] },
-  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["ab.def"] },
-  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: [1] },
-  { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["AbC_1-", "AbC_1-"] },
-  {
-    ...STRICT_PHASE,
-    type: "relaxed",
-    strictWorkTokens: Array.from(
-      { length: LIMITS.corpusIndexSearchMaxExcludedGroups + 1 },
-      (_, index) => String(index).padStart(6, "0"),
-    ),
-  },
-])("rejects malformed phase data %p", (phase) => {
+test.each(
+  [
+    null,
+    [],
+    { ...STRICT_PHASE, type: "other" },
+    { ...STRICT_PHASE, fingerprint: HASH_A.slice(1) },
+    { ...STRICT_PHASE, fingerprint: HASH_A.toUpperCase() },
+    { ...STRICT_PHASE, generation: "" },
+    { ...STRICT_PHASE, generation: "../legislation_v2" },
+    { ...STRICT_PHASE, generation: "a".repeat(65) },
+    { ...STRICT_PHASE, extra: "unexpected" },
+    { ...STRICT_PHASE, strictWorkTokens: [] },
+    { ...STRICT_PHASE, type: "relaxed" },
+    { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: "AbC_1-" },
+    { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["short"] },
+    { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: ["ab.def"] },
+    { ...STRICT_PHASE, type: "relaxed", strictWorkTokens: [1] },
+    {
+      ...STRICT_PHASE,
+      type: "relaxed",
+      strictWorkTokens: ["AbC_1-", "AbC_1-"],
+    },
+    {
+      ...STRICT_PHASE,
+      type: "relaxed",
+      strictWorkTokens: Array.from(
+        { length: LIMITS.corpusIndexSearchMaxExcludedGroups + 1 },
+        (_, index) => String(index).padStart(6, "0"),
+      ),
+    },
+  ].map((phase) => ({ phase })),
+)("rejects malformed phase data %p", ({ phase }) => {
   expect(
     decodeCorpusSearchCursor(
       encodeCursor(
@@ -649,7 +656,7 @@ test("the maximum phase and group payload fits the legislation-only cursor cap",
     ...phaseCursor({
       type: "relaxed",
       fingerprint: HASH_A,
-      generation: "a".repeat(64),
+      generation: "A.b-".repeat(8),
       strictWorkTokens: tokens,
     }),
     dictionary: DICTIONARY_A,
@@ -666,4 +673,26 @@ test("the maximum phase and group payload fits the legislation-only cursor cap",
     CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
   );
   expect(decodeCorpusSearchCursor(encoded)).toEqual(cursor);
+});
+
+test("phase generations use the corpus generation grammar", () => {
+  assertProperty(
+    "phase generations use the corpus generation grammar",
+    fc.property(fc.string({ maxLength: 40 }), (generation) => {
+      const phase = { type: "strict", fingerprint: HASH_A, generation };
+      const decoded = decodeCorpusSearchCursor(
+        encodeCursor(
+          0.5,
+          `0:none:relevance:${phaseSegment(phase)}:${DECISION_ID}`,
+        ),
+      );
+      expect(decoded !== null).toBe(isCorpusIndexGeneration(generation));
+    }),
+  );
+  for (const generation of ["A", "Legal.V2", "A.b-".repeat(8)]) {
+    const cursor = phaseCursor({ ...STRICT_PHASE, generation });
+    expect(decodeCorpusSearchCursor(encodeCorpusSearchCursor(cursor))).toEqual(
+      cursor,
+    );
+  }
 });

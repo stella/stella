@@ -1,3 +1,5 @@
+import { panic } from "better-result";
+
 import { foldToAscii } from "@stll/text-normalize";
 
 import {
@@ -6,6 +8,7 @@ import {
   type StatuteAliasTarget,
   type StatuteQueryCountry,
 } from "./statute-aliases";
+import { CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE } from "./statute-gazette";
 
 /**
  * What a statute box entry asks for. An act is addressed by number (with the
@@ -40,11 +43,11 @@ export const foldStatuteQuery = (raw: string): string =>
 
 /**
  * Publisher collections as lawyers abbreviate them, mapped to the collection
- * segment of the publisher's ELI. The Czech official gazette (`Ú. l.`) was
- * split into two ELI collections, so its abbreviation names no single one.
+ * segment of the publisher's ELI. The ambiguous historical Czech official
+ * gazette (`Ú. l.`) is unsupported rather than widened across collections.
  */
 const COLLECTION_BY_ABBREVIATION = {
-  cze: { sb: "sb", sbms: "sm", ul: null },
+  cze: { sb: "sb", sbms: "sm" },
   svk: { zb: "zz", zz: "zz" },
 } as const satisfies Record<StatuteQueryCountry, Record<string, string | null>>;
 
@@ -98,7 +101,7 @@ const actFromNumber = (
   const suffix = match?.[3];
   const collections: Record<string, string | null> =
     COLLECTION_BY_ABBREVIATION[country];
-  let collection: string | null = null;
+  let collection: string | null = country === "cze" ? "sb" : "zz";
   if (suffix !== undefined) {
     const abbreviation = canonicalCollectionAbbreviation(suffix);
     // A collection this jurisdiction does not publish (`Z. z.` while reading
@@ -192,8 +195,73 @@ export type StatuteQueryReference = {
   label: string | null;
 };
 
+// Ordinary words and clipped titles remain box-only aliases. Abbreviations
+// embedded in prose must retain their conventional casing to avoid word pins.
+const EMBEDDED_ALIAS_POLICY = {
+  cze: {
+    oz: ["OZ"],
+    noz: ["NOZ"],
+    obcz: ["ObčZ", "OBČZ", "OBCZ"],
+    zok: ["ZOK"],
+    zp: ["ZP"],
+    tz: ["TZ"],
+    trz: ["TrZ", "TRZ"],
+    tr: ["TR"],
+    osr: ["OSŘ", "OSR"],
+    srs: ["SŘS", "SRS"],
+    sr: ["SŘ", "SR"],
+    insz: ["InsZ", "INSZ"],
+    iz: ["IZ"],
+    zdp: ["ZDP"],
+    dph: ["DPH"],
+    lzps: ["LZPS"],
+    zrs: ["ZŘS", "ZRS"],
+    "obc. zak.": "whole-query",
+    "obc zak": "whole-query",
+    obcansky: "whole-query",
+    obcan: "whole-query",
+    ustava: "whole-query",
+    listina: "whole-query",
+    "obcansky zakonik": "title",
+    "zakon o obchodnich korporacich": "title",
+    "zakonik prace": "title",
+    "trestni zakonik": "title",
+    "trestni rad": "title",
+    "obcansky soudni rad": "title",
+    "soudni rad spravni": "title",
+    "spravni rad": "title",
+    "insolvencni zakon": "title",
+    "zivnostensky zakon": "title",
+    "stavebni zakon": "title",
+  },
+  svk: {
+    oz: ["OZ"],
+    obchz: ["ObchZ", "OBCHZ"],
+    obz: ["ObZ", "OBZ"],
+    zp: ["ZP"],
+    tz: ["TZ"],
+    csp: ["CSP"],
+    "obciansky zakonnik": "title",
+    "obchodny zakonnik": "title",
+    "zakonnik prace": "title",
+    "trestny zakon": "title",
+    "civilny sporovy poriadok": "title",
+    "spravny poriadok": "title",
+  },
+} as const satisfies {
+  [Country in StatuteQueryCountry]: {
+    [Alias in keyof (typeof STATUTE_ALIASES)[Country]]:
+      | "whole-query"
+      | "title"
+      | readonly string[];
+  };
+};
+
 const WORD_CHARACTER = /[\p{L}\p{M}\p{N}]/u;
-const ANOTHER_GAZETTE_SUFFIX = /^ ?nss\b/u;
+const ANOTHER_GAZETTE_SUFFIX = new RegExp(
+  `^ ?${CZE_CASE_LAW_REPORTER_SUFFIX_SOURCE}`,
+  "iu",
+);
 
 /**
  * Uses the box parser's number grammar and alias owner inside longer text.
@@ -205,6 +273,21 @@ export const readStatuteQueryReferences = (
   raw: string,
 ): StatuteQueryReference[] => {
   const folded = foldStatuteQuery(raw);
+  const casePreserved = foldToAscii(raw.normalize("NFKC"))
+    .replace(/\s+/gu, " ")
+    .trim();
+  const wholeQuery = parseStatuteQuery(country, raw);
+  if (wholeQuery.type === "act") {
+    return [
+      {
+        country,
+        collection: wholeQuery.collection,
+        number: wholeQuery.number,
+        year: wholeQuery.year,
+        label: wholeQuery.label,
+      },
+    ];
+  }
   const mentions: {
     offset: number;
     end: number;
@@ -216,7 +299,19 @@ export const readStatuteQueryReferences = (
   );
   for (const match of folded.matchAll(numberMentions)) {
     const after = folded.slice(match.index + match[0].length);
-    if (ANOTHER_GAZETTE_SUFFIX.test(after)) {
+    const before = folded.slice(0, match.index);
+    // Docket register references and temporal "od" references are not acts,
+    // even when surrounding text happens to include a gazette abbreviation.
+    const docketOrDate =
+      /(?:^|[^\p{L}\p{N}])(?:cdo|tdo|nd|odo|as|ads|afs|azs|ao|na|n|co|to|od) (?:c\. ?)?$/u.test(
+        before,
+      );
+    const explicitPrefix = /(?:^|[^\p{L}\p{N}])c\. ?$/u.test(before);
+    if (
+      docketOrDate ||
+      (match[3] === undefined && !explicitPrefix) ||
+      ANOTHER_GAZETTE_SUFFIX.test(after)
+    ) {
       continue;
     }
     const intent = actFromNumber(country, match[0], null);
@@ -235,12 +330,26 @@ export const readStatuteQueryReferences = (
     }
   }
   for (const [alias, target] of Object.entries(STATUTE_ALIASES[country])) {
+    const policies: Record<
+      string,
+      "whole-query" | "title" | readonly string[]
+    > = EMBEDDED_ALIAS_POLICY[country];
+    const policy = policies[alias];
+    if (policy === undefined) {
+      panic("Statute alias is missing its embedded-match policy");
+    }
+    if (policy === "whole-query") {
+      continue;
+    }
     let offset = folded.indexOf(alias);
     while (offset !== -1) {
       const end = offset + alias.length;
+      const originalSpelling = casePreserved.slice(offset, end);
       if (
         !WORD_CHARACTER.test(folded.charAt(offset - 1)) &&
-        !WORD_CHARACTER.test(folded.charAt(end))
+        !WORD_CHARACTER.test(folded.charAt(end)) &&
+        (policy === "title" ||
+          policy.some((spelling) => foldToAscii(spelling) === originalSpelling))
       ) {
         mentions.push({ offset, end, reference: { country, ...target } });
       }

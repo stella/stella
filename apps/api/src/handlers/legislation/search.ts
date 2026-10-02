@@ -118,22 +118,9 @@ import {
 } from "@/api/lib/search/highlight";
 import { isRecord } from "@/api/lib/type-guards";
 
-type LegislationHit = {
-  match: { type: "strict" } | { type: "relaxed" };
-  documentId: string;
-  eli: string;
-  /** The persisted public slug; null until the corpus mints one. */
-  slug: string | null;
-  title: string;
-  country: string;
-  language: string;
-  documentType: string | null;
-  status: string;
-  effectiveDate: string | null;
-  sourceUrl: string | null;
-  headline: string | null;
-  score: number;
-};
+type LegislationHit = Static<
+  typeof searchLegislationSuccessResponseSchema
+>["items"][number];
 
 type RawRow = Record<string, unknown>;
 
@@ -533,7 +520,14 @@ export const rehydrateLegislationCandidates = async ({
             ),
             authorityById,
           })
-        : candidates.filter((candidate) => matchedIds.has(candidate.id)),
+        : candidates
+            .filter((candidate) => matchedIds.has(candidate.id))
+            .map(({ id, score }) => ({
+              id,
+              score,
+              lexicalScore: score,
+              citationAuthority: 0,
+            })),
     workOf,
     representatives,
     // Named Works that apply today are placed first; a name only repealed or
@@ -904,7 +898,9 @@ const pgSearch = async (
   return { hits, nextCursor };
 };
 
-const legislationQueryFingerprint = (body: SearchLegislationBody): string =>
+export const legislationQueryFingerprint = (
+  body: SearchLegislationBody,
+): string =>
   createHash("sha256")
     .update(
       JSON.stringify([
@@ -990,10 +986,6 @@ const corpusIndexSearch = async ({
       ...(active.type === "relaxed"
         ? {
             maxRounds: 1,
-            scanTransport: {
-              type: "native" as const,
-              snippets: "inline" as const,
-            },
           }
         : {}),
       snippetFields: ["text"],
@@ -1098,7 +1090,6 @@ const corpusIndexSearch = async ({
     id: "00000000-0000-0000-0000-000000000000",
     sort: DEFAULT_SEARCH_SORT,
     windowStart: 0,
-    excludedGroups: strictWorkTokens,
   };
   const extra = await readPhase({
     active: relaxed,

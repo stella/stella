@@ -62,6 +62,45 @@ test("section, paragraph and letter designations remain searchable", () => {
   ).toBe('("2051" OR "52" OR "2" OR "f" OR "náhrada" OR "výpověď" OR "Kč")');
 });
 
+test("diacritic words after section markers remain whole words", () => {
+  assertProperty(
+    "diacritic words after section markers remain whole words",
+    fc.property(
+      fc.constantFrom("§", "odst.", "písm."),
+      fc.constantFrom("návrh", "článek", "řád", "škoda", "úprava", "žádost"),
+      fc.constantFrom("NFC", "NFD"),
+      (marker, word, normalization) => {
+        const query = `${marker} ${word}`.normalize(normalization);
+        const expected =
+          marker === "§"
+            ? `("${word}")`
+            : `("${marker.slice(0, -1)}" OR "${word}")`;
+        expect(relaxedLegislationClause({ query, jurisdiction: "CZE" })).toBe(
+          expected,
+        );
+      },
+    ),
+  );
+});
+
+test("letter designations survive function-word filtering", () => {
+  assertProperty(
+    "letter designations survive function-word filtering",
+    fc.property(
+      fc.constantFrom("CZE", "SVK"),
+      fc.constantFrom("a", "i", "o", "s", "u", "v", "z"),
+      (jurisdiction, letter) => {
+        expect(
+          relaxedLegislationClause({
+            query: `písm. ${letter}) náhrada`,
+            jurisdiction,
+          }),
+        ).toBe(`("${letter}" OR "náhrada")`);
+      },
+    ),
+  );
+});
+
 test("section designation preservation survives decomposed Czech diacritics", () => {
   const query = "písm. 3 náhrada";
   const decomposed = query.normalize("NFD");

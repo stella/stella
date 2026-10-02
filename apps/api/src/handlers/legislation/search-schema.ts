@@ -2,6 +2,7 @@ import { t } from "elysia";
 import type { Static } from "elysia";
 
 import { PUBLIC_LEGISLATION_COUNTRIES } from "@stll/api-contract/legislation-publication";
+import { LEGISLATION_SEARCH_MATCH_TYPES } from "@stll/api-contract/search";
 
 import {
   safeHandlerErrorResponseSchema,
@@ -52,16 +53,14 @@ export const searchLegislationSuccessResponseSchema = t.Object(
     items: t.Array(
       t.Object(
         {
-          match: t.Union([
-            t.Object(
-              { type: t.Literal("strict") },
-              { additionalProperties: false },
-            ),
-            t.Object(
-              { type: t.Literal("relaxed") },
-              { additionalProperties: false },
-            ),
-          ]),
+          match: t.Object(
+            {
+              type: t.Union(
+                LEGISLATION_SEARCH_MATCH_TYPES.map((type) => t.Literal(type)),
+              ),
+            },
+            { additionalProperties: false },
+          ),
           documentId: t.String(),
           eli: t.String(),
           slug: nullableStringSchema,

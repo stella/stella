@@ -57,6 +57,7 @@
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
     "./statute-route": "./src/statute-route.ts",
     "./workflow-status": "./src/workflow-status.ts",
+    "./statute-gazette": "./src/statute-gazette.ts",
     "./statute-aliases": "./src/statute-aliases.ts",
     "./statute-query-intent": "./src/statute-query-intent.ts"
   },

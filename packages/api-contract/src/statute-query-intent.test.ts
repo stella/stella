@@ -32,16 +32,14 @@ const prefix = fc.constantFrom(
   "ZÁKON Č. ",
 );
 const czechSuffix = fc.constantFrom(
-  ["", null],
+  ["", "sb"],
   ["Sb.", "sb"],
   ["Sb", "sb"],
   ["sb.", "sb"],
   ["SB.", "sb"],
-  ["Ú. l.", null],
-  ["Ú.l. I", null],
 );
 const slovakSuffix = fc.constantFrom(
-  ["", null],
+  ["", "zz"],
   ["Zb.", "zz"],
   ["Z. z.", "zz"],
   ["Z.z.", "zz"],
@@ -286,15 +284,119 @@ describe("reading act references inside a full-text query", () => {
     ).toEqual([]);
   });
 
-  test("every alias target remains available inside a longer query", () => {
-    for (const country of countries) {
-      for (const [alias, target] of Object.entries(STATUTE_ALIASES[country])) {
-        for (const typed of [alias, alias.toUpperCase(), `(${alias})`]) {
+  test("ordinary Czech and Slovak prose never supplies alias pins", () => {
+    const sentences = [
+      "zakladatelská listina stanoví název spolku",
+      "občanský průkaz musí mít každý občan",
+      "občanský život se týká sousedských vztahů",
+      "tr. čin musí být prokázán svědeckou výpovědí",
+      "sr je součást označení souboru v seznamu",
+      "listina obsahuje podpis občana a datum",
+      "občiansky preukaz sa vydáva občanovi",
+      "ústava upravuje základné princípy štátu",
+      "oz a zp jsou malá písmena v poznámce",
+      "trz označuje položku v interním seznamu",
+    ];
+    assertProperty(
+      "ordinary Czech and Slovak prose never supplies alias pins",
+      fc.property(
+        fc.constantFrom(...countries),
+        fc.constantFrom(...sentences),
+        fc.array(
+          fc.constantFrom("dnes", "prosím", "podrobně", "výklad", "otázka"),
+          { maxLength: 20 },
+        ),
+        (country, sentence, words) => {
           expect(
-            readStatuteQueryReferences(country, `výklad ${typed} při použití`),
-          ).toEqual([{ country, ...target }]);
+            readStatuteQueryReferences(
+              country,
+              `${words.join(" ")} ${sentence} ${words.join(" ")}`,
+            ),
+          ).toEqual([]);
+        },
+      ),
+    );
+  });
+
+  test("abbreviations embedded in long text retain their case", () => {
+    for (const abbreviation of ["oz", "zp", "zok", "osř", "trz", "sr"]) {
+      expect(
+        readStatuteQueryReferences(
+          "cze",
+          `Rozsáhlý popis smluvních vztahů obsahuje ${abbreviation} v poznámce a další podrobnosti`,
+        ),
+      ).toEqual([]);
+    }
+    expect(readStatuteQueryReferences("cze", "výklad CSP ve sporu")).toEqual(
+      [],
+    );
+    expect(readStatuteQueryReferences("svk", "výklad ZOK ve sporu")).toEqual(
+      [],
+    );
+  });
+
+  test("embedded numeric references need an act marker and exclude dockets", () => {
+    for (const country of countries) {
+      for (const register of [
+        "Cdo",
+        "Tdo",
+        "Nd",
+        "Odo",
+        "As",
+        "Ads",
+        "Afs",
+        "Azs",
+        "Co",
+        "To",
+        "od",
+      ]) {
+        for (const suffix of ["", country === "cze" ? " Sb." : " Z. z."]) {
+          for (const docketPrefix of [
+            register,
+            `21 ${register}`,
+            `${register} č.`,
+          ]) {
+            expect(
+              readStatuteQueryReferences(
+                country,
+                `výklad ${docketPrefix} 89/2012${suffix} ve věci`,
+              ),
+            ).toEqual([]);
+          }
         }
       }
+      expect(
+        readStatuteQueryReferences(country, "ve věci 89/2012 bylo rozhodnuto"),
+      ).toEqual([]);
+      expect(
+        readStatuteQueryReferences(
+          country,
+          "ve věci zákona č. 89/2012 bylo rozhodnuto",
+        ),
+      ).toEqual([
+        {
+          country,
+          collection: country === "cze" ? "sb" : "zz",
+          number: "89",
+          year: "2012",
+          label: null,
+        },
+      ]);
+    }
+    expect(readStatuteQueryReferences("cze", "89/2012")).toEqual([
+      {
+        country: "cze",
+        collection: "sb",
+        number: "89",
+        year: "2012",
+        label: null,
+      },
+    ]);
+    for (const suffix of ["Ú. l.", "Ú.l. I", "Ú.l. II"]) {
+      expect(parseStatuteQuery("cze", `89/2012 ${suffix}`).type).toBe("text");
+      expect(
+        readStatuteQueryReferences("cze", `výklad 89/2012 ${suffix}`),
+      ).toEqual([]);
     }
   });
 
@@ -348,9 +450,32 @@ describe("reading act references inside a full-text query", () => {
     );
   });
 
+  test.each(["Sb. NSS", "Sb.NSS", "Sb. rozh.", "Sb.rozh.", "sb. ROZH."])(
+    "reporter %s cannot pin a statute with the same act number",
+    (reporter) => {
+      expect(
+        readStatuteQueryReferences(
+          "cze",
+          `výklad 89/2012 ${reporter} a zákona č. 90/2012 Sb.`,
+        ),
+      ).toEqual([
+        {
+          country: "cze",
+          collection: "sb",
+          number: "90",
+          year: "2012",
+          label: null,
+        },
+      ]);
+    },
+  );
+
   test("foreign gazettes and fragments of larger identifiers do not pin an act", () => {
     expect(
-      readStatuteQueryReferences("cze", "40/1964 Z. z. a 89/2012 Sb. NSS"),
+      readStatuteQueryReferences(
+        "cze",
+        "40/1964 Z. z. a 89/2012 Sb. NSS a 90/2012 Sb. rozh.",
+      ),
     ).toEqual([]);
     expect(
       readStatuteQueryReferences("svk", "89/2012 Sb. a 57/2008 Sb. m. s."),
