@@ -1,3 +1,4 @@
+// parser-output-unchanged: preserves explicit URL declarations; ordinary metadata strings are projected as before
 // parser-output-unchanged: SyncPage adds optional failure telemetry; decision parsing and stored output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 

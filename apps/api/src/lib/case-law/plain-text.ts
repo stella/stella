@@ -1,3 +1,4 @@
+// parser-output-unchanged: typed URL values pass through; plain strings are projected as before
 import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
 import * as v from "valibot";

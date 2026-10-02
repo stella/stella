@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds a typed constructor; existing callers are unaffected
 import { Result, TaggedError } from "better-result";
 import { decodeHTMLAttribute } from "entities";
 import * as v from "valibot";

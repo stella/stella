@@ -1,3 +1,4 @@
+// parser-output-unchanged: adds explicit URL declarations; unannotated metadata and existing stored output are unchanged
 import { panic } from "better-result";
 
 import {
