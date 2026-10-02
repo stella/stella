@@ -1,3 +1,4 @@
+// parser-output-unchanged: publisher scheduling only; response parsing is unchanged.
 import { TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
@@ -12,11 +13,42 @@ const RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
 local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
 local reserved = tonumber(redis.call("GET", KEYS[1])) or now
-local slot = math.max(now, reserved)
+local cooldown = KEYS[2] and tonumber(redis.call("GET", KEYS[2])) or now
+local slot = math.max(now, reserved, cooldown or now)
 local next = slot + tonumber(ARGV[1])
 redis.call("PSETEX", KEYS[1], next - now + tonumber(ARGV[1]), tostring(next))
 return slot - now
 `;
+
+// Redis time makes cooldowns comparable across workers with different clocks.
+const COOLDOWN_SCRIPT = `
+local clock = redis.call("TIME")
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local untilAt = tonumber(redis.call("GET", KEYS[1])) or now
+if ARGV[1] then
+  untilAt = math.max(untilAt, now + tonumber(ARGV[1]))
+  if untilAt > now then
+    redis.call("PSETEX", KEYS[1], untilAt - now, tostring(untilAt))
+  end
+end
+return ARGV[1] and untilAt or math.max(0, untilAt - now)
+`;
+
+// Deadline and expiry are evaluated on the same Redis TIME clock as reservations.
+const READ_COOLDOWN_SCRIPT = `
+local clock = redis.call("TIME")
+local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
+local untilAt = tonumber(redis.call("GET", KEYS[1])) or now
+return untilAt > now and untilAt or 0
+`;
+
+export const publisherGateKeys = (slot: string) => {
+  const key = `case-law:publisher-gate:${slot}`;
+  // Preserve deployed gate keys so rolling workers share pacing. Redis hashes
+  // an unbraced key in full; bracing that full key colocates the cooldown.
+  // coordinationKey prefixes its hash tag, so it cannot preserve this format.
+  return { key, cooldownKey: `{${key}}:cooldown` };
+};
 
 export type PublisherGateClient = {
   send: (command: string, args: string[]) => unknown;
@@ -26,6 +58,7 @@ type PublisherRequestGateConfig = {
   intervalMs: number;
   key: string;
   publisher: string;
+  cooldown?: "shared";
 };
 
 export type PublisherRequestGateDependencies = {
@@ -33,7 +66,7 @@ export type PublisherRequestGateDependencies = {
   sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
 };
 
-const abortableSleep = async (
+export const abortableSleep = async (
   durationMs: number,
   signal?: AbortSignal,
 ): Promise<void> => {
@@ -129,10 +162,26 @@ const defaultDependencies = (
   intervalMs: number,
 ): PublisherRequestGateDependencies => {
   let localNextRequestAt = 0;
+  let localCooldownUntil = 0;
   const localRedis: PublisherGateClient = {
-    send: () => {
+    send: (_command, args) => {
       const now = Temporal.Now.instant().epochMilliseconds;
-      const slot = Math.max(now, localNextRequestAt);
+      if (args[0] === READ_COOLDOWN_SCRIPT) {
+        return localCooldownUntil > now ? localCooldownUntil : 0;
+      }
+      if (args[0] === COOLDOWN_SCRIPT) {
+        const duration = args.at(3);
+        if (duration !== undefined) {
+          localCooldownUntil = Math.max(
+            localCooldownUntil,
+            now + Number(duration),
+          );
+        }
+        return duration === undefined
+          ? Math.max(0, localCooldownUntil - now)
+          : Math.max(now, localCooldownUntil);
+      }
+      const slot = Math.max(now, localNextRequestAt, localCooldownUntil);
       localNextRequestAt = slot + intervalMs;
       return slot - now;
     },
@@ -168,21 +217,15 @@ class PublisherGateReplyError extends TaggedError("PublisherGateReplyError")<{
   message: string;
 }> {}
 
-export const createPublisherRequestSlot =
-  (
-    { intervalMs, key, publisher }: PublisherRequestGateConfig,
-    dependencies = defaultDependencies(intervalMs),
-  ): ((signal?: AbortSignal) => Promise<void>) =>
-  async (signal) => {
+export const createPublisherRequestSlot = (
+  { intervalMs, key: slot, publisher, cooldown }: PublisherRequestGateConfig,
+  dependencies = defaultDependencies(intervalMs),
+) => {
+  const { key, cooldownKey } = publisherGateKeys(slot);
+  const commandWait = async (args: string[], signal?: AbortSignal) => {
     const redis = await dependencies.redis();
     const rawWait = await withTimeout(
-      async () =>
-        await redis.send("EVAL", [
-          RESERVE_SLOT_SCRIPT,
-          "1",
-          key,
-          String(intervalMs),
-        ]),
+      async () => await redis.send("EVAL", args),
       {
         label: `${publisher} publisher gate reservation`,
         signal,
@@ -195,5 +238,44 @@ export const createPublisherRequestSlot =
         message: `${publisher} publisher gate returned an invalid wait`,
       });
     }
-    await dependencies.sleep(waitMs, signal);
+    return waitMs;
   };
+  const reserve = async (signal?: AbortSignal) => {
+    while (true) {
+      const keys = cooldown === "shared" ? [key, cooldownKey] : [key];
+      const waitMs = await commandWait(
+        [RESERVE_SLOT_SCRIPT, String(keys.length), ...keys, String(intervalMs)],
+        signal,
+      );
+      await dependencies.sleep(waitMs, signal);
+      if (cooldown !== "shared") {
+        return;
+      }
+      // Recheck reservations already sleeping when another worker backs off.
+      // Re-reserving after the cooldown preserves spacing between those workers.
+      const remaining = await commandWait(
+        [COOLDOWN_SCRIPT, "1", cooldownKey],
+        signal,
+      );
+      if (remaining === 0) {
+        return;
+      }
+      await dependencies.sleep(remaining, signal);
+    }
+  };
+  return Object.assign(reserve, {
+    readCooldown: async (): Promise<number | null> => {
+      const deadline = await commandWait([
+        READ_COOLDOWN_SCRIPT,
+        "1",
+        cooldownKey,
+      ]);
+      return deadline === 0 ? null : deadline;
+    },
+    defer: async (durationMs: number, signal?: AbortSignal) =>
+      await commandWait(
+        [COOLDOWN_SCRIPT, "1", cooldownKey, String(durationMs)],
+        signal,
+      ),
+  });
+};

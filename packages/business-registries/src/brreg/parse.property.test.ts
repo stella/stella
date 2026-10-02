@@ -152,13 +152,19 @@ test(
     await fc.assert(
       fc.asyncProperty(entity, async (raw) => {
         const baseline = await expectRegistryResponse(raw, async () =>
-          lookupByOrgnr("923609016", { includeSubEntities: false }),
+          lookupByOrgnr("923609016", {
+            observer: "unobserved",
+            includeSubEntities: false,
+          }),
         );
         expect(baseline?.orgnr).toBe(raw.organisasjonsnummer);
         expect(baseline?.name).toBe(raw.navn);
         await forEachRegistryMutation(raw, async (mutated) => {
           const parsed = await expectRegistryResponse(mutated, async () =>
-            lookupByOrgnr("923609016", { includeSubEntities: false }),
+            lookupByOrgnr("923609016", {
+              observer: "unobserved",
+              includeSubEntities: false,
+            }),
           );
           if (!parsed) {
             return;
@@ -202,7 +208,7 @@ test(
           { _embedded: { enheter: [raw] } },
           async (mutated) => {
             const results = await expectRegistryResponse(mutated, async () =>
-              searchByName("registry"),
+              searchByName("registry", { observer: "unobserved" }),
             );
             if (results) {
               for (const result of results) {

@@ -247,6 +247,7 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Checkout",
       "Resolve browser image",
+      "Plan release marketing screenshots",
       "Setup Bun for dependency scope",
       "Check changed file scope",
     ]) {
@@ -547,16 +548,14 @@ describe("detect-e2e-changes", () => {
     expect(driftGuard).not.toContain("package_checks_required");
   });
 
-  test("fails the pull request that invalidates a shipped product screenshot", () => {
+  test("checks shipped product screenshots on planned releases", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
-      `marketing_screenshots_required: ${githubExpression("steps.changed-files.outputs.marketing_screenshots_required")}`,
+      `marketing_screenshots_required: ${githubExpression("steps.marketing-release.outputs.required")}`,
     );
-    expect(plan).toContain(
-      "marketing_screenshots_required=$(bash scripts/detect-e2e-changes.sh marketing",
+    expect(workflowStep(plan, "Plan release marketing screenshots")).toContain(
+      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
     );
-    expect(plan).toContain('echo "marketing_screenshots_required=true"');
-    expect(plan).toContain('echo "marketing_screenshots_required=false"');
 
     const screenshots = workflowJob("marketing-screenshots");
     expect(screenshots).toContain("needs: [ci-plan, web-build]");

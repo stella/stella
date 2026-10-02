@@ -190,6 +190,7 @@ test("the generated-output guards run when their inputs change", () => {
     "bunfig.toml",
     "package.json",
     ".github/workflows/ci.yml",
+    ".npmrc",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "true"]);
   }
@@ -198,6 +199,7 @@ test("the generated-output guards run when their inputs change", () => {
     "apps/api/tsconfig.json",
     "apps/web/package.json",
     "apps/web/src/generated/api-routes.gen.ts",
+    "apps/web/src/routes/index.tsx",
     "types/wasm.d.ts",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["true", "false"]);
@@ -207,7 +209,6 @@ test("the generated-output guards run when their inputs change", () => {
     "scripts/prepare-publish.ts",
     "scripts/publish-manifest.ts",
     "scripts/published-export-guards.ts",
-    ".npmrc",
   ]) {
     expect(generatedOutputGuardPlan([file]), file).toEqual(["false", "true"]);
   }
@@ -215,7 +216,6 @@ test("the generated-output guards run when their inputs change", () => {
 
 test("the generated-output guards skip unrelated pull requests but never full depth", () => {
   for (const file of [
-    "apps/web/src/routes/index.tsx",
     "apps/landing/src/pages/index.astro",
     "scripts/typecheck-baseline.json",
     "docs/changelog/x.md",
@@ -1031,6 +1031,27 @@ test("route network budgets are required on pull requests and merge groups", () 
   }
 });
 
+test("a planned release screenshot check runs and must pass on the release pull request", () => {
+  // The planner selects it only for release pull requests and tags, so a
+  // full-depth gate would skip it on the pull request every time.
+  expect(jobIf(ciJobs["marketing-screenshots"])).toContain(
+    "needs.ci-plan.outputs.marketing_screenshots_required == 'true'",
+  );
+  expect(heavyJobs).not.toContain("marketing-screenshots");
+  expect(fastRequired).toContain("marketing-screenshots");
+  const event = EVENT.pullRequest;
+  expect(
+    evaluateResult({ event, results: { "marketing-screenshots": "skipped" } }),
+  ).toBe(1);
+  expect(
+    evaluateResult({
+      event,
+      results: { "marketing-screenshots": "skipped" },
+      unplannedScopes: ["marketing_screenshots_required"],
+    }),
+  ).toBe(0);
+});
+
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
   for (const job of fastRequired) {
@@ -1195,7 +1216,7 @@ test("ci-checks gates each generated-output guard on its planned scope", () => {
     ciJobs["ci-checks-generated"],
   ).steps;
   for (const [name, scope] of [
-    ["Web API types drift guard", "web_api_types_required"],
+    ["Web API types determinism guard", "web_api_types_required"],
     ["Route tree drift guard", "route_tree_required"],
     ["Published export map guard", "published_exports_required"],
   ] as const) {
@@ -1383,6 +1404,262 @@ test("a failed API image run annotates the failing lines, escaped", () => {
   expect(annotate({ build: "ERROR: failed to solve: pull failed\n" })).toEqual([
     "::error title=API image build (linux/arm64)::ERROR: failed to solve: pull failed",
   ]);
+});
+
+test("marketing screenshots are planned only for ready same-repository releases or release tags", () => {
+  const plan = v.parse(
+    v.object({
+      outputs: v.record(v.string(), v.string()),
+      steps: v.array(
+        v.object({ name: v.optional(v.string()), run: v.optional(v.string()) }),
+      ),
+    }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs["marketing_screenshots_required"]).toBe(
+    ["$", "{{ steps.marketing-release.outputs.required }}"].join(""),
+  );
+  const command = v.parse(
+    v.string(),
+    plan.steps.find(({ name }) => name === "Plan release marketing screenshots")
+      ?.run,
+  );
+  const directory = mkdtempSync(
+    nodePath.join(tmpdir(), "marketing-release-plan-"),
+  );
+  const output = nodePath.join(directory, "output");
+  const listing = [
+    {
+      number: 7,
+      title: "chore: release v1.2.3",
+      isDraft: false,
+      isCrossRepository: false,
+    },
+    {
+      number: 8,
+      title: "fix: ordinary",
+      isDraft: false,
+      isCrossRepository: false,
+    },
+    {
+      number: 9,
+      title: "chore: release v1.2.3",
+      isDraft: true,
+      isCrossRepository: false,
+    },
+    {
+      number: 10,
+      title: "chore: release v1.2.3",
+      isDraft: false,
+      isCrossRepository: true,
+    },
+  ];
+  writeFileSync(
+    nodePath.join(directory, "listing.json"),
+    JSON.stringify(listing),
+  );
+  writeFileSync(
+    nodePath.join(directory, "gh"),
+    [
+      "#!/usr/bin/env bash",
+      "set -euo pipefail",
+      '[[ "$*" == "pr list --repo stella/stella --state open --base main --limit 500 --json number,title,isDraft,isCrossRepository" ]] || exit 3',
+      'cat "$(dirname "$0")/listing.json"',
+    ].join("\n"),
+    { mode: 0o755 },
+  );
+  const cases = [
+    {
+      event: "pull_request",
+      number: "7",
+      ref: "refs/pull/7/merge",
+      head: "",
+      required: true,
+    },
+    {
+      event: "pull_request",
+      number: "8",
+      ref: "refs/pull/8/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "pull_request",
+      number: "9",
+      ref: "refs/pull/9/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "pull_request",
+      number: "10",
+      ref: "refs/pull/10/merge",
+      head: "",
+      required: false,
+    },
+    {
+      event: "merge_group",
+      number: "",
+      ref: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      head: "refs/heads/gh-readonly-queue/main/pr-7-abcdef",
+      required: true,
+    },
+    {
+      event: "merge_group",
+      number: "",
+      ref: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      head: "refs/heads/gh-readonly-queue/main/pr-8-abcdef",
+      required: false,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/tags/v1.2.3",
+      head: "",
+      required: true,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/tags/ordinary",
+      head: "",
+      required: false,
+    },
+    {
+      event: "workflow_dispatch",
+      number: "",
+      ref: "refs/heads/main",
+      head: "",
+      required: false,
+    },
+  ];
+  try {
+    for (const { event, number, ref, head, required } of cases) {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(["bash", "-eu", "-c", command], {
+        cwd: nodePath.resolve(import.meta.dir, ".."),
+        env: {
+          PATH: `${directory}:${Bun.env["PATH"] ?? ""}`,
+          EVENT_NAME: event,
+          PR_NUMBER: number,
+          GITHUB_REF: ref,
+          MERGE_GROUP_HEAD_REF: head,
+          REPOSITORY: "stella/stella",
+          GITHUB_OUTPUT: output,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+      expect(readFileSync(output, "utf-8"), `${event} ${ref}`).toBe(
+        `required=${String(required)}\n`,
+      );
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
+
+test("direct web compiler checks materialize ignored API contracts before checking", () => {
+  const nightly = workflowJobs(
+    readFileSync(
+      new URL("../.github/workflows/nightly-typecheck.yml", import.meta.url),
+      "utf-8",
+    ),
+  );
+  const directCompiler =
+    /bun (?:run check:query-cache-types|scripts\/typecheck-coverage\.ts|scripts\/typecheck-baseline\.ts --(?:check(?:-delta)?|measure))/u;
+  let consumers = 0;
+  for (const [workflowName, jobs] of [
+    ["ci", ciJobs],
+    ["nightly", nightly],
+  ] as const) {
+    for (const [job, body] of Object.entries(jobs)) {
+      const steps = v.parse(
+        v.object({
+          steps: v.optional(
+            v.array(
+              v.object({
+                run: v.optional(v.string()),
+              }),
+            ),
+            [],
+          ),
+        }),
+        body,
+      ).steps;
+      let precedingCommands = "";
+      for (const step of steps) {
+        const commands = step.run ?? "";
+        const consumer = directCompiler.exec(commands);
+        if (consumer !== null) {
+          consumers += 1;
+          const beforeCheck =
+            precedingCommands + commands.slice(0, consumer.index);
+          expect(
+            beforeCheck,
+            `${workflowName}/${job} generates before direct compiler checks`,
+          ).toContain("bun run generate");
+          if (commands.includes("--measure")) {
+            expect(
+              commands.slice(0, consumer.index),
+              `${job} generates in the base checkout`,
+            ).toContain("bun --filter @stll/api gen:web-api-types");
+          }
+        }
+        precedingCommands += `${commands}\n`;
+      }
+    }
+  }
+  expect(consumers).toBeGreaterThan(0);
+});
+
+test("direct web compiler package scripts generate before inspecting types", () => {
+  const { tasks } = v.parse(
+    v.object({
+      tasks: v.record(
+        v.string(),
+        v.object({
+          dependsOn: v.optional(v.array(v.string()), []),
+        }),
+      ),
+    }),
+    Bun.JSONC.parse(
+      readFileSync(new URL("../turbo.json", import.meta.url), "utf-8"),
+    ),
+  );
+  const directCompiler =
+    /(?:tsc-native\.ts|code-check-affected\.ts|lint-changed\.ts|query-cache-types\.ts|result-consumption\.ts|oxlint\b.*--type-aware)/u;
+  let consumers = 0;
+  for (const manifest of ["../package.json", "../apps/web/package.json"]) {
+    const { name: owner, scripts } = v.parse(
+      v.object({ name: v.string(), scripts: v.record(v.string(), v.string()) }),
+      JSON.parse(readFileSync(new URL(manifest, import.meta.url), "utf-8")),
+    );
+    for (const [name, command] of Object.entries(scripts)) {
+      const consumer = directCompiler.exec(command);
+      if (consumer === null) {
+        continue;
+      }
+      consumers += 1;
+      expect(
+        command.slice(0, consumer.index),
+        `${manifest} ${name} materializes the API contract`,
+      ).toMatch(/bun(?: --cwd \.\.\/\.\.)? run generate/u);
+      if (command.includes("$TURBO_HASH")) {
+        const task = `${manifest === "../package.json" ? "//" : owner}#${name}`;
+        expect(
+          tasks[task]?.dependsOn,
+          `${task} prepares API types before skipping the nested cache restore`,
+        ).toContain(
+          manifest === "../package.json"
+            ? "@stll/web#generate:api-types"
+            : "generate:api-types",
+        );
+      }
+    }
+  }
+  expect(consumers).toBeGreaterThan(0);
 });
 
 test("folded Docker suites keep their scopes and fail independently, including missing or cancelled verdicts", () => {

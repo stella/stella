@@ -142,3 +142,12 @@ index or page.
 Convention and suppression ratchets may only tighten. Every lint suppression names
 a rule and reason; security-tier suppressions also need a waiver. Type-cost baseline
 increases require PR justification and are never a mechanical way to pass CI.
+
+## Property Failure Discipline
+
+A failing property seed is a real bug: fix it, then pin it with a neutral note
+in `packages/property-testing/property-seeds.json` after the fix merges.
+Extend the generator or oracle to cover the input class. Never rerun until green.
+Use `assertProperty` with an explicit stable id for new properties. Keep PR and
+merge-queue seeds deterministic; run exploratory fuzzing in the private nightly
+tier. A documented contract wins over a suggested oracle; adapt the oracle.

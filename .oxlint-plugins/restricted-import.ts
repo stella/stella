@@ -107,6 +107,7 @@ const TANSTACK_DEVTOOLS_ROOT =
   "apps/web/src/components/tanstack-devtools-root.tsx";
 const TABLE_DEVTOOLS =
   "apps/web/src/routes/_protected.workspaces/$workspaceId/-components/table/table-devtools.tsx";
+const TANSTACK_START_SERVER = "@tanstack/react-start/server";
 
 const STATIC_DEVTOOLS_PACKAGE_MESSAGE =
   "Keep TanStack devtools package imports inside the approved lazy-loaded devtools modules.";
@@ -159,6 +160,26 @@ const RESTRICTED_IMPORT_RULES = {
         type: "module",
         typeOnlyImports: TYPE_ONLY_IMPORTS.restricted,
         dynamicImports: DYNAMIC_IMPORTS.restricted,
+      },
+      owners: [],
+    },
+  ],
+  // Route code has one approved helper; other exports stay at the boundary.
+  "confine-server-reads": [
+    {
+      messageId: "confineServerReads",
+      message: "Use the approved server request helper for this access.",
+      modules: [TANSTACK_START_SERVER],
+      restriction: {
+        type: "exports",
+        names: new Set([
+          "getCookie",
+          "getCookies",
+          "getRequest",
+          "getRequestHeader",
+          "getRequestHeaders",
+        ]),
+        hit: EXPORT_HIT.binding,
       },
       owners: [],
     },

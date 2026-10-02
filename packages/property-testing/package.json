@@ -20,6 +20,7 @@
     "format": "bun ../../scripts/run-oxfmt.ts ."
   },
   "dependencies": {
+    "better-result": "catalog:",
     "fast-check": "catalog:"
   },
   "devDependencies": {

@@ -1,6 +1,6 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { isOptionalRecord, isRecord } from "../shared/guards.js";
-import { registryFetch } from "../shared/http.js";
+import { type RegistryClientOptions, registryFetch } from "../shared/http.js";
 import {
   EdgarAPIError,
   EdgarRequestError,
@@ -25,7 +25,7 @@ const SUBMISSIONS_BASE = "https://data.sec.gov/submissions";
 // blocked from EDGAR entirely.
 //
 // See: https://www.sec.gov/os/accessing-edgar-data
-export type EdgarClientConfig = {
+export type EdgarClientConfig = RegistryClientOptions & {
   /**
    * Identifying string sent in the `User-Agent` header on every
    * EDGAR request. The SEC asks for "<App name> <contact@email>";
@@ -88,13 +88,15 @@ const isEdgarRawSubmission = (value: unknown): value is EdgarRawSubmission =>
 
 const edgarGet = async (
   url: string,
-  userAgent: string,
+  config: EdgarClientConfig,
 ): Promise<EdgarRawSubmission | null> =>
   await registryFetch({
     url,
+    observer: config.observer,
+    signal: config.signal,
     init: {
       headers: {
-        "User-Agent": userAgent,
+        "User-Agent": config.userAgent,
         Accept: "application/json",
         // The SEC docs recommend `Accept-Encoding: gzip, deflate` to
         // reduce bandwidth; Bun's fetch already negotiates this.
@@ -173,7 +175,7 @@ export const lookupByCik = async (
 
   const padded = padCik(cik);
   const url = `${SUBMISSIONS_BASE}/CIK${encodeRegistryComponent(padded)}.json`;
-  const raw = await edgarGet(url, config.userAgent);
+  const raw = await edgarGet(url, config);
   if (!raw) {
     return null;
   }

@@ -76,6 +76,10 @@ import { TASK_ASSIGNEE_FILTERS } from "@/api/lib/tasks/assigned";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { updateTaskHandler } from "@/api/lib/tasks/update-task";
 import { includes } from "@/api/lib/type-guards";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import {
@@ -1153,7 +1157,12 @@ const handleCheckCounterpartyTool: TypedMcpToolHandler<
     return validationErrorResult(parsed.issues);
   }
 
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const result = await runEntityCheckShared({
+    observer,
     check: parsed.output.check,
     subject: toEntityCheckSubject(parsed.output.subject),
     runCheck: context.testDependencies?.runEntityCheck,
@@ -2329,6 +2338,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "people or organizations.",
     inputSchema: listContactsArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "excluded",
       reason: "dynamic_tenant_payload",
@@ -2405,6 +2415,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "read_contact.",
     inputSchema: lookupBusinessRegistryArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "passthrough" },
     name: "lookup_business_registry",
     scope: "stella:read",
@@ -2436,6 +2447,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "subject.birth_date": { kind: AGENT_INPUT_NORMALIZATION_KIND.date },
     },
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "personal_register_data" },
     name: "check_counterparty",
     scope: "stella:read",
@@ -2457,6 +2469,7 @@ export const MATTER_TOOL_DEFINITIONS = [
       "names its matter (id, name, reference).",
     inputSchema: listTasksArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [

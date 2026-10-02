@@ -1,16 +1,14 @@
 import { panic, Result } from "better-result";
 import { and, eq, inArray } from "drizzle-orm";
 
-import {
-  CHAT_SEND_MODE,
-  CHAT_TRANSPORT_ERROR_CODE,
-} from "@stll/anonymize-chat";
+import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
 import type { ChatSendMode } from "@stll/anonymize-chat";
 import { isChatFileMimeType } from "@stll/api-contract/chat-file-types";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads, userFiles } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_CSV_MIME_TYPE,
@@ -319,10 +317,12 @@ export const canHydrateFilePartAsPlainText = (
   mimeType === XLSX_MIME_TYPE;
 
 const createBlockedHydratedFilePart = (): HydratedFilePart => ({
-  error: new HandlerError({
-    code: CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
-    status: 422,
+  error: refuseAnonymizedCrossing({
     message: THIRD_PARTY_BOUNDARY_REFUSAL_MESSAGE,
+    offerRawRetry: true,
+    reason: "unsupported_content",
+    site: "file_hydration",
+    status: 422,
   }),
   type: "blocked",
 });

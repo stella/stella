@@ -4,6 +4,7 @@ import { SaxesParser } from "saxes";
 
 import { isRecord } from "../shared/guards.js";
 import { performRegistryRequest } from "../shared/http.js";
+import type { RegistryRequestObservation } from "../shared/request-observer.js";
 import {
   EntityCheckCancelledError,
   EntityCheckUnavailableError,
@@ -59,6 +60,7 @@ const requestFailure = (
 };
 
 type SoapRequestOptions = {
+  observer: RegistryRequestObservation;
   url: string;
   soapAction: string;
   /** Namespace declarations for the envelope, keyed by prefix. */
@@ -164,6 +166,7 @@ export const soapRequest = async (
         try: async () =>
           await performRegistryRequest({
             url: options.url,
+            observer: options.observer,
             init: {
               method: "POST",
               headers: {

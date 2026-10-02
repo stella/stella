@@ -927,6 +927,8 @@ describe("public-law reader role", () => {
         kind: "docket",
         jurisdiction: "CZE",
         value: "22 Cdo 1/2026",
+        family: "22 Cdo 1/2026",
+        selector: { kind: "none" },
       },
     });
     expect(byDocket).toEqual([]);
