@@ -52,6 +52,28 @@ const budgetPropertyPartFromKind = (kind: number): ChatPart => {
 };
 
 describe("persisted chat message parts", () => {
+  test.each(["", " ", "\n\t", "\u00a0\u2003"])(
+    "keeps invisible assistant text out of persistence: %j",
+    (blank) => {
+      const message = {
+        id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
+        parts: [
+          { type: "thinking", content: "Reviewing the clause." },
+          createChatTextPart(blank),
+          createChatTextPart(" \nAnswer.\t "),
+        ],
+        role: "assistant",
+      } as const;
+      expect(toPersistableChatMessage(message).parts).toEqual([
+        message.parts[0],
+        message.parts[2],
+      ]);
+      expect(
+        toPersistableChatMessage({ ...message, role: "user" }).parts,
+      ).toEqual(message.parts);
+    },
+  );
+
   test("gives a legacy file part a sanitized display name", () => {
     const attachment = (filename: string) =>
       legacyAiSdkFilePartToTanStack({
