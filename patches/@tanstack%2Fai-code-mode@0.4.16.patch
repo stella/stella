@@ -1,0 +1,20 @@
+create-code-mode-tool.js: a failed execute_typescript run no longer logs its
+error to the console. The error message and stack carry guest text, which
+can be document content; the tool result still returns it to the model.
+apps/api/src/handlers/chat/tools/execute/chat-code-mode.test.ts fails if a
+release logs it again. Remove when upstream stops logging failures.
+
+diff --git a/dist/esm/create-code-mode-tool.js b/dist/esm/create-code-mode-tool.js
+index b043689..bbc09e5 100644
+--- a/dist/esm/create-code-mode-tool.js
++++ b/dist/esm/create-code-mode-tool.js
+@@ -80,8 +80,7 @@ function createCodeModeTool(config) {
+ 				} : void 0
+ 			};
+ 			emitCustomEvent("code_mode:execution_finished", payload);
+-			if (!result.success) console.error("[code-mode] execute_typescript failed", payload);
+-			else if (typeof process !== "undefined" && process.env?.CODE_MODE_DEBUG === "1") console.info("[code-mode] execute_typescript ok", {
++			if (result.success && typeof process !== "undefined" && process.env?.CODE_MODE_DEBUG === "1") console.info("[code-mode] execute_typescript ok", {
+ 				durationMs,
+ 				phase,
+ 				logCount: payload.logCount
