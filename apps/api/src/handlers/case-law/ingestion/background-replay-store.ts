@@ -1093,17 +1093,24 @@ const recordPreviewFailure = async (
           .for("update")
           .limit(1)
       ).at(0) ?? panic("Preview failure has no reservation");
+    // Admission spends an attempt before inspection; outages cannot spend
+    // the row's bounded failure allowance.
+    const attempts =
+      failure.scope === "systemic"
+        ? Math.max(0, receipt.attempts - 1)
+        : receipt.attempts;
     const exhausted =
-      receipt.attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+      failure.scope === "row" &&
+      attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
     const delay = Math.min(
       BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
-      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs *
-        2 ** Math.max(0, receipt.attempts - 1),
+      BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** Math.max(0, attempts - 1),
     );
     await tx
       // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
+        attempts,
         failed: 1,
         retryAt: exhausted ? null : new Date(now() + delay),
         failureCode: failure.code,
@@ -1122,7 +1129,7 @@ const recordPreviewFailure = async (
       resourceId: batch.id,
       details: {
         mode: "dry-run",
-        attempts: receipt.attempts,
+        attempts,
         failureCode: failure.code,
       },
       createdAt: new Date(now()),
@@ -1561,6 +1568,29 @@ const resetDryRunCursor = async (
   source: BackgroundReplaySource,
 ) =>
   await withReplayTransaction(db, async (tx) => {
+    await lockCheckpoint(tx, source);
+    // Keep daily charges and receipt identity while re-admitting exhausted
+    // previews for this source and parser version.
+    await tx
+      .update(caseLawReplayBatches)
+      .set({
+        attempts: 0,
+        outcome: null,
+        retryAt: null,
+        failureCode: null,
+        failureMessageClass: null,
+      })
+      .where(
+        and(
+          eq(caseLawReplayBatches.sourceId, source.id),
+          eq(caseLawReplayBatches.parserVersionTo, source.currentParserVersion),
+          eq(
+            caseLawReplayBatches.outcome,
+            REPLAY_PREVIEW_FAILURE.RETRY_EXHAUSTED,
+          ),
+          sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
+        ),
+      );
     // explicit reset of owner-only dry-run progress
     await tx
       // audit: skip — public case-law corpus bookkeeping, no workspace data

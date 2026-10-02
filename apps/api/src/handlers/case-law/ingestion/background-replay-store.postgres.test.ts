@@ -1693,7 +1693,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("exhausted previews advance durably without resetting attempts or excluding apply", async () => {
+    test("exhausted previews advance durably until an explicit reset re-admits them without excluding apply", async () => {
       const { source: enrolled, ids } = await fixture(10);
       const source = { ...enrolled, mode: "dry-run" } as const;
       let clock = Date.UTC(2026, 9, 1);
@@ -1768,13 +1768,41 @@ if (!databaseUrl || !enabled) {
       }
       expect(next.batch.decisionId).toBe(ids.at(1));
       await restart().advancePreview(next.batch);
-      clock += 8 * DAY_IN_MS;
+      if (!terminal) {
+        throw new TypeError("Expected exhausted preview receipt");
+      }
+      const { source: otherSource } = await fixture(10);
+      const otherSourceReceipt = {
+        ...terminal,
+        id: `${otherSource.id}:2:${terminal.firstDecisionId}:dry-run`,
+        sourceId: otherSource.id,
+      };
+      const otherVersionReceipt = {
+        ...terminal,
+        id: `${source.id}:3:${terminal.firstDecisionId}:dry-run`,
+        parserVersionTo: 3,
+      };
+      await db
+        .insert(caseLawReplayBatches)
+        .values([otherSourceReceipt, otherVersionReceipt]);
       await restart().resetDryRunCursor(source);
+      for (const untouched of [otherSourceReceipt, otherVersionReceipt]) {
+        expect(
+          (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.id, untouched.id))
+          ).at(0),
+        ).toEqual(untouched);
+      }
       const reset = await restart().previewBatch(source, null);
       if (reset.type !== "reserved") {
-        throw new TypeError("Expected later preview after reset");
+        throw new TypeError(
+          "Expected exhausted preview re-admission after reset",
+        );
       }
-      expect(reset.batch.decisionId).toBe(ids.at(1));
+      expect(reset.batch.decisionId).toBe(ids.at(0));
       expect(
         (
           await db
@@ -1782,7 +1810,11 @@ if (!databaseUrl || !enabled) {
             .from(caseLawReplayBatches)
             .where(eq(caseLawReplayBatches.id, receiptId))
         ).at(0),
-      ).toEqual(terminal);
+      ).toMatchObject({
+        attempts: 1,
+        failed: 1,
+        outcome: null,
+      });
       const apply = await restart().reserveBatch(
         enrolled,
         new Date(clock).toISOString().slice(0, 10),
@@ -1794,6 +1826,83 @@ if (!databaseUrl || !enabled) {
         );
       }
       expect(apply.batch.decisionId).toBe(ids.at(0));
+    });
+
+    test("systemic preview failures never exhaust the cursor row beyond the retry bound", async () => {
+      for (const code of [
+        "stored-raw-read",
+        "writer-retryable",
+        "tick-deadline",
+      ] as const) {
+        const { source: enrolled, ids } = await fixture(10);
+        const source = { ...enrolled, mode: "dry-run" } as const;
+        let clock = Date.UTC(2026, 9, 1);
+        const restart = () =>
+          createBackgroundReplayStore({ db, now: () => clock });
+        const rowFailures =
+          code === "writer-retryable"
+            ? BACKGROUND_REPLAY_LIMITS.maxRowAttempts - 1
+            : 0;
+        for (let attempt = 0; attempt < rowFailures; attempt++) {
+          const preview = await restart().previewBatch(source, null);
+          if (preview.type !== "reserved") {
+            throw new TypeError("Expected preview before row failure");
+          }
+          expect(
+            await restart().recordFailure(preview.batch, {
+              ...replayFailure("adapter-exception"),
+              healthyEvidence: "none",
+              durationMs: 1,
+              verdict: verdict(),
+            }),
+          ).toBe("retryable");
+          clock += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        }
+        for (
+          let attempt = 0;
+          attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts + 2;
+          attempt++
+        ) {
+          const preview = await restart().previewBatch(source, null);
+          if (preview.type !== "reserved") {
+            throw new TypeError("Expected due preview during systemic outage");
+          }
+          expect(preview.batch.decisionId).toBe(ids.at(0));
+          expect(
+            await restart().recordFailure(preview.batch, {
+              ...replayFailure(code),
+              healthyEvidence: "none",
+              durationMs: 1,
+              verdict: verdict(),
+            }),
+          ).toBe("retryable");
+          const receipt = (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.id, preview.batch.id))
+          ).at(0);
+          expect(receipt).toMatchObject({
+            attempts: rowFailures,
+            outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+          });
+          expect(await restart().previewBatch(source, null)).toEqual({
+            type: "waiting",
+          });
+          clock += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        }
+        const recovered = await restart().previewBatch(source, null);
+        if (recovered.type !== "reserved") {
+          throw new TypeError("Expected preview after systemic recovery");
+        }
+        expect(recovered.batch.decisionId).toBe(ids.at(0));
+        await restart().advancePreview(recovered.batch);
+        const next = await restart().previewBatch(source, null);
+        if (next.type !== "reserved") {
+          throw new TypeError("Expected later preview after systemic recovery");
+        }
+        expect(next.batch.decisionId).toBe(ids.at(1));
+      }
     });
 
     test("transient previews keep their cursor until success at every attempt below the bound", async () => {
