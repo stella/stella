@@ -21,7 +21,10 @@ import {
   isCorpusSchemaLaneGranted,
 } from "./corpus-schema-lane";
 import { runMigrations, runMigrationsUntilSettled } from "./migration-runner";
-import type { OnlineMigrationOutcome } from "./online-migrations";
+import {
+  ONLINE_MIGRATION_INDEXES,
+  type OnlineMigrationOutcome,
+} from "./online-migrations";
 
 const databaseUrl = process.env["DATABASE_URL"];
 // Scratch databases are not RDS; the migrator requires an explicit choice.
@@ -563,6 +566,131 @@ if (!runPostgresTests || databaseUrl === undefined) {
             connection.release();
           }
         });
+      });
+    });
+
+    test("the migrate CLI retries a held online phase instead of exiting after one run", async () => {
+      await withScratch(async ({ scratchUrl, observer, openClient }) => {
+        // No schema SQL is pending. The first absent online index must defer
+        // before DDL, so this fixture needs the real ledger and health probes.
+        const migrations = readMigrationFiles({ migrationsFolder: CORPUS_DIR });
+        expect(migrations.length).toBeGreaterThan(0);
+        const firstIndex = ONLINE_MIGRATION_INDEXES.at(0);
+        if (firstIndex === undefined) {
+          throw new TypeError("Expected an online index");
+        }
+        await observer.unsafe("CREATE SCHEMA drizzle");
+        await observer.unsafe(`CREATE TABLE drizzle.__drizzle_migrations (
+          id serial PRIMARY KEY, hash text NOT NULL, created_at bigint,
+          name text NOT NULL UNIQUE, applied_at timestamptz DEFAULT now()
+        )`);
+        await observer.unsafe(
+          `INSERT INTO drizzle.__drizzle_migrations (name, hash, created_at) VALUES ${migrations.map((_migration, index) => `($${index * 3 + 1}, $${index * 3 + 2}, $${index * 3 + 3})`).join(", ")}`,
+          migrations.flatMap(({ name, hash, folderMillis }) => [
+            name,
+            hash,
+            folderMillis,
+          ]),
+        );
+        await observer.unsafe("CREATE TABLE transaction_probe (id int)");
+        const blocker = await openClient().reserve();
+        const environmentDirectory = mkdtempSync(
+          nodePath.join(tmpdir(), "stella-migrate-cli-"),
+        );
+        try {
+          await blocker.unsafe("BEGIN");
+          await blocker.unsafe("SELECT * FROM transaction_probe");
+          const emptyEnvironment = nodePath.join(
+            environmentDirectory,
+            "empty.env",
+          );
+          writeFileSync(emptyEnvironment, "");
+          const child = Bun.spawn({
+            cmd: [
+              "bun",
+              "run",
+              `--env-file=${emptyEnvironment}`,
+              nodePath.join(import.meta.dir, "migrate.ts"),
+            ],
+            env: {
+              DATABASE_URL: scratchUrl,
+              DB_LOAD_GATE_EBS_SIGNAL: "disabled",
+              DB_LOAD_GATE_BUSY_WINDOWS: "[]",
+              DB_LOAD_GATE_LONG_TX_MAX_AGE_MS: "1",
+              ONLINE_INDEX_RETRY_MS: "13",
+              HOME: environmentDirectory,
+              NODE_ENV: "test",
+              PATH: process.env["PATH"] ?? "",
+            },
+            stdout: "pipe",
+            stderr: "pipe",
+          });
+          let output = "";
+          const decisions: { index: string; retryAfterMs: number }[] = [];
+          const deadline = setTimeout(() => child.kill(), 30_000);
+          try {
+            const readOutput = async () => {
+              const decoder = new TextDecoder();
+              let pending = "";
+              for await (const chunk of child.stdout) {
+                const text = decoder.decode(chunk, { stream: true });
+                output += text;
+                pending += text;
+                const lines = pending.split("\n");
+                pending = lines.pop() ?? "";
+                for (const line of lines) {
+                  if (!line.includes('"event":"migrate.online_deferred"')) {
+                    continue;
+                  }
+                  const record: unknown = JSON.parse(line);
+                  if (
+                    typeof record !== "object" ||
+                    record === null ||
+                    !("index" in record) ||
+                    typeof record.index !== "string" ||
+                    !("retryAfterMs" in record) ||
+                    typeof record.retryAfterMs !== "number"
+                  ) {
+                    throw new TypeError("Invalid migrate deferral event");
+                  }
+                  decisions.push({
+                    index: record.index,
+                    retryAfterMs: record.retryAfterMs,
+                  });
+                  if (decisions.length === 2) {
+                    child.kill();
+                  }
+                }
+              }
+            };
+            const [stderr] = await Promise.all([
+              new Response(child.stderr).text(),
+              readOutput(),
+              child.exited,
+            ]);
+            expect(
+              decisions.length,
+              `${output}\n${stderr}`,
+            ).toBeGreaterThanOrEqual(2);
+            const first = decisions.at(0);
+            expect(first).toMatchObject({
+              index: firstIndex.name,
+              retryAfterMs: 13,
+            });
+            expect(decisions.at(1)).toEqual(first);
+            expect(output).not.toContain("[migrate] migrations applied");
+            expect(stderr).not.toContain("[migrate] failed:");
+            expect(stderr).toContain('"indicator":"long_transaction"');
+          } finally {
+            clearTimeout(deadline);
+            child.kill();
+            await child.exited;
+          }
+        } finally {
+          await blocker.unsafe("ROLLBACK");
+          blocker.release();
+          rmSync(environmentDirectory, { recursive: true, force: true });
+        }
       });
     });
 
