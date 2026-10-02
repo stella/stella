@@ -223,6 +223,38 @@ const readWorkflowJobs = (file: string): Record<string, WorkflowJob> => {
 };
 
 describe("network baseline workflows", () => {
+  test("preparation generates revision trees instead of reading a committed route tree", () => {
+    const script = readFileSync(
+      path.join(
+        import.meta.dirname,
+        "..",
+        ".github/actions/prepare-network-baseline/prepare.sh",
+      ),
+      "utf-8",
+    );
+    expect(script).not.toMatch(/git\s+show[^\n]*routeTree\.gen\.ts/u);
+    expect(script).not.toContain("apps/web/src/routeTree.gen.ts");
+    expect(script).toContain(
+      'network-baseline-route-tree.ts "$repository" "$base" "$base_tree"',
+    );
+    expect(script).toContain(
+      'network-baseline-route-tree.ts "$repository" "$head" "$head_tree"',
+    );
+    for (const file of ["ci.yml", "network-baseline-record.yml"]) {
+      for (const job of Object.values(readWorkflowJobs(file))) {
+        const prepare = job.steps.findIndex(
+          (step) => step.uses === "./.github/actions/prepare-network-baseline",
+        );
+        if (prepare === -1) {continue;}
+        const install = job.steps.findIndex(
+          (step) => step.name === "Install dependencies",
+        );
+        expect(install, file).toBeGreaterThan(-1);
+        expect(prepare, file).toBeGreaterThan(install);
+      }
+    }
+  });
+
   test("recordings run only on main and carry an immutable source identity", () => {
     const source = workflowSource("network-baseline-record.yml");
     const parsed: unknown = Bun.YAML.parse(source);
@@ -455,6 +487,24 @@ describe("reviewed network budgets", () => {
   }, 60_000);
 });
 
+const installRouteTreeGeneratorFixture = (directory: string) => {
+  const script = path.join(
+    directory,
+    "apps/web/scripts/network-baseline-route-tree.ts",
+  );
+  mkdirSync(path.dirname(script), { recursive: true });
+  writeFileSync(
+    script,
+    `import { writeFileSync } from "node:fs";
+const [repository, revision, output] = Bun.argv.slice(2);
+if (!repository || !revision || !output || !/^[a-f0-9]{40}$/.test(revision)) process.exit(1);
+const result = Bun.spawnSync(["git", "-C", repository, "show", revision + ":apps/web/src/fixture-route-tree.txt"]);
+if (result.exitCode !== 0) process.exit(result.exitCode);
+writeFileSync(output, result.stdout);
+`,
+  );
+};
+
 describe("merge-base preparation integration", () => {
   test("PR merge refs use advanced main rather than the recorded event base", () => {
     const directory = mkdtempSync(path.join(os.tmpdir(), "network-pr-merge-"));
@@ -474,7 +524,10 @@ describe("merge-base preparation integration", () => {
       directory,
       "apps/web/e2e/network-baseline.json",
     );
-    const treePath = path.join(directory, "apps/web/src/routeTree.gen.ts");
+    const treePath = path.join(
+      directory,
+      "apps/web/src/fixture-route-tree.txt",
+    );
     const mainBaseline = { "/chat": entry(8), "/settings": entry(2) };
     const mainTree = `${routeTree}\n// main advances\n`;
     try {
@@ -491,6 +544,7 @@ describe("merge-base preparation integration", () => {
         JSON.stringify({ "/chat": entry(1), "/settings": entry(2) }),
       );
       writeFileSync(treePath, routeTree);
+      installRouteTreeGeneratorFixture(directory);
       checked(["git", "init", "-b", "main"]);
       checked(["git", "config", "user.name", "Fixture"]);
       checked(["git", "config", "user.email", "fixture@example.test"]);
@@ -543,6 +597,10 @@ describe("merge-base preparation integration", () => {
           RUNNER_TEMP: directory,
           GITHUB_STEP_SUMMARY: summary,
         });
+      expect(
+        run(["git", "show", `${advancedMain  }:apps/web/src/routeTree.gen.ts`])
+          .exitCode,
+      ).not.toBe(0);
       const result = prepare(prepareScript);
       expect(result.exitCode, result.stderr.toString()).toBe(0);
       expect(JSON.parse(readFileSync(baselinePath, "utf-8"))).toEqual(
@@ -557,10 +615,10 @@ describe("merge-base preparation integration", () => {
         ),
       ).toEqual(mainBaseline);
       expect(
-        readFileSync(
-          path.join(directory, "apps/web/e2e/.network-baseline-base-tree.ts"),
-          "utf-8",
-        ),
+        readFileSync(path.join(directory, "base-route-tree.gen.ts"), "utf-8"),
+      ).toBe(mainTree);
+      expect(
+        readFileSync(path.join(directory, "head-route-tree.gen.ts"), "utf-8"),
       ).toBe(mainTree);
       expect(
         readFileSync(
@@ -583,6 +641,17 @@ describe("merge-base preparation integration", () => {
       expect(mutation.exitCode).not.toBe(0);
       expect(mutation.stderr.toString()).toContain(
         "PRs must declare network budget changes instead of editing network-baseline.json",
+      );
+      const committedTreeMutant = script.replace(
+        'bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$base" "$base_tree"',
+        'git show "$base:apps/web/src/routeTree.gen.ts" > "$base_tree"',
+      );
+      expect(committedTreeMutant).not.toBe(script);
+      writeFileSync(mutantPath, committedTreeMutant);
+      const committedTreeMutation = prepare(mutantPath);
+      expect(committedTreeMutation.exitCode).not.toBe(0);
+      expect(committedTreeMutation.stderr.toString()).toContain(
+        "does not exist",
       );
     } finally {
       rmSync(directory, { recursive: true, force: true });
@@ -622,9 +691,10 @@ describe("merge-base preparation integration", () => {
         JSON.stringify({ "/chat": entry(1), "/settings": entry(2) }),
       );
       writeFileSync(
-        path.join(directory, "apps/web/src/routeTree.gen.ts"),
+        path.join(directory, "apps/web/src/fixture-route-tree.txt"),
         routeTree,
       );
+      installRouteTreeGeneratorFixture(directory);
       checked(["git", "init", "-b", "main"]);
       checked(["git", "config", "user.name", "Fixture"]);
       checked(["git", "config", "user.email", "fixture@example.test"]);

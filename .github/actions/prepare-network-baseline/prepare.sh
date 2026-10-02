@@ -18,7 +18,12 @@ if [[ "$purpose" == recording && "$base" != "$(git rev-parse HEAD)" ]]; then
   exit 1
 fi
 git show "$base:apps/web/e2e/network-baseline.json" > apps/web/e2e/.network-baseline-base.json
-git show "$base:apps/web/src/routeTree.gen.ts" > apps/web/e2e/.network-baseline-base-tree.ts
+base_tree="$RUNNER_TEMP/base-route-tree.gen.ts"
+head_tree="$RUNNER_TEMP/head-route-tree.gen.ts"
+repository=$(git rev-parse --show-toplevel)
+head=$(git rev-parse HEAD)
+bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$base" "$base_tree"
+bun apps/web/scripts/network-baseline-route-tree.ts "$repository" "$head" "$head_tree"
 git diff --name-only --no-renames "$base" HEAD > apps/web/e2e/.network-baseline-changed
 recorded=false
 recorded_source=''
@@ -77,8 +82,8 @@ if [[ "$purpose" == recording ]]; then
     bun scripts/network-baseline-scope.ts prepare \
       --base apps/web/e2e/.network-baseline-base.json \
       --changed apps/web/e2e/.network-baseline-declarations \
-      --base-route-tree apps/web/e2e/.network-baseline-base-tree.ts \
-      --route-tree apps/web/src/routeTree.gen.ts \
+      --base-route-tree "$base_tree" \
+      --route-tree "$head_tree" \
       --output apps/web/e2e/network-baseline.json \
       --context apps/web/e2e/.network-baseline-context.json >> "$GITHUB_STEP_SUMMARY"
     cp apps/web/e2e/network-baseline.json apps/web/e2e/.network-baseline-base.json
@@ -87,7 +92,7 @@ fi
 bun scripts/network-baseline-scope.ts prepare \
   --base apps/web/e2e/.network-baseline-base.json \
   --changed apps/web/e2e/.network-baseline-changed \
-  --base-route-tree apps/web/e2e/.network-baseline-base-tree.ts \
-  --route-tree apps/web/src/routeTree.gen.ts \
+  --base-route-tree "$base_tree" \
+  --route-tree "$head_tree" \
   --output apps/web/e2e/network-baseline.json \
   --context apps/web/e2e/.network-baseline-context.json >> "$GITHUB_STEP_SUMMARY"

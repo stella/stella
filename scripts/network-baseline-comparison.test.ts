@@ -13,12 +13,30 @@ import {
   diffNetworkBaseline,
   mergeNetworkBaseline,
 } from "../apps/web/e2e/helpers/network";
+import { generateRevisionRouteTree } from "../apps/web/scripts/network-baseline-route-tree";
 import { prepareComparisonBaseline } from "./network-baseline-scope";
 
-const routeTree = readFileSync(
-  new URL("../apps/web/src/routeTree.gen.ts", import.meta.url),
-  "utf-8",
-);
+const routeTree = await (async () => {
+  const directory = mkdtempSync(
+    path.join(os.tmpdir(), "network-comparison-tree-"),
+  );
+  const repository = path.join(import.meta.dirname, "..");
+  const revision = Bun.spawnSync(["git", "rev-parse", "HEAD"], {
+    cwd: repository,
+  });
+  expect(revision.exitCode).toBe(0);
+  const output = path.join(directory, "route-tree.ts");
+  try {
+    await generateRevisionRouteTree({
+      repository,
+      revision: revision.stdout.toString().trim(),
+      output,
+    });
+    return readFileSync(output, "utf-8");
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+})();
 
 test("successive write recordings retain declarations and timing-conditional peaks", () => {
   const requests = ["GET /conditional", "GET /observed"];
