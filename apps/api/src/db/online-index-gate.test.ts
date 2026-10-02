@@ -608,6 +608,48 @@ describe("online index gate", () => {
     await harness.gate.close();
   });
 
+  test("a held index excludes busy-window time from its single alert", async () => {
+    const gateConfig = config({
+      health: {
+        ...config().health,
+        maxHeldMs: 60_000,
+        busyWindows: [{ start: "12:00", end: "12:30", timeZone: "UTC" }],
+      },
+    });
+    const harness = makeHarness({
+      readings: [ebs(69, "degraded")],
+      config: gateConfig,
+    });
+    const statement =
+      "CREATE INDEX CONCURRENTLY test_idx ON public.test_table (id)";
+    const alerts = () =>
+      harness.records.filter(
+        (record) =>
+          typeof record === "object" &&
+          record !== null &&
+          "event" in record &&
+          record.event === "database_load_gate_held_too_long",
+      );
+    try {
+      expect(await harness.gate.attempt(statement)).toBe("wait");
+      harness.advanceClock(15 * 60_000);
+      expect(await harness.gate.attempt(statement)).toBe("wait");
+      expect(alerts()).toEqual([]);
+      harness.advanceClock(15 * 60_000);
+      expect(await harness.gate.attempt(statement)).toBe("wait");
+      expect(alerts()).toEqual([]);
+      harness.advanceClock(60_000);
+      expect(await harness.gate.attempt(statement)).toBe("wait");
+      expect(alerts()).toHaveLength(1);
+      harness.advanceClock(60_000);
+      expect(await harness.gate.attempt(statement)).toBe("wait");
+      expect(alerts()).toHaveLength(1);
+      expect(harness.statements).not.toContain(statement);
+    } finally {
+      await harness.gate.close();
+    }
+  });
+
   /**
    * A held build ends its migrator run so the schema lane is released, and
    * the next run creates a new gate. The hold must outlive the gate, or it
