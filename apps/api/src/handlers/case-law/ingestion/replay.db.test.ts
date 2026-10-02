@@ -747,7 +747,7 @@ describe("replay of a source", () => {
     ]);
   });
 
-  test("a pending corpus mirror is reported as work even when content matches", async () => {
+  test("a current-stamped pending corpus mirror remains work in the reserved decision scope", async () => {
     const sourceId = await createSource();
     const id = createSafeId<"caseLawDecision">();
     await insertDecision({
@@ -760,7 +760,10 @@ describe("replay of a source", () => {
     });
     await db
       .update(caseLawDecisions)
-      .set({ corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING })
+      .set({
+        corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        parserVersion: 4,
+      })
       .where(eq(caseLawDecisions.id, id));
 
     const ran = await replayCaseLawSource({
@@ -778,12 +781,13 @@ describe("replay of a source", () => {
             ),
             rawHash: "stored-hash-42",
             documentAst: EMPTY_AST,
+            parserVersion: 4,
           },
         }),
       }),
       scopedDb,
       sourceId,
-      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      scope: { type: "decision", decisionId: id },
       readStoredRaw: storedRawReader([]),
       sourceLease: null,
       bound: { type: "at-most", limit: 10 },

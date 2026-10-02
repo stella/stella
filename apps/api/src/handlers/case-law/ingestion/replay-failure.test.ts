@@ -28,11 +28,13 @@ test("stored payload budgets and timeout causes produce stable content-free clas
     expect(classifyReplayFailure(cause)).toEqual({
       code: "stored-raw-timeout",
       messageClass: "timeout",
+      scope: "systemic",
     });
   }
   expect(classifyReplayFailure(budget)).toEqual({
     code: "stored-raw-too-large",
     messageClass: "payload-budget",
+    scope: "row",
   });
   const adapter = new ReplayStageError({
     message: "fixture adapter detail",
@@ -42,9 +44,22 @@ test("stored payload budgets and timeout causes produce stable content-free clas
   expect(classifyReplayFailure(adapter)).toEqual({
     code: "adapter-exception",
     messageClass: "adapter",
+    scope: "row",
   });
   expect(classifyReplayFailure(new TypeError("fixture secret"))).toEqual({
     code: "unexpected",
     messageClass: "unexpected",
+    scope: "systemic",
   });
+});
+
+test("database outages inside an adapter stage never consume poison-row attempts", () => {
+  const failure = classifyReplayFailure(
+    new ReplayStageError({
+      message: "fixture metadata read failed",
+      failure: replayFailure("adapter-exception"),
+      cause: { code: "08006" },
+    }),
+  );
+  expect(failure.scope).toBe("systemic");
 });

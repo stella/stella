@@ -46,16 +46,15 @@ export const REPLAY_ENROLMENT = {
 
 export const BACKGROUND_REPLAY_LIMITS = {
   maxRows: 100,
-  maxDurationMs: 5 * 60_000,
+  maxDurationMs: 4 * 60_000,
+  hardDurationMs: 5 * 60_000,
   maxDailyBudget: 10_000,
-  errorRateCeiling: 0.1,
   storedRawReadTimeoutMs: 30_000,
   maxRowAttempts: 5,
   rowRetryBaseMs: 60_000,
   rowRetryMaxMs: 60 * 60_000,
   receiptRetentionDays: 90,
-  maxCompactRows: 100,
-  minErrorSampleRows: 10,
+  maxCompactRows: 600,
 } as const;
 
 export const validateReplayEnrolment = (policy: ReplayEnrolment): void => {

@@ -74,6 +74,7 @@ import {
   storedDecisionSignal,
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import { logger } from "@/api/lib/observability/logger";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { sortDeep } from "@/api/lib/sort-deep";
 
 type PendingMirrorPayload = Awaited<
@@ -100,6 +101,7 @@ const storedScopeRow = async (
 
 type StoredScopeStateOptions = {
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   corpus: CaseLawCorpusDependencies;
@@ -110,12 +112,14 @@ const storedScopeState = async ({
   scopedDb,
   corpus,
   signal,
+  s3Policy,
 }: StoredScopeStateOptions) => {
   const row = await storedScopeRow(decisionId, scopedDb);
   const ast = row?.astS3Key
     ? await readCorpusAst(row.astS3Key, {
         ...corpus.readBytes,
         signal,
+        s3Policy,
         readTombstones: async (locations) =>
           await scopedDb(
             async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
@@ -141,12 +145,14 @@ const verifyStoredCitationScopes = async ({
   scopedDb,
   corpus,
   signal,
+  s3Policy,
 }: VerifyStoredCitationScopesOptions) => {
   if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
     return Result.ok(false);
   }
   const snapshot = await storedScopeState({
     signal,
+    s3Policy,
     decisionId: existing.id,
     scopedDb,
     corpus,
@@ -467,6 +473,7 @@ const planCorpusPayload = ({
 
 type PlanDecisionWriteOptions = {
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   result: IngestionResult;
   existing: ExistingDecision | undefined;
   decisionId: SafeId<"caseLawDecision">;
@@ -492,6 +499,7 @@ export const planDecisionWrite = async ({
   incomingCarriesDocument,
   polarityRules,
   signal,
+  s3Policy,
 }: PlanDecisionWriteOptions) => {
   const sections = decisionSections(result);
 
@@ -522,6 +530,7 @@ export const planDecisionWrite = async ({
       : undefined;
   const verified = await verifyStoredCitationScopes({
     signal,
+    s3Policy,
     scopedDb,
     corpus,
     existing,

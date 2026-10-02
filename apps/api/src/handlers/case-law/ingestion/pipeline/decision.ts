@@ -143,6 +143,7 @@ const runDecisionAttempt = async ({
   corpusBatch,
   polarityRules,
   signal,
+  s3Policy,
 }: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
   signal?.throwIfAborted();
   const observation = observeDecision({ input, sourceId });
@@ -198,6 +199,7 @@ const runDecisionAttempt = async ({
   signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
     signal,
+    s3Policy,
     result,
     existing,
     preservesExistingDetail: shape.preservesExistingDetail,
@@ -221,6 +223,7 @@ const runDecisionAttempt = async ({
     try: async () => {
       const planned = await planDecisionWrite({
         signal,
+        s3Policy,
         result,
         existing,
         decisionId,
@@ -240,6 +243,7 @@ const runDecisionAttempt = async ({
       signal?.throwIfAborted();
       const write: DecisionRowWrite = {
         signal,
+        s3Policy,
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
         sourceId,

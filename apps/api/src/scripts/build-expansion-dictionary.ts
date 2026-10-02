@@ -421,18 +421,18 @@ const contentHash = hasher.digest("hex");
 const compressed = zstdCompress(payload);
 
 await refreshCorpusS3();
-await putCorpusS3ObjectWithSignal(
-  morphologyDictionaryKey(language, contentHash),
-  compressed,
-  "application/zstd",
-  AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
-);
-await putCorpusS3ObjectWithSignal(
-  morphologyDictionaryPointerKey(language),
-  new TextEncoder().encode(contentHash),
-  "text/plain",
-  AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
-);
+await putCorpusS3ObjectWithSignal({
+  key: morphologyDictionaryKey(language, contentHash),
+  bytes: compressed,
+  mimeType: "application/zstd",
+  signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+});
+await putCorpusS3ObjectWithSignal({
+  key: morphologyDictionaryPointerKey(language),
+  bytes: new TextEncoder().encode(contentHash),
+  mimeType: "text/plain",
+  signal: AbortSignal.timeout(UPLOAD_TIMEOUT_MS),
+});
 
 console.log(
   `Published ${buckets.length} buckets (${compressed.length} compressed bytes) at ${contentHash}.`,

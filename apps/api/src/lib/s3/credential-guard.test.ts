@@ -49,18 +49,22 @@ describe("createS3CredentialGuard", () => {
     let started = false;
     const guard = createS3CredentialGuard({
       isStale: () => true,
-      refresh: async (signal) => {
-        expect(signal).toBe(controller.signal);
+      refresh: async (options) => {
+        expect(options?.mode).toBe("replay-strict");
+        expect(options?.signal).toBe(controller.signal);
         controller.abort(
           new DOMException("fixture tick expired", "TimeoutError"),
         );
-        signal?.throwIfAborted();
+        options?.signal.throwIfAborted();
       },
     });
     await expect(
-      guard.run(async () => {
-        started = true;
-      }, controller.signal),
+      guard.run(
+        async () => {
+          started = true;
+        },
+        { mode: "replay-strict", signal: controller.signal },
+      ),
     ).rejects.toThrow("fixture tick expired");
     expect(started).toBe(false);
   });

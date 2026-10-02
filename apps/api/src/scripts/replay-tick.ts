@@ -1,12 +1,24 @@
 import { panic, Result } from "better-result";
-import { eq, sql, type SQLWrapper } from "drizzle-orm";
+import type { ReservedSQL } from "bun";
+import { eq, type SQLWrapper } from "drizzle-orm";
 import { setTimeout as sleep } from "node:timers/promises";
 
-import { isHeldTooLong, type Verdict } from "@stll/db-load-gate/health";
+import {
+  defaultConfig,
+  isHeldTooLong,
+  nextBatch,
+  type BatchState,
+  type Verdict,
+} from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { readReplayTickEnvironment } from "@/api/env-replay";
+import type {
+  SourceAdapter,
+  StoredRawReader,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   BackgroundReplaySource,
   BackgroundReplayTickReport,
@@ -143,11 +155,14 @@ const cleanupReplayTransaction: CaseLawRootHandle["transaction"] = async (
   );
 };
 
-const releaseReplayDb: ScopedDb = async (work) =>
-  await cleanupReplayTransaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-    return await work(tx);
-  });
+const releaseReplayDb: ScopedDb = async (work) => {
+  const { createIngestionDb, markRlsDatabase } =
+    await import("@/api/db/scoped");
+  return await createIngestionDb(
+    markRlsDatabase({ transaction: cleanupReplayTransaction }),
+    { laneWaitMs: 0 },
+  )(work);
+};
 
 const loadReplayTickRuntime = async () => {
   const [
@@ -160,7 +175,7 @@ const loadReplayTickRuntime = async () => {
     { createBackgroundReplayStore },
     { acquireCaseLawSourceIngestionLease },
     { CASE_LAW_MAINTENANCE_LANE },
-    { refreshS3, refreshCorpusS3 },
+    { createIngestionDb, markRlsDatabase },
   ] = await Promise.all([
     import("@/api/db/long-running-connection"),
     import("@/api/db/corpus-schema-lane"),
@@ -171,7 +186,7 @@ const loadReplayTickRuntime = async () => {
     import("@/api/handlers/case-law/ingestion/background-replay-store"),
     import("@/api/lib/legal-search/case-law-source-ingestion-lease"),
     import("@/api/lib/case-law/maintenance-lane"),
-    import("@/api/lib/s3"),
+    import("@/api/db/scoped"),
   ]);
   return {
     withLongRunningConnection,
@@ -183,8 +198,8 @@ const loadReplayTickRuntime = async () => {
     createBackgroundReplayStore,
     acquireCaseLawSourceIngestionLease,
     CASE_LAW_MAINTENANCE_LANE,
-    refreshS3,
-    refreshCorpusS3,
+    createIngestionDb,
+    markRlsDatabase,
   };
 };
 
@@ -210,7 +225,7 @@ const reportReplayTick = (report: BackgroundReplayTickReport) => {
   if (report.source) {
     metric(report.source, "case_law.replay.tick", {
       "case_law.replay.tick.applied": report.applied,
-      "case_law.replay.tick.failed": Number(report.errors > 0),
+      "case_law.replay.tick.failed": Number(report.status === "failed"),
       "case_law.replay.tick.rows_failed": report.failed,
       "case_law.replay.tick.hold_too_long": Number(report.heldTooLong),
       "case_law.replay.tick.blocked": report.blocked,
@@ -224,7 +239,70 @@ const reportReplayTick = (report: BackgroundReplayTickReport) => {
       ),
     });
   }
-  log({ event: "case_law.replay.tick", ...report });
+  log({
+    ...(report.source === null
+      ? {
+          _aws: {
+            Timestamp: now(),
+            CloudWatchMetrics: [
+              {
+                Namespace: "Stella/CaseLaw",
+                Dimensions: [[]],
+                Metrics: [
+                  { Name: "case_law.replay.tick.held", Unit: "Count" },
+                  { Name: "case_law.replay.tick.hold_too_long", Unit: "Count" },
+                  { Name: "case_law.replay.tick.failed", Unit: "Count" },
+                ],
+              },
+            ],
+          },
+          "case_law.replay.tick.held": Number(report.status === "held"),
+          "case_law.replay.tick.hold_too_long": Number(report.heldTooLong),
+          "case_law.replay.tick.failed": Number(report.status === "failed"),
+        }
+      : {}),
+    event: "case_law.replay.tick",
+    ...report,
+  });
+};
+
+type ReplayPreflightGateOptions = {
+  readVerdict: () => Promise<Verdict>;
+  loadState: () => Promise<BatchState>;
+  saveState: (state: BatchState) => Promise<void>;
+  clock: () => number;
+};
+
+export const createReplayPreflightGate = ({
+  readVerdict,
+  loadState,
+  saveState,
+  clock,
+}: ReplayPreflightGateOptions) => {
+  let state: BatchState | undefined;
+  return {
+    heldTooLong: () => state !== undefined && isHeldTooLong(state, clock()),
+    readVerdict: async (): Promise<Verdict> => {
+      state ??= await loadState();
+      if (state.holdUntil !== null && clock() < state.holdUntil) {
+        return { kind: "unknown", signals: [] };
+      }
+      const verdict = await readVerdict();
+      const recovering = state.heldSince !== null;
+      const plan = nextBatch({
+        state,
+        verdict,
+        lastDurationMs: null,
+        config: defaultConfig,
+        clock,
+      });
+      state = plan.state;
+      if (plan.action === "hold" || recovering) {
+        await saveState(state);
+      }
+      return verdict;
+    },
+  };
 };
 
 type ReplayLeaseOwnerOptions = {
@@ -257,9 +335,286 @@ const createReplayLeaseOwner = ({
   };
 };
 
+type ReplayTickFixtureOptions = {
+  enrolment?: Readonly<Record<AdapterKey, ReplayEnrolment>>;
+  adapterFor?: (key: string) => SourceAdapter | undefined;
+  readStoredRaw?: StoredRawReader;
+  gate?: () => Promise<Verdict>;
+  maxRows?: number;
+  onIngestionTransaction?: (tx: Transaction) => Promise<void>;
+  onRootTransaction?: (tx: Transaction) => Promise<void>;
+};
+
+type ReplayTickRuntime = Awaited<ReturnType<typeof loadReplayTickRuntime>>;
+
+type ReplaySessionHandlesOptions = {
+  db: Pick<CaseLawRootHandle, "transaction">;
+  runtime: ReplayTickRuntime;
+  signal: AbortSignal;
+  fixture: ReplayTickFixtureOptions;
+};
+
+const createReplaySessionHandles = ({
+  db,
+  runtime,
+  signal,
+  fixture,
+}: ReplaySessionHandlesOptions) => {
+  // Root indicators and canonical pipeline transactions share a reserved
+  // session, so serialize their short transactions before opening one.
+  let pending = Promise.resolve();
+  const queuedTransaction: CaseLawRootHandle["transaction"] = async (work) => {
+    const current = pending.then(async () => await db.transaction(work));
+    pending = Result.tryPromise(async () => await current).then(
+      () => undefined,
+    );
+    return await current;
+  };
+  const queuedDatabase = { transaction: queuedTransaction };
+  const transaction: CaseLawRootHandle["transaction"] = async (work) => {
+    signal.throwIfAborted();
+    return await runtime.runUnderCorpusSchemaLane({
+      database: queuedDatabase,
+      laneWaitMs: 0,
+      work: async (tx) => {
+        signal.throwIfAborted();
+        await fixture.onRootTransaction?.(tx);
+        const result = await work(tx);
+        signal.throwIfAborted();
+        return result;
+      },
+    });
+  };
+  const rootDb: CaseLawRootHandle = {
+    transaction,
+    execute: async <TRow extends Record<string, unknown>>(
+      query: SQLWrapper | string,
+    ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
+  };
+  const scopedIngestion = runtime.createIngestionDb(
+    runtime.markRlsDatabase(queuedDatabase),
+    { laneWaitMs: 0 },
+  );
+  const ingestionDb: ScopedDb = async (work) =>
+    await scopedIngestion(async (tx) => {
+      signal.throwIfAborted();
+      await fixture.onIngestionTransaction?.(tx);
+      const result = await work(tx);
+      signal.throwIfAborted();
+      return result;
+    });
+  return { rootDb, ingestionDb };
+};
+
+const persistReplayTickReport = async (
+  tickReport: BackgroundReplayTickReport,
+  cleanupStore: Awaited<ReturnType<typeof createReplayCleanupStore>>,
+) => {
+  const progress = await cleanupStore.recordTick(tickReport);
+  if (tickReport.source !== null && progress !== null) {
+    metric(tickReport.source, "case_law.replay.progress", {
+      "case_law.replay.tick.ticks_without_progress":
+        progress.ticksWithoutProgress,
+      "case_law.replay.tick.no_progress_while_lagging": Number(
+        tickReport.source.rowsBehind > 0 && progress.ticksWithoutProgress > 0,
+      ),
+    });
+  }
+  const compacted = await Result.tryPromise(cleanupStore.compact);
+  if (compacted.isErr()) {
+    log({
+      event: "case_law.replay.compaction_deferred",
+      ...classifyReplayFailure(compacted.error),
+    });
+  }
+  return tickReport;
+};
+
+type ReplaySlotSessionOptions = {
+  connection: ReservedSQL;
+  runtime: ReplayTickRuntime;
+  rootDb: CaseLawRootHandle;
+  ingestionDb: ScopedDb;
+  signal: AbortSignal;
+  fixture: ReplayTickFixtureOptions;
+};
+
+const runReplayOnSlotSession = async ({
+  connection,
+  runtime,
+  rootDb,
+  ingestionDb,
+  signal,
+  fixture,
+}: ReplaySlotSessionOptions): Promise<BackgroundReplayTickReport> => {
+  const lockBackend = (
+    await connection.unsafe<{ pid: number }[]>("SELECT pg_backend_pid() AS pid")
+  ).at(0)?.pid;
+  if (lockBackend === undefined) {
+    panic("Heavy-work session returned no backend identity");
+  }
+  const slot = runtime.createHeavyWorkSlot({
+    kind: "backfill_batch",
+    session: {
+      query: async (statement, parameters) => {
+        const rows = await connection.unsafe<{ acquired: boolean }[]>(
+          statement,
+          [...parameters],
+        );
+        return rows;
+      },
+    },
+  });
+  const health = runtime.createScriptBackfillHealthReader({
+    db: rootDb,
+    tableName: "case_law_decisions",
+    clock: now,
+  });
+  let lastVerdict: Verdict = { kind: "unknown", signals: [] };
+  const leaseOwner = createReplayLeaseOwner({
+    acquire: runtime.acquireCaseLawSourceIngestionLease,
+    scopedDb: ingestionDb,
+  });
+  const cleanupStore = await createReplayCleanupStore();
+  const store = runtime.createBackgroundReplayStore({
+    db: rootDb,
+    now,
+    ...(fixture.enrolment === undefined
+      ? {}
+      : { enrolment: fixture.enrolment }),
+    sourceEnabled: (key) => !replayKillRequested(key),
+    onBudgetExhausted: (source) =>
+      metric(source, "case_law.replay.tick", {
+        "case_law.replay.tick.budget_exhausted": 1,
+      }),
+    onHeld: (source, state) =>
+      metric(source, "case_law.replay.tick", {
+        "case_law.replay.tick.held": 1,
+        "case_law.replay.tick.hold_too_long": Number(
+          isHeldTooLong(state, now()),
+        ),
+      }),
+  });
+  const runner = runtime.createBackgroundReplayRunner({
+    rootDb,
+    ingestionDb,
+    getLease: leaseOwner.getLease,
+    signal,
+    ...(fixture.adapterFor === undefined
+      ? {}
+      : { adapterFor: fixture.adapterFor }),
+    ...(fixture.readStoredRaw === undefined
+      ? {}
+      : { readStoredRaw: fixture.readStoredRaw }),
+    recordFailure: cleanupStore.recordFailure,
+    assertSlot: async () =>
+      await assertReplaySlot({
+        expectedBackend: lockBackend,
+        signal,
+        queryBackend: async () =>
+          (
+            await connection.unsafe<{ pid: number }[]>(
+              "SELECT pg_backend_pid() AS pid",
+            )
+          ).at(0)?.pid,
+      }),
+    store,
+    log,
+  });
+  const observation: {
+    source: BackgroundReplaySource | null;
+    report: BackgroundReplayTickReport | null;
+  } = { source: null, report: null };
+  const preflight = createReplayPreflightGate({
+    readVerdict: async () =>
+      fixture.gate === undefined
+        ? await readReplayGate(health)
+        : await fixture.gate(),
+    loadState: cleanupStore.loadPreflightGateState,
+    saveState: cleanupStore.savePreflightGateState,
+    clock: now,
+  });
+  try {
+    const attempted = await Result.tryPromise(async () => {
+      signal.throwIfAborted();
+      const tickReport = await runtime.runBackgroundReplayTick({
+        ...BACKGROUND_REPLAY_LIMITS,
+        ...(fixture.maxRows === undefined ? {} : { maxRows: fixture.maxRows }),
+        signal,
+        dependencies: {
+          ...store,
+          chooseSource: async () => {
+            observation.source = await store.chooseSource();
+            return observation.source;
+          },
+          killRequested: async (source) =>
+            await Promise.resolve(replayKillRequested(source.adapterKey)),
+          reserveBatch: async (source, day) =>
+            await store.reserveBatch(source, day, lastVerdict),
+          acquireLease: leaseOwner.acquireLease,
+          acquireHeavySlot: async () => {
+            const slotAttempt = await slot.tryAcquire();
+            if (slotAttempt.isErr()) {
+              throw slotAttempt.error;
+            }
+            return slotAttempt.value ? slot.release : null;
+          },
+          gate: async () => {
+            signal.throwIfAborted();
+            lastVerdict = await preflight.readVerdict();
+            signal.throwIfAborted();
+            return lastVerdict;
+          },
+          ...runner,
+          metric: (report) => {
+            if (report.source === null && report.status === "held") {
+              report.heldTooLong = preflight.heldTooLong();
+            }
+            observation.report = report;
+            reportReplayTick(report);
+          },
+          now,
+          sleep: async (milliseconds) => {
+            await sleep(milliseconds, undefined, { signal });
+          },
+        },
+      });
+      return tickReport;
+    });
+    const tickReport: BackgroundReplayTickReport = attempted.isOk()
+      ? attempted.value
+      : {
+          status: "failed",
+          source: observation.source,
+          attempted: observation.report?.attempted ?? 0,
+          applied: observation.report?.applied ?? 0,
+          blocked: observation.report?.blocked ?? 0,
+          errors: (observation.report?.errors ?? 0) + 1,
+          failed: observation.report?.failed ?? 0,
+          heldTooLong: preflight.heldTooLong(),
+        };
+    if (attempted.isErr()) {
+      reportReplayTick(tickReport);
+      log({
+        event: "case_law.replay.tick_failure",
+        sourceId: observation.source?.id ?? null,
+        ...classifyReplayFailure(attempted.error),
+      });
+    }
+    return await persistReplayTickReport(tickReport, cleanupStore);
+  } finally {
+    try {
+      await health.settle();
+    } finally {
+      await slot.close();
+    }
+  }
+};
+
 /** A bounded scheduled invocation: no waiting for leases, slots or health holds. */
-const runEnabledReplayTick = async (
+export const runEnabledReplayTick = async (
   signal: AbortSignal,
+  fixture: ReplayTickFixtureOptions = {},
 ): Promise<BackgroundReplayTickReport | null> => {
   signal.throwIfAborted();
   const runtime = await loadReplayTickRuntime();
@@ -284,166 +639,27 @@ const runEnabledReplayTick = async (
         log({ event: "case_law.replay.tick", status: "maintenance-held" });
         return null;
       }
-      const transaction: CaseLawRootHandle["transaction"] = async (work) => {
-        signal.throwIfAborted();
-        return await runtime.runUnderCorpusSchemaLane({
-          database: db,
-          laneWaitMs: 0,
-          work: async (tx) => {
-            signal.throwIfAborted();
-            const result = await work(tx);
-            signal.throwIfAborted();
-            return result;
-          },
-        });
-      };
-      const rootDb: CaseLawRootHandle = {
-        transaction,
-        execute: async <TRow extends Record<string, unknown>>(
-          query: SQLWrapper | string,
-        ) => await transaction(async (tx) => await tx.execute<TRow>(query)),
-      };
-      const ingestionDb: ScopedDb = async (work) =>
-        await transaction(async (tx) => {
-          await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-          return await work(tx);
-        });
+      const { rootDb, ingestionDb } = createReplaySessionHandles({
+        db,
+        runtime,
+        signal,
+        fixture,
+      });
       return await runtime.withLongRunningConnection(
         {
           statementTimeout: REPLAY_QUERY_TIMEOUT_MS,
           lockTimeout: REPLAY_QUERY_TIMEOUT_MS,
           signal,
         },
-        async ({ connection }) => {
-          const lockBackend = (
-            await connection.unsafe<{ pid: number }[]>(
-              "SELECT pg_backend_pid() AS pid",
-            )
-          ).at(0)?.pid;
-          if (lockBackend === undefined) {
-            panic("Heavy-work session returned no backend identity");
-          }
-          const slot = runtime.createHeavyWorkSlot({
-            kind: "backfill_batch",
-            session: {
-              query: async (statement, parameters) => {
-                const rows = await connection.unsafe<{ acquired: boolean }[]>(
-                  statement,
-                  [...parameters],
-                );
-                return rows;
-              },
-            },
-          });
-          const health = runtime.createScriptBackfillHealthReader({
-            db: rootDb,
-            tableName: "case_law_decisions",
-            clock: now,
-          });
-          let lastVerdict: Verdict = { kind: "unknown", signals: [] };
-          const leaseOwner = createReplayLeaseOwner({
-            acquire: runtime.acquireCaseLawSourceIngestionLease,
-            scopedDb: ingestionDb,
-          });
-          const cleanupStore = await createReplayCleanupStore();
-          const store = runtime.createBackgroundReplayStore({
-            db: rootDb,
-            now,
-            sourceEnabled: (key) => !replayKillRequested(key),
-            onBudgetExhausted: (source) =>
-              metric(source, "case_law.replay.tick", {
-                "case_law.replay.tick.budget_exhausted": 1,
-              }),
-            onLag: (source) =>
-              metric(source, "case_law.replay.lag", {
-                "case_law.replay.lag.sampled_rows_behind": source.rowsBehind,
-              }),
-            onHeld: (source, state) =>
-              metric(source, "case_law.replay.tick", {
-                "case_law.replay.tick.held": 1,
-                "case_law.replay.tick.hold_too_long": Number(
-                  isHeldTooLong(state, now()),
-                ),
-              }),
-          });
-          const runner = runtime.createBackgroundReplayRunner({
+        async ({ connection }) =>
+          await runReplayOnSlotSession({
+            connection,
+            runtime,
             rootDb,
             ingestionDb,
-            getLease: leaseOwner.getLease,
             signal,
-            recordFailure: cleanupStore.recordFailure,
-            assertSlot: async () =>
-              await assertReplaySlot({
-                expectedBackend: lockBackend,
-                signal,
-                queryBackend: async () =>
-                  (
-                    await connection.unsafe<{ pid: number }[]>(
-                      "SELECT pg_backend_pid() AS pid",
-                    )
-                  ).at(0)?.pid,
-              }),
-            store,
-            log,
-          });
-          try {
-            signal.throwIfAborted();
-            await runtime.refreshS3(signal);
-            signal.throwIfAborted();
-            await runtime.refreshCorpusS3(signal);
-            signal.throwIfAborted();
-            const tickReport = await runtime.runBackgroundReplayTick({
-              ...BACKGROUND_REPLAY_LIMITS,
-              signal,
-              dependencies: {
-                ...store,
-                killRequested: async (source) =>
-                  await Promise.resolve(replayKillRequested(source.adapterKey)),
-                reserveBatch: async (source, day) =>
-                  await store.reserveBatch(source, day, lastVerdict),
-                acquireLease: leaseOwner.acquireLease,
-                acquireHeavySlot: async () => {
-                  const slotAttempt = await slot.tryAcquire();
-                  if (slotAttempt.isErr()) {
-                    throw slotAttempt.error;
-                  }
-                  return slotAttempt.value ? slot.release : null;
-                },
-                gate: async () => {
-                  signal.throwIfAborted();
-                  lastVerdict = await readReplayGate(health);
-                  signal.throwIfAborted();
-                  return lastVerdict;
-                },
-                ...runner,
-                metric: reportReplayTick,
-                now,
-                sleep: async (milliseconds) => {
-                  await sleep(milliseconds, undefined, { signal });
-                },
-              },
-            });
-            const progress = await cleanupStore.recordTick(tickReport);
-            if (tickReport.source !== null && progress !== null) {
-              metric(tickReport.source, "case_law.replay.progress", {
-                "case_law.replay.tick.ticks_without_progress":
-                  progress.ticksWithoutProgress,
-                "case_law.replay.tick.no_progress_while_lagging": Number(
-                  tickReport.source.rowsBehind > 0 &&
-                    progress.ticksWithoutProgress > 0,
-                ),
-              });
-            }
-            await cleanupStore.compact();
-            return tickReport;
-          } finally {
-            try {
-              await health.settle();
-            } finally {
-              await slot.close();
-            }
-          }
-        },
+            fixture,
+          }),
       );
     },
   );
@@ -576,7 +792,7 @@ export const runReplayTickScript = async ({
   log: writeLog = log,
   timeoutSignal = AbortSignal.timeout,
 }: RunReplayTickScriptOptions = {}): Promise<number> => {
-  const signal = timeoutSignal(BACKGROUND_REPLAY_LIMITS.maxDurationMs);
+  const signal = timeoutSignal(BACKGROUND_REPLAY_LIMITS.hardDurationMs);
   const outcome = await Result.tryPromise(async () => {
     const command = parseReplayTickCommand(args);
     const resetPolicy =
@@ -617,13 +833,7 @@ export const runReplayTickScript = async ({
     }
     const report = await runEnabled(signal);
     signal.throwIfAborted();
-    return report !== null &&
-      (report.errors > 0 ||
-        report.status === "failed" ||
-        report.status === "error-ceiling" ||
-        report.status === "retryable")
-      ? 1
-      : 0;
+    return report?.status === "failed" ? 1 : 0;
   });
   if (outcome.isOk()) {
     return outcome.value;

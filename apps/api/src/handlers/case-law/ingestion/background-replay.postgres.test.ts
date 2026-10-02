@@ -1,6 +1,6 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
 import {
@@ -43,6 +43,7 @@ import {
   REPLAY_ROW_OUTCOME,
   type ReplayRunReport,
 } from "@/api/handlers/case-law/ingestion/replay";
+import { REPLAY_ENROLMENT } from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -52,7 +53,12 @@ import {
   acquireCaseLawSourceIngestionLease,
   type CaseLawSourceIngestionLease,
 } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
-import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import {
+  ADAPTER_KEYS,
+  PARSER_VERSIONS,
+} from "@/api/lib/legal-search/ingestion-constants";
+import { isUsableStaticCredential } from "@/api/lib/s3/credentials";
+import { runEnabledReplayTick } from "@/api/scripts/replay-tick";
 import {
   openGatedTestDatabase,
   withGatedTestClients,
@@ -243,7 +249,6 @@ if (!databaseUrl || !enabled) {
         maxRows,
         signal,
         maxDurationMs: 60_000,
-        errorRateCeiling: 0.1,
         healthConfig: { ...defaultConfig, minSleepMs: 0 },
         dependencies: {
           ...state.store,
@@ -340,7 +345,7 @@ if (!databaseUrl || !enabled) {
         }
       });
 
-    const canonicalReplay = (listingOnly = false) => {
+    const canonicalReplay = (listingOnly = false, parserVersion = 2) => {
       const adapter = {
         key: ADAPTER_KEYS.EU_ECJ,
         sourceFields: {
@@ -372,7 +377,7 @@ if (!databaseUrl || !enabled) {
             court: stored.court,
             country: "CZE",
             language: stored.language,
-            parserVersion: 2,
+            parserVersion,
             isListingOnly: listingOnly,
             textFields: absentDecisionTextFields(
               TEXT_ABSENCE_REASON.NOT_PUBLISHED,
@@ -430,7 +435,7 @@ if (!databaseUrl || !enabled) {
             expect(
               receipts.every(
                 (receipt) =>
-                  receipt.status === "superseded" &&
+                  receipt.status === "blocked" &&
                   receipt.applied === 0 &&
                   receipt.blocked === 1,
               ),
@@ -509,7 +514,7 @@ if (!databaseUrl || !enabled) {
                 .from(caseLawReplayBatches)
                 .where(eq(caseLawReplayBatches.sourceId, state.source.id));
               expect(receipts.at(0)).toMatchObject({
-                status: "superseded",
+                status: "blocked",
                 applied: 0,
                 blocked: 1,
               });
@@ -738,7 +743,7 @@ if (!databaseUrl || !enabled) {
               ).at(0);
               expect(receipt).toMatchObject({
                 status: "reserved",
-                attempts: 1,
+                attempts: 0,
                 failureCode: "tick-deadline",
                 failureMessageClass: "deadline",
               });
@@ -775,6 +780,18 @@ if (!databaseUrl || !enabled) {
 
     test("the tick signal cancels a real blocked database query and releases its maintenance lane", async () => {
       expect(envBase.DATABASE_URL).toBe(databaseUrl);
+      expect(isUsableStaticCredential(envBase.S3_ACCESS_KEY_ID)).toBe(true);
+      expect(isUsableStaticCredential(envBase.S3_SECRET_ACCESS_KEY)).toBe(true);
+      const endpoint = envBase.S3_ENDPOINT;
+      const localCredentials =
+        envBase.S3_CREDENTIALS_PROVIDER === "env" ||
+        (envBase.S3_CREDENTIALS_PROVIDER === "auto" &&
+          endpoint !== undefined &&
+          ["localhost", "127.0.0.1", "[::1]"].includes(
+            new URL(endpoint).hostname,
+          ));
+      // Strict refresh must stay on static fixture credentials, never ECS/IMDS.
+      expect(localCredentials).toBe(true);
       const state = await fixture(3);
       const id = state.ids.at(0);
       if (id === undefined) {
@@ -872,6 +889,137 @@ if (!databaseUrl || !enabled) {
           await running;
         }
       });
+    });
+
+    test("the real scheduled wiring runs canonical pipeline transactions through the ingestion role on its dedicated session", async () => {
+      expect(envBase.DATABASE_URL).toBe(databaseUrl);
+      const state = await fixture(3);
+      const id = state.ids.at(0);
+      if (id === undefined) {
+        return panic("Expected first fixture decision");
+      }
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
+        .where(eq(caseLawSources.id, state.source.id));
+      const oldEnabled = process.env["CASE_LAW_REPLAY_ENABLED"];
+      const oldKill = process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
+      const oldDisabled = process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
+      process.env["CASE_LAW_REPLAY_ENABLED"] = "true";
+      process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = "false";
+      process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = "";
+      const fake = startFakeS3();
+      const roles: string[] = [];
+      const rootRoles: string[] = [];
+      try {
+        const canonical = canonicalReplay(
+          false,
+          PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+        );
+        const enrolment = {
+          ...REPLAY_ENROLMENT,
+          [ADAPTER_KEYS.EU_ECJ]: {
+            mode: "enrolled",
+            dailyBudget: 3,
+            reviewedDryRun: "fixture",
+          },
+        } as const;
+        const result = await runEnabledReplayTick(AbortSignal.timeout(10_000), {
+          enrolment,
+          maxRows: 1,
+          adapterFor: () => canonical.adapter,
+          readStoredRaw: async () =>
+            new TextEncoder().encode("<html>stored fixture judgment</html>"),
+          gate: async () => healthy(),
+          onIngestionTransaction: async (tx) => {
+            roles.push(
+              (
+                await tx.execute<{ role: string }>(
+                  sql`SELECT current_user AS role`,
+                )
+              ).at(0)?.role ?? "missing",
+            );
+          },
+          onRootTransaction: async (tx) => {
+            rootRoles.push(
+              (
+                await tx.execute<{ role: string }>(
+                  sql`SELECT current_user AS role`,
+                )
+              ).at(0)?.role ?? "missing",
+            );
+          },
+        });
+        expect(result).toMatchObject({ applied: 1, blocked: 0, errors: 0 });
+        expect(roles.length).toBeGreaterThan(3);
+        expect(roles.every((role) => role === "stella_ingestion")).toBe(true);
+        expect(rootRoles.length).toBeGreaterThan(1);
+        expect(
+          rootRoles.every(
+            (role) => role !== "stella_ingestion" && role !== "missing",
+          ),
+        ).toBe(true);
+        const row = (
+          await db
+            .select()
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, id))
+        ).at(0);
+        expect(row).toMatchObject({
+          parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+          fulltext: "Fixture judgment rederived from stored bytes.",
+          corpusMirrorStatus: "settled",
+        });
+        expect(row?.sourceRawS3Key).not.toBe(`fixture/${id}`);
+        expect(
+          (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.sourceId, state.source.id))
+          ).at(0),
+        ).toMatchObject({ status: "completed", applied: 1, attempts: 1 });
+        expect(fake.requests.some((request) => request.method === "PUT")).toBe(
+          true,
+        );
+        expect(
+          (
+            await db
+              .select()
+              .from(caseLawSources)
+              .where(eq(caseLawSources.id, state.source.id))
+          ).at(0)?.ingestionLeaseToken,
+        ).toBeNull();
+      } finally {
+        fake.stop();
+        if (oldEnabled === undefined) {
+          delete process.env["CASE_LAW_REPLAY_ENABLED"];
+        } else {
+          process.env["CASE_LAW_REPLAY_ENABLED"] = oldEnabled;
+        }
+        if (oldKill === undefined) {
+          delete process.env["CASE_LAW_REPLAY_KILL_SWITCH"];
+        } else {
+          process.env["CASE_LAW_REPLAY_KILL_SWITCH"] = oldKill;
+        }
+        if (oldDisabled === undefined) {
+          delete process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"];
+        } else {
+          process.env["CASE_LAW_REPLAY_DISABLED_SOURCES"] = oldDisabled;
+        }
+        await db
+          .delete(databaseBackfillStates)
+          .where(
+            eq(
+              databaseBackfillStates.name,
+              `case-law-replay:${state.source.id}:${PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ]}`,
+            ),
+          );
+        await db
+          .update(caseLawSources)
+          .set({ adapterKey: `engine-${state.source.id}` })
+          .where(eq(caseLawSources.id, state.source.id));
+      }
     });
 
     test("two ticks use real source leases and session slots to admit one writer", async () => {

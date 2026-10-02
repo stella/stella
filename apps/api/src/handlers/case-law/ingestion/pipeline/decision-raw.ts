@@ -24,6 +24,7 @@ import type {
 } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 /** The raw writes one decision attempt makes under its decision. */
 export type RawWriteState = {
@@ -91,6 +92,7 @@ export type SourceRawArtifact = {
 
 type AcquireSourceRawArtifactOptions = {
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   result: IngestionResult;
   existing: ExistingDecision | undefined;
   preservesExistingDetail: boolean;
@@ -112,6 +114,7 @@ export const acquireSourceRawArtifact = async ({
   decisionId,
   rawWrites,
   signal,
+  s3Policy,
 }: AcquireSourceRawArtifactOptions) => {
   const rawContentType = result.sourceRawContentType ?? "text/plain";
   const storedRawKey = existing?.sourceRawS3Key ?? null;
@@ -183,6 +186,7 @@ export const acquireSourceRawArtifact = async ({
   > =>
     await writeOwnedRawPayload({
       signal,
+      s3Policy,
       result,
       sourceId,
       ownerId: decisionId,

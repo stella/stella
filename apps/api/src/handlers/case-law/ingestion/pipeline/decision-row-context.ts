@@ -19,11 +19,13 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { synchronizeLockedCorpusProjectionDesiredStateTx } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { logger } from "@/api/lib/observability/logger";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 /** Everything one decision's row write reads, decided before it runs. */
 export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
   Pick<ObservedDecision, "persistedDecisionDate"> & {
     signal?: AbortSignal;
+    s3Policy?: S3CredentialRefreshOptions;
     sourceId: SafeId<"caseLawSource">;
     decisionId: SafeId<"caseLawDecision">;
     /** The observation composed with the supplements its document takes in. */

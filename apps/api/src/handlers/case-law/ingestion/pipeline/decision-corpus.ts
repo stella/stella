@@ -41,6 +41,7 @@ export const enqueueCorpusMirror = async ({
   const {
     decisionId,
     signal,
+    s3Policy,
     existing,
     result,
     observationOrder,
@@ -79,7 +80,12 @@ export const enqueueCorpusMirror = async ({
       // fence redaction takes.
       const batch =
         corpusBatch ??
-        openCorpusPackBatch({ scopedDb, transfer: corpus.transfer, signal });
+        openCorpusPackBatch({
+          scopedDb,
+          transfer: corpus.transfer,
+          signal,
+          s3Policy,
+        });
       batch.enqueue({
         decisionId,
         jurisdiction: corpusPayload.jurisdiction,

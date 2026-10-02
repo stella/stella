@@ -10,11 +10,14 @@ import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-t
 import { caseLawSources } from "./case-law";
 import { jsonb, p, safeUuid, sql, timestamptz } from "./common";
 
+const REPLAY_ATTEMPT_STATES = ["idle", "picked-up"] as const;
+
 export const REPLAY_BATCH_STATUSES = [
   "reserved",
   "completed",
   "superseded",
   "failed",
+  "blocked",
 ] as const;
 export const REPLAY_BLOCKED_REASONS = [
   "missing-payload",
@@ -49,7 +52,12 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     gateVerdict: jsonb("gate_verdict").$type<Verdict>().notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     completedAt: timestamptz("completed_at"),
+    supersededAt: timestamptz("superseded_at"),
     attempts: p.integer().default(0).notNull(),
+    attemptState: p
+      .text("attempt_state", { enum: REPLAY_ATTEMPT_STATES })
+      .default("idle")
+      .notNull(),
     retryAt: timestamptz("retry_at"),
     failureCode: p.text("failure_code", { enum: REPLAY_FAILURE_CODES }),
     failureMessageClass: p
@@ -71,8 +79,8 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
       .on(t.sourceId, t.firstDecisionId, t.parserVersionTo),
     p
       .index("case_law_replay_batches_retention_idx")
-      .on(t.completedAt, t.id)
-      .where(sql`${t.status} IN ('completed', 'superseded', 'failed')`),
+      .on(t.supersededAt, t.id)
+      .where(sql`${t.supersededAt} IS NOT NULL`),
     p.check(
       "case_law_replay_batches_failure_code_check",
       sql`${t.failureCode} IS NULL OR ${t.failureCode} IN (${sql.join(
@@ -84,6 +92,13 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
       "case_law_replay_batches_status_check",
       sql`${t.status} IN (${sql.join(
         REPLAY_BATCH_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_replay_batches_attempt_state_check",
+      sql`${t.attemptState} IN (${sql.join(
+        REPLAY_ATTEMPT_STATES.map((state) => sql.raw(`'${state}'`)),
         sql`, `,
       )})`,
     ),
@@ -170,17 +185,25 @@ export const caseLawReplayDailyRows = p.pgTable.withRLS(
 export const caseLawReplaySourceProgress = p.pgTable.withRLS(
   "case_law_replay_source_progress",
   {
-    sourceId: safeUuid<"caseLawSource">("source_id")
-      .primaryKey()
-      .references(() => caseLawSources.id, { onDelete: "restrict" }),
+    sourceId: safeUuid<"caseLawSource">("source_id").notNull(),
     ticksWithoutProgress: p
       .integer("ticks_without_progress")
       .default(0)
       .notNull(),
     lastCompletedAt: timestamptz("last_completed_at"),
-    lastServedAt: timestamptz("last_served_at"),
   },
   (t) => [
+    p.primaryKey({
+      columns: [t.sourceId],
+      name: "case_law_replay_source_progress_pkey",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_replay_progress_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("restrict"),
     p.check(
       "case_law_replay_source_progress_ticks_check",
       sql`${t.ticksWithoutProgress} >= 0`,
@@ -219,7 +242,6 @@ export type ReplayMaintenanceAuditDetails = {
   ticksWithoutProgress?: number;
   compactedReceipts?: number;
   compactedAuditEvents?: number;
-  receiptIds?: string[];
 };
 
 // Independent of receipt FKs: audit history survives bounded receipt compaction.
@@ -227,11 +249,8 @@ export type ReplayMaintenanceAuditDetails = {
 export const caseLawReplayAuditEvents = p.pgTable.withRLS(
   "case_law_replay_audit_events",
   {
-    id: p.text().primaryKey(),
-    sourceId: safeUuid<"caseLawSource">("source_id").references(
-      () => caseLawSources.id,
-      { onDelete: "restrict" },
-    ),
+    id: p.text().notNull(),
+    sourceId: safeUuid<"caseLawSource">("source_id"),
     serviceId: p.text("service_id").notNull(),
     action: p.text({ enum: REPLAY_MAINTENANCE_AUDIT_ACTIONS }).notNull(),
     resourceId: p.text("resource_id").notNull(),
@@ -239,6 +258,17 @@ export const caseLawReplayAuditEvents = p.pgTable.withRLS(
     createdAt: timestamptz("created_at").defaultNow().notNull(),
   },
   (t) => [
+    p.primaryKey({
+      columns: [t.id],
+      name: "case_law_replay_audit_events_pkey",
+    }),
+    p
+      .foreignKey({
+        name: "case_law_replay_audit_source_fk",
+        columns: [t.sourceId],
+        foreignColumns: [caseLawSources.id],
+      })
+      .onDelete("restrict"),
     p.index("case_law_replay_audit_events_retention_idx").on(t.createdAt, t.id),
     p
       .index("case_law_replay_audit_events_source_idx")

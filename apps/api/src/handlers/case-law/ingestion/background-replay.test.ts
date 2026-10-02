@@ -11,6 +11,8 @@ import {
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 
+import { ReplayStageError, replayFailure } from "./replay-failure";
+
 const fixture = (dailyBudget = 3) => {
   const source: BackgroundReplaySource = {
     id: createSafeId<"caseLawSource">(),
@@ -118,6 +120,7 @@ const fixture = (dailyBudget = 3) => {
       writes += 1;
       return "applied";
     },
+    pickUpBatch: async () => "ready",
     recordFailure: async () => "retryable",
     advancePreview: async () => {},
     metric: () => {},
@@ -131,7 +134,6 @@ const fixture = (dailyBudget = 3) => {
       dependencies,
       maxRows,
       maxDurationMs: 60_000,
-      errorRateCeiling: 0.1,
       healthConfig: { ...defaultConfig, minSleepMs: 0 },
     });
   return {
@@ -169,9 +171,6 @@ test("invalid invocation bounds fail before reading or reserving a source", asyn
     ...[0, -1, Number.NaN, Number.POSITIVE_INFINITY].map((maxDurationMs) => ({
       maxDurationMs,
     })),
-    ...[-0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY].map(
-      (errorRateCeiling) => ({ errorRateCeiling }),
-    ),
   ];
   for (const bounds of cases) {
     const state = fixture();
@@ -185,7 +184,6 @@ test("invalid invocation bounds fail before reading or reserving a source", asyn
         dependencies: state.dependencies,
         maxRows: 1,
         maxDurationMs: 60_000,
-        errorRateCeiling: 0.1,
         ...bounds,
       }),
     ).rejects.toThrow("Replay tick bounds must be positive");
@@ -352,7 +350,7 @@ test("retryable outcomes persist a deferred receipt before ending a bounded tick
     report.outcomes.retryable = 1;
     return report;
   };
-  expect((await state.run()).status).toBe("budget-exhausted");
+  expect((await state.run()).status).toBe("failed");
   expect(state.counts().completed).toBe(0);
   state.dependencies.replay = async (batch) => state.success(batch);
   expect((await state.run()).applied).toBe(1);
@@ -369,8 +367,8 @@ test("a halted replay without visited rows never completes its reservation", asy
     return report;
   };
   const report = await state.run();
-  expect(report.status).toBe("budget-exhausted");
-  expect(report.errors).toBe(3);
+  expect(report.status).toBe("failed");
+  expect(report.errors).toBe(1);
   expect(state.counts().completed).toBe(0);
 });
 
@@ -398,17 +396,19 @@ test("a deferred throwing row yields to later rows within the same tick", async 
     deferred = true;
     failures.push(batch.id);
     expect(failure).toMatchObject({
-      code: "unexpected",
-      messageClass: "unexpected",
+      code: "adapter-exception",
+      messageClass: "adapter",
+      scope: "row",
     });
     return "retryable";
   };
   state.dependencies.replay = async (batch) => {
     seen.push(batch.id);
     if (seen.length === 1) {
-      throw new TypeError(
-        "fixture exception with content that must not persist",
-      );
+      throw new ReplayStageError({
+        message: "fixture exception with content that must not persist",
+        failure: replayFailure("adapter-exception"),
+      });
     }
     return state.success(batch);
   };
@@ -475,4 +475,89 @@ test("a dry run records each preview cursor without completing an apply reservat
   expect(previews).toHaveLength(3);
   expect(state.counts().spent).toBe(0);
   expect(state.counts().completed).toBe(0);
+});
+
+test("systemic failures stop before another row, while pick-up precedes every writer", async () => {
+  for (const code of [
+    "stored-raw-read",
+    "receipt-write",
+    "writer-retryable",
+    "unexpected",
+  ] as const) {
+    const state = fixture(20);
+    let pickedUp = false;
+    let settlements = 0;
+    state.dependencies.pickUpBatch = async () => {
+      pickedUp = true;
+      return "ready";
+    };
+    state.dependencies.replay = async () => {
+      expect(pickedUp).toBe(true);
+      throw new ReplayStageError({
+        message: "fixture outage",
+        failure: replayFailure(code),
+      });
+    };
+    state.dependencies.recordFailure = async (_batch, failure) => {
+      expect(failure.scope).toBe("systemic");
+      settlements += 1;
+      return "retryable";
+    };
+    expect(await state.run(20)).toMatchObject({
+      status: "failed",
+      attempted: 1,
+      failed: 0,
+    });
+    expect(settlements).toBe(1);
+    expect(state.counts().leased).toBe(false);
+    expect(state.counts().slotted).toBe(false);
+  }
+});
+
+test("the hard deadline settles as systemic and yields a successful time limit", async () => {
+  const state = fixture();
+  const controller = new AbortController();
+  state.dependencies.replay = async () => {
+    controller.abort();
+    throw controller.signal.reason;
+  };
+  let settled = false;
+  state.dependencies.recordFailure = async (_batch, failure) => {
+    expect(failure).toMatchObject({ code: "tick-deadline", scope: "systemic" });
+    settled = true;
+    return "retryable";
+  };
+  const report = await runBackgroundReplayTick({
+    dependencies: state.dependencies,
+    maxRows: 3,
+    maxDurationMs: 60_000,
+    signal: controller.signal,
+  });
+  expect(report.status).toBe("time-limit");
+  expect(settled).toBe(true);
+});
+
+test("a crash-exhausted pickup yields to the next row without invoking its writer", async () => {
+  const state = fixture(3);
+  const pending = state.dependencies.pendingBatch;
+  let exhausted = false;
+  state.dependencies.pendingBatch = async (...args) =>
+    exhausted ? { type: "empty" } : await pending(...args);
+  state.dependencies.pickUpBatch = async () => {
+    if (!exhausted) {
+      exhausted = true;
+      return "failed";
+    }
+    return "ready";
+  };
+  const report = await state.run(3);
+  expect(report).toMatchObject({
+    status: "row-limit",
+    attempted: 3,
+    failed: 1,
+    applied: 2,
+  });
+  expect(state.counts().completed).toBe(2);
+  expect(state.counts().leased).toBe(false);
+  expect(state.counts().slotted).toBe(false);
 });

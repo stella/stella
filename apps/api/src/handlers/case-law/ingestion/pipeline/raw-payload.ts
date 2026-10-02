@@ -20,6 +20,7 @@ import type {
   RawSourceWriteWindow,
 } from "@/api/lib/legal-search/raw-source-storage";
 import { logger } from "@/api/lib/observability/logger";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 /** Wall-clock bound on copying one file an envelope names into its decision. */
 export const RAW_OBJECT_COPY_TIMEOUT_MS = 60_000;
@@ -98,6 +99,7 @@ const planSourceRawPayload = ({
 
 type WriteOwnedRawPayloadOptions = {
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   result: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
   /** The decision whose prefix holds the payload and the files it names. */
@@ -127,6 +129,7 @@ export const writeOwnedRawPayload = async ({
   window,
   onWriteStart,
   signal,
+  s3Policy,
 }: WriteOwnedRawPayloadOptions): Promise<
   Result<string | undefined, RawSourceWriteFailure>
 > => {
@@ -163,6 +166,7 @@ export const writeOwnedRawPayload = async ({
         contentType: fileContentType,
         window,
         signal,
+        s3Policy,
       });
       if (Result.isError(file)) {
         return file;
@@ -172,6 +176,7 @@ export const writeOwnedRawPayload = async ({
       const copied = await copyRawObject({
         copy,
         window,
+        s3Policy,
         signal:
           signal === undefined
             ? AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS)
@@ -190,6 +195,7 @@ export const writeOwnedRawPayload = async ({
   signal?.throwIfAborted();
   return await writeCaseLawRawPayload({
     signal,
+    s3Policy,
     owner,
     window,
     data: homed.value.payload,

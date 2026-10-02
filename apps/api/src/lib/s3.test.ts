@@ -4,6 +4,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 import { envBase } from "@/api/env-base";
 import {
   createS3ObjectIfAbsent,
+  corpusS3ObjectExists,
   getS3,
   isMissingCorpusObjectError,
   isMissingS3ObjectError,
@@ -99,9 +100,16 @@ describe("resolveS3Credentials", () => {
       }), {status: 200}), {preconnect: originalFetch.preconnect});
       const { refreshS3, refreshCorpusS3, S3DeadlineCredentialsError } = await import("./src/lib/s3.ts");
       const results = [];
+      if (process.env.S3_CREDENTIALS_PROVIDER === "none") {
+        for (const refresh of [refreshS3, refreshCorpusS3]) {
+          await refresh();
+          results.push(true);
+        }
+      }
       for (const refresh of [refreshS3, refreshCorpusS3]) {
         try {
-          await refresh(new AbortController().signal);
+          const signal = new AbortController().signal;
+          await refresh({mode: "replay-strict", signal});
           results.push(false);
         } catch (error) {
           results.push(error instanceof S3DeadlineCredentialsError);
@@ -136,7 +144,9 @@ describe("resolveS3Credentials", () => {
       ]);
       expect(exit).toBe(0);
       expect(stderr).toBe("");
-      expect(stdout.trim()).toBe("[true,true]");
+      expect(stdout.trim()).toBe(
+        provider === "none" ? "[true,true,true,true]" : "[true,true]",
+      );
     }
   });
 
@@ -366,6 +376,30 @@ describe("writeS3ObjectWithRetry", () => {
     key: "case-law/raw/source/hash",
   };
 
+  test("the existing corpus exists caller retains Bun behavior even with an aborted signal", async () => {
+    const store = startFakeS3();
+    try {
+      const bucket = envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
+      store.put(bucket, "fixture-existing-pack", new Uint8Array([1]));
+      const controller = new AbortController();
+      controller.abort(new DOMException("fixture canceled", "AbortError"));
+      expect(
+        await corpusS3ObjectExists("fixture-existing-pack", controller.signal),
+      ).toBe(true);
+      await expect(
+        corpusS3ObjectExists("fixture-existing-pack", controller.signal, {
+          mode: "replay-strict",
+          signal: controller.signal,
+        }),
+      ).rejects.toThrow("fixture canceled");
+      expect(
+        store.requests.filter(({ method }) => method === "HEAD"),
+      ).toHaveLength(1);
+    } finally {
+      store.stop();
+    }
+  });
+
   test("an in-flight PUT receives cancellation and never starts another attempt", async () => {
     const controller = new AbortController();
     let attempts = 0;
@@ -425,11 +459,13 @@ describe("writeS3ObjectWithRetry", () => {
               ...object,
               key,
               signal: controller.signal,
+              s3Policy: { mode: "replay-strict", signal: controller.signal },
             })
           : writeS3ObjectWithRetry({
               ...object,
               key,
               signal: controller.signal,
+              s3Policy: { mode: "replay-strict", signal: controller.signal },
             });
         try {
           await held.reached;

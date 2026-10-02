@@ -59,6 +59,7 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 
 import {
   classifyReplayFailure,
@@ -339,6 +340,31 @@ type SelectScopeEndOptions = {
  *
  * Null where the scope holds nothing to replay.
  */
+type ReplayScopeEndQueryOptions = Omit<SelectScopeEndOptions, "scopedDb">;
+export const buildReplayScopeEndQuery = (
+  tx: Transaction,
+  {
+    sourceId,
+    scope,
+    selection = OPERATOR_REPLAY_SELECTION,
+  }: ReplayScopeEndQueryOptions,
+) =>
+  tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(
+      and(
+        replayableRows(sourceId, scope),
+        replaySelectionPredicate(selection, tx),
+      ),
+    )
+    .orderBy(
+      ...(selection.type === "background"
+        ? [desc(caseLawDecisions.id)]
+        : [desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id)]),
+    )
+    .limit(1);
+
 export const selectScopeEnd = async ({
   scopedDb,
   sourceId,
@@ -347,21 +373,7 @@ export const selectScopeEnd = async ({
 }: SelectScopeEndOptions): Promise<SafeId<"caseLawDecision"> | null> => {
   const last = (
     await scopedDb((tx) =>
-      tx
-        .select({ id: caseLawDecisions.id })
-        .from(caseLawDecisions)
-        .where(
-          and(
-            replayableRows(sourceId, scope),
-            replaySelectionPredicate(selection, tx),
-          ),
-        )
-        .orderBy(
-          ...(selection.type === "background"
-            ? [desc(caseLawDecisions.id)]
-            : [desc(caseLawDecisions.createdAt), desc(caseLawDecisions.id)]),
-        )
-        .limit(1),
+      buildReplayScopeEndQuery(tx, { sourceId, scope, selection }),
     )
   ).at(0);
   return last?.id ?? null;
@@ -645,6 +657,7 @@ const storedInputFor = (
 
 type ReplayRowOptions = {
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   row: ReplayDecisionRow;
   /** The payload this replay read, as stored. */
   raw: Uint8Array;
@@ -937,6 +950,7 @@ const replayRow = async ({
   sourceLease,
   withdraw,
   signal,
+  s3Policy,
 }: ReplayRowOptions): Promise<ReplayRowReport> => {
   signal?.throwIfAborted();
   const base = {
@@ -1068,6 +1082,7 @@ const replayRow = async ({
   signal?.throwIfAborted();
   const processed = await processDecision({
     signal,
+    s3Policy,
     // The payload travels with the result, always, whatever the adapter put
     // in it. The pipeline writes the row's raw-payload pointer from the
     // result it is handed, so a result that carried no payload would clear
@@ -1110,6 +1125,7 @@ const replayRow = async ({
 
 type ReplayOneRowOptions = {
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   capability: Extract<ReplayCapability, { type: "supported" }>;
   readStoredRaw: StoredRawReader;
   row: ReplayDecisionRow;
@@ -1139,6 +1155,7 @@ const replayOneRow = async ({
   sourceLease,
   withdraw,
   signal,
+  s3Policy,
 }: ReplayOneRowOptions): Promise<Result<ReplayRowReport, unknown>> => {
   signal?.throwIfAborted();
   const read = await Result.tryPromise({
@@ -1186,6 +1203,7 @@ const replayOneRow = async ({
     async () =>
       await replayRow({
         signal,
+        s3Policy,
         row,
         raw,
         reparsed: parsed.value,
@@ -1280,6 +1298,7 @@ export type ReplayVisitBound =
 
 export type ReplayCaseLawSourceOptions = {
   signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   adapter: SourceAdapter;
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
@@ -1383,6 +1402,7 @@ export const replayCaseLawSource = async ({
   withdraw = withdrawCaseLawDecisionDocument,
   recordRow,
   signal,
+  s3Policy,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
   signal?.throwIfAborted();
   const capability = replayCapability(adapter);
@@ -1440,6 +1460,7 @@ export const replayCaseLawSource = async ({
       try: async () =>
         await replayOneRow({
           signal,
+          s3Policy,
           capability,
           readStoredRaw,
           row,

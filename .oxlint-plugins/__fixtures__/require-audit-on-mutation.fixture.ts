@@ -6,7 +6,6 @@ import type { Transaction } from "@/api/db/root";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { auditedPresignDownload as presign } from "@/api/lib/audited-download";
-import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
 
 type Writer = {
   insert: (value: unknown) => void;
@@ -157,14 +156,4 @@ export const readOnlyExecute = () => {
 export const mapDelete = (entries: Map<string, number>) => {
   // expect-clean: require-audit-on-mutation/require-audit-on-mutation
   entries.delete("key");
-};
-
-export const auditedReplayMaintenance = async (transaction: Transaction) => {
-  // expect-clean: require-audit-on-mutation/require-audit-on-mutation
-  tx.update({ id: "maintenance-fixture" });
-  await recordReplayMaintenanceAuditEvent(transaction, {
-    action: "dry-run-reset",
-    resourceId: "fixture-checkpoint",
-    details: {},
-  });
 };

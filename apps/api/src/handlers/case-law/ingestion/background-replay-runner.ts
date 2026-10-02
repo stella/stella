@@ -2,7 +2,10 @@ import { panic } from "better-result";
 import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import { caseLawDecisions } from "@/api/db/schema";
+import {
+  caseLawDecisions,
+  CASE_LAW_CORPUS_MIRROR_STATUS,
+} from "@/api/db/schema";
 import type { StoredRawReader } from "@/api/handlers/case-law/ingestion/adapter";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
@@ -40,13 +43,15 @@ const readBackgroundStoredRaw = async (
   key: string,
   tickSignal?: AbortSignal,
 ) => {
+  const signal = AbortSignal.any([
+    AbortSignal.timeout(BACKGROUND_REPLAY_LIMITS.storedRawReadTimeoutMs),
+    ...(tickSignal === undefined ? [] : [tickSignal]),
+  ]);
   const bytes = await readS3ObjectBoundedIfPresent({
     key,
     maxBytes: LIMITS.corpusPayloadMaxDecompressedBytes,
-    signal: AbortSignal.any([
-      AbortSignal.timeout(BACKGROUND_REPLAY_LIMITS.storedRawReadTimeoutMs),
-      ...(tickSignal === undefined ? [] : [tickSignal]),
-    ]),
+    s3Policy: { mode: "replay-strict", signal },
+    signal,
   });
   return bytes === null ? null : new Uint8Array(bytes);
 };
@@ -92,6 +97,7 @@ export const createBackgroundReplayRunner = ({
                 parserVersion: caseLawDecisions.parserVersion,
                 redactedAt: caseLawDecisions.redactedAt,
                 rawKey: caseLawDecisions.sourceRawS3Key,
+                corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
               })
               .from(caseLawDecisions)
               .where(eq(caseLawDecisions.id, batch.decisionId))
@@ -103,13 +109,15 @@ export const createBackgroundReplayRunner = ({
         row.redactedAt !== null ||
         row.rawKey === null ||
         (row.parserVersion !== null &&
-          row.parserVersion >= batch.targetParserVersion)
+          row.parserVersion >= batch.targetParserVersion &&
+          row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED)
       ) {
         const recovered =
           row !== undefined &&
           row.redactedAt === null &&
           row.parserVersion !== null &&
-          row.parserVersion >= batch.targetParserVersion;
+          row.parserVersion >= batch.targetParserVersion &&
+          row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;
         const report: ReplayRowReport = {
           id: batch.decisionId,
           caseNumber: "",
@@ -129,7 +137,9 @@ export const createBackgroundReplayRunner = ({
         adapter,
         scopedDb: ingestionDb,
         sourceId: batch.source.id,
-        ...(signal === undefined ? {} : { signal }),
+        ...(signal === undefined
+          ? {}
+          : { signal, s3Policy: { mode: "replay-strict" as const, signal } }),
         scope: { type: "decision", decisionId: batch.decisionId } as const,
         bound: { type: "at-most", limit: 1 } as const,
         pageSize: 1,
@@ -219,14 +229,17 @@ export const createBackgroundReplayRunner = ({
       return disposition;
     },
     recordFailure: async (batch, failure) => {
-      const disposition = await recordFailure(batch, failure);
-      reports.delete(batch.id);
       log({
         event: "case_law.replay.row_failure",
+        sourceId: batch.source.id,
+        decisionId: batch.decisionId,
+        haltReason: failure.code,
+        failureScope: failure.scope,
         failureCode: failure.code,
         messageClass: failure.messageClass,
-        disposition,
       });
+      const disposition = await recordFailure(batch, failure);
+      reports.delete(batch.id);
       return disposition;
     },
   } satisfies Pick<

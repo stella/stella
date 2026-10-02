@@ -4,9 +4,11 @@ import { eq, sql } from "drizzle-orm";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
+import { DAY_IN_MS } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
   caseLawReplayBatches,
   caseLawReplayDailyRows,
@@ -26,13 +28,18 @@ import type {
   BackgroundReplaySource,
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import { createBackgroundReplayRunner } from "@/api/handlers/case-law/ingestion/background-replay-runner";
-import { createBackgroundReplayStore } from "@/api/handlers/case-law/ingestion/background-replay-store";
 import {
+  buildReplayCompactionQuery,
+  createBackgroundReplayStore,
+} from "@/api/handlers/case-law/ingestion/background-replay-store";
+import {
+  CASE_LAW_REPLAY_SCOPE,
   REPLAY_ROW_OUTCOME,
   replayCaseLawSource,
   selectScopeEnd,
   buildBackgroundReplayProbe,
   buildReplayPageQuery,
+  buildReplayScopeEndQuery,
 } from "@/api/handlers/case-law/ingestion/replay";
 import {
   BACKGROUND_REPLAY_LIMITS,
@@ -61,6 +68,8 @@ import {
   scaleTableToProfile,
   SYNTHETIC_SCALE_PROFILE,
 } from "@/api/tests/query-plans/scale-profile";
+
+import { replayFailure } from "./replay-failure";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -252,6 +261,7 @@ if (!databaseUrl || !enabled) {
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
         .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
       await store.completeBatch(first.batch, applied(first.batch));
       await store.completeBatch(first.batch, applied(first.batch));
       const history = await db
@@ -1073,7 +1083,7 @@ if (!databaseUrl || !enabled) {
           .from(caseLawReplayBatches)
           .where(eq(caseLawReplayBatches.id, reserved.batch.id))
       ).at(0);
-      expect(row?.status).toBe("superseded");
+      expect(row?.status).toBe("blocked");
       expect(row?.blocked).toBe(1);
       expect(row?.applied).toBe(0);
       const scope = {
@@ -1175,11 +1185,11 @@ if (!databaseUrl || !enabled) {
         throw new TypeError("Expected poison fixture");
       }
       const failure = {
-        code: "stored-raw-timeout",
-        messageClass: "timeout",
+        ...replayFailure("adapter-exception"),
         durationMs: 1,
         verdict: verdict(),
       } as const;
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
       expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
         type: "empty",
@@ -1205,6 +1215,7 @@ if (!databaseUrl || !enabled) {
           throw new TypeError("Expected due poison fixture");
         }
         expect(recovered.batch.id).toBe(first.batch.id);
+        expect(await store.pickUpBatch(recovered.batch)).toBe("ready");
         expect(await store.recordFailure(recovered.batch, failure)).toBe(
           attempt === BACKGROUND_REPLAY_LIMITS.maxRowAttempts
             ? "failed"
@@ -1221,9 +1232,8 @@ if (!databaseUrl || !enabled) {
         status: "failed",
         attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
         failed: 1,
-        failureCode: "stored-raw-timeout",
-        failureMessageClass: "timeout",
-        retryAt: null,
+        failureCode: "adapter-exception",
+        failureMessageClass: "adapter",
       });
       expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
         type: "empty",
@@ -1234,6 +1244,93 @@ if (!databaseUrl || !enabled) {
         throw new TypeError("Expected remaining row");
       }
       expect(next.batch.decisionId).toBe(ids.at(2));
+    });
+
+    test("crashed pickups exhaust the row budget and automatically re-admit after seven days", async () => {
+      const { source } = await fixture(30);
+      let time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected crash fixture");
+      }
+      for (
+        let attempt = 0;
+        attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+        attempt++
+      ) {
+        expect(await store.pickUpBatch(first.batch)).toBe("ready");
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+      }
+      expect(await store.pickUpBatch(first.batch)).toBe("failed");
+      time += 7 * DAY_IN_MS;
+      const readmitted = await store.pendingBatch(source, "2026-10-08");
+      expect(readmitted.type).toBe("reserved");
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
+      const receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, first.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        status: "reserved",
+        attempts: 1,
+        attemptState: "picked-up",
+      });
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.decisionId, first.batch.decisionId)),
+      ).toHaveLength(0);
+    });
+
+    test("systemic failure refunds only its pickup and persists a source hold without settling a pending mirror", async () => {
+      const { source } = await fixture(30);
+      const time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected systemic fixture");
+      }
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
+      await db
+        .update(caseLawDecisions)
+        .set({
+          parserVersion: 2,
+          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      const failure = {
+        ...replayFailure("tick-deadline"),
+        durationMs: 1,
+        verdict: verdict(),
+      };
+      expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
+      expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
+      const receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, first.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        status: "reserved",
+        attempts: 0,
+        attemptState: "idle",
+        applied: 0,
+      });
+      expect((await store.loadGateState(source)).holdUntil).toBeGreaterThan(
+        time,
+      );
+      await db
+        .update(caseLawDecisions)
+        .set({ corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      expect(await store.completeBatch(first.batch, applied(first.batch))).toBe(
+        "applied",
+      );
     });
 
     test("a moved stamp settles applied after a receipt failure on the final allowed attempt", async () => {
@@ -1253,14 +1350,14 @@ if (!databaseUrl || !enabled) {
           failed: 1,
         })
         .where(eq(caseLawReplayBatches.id, reserved.batch.id));
+      expect(await store.pickUpBatch(reserved.batch)).toBe("ready");
       await db
         .update(caseLawDecisions)
         .set({ parserVersion: reserved.batch.targetParserVersion })
         .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
       expect(
         await store.recordFailure(reserved.batch, {
-          code: "receipt-write",
-          messageClass: "receipt",
+          ...replayFailure("receipt-write"),
           durationMs: 1,
           verdict: verdict(),
         }),
@@ -1274,7 +1371,7 @@ if (!databaseUrl || !enabled) {
       expect(receipt).toMatchObject({
         status: "completed",
         outcome: REPLAY_ROW_OUTCOME.APPLIED,
-        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
+        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts - 1,
         applied: 1,
         failed: 0,
         blocked: 0,
@@ -1383,6 +1480,10 @@ if (!databaseUrl || !enabled) {
         applied: 1,
         gateVerdict: verdict(),
       });
+      await db
+        .update(caseLawReplayBatches)
+        .set({ supersededAt: new Date(Date.UTC(2025, 0, 1)) })
+        .where(eq(caseLawReplayBatches.id, reserved.batch.id));
       expect(await store.compact()).toBe(1);
       expect(
         await db
@@ -1554,6 +1655,68 @@ if (!databaseUrl || !enabled) {
       expect(rls.at(0)).toEqual({ forced: true, enabled: true });
     });
 
+    test("actual compaction query scans only the indexed superseded retention page at production scale", async () => {
+      const { source, ids } = await fixture(10);
+      await db.insert(caseLawReplayBatches).values(
+        ids.map((id, index) => ({
+          id: `retention-${id}`,
+          sourceId: source.id,
+          firstDecisionId: id,
+          lastDecisionId: id,
+          parserVersionTo: 2,
+          budgetDay: "2026-10-01",
+          status: "completed" as const,
+          attempted: 1,
+          gateVerdict: verdict(),
+          supersededAt: index === 0 ? new Date(Date.UTC(2025, 0, 1)) : null,
+        })),
+      );
+      const rolledBack = await Result.tryPromise(
+        async () =>
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`ANALYZE case_law_replay_batches`);
+            await scaleTableToProfile(
+              tx,
+              "case_law_replay_batches",
+              SYNTHETIC_SCALE_PROFILE,
+            );
+            const query = buildReplayCompactionQuery(tx, {
+              cutoff: new Date(Date.UTC(2026, 6, 1)),
+              limit: BACKGROUND_REPLAY_LIMITS.maxCompactRows,
+            });
+            const root = explainRoot(
+              await tx.execute(sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`),
+            );
+            const scans = scanOccurrences(root).filter(
+              ({ relation }) => relation === "case_law_replay_batches",
+            );
+            expect(scans.length).toBeGreaterThan(0);
+            expect(
+              scans.every(({ nodeType }) => nodeType.includes("Index")),
+            ).toBe(true);
+            expect(
+              scans.some(
+                ({ index }) =>
+                  index === "case_law_replay_batches_retention_idx",
+              ),
+            ).toBe(true);
+            const cost = root["Total Cost"];
+            expect(typeof cost).toBe("number");
+            if (typeof cost !== "number") {
+              throw new TypeError("Expected numeric retention plan cost");
+            }
+            expect(cost).toBeLessThan(10_000);
+            throw new TypeError("restore compaction statistics");
+          }),
+      );
+      expect(Result.isError(rolledBack)).toBe(true);
+      if (Result.isError(rolledBack)) {
+        expect(String(rolledBack.error)).toContain(
+          "restore compaction statistics",
+        );
+      }
+    });
+
     test("actual selector and probe remain indexed and bounded under sparse and full synthetic corpus lag", async () => {
       const { source } = await fixture(10);
       // Seed only synthetic rows; catalog restoration is transaction-local and
@@ -1562,6 +1725,9 @@ if (!databaseUrl || !enabled) {
         SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${source.id}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
           CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
         FROM generate_series(1, 1000) AS series(n)`);
+      await db.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, reason, detail)
+        SELECT ${source.id}, id, 1, 2, 'missing-payload', 'synthetic blocked fixture'
+        FROM case_law_decisions WHERE source_id = ${source.id} AND case_number LIKE 'plan-%'`);
       const end = toSafeId<"caseLawDecision">(
         "ffffffff-ffff-4fff-bfff-ffffffffffff",
       );
@@ -1569,6 +1735,12 @@ if (!databaseUrl || !enabled) {
         async () =>
           await db.transaction(async (tx) => {
             await tx.execute(sql`ANALYZE case_law_decisions`);
+            await tx.execute(sql`ANALYZE case_law_replay_blocked`);
+            await scaleTableToProfile(
+              tx,
+              "case_law_replay_blocked",
+              SYNTHETIC_SCALE_PROFILE,
+            );
             await scaleTableToProfile(
               tx,
               "case_law_decisions",
@@ -1583,6 +1755,11 @@ if (!databaseUrl || !enabled) {
             'most_common_vals', '{1,2}', 'most_common_freqs', ARRAY[${frequencies.at(0)}::real, ${frequencies.at(1)}::real]::real[]
           )`);
               const queries = [
+                buildReplayScopeEndQuery(tx, {
+                  sourceId: source.id,
+                  scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+                  selection: { type: "background", currentParserVersion: 2 },
+                }),
                 buildBackgroundReplayProbe(tx, {
                   sourceId: source.id,
                   currentParserVersion: 2,
@@ -1615,6 +1792,13 @@ if (!databaseUrl || !enabled) {
                       index === "case_law_decisions_replay_sparse_idx" ||
                       index === "case_law_decisions_replay_walk_idx",
                   ),
+                ).toBe(true);
+                const blocked = scanOccurrences(root).filter(
+                  ({ relation }) => relation === "case_law_replay_blocked",
+                );
+                expect(blocked.length).toBeGreaterThan(0);
+                expect(
+                  blocked.every(({ nodeType }) => nodeType.includes("Index")),
                 ).toBe(true);
                 const cost = root["Total Cost"];
                 expect(typeof cost).toBe("number");

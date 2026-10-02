@@ -1,5 +1,6 @@
 import { TaggedError } from "better-result";
 
+import { getPgDriverErrorCode, getPgErrorCode } from "@/api/lib/pg-error";
 import { isRecord } from "@/api/lib/type-guards";
 
 export const REPLAY_FAILURE_CODES = [
@@ -10,11 +11,13 @@ export const REPLAY_FAILURE_CODES = [
   "writer-retryable",
   "receipt-write",
   "tick-deadline",
+  "tick-cancelled",
   "unexpected",
 ] as const;
 
 export type ReplayFailure = {
   code: (typeof REPLAY_FAILURE_CODES)[number];
+  scope: "row" | "systemic";
   messageClass:
     | "timeout"
     | "payload-budget"
@@ -23,8 +26,21 @@ export type ReplayFailure = {
     | "write"
     | "receipt"
     | "deadline"
+    | "cancelled"
     | "unexpected";
 };
+
+const failureScopes = {
+  "stored-raw-timeout": "systemic",
+  "stored-raw-too-large": "row",
+  "stored-raw-read": "systemic",
+  "adapter-exception": "row",
+  "writer-retryable": "systemic",
+  "receipt-write": "systemic",
+  "tick-deadline": "systemic",
+  "tick-cancelled": "systemic",
+  unexpected: "systemic",
+} as const satisfies Record<ReplayFailure["code"], ReplayFailure["scope"]>;
 
 export class ReplayStageError extends TaggedError("ReplayStageError")<{
   message: string;
@@ -40,6 +56,7 @@ const failureClasses = {
   "writer-retryable": "write",
   "receipt-write": "receipt",
   "tick-deadline": "deadline",
+  "tick-cancelled": "cancelled",
   unexpected: "unexpected",
 } as const satisfies Record<
   ReplayFailure["code"],
@@ -48,11 +65,20 @@ const failureClasses = {
 
 export const replayFailure = (code: ReplayFailure["code"]): ReplayFailure => ({
   code,
+  scope: failureScopes[code],
   messageClass: failureClasses[code],
 });
 
 /** Persist classes, never object keys, decision text or exception messages. */
 export const classifyReplayFailure = (cause: unknown): ReplayFailure => {
+  // Adapter re-parsing may read metadata: a driver failure is an outage,
+  // even when the stage wrapper describes it as an adapter exception.
+  if (
+    getPgErrorCode(cause) !== undefined ||
+    getPgDriverErrorCode(cause) !== undefined
+  ) {
+    return replayFailure("unexpected");
+  }
   let current = cause;
   for (let depth = 0; depth < 6; depth++) {
     if (current instanceof ReplayStageError) {

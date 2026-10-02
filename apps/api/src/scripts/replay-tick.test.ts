@@ -121,7 +121,7 @@ describe("scheduled replay entrypoint", () => {
   test("failure reports and rejected setup exit nonzero; normal stops exit zero", async () => {
     for (const status of [
       "retryable",
-      "error-ceiling",
+      "failed",
       "complete",
       "held",
       "time-limit",
@@ -134,7 +134,7 @@ describe("scheduled replay entrypoint", () => {
           runEnabled: async () => report(status),
           log: () => undefined,
         }),
-      ).toBe(status === "retryable" || status === "error-ceiling" ? 1 : 0);
+      ).toBe(status === "failed" ? 1 : 0);
     }
     const records: unknown[] = [];
     expect(
