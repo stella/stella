@@ -81,7 +81,7 @@ jobs:
         run: bun scripts/typecheck-baseline.ts --check
 
   fresh-web-sources:
-    if: ${{ inputs.fresh-web }}
+    if: ${{ github.event_name == 'schedule' || inputs.fresh-web }}
     runs-on: ubuntu-latest
     timeout-minutes: 45
     permissions:

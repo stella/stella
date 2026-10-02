@@ -582,7 +582,7 @@ test("route tree has one derived owner and a cache producer for every consumer",
   }
 });
 
-test("the fresh-export dispatch selects only the web proof job", () => {
+test("the fresh-export proof runs nightly and alone on dispatch", () => {
   const workflow = v.parse(
     v.object({ jobs: v.record(v.string(), v.looseObject({ if: v.string() })) }),
     Bun.YAML.parse(
@@ -593,7 +593,7 @@ test("the fresh-export dispatch selects only the web proof job", () => {
     ),
   );
   expect(workflow.jobs["fresh-web-sources"]?.if).toBe(
-    `\${{ inputs.fresh-web }}`,
+    `\${{ github.event_name == 'schedule' || inputs.fresh-web }}`,
   );
   for (const [name, job] of Object.entries(workflow.jobs)) {
     if (name === "fresh-web-sources") {
