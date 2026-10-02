@@ -14,6 +14,7 @@ import { fileURLToPath } from "node:url";
 import {
   extractPlanSelector,
   PlanSelectorError,
+  runPlanScopes,
   runPlanSelector,
 } from "./ci-plan-selector";
 import {
@@ -1542,6 +1543,48 @@ esac
   );
 });
 
+// A production-shaped planner and gate: main's rule for the PR's file (and
+// any line appended to the selector) is what varies between cases.
+const planWorkflow = (rule: string, selectorTail = "") => `
+jobs:
+  ci-plan:
+    outputs:
+      e2e_production_required: \${{ steps.changed-files.outputs.e2e_production_required }}
+      marketing_screenshots_required: \${{ steps.marketing-release.outputs.required }}
+    steps:
+      - id: changed-files
+        run: |
+          # Path scopes for the build/smoke jobs
+          e2e_production_required=false
+          for file in "\${changed_files[@]}"; do
+            case "$file" in
+              ${rule}) e2e_production_required=true ;;
+            esac
+          done
+          ${selectorTail}
+          printf 'Changed files:\\n'
+  e2e-production-shard:
+    strategy:
+      matrix:
+        shard: [1, 2]
+  marketing-screenshots: {}
+  parser-version-guard: {}
+  ci-result:
+    steps:
+      - name: Evaluate CI outcome
+        env:
+          FAST_REQUIRED: '["e2e-production-shard", "marketing-screenshots", "parser-version-guard"]'
+          JOB_SCOPES: '{"e2e-production-shard": "e2e_production_required", "marketing-screenshots": "marketing_screenshots_required", "parser-version-guard": null}'
+          FAST_JOB_SCOPES: '{}'
+`;
+const PR_FILE = "apps/web/e2e/production/new.spec.ts";
+const SELECTING_RULE = "apps/web/e2e/*";
+const UNRELATED_RULE = "docs/never/*";
+const guard = { name: "parser-version-guard", conclusion: "success" };
+const shard = (leg: number, conclusion: string) => ({
+  name: `e2e-production-shard (${leg})`,
+  conclusion,
+});
 describe("green result freshness", () => {
   const run = {
     id: 77,
@@ -1610,47 +1653,6 @@ describe("green result freshness", () => {
     }
   });
 
-  // A production-shaped planner and gate: main's rule for the PR's file is
-  // the only thing that varies between cases.
-  const planWorkflow = (rule: string) => `
-jobs:
-  ci-plan:
-    outputs:
-      e2e_production_required: \${{ steps.changed-files.outputs.e2e_production_required }}
-      marketing_screenshots_required: \${{ steps.marketing-release.outputs.required }}
-    steps:
-      - id: changed-files
-        run: |
-          # Path scopes for the build/smoke jobs
-          e2e_production_required=false
-          for file in "\${changed_files[@]}"; do
-            case "$file" in
-              ${rule}) e2e_production_required=true ;;
-            esac
-          done
-          printf 'Changed files:\\n'
-  e2e-production-shard:
-    strategy:
-      matrix:
-        shard: [1, 2]
-  marketing-screenshots: {}
-  parser-version-guard: {}
-  ci-result:
-    steps:
-      - name: Evaluate CI outcome
-        env:
-          FAST_REQUIRED: '["e2e-production-shard", "marketing-screenshots", "parser-version-guard"]'
-          JOB_SCOPES: '{"e2e-production-shard": "e2e_production_required", "marketing-screenshots": "marketing_screenshots_required", "parser-version-guard": null}'
-          FAST_JOB_SCOPES: '{}'
-`;
-  const PR_FILE = "apps/web/e2e/production/new.spec.ts";
-  const SELECTING_RULE = "apps/web/e2e/*";
-  const UNRELATED_RULE = "docs/never/*";
-  const guard = { name: "parser-version-guard", conclusion: "success" };
-  const shard = (leg: number, conclusion: string) => ({
-    name: `e2e-production-shard (${leg})`,
-    conclusion,
-  });
   const planReaders = ({
     rule,
     runJobs,
@@ -1671,7 +1673,7 @@ jobs:
       files: readonly string[];
       outputs: readonly string[];
       title: string;
-    }) => runPlanSelector({ ...input, cwd: REPO_ROOT }),
+    }) => runPlanScopes({ ...input, cwd: REPO_ROOT }),
     readRunJobs: (runId: number) => {
       expect(runId).toBe(77);
       return runJobs;
@@ -1740,6 +1742,36 @@ jobs:
     );
   });
 
+  test.each([
+    { tail: "exit 1", detail: "ci-plan selector exited 1" },
+    {
+      tail: "echo broken >&2; exit 3",
+      detail: "ci-plan selector exited 3: broken",
+    },
+    {
+      tail: "e2e_production_required=maybe",
+      detail: 'ci-plan selector set e2e_production_required to "maybe"',
+    },
+    {
+      tail: "unset e2e_production_required",
+      detail: 'ci-plan selector set e2e_production_required to ""',
+    },
+  ])(
+    "main's planner failing with `$tail` refuses through the real selector",
+    ({ tail, detail }) => {
+      const result = checkGreenResultFreshness({
+        ...planReaders({
+          rule: SELECTING_RULE,
+          runJobs: [guard, shard(1, "success"), shard(2, "success")],
+        }),
+        readBaseWorkflow: () => planWorkflow(UNRELATED_RULE, tail),
+      });
+      expect(result.isErr() && result.error.message).toContain(
+        `cannot evaluate main's CI plan: ${detail}`,
+      );
+    },
+  );
+
   test("main's real gate maps fast-required jobs to how they are planned", () => {
     const jobs =
       readFastRequiredJobs(
@@ -1773,7 +1805,7 @@ jobs:
       scope.type === "selector" ? [scope.variable] : [],
     );
     expect(outputs.length).toBeGreaterThan(0);
-    const plan = runPlanSelector({
+    const plan = runPlanScopes({
       selector: extractPlanSelector(
         readFileSync(path.join(REPO_ROOT, ".github/workflows/ci.yml"), "utf-8"),
       ),
@@ -1781,11 +1813,7 @@ jobs:
       outputs,
       cwd: REPO_ROOT,
     });
-    expect(plan.isOk()).toBe(true);
-    for (const output of outputs) {
-      const value = plan.isOk() ? plan.value.get(output) : undefined;
-      expect(value === "true" || value === "false", output).toBe(true);
-    }
+    expect(plan.isOk() && [...plan.value.keys()]).toEqual(outputs);
   });
 
   test("unrun planned jobs ignore jobs main plans from something other than files", () => {
@@ -2265,5 +2293,347 @@ esac
       }
     },
     15_000,
+  );
+});
+
+describe("ejection retry timestamps", () => {
+  test("a main tip committed at the removal's own second does not prove main moved", () => {
+    const removal = failedRemoval({ groupSha: null });
+    const mainTip = { sha: MAIN_SHA, committedAt: REMOVED_AT };
+    expect(
+      evaluateEjectedHead({
+        headSha: HEAD_SHA,
+        ejection: { removal, group: { type: "not-found" } },
+        mainTip,
+      }),
+    ).toEqual({ type: "unchanged-retry" });
+    const result = checkEjectedHead({
+      gateway: {
+        readMergeQueueRemovals: () => [removal],
+        readMergeGroup: () => {
+          throw new Error("a removal without a group has no run to read");
+        },
+        readBranchTip: () => mainTip,
+      },
+      pullRequest: { headSha: HEAD_SHA, baseRefName: "main" },
+    });
+    expect(result.isErr() && result.error.message).toContain(
+      "EJECTED_HEAD_UNCHANGED",
+    );
+  });
+});
+
+describe("ci-plan selector failures", () => {
+  const run = (selector: string, outputs: readonly string[] = ["scope"]) =>
+    runPlanSelector({
+      selector,
+      files: ["docs/example.md"],
+      outputs,
+      cwd: REPO_ROOT,
+    });
+
+  test.each([
+    { selector: "exit 1", exit: 1, stderr: "" },
+    { selector: "exit 2", exit: 2, stderr: "" },
+    {
+      selector: "echo selector broke >&2; exit 1",
+      exit: 1,
+      stderr: "selector broke",
+    },
+    { selector: "false", exit: 1, stderr: "" },
+  ])("`$selector` is an error, never a plan", ({ selector, exit, stderr }) => {
+    const result = run(`scope=true\n${selector}`);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PlanSelectorError);
+      expect(result.error.message).toStartWith(
+        `ci-plan selector exited ${exit}: `,
+      );
+      expect(result.error.message).toContain(stderr);
+    }
+  });
+
+  test("a detector that cannot run fails the selector", () => {
+    const directory = mkdtempSync(path.join(tmpdir(), "ci-plan-selector-"));
+    try {
+      const result = runPlanSelector({
+        selector: "scope=true",
+        files: ["docs/example.md"],
+        outputs: ["scope"],
+        cwd: directory,
+      });
+      expect(result.isErr() && result.error.message).toContain(
+        "scripts/detect-e2e-changes.sh",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+
+  test("output the selector prints itself does not shift the values", () => {
+    const result = run("echo 'scope=false'\nscope=true\nother=false", [
+      "scope",
+      "other",
+    ]);
+    expect(result.isOk() && [...result.value]).toEqual([
+      ["scope", "true"],
+      ["other", "false"],
+    ]);
+  });
+
+  test("a value spanning lines cannot pass for the requested outputs", () => {
+    const result = run("scope=$'true\\nfalse'");
+    expect(result.isErr() && result.error.message).toBe(
+      "ci-plan selector printed 2 value(s) for 1 output(s)",
+    );
+  });
+
+  test.each([
+    { selector: "scope=maybe", value: '"maybe"' },
+    { selector: "scope=", value: '""' },
+    { selector: "unset scope", value: '""' },
+    { selector: "scope=TRUE", value: '"TRUE"' },
+  ])("scope `$selector` is not a boolean and fails", ({ selector, value }) => {
+    const result = runPlanScopes({
+      selector,
+      files: ["docs/example.md"],
+      outputs: ["scope"],
+      cwd: REPO_ROOT,
+    });
+    expect(result.isErr() && result.error.message).toBe(
+      `ci-plan selector set scope to ${value}, not true or false`,
+    );
+  });
+
+  test("boolean scopes read as booleans", () => {
+    const result = runPlanScopes({
+      selector: "scope=true\nother=false",
+      files: ["docs/example.md"],
+      outputs: ["scope", "other"],
+      cwd: REPO_ROOT,
+    });
+    expect(result.isOk() && [...result.value]).toEqual([
+      ["scope", true],
+      ["other", false],
+    ]);
+  });
+});
+
+type LiveBarOptions = {
+  title: string;
+  extraArguments: readonly string[];
+  timeline: readonly unknown[];
+  mainTipSha?: string;
+  comparison: unknown;
+  workflow?: string;
+  runJobs?: readonly { name: string; conclusion: string }[];
+};
+
+/**
+ * The CLI without --dry-run against a fake gh that records every merge
+ * write (auto-merge or enqueue) instead of refusing it, so a test can assert
+ * exactly what the bar armed.
+ */
+const runLiveBar = ({
+  title,
+  extraArguments,
+  timeline,
+  mainTipSha = MAIN_SHA,
+  comparison,
+  workflow = "",
+  runJobs = [],
+}: LiveBarOptions) => {
+  const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-live-"));
+  const executable = path.join(directory, "gh");
+  const writes = path.join(directory, "writes.log");
+  writeFileSync(writes, "");
+  writeFileSync(
+    executable,
+    `#!/bin/sh
+case "$*" in
+  'variable get STELLA_MERGE_HOLD --repo '*) printf '%s\\n' 'variable STELLA_MERGE_HOLD was not found' >&2; exit 1;;
+  *'pr merge'*|*enqueuePullRequest*)
+    printf '%s' "$*" | tr '\\n' ' ' >> "$FIXTURE_WRITES"; printf '\\n' >> "$FIXTURE_WRITES"
+    case "$*" in
+      *enqueuePullRequest*) printf '%s\\n' '{"data":{"enqueuePullRequest":{"mergeQueueEntry":{"id":"entry","position":1,"jump":true,"state":"QUEUED"}}}}';;
+      *) printf '%s\\n' 'auto-merge enabled';;
+    esac;;
+  *REMOVED_FROM_MERGE_QUEUE_EVENT*) printf '%s\\n' "$FIXTURE_TIMELINE";;
+  *'mergeQueue(branch'*) printf '%s\\n' '{"data":{"repository":{"mergeQueue":{"entries":{"totalCount":1,"nodes":[{"position":1,"jump":true,"state":"QUEUED","pullRequest":{"number":123}}]}}}}}';;
+  *'actions/runs?event=merge_group&head_sha=${GROUP_SHA}'*) printf '%s\\n' "$FIXTURE_GROUP_RUNS";;
+  *commits/main*) printf '%s\\n' "$FIXTURE_MAIN_TIP";;
+  *contents/.github/workflows/ci.yml*) printf '%s\\n' "$FIXTURE_WORKFLOW";;
+  *actions/runs/1/jobs*) printf '%s\\n' "$FIXTURE_RUN_JOBS";;
+  *reviewThreads*) printf '%s\\n' '{"nodes":[],"pageInfo":{"hasNextPage":false}}';;
+  *rules/branches/main*) printf '%s\\n' '[{"type":"required_status_checks","parameters":{"required_status_checks":[{"context":"ci-result"}]}},{"type":"merge_queue","parameters":{}}]';;
+  *check-runs/1*) printf '%s\\n' '{"details_url":"https://github.com/stella/private/actions/runs/1"}';;
+  *actions/runs/1*) printf '%s\\n' '{"id":1,"head_sha":"${HEAD_SHA}","pull_requests":[{"number":123,"head":{"sha":"${HEAD_SHA}"},"base":{"ref":"main","sha":"${OTHER_SHA}"}}]}';;
+  *compare/*) printf '%s\\n' "$FIXTURE_COMPARISON";;
+  *check-runs*) printf '1\\tci-result\\tcompleted\\tsuccess\\n';;
+  *pulls/123/files*) printf '%s\\n' '{"status":"added","filename":"${PR_FILE}"}';;
+  *pulls/123*) printf '%s\\n' '1';;
+  *headRefOid*)
+    if [ "$1" = api ]; then printf '%s\\n' "$FIXTURE_PULL_REQUEST";
+    else printf '%s\\n' '{"headRefOid":"${HEAD_SHA}"}'; fi;;
+  *) exit 99;;
+esac
+`,
+  );
+  chmodSync(executable, 0o700);
+  try {
+    const result = Bun.spawnSync({
+      cmd: [
+        process.execPath,
+        fileURLToPath(new URL("merge-bar.ts", import.meta.url)),
+        "123",
+        "--repo",
+        PRIVATE_REPO,
+        ...extraArguments,
+      ],
+      env: {
+        ...process.env,
+        PATH: `${directory}${path.delimiter}${process.env["PATH"] ?? ""}`,
+        FIXTURE_WRITES: writes,
+        FIXTURE_PULL_REQUEST: JSON.stringify({
+          data: {
+            repository: {
+              pullRequest: {
+                id: "PR_fixture",
+                number: 123,
+                title,
+                isCrossRepository: false,
+                state: "OPEN",
+                isDraft: false,
+                mergeable: "MERGEABLE",
+                headRefOid: HEAD_SHA,
+                baseRefName: "main",
+                autoMergeRequest: null,
+                mergeQueueEntry: null,
+              },
+            },
+          },
+        }),
+        FIXTURE_TIMELINE: JSON.stringify(timeline),
+        FIXTURE_GROUP_RUNS: JSON.stringify({
+          workflow_runs: [
+            {
+              conclusion: "failure",
+              head_branch: `gh-readonly-queue/main/pr-123-${BASE_SHA}`,
+              html_url: RUN_URL,
+            },
+          ],
+        }),
+        FIXTURE_MAIN_TIP: JSON.stringify({
+          sha: mainTipSha,
+          committedAt: "2026-10-02T09:00:00Z",
+        }),
+        FIXTURE_COMPARISON: JSON.stringify(comparison),
+        FIXTURE_WORKFLOW: workflow,
+        FIXTURE_RUN_JOBS: runJobs
+          .map(({ name, conclusion }) => `${name}\t${conclusion}`)
+          .join("\n"),
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    return {
+      exitCode: result.exitCode,
+      stdout: result.stdout.toString(),
+      stderr: result.stderr.toString(),
+      writes: readFileSync(writes, "utf-8").split("\n").filter(Boolean),
+    };
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+describe("live arming", () => {
+  const ejectedAtHead = [
+    commitNode(HEAD_SHA),
+    removalNode({ reason: "failed_checks" }),
+  ];
+
+  test.each([
+    { title: "fix: something", extraArguments: [], write: "--auto" },
+    {
+      title: "chore: release v0.9.42",
+      extraArguments: ["--jump"],
+      write: "enqueuePullRequest",
+    },
+  ])(
+    "an unchanged ejected head cannot arm: $title $extraArguments",
+    ({ title, extraArguments, write }) => {
+      const refused = runLiveBar({
+        title,
+        extraArguments,
+        timeline: ejectedAtHead,
+        mainTipSha: BASE_SHA,
+        comparison: { status: "identical" },
+      });
+      expect(refused.exitCode, refused.stderr).toBe(1);
+      expect(refused.stderr).toContain("EJECTED_HEAD_UNCHANGED");
+      expect(refused.writes).toEqual([]);
+
+      // Control: the same run with main moved arms exactly once.
+      const armed = runLiveBar({
+        title,
+        extraArguments,
+        timeline: ejectedAtHead,
+        mainTipSha: MAIN_SHA,
+        comparison: { status: "identical" },
+      });
+      expect(armed.exitCode, armed.stderr).toBe(0);
+      expect(armed.writes).toHaveLength(1);
+      expect(armed.writes.at(0)).toContain(write);
+      expect(armed.writes.at(0)).toContain(HEAD_SHA);
+    },
+    30_000,
+  );
+
+  // Releases and --jump skip green-result freshness, so this gate is
+  // exercised on an ordinary pull request.
+  test.each([
+    {
+      name: "a job the green run skipped blocks arming",
+      runJobs: [guard, { name: "e2e-production-shard", conclusion: "skipped" }],
+      armed: false,
+    },
+    {
+      name: "the same job having succeeded arms exactly once",
+      runJobs: [guard, shard(1, "success"), shard(2, "success")],
+      armed: true,
+    },
+  ])(
+    "main's new plan in a live run: $name",
+    ({ runJobs, armed }) => {
+      const result = runLiveBar({
+        title: "fix: something",
+        extraArguments: [],
+        timeline: [],
+        // Main moved one commit and touched only its workflow; the PR touched
+        // only its spec, so no file overlap can refuse.
+        comparison: {
+          status: "ahead",
+          ahead_by: 1,
+          files: [{ filename: ".github/workflows/ci.yml" }],
+        },
+        workflow: planWorkflow(SELECTING_RULE),
+        runJobs,
+      });
+      if (armed) {
+        expect(result.exitCode, result.stderr).toBe(0);
+        expect(result.writes).toHaveLength(1);
+        expect(result.writes.at(0)).toContain(
+          `--auto --match-head-commit ${HEAD_SHA}`,
+        );
+        return;
+      }
+      expect(result.exitCode).toBe(1);
+      expect(result.stderr).toContain(
+        "STALE_PLAN: main's CI plan now selects e2e-production-shard for this PR's files",
+      );
+      expect(result.writes).toEqual([]);
+    },
+    30_000,
   );
 });

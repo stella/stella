@@ -8,6 +8,7 @@ import { panic, Result, TaggedError } from "better-result";
 const SELECTOR_START = "          # Path scopes for the build/smoke jobs";
 const SELECTOR_END = "          printf 'Changed files:";
 const OUTPUT_NAME_PATTERN = /^[a-z_][a-z0-9_]*$/u;
+const VALUES_MARKER = "--- ci-plan-selector values ---";
 
 export const extractPlanSelector = (workflowSource: string): string => {
   const start = workflowSource.indexOf(SELECTOR_START);
@@ -64,7 +65,7 @@ e2e_landing_required=\${E2E_LANDING_REQUIRED:-$(bash scripts/detect-e2e-changes.
 desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
 package_checks_required=true
 ${selector}
-printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
+printf "%s\\n" "${VALUES_MARKER}" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       "ci-plan-selector",
       ...files,
     ],
@@ -86,8 +87,44 @@ printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
       }),
     );
   }
-  const values = new TextDecoder().decode(process.stdout).trim().split("\n");
+  // Anything the selector itself prints precedes the marker; a value that
+  // spans lines changes the count. Either way the values are not a plan.
+  const lines = new TextDecoder().decode(process.stdout).split("\n");
+  const values = lines.slice(lines.lastIndexOf(VALUES_MARKER) + 1, -1);
+  if (!lines.includes(VALUES_MARKER) || values.length !== outputs.length) {
+    return Result.err(
+      new PlanSelectorError({
+        message: `ci-plan selector printed ${values.length} value(s) for ${outputs.length} output(s)`,
+      }),
+    );
+  }
   return Result.ok(
-    new Map(outputs.map((output, index) => [output, values.at(index) ?? ""])),
+    new Map(
+      outputs.map((output, index) => [
+        output,
+        values[index] ?? panic("unreachable: the count matches the outputs"),
+      ]),
+    ),
   );
 };
+
+/**
+ * Selector outputs read as path scopes. A scope that is not exactly "true"
+ * or "false" (unset, empty, or garbled) fails the run instead of reading as
+ * an unselected job.
+ */
+export const runPlanScopes = (options: RunPlanSelectorOptions) =>
+  runPlanSelector(options).andThen((values) => {
+    const scopes = new Map<string, boolean>();
+    for (const [output, value] of values) {
+      if (value !== "true" && value !== "false") {
+        return Result.err(
+          new PlanSelectorError({
+            message: `ci-plan selector set ${output} to ${JSON.stringify(value)}, not true or false`,
+          }),
+        );
+      }
+      scopes.set(output, value === "true");
+    }
+    return Result.ok(scopes);
+  });

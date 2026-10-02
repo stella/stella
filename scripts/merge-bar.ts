@@ -59,7 +59,7 @@ import { findMigrationIdentityViolation } from "./check-migration-order";
 import {
   extractPlanSelector,
   type PlanSelectorError,
-  runPlanSelector,
+  runPlanScopes,
 } from "./ci-plan-selector";
 
 const DEFAULT_REPO = "stella/stella";
@@ -688,7 +688,7 @@ export type RunJob = { name: string; conclusion: string | null };
 
 type UnrunPlannedJobsOptions = {
   jobs: readonly FastRequiredJob[];
-  plan: ReadonlyMap<string, string>;
+  plan: ReadonlyMap<string, boolean>;
   runJobs: readonly RunJob[];
 };
 
@@ -708,7 +708,10 @@ export const unrunPlannedJobs = ({
         case "always":
           return true;
         case "selector":
-          return plan.get(scope.variable) === "true";
+          return (
+            plan.get(scope.variable) ??
+            panic(`The plan has no value for ${scope.variable}`)
+          );
         case "not-file-derived":
           return false;
         default:
@@ -748,7 +751,7 @@ type CheckGreenResultFreshnessOptions = {
     files: readonly string[];
     outputs: readonly string[];
     title: string;
-  }) => Result<ReadonlyMap<string, string>, PlanSelectorError>;
+  }) => Result<ReadonlyMap<string, boolean>, PlanSelectorError>;
   readRunJobs: (runId: number) => readonly RunJob[];
 };
 
@@ -2362,7 +2365,7 @@ if (import.meta.main) {
     readBaseWorkflow: () => gateway.readBaseWorkflow(pullRequest.baseRefName),
     // The selector's detector scripts run from this checkout.
     runSelector: (input) =>
-      runPlanSelector({
+      runPlanScopes({
         ...input,
         cwd: fileURLToPath(new URL("..", import.meta.url)),
       }),
