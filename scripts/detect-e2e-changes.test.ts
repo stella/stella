@@ -5,12 +5,12 @@ import {
   mkdtempSync,
   readdirSync,
   readFileSync,
+  realpathSync,
   rmSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
-import * as v from "valibot";
 
 import { parseBunLockText } from "./bun-lock-text";
 
@@ -289,7 +289,7 @@ describe("detect-e2e-changes", () => {
       "needs.ci-plan.outputs.service_suites_required == 'true'",
     );
     expect(collabRedis).toContain(
-      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true'")}`,
+      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true'")}`,
     );
     expect(collabRedis).toContain(
       "bun --filter @stll/collab test src/server.test.ts",
@@ -1057,11 +1057,33 @@ describe("PR production E2E scope", () => {
 
 test("every workflow browser command uses the pinned image and no reachable browser action installs system packages", () => {
   const root = path.resolve(import.meta.dirname, "..");
-  const stepSchema = v.object({
-    run: v.optional(v.string()),
-    uses: v.optional(v.string()),
-  });
-  const actionSteps = new Map<string, v.InferOutput<typeof stepSchema>[]>();
+  // CI runs this file without the dependency install, so workflow shapes are
+  // read by hand rather than through a schema library.
+  type Step = { run?: string; uses?: string };
+  const isRecord = (value: unknown): value is Record<string, unknown> =>
+    typeof value === "object" && value !== null && !Array.isArray(value);
+  const optionalText = (value: unknown, where: string): string | undefined => {
+    expect(value === undefined || typeof value === "string", where).toBe(true);
+    return typeof value === "string" ? value : undefined;
+  };
+  const stepsOf = (value: unknown, where: string): Step[] => {
+    expect(Array.isArray(value), where).toBe(true);
+    return (Array.isArray(value) ? value : []).map((step: unknown) => {
+      expect(isRecord(step), where).toBe(true);
+      const record = isRecord(step) ? step : {};
+      const parsedStep: Step = {};
+      const run = optionalText(record["run"], `${where}: run`);
+      const uses = optionalText(record["uses"], `${where}: uses`);
+      if (run !== undefined) {
+        parsedStep.run = run;
+      }
+      if (uses !== undefined) {
+        parsedStep.uses = uses;
+      }
+      return parsedStep;
+    });
+  };
+  const actionSteps = new Map<string, Step[]>();
   const forbidden =
     /\b(?:apt-get|apt|dpkg)\b|playwright\s+install(?:-deps)?\b/u;
   const browserCommand = (run: string) =>
@@ -1075,9 +1097,7 @@ test("every workflow browser command uses the pinned image and no reachable brow
         (command.includes("test:e2e") || command.includes("test:browser"))
       );
     });
-  const reachableSteps = (
-    steps: v.InferOutput<typeof stepSchema>[],
-  ): v.InferOutput<typeof stepSchema>[] =>
+  const reachableSteps = (steps: Step[]): Step[] =>
     steps.flatMap((step) => {
       if (!step.uses?.startsWith("./.github/actions/")) {
         return [step];
@@ -1086,35 +1106,35 @@ test("every workflow browser command uses the pinned image and no reachable brow
       if (cached !== undefined) {
         return [step, ...cached];
       }
-      const action = v.parse(
-        v.object({ runs: v.object({ steps: v.array(stepSchema) }) }),
-        Bun.YAML.parse(
-          readFileSync(path.join(root, step.uses, "action.yml"), "utf-8"),
-        ),
+      const action: unknown = Bun.YAML.parse(
+        readFileSync(path.join(root, step.uses, "action.yml"), "utf-8"),
       );
-      const reached = reachableSteps(action.runs.steps);
+      const runs =
+        isRecord(action) && isRecord(action["runs"]) ? action["runs"] : {};
+      const reached = reachableSteps(stepsOf(runs["steps"], step.uses));
       actionSteps.set(step.uses, reached);
       return [step, ...reached];
     });
   for (const file of readdirSync(path.join(root, ".github/workflows")).filter(
     (name) => name.endsWith(".yml"),
   )) {
-    const jobs = v.parse(
-      v.object({
-        jobs: v.record(
-          v.string(),
-          v.object({
-            steps: v.optional(v.array(stepSchema)),
-            container: v.optional(v.object({ image: v.string() })),
-          }),
-        ),
-      }),
-      Bun.YAML.parse(
-        readFileSync(path.join(root, ".github/workflows", file), "utf-8"),
-      ),
-    ).jobs;
-    for (const [job, body] of Object.entries(jobs)) {
-      const steps = reachableSteps(body.steps ?? []);
+    const parsedWorkflow: unknown = Bun.YAML.parse(
+      readFileSync(path.join(root, ".github/workflows", file), "utf-8"),
+    );
+    const jobs =
+      isRecord(parsedWorkflow) && isRecord(parsedWorkflow["jobs"])
+        ? parsedWorkflow["jobs"]
+        : {};
+    expect(Object.keys(jobs).length, file).toBeGreaterThan(0);
+    for (const [job, value] of Object.entries(jobs)) {
+      expect(isRecord(value), `${file}:${job}`).toBe(true);
+      const body = isRecord(value) ? value : {};
+      const container = isRecord(body["container"]) ? body["container"] : {};
+      const steps = reachableSteps(
+        body["steps"] === undefined
+          ? []
+          : stepsOf(body["steps"], `${file}:${job}`),
+      );
       const imageJob = file === "ci.yml" && job === "ci-browser";
       const browserSteps = steps.filter((step) =>
         browserCommand(step.run ?? ""),
@@ -1123,7 +1143,7 @@ test("every workflow browser command uses the pinned image and no reachable brow
         continue;
       }
       if (imageJob) {
-        expect(body.container?.image).toBe(
+        expect(container["image"]).toBe(
           githubExpression("needs.ci-plan.outputs.playwright_image"),
         );
       }
@@ -1167,7 +1187,19 @@ test("browser image runner preserves argv, cwd, verdict and only browser inputs,
     import.meta.dirname,
     "../.github/actions/setup-playwright/run-in-image.sh",
   );
-  const root = path.resolve(import.meta.dirname, "..");
+  // A self-contained workspace: the runner reads the pinned image and the
+  // installed Playwright package from it, and CI runs this test without the
+  // dependency install, so the real checkout may have no node_modules.
+  const root = path.join(realpathSync(directory), "workspace");
+  const imageFile = ".github/actions/setup-playwright/image.txt";
+  mkdirSync(path.join(root, path.dirname(imageFile)), { recursive: true });
+  writeFileSync(
+    path.join(root, imageFile),
+    readFileSync(path.resolve(import.meta.dirname, "..", imageFile), "utf-8"),
+  );
+  mkdirSync(path.join(root, "apps/web/node_modules/@playwright/test"), {
+    recursive: true,
+  });
   const cache = path.join(directory, ".bun/install/cache");
   mkdirSync(cache, { recursive: true });
   writeFileSync(

@@ -272,9 +272,8 @@ export const describeRowUpdateTx = async (
       storesUnpublishedWithoutDocument,
     },
     plan: {
-      caseNumberType,
       corpusPlan,
-      incomingCitationKey,
+      docketColumns,
       languageGroupKey,
       payloadColumns,
       pendingMirrorPayload,
@@ -311,12 +310,13 @@ export const describeRowUpdateTx = async (
   // The row's stated identity and description, as this observation
   // reads them. Compared against the stored row below so that
   // `updated_at` moves only when one of them, or the payload, does.
+  // The file key is derived, never stated: filling it on a row keyed before
+  // it existed is not a change to what the decision says.
+  const { docketFamilyKey, ...statedDocketColumns } = docketColumns;
   const describedColumns = preservesExistingDetail
     ? {}
     : {
-        caseNumber: result.caseNumber,
-        caseNumberType,
-        citationKey: incomingCitationKey,
+        ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
         ecli: result.ecli,
         court: result.court,
@@ -362,6 +362,7 @@ export const describeRowUpdateTx = async (
 
   const set = {
     ...describedColumns,
+    ...(preservesExistingDetail ? {} : { docketFamilyKey }),
     ...(metadataWrite === undefined ? {} : { metadata: metadataWrite }),
     ...(preservesExistingDetail
       ? {}

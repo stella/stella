@@ -45,6 +45,7 @@ export type InsertAutomatedFlowRunWithinCapInput = {
   /** Pre-built run + step rows (see `buildFlowRunRows`). */
   rows: FlowRunRows;
   now?: Date;
+  reservePeriod?: () => Promise<void>;
   database: Pick<typeof rootDb, "transaction">;
 };
 
@@ -62,6 +63,7 @@ export const insertAutomatedFlowRunWithinCap = async ({
   definitionId,
   rows,
   now = new Date(),
+  reservePeriod,
   database,
 }: InsertAutomatedFlowRunWithinCapInput): Promise<InsertAutomatedFlowRunWithinCapResult> =>
   await database.transaction(async (tx) => {
@@ -87,5 +89,8 @@ export const insertAutomatedFlowRunWithinCap = async ({
 
     await tx.insert(flowRuns).values(rows.run);
     await tx.insert(flowRunSteps).values(rows.steps);
+    // A refusal rolls the inserted run back. A later commit failure may rarely
+    // over-count the operational throttle; reservations are never refunded.
+    await reservePeriod?.();
     return { outcome: "started" };
   });

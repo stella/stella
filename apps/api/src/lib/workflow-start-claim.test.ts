@@ -17,10 +17,14 @@
  * queue module process-wide.
  */
 
+import { panic } from "better-result";
 import { describe, expect, mock, test } from "bun:test";
 
 import type { ScopedDb } from "@/api/db/safe-db";
+import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
+import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
+import { runQueuedKickoff } from "@/api/lib/rate-limit/queued-action-admission";
 import { startWorkflow } from "@/api/lib/workflow-queue";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -178,5 +182,173 @@ describe("startWorkflow when its run cannot be recorded", () => {
       { requestId: claimed.at(0) ?? "", workspaceId: WORKSPACE_ID },
     ]);
     expect(clearAfterCreate).not.toHaveBeenCalled();
+  });
+});
+
+describe("accepted extraction kickoff", () => {
+  test("keeps enqueued work and its claim after late lease loss, including inherited admission", async () => {
+    const previous = env.FEATURE_ACTION_ADMISSION;
+    env.FEATURE_ACTION_ADMISSION = true;
+    try {
+      for (const scope of ["fresh", "inherited"] as const) {
+        let claim: string | undefined;
+        let enqueued = 0;
+        let releases = 0;
+        let acquisitions = 0;
+        let renew: (() => void) | undefined;
+        let leaseSignal: AbortSignal | undefined;
+        const entityId = toSafeId<"entity">(
+          "01931f4a-0000-7000-8000-000000000104",
+        );
+        const redis = {
+          send: async (_command: string, args: string[]) => {
+            const script = args.at(0) ?? "";
+            if (script.includes("ZREMRANGEBYSCORE")) {
+              acquisitions += 1;
+              return 1;
+            }
+            return script.includes("ZSCORE") && !script.includes("HEXISTS")
+              ? 0
+              : 1;
+          },
+        };
+        const admission: typeof withActionAdmission = async (options) =>
+          await withActionAdmission({
+            ...options,
+            enabled: true,
+            policy: {
+              organizationConcurrency: 1,
+              userConcurrency: 1,
+              leaseMs: 100,
+            },
+            periodPolicy: { periodMs: 86_400_000, limit: 10 },
+            redis,
+            timing: {
+              now: () => 0,
+              schedule: (callback) => {
+                renew = callback;
+                return () => undefined;
+              },
+            },
+            run: async (signal, control) => {
+              leaseSignal = signal;
+              return await options.run(signal, control);
+            },
+          });
+        const kickoff: typeof runQueuedKickoff = async (options) =>
+          await runQueuedKickoff({ ...options, admission });
+        const claimingStore = asTestRaw<
+          NonNullable<Parameters<typeof startWorkflow>[0]["runStateStore"]>
+        >({
+          tryClaim: async ({ requestId }: { requestId: string }) => {
+            claim = requestId;
+            return true;
+          },
+          setRequestId: async () => undefined,
+          extendPlanningLease: async () => undefined,
+          initializeCompletion: async () => undefined,
+          clear: async () => {
+            claim = undefined;
+          },
+          releaseClaim: async () => {
+            releases += 1;
+            claim = undefined;
+            return true;
+          },
+        });
+        const transaction = asTestRaw<Parameters<Parameters<ScopedDb>[0]>[0]>({
+          query: {
+            properties: {
+              findMany: async () => [
+                {
+                  id: toSafeId<"property">(
+                    "01931f4a-0000-7000-8000-000000000105",
+                  ),
+                  status: "stale",
+                  content: { version: 1, type: "text", value: "x" },
+                  tool: { version: 1, type: "ai-model", prompt: "test" },
+                  dependencies: [
+                    {
+                      dependsOnPropertyId:
+                        "01931f4a-0000-7000-8000-000000000106",
+                      condition: null,
+                    },
+                  ],
+                },
+                {
+                  id: toSafeId<"property">(
+                    "01931f4a-0000-7000-8000-000000000106",
+                  ),
+                  status: "fresh",
+                  content: { version: 1, type: "file" },
+                  tool: { version: 1, type: "manual-input" },
+                  dependencies: [],
+                },
+              ],
+            },
+          },
+          select: () => ({
+            from: () => ({
+              where: async () => [{ id: entityId, kind: "document" }],
+            }),
+          }),
+        });
+        const scopedDb: ScopedDb = async (read) => await read(transaction);
+        const queue = asTestRaw<
+          NonNullable<Parameters<typeof startWorkflow>[0]["queue"]>
+        >({
+          addBulk: async (jobs: unknown[]) => {
+            enqueued += jobs.length;
+            const signal =
+              leaseSignal ?? panic("Missing admitted enqueue signal");
+            const lost = new Promise<void>((resolve) => {
+              signal.addEventListener("abort", () => resolve(), { once: true });
+            });
+            (renew ?? panic("Missing admission renewal"))();
+            await lost;
+            expect(signal.aborted).toBe(true);
+            return [];
+          },
+        });
+        const start = async () =>
+          await startWorkflow({
+            workspaceId: WORKSPACE_ID,
+            organizationId: ORGANIZATION_ID,
+            userId: USER_ID,
+            entityIds: [entityId],
+            scopedDb,
+            runStateStore: claimingStore,
+            extractionRunStore: {
+              create: async () => undefined,
+              start: async () => undefined,
+              skip: async () => undefined,
+              fail: async () => undefined,
+            },
+            kickoff,
+            queue,
+          });
+        const result =
+          scope === "fresh"
+            ? await start()
+            : (
+                await admission({
+                  organizationId: ORGANIZATION_ID,
+                  userId: USER_ID,
+                  periodIdentity: {
+                    actionKind: "mcp.services/call",
+                    logicalPhaseId: "parent-call",
+                  },
+                  run: start,
+                })
+              ).unwrap();
+        expect(result).toEqual({ status: "started" });
+        expect(enqueued).toBe(1);
+        expect(claim).toBeDefined();
+        expect(releases).toBe(0);
+        expect(acquisitions).toBe(1);
+      }
+    } finally {
+      env.FEATURE_ACTION_ADMISSION = previous;
+    }
   });
 });
