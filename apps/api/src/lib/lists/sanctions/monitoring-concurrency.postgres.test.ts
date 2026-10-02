@@ -402,7 +402,13 @@ if (!databaseUrl || !runPostgresTests) {
           result.contactFingerprint,
         );
         const excludedState = await contactState(controlDb, contact.id);
-        expect(excludedState.matches).toEqual(state.matches);
+        expect(excludedState.matches).toEqual(
+          state.matches.map((match) => ({
+            ...match,
+            state: "lapsed",
+            updatedAt: now,
+          })),
+        );
         expect(excludedState.events).toEqual(state.events);
         expect(excludedState.screenings).toHaveLength(1);
         expect(excludedState.screenings.at(0)).toMatchObject({
