@@ -4,7 +4,10 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
+import {
+  createScopedDbMock,
+  createSelectQueryMock,
+} from "@/api/tests/scoped-db-mock";
 
 import updateExpense from "./update";
 
@@ -33,9 +36,7 @@ const existingExpense = (amountCents: number) => ({
 const runUpdate = async (amountCents: number) => {
   const written: Record<string, unknown>[] = [];
   const { getCallCount, safeDb } = createScopedDbMock({
-    query: {
-      expenses: { findFirst: () => existingExpense(amountCents) },
-    },
+    select: () => createSelectQueryMock([existingExpense(amountCents)]),
     update: () => ({
       set: (values: Record<string, unknown>) => {
         written.push(values);
@@ -82,7 +83,7 @@ describe("updateExpense currency restatement range", () => {
           "send the amount in that currency instead",
       },
     });
-    // The read that loaded the expense, and nothing after it.
+    // Refusal completes without opening another transaction.
     expect(getCallCount()).toBe(1);
   });
 
