@@ -443,12 +443,13 @@ export const alignAmendmentPoints = ({
             : "work_identifier",
       };
     }
-    if (invalidEnactedWork)
-      {return {
+    if (invalidEnactedWork) {
+      return {
         status: "unresolved_anchor",
         billId: point.id,
         reason: "invalid_enacted_work_identifier",
-      };}
+      };
+    }
     if (enactedCoverage === "partial") {
       return {
         status: "unresolved_anchor",

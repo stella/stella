@@ -351,12 +351,13 @@ const pointCandidates = ({
 }: PointCandidatesOptions): CandidateResult => {
   if (numbering === "bill") {
     const matches = alignment.filter((entry) => entry.billId === point.id);
-    if (matches.length > 1)
-      {return {
+    if (matches.length > 1) {
+      return {
         status: "ambiguous",
         reason: "bill_point_identity",
         fanOut: "grouped",
-      };}
+      };
+    }
     const aligned = matches.at(0);
     if (aligned === undefined) {
       return {
@@ -451,8 +452,9 @@ const amendmentCandidates = ({
     scope.type === "work"
       ? grammar.gazette.parse(scope.workIdentifier)?.identifier
       : null;
-  if (scope.type === "work" && scopeWork === undefined)
-    {return { status: "unresolved_anchor", reason: "work_identifier", fanOut };}
+  if (scope.type === "work" && scopeWork === undefined) {
+    return { status: "unresolved_anchor", reason: "work_identifier", fanOut };
+  }
   const candidates: Candidate[] = [];
   for (const number of target.points) {
     const matches = source.filter(
