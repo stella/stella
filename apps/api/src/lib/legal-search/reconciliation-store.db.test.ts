@@ -679,8 +679,8 @@ test("position-only listing movement keeps retry state and unchanged visits do n
   const moved = await readRow(sourceId, DOCUMENT_KEY);
   expect(moved?.slice).toBe("moved");
   expect(moved?.payload).toEqual({ content: "decision", position: 2 });
-  expect(moved?.attempts).toBe(before?.attempts);
-  expect(moved?.status).toBe(before?.status);
+  expect(moved?.attempts).toBe(before.attempts);
+  expect(moved?.status).toBe(before.status);
 });
 
 test("park and retire reject stale projections using the persisted hash, including legacy null hashes", async () => {
