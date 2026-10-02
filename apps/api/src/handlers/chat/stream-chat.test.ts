@@ -1164,7 +1164,7 @@ describe("native interrupt boundary persistence", () => {
       for (const chunk of visible) {
         processor.processChunk(chunk);
       }
-      if (finish === undefined || finish === null) {
+      if (finish === null) {
         throw new Error("Expected the real engine to finish the turn");
       }
       expect(
