@@ -76,8 +76,10 @@ const marketingCapture = readFileSync(
 );
 
 // This contract is exercised before CI installs dependencies.
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
 const contractRecord = (value: unknown): Record<string, unknown> => {
-  if (typeof value !== "object" || value === null || Array.isArray(value)) {
+  if (!isRecord(value)) {
     throw new TypeError("Expected workflow object");
   }
   return value;
@@ -777,7 +779,12 @@ describe("detect-e2e-changes", () => {
     expect(checkoutRefs.length).toBeGreaterThan(0);
     for (const event of ["pull_request", "merge_group", "workflow_dispatch"]) {
       const context = {
-        github: { event_name: event, workflow: "CI Checks", sha: "event-sha" },
+        github: {
+          event_name: event,
+          workflow: "CI Checks",
+          sha: "event-sha",
+          workflow_sha: "workflow-sha",
+        },
         inputs: {
           heavy_only: false,
           sha: "unvalidated-sha",
@@ -799,7 +806,9 @@ describe("detect-e2e-changes", () => {
             requiredExpression(checkout.with?.["ref"]),
             context,
           ),
-        ).toBe("");
+        ).toBe(
+          checkout.with?.["path"] === ".workflow-tooling" ? "workflow-sha" : "",
+        );
       }
       for (const job of Object.values(ciContract.jobs)) {
         for (const item of job.steps ?? []) {
@@ -828,7 +837,11 @@ describe("detect-e2e-changes", () => {
     );
     expect(callerSha).toBe(validatedSha);
     const heavyContext = {
-      github: { workflow: "Main heavy suites", sha: "event-sha" },
+      github: {
+        workflow: "Main heavy suites",
+        sha: "event-sha",
+        workflow_sha: "workflow-sha",
+      },
       inputs: { heavy_only: true, sha: callerSha, ref: callerSha },
     };
     for (const checkout of checkoutRefs) {
@@ -837,7 +850,11 @@ describe("detect-e2e-changes", () => {
           requiredExpression(checkout.with?.["ref"]),
           heavyContext,
         ),
-      ).toBe(validatedSha);
+      ).toBe(
+        checkout.with?.["path"] === ".workflow-tooling"
+          ? "workflow-sha"
+          : validatedSha,
+      );
     }
     expect(
       evaluateExpression(
@@ -1363,8 +1380,6 @@ test("every workflow browser command uses the pinned image and no reachable brow
   // CI runs this file without the dependency install, so workflow shapes are
   // read by hand rather than through a schema library.
   type Step = { run?: string; uses?: string };
-  const isRecord = (value: unknown): value is Record<string, unknown> =>
-    typeof value === "object" && value !== null && !Array.isArray(value);
   const optionalText = (value: unknown, where: string): string | undefined => {
     expect(value === undefined || typeof value === "string", where).toBe(true);
     return typeof value === "string" ? value : undefined;
