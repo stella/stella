@@ -246,7 +246,7 @@ export const createProvisionCitationGrammar = <
     ({ key, marker, value }) => ({
       key,
       marker: sticky(marker),
-      value: sticky(value),
+      value: new RegExp(value, "uy"),
     }),
   );
   const anchor = (reference: ProvisionReference): string =>
@@ -499,7 +499,8 @@ export const createProvisionCitationGrammar = <
     },
     unit,
     parseReference: (raw) => {
-      const text = raw.trim().normalize("NFC");
+      // Validate designators before normalization can turn a non-ASCII letter into ASCII.
+      const text = raw.trim();
       const element = parseElement(text, 0, 0, []);
       if (element === null || element.end !== text.length) {
         return null;
@@ -619,20 +620,20 @@ export const PROVISION_CITATION_GRAMMARS = {
       {
         key: "section",
         marker: "§§?",
-        value: String.raw`\d{1,4}[a-z]?`,
+        value: String.raw`\d{1,4}[a-zA-Z]?`,
         anchorMarker: "par_",
       },
       {
         key: "subsection",
         anchorMarker: "odst_",
         marker: String.raw`odst\.`,
-        value: String.raw`\d+[a-z]?`,
+        value: String.raw`\d+[a-zA-Z]?`,
       },
       {
         key: "letter",
         anchorMarker: "pism_",
-        marker: String.raw`písm\.`,
-        value: String.raw`(?<value>[a-z])\)?`,
+        marker: String.raw`p(?:í|i\u0301)sm\.`,
+        value: String.raw`(?<value>[a-zA-Z])\)?`,
       },
       {
         key: "point",

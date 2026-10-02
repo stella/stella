@@ -121,20 +121,20 @@ export const provisionRefOf = ({
   if (work === null) {
     return { status: "invalid_work_identifier" };
   }
-  const validated = v.safeParse(provisionReferenceSchema, reference);
-  if (!validated.success) {
+  const normalized = grammar.normalizeReference(reference);
+  if (normalized === null) {
     return { status: "invalid_reference" };
   }
-  const normalized = grammar.normalizeReference(validated.output);
-  if (normalized === null) {
+  const validated = v.safeParse(provisionReferenceSchema, normalized);
+  if (!validated.success) {
     return { status: "invalid_reference" };
   }
   const provision = v.safeParse(refSchema, {
     jurisdiction: grammar.jurisdiction,
     workIdentifier: work.identifier,
     workEli: work.eli,
-    reference: normalized,
-    anchor: grammar.anchor(normalized),
+    reference: validated.output,
+    anchor: grammar.anchor(validated.output),
   });
   if (!provision.success) {
     return { status: "invalid_reference" };

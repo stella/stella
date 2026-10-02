@@ -325,6 +325,67 @@ describe("provision identity construction", () => {
     }
   });
 
+  test("non-ASCII case-fold lookalikes cannot become provision designators", () => {
+    const fields = ["sectionSuffix", "subsection", "letter"] as const;
+    assertProperty(
+      "non-ASCII case-fold lookalikes cannot become provision designators",
+      fc.property(
+        fc.constantFrom("ſ", "\u212a", "ı"),
+        fc.constantFrom(...fields),
+        (lookalike, field) => {
+          const ref = grammar.parseReference("§ 5 odst. 2 písm. a)");
+          expect(ref).not.toBeNull();
+          if (ref === null) {
+            return;
+          }
+          const value = field === "subsection" ? `2${lookalike}` : lookalike;
+          expect(
+            provisionRefOf({
+              jurisdiction: "CZE",
+              workIdentifier: "89/2012 Sb.",
+              reference: { ...ref, [field]: value },
+            }).status,
+          ).toBe("invalid_reference");
+          const examples = {
+            sectionSuffix: {
+              anchor: `par_5${lookalike}`,
+              printed: `§ 5${lookalike}`,
+            },
+            subsection: {
+              anchor: `par_5-odst_2${lookalike}`,
+              printed: `§ 5 odst. 2${lookalike}`,
+            },
+            letter: {
+              anchor: `par_5-pism_${lookalike}`,
+              printed: `§ 5 písm. ${lookalike})`,
+            },
+          } as const satisfies Record<
+            (typeof fields)[number],
+            { anchor: string; printed: string }
+          >;
+          const example = examples[field];
+          expect(
+            parseProvisionKey(
+              JSON.stringify(["CZE", "89/2012 Sb.", example.anchor]),
+            ),
+          ).toBeNull();
+          expect(grammar.parseReference(example.printed)).toBeNull();
+        },
+      ),
+    );
+  });
+
+  test("ASCII designator case normalizes through the grammar", () => {
+    const ref = grammar.parseReference("§ 5A odst. 2B písm. K)");
+    expect(ref).not.toBeNull();
+    if (ref === null) {
+      return;
+    }
+    expect(ref.sectionSuffix).toBe("a");
+    expect(ref.subsection).toBe("2b");
+    expect(ref.letter).toBe("k");
+  });
+
   test("gazette spelling normalizes consistently with extracted work ELIs", () => {
     expect(grammar.gazette.parse(" č. 00089/2012 Sb. ")).toEqual({
       identifier: "89/2012 Sb.",
