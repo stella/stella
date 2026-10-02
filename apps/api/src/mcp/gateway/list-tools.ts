@@ -7,6 +7,16 @@ import {
 } from "@/api/lib/mcp-upstream/namespace";
 import type { McpMode } from "@/api/mcp/constants";
 import type { McpRequestContext } from "@/api/mcp/context";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
+import {
+  isMcpDescriptorFeatureEnabled,
+  resolveMcpDescriptorFeatureId,
+} from "@/api/mcp/feature-access";
+import {
+  hiddenMcpDescriptorIds,
+  scopeMcpDescriptorProse,
+  scopeSchemaAnnotations,
+} from "@/api/mcp/feature-access-prose";
 import {
   getDynamicMcpToolOutputContract,
   SKILL_TOOL_ANNOTATIONS,
@@ -28,6 +38,7 @@ import {
   listOfferedStaticMcpToolDefinitions,
 } from "@/api/mcp/gateway/static-tool-visibility";
 import {
+  DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
   getStaticMcpToolOutputContract,
 } from "@/api/mcp/static-tool-definitions";
@@ -108,6 +119,21 @@ const externalMcpToolAccess = ({
         destructiveBehavior: { type: "upstream" },
       };
 
+const projectFeatureToolDefinition = (
+  definition: McpToolDefinition,
+  context: McpRequestContext,
+) => {
+  const featureId = resolveMcpDescriptorFeatureId({
+    context,
+    kind: "tools",
+    id: definition.name,
+    featureId: definition.featureId,
+  });
+  return featureId === undefined
+    ? definition
+    : { ...definition, _meta: { ...definition._meta, featureId } };
+};
+
 export const listGatewayMcpToolDefinitions = async ({
   context,
   mode,
@@ -117,9 +143,11 @@ export const listGatewayMcpToolDefinitions = async ({
   mode: McpMode;
   scopes?: readonly string[];
 }): Promise<McpToolDefinition[]> => {
-  const definitions = [
-    ...listOfferedStaticMcpToolDefinitions({ context, mode, scopes }),
-  ];
+  const definitions = listOfferedStaticMcpToolDefinitions({
+    context,
+    mode,
+    scopes,
+  }).map((definition) => projectFeatureToolDefinition(definition, context));
   // Every restricted surface is a pure static projection. Dynamic
   // connector/skill discovery runs only on the default surface, so a
   // restricted client never discovers a tool its dispatcher rejects and never
@@ -140,7 +168,16 @@ export const listGatewayMcpToolDefinitions = async ({
     }
   }
 
-  return definitions;
+  return definitions
+    .filter((definition) =>
+      isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: definition.name,
+        featureId: definition.featureId,
+      }),
+    )
+    .map((definition) => projectFeatureToolDefinition(definition, context));
 };
 
 export const getGatewayMcpToolDefinition = async ({
@@ -154,11 +191,20 @@ export const getGatewayMcpToolDefinition = async ({
 }): Promise<McpToolDefinition | undefined> => {
   const staticTool = getStaticMcpToolDefinition(toolName, mode);
   if (staticTool) {
-    return isStaticToolVisibleToRole(context, staticTool)
+    return isStaticToolVisibleToRole(context, staticTool) &&
+      isMcpDescriptorFeatureEnabled({
+        context,
+        kind: "tools",
+        id: staticTool.name,
+        featureId: staticTool.featureId,
+      })
       ? staticTool
       : undefined;
   }
-  if (mode !== "default") {
+  if (
+    mode !== "default" ||
+    !isMcpDescriptorFeatureEnabled({ context, kind: "tools", id: toolName })
+  ) {
     return undefined;
   }
 
@@ -323,22 +369,49 @@ const toWireInputSchema = (schema: McpToolInputSchema): WireInputSchema => {
 
 export const toMcpTools = (
   definitions: readonly McpToolDefinition[],
-  mode: McpMode = "default",
-): McpTool[] =>
-  definitions.map(({ _meta, annotations, description, inputSchema, name }) => {
-    const outputContract = resolveMcpToolOutputContract(name, mode);
-    return {
-      ...(_meta === undefined ? {} : { _meta }),
-      annotations,
-      description,
-      inputSchema: toWireInputSchema(inputSchema),
-      name,
-      ...(outputContract === undefined
-        ? {}
-        : { outputSchema: outputContract.outputSchema }),
-      title: annotations.title,
-    };
-  });
+  {
+    mode = "default",
+    context,
+  }: { mode?: McpMode; context?: McpFeatureAccessContext } = {},
+): McpTool[] => {
+  const hiddenIds = hiddenMcpDescriptorIds(
+    context,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
+  return definitions.map(
+    ({ _meta, annotations, description, inputSchema, name }) => {
+      const outputContract = resolveMcpToolOutputContract(name, mode);
+      return {
+        ...(_meta === undefined ? {} : { _meta }),
+        annotations,
+        description: scopeMcpDescriptorProse(description, hiddenIds),
+        inputSchema:
+          hiddenIds.size === 0
+            ? toWireInputSchema(inputSchema)
+            : toWireInputSchema({
+                ...scopeSchemaAnnotations(inputSchema, hiddenIds),
+                type: "object",
+              }),
+        name,
+        ...(outputContract === undefined
+          ? {}
+          : {
+              outputSchema:
+                hiddenIds.size === 0
+                  ? outputContract.outputSchema
+                  : toWireInputSchema({
+                      ...scopeSchemaAnnotations(
+                        outputContract.outputSchema,
+                        hiddenIds,
+                      ),
+                      type: "object",
+                    }),
+            }),
+        title: annotations.title,
+      };
+    },
+  );
+};
 
 // Display title for a dynamically-gated tool. External connectors and skills
 // carry human names already; clamp to the CLI trust boundary's 64-char wire

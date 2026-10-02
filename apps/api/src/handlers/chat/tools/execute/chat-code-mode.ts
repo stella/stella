@@ -9,12 +9,13 @@ import {
   type CodeModeTool,
   type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
 
 import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
+import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script-read-boundary";
 import {
   EAGER_CHAT_READ_TOOLS,
   toDocumentedChatReads,
@@ -39,13 +40,17 @@ import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/to
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
-import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   hasToolSchemaInputs,
   type WithToolSchemaInputs,
 } from "@/api/lib/tanstack-ai-schema";
 import { isRecord } from "@/api/lib/type-guards";
+import { isMcpDescriptorFeatureEnabled } from "@/api/mcp/feature-access";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
+import {
+  hiddenMcpDescriptorIds,
+  scopeMcpDescriptorProse,
+} from "@/api/mcp/feature-access-prose";
 import {
   DEFAULT_MCP_TOOL_DEFINITIONS,
   getStaticMcpToolDefinition,
@@ -71,7 +76,7 @@ import {
  * projectability and the read script policy which of those are script
  * functions.
  */
-export const chatScriptReadToolNames = (): readonly RegistryReadToolName[] => {
+const scriptEligibleReadToolNames = (): readonly RegistryReadToolName[] => {
   const names: RegistryReadToolName[] = [];
   for (const definition of DEFAULT_MCP_TOOL_DEFINITIONS) {
     if (definition.access !== "read") {
@@ -86,6 +91,18 @@ export const chatScriptReadToolNames = (): readonly RegistryReadToolName[] => {
   }
   return names;
 };
+
+export const chatScriptReadToolNames = (
+  featureAccessContext?: McpFeatureAccessContext,
+): readonly RegistryReadToolName[] =>
+  scriptEligibleReadToolNames().filter((name) =>
+    isMcpDescriptorFeatureEnabled({
+      context: featureAccessContext,
+      kind: "tools",
+      id: name,
+      featureId: getStaticMcpToolDefinition(name)?.featureId,
+    }),
+  );
 
 /**
  * The `execute_typescript` runner that Stella's sandbox owns unchanged. Passed to
@@ -124,6 +141,7 @@ const chatReadToolDescription = (toolName: RegistryReadToolName): string => {
 };
 
 type BuildChatReadToolsProps = {
+  featureAccessContext?: McpFeatureAccessContext | undefined;
   /** Reads the active skill documents up front, beside the always-eager set. */
   documentedReads: readonly RegistryReadToolName[];
   runReadTool: (toolName: RegistryReadToolName, args: unknown) => unknown;
@@ -138,14 +156,19 @@ type BuildChatReadToolsProps = {
  * two are disjoint by construction (`documented-chat-reads.ts`).
  */
 const buildChatReadTools = ({
+  featureAccessContext,
   documentedReads,
   runReadTool,
 }: BuildChatReadToolsProps): CodeModeTool[] => {
+  const hiddenIds = hiddenMcpDescriptorIds(
+    featureAccessContext,
+    DEFAULT_MCP_TOOL_DEFINITIONS,
+  );
   const eager = new Set<RegistryReadToolName>([
     ...EAGER_CHAT_READ_TOOLS,
     ...documentedReads,
   ]);
-  return chatScriptReadToolNames().map((toolName) => {
+  return chatScriptReadToolNames(featureAccessContext).map((toolName) => {
     const definition =
       getStaticMcpToolDefinition(toolName) ??
       panic(`Chat read tool ${toolName} is missing from the static registry`);
@@ -156,7 +179,10 @@ const buildChatReadTools = ({
 
     return toolDefinition({
       name: toolName,
-      description: chatReadToolDescription(toolName),
+      description: scopeMcpDescriptorProse(
+        chatReadToolDescription(toolName),
+        hiddenIds,
+      ),
       inputSchema: toToolInputSchema(definition.inputSchema),
       // Code Mode's latest tool type requires an output schema. The concrete
       // projection is rendered in the description above; exposing the raw
@@ -181,6 +207,7 @@ export type ChatCodeModeReadRunner = (
 ) => Promise<unknown>;
 
 type CreateChatCodeModeSurfaceProps = {
+  featureAccessContext?: McpFeatureAccessContext | undefined;
   concurrencyKey: string;
   documentedReads: readonly RegistryReadToolName[];
   /** Tells a script that called a name it cannot the call to make instead. */
@@ -193,6 +220,7 @@ type CreateChatCodeModeSurfaceProps = {
  * catalog. `buildChatCodeMode` is this with the registry runner bound.
  */
 export const createChatCodeModeSurface = ({
+  featureAccessContext,
   concurrencyKey,
   documentedReads,
   nameGuide,
@@ -204,6 +232,7 @@ export const createChatCodeModeSurface = ({
       ...(nameGuide === undefined ? {} : { nameGuide }),
     }),
     tools: buildChatReadTools({
+      featureAccessContext,
       documentedReads,
       runReadTool: async (toolName, args) =>
         await runReadTool(toolName, isRecord(args) ? args : {}),
@@ -220,7 +249,7 @@ const SCRIPT_FUNCTION_PREFIX = "external_";
  * a script misspelled.
  */
 const CHAT_SCRIPT_READ_FUNCTIONS: ReadonlySet<string> = new Set(
-  chatScriptReadToolNames().map(
+  scriptEligibleReadToolNames().map(
     (toolName) => `${SCRIPT_FUNCTION_PREFIX}${toolName}`,
   ),
 );
@@ -295,32 +324,22 @@ export const buildChatCodeMode = (
   const context = buildMcpContextFromChat(contextDeps);
 
   return createChatCodeModeSurface({
+    featureAccessContext: context,
     concurrencyKey: contextDeps.userId,
     documentedReads,
-    runReadTool: async (toolName, toolArgs) => {
-      // Mechanical retry policy: an identical call that already failed with a
-      // server defect this turn is refused before dispatch. "Do not retry this
-      // call" is enforced here, not left to the model's reading of error prose.
-      if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: knownDefectRefusalMessage(toolName),
-        });
-      }
-      const result = await runRegistryReadTool({
+    runReadTool: async (toolName, toolArgs) =>
+      await runChatScriptRead({
         toolName,
         args: toolArgs,
-        context,
-        refRegistry,
-      });
-      if (Result.isError(result)) {
-        if (result.error.kind === "server-defect") {
-          toolDefectMemo.recordDefect(toolName, toolArgs);
-        }
-        throw result.error;
-      }
-      return result.value;
-    },
+        toolDefectMemo,
+        read: async () =>
+          await runRegistryReadTool({
+            toolName,
+            args: toolArgs,
+            context,
+            refRegistry,
+          }),
+      }),
     // A script that calls a direct tool, an unprefixed read or a tool this
     // chat does not offer is told the call to make instead.
     nameGuide: (bindingNames) =>
@@ -375,12 +394,14 @@ export const codeModePromptVariantKey = (
 
 const renderChatCodeModeSystemPrompt = (
   documentedReads: readonly RegistryReadToolName[],
+  featureAccessContext?: McpFeatureAccessContext,
 ): string =>
   createCodeModeSystemPrompt({
     driver: createStellaIsolateDriver({
       concurrencyKey: "chat-code-mode-prompt",
     }),
     tools: buildChatReadTools({
+      featureAccessContext,
       documentedReads: [...new Set(documentedReads)].toSorted(),
       runReadTool: () => ({}),
     }),
@@ -428,10 +449,25 @@ export const builtInCodeModePromptVariants = (): ReadonlyMap<
  */
 export const chatCodeModeSystemPrompt = (
   documentedReads: readonly RegistryReadToolName[],
-): string =>
-  builtInCodeModePromptVariants().get(
-    codeModePromptVariantKey(documentedReads),
-  ) ?? renderChatCodeModeSystemPrompt(documentedReads);
+  featureAccessContext?: McpFeatureAccessContext,
+): string => {
+  const baseline = chatScriptReadToolNames();
+  const offered = chatScriptReadToolNames(featureAccessContext);
+  if (
+    baseline.length !== offered.length ||
+    baseline.some((name, index) => offered[index] !== name)
+  ) {
+    return renderChatCodeModeSystemPrompt(
+      documentedReads,
+      featureAccessContext,
+    );
+  }
+  return (
+    builtInCodeModePromptVariants().get(
+      codeModePromptVariantKey(documentedReads),
+    ) ?? renderChatCodeModeSystemPrompt(documentedReads)
+  );
+};
 
 /** The base variant: no active skill, so only `list_matters` is documented. */
 export const CHAT_CODE_MODE_SYSTEM_PROMPT: string = chatCodeModeSystemPrompt(

@@ -1,20 +1,8 @@
 import { Result } from "better-result";
-// The runtime-fetch call site (spec 051 S5.2 runtime + S5.3 + S5.5). Startup
-// always uses the baked-in tree (instant, offline); this module keeps the
-// per-origin cache current and, when a validated fetch diverges from the
-// baked-in tree, lets the next command build from the cached listings.
-//
-// Two entry points:
-//   - `resolveCommandTree`: read-only, no network. Picks the baked-in tree, or
-//     the cached-listings tree when the cache shows a non-empty delta, and
-//     hands that delta back for `registry-drift.ts` to report.
-//   - `refreshRegistryCache`: fetch `tools/list`, validate through the S5.5
-//     trust boundary, diff vs baked-in, and write the cache. Fails closed: any
-//     transport/validation failure leaves the trusted baked-in tree in place.
-//
-// Both share the ONE pure `generateRouteMap` and the ONE baked-in Annotation
-// Table, so unknown fetched tools get the same S1 heuristic defaults as the
-// build-time path.
+// Runtime registry fetches validate caller listings for this invocation only.
+// resolveCommandTree consumes a current response or the baked-in baseline;
+// refreshRegistryCache persists deployment omissions and version metadata.
+// Both paths share the build-time route generator and annotation table.
 import { access, readFile } from "node:fs/promises";
 import { Temporal } from "temporal-polyfill/full";
 
@@ -22,6 +10,12 @@ import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
+import {
+  hasFeatureCommands,
+  projectFeatureCommands,
+} from "./feature-command-projection.js";
+import type { CallerFeatureAccess } from "./feature-command-projection.js";
+import type { CapabilityCatalogEntry } from "./generate-capability-tree.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
@@ -50,6 +44,7 @@ import {
   NO_DISABLED_COMMANDS,
   type RegistryToolListing,
   type RouteNode,
+  type ToolAnnotation,
 } from "./route-types.js";
 
 const SNAPSHOT_URL = new URL(
@@ -83,9 +78,16 @@ const loadBakedListings = async (): Promise<readonly RegistryToolListing[]> => {
     const name = entry["name"];
     const inputSchema = entry["inputSchema"];
     const description = entry["description"];
+    const cli = entry["cli"];
+    const meta = entry["_meta"];
+    const cliFeatureId = isRecord(cli) ? cli["featureId"] : undefined;
+    const metaFeatureId = isRecord(meta) ? meta["featureId"] : undefined;
+    const featureId =
+      typeof cliFeatureId === "string" ? cliFeatureId : metaFeatureId;
     if (typeof name === "string" && isRecord(inputSchema)) {
       listings.push({
         name,
+        ...(typeof featureId === "string" ? { featureId } : {}),
         description: typeof description === "string" ? description : "",
         inputSchema,
       });
@@ -146,6 +148,22 @@ const retainAttestedOmittedListings = ({
   return retained.length === 0 ? fetched : [...fetched, ...retained];
 };
 
+export const requiresFeatureAccessRefresh = (
+  tree: RouteNode = generatedRouteMap,
+): boolean => hasFeatureCommands(tree);
+
+/** Validated caller projection held only during its authenticated invocation. */
+export type CurrentRegistry = {
+  serverOrigin: string;
+  listings: readonly RegistryToolListing[];
+  delta: RegistryDelta;
+  toolsListHash: string;
+  grantedScopes?: readonly string[];
+  scopeOmittedTools?: readonly string[];
+  featureOmittedTools?: readonly string[];
+  featureOmittedCapabilities?: readonly string[];
+};
+
 export type ResolvedCommandTree = {
   tree: RouteNode;
   /**
@@ -159,29 +177,48 @@ export type ResolvedCommandTree = {
 };
 
 /**
- * Pick the command tree for this invocation without any network (spec S5.3).
- * The baked-in tree is the default; a valid same-origin cache with a non-empty
- * delta builds from the cached listings and reports that delta as `drift`. A
- * cache whose only divergence is a single-scope omission also builds from the
- * listings, so a command this token cannot use is not exposed; it reports no
- * drift, because the registry itself did not diverge. Provenance is pinned: a
- * cache whose
- * `serverOrigin` differs is ignored (rule 5), and a cached tree that fails to
- * build falls back to baked-in (rule 6).
+ * Resolve this invocation without network. A current same-origin response can
+ * rebuild and prune the tree by caller scope; disk supplies deployment metadata
+ * only. Missing or invalid live data uses the baked-in baseline with feature
+ * commands hidden.
  */
 export const resolveCommandTree = async ({
   serverOrigin,
   env,
+  registry,
+  featureAccess,
+  bakedTree = generatedRouteMap,
+  loadCatalog = loadBakedCapabilityCatalog,
+  annotations = TOOL_ANNOTATIONS,
 }: {
   serverOrigin: string | undefined;
   env: CacheEnv;
+  registry?: CurrentRegistry;
+  featureAccess?: CallerFeatureAccess;
+  bakedTree?: RouteNode;
+  loadCatalog?: () => Promise<readonly CapabilityCatalogEntry[] | null>;
+  annotations?: Readonly<Record<string, ToolAnnotation>>;
 }): Promise<ResolvedCommandTree> => {
+  const file =
+    serverOrigin !== undefined && registry?.serverOrigin === serverOrigin
+      ? registry
+      : undefined;
+  const currentAccess = file === undefined ? undefined : featureAccess;
+  const project = (tree: RouteNode) =>
+    projectFeatureCommands({ tree, featureAccess: currentAccess });
   if (serverOrigin === undefined) {
-    return { tree: generatedRouteMap, disabled: NO_DISABLED_COMMANDS };
+    return { tree: project(bakedTree), disabled: NO_DISABLED_COMMANDS };
   }
-  const file = await readCacheFile(cachePathFor(serverOrigin, env));
-  if (file === undefined || file.serverOrigin !== serverOrigin) {
-    return { tree: generatedRouteMap, disabled: NO_DISABLED_COMMANDS };
+  const cached = await readCacheFile(cachePathFor(serverOrigin, env));
+  const deployment = cached?.serverOrigin === serverOrigin ? cached : undefined;
+  if (file === undefined) {
+    return {
+      tree: project(bakedTree),
+      disabled: {
+        tools: deployment?.featureOmittedTools ?? [],
+        capabilities: deployment?.featureOmittedCapabilities ?? [],
+      },
+    };
   }
   // Tools and capabilities the server attested it omits because a deployment
   // feature is off. They stay in the tree (the server answers a call with its
@@ -193,16 +230,37 @@ export const resolveCommandTree = async ({
   const prunedByScope = (file.scopeOmittedTools ?? []).some(
     (name) => !isCompoundTool(name),
   );
-  if (isDeltaEmpty(file.delta) && !prunedByScope) {
-    return { tree: generatedRouteMap, disabled };
+  const featureListings = file.listings.some(
+    (listing) => listing.featureId !== undefined,
+  );
+  const enabledTools = new Set(currentAccess?.tools);
+  const hiddenTools = new Set(
+    Object.entries(annotations).flatMap(([name, annotation]) =>
+      annotation.featureId !== undefined && !enabledTools.has(name)
+        ? [name]
+        : [],
+    ),
+  );
+  for (const listing of file.listings) {
+    if (listing.featureId !== undefined && !enabledTools.has(listing.name)) {
+      hiddenTools.add(listing.name);
+    }
+  }
+  const delta: RegistryDelta = {
+    added: file.delta.added.filter((name) => !hiddenTools.has(name)),
+    removed: file.delta.removed.filter((name) => !hiddenTools.has(name)),
+    changed: file.delta.changed.filter((name) => !hiddenTools.has(name)),
+  };
+  if (isDeltaEmpty(file.delta) && !prunedByScope && !featureListings) {
+    return { tree: project(bakedTree), disabled };
   }
   // Rebuild through the SAME shared builder codegen uses (curated tools from
-  // the cached listings + the baked capability merge), so a diverged registry
+  // the current listings + the baked capability merge), so a diverged registry
   // never drops the generated capability leaves. A missing/corrupt catalog or
   // a tree that fails to build falls back to the baked-in tree (rule 6).
-  const entries = await loadBakedCapabilityCatalog();
+  const entries = await loadCatalog();
   if (entries === null) {
-    return { tree: generatedRouteMap, disabled };
+    return { tree: project(bakedTree), disabled };
   }
   const listings = retainAttestedOmittedListings({
     fetched: file.listings,
@@ -214,16 +272,16 @@ export const resolveCommandTree = async ({
     () =>
       buildCliRouteTree({
         listings,
-        annotations: TOOL_ANNOTATIONS,
+        annotations,
         entries,
       }).tree,
   );
   if (Result.isError(built)) {
-    return { tree: generatedRouteMap, disabled };
+    return { tree: project(bakedTree), disabled };
   }
-  return isDeltaEmpty(file.delta)
-    ? { tree: built.value, disabled }
-    : { tree: built.value, drift: file.delta, disabled };
+  return isDeltaEmpty(delta)
+    ? { tree: project(built.value), disabled }
+    : { tree: project(built.value), drift: delta, disabled };
 };
 
 /** The outcome of a cache-refresh attempt (spec S5.3/S5.5 + addendum nudge). */
@@ -231,7 +289,13 @@ export type RefreshOutcome =
   | { status: "skipped"; reason: "no-cache" | "fresh" }
   | { status: "failed"; warning: string }
   | { status: "admission-refused"; refusal: CliActionAdmissionRefusal }
-  | { status: "refreshed"; deltaEmpty: boolean; nudge?: string };
+  | {
+      status: "refreshed";
+      deltaEmpty: boolean;
+      nudge?: string;
+      featureAccess?: CallerFeatureAccess;
+      registry: CurrentRegistry;
+    };
 
 type FetchRaw = () => Promise<Result<RawToolsList, McpClientError>>;
 type FetchLatestVersion = () => Promise<string | undefined>;
@@ -334,13 +398,8 @@ export const refreshRegistryCache = async ({
   });
   const lastNudgedVersion = nudge.nudgeVersion ?? existing?.lastNudgedVersion;
 
-  const file: RegistryCacheFile = {
-    version: CACHE_SCHEMA_VERSION,
+  const registry: CurrentRegistry = {
     serverOrigin,
-    fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({
-      fractionalSecondDigits: 3,
-    }),
-    ttlSeconds,
     toolsListHash: trust.toolsListHash,
     listings: trust.listings,
     delta,
@@ -356,12 +415,30 @@ export const refreshRegistryCache = async ({
     ...(raw.value.featureOmittedCapabilities === undefined
       ? {}
       : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
+  };
+  const file: RegistryCacheFile = {
+    version: CACHE_SCHEMA_VERSION,
+    serverOrigin,
+    fetchedAt: Temporal.Instant.fromEpochMilliseconds(now).toString({
+      fractionalSecondDigits: 3,
+    }),
+    ttlSeconds,
+    ...(raw.value.featureOmittedTools === undefined
+      ? {}
+      : { featureOmittedTools: raw.value.featureOmittedTools }),
+    ...(raw.value.featureOmittedCapabilities === undefined
+      ? {}
+      : { featureOmittedCapabilities: raw.value.featureOmittedCapabilities }),
     ...(lastNudgedVersion === undefined ? {} : { lastNudgedVersion }),
   };
   await writeCacheFile(filePath, file);
   return {
     status: "refreshed",
+    registry,
     deltaEmpty: isDeltaEmpty(delta),
+    ...(trust.featureAccess === undefined
+      ? {}
+      : { featureAccess: trust.featureAccess }),
     ...(nudge.line === undefined ? {} : { nudge: nudge.line }),
   };
 };

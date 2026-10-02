@@ -21,9 +21,12 @@ export const MemoryExtractionCard = () => {
   const errorsT = useTranslations("errors");
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const activeOrganizationId = useAuthenticatedUser().activeOrganizationId;
+  const { activeOrganizationId, id: userId } = useAuthenticatedUser();
   const { data: settings } = useQuery(
-    organizationSettingsOptions(activeOrganizationId),
+    organizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
   );
 
   const mutation = useMutation({

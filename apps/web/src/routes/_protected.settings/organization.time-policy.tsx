@@ -22,7 +22,10 @@ export const Route = createFileRoute(
   loader: async ({ context }) => {
     await ensureRouteQueryData(
       context.queryClient,
-      organizationSettingsOptions(context.user.activeOrganizationId),
+      organizationSettingsOptions({
+        organizationId: context.user.activeOrganizationId,
+        userId: context.user.id,
+      }),
     );
   },
   component: TimePolicyPage,

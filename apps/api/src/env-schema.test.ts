@@ -12,6 +12,19 @@ test("agent client storage format requires explicit enablement", () => {
   expect(v.parse(schema, "true")).toBe(true);
 });
 
+test("feature access grants default to empty and unknown production feature ids reject startup", () => {
+  expect(v.parse(envApiServerSchema.FEATURE_ACCESS_GRANTS, undefined)).toEqual(
+    {},
+  );
+  expect(v.parse(envApiServerSchema.FEATURE_ACCESS_GRANTS, "{}")).toEqual({});
+  expect(
+    v.safeParse(
+      envApiServerSchema.FEATURE_ACCESS_GRANTS,
+      '{"unknown-feature":[{"type":"member","organizationId":"org-a","email":"member@example.test"}]}',
+    ).success,
+  ).toBe(false);
+});
+
 test("accepted retention settings keep cutoff timestamps in positive ISO years", () => {
   const now = new Date("2021-03-04T10:00:00Z");
   for (const days of [1, 17, 365_000]) {

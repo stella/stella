@@ -49,6 +49,7 @@ import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-cat
 import { expandSchemaDefs } from "../../../packages/cli/src/expand-schema-defs";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
 import type { RouteNode } from "../../../packages/cli/src/route-types";
+import { FEATURE_REGISTRY } from "../src/lib/auth/feature-access/registry";
 import type { CapabilityTransport } from "../src/lib/capability-transport";
 import {
   isTransportInvocable,
@@ -111,6 +112,7 @@ import {
   type ParsedExposure,
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
+import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
 
 const CATALOG_PATH = path.resolve(
   REPO_ROOT,
@@ -516,6 +518,8 @@ type CapabilityEntry = {
    * Consulted by list_capabilities/describe/invoke (see capability-feature.ts).
    */
   feature?: string;
+  featureId?: string;
+  featureAccess?: "required" | "conditional";
   permissions?: unknown;
   /**
    * The handler config's `body`/`params`/`query`, `$defs`-compacted: repeated
@@ -908,6 +912,9 @@ type BuildCatalogEntryOptions = {
   compactedInputSchema: CompactedCapabilityInputSchema;
   exposure: ParsedExposure;
   feature: string | undefined;
+  featureAccess:
+    | { featureId: string; type: "required" | "conditional" }
+    | undefined;
   /** Declared transport, already cross-checked against the live schema. */
   transport: CapabilityTransport;
 };
@@ -934,6 +941,7 @@ const buildCatalogEntry = ({
   compactedInputSchema,
   exposure,
   feature,
+  featureAccess,
   transport,
 }: BuildCatalogEntryOptions): CapabilityEntry => ({
   id,
@@ -954,6 +962,12 @@ const buildCatalogEntry = ({
     : {}),
   transport,
   ...(feature === undefined ? {} : { feature }),
+  ...(featureAccess === undefined
+    ? {}
+    : {
+        featureId: featureAccess.featureId,
+        featureAccess: featureAccess.type,
+      }),
   ...(hasPermissions ? { permissions } : {}),
   inputSchema: compactedInputSchema,
   mcp: toCapabilityMcp(exposure),
@@ -1160,9 +1174,39 @@ const collectClassGuardErrors = ({
   return errors;
 };
 
+const parseFeatureRequirement = (value: unknown) => {
+  if (!isRecord(value) || typeof value["featureId"] !== "string") {
+    return undefined;
+  }
+  const type = value["type"];
+  if (type !== "required" && type !== "conditional") {
+    return undefined;
+  }
+  return { featureId: value["featureId"], type } as const;
+};
+
+const readFeatureDeclarationSources = async () => {
+  const featureSources = new Map<string, string>();
+  for (const file of new Bun.Glob(
+    "apps/api/{src,scripts}/**/*.{ts,tsx}",
+  ).scanSync({ cwd: REPO_ROOT, onlyFiles: true })) {
+    if (/\.(?:test|spec)\.tsx?$/u.test(file) || file.includes("/tests/")) {
+      continue;
+    }
+    featureSources.set(file, await Bun.file(path.join(REPO_ROOT, file)).text());
+  }
+  return featureSources;
+};
+
 const buildCatalog = async (): Promise<BuildResult> => {
   const { endpoints, files, importErrors } = await discoverSafeHandlers();
   const errors: string[] = [];
+  const featureSources = await readFeatureDeclarationSources();
+  assertFeatureAccessDeclarations({
+    registry: FEATURE_REGISTRY,
+    endpoints,
+    sources: featureSources,
+  });
 
   for (const { id, message } of importErrors) {
     errors.push(`import failed: ${id}: ${message}`);
@@ -1594,6 +1638,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
         compactedInputSchema,
         exposure: endpoint.exposure,
         feature: inheritedFeature ?? DOMAIN_FEATURE[domain],
+        featureAccess: parseFeatureRequirement(
+          endpoint.config["featureAccess"],
+        ),
         transport,
       }),
     );

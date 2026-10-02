@@ -20,11 +20,9 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 
 import { StellaMark } from "@/components/stella-mark";
-import { api } from "@/lib/api";
 import { authClient } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
-import { unwrapEden } from "@/lib/errors/api";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
 import {
@@ -40,6 +38,7 @@ import {
 } from "@/lib/oauth-scopes";
 import { managementRoles } from "@/lib/organization/consts";
 import { organizationListOptions } from "@/lib/organization/queries";
+import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -117,14 +116,12 @@ function ConsentPage() {
   });
 
   const jurisdictionsQuery = useQuery({
+    ...optionalOrganizationSettingsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+    }),
     enabled: activeOrganizationId !== null && canManageOrganization,
-    queryKey: ["consent-practice-jurisdictions", activeOrganizationId],
-    queryFn: async ({ signal }) => {
-      const response = await api["organization-settings"].get({
-        fetch: { signal },
-      });
-      return unwrapEden(response).practiceJurisdictions;
-    },
+    select: (settings) => settings.practiceJurisdictions,
   });
   const showJurisdictionsNotice =
     canManageOrganization && jurisdictionsQuery.data?.length === 0;

@@ -53,7 +53,7 @@ export function MemberToolsPage({
   const [, { data: settings }, { data: role }] = useSuspenseQueries({
     queries: [
       catalogueOptions(organizationId, userId),
-      organizationSettingsOptions(organizationId),
+      organizationSettingsOptions({ organizationId, userId }),
       roleOptions,
     ],
   });

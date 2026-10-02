@@ -1,11 +1,10 @@
+import { panic, Result, UnhandledException } from "better-result";
 /**
  * System prompt builders for chat endpoints.
  *
  * Extracted from the chat actor so both the actor and the
  * REST chat endpoint can share the same prompt logic.
  */
-
-import { panic, Result, UnhandledException } from "better-result";
 import * as cheerio from "cheerio";
 import { and, asc, count, eq, isNull, or, sql } from "drizzle-orm";
 import * as v from "valibot";
@@ -136,6 +135,7 @@ import {
   untrustedText,
 } from "@/api/lib/prompt-safety";
 import { readS3ArrayBuffer } from "@/api/lib/s3";
+import type { McpFeatureAccessContext } from "@/api/mcp/feature-access";
 
 const TITLE_MAX_LENGTH = 80;
 const ACTIVE_DECISION_MAX_CHARS = 12_000;
@@ -555,6 +555,7 @@ export const buildChatPromptCacheKey = (
 };
 
 type BuildChatSystemPromptProps = {
+  featureAccessContext?: McpFeatureAccessContext | undefined;
   activeDecision: IncomingActiveDecision | undefined;
   activeDraft?: IncomingActiveDraft | undefined;
   activeExternal: IncomingActiveExternal | undefined;
@@ -740,6 +741,7 @@ const resolveActiveFilePromptContext = async ({
 };
 
 export const buildChatSystemPromptParts = async ({
+  featureAccessContext,
   activeDecision,
   activeDraft,
   activeExternal,
@@ -791,6 +793,7 @@ export const buildChatSystemPromptParts = async ({
     const safeParts =
       workspaceId === null
         ? buildGlobalPromptParts({
+            featureAccessContext,
             documentedChatReads,
             practiceJurisdictions,
             skillMetadata: promptSkillMetadata,
@@ -799,6 +802,7 @@ export const buildChatSystemPromptParts = async ({
           })
         : yield* Result.await(
             buildWorkspacePromptPartsFromDb({
+              featureAccessContext,
               documentedChatReads,
               practiceJurisdictions,
               refRegistry,
@@ -1056,6 +1060,7 @@ export const extractTitle = (parts: ChatMessage["parts"]) => {
 };
 
 type BuildGlobalPromptProps = {
+  featureAccessContext?: McpFeatureAccessContext | undefined;
   /** The active skill's documented reads; none without a skill. */
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   practiceJurisdictions?: readonly PracticeJurisdiction[];
@@ -1065,6 +1070,7 @@ type BuildGlobalPromptProps = {
 };
 
 export const buildGlobalPrompt = ({
+  featureAccessContext,
   documentedChatReads = [],
   practiceJurisdictions = [],
   skillMetadata = [],
@@ -1072,6 +1078,7 @@ export const buildGlobalPrompt = ({
   userContext,
 }: BuildGlobalPromptProps) =>
   buildGlobalPromptParts({
+    featureAccessContext,
     documentedChatReads,
     practiceJurisdictions,
     skillMetadata,
@@ -1080,6 +1087,7 @@ export const buildGlobalPrompt = ({
   }).fullPrompt;
 
 export const buildGlobalPromptParts = ({
+  featureAccessContext,
   documentedChatReads = [],
   practiceJurisdictions = [],
   skillMetadata = [],
@@ -1087,6 +1095,7 @@ export const buildGlobalPromptParts = ({
   userContext,
 }: BuildGlobalPromptProps): ChatPromptParts =>
   buildPromptParts({
+    featureAccessContext,
     documentedChatReads,
     practiceJurisdictions,
     requestContextSections: [],
@@ -1139,6 +1148,7 @@ export const estimateChatContextPromptTokens = ({
 };
 
 type BuildWorkspacePromptProps = {
+  featureAccessContext?: McpFeatureAccessContext | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
   practiceJurisdictions?: readonly PracticeJurisdiction[];
   refRegistry: ChatRefRegistry;
@@ -1150,6 +1160,7 @@ type BuildWorkspacePromptProps = {
 };
 
 const buildWorkspacePromptPartsFromDb = async ({
+  featureAccessContext,
   documentedChatReads,
   practiceJurisdictions = [],
   refRegistry,
@@ -1169,6 +1180,7 @@ const buildWorkspacePromptPartsFromDb = async ({
 
     return Result.ok(
       buildWorkspacePromptParts({
+        featureAccessContext,
         documentedChatReads,
         entityCount: workspacePromptData.entityCount,
         extractedProperties: workspacePromptData.extractedProperties,
@@ -1304,6 +1316,7 @@ const buildWorkspaceContextSections = ({
 };
 
 type BuildWorkspacePromptTextProps = {
+  featureAccessContext?: McpFeatureAccessContext | undefined;
   /** The active skill's documented reads; none without a skill. */
   documentedChatReads?: readonly RegistryReadToolName[] | undefined;
   entityCount: number;
@@ -1318,6 +1331,7 @@ type BuildWorkspacePromptTextProps = {
 };
 
 export const buildWorkspacePromptText = ({
+  featureAccessContext,
   documentedChatReads = [],
   entityCount,
   extractedProperties = [],
@@ -1330,6 +1344,7 @@ export const buildWorkspacePromptText = ({
   workspaceName,
 }: BuildWorkspacePromptTextProps) =>
   buildWorkspacePromptParts({
+    featureAccessContext,
     documentedChatReads,
     entityCount,
     extractedProperties,
@@ -1343,6 +1358,7 @@ export const buildWorkspacePromptText = ({
   }).fullPrompt;
 
 export const buildWorkspacePromptParts = ({
+  featureAccessContext,
   documentedChatReads = [],
   entityCount,
   extractedProperties = [],
@@ -1355,6 +1371,7 @@ export const buildWorkspacePromptParts = ({
   workspaceName,
 }: BuildWorkspacePromptTextProps): ChatPromptParts =>
   buildPromptParts({
+    featureAccessContext,
     documentedChatReads,
     practiceJurisdictions,
     requestContextSections: buildWorkspaceContextSections({
@@ -2884,6 +2901,7 @@ export const buildActiveFileSection = ({
     : "";
 
 type BuildPromptProps = {
+  featureAccessContext?: McpFeatureAccessContext | undefined;
   documentedChatReads: readonly RegistryReadToolName[];
   practiceJurisdictions: readonly PracticeJurisdiction[];
   requestContextSections: string[];
@@ -2893,6 +2911,7 @@ type BuildPromptProps = {
 };
 
 const buildPromptParts = ({
+  featureAccessContext,
   documentedChatReads,
   practiceJurisdictions,
   requestContextSections,
@@ -2920,7 +2939,7 @@ const buildPromptParts = ({
         toolAvailability,
       }),
       buildSkillCatalogSection(builtInSkillMetadata),
-      chatCodeModeSystemPrompt(documentedChatReads),
+      chatCodeModeSystemPrompt(documentedChatReads, featureAccessContext),
     ]),
   );
   // Safe half: scaffold + jurisdiction labels. Both are
