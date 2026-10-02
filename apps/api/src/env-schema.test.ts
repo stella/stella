@@ -26,3 +26,11 @@ test("accepted retention settings keep cutoff timestamps in positive ISO years",
     ).toBe(false);
   }
 });
+
+test("Microsoft claim configuration defaults to disabled", () => {
+  const schema = envApiServerSchema.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM;
+  expect(v.parse(schema, undefined)).toBe(false);
+  expect(v.parse(schema, "false")).toBe(false);
+  expect(v.parse(schema, "true")).toBe(true);
+  expect(v.safeParse(schema, "invalid").success).toBe(false);
+});

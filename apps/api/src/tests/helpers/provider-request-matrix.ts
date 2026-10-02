@@ -95,7 +95,7 @@ export type EffortChoice = "default" | ReasoningEffort;
  * sources, or with every source the send path can add (web search and URL
  * fetching, an organization's external tools listed lazily).
  */
-const TOOL_SURFACES = ["default", "extended"] as const;
+export const TOOL_SURFACES = ["default", "extended"] as const;
 export type ToolSurface = (typeof TOOL_SURFACES)[number];
 
 /**

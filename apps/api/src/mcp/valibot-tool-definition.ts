@@ -37,7 +37,11 @@ type JsonSchemaProjectionWaiver = {
   reason: string;
 };
 
-type ValibotMcpToolInput = Omit<McpToolDefinition, "inputSchema"> & {
+type ToolWithoutInputSchema<TDefinition> = TDefinition extends McpToolDefinition
+  ? Omit<TDefinition, "inputSchema">
+  : never;
+
+type ValibotMcpToolInput = ToolWithoutInputSchema<McpToolDefinition> & {
   inputSchema: NullAsAbsentInputSchema;
   /** Explicit kinds JSON Schema cannot express, keyed by dotted field path. */
   inputNormalization?: Readonly<

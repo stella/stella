@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Santrauka",
+      "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
@@ -2175,6 +2176,7 @@
       "forbidden": "Neturite teisės atlikti šio veiksmo.",
       "notFound": "Nepavyko rasti prašomo objekto.",
       "payloadTooLarge": "Užklausa per didelė.",
+      "publicCountryUnavailable": "Šios šalies teisės aktai ir teismų praktika nepasiekiami. Pasirinkite kitą šalį.",
       "rateLimited": "Per daug užklausų. Bandykite dar kartą vėliau.",
       "server": "Kažkas nepavyko. Bandykite dar kartą.",
       "serviceUnavailable": "Paslauga laikinai nepasiekiama. Bandykite dar kartą.",

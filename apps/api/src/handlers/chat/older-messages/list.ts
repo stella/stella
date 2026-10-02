@@ -25,6 +25,7 @@ const config = {
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "assistant_chat",
     consumesServices: false,
   },

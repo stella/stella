@@ -59,6 +59,7 @@ const chatToolsFor = (accessibleWorkspaceIds: SafeId<"workspace">[]) =>
       pinnedIds: [],
     }),
     userId,
+    userEmail: "standard@example.test",
     webSearchEnabled: false,
     webSearchProviders: { webSearchProvider: null, urlFetcher: null },
     workspaceId: null,
