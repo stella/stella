@@ -11,7 +11,7 @@ import type { EditableField } from "@/routes/_protected.contacts/-components/typ
 
 type EditableFieldPolicy =
   | { valueKind: "text"; maxLength: number | null }
-  | { valueKind: "nonNegativeInteger"; maximum: number | null }
+  | { valueKind: "nonNegativeInteger"; maximum: number }
   | { valueKind: "money" };
 
 export const EDITABLE_FIELD_POLICY = {
@@ -74,18 +74,17 @@ type NumericContactPayloadResult =
 
 const NON_NEGATIVE_INTEGER_TOKEN = /^[0-9]+$/u;
 
+const NUMERIC_PAYLOAD_BUILDERS = {
+  paymentTermDays: (value) => ({ paymentTermDays: value }),
+} as const satisfies Record<
+  NumericEditableField,
+  (value: number | null) => NumericContactPayload
+>;
+
 const buildNumericPayload = (
   field: NumericEditableField,
   value: number | null,
-): NumericContactPayload => {
-  switch (field) {
-    case "paymentTermDays":
-      return { paymentTermDays: value };
-    default:
-      field satisfies never;
-      return panic(`Unhandled field: ${String(field)}`);
-  }
-};
+): NumericContactPayload => NUMERIC_PAYLOAD_BUILDERS[field](value);
 
 export const buildNumericContactPayload = (
   field: NumericEditableField,
@@ -104,11 +103,7 @@ export const buildNumericContactPayload = (
 
   const value = Number(trimmedInput);
   const policy = EDITABLE_FIELD_POLICY[field];
-  if (
-    !Number.isSafeInteger(value) ||
-    value < 0 ||
-    (policy.maximum !== null && value > policy.maximum)
-  ) {
+  if (!Number.isSafeInteger(value) || value < 0 || value > policy.maximum) {
     return { status: "invalid" };
   }
 
