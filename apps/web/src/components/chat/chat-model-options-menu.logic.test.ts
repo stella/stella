@@ -5,6 +5,7 @@ import type { BYOKProvider } from "@stll/ai-catalog";
 import { getModelPickerView } from "@/components/chat/chat-model-options-menu.logic";
 import type {
   ModelPickerBenchmark,
+  ModelPickerEntry,
   ModelPickerOption,
   ModelPickerView,
 } from "@/components/chat/chat-model-options-menu.logic";
@@ -67,13 +68,11 @@ const view = (
     selectedValue: selected,
   });
 
-const names = (
-  entries: readonly { option: ModelPickerOption; recommendation: unknown }[],
-) =>
+const names = (entries: readonly ModelPickerEntry<ModelPickerOption>[]) =>
   entries.map(({ option, recommendation }) =>
     recommendation === null || recommendation === "frontier"
       ? option.value
-      : `${option.value} (${String(recommendation)})`,
+      : `${option.value} (${recommendation})`,
   );
 
 const cheapFast: Model = {

@@ -29,6 +29,8 @@ import {
 } from "@stll/ai-catalog/benchmarks";
 import type { ModelBenchmarkRating } from "@stll/ai-catalog/benchmarks";
 
+import { formatInteger } from "./model-catalog-rates-gen";
+
 const OUTPUT_PATH = path.resolve(
   import.meta.dir,
   "../../ai-catalog/src/benchmarks.gen.ts",
@@ -317,11 +319,6 @@ export const buildBenchmarkSnapshot = (
   }
   return Result.ok({ publishDate, ratings });
 };
-
-const formatInteger = (value: number): string =>
-  String(value).length <= 4
-    ? String(value)
-    : String(value).replaceAll(/\B(?=(\d{3})+$)/gu, "_");
 
 export const renderBenchmarksModule = ({
   publishDate,

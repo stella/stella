@@ -85,13 +85,15 @@ const arenaRow = (modelName: string, rating = 1400): ArenaRow => ({
 
 describe("benchmark snapshot", () => {
   test("names every referenced source id missing upstream", () => {
-    const [first, second, ...present] = referencedSourceModelIds();
+    const ids = referencedSourceModelIds();
+    const missing = ids.slice(0, 2);
     const snapshot = buildBenchmarkSnapshot(
-      present.map((modelName) => arenaRow(modelName)),
+      ids.slice(2).map((modelName) => arenaRow(modelName)),
     );
 
+    expect(missing).toHaveLength(2);
     expect(Result.isError(snapshot) ? snapshot.error.message : null).toContain(
-      `${first}, ${second}`,
+      missing.join(", "),
     );
   });
 

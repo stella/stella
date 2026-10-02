@@ -201,16 +201,15 @@ export const ChatModelOptionsMenu = ({
         </MenuRadioGroup>
         <MenuItem
           aria-expanded={allModelsExpanded}
-          className="text-muted-foreground"
           closeOnClick={false}
           onClick={() => setAllModelsExpanded((expanded) => !expanded)}
         >
-          <span className="flex-1">
+          <span className="text-muted-foreground flex-1">
             {t("chat.modelSelector.allModels", { count: visibleCount })}
           </span>
           <ChevronDownIcon
             className={cn(
-              "size-3.5 transition-transform duration-150",
+              "text-muted-foreground size-3.5 transition-transform duration-150",
               allModelsExpanded && "rotate-180",
             )}
           />
@@ -338,12 +337,11 @@ const ModelOptionRow = ({
           <>
             <EffortHelp />
             <EffortSubmenu
-              dominatedEfforts={tradeoff?.dominatedReasoningEfforts ?? []}
               efforts={option.reasoningEfforts}
               providerDefaultEffort={option.defaultReasoningEffort}
               onSelect={onSelect}
-              premiumEfforts={tradeoff?.premiumReasoningEfforts ?? []}
               selected={selected}
+              tradeoff={tradeoff}
               value={displayedEffort}
             />
           </>
@@ -353,20 +351,18 @@ const ModelOptionRow = ({
 };
 
 const EffortSubmenu = ({
-  dominatedEfforts,
   efforts,
   providerDefaultEffort,
   onSelect,
-  premiumEfforts,
   selected,
+  tradeoff,
   value,
 }: {
-  dominatedEfforts: ModelTradeoff["dominatedReasoningEfforts"];
   efforts: readonly ReasoningEffort[];
   providerDefaultEffort: ReasoningEffort | null;
   onSelect: (reasoningEffort: ReasoningEffort | null) => void;
-  premiumEfforts: ModelTradeoff["premiumReasoningEfforts"];
   selected: boolean;
+  tradeoff: ModelTradeoff | null;
   value: ReasoningEffort | null;
 }) => {
   const t = useTranslations();
@@ -393,10 +389,9 @@ const EffortSubmenu = ({
             </span>
           </>
         )}
-        <EffortTradeoffNote
-          dominated={dominatedEfforts.includes(effort)}
-          premium={premiumEfforts.includes(effort)}
-        />
+        {tradeoff !== null && (
+          <EffortTradeoffNote effort={effort} tradeoff={tradeoff} />
+        )}
       </span>
     </MenuRadioItem>
   );
@@ -423,10 +418,9 @@ const EffortSubmenu = ({
             >
               <span className="flex w-full items-center gap-1.5">
                 {t("chat.modelSelector.effortValues.providerDefault")}
-                <EffortTradeoffNote
-                  dominated={dominatedEfforts.includes(null)}
-                  premium={premiumEfforts.includes(null)}
-                />
+                {tradeoff !== null && (
+                  <EffortTradeoffNote effort={null} tradeoff={tradeoff} />
+                )}
               </span>
             </MenuRadioItem>
           )}
@@ -439,15 +433,20 @@ const EffortSubmenu = ({
   );
 };
 
-/** Muted suffix for an effort that is dominated or unusually expensive. */
+/**
+ * Muted suffix for an effort that is dominated or unusually expensive;
+ * `effort: null` is the provider default.
+ */
 const EffortTradeoffNote = ({
-  dominated,
-  premium,
+  effort,
+  tradeoff,
 }: {
-  dominated: boolean;
-  premium: boolean;
+  effort: ReasoningEffort | null;
+  tradeoff: ModelTradeoff;
 }) => {
   const t = useTranslations();
+  const dominated = tradeoff.dominatedReasoningEfforts.includes(effort);
+  const premium = tradeoff.premiumReasoningEfforts.includes(effort);
   if (!dominated && !premium) {
     return null;
   }
@@ -486,25 +485,27 @@ const RecommendedHelp = ({
       </PopoverTrigger>
       <PopoverPopup
         align="end"
-        className="w-72 text-xs font-normal text-pretty"
+        className="w-72"
         layer="popup"
         side="inline-start"
         sideOffset={6}
       >
-        {t.rich("chat.modelSelector.recommendedHelpDescription", {
-          benchmark: benchmarkName,
-          licence,
-          link: (chunks) => (
-            <a
-              className="hover:text-foreground underline"
-              href={sanitizeHref(sourceUrl)}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {chunks}
-            </a>
-          ),
-        })}
+        <div className="text-xs font-normal text-pretty">
+          {t.rich("chat.modelSelector.recommendedHelpDescription", {
+            benchmark: benchmarkName,
+            licence,
+            link: (chunks) => (
+              <a
+                className="hover:text-foreground underline"
+                href={sanitizeHref(sourceUrl)}
+                rel="noreferrer"
+                target="_blank"
+              >
+                {chunks}
+              </a>
+            ),
+          })}
+        </div>
       </PopoverPopup>
     </Popover>
   );
