@@ -13,7 +13,10 @@ import {
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { ACTION_KINDS } from "@/api/lib/rate-limit/action-kinds";
-import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
+import type {
+  AdmittedActionIdentity,
+  ConcurrencyOnlyActionKind,
+} from "@/api/lib/rate-limit/action-kinds";
 import {
   ACTION_PERIOD_ACQUIRE_SCRIPT,
   ACTION_SERVICE_DEADLINE_EXPIRED,
@@ -140,28 +143,36 @@ type AdmissionKeys = {
 const admissionKeys = ({
   organizationId,
   userId,
+  pool,
 }: {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
+  pool: "interactive" | "background";
 }): AdmissionKeys => ({
   organization: coordinationKey({
     scope: "action-admission",
     slot: organizationId,
-    suffix: "organization",
+    suffix: pool === "background" ? "background:organization" : "organization",
   }),
   user: coordinationKey({
     scope: "action-admission",
     slot: organizationId,
-    suffix: `user:${userId}`,
+    suffix:
+      pool === "background" ? `background:user:${userId}` : `user:${userId}`,
   }),
 });
 
-const configuredPolicy = (): Result<
-  ActionAdmissionPolicy,
-  ActionAdmissionError
-> => {
-  const organizationConcurrency = env.ACTION_ADMISSION_ORG_CONCURRENCY;
-  const userConcurrency = env.ACTION_ADMISSION_USER_CONCURRENCY;
+const configuredPolicy = (
+  pool: "interactive" | "background",
+): Result<ActionAdmissionPolicy, ActionAdmissionError> => {
+  const organizationConcurrency =
+    pool === "background"
+      ? env.ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY
+      : env.ACTION_ADMISSION_ORG_CONCURRENCY;
+  const userConcurrency =
+    pool === "background"
+      ? env.ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY
+      : env.ACTION_ADMISSION_USER_CONCURRENCY;
   const leaseMs = env.ACTION_ADMISSION_LEASE_MS;
   if (
     organizationConcurrency === undefined ||
@@ -190,18 +201,27 @@ type ActionAdmissionOptions<T = unknown> = {
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
-  periodPolicy?: ActionPeriodPolicy;
+  periodReservation?: "on-acceptance" | undefined;
+  periodPolicy?: ActionPeriodPolicy | undefined;
   serviceBudgetsEnabled?: boolean;
   serviceBudgetConfig?: OrganizationActionBudgetConfig;
   organizationStateDb?: ScopedDb;
   readOrganizationState?: OrganizationStateReader;
   budgetNow?: () => number;
-  redis?: RedisCommands;
+  redis?: RedisCommands | undefined;
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
   timing?: AdmissionTiming;
   costRecorder?: ActionCostRecorder | null;
-} & ActionAdmissionReservation;
+} & ActionAdmissionReservation &
+  (
+    | {
+        execution: "background-job";
+        actionKind: ConcurrencyOnlyActionKind;
+        periodIdentity?: never;
+      }
+    | { execution?: "queued-kickoff" | undefined; actionKind?: never }
+  );
 
 type ActionAdmissionControl = {
   reservePeriod: (
@@ -235,6 +255,11 @@ type AdmissionScope = {
   signal: AbortSignal;
   control: ActionAdmissionControl;
   status: "active" | "settled";
+  keys: AdmissionKeys;
+  limits: ActionAdmissionPolicy;
+  leaseId: string;
+  organizationBudgetOptions: ResolveAdmissionBudgetOptions;
+  queuedIdentity: AdmittedActionIdentity | undefined;
 };
 
 const admissionScope = new AsyncLocalStorage<AdmissionScope>();
@@ -631,6 +656,7 @@ type PeriodReservationScopeOptions = AdmissionExecutorOptions & {
   limits: ActionAdmissionPolicy;
   leaseId: string;
   organizationBudgetOptions: ResolveAdmissionBudgetOptions;
+  queuedIdentity?: AdmittedActionIdentity | undefined;
 };
 
 const createPeriodReservationScope = ({
@@ -645,6 +671,7 @@ const createPeriodReservationScope = ({
   limits,
   leaseId,
   organizationBudgetOptions,
+  queuedIdentity,
 }: PeriodReservationScopeOptions): AdmissionScope => {
   const reservePhase = async (
     identity: AdmittedActionIdentity,
@@ -732,8 +759,153 @@ const createPeriodReservationScope = ({
     signal,
     control,
     status: "active",
+    keys,
+    limits,
+    leaseId,
+    organizationBudgetOptions,
+    queuedIdentity,
   };
   return executionScope;
+};
+
+export const reserveQueuedKickoffPeriod = async () => {
+  if (!env.FEATURE_ACTION_ADMISSION) {
+    return Result.ok(undefined);
+  }
+  const scope = admissionScope.getStore();
+  if (scope?.status !== "active" || scope.queuedIdentity === undefined) {
+    return panic(
+      "Queued period reservation requires an active queued admission scope",
+    );
+  }
+  return await scope.control.reservePeriod(scope.queuedIdentity);
+};
+
+const resolveQueuedBudget = async (options: ResolveAdmissionBudgetOptions) => {
+  const resolved = await resolveAdmissionBudget(options);
+  if (Result.isError(resolved)) {
+    return resolved;
+  }
+  // A queued kickoff relinquishes its slot after enqueue; its period cap bounds backlog.
+  if (resolved.value.budget === null) {
+    return Result.err(
+      new ActionAdmissionError({
+        message: "Queued action admission requires a configured period budget",
+        reason: "unavailable",
+      }),
+    );
+  }
+  return resolved;
+};
+
+type InheritedQueuedAdmissionOptions<T> = {
+  inherited: AdmissionScope;
+  organizationBudgetOptions: ResolveAdmissionBudgetOptions;
+  organizationId: SafeId<"organization">;
+  userId: SafeId<"user">;
+  periodIdentity: AdmittedActionIdentity | undefined;
+  periodReservation: ActionAdmissionOptions["periodReservation"];
+  redis: RedisCommands | undefined;
+  redisReady: () => Promise<RedisCommands>;
+  run: ActionAdmissionOptions<T>["run"];
+};
+
+const runInheritedQueuedAdmission = async <T>({
+  inherited,
+  organizationBudgetOptions,
+  organizationId,
+  userId,
+  periodIdentity,
+  periodReservation,
+  redis,
+  redisReady,
+  run,
+}: InheritedQueuedAdmissionOptions<T>): Promise<Result<T, unknown>> => {
+  const nestedBudgetOptions = {
+    ...organizationBudgetOptions,
+    organizationStateDb:
+      organizationBudgetOptions.organizationStateDb ??
+      inherited.organizationBudgetOptions.organizationStateDb,
+    readOrganizationState:
+      organizationBudgetOptions.readOrganizationState ??
+      inherited.organizationBudgetOptions.readOrganizationState,
+  };
+  const resolved = await resolveQueuedBudget(nestedBudgetOptions);
+  if (Result.isError(resolved)) {
+    return resolved;
+  }
+  const nested = createPeriodReservationScope({
+    keys: inherited.keys,
+    budget: null,
+    serviceDeadlineMs: resolved.value.serviceDeadlineMs,
+    organizationId,
+    userId,
+    periodIdentity,
+    redis,
+    redisReady,
+    signal: inherited.signal,
+    limits: inherited.limits,
+    leaseId: inherited.leaseId,
+    organizationBudgetOptions: nestedBudgetOptions,
+    queuedIdentity: periodIdentity,
+  });
+  try {
+    return await admissionScope.run(nested, async () => {
+      inherited.signal.throwIfAborted();
+      if (periodReservation !== "on-acceptance") {
+        const reserved = await nested.control.reservePeriod(
+          periodIdentity ?? panic("Queued action identity is missing"),
+        );
+        if (Result.isError(reserved)) {
+          return reserved;
+        }
+      }
+      return await Result.tryPromise({
+        try: async () => await run(inherited.signal, nested.control),
+        catch: (error: unknown) => error,
+      });
+    });
+  } finally {
+    nested.status = "settled";
+  }
+};
+
+type ResolveExecutionBudgetOptions = Pick<
+  ActionAdmissionOptions,
+  "mode" | "execution"
+> & {
+  organizationBudgetOptions: ResolveAdmissionBudgetOptions;
+};
+
+const resolveExecutionBudget = async ({
+  mode,
+  execution,
+  organizationBudgetOptions,
+}: ResolveExecutionBudgetOptions) => {
+  if (mode === "concurrency-only" || execution === "background-job") {
+    return Result.ok({ budget: null, serviceDeadlineMs: null });
+  }
+  if (execution === "queued-kickoff") {
+    return await resolveQueuedBudget(organizationBudgetOptions);
+  }
+  return await resolveAdmissionBudget(organizationBudgetOptions);
+};
+
+const settledAdmissionOutcome = <T>(
+  outcome: Result<T, unknown>,
+  signal: AbortSignal,
+) => {
+  // A settled success may already have committed or charged. Losing the lease
+  // cannot replace it with an infrastructure error that invites duplicate work.
+  if (
+    Result.isError(outcome) &&
+    signal.aborted &&
+    (outcome.error === signal.reason ||
+      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
+  ) {
+    return Result.err(signal.reason);
+  }
+  return outcome;
 };
 
 const withEnabledActionAdmission = async <T>({
@@ -746,6 +918,8 @@ const withEnabledActionAdmission = async <T>({
   periodIdentity,
   periodPolicy,
   organizationBudgetOptions,
+  execution,
+  periodReservation,
   redis,
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
@@ -755,11 +929,25 @@ const withEnabledActionAdmission = async <T>({
 }): Promise<Result<T, unknown>> => {
   const inherited = admissionScope.getStore();
   if (
+    execution !== "background-job" &&
     scope === "inherit" &&
     inherited?.status === "active" &&
     inherited.organizationId === organizationId &&
     inherited.userId === userId
   ) {
+    if (execution === "queued-kickoff") {
+      return await runInheritedQueuedAdmission({
+        inherited,
+        organizationBudgetOptions,
+        organizationId,
+        userId,
+        periodIdentity,
+        periodReservation,
+        redis,
+        redisReady,
+        run,
+      });
+    }
     return await reuseAdmissionScope({
       scope: inherited,
       organizationId,
@@ -772,27 +960,30 @@ const withEnabledActionAdmission = async <T>({
     });
   }
 
-  const resolvedBudget =
-    mode === "concurrency-only"
-      ? Result.ok({ budget: null, serviceDeadlineMs: null })
-      : await resolveAdmissionBudget(organizationBudgetOptions);
+  const resolvedBudget = await resolveExecutionBudget({
+    mode,
+    execution,
+    organizationBudgetOptions,
+  });
   if (Result.isError(resolvedBudget)) {
     return resolvedBudget;
   }
   const { budget, serviceDeadlineMs } = resolvedBudget.value;
 
+  const pool = execution === "background-job" ? "background" : "interactive";
   const resolvedPolicy =
-    policy === undefined ? configuredPolicy() : Result.ok(policy);
+    policy === undefined ? configuredPolicy(pool) : Result.ok(policy);
   if (Result.isError(resolvedPolicy)) {
     return resolvedPolicy;
   }
   const limits = resolvedPolicy.value;
-  const keys = admissionKeys({ organizationId, userId });
+  const keys = admissionKeys({ organizationId, userId, pool });
   const leaseId = createId();
-  const periodArgs = actionPeriodArguments(budget);
+  const initialBudget = periodReservation === "on-acceptance" ? null : budget;
+  const periodArgs = actionPeriodArguments(initialBudget);
   const execute = createAdmissionExecutor({
     keys,
-    budget,
+    budget: initialBudget,
     serviceDeadlineMs,
     organizationId,
     periodIdentity,
@@ -889,7 +1080,7 @@ const withEnabledActionAdmission = async <T>({
   let outcome: Result<T, unknown>;
   const executionScope = createPeriodReservationScope({
     keys,
-    budget,
+    budget: initialBudget,
     serviceDeadlineMs,
     organizationId,
     userId,
@@ -897,6 +1088,7 @@ const withEnabledActionAdmission = async <T>({
     redis,
     redisReady,
     signal: controller.signal,
+    queuedIdentity: execution === "queued-kickoff" ? periodIdentity : undefined,
     limits,
     leaseId,
     organizationBudgetOptions,
@@ -922,17 +1114,7 @@ const withEnabledActionAdmission = async <T>({
       observeFailure(released.error, { sink: RELEASE_FAILURE });
     }
   }
-  // A settled success may already have committed or charged. Losing the lease
-  // cannot replace it with an infrastructure error that invites duplicate work.
-  if (
-    Result.isError(outcome) &&
-    controller.signal.aborted &&
-    (outcome.error === controller.signal.reason ||
-      (outcome.error instanceof Error && outcome.error.name === "AbortError"))
-  ) {
-    return Result.err(controller.signal.reason);
-  }
-  return outcome;
+  return settledAdmissionOutcome(outcome, controller.signal);
 };
 
 export const withActionAdmission = async <T>(

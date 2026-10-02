@@ -36,6 +36,7 @@ import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-e
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
+import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 
@@ -443,6 +444,18 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "work-obligations/queues/list.ts": {
     kind: "no-web-caller",
     calls: ['api["my-work"].get'],
+  },
+  "workspaces/member-previews/list.ts": {
+    kind: "keyed",
+    calls: ['api.workspaces["member-previews"].get'],
+    files: ["lib/workspaces/queries/workspace-member-previews.ts"],
+    keys: () => [
+      workspaceMemberPreviewsOptions({
+        organizationId: ORG,
+        userId: USER,
+        workspaceIds: [WORKSPACE],
+      }).queryKey,
+    ],
   },
   "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "workspaces/read-active.ts": {
