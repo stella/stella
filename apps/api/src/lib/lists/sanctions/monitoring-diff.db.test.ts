@@ -33,6 +33,7 @@ import {
 } from "@/api/lib/lists/sanctions/monitoring-input";
 import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
 import { screenSanctionsSubject } from "@/api/lib/lists/sanctions/screening-service";
+import type { SanctionsPossibleMatch } from "@/api/lib/lists/sanctions/screening-service";
 import { encodePaginationCursor } from "@/api/lib/pagination";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -258,6 +259,128 @@ const matchFor = async (contactId: typeof contacts.$inferSelect.id) =>
       .from(sanctionsContactMatches)
       .where(eq(sanctionsContactMatches.contactId, contactId))
   ).at(0) ?? panic("Expected current match");
+
+const stateFor = async (contactId: typeof contacts.$inferSelect.id) => ({
+  matches: await db
+    .select()
+    .from(sanctionsContactMatches)
+    .where(eq(sanctionsContactMatches.contactId, contactId))
+    .orderBy(sanctionsContactMatches.sourceEntryId),
+  events: await db
+    .select()
+    .from(sanctionsScreeningEvents)
+    .where(eq(sanctionsScreeningEvents.contactId, contactId))
+    .orderBy(sanctionsScreeningEvents.id),
+  coverage: await screeningFor(contactId),
+});
+
+test(
+  "incomplete monitoring outcomes preserve matches events and coverage at the result bound",
+  async () => {
+    const editionId = await activate("5");
+    const contact = await addContact();
+    const work = await prepare(contact);
+    const outcome = work.outcome;
+    if (outcome.status !== "possible-match") {
+      panic("Expected matching fixture");
+    }
+    const hit = outcome.possibleMatches[0];
+    const outcomeWithHits = (
+      possibleMatches: [SanctionsPossibleMatch, ...SanctionsPossibleMatch[]],
+      truncated = false,
+    ) => ({
+      ...outcome,
+      possibleMatches,
+      truncated,
+      totalMatches: possibleMatches.length,
+    });
+    const hits = Array.from({ length: 1001 }, (_, index) => ({
+      ...hit,
+      sourceEntryId: `bound-${index.toString().padStart(4, "0")}`,
+    }));
+    const payload =
+      (
+        await db
+          .select()
+          .from(sanctionsEntryPayloads)
+          .where(eq(sanctionsEntryPayloads.contentHash, "5".repeat(64)))
+      ).at(0)?.payload ?? panic("Bound fixture payload missing");
+    const entries = hits.map(({ sourceEntryId }) => {
+      const entry = { ...payload, sourceId: sourceEntryId };
+      return {
+        sourceEntryId,
+        payload: entry,
+        contentHash: createHash("sha256")
+          .update(JSON.stringify(entry))
+          .digest("hex"),
+      };
+    });
+    await db.insert(sanctionsEntryPayloads).values(
+      entries.map(({ payload: entry, contentHash }) => ({
+        payload: entry,
+        contentHash,
+      })),
+    );
+    await db
+      .delete(sanctionsEditionEntries)
+      .where(eq(sanctionsEditionEntries.editionId, editionId));
+    await db.insert(sanctionsEditionEntries).values(
+      entries.slice(0, 2).map(({ sourceEntryId, contentHash }) => ({
+        editionId,
+        sourceEntryId,
+        contentHash,
+      })),
+    );
+    await db
+      .update(sanctionsEditions)
+      .set({ entryCount: 2 })
+      .where(eq(sanctionsEditions.id, editionId));
+    const first = hits.at(0) ?? panic("First hit missing");
+    const second = hits.at(1) ?? panic("Second hit missing");
+    expect(
+      await commit({ ...work, outcome: outcomeWithHits([first, second]) }),
+    ).toEqual([contact.id]);
+    const initial = await stateFor(contact.id);
+    expect(initial.matches.map(({ state }) => state)).toEqual([
+      "active",
+      "active",
+    ]);
+    expect(initial.events).toHaveLength(2);
+    for (const incompleteOutcome of [
+      outcomeWithHits([first], true),
+      outcomeWithHits([first, ...hits.slice(1)]),
+    ]) {
+      await expectFailure(
+        async () => await commit({ ...work, outcome: incompleteOutcome }),
+        "Monitoring requires the complete sanctions result set",
+      );
+      expect(await stateFor(contact.id)).toEqual(initial);
+    }
+    await db.insert(sanctionsEditionEntries).values(
+      entries.slice(2, 1000).map(({ sourceEntryId, contentHash }) => ({
+        editionId,
+        sourceEntryId,
+        contentHash,
+      })),
+    );
+    await db
+      .update(sanctionsEditions)
+      .set({ entryCount: 1000 })
+      .where(eq(sanctionsEditions.id, editionId));
+    const complete = {
+      ...work,
+      outcome: outcomeWithHits([first, ...hits.slice(1, 1000)]),
+    };
+    expect(await commit(complete)).toEqual([contact.id]);
+    const boundary = await stateFor(contact.id);
+    expect(boundary.matches).toHaveLength(1000);
+    expect(boundary.events).toHaveLength(1000);
+    expect(boundary.coverage.status).toBe("possible-match");
+    await commit(complete);
+    expect(await stateFor(contact.id)).toEqual(boundary);
+  },
+  TIMEOUT,
+);
 
 test(
   "full-edition diff converges across replay, unchanged review, changed entries, lapse and reopen",
@@ -1368,6 +1491,274 @@ test(
       match: "informational",
       open: "informational",
     });
+  },
+  TIMEOUT,
+);
+
+test(
+  "active evidence changes append one changed event and preserve unchanged reviews",
+  async () => {
+    await activate("3");
+    const contact = await addContact();
+    const work = await prepare(contact);
+    if (work.outcome.status !== "possible-match") {
+      panic("Expected active matching fixture");
+    }
+    await commit(work);
+    const old = await matchFor(contact.id);
+    const newEdition = await activate("4");
+    const changed = await prepare(contact);
+    if (changed.outcome.status !== "possible-match") {
+      panic("Expected changed matching fixture");
+    }
+    await commit(changed);
+    await commit(changed);
+    const history = await eventsFor(contact.id);
+    expect(history.map(({ type }) => type).toSorted()).toEqual([
+      "changed",
+      "new",
+    ]);
+    expect(history.find(({ type }) => type === "changed")).toMatchObject({
+      oldMatch: old.match,
+      newMatch: changed.outcome.possibleMatches[0],
+      oldEditionId: old.editionId,
+      newEditionId: newEdition,
+      reason: "evidence-changed",
+    });
+    const reviewer = toSafeId<"user">("monitoring-evidence-reviewer");
+    await db.insert(user).values({
+      id: reviewer,
+      name: "Reviewer",
+      email: "monitoring-reviewer@example.test",
+    });
+    await db
+      .update(sanctionsContactMatches)
+      .set({
+        disposition: "dismissed",
+        reviewedBy: reviewer,
+        reviewReason: "Confirmed distinct identity",
+      })
+      .where(eq(sanctionsContactMatches.contactId, contact.id));
+    const before = await matchFor(contact.id);
+    const hit = changed.outcome.possibleMatches[0];
+    const evidenceOnly = {
+      ...changed,
+      outcome: {
+        ...changed.outcome,
+        possibleMatches: [
+          {
+            ...hit,
+            evidence: { ...hit.evidence, matchedName: "Synthetic Alternate" },
+          },
+        ],
+      } satisfies typeof changed.outcome,
+    };
+    await commit(evidenceOnly);
+    const after = await matchFor(contact.id);
+    expect(after).toMatchObject({
+      disposition: before.disposition,
+      reviewedBy: reviewer,
+      reviewReason: before.reviewReason,
+      entryHash: before.entryHash,
+      contactFingerprint: before.contactFingerprint,
+      match: evidenceOnly.outcome.possibleMatches[0],
+    });
+    const evidenceHistory = await eventsFor(contact.id);
+    expect(evidenceHistory.map(({ type }) => type).toSorted()).toEqual([
+      "changed",
+      "changed",
+      "new",
+    ]);
+    expect(
+      evidenceHistory.find(
+        ({ newMatch }) =>
+          newMatch?.evidence.matchedName === "Synthetic Alternate",
+      ),
+    ).toMatchObject({
+      oldMatch: before.match,
+      newMatch: evidenceOnly.outcome.possibleMatches[0],
+      oldEditionId: newEdition,
+      newEditionId: newEdition,
+      reason: "evidence-changed",
+    });
+    await commit(evidenceOnly);
+    expect(await eventsFor(contact.id)).toEqual(evidenceHistory);
+    expect(await matchFor(contact.id)).toEqual(after);
+  },
+  TIMEOUT,
+);
+
+test(
+  "batch bounds and source mismatches reject work without writes",
+  async () => {
+    await activate("2");
+    const contact = await addContact();
+    const work = await prepare(contact);
+    await commit(work);
+    const initial = await stateFor(contact.id);
+    const options = {
+      db: scopedDb,
+      organizationId: orgId,
+      source: "eu",
+      now,
+    } as const;
+    await expectFailure(
+      async () =>
+        await commitSanctionsMonitoringBatch({
+          ...options,
+          results: [work, work],
+        }),
+      "Sanctions monitoring batch contains duplicate contacts",
+    );
+    expect(await stateFor(contact.id)).toEqual(initial);
+    const contactRows = await db
+      .insert(contacts)
+      .values(
+        Array.from({ length: 101 }, () => ({
+          organizationId: orgId,
+          type: "person" as const,
+          displayName: "Bound Contact",
+        })),
+      )
+      .returning();
+    await expectFailure(
+      async () =>
+        await commitSanctionsMonitoringBatch({
+          ...options,
+          results: contactRows.map(({ id }) => ({ ...work, contactId: id })),
+        }),
+      "Sanctions monitoring batch exceeds its bound",
+    );
+    expect(await stateFor(contact.id)).toEqual(initial);
+    const ids = contactRows.map(({ id }) => id);
+    expect(
+      await db
+        .select()
+        .from(sanctionsScreeningEvents)
+        .where(inArray(sanctionsScreeningEvents.contactId, ids)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(sanctionsContactMatches)
+        .where(inArray(sanctionsContactMatches.contactId, ids)),
+    ).toEqual([]);
+    expect(
+      await db
+        .select()
+        .from(sanctionsContactScreenings)
+        .where(inArray(sanctionsContactScreenings.contactId, ids)),
+    ).toEqual([]);
+    expect(
+      await commit({ ...work, outcome: { ...work.outcome, source: "un" } }),
+    ).toEqual([]);
+    expect(await stateFor(contact.id)).toEqual(initial);
+  },
+  TIMEOUT,
+);
+
+test(
+  "contact birth precision and registration numbers reach the real screening evidence",
+  async () => {
+    const editionId = await activate("0", 0);
+    const base: SanctionsEntry = {
+      source: "eu",
+      issuer: SANCTIONS_SOURCES.eu.issuer,
+      sourceId: "precision-person",
+      referenceNumber: null,
+      entityType: "person",
+      names: [{ name: "Čeněk Šťastný", quality: "strong" }],
+      birthDates: [
+        { precision: "day", year: 1980, month: 4, day: 3, circa: false },
+      ],
+      nationalities: [],
+      identifiers: [],
+      addresses: [],
+      programme: null,
+      legalBasis: null,
+      listedOn: null,
+      sourceUrl: "https://example.test/precision",
+    };
+    const listedOrganization: SanctionsEntry = {
+      ...base,
+      sourceId: "registration-organization",
+      entityType: "organisation",
+      names: [{ name: "Listed Enterprise", quality: "strong" }],
+      birthDates: [],
+      identifiers: [
+        {
+          kind: "registration",
+          status: "listed",
+          label: "Registration",
+          number: "REG123",
+          country: null,
+        },
+      ],
+    };
+    const entries = [base, listedOrganization].map((payload) => ({
+      payload,
+      contentHash: createHash("sha256")
+        .update(JSON.stringify(payload))
+        .digest("hex"),
+    }));
+    await db.insert(sanctionsEntryPayloads).values(entries);
+    await db.insert(sanctionsEditionEntries).values(
+      entries.map(({ payload, contentHash }) => ({
+        editionId,
+        sourceEntryId: payload.sourceId,
+        contentHash,
+      })),
+    );
+    await db
+      .update(sanctionsEditions)
+      .set({ entryCount: entries.length })
+      .where(eq(sanctionsEditions.id, editionId));
+    const person = await addContact();
+    const full = {
+      ...person,
+      displayName: "Čeněk Šťastný",
+      dateOfBirthMonth: 4,
+      dateOfBirthDay: 3,
+    };
+    const matching = await prepare(full);
+    const dayMismatch = await prepare({ ...full, dateOfBirthDay: 4 });
+    const monthMismatch = await prepare({ ...full, dateOfBirthMonth: 5 });
+    const yearOnly = await prepare({
+      ...full,
+      dateOfBirthMonth: null,
+      dateOfBirthDay: null,
+    });
+    const hitFor = (work: Awaited<ReturnType<typeof prepare>>) =>
+      work.outcome.possibleMatches.find(
+        ({ sourceEntryId }) => sourceEntryId === "precision-person",
+      ) ?? panic("Precision fixture not matched");
+    expect(hitFor(matching).evidence.birthDate).toBe("match");
+    expect(hitFor(yearOnly).evidence.birthDate).toBe("match");
+    for (const mismatch of [dayMismatch, monthMismatch]) {
+      expect(hitFor(mismatch).evidence.birthDate).toBe("mismatch");
+      expect(hitFor(mismatch).score).toBeLessThan(hitFor(matching).score);
+    }
+    const contact = {
+      ...person,
+      type: "organization" as const,
+      displayName: "Other Display",
+      organizationName: "Distinct Trading",
+      registrationNumber: "REG123",
+    };
+    const byRegistration = await prepare(contact);
+    expect(
+      byRegistration.outcome.possibleMatches.map(
+        ({ sourceEntryId }) => sourceEntryId,
+      ),
+    ).toEqual(["registration-organization"]);
+    expect(
+      byRegistration.outcome.possibleMatches.at(0)?.evidence.identifier,
+    ).toBe("match");
+    const withoutRegistration = await prepare({
+      ...contact,
+      registrationNumber: null,
+    });
+    expect(withoutRegistration.outcome.possibleMatches).toEqual([]);
   },
   TIMEOUT,
 );
