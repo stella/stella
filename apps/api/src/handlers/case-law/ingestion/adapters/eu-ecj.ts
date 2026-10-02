@@ -1,3 +1,4 @@
+// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -42,7 +43,10 @@ import type {
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchPublisher,
+  PublisherRateLimitRefusalError,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -493,6 +497,7 @@ const queryDecisions = async ({
 
   const response = await fetchPublisher(SPARQL_URL, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     method: "POST",
     signal,
     timeoutMs,
@@ -799,6 +804,7 @@ const readDocumentResponse = async ({
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -936,12 +942,14 @@ const fetchManifestation = async ({
         signal,
       }),
     catch: (cause) =>
-      new AdapterFetchError({
-        message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        cursor: null,
-        cause,
-      }),
+      cause instanceof AdapterFetchError
+        ? cause
+        : new AdapterFetchError({
+            message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor: null,
+            cause,
+          }),
   });
   if (Result.isError(fetched)) {
     return fetched;
@@ -1673,6 +1681,7 @@ const fetchNotice = async (
   }
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -1726,6 +1735,7 @@ const fetchFormex = async (
   }
   const response = await fetchPublisher(contentUrl.value, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -2750,6 +2760,7 @@ export const euEcjAdapter = defineSourceAdapter({
     try {
       const response = await fetchPublisher(SPARQL_URL, {
         adapterKey: ADAPTER_KEYS.EU_ECJ,
+        retryPolicy: "publisher-backoff",
         method: "POST",
         signal,
         timeoutMs: 60_000,
@@ -2861,7 +2872,19 @@ export const euEcjAdapter = defineSourceAdapter({
           itemBuildFailures: { type: "item_build_failed", count: failed },
         };
       },
-      catch: adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor),
+      catch: (cause) => {
+        const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);
+        if (error instanceof PublisherRateLimitRefusalError) {
+          return new PublisherRateLimitRefusalError({
+            publisherKey: error.publisherKey,
+            status: error.status,
+            cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor,
+          });
+        }
+        return error;
+      },
     });
   },
 });

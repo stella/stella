@@ -1,8 +1,20 @@
 import type { CallToolResult } from "@modelcontextprotocol/server";
 import { Result } from "better-result";
-import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  mock,
+  test,
+} from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import {
+  resetMetricLineSinkForTesting,
+  setMetricLineSinkForTesting,
+} from "@/api/lib/observability/request-metrics";
 import type { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { anonymizeTextFieldsWithDependencies } from "@/api/mcp/anonymization-core";
 import type { AnonymizeTextFieldsInput } from "@/api/mcp/anonymization-core";
@@ -643,6 +655,94 @@ describe("finalizeMcpEgress", () => {
   });
 });
 
+describe("an anonymizer failure at egress", () => {
+  beforeEach(() => {
+    anonymizeTextFieldsMock.mockReset();
+    anonymizeTextFieldsMock.mockRejectedValue(
+      new Error("anonymizer unavailable"),
+    );
+    loadGazetteerByWorkspaceMock.mockReset();
+    loadGazetteerByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+    loadAllowlistByWorkspaceMock.mockReset();
+    loadAllowlistByWorkspaceMock.mockImplementation(emptyCatalogsByWorkspace);
+  });
+
+  afterEach(() => {
+    resetMetricLineSinkForTesting();
+  });
+
+  /** One anonymized plan per egress variant, each carrying tenant text. */
+  const ANONYMIZED_PLANS = {
+    compatFetch: () => ({
+      cursor: undefined,
+      egress: "compatFetch",
+      id: "entity_1",
+      maxChars: 100,
+      subject: { kind: "document", workspaceId: "ws_1" },
+      text: "John Smith signed here",
+      title: "John Smith SPA",
+      url: "https://example.test/doc",
+    }),
+    compatSearch: () => ({
+      egress: "compatSearch",
+      nextCursor: null,
+      results: [
+        {
+          id: "entity_1",
+          kind: "matter",
+          title: "John Smith SPA",
+          url: "https://example.test/1",
+          workspaceId: "ws_1",
+        },
+      ],
+    }),
+    structured: () => {
+      const payload = { name: "John Smith Ltd" };
+      return {
+        egress: "structured",
+        payload,
+        textFields: [
+          {
+            apply: (value: string) => {
+              payload.name = value;
+            },
+            value: payload.name,
+            workspaceId: "ws_1",
+          },
+        ],
+      };
+    },
+  } as const satisfies Record<McpEgressPlan["egress"], () => McpEgressPlan>;
+
+  for (const [egress, plan] of Object.entries(ANONYMIZED_PLANS)) {
+    test(`${egress} is refused without its text and counts one refusal`, async () => {
+      const lines: string[] = [];
+      setMetricLineSinkForTesting((line) => {
+        lines.push(line);
+      });
+
+      const result = await finalizeMcpEgress({
+        context: createContext(),
+        mode: "anonymized",
+        response: plan(),
+      });
+      expect(anonymizeTextFieldsMock).toHaveBeenCalledTimes(1);
+      expect(result.isError).toBe(true);
+      expect(JSON.stringify(result)).toContain(
+        "Tool output could not be anonymized",
+      );
+      expect(JSON.stringify(result)).not.toContain("John Smith");
+      expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
+        expect.objectContaining({
+          AnonymizationRefusals: 1,
+          reason: "pipeline_error",
+          site: "mcp_egress",
+        }),
+      ]);
+    });
+  }
+});
+
 describe("egress whose anonymization output lost its field structure", () => {
   const RAW_NAME = "John Smith";
   const damagingDependencies = createRewritingAnonymizeDependencies((text) =>
@@ -652,6 +752,10 @@ describe("egress whose anonymization output lost its field structure", () => {
     response: Parameters<typeof finalizeToolEgress>[0]["response"],
   ) => {
     let anonymizeCalls = 0;
+    const metricLines: string[] = [];
+    setMetricLineSinkForTesting((line) => {
+      metricLines.push(line);
+    });
     const result = serializeToolResult(
       await finalizeToolEgress(
         { context: createContext(), mode: "anonymized", response },
@@ -672,17 +776,30 @@ describe("egress whose anonymization output lost its field structure", () => {
         },
       ),
     );
-    return { anonymizeCalls, result };
+    return { anonymizeCalls, metricLines, result };
   };
+
+  afterEach(() => {
+    resetMetricLineSinkForTesting();
+  });
 
   const expectRefusedWithoutRawText = ({
     anonymizeCalls,
+    metricLines,
     result,
   }: Awaited<ReturnType<typeof finalizeWithDamagedOutput>>) => {
     // The fixture must reach the anonymizer, or the refusal proves nothing.
     expect(anonymizeCalls).toBeGreaterThan(0);
     expect(result.isError).toBe(true);
     expect(JSON.stringify(result)).not.toContain(RAW_NAME);
+    // The refusal is counted once, as a damaged field structure.
+    expect(metricLines.map((line): unknown => JSON.parse(line))).toEqual([
+      expect.objectContaining({
+        AnonymizationRefusals: 1,
+        reason: "field_boundary",
+        site: "mcp_egress",
+      }),
+    ]);
   };
 
   test("a fetched document is refused", async () => {

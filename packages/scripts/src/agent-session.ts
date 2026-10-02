@@ -406,6 +406,16 @@ const printStatus = (root: string, runtime: DevRuntime) => {
 };
 
 const up = async (root: string, args: readonly string[]) => {
+  const generation = Bun.spawn({
+    cmd: [process.execPath, "run", "generate"],
+    cwd: root,
+    stdio: ["inherit", "inherit", "inherit"],
+  });
+  if ((await generation.exited) !== 0) {
+    fail(
+      "Web source generation failed; fix the generator before starting the stack",
+    );
+  }
   const reused = await liveRuntime(root);
   const runtime =
     reused ??
