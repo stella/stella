@@ -130,7 +130,7 @@ const assertRevisionSequence = async ({
       }
       default: {
         const exhaustive: never = action;
-        panic(`Unknown generated revision action: ${exhaustive}`);
+        panic(`Unknown generated revision action: ${String(exhaustive)}`);
       }
     }
     const row = await readItem(sourceId, identityKey);

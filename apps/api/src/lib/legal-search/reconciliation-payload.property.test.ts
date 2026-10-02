@@ -21,7 +21,7 @@ const reverseObjectKeys = (value: unknown): unknown => {
 
 test("listing fingerprints survive JSON persistence and object key order", () => {
   assertProperty(
-    "reconciliation-payload-json-and-key-order-fixed-point",
+    "listing fingerprints survive JSON persistence and object key order",
     fc.property(fc.jsonValue(), (payload) => {
       const serialized = JSON.stringify(payload);
       const stored: unknown = JSON.parse(serialized);
@@ -45,7 +45,7 @@ test("listing fingerprints survive JSON persistence and object key order", () =>
 
 test("listing fingerprints distinguish publisher revisions and JSON shapes", () => {
   assertProperty(
-    "reconciliation-payload-revision-and-shape-distinction",
+    "listing fingerprints distinguish publisher revisions and JSON shapes",
     fc.property(fc.jsonValue(), (payload) => {
       expect(
         fingerprintReconciliationPayload({ payload, revision: 1 }),
@@ -73,7 +73,7 @@ test("listing fingerprints distinguish publisher revisions and JSON shapes", () 
 
 test("listing fingerprints retain every persisted JSON object key", () => {
   assertProperty(
-    "reconciliation-payload-reserved-json-keys-distinction",
+    "listing fingerprints retain every persisted JSON object key",
     fc.property(
       fc.constantFrom("__proto__", "constructor", "toString"),
       fc.jsonValue(),

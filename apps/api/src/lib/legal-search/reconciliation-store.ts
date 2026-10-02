@@ -26,6 +26,7 @@ import {
 import type { ReconciliationItemStatus } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { chunked } from "@/api/lib/chunked";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { logger } from "@/api/lib/observability/logger";
 
@@ -523,13 +524,7 @@ export const refreshTrackedReconciliationItems = async (
 ): Promise<RefreshTrackedReconciliationItemsResult> => {
   const trackedIdentityKeys = new Set<string>();
   const refreshedIdentityKeys = new Set<string>();
-  for (
-    let offset = 0;
-    offset < items.length;
-    offset += LISTING_REVISION_BATCH_SIZE
-  ) {
-    const page = items.slice(offset, offset + LISTING_REVISION_BATCH_SIZE);
-    // db-await-in-loop: bounded 250-item transitions from one completed listing walk, under its source lease
+  for (const page of chunked(items, LISTING_REVISION_BATCH_SIZE)) {
     const result = await scopedDb(async (tx) => {
       if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
         return { outcome: "superseded" as const };

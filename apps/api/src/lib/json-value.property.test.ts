@@ -7,7 +7,7 @@ import { toJsonObject } from "@/api/lib/json-value";
 
 test("JSON conversion retains own object keys through persistence", () => {
   assertProperty(
-    "json-value-own-key-preservation",
+    "JSON conversion retains own object keys through persistence",
     fc.property(
       fc.constantFrom("__proto__", "constructor", "toString"),
       fc.jsonValue(),

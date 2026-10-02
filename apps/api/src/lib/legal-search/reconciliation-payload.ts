@@ -15,10 +15,9 @@ export class ReconciliationPayloadSerializationError extends TaggedError(
 export const fingerprintReconciliationPayload = (payload: unknown): string => {
   const normalized = Result.try({
     try: () => {
-      const serialized = JSON.stringify(payload);
-      if (serialized === undefined) {
-        return panic("Reconciliation payload must have a JSON representation");
-      }
+      const serialized =
+        JSON.stringify(payload) ||
+        panic("Reconciliation payload must have a JSON representation");
       const decoded: unknown = JSON.parse(serialized);
       return toJsonValue(decoded);
     },

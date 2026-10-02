@@ -358,7 +358,7 @@ describe.skipIf(!enabled)(
         if (crawlLease === null) {
           finishFetch.resolve(undefined);
           await staleRun;
-          return panic("The next crawl must acquire the expired source lease");
+          panic("The next crawl must acquire the expired source lease");
         }
         try {
           try {
@@ -392,7 +392,7 @@ describe.skipIf(!enabled)(
           const stale = await staleRun;
           expect(stale.isErr()).toBe(true);
           if (stale.isOk()) {
-            return panic("A stale worker must reject its lost source lease");
+            panic("A stale worker must reject its lost source lease");
           }
           expect(stale.error).toBeInstanceOf(ConcurrentModificationError);
           expect(await fixture.row(id)).toBeUndefined();
