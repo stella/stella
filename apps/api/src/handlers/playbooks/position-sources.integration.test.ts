@@ -15,9 +15,11 @@ import { eq, inArray } from "drizzle-orm";
 
 import { entities, playbookDefinitions } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
+import approvePlaybookDefinition from "@/api/handlers/playbooks/approve";
 import createPlaybookDefinition from "@/api/handlers/playbooks/create";
 import getPlaybookDefinition from "@/api/handlers/playbooks/get";
 import updatePlaybookDefinition from "@/api/handlers/playbooks/update";
+import restorePlaybookVersion from "@/api/handlers/playbooks/versions/restore";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -275,6 +277,87 @@ describe("playbook position sources: the save rule", () => {
 
     expect(statusOf(result)).toBeNull();
     expect(await storedSources(playbookId)).toEqual([source]);
+  });
+});
+
+describe("playbook position sources: restoring a version", () => {
+  /** Approve as A1, which snapshots the current positions as version 1. */
+  const approve = async (playbookId: SafeId<"playbookDefinition">) => {
+    const rows = await testDb
+      .select({ updatedAt: playbookDefinitions.updatedAt })
+      .from(playbookDefinitions)
+      .where(eq(playbookDefinitions.id, playbookId));
+    const result: unknown = await approvePlaybookDefinition.handler(
+      asTestRaw<Parameters<typeof approvePlaybookDefinition.handler>[0]>({
+        ...contextFor("a1"),
+        params: { playbookId },
+        body: { expectedUpdatedAt: rows.at(0)?.updatedAt.toISOString() },
+      }),
+    );
+    expect(statusOf(result)).toBeNull();
+  };
+
+  const restore = async (
+    actor: Actor,
+    playbookId: SafeId<"playbookDefinition">,
+  ): Promise<unknown> =>
+    await restorePlaybookVersion.handler(
+      asTestRaw<Parameters<typeof restorePlaybookVersion.handler>[0]>({
+        ...contextFor(actor),
+        params: { playbookId, version: 1 },
+      }),
+    );
+
+  /** Version 1 cites `source`; the current definition no longer does. */
+  const withSnapshotOnlySource = async (source: PositionSource) => {
+    const playbookId = await createdBy("a1", positionsCiting([source]));
+    await approve(playbookId);
+    expect(
+      statusOf(await update("a1", playbookId, positionsCiting(undefined))),
+    ).toBeNull();
+    expect(await storedSources(playbookId)).toBeUndefined();
+    return playbookId;
+  };
+
+  test("a restore cannot bring back a source the restorer cannot read", async () => {
+    const source = { workspaceId: ids.wsA1, entityId: ids.entityA1 };
+    const playbookId = await withSnapshotOnlySource(source);
+
+    const result = await restore("a2", playbookId);
+
+    expect(statusOf(result)).toBe(403);
+    expect(await storedSources(playbookId)).toBeUndefined();
+  });
+
+  test("a restore brings back a source the restorer can read", async () => {
+    const source = { workspaceId: ids.wsA1, entityId: ids.entityA1 };
+    const playbookId = await withSnapshotOnlySource(source);
+
+    const result = await restore("a1", playbookId);
+
+    expect(statusOf(result)).toBeNull();
+    expect(await storedSources(playbookId)).toEqual([source]);
+  });
+
+  test("a restore carries a source the current definition still stores", async () => {
+    const source = { workspaceId: ids.wsA1, entityId: ids.entityA1 };
+    const playbookId = await createdBy("a1", positionsCiting([source]));
+    await approve(playbookId);
+    await update(
+      "a1",
+      playbookId,
+      positionsCiting([source], "Governing law and venue"),
+    );
+
+    const result = await restore("a2", playbookId);
+
+    expect(statusOf(result)).toBeNull();
+    expect(await storedSources(playbookId)).toEqual([source]);
+    const rows = await testDb
+      .select({ positions: playbookDefinitions.positions })
+      .from(playbookDefinitions)
+      .where(eq(playbookDefinitions.id, playbookId));
+    expect(rows.at(0)?.positions.items.at(0)?.issue).toBe("Governing law");
   });
 });
 
