@@ -667,6 +667,13 @@ export const createInspectorTabsSlice = (
       state.flashSeq += 1;
     }),
 
+  clearTabFlash: (tabId) =>
+    set((state) => {
+      if (state.flashTabId === tabId) {
+        state.flashTabId = null;
+      }
+    }),
+
   closeTabsOutsideRoutes: (routeIds) =>
     set((state) => {
       const removed = new Set<string>();

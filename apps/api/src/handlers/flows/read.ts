@@ -12,6 +12,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedFlowDefinitionId } from "@/api/lib/safe-id-boundaries";
 
 // ── List ────────────────────────────────────────────────
@@ -41,7 +42,9 @@ export const listFlowDefinitionsHandler = async function* ({
   organizationId,
   query,
 }: ListFlowDefinitionsProps) {
-  const limit = query.limit ?? LIMITS.flowDefinitionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.flowDefinitionsPageSizeDefault,
+  );
   const conditions = [eq(flowDefinitions.organizationId, organizationId)];
 
   if (query.cursor) {

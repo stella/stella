@@ -19,13 +19,14 @@ import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   readThreadStoredContentSendModeOnTx,
   THREAD_STORED_CONTENT_SEND_MODE,
 } from "@/api/lib/chat/thread-stored-content-send-mode";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
-import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
+import type { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const TITLE_GENERATION_TIMEOUT_MS = 10_000;
@@ -41,10 +42,14 @@ const TITLE_ADMISSION_FAILED = failureSink({
 });
 
 type GenerateThreadTitleProps = {
+  /** Refreshes the thread's search document once the title changed; the
+   *  caller supplies it so the title's database access stays with its own. */
+  indexThread: typeof upsertChatThreadSearchDocument;
   initialTitle: string;
   messages: [ChatMessage, ChatMessage]; // [userMessage, AIMessage]
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
   safeDb: SafeDb;
@@ -55,10 +60,12 @@ type GenerateThreadTitleProps = {
 
 const generateAdmittedThreadTitle = async ({
   admissionSignal,
+  indexThread,
   initialTitle,
   messages,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   recordAuditEvent,
   safeDb,
@@ -69,6 +76,7 @@ const generateAdmittedThreadTitle = async ({
   admissionSignal?: AbortSignal | undefined;
 }): Promise<void> => {
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "background",
       organizationId,
@@ -99,6 +107,7 @@ const generateAdmittedThreadTitle = async ({
 
   try {
     const text = await generateTanStackTextForRole({
+      dataClass: "customer",
       abortSignal:
         admissionSignal === undefined
           ? AbortSignal.timeout(TITLE_GENERATION_TIMEOUT_MS)
@@ -111,6 +120,7 @@ const generateAdmittedThreadTitle = async ({
       role: "fast",
       serviceTier: "batch",
       orgAIConfig,
+      managedAIResidency,
       organizationId,
       analytics: aiAnalytics,
       caching: resolveCaching({
@@ -197,10 +207,11 @@ const generateAdmittedThreadTitle = async ({
       return;
     }
 
-    // Re-index so the new AI-generated title is searchable. Fire-and-
-    // forget: title generation is already a best-effort side path.
+    // Re-index so the new AI-generated title is searchable. Best effort:
+    // a failure is reported, never thrown. Awaited, so whoever waits for
+    // this title (the turn's follow-ups) waits for its indexing too.
     if (updateResult.value) {
-      upsertChatThreadSearchDocument(threadId).catch(captureError);
+      await indexThread(threadId).catch(captureError);
     }
   } catch (error) {
     aiAnalytics.captureError(error);

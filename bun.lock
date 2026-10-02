@@ -606,7 +606,7 @@
     },
     "packages/business-registries": {
       "name": "@stll/business-registries",
-      "version": "0.10.2",
+      "version": "0.11.0",
       "dependencies": {
         "@stll/country-codes": "workspace:*",
         "@stll/stdnum": "^2.3.2",
@@ -652,7 +652,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.31",
+      "version": "0.1.32",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -680,7 +680,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.3.0",
+      "version": "3.3.1",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -1102,7 +1102,7 @@
     },
     "packages/ui": {
       "name": "@stll/ui",
-      "version": "0.38.0",
+      "version": "0.39.0",
       "dependencies": {
         "better-result": "catalog:",
         "class-variance-authority": "^0.7.1",
@@ -1175,7 +1175,7 @@
     },
     "packages/workspace-ui": {
       "name": "@stll/workspace-ui",
-      "version": "0.11.15",
+      "version": "0.11.16",
       "dependencies": {
         "@stll/calculations": "workspace:^",
         "@stll/conditions": "workspace:^",

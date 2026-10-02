@@ -15,6 +15,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedBillingCodeId } from "@/api/lib/safe-id-boundaries";
 
 const readBillingCodesQuerySchema = t.Object({
@@ -63,7 +64,9 @@ const decodeBillingCodeCursor = (cursor: string): BillingCodeCursor | null => {
 const readBillingCodes = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.billingCodesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.billingCodesPageSizeDefault,
+    );
 
     const conditions = [eq(billingCodes.workspaceId, workspaceId)];
 

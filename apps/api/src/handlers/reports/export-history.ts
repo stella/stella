@@ -9,6 +9,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
 import type { Page } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedReportExportId } from "@/api/lib/safe-id-boundaries";
 
 import { resolvedReportResultFieldId } from "./result-field";
@@ -53,11 +54,12 @@ const parseReportExportCursor = (cursor: string | undefined) => {
 
 export const readReportExportHistory = async function* ({
   cursor,
-  limit,
+  limit: requestedLimit,
   requestedBy,
   safeDb,
   workspaceId,
 }: ReportExportHistoryOptions): SafeHandlerGenerator<ReportExportHistoryPage> {
+  const limit = normalizeTenantPageLimit(requestedLimit);
   const cursorResult = parseReportExportCursor(cursor);
   if (Result.isError(cursorResult)) {
     return Result.err(cursorResult.error);

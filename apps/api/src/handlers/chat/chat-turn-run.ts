@@ -79,7 +79,7 @@ const CONNECTOR_CLOSE_FAILED_SINK = failureSink({
 
 /** The turn a run produces for, and what storing its failure needs. */
 type ChatTurnRunOwner = {
-  indexThread?: PersistMessageProps["indexThread"];
+  indexThread: PersistMessageProps["indexThread"];
   execution: ChatTurnExecution;
   owningAssistantMessage: PersistableChatMessage | undefined;
   recordAuditEvent: AuditRecorder;
@@ -477,6 +477,7 @@ export class ChatTurnRun {
         ? await persistFailedChatTurn({
             code,
             execution: owner.execution,
+            indexThread: owner.indexThread,
             owningAssistantMessage: owner.owningAssistantMessage,
             recordAuditEvent: owner.recordAuditEvent,
             retryable,

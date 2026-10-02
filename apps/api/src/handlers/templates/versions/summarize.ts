@@ -39,7 +39,15 @@ const config = {
  */
 const templateVersionSummarize = createSafeRootHandler(
   config,
-  async function* ({ scopedDb, session, params, safeDb, user, orgAIConfig }) {
+  async function* ({
+    scopedDb,
+    session,
+    params,
+    safeDb,
+    user,
+    orgAIConfig,
+    managedAIResidency,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     const sources = yield* Result.await(
@@ -75,6 +83,7 @@ const templateVersionSummarize = createSafeRootHandler(
         currentText: sources.currentText,
         feature: "templates.version_summary",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         safeDb,
         userId: user.id,
