@@ -1,5 +1,4 @@
 import { panic, Result } from "better-result";
-import { decodeHTMLStrict } from "entities";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -79,6 +78,7 @@ import {
   checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { decisionTypeKey } from "@/api/lib/case-law/decision-type-key";
+import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
@@ -422,17 +422,25 @@ const skCourtsSourceDocumentId = (
 /** The two fields this adapter refuses to store a decision without. */
 type SkCourtsIdentityFields = { caseNumber: string; court: string };
 
-// Decode publisher display text once; raw payloads, URLs and source IDs stay verbatim.
+/**
+ * Publisher display text in the form a plain-text field stores. A value the
+ * canonical form refuses is kept as stated, so assembly reports it instead of
+ * this helper hiding it.
+ */
+const canonicalSkCourtText = (value: string): string =>
+  toPlainText(value).unwrapOr(value);
+
+// Raw payloads, URLs and source IDs stay verbatim.
 const decodeSkCourtText = (value: string | null | undefined) => {
   const text = toOptionalValue(value);
-  return text === undefined ? undefined : decodeHTMLStrict(text);
+  return text === undefined ? undefined : canonicalSkCourtText(text);
 };
 
 const decodeSkCourtTextList = (values: string[] | null | undefined) => {
   if (values === null || values === undefined) {
     return values;
   }
-  return values.map((value) => decodeHTMLStrict(value));
+  return values.map((value) => canonicalSkCourtText(value));
 };
 
 /** The registry's display names decoded; a stated null or absence stays as stated. */
@@ -440,12 +448,12 @@ const decodeSkCourtRegistryRecord = (
   record: SkCourtRegistryRecord,
 ): SkCourtRegistryRecord => ({
   ...record,
-  nazov: decodeHTMLStrict(record.nazov),
+  nazov: canonicalSkCourtText(record.nazov),
   ...(typeof record.typSudu === "string"
-    ? { typSudu: decodeHTMLStrict(record.typSudu) }
+    ? { typSudu: canonicalSkCourtText(record.typSudu) }
     : {}),
   ...(typeof record.skratka_string === "string"
-    ? { skratka_string: decodeHTMLStrict(record.skratka_string) }
+    ? { skratka_string: canonicalSkCourtText(record.skratka_string) }
     : {}),
 });
 
@@ -1520,10 +1528,10 @@ type SkCourtsStoredDocketMatch = "same" | "legacy-encoded" | "different";
  * How a row's stored docket relates to the one its payload now parses to.
  *
  * Rows written before display text was decoded hold the publisher's encoded
- * spelling (`7C&#x2F;221/1991`). That is the same docket exactly when decoding
- * it once, with the decoder ingestion now applies, yields the replayed value.
- * Decoding is not repeated, so a stored value that only matches after a
- * second pass is a different docket, as is anything else.
+ * spelling (`7C&#x2F;221/1991`). That is the same docket exactly when its
+ * canonical plain-text form, the one ingestion now stores, is the replayed
+ * value. Anything else, a spelling the canonical form refuses included, is a
+ * different docket.
  */
 const skCourtsStoredDocketMatch = ({
   stored,
@@ -1532,7 +1540,8 @@ const skCourtsStoredDocketMatch = ({
   if (stored === replayed) {
     return "same";
   }
-  return decodeSkCourtText(stored) === replayed
+  const canonical = toPlainText(stored);
+  return canonical.isOk() && canonical.value === replayed
     ? "legacy-encoded"
     : "different";
 };
