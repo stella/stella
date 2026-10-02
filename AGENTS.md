@@ -367,14 +367,16 @@ index or page.
 
 ## Convention & Type-Cost Guards
 
-Convention and suppression ratchets may only tighten. Every lint suppression names
+Convention and suppression ratchets tighten by default. Every lint suppression names
 a rule and reason; security-tier suppressions also need a waiver. Type-cost baseline
 increases require PR justification and are never a mechanical way to pass CI.
 
 `bun scripts/ratchet.ts --check` measures the merge-base tree and the current
-tree using the same metric registry. Metrics and per-file ceilings may only
-decrease. No committed ratchet baseline or `--write` step is needed, including
-after merging main. New metrics measure both trees; report-only metrics do not gate.
+tree using the same metric registry. An increase requires a justified JSON file
+in `scripts/ratchet-allowances/` added in the same PR, whose delta matches the
+metric (or per-file) increase exactly. Allowances already in the base are inert
+and may be pruned. New metrics measure both trees; report-only metrics take no
+allowances.
 
 ## Property Failure Discipline
 

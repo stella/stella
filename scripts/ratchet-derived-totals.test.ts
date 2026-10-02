@@ -325,3 +325,268 @@ test("the lint planner inherits only result-boundary debt measured in the base t
     expect(JSON.parse(measured)).toEqual([legacy]);
   });
 }, 30_000);
+
+const ALLOWANCE = "scripts/ratchet-allowances/fixture-increase.json";
+const fund = (root: string, allowance: unknown, relative = ALLOWANCE) =>
+  write({ root, relative, contents: `${JSON.stringify(allowance)}\n` });
+const check = (root: string, ...args: string[]) =>
+  run(root, [process.execPath, "scripts/ratchet.ts", "--check", ...args]);
+
+for (const { name, count, delta, code, diagnostic } of [
+  {
+    name: "funded increase passes",
+    count: 3,
+    delta: 1,
+    code: 0,
+    diagnostic: "ratchet --check: OK",
+  },
+  {
+    name: "under-funded increase fails",
+    count: 4,
+    delta: 1,
+    code: 1,
+    diagnostic: "actual increase 2, funded 1 (unfunded increase)",
+  },
+  {
+    name: "over-funded increase fails",
+    count: 3,
+    delta: 2,
+    code: 1,
+    diagnostic: "actual increase 1, funded 2 (over-funded)",
+  },
+  {
+    name: "allowance without an increase fails",
+    count: 2,
+    delta: 1,
+    code: 1,
+    diagnostic: "actual increase 0, funded 1",
+  },
+]) {
+  test(
+    name,
+    () => {
+      withClone((root) => {
+        write({ root, relative: FIRST, contents: casts(count) });
+        fund(root, {
+          metric: "as-casts",
+          delta,
+          reason: "Required fixture conversion",
+        });
+        commit(root, "change with allowance");
+        const result = check(root);
+        expect(result.code, result.output).toBe(code);
+        expect(result.output).toContain(diagnostic);
+        if (code !== 0) {
+          expect(result.output).toContain(ALLOWANCE);
+        }
+      });
+    },
+    30_000,
+  );
+}
+
+test("multiple added allowances must sum to the actual increase", () => {
+  withClone((root) => {
+    write({ root, relative: FIRST, contents: casts(4) });
+    for (const slug of ["one", "two"]) {
+      fund(
+        root,
+        { metric: "as-casts", delta: 1, reason: "Fixture conversion" },
+        `scripts/ratchet-allowances/${slug}.json`,
+      );
+    }
+    commit(root, "split funding");
+    expect(check(root).code).toBe(0);
+  });
+}, 30_000);
+
+test("base allowances stay inert even when edited; counting them kills the guard", () => {
+  withClone((root) => {
+    fund(root, {
+      metric: "as-casts",
+      delta: 1,
+      reason: "Historical conversion",
+    });
+    commit(root, "historical allowance");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    write({ root, relative: FIRST, contents: casts(3) });
+    fund(root, {
+      metric: "as-casts",
+      delta: 1,
+      reason: "Edited historical reason",
+    });
+    commit(root, "later increase");
+    const result = check(root);
+    expect(result.code, result.output).toBe(1);
+    expect(result.output).toContain("actual increase 1, funded 0");
+    expect(result.output).toContain('"delta":1');
+    const script = path.join(root, "scripts/ratchet.ts");
+    const original = readFileSync(script, "utf-8");
+    const mutant = original.replace(
+      "if (inherited.has(filename)) {",
+      "if (false) {",
+    );
+    expect(mutant).not.toBe(original);
+    writeFileSync(script, mutant);
+    // The same exit-code assertion goes red with base funding enabled.
+    expect(check(root).code).toBe(0);
+  });
+}, 30_000);
+
+test("pruning an allowance inherited from the base passes", () => {
+  withClone((root) => {
+    fund(root, {
+      metric: "as-casts",
+      delta: 1,
+      reason: "Historical conversion",
+    });
+    commit(root, "historical allowance");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    rmSync(path.join(root, ALLOWANCE));
+    commit(root, "prune historical allowance");
+    expect(check(root).code).toBe(0);
+  });
+}, 30_000);
+
+for (const { name, allowance, diagnostic } of [
+  {
+    name: "per-file allowance requires a file",
+    allowance: {
+      metric: "direct-root-connection-imports",
+      delta: 1,
+      reason: "Fixture",
+    },
+    diagnostic: "requires file",
+  },
+  {
+    name: "report-only metrics reject allowances",
+    allowance: {
+      metric: "lockfile-package-entries",
+      delta: 1,
+      reason: "Fixture",
+    },
+    diagnostic: "report-only metric takes no allowances",
+  },
+  {
+    name: "empty reasons fail",
+    allowance: { metric: "as-casts", delta: 1, reason: "  " },
+    diagnostic: "non-empty reason",
+  },
+  {
+    name: "unknown metrics fail",
+    allowance: { metric: "absent-metric", delta: 1, reason: "Fixture" },
+    diagnostic: "unknown metric",
+  },
+  {
+    name: "unknown allowance keys fail",
+    allowance: { metric: "as-casts", delta: 1, reason: "Fixture", extra: true },
+    diagnostic: "no unknown keys",
+  },
+  {
+    name: "total metrics forbid a file",
+    allowance: { metric: "as-casts", file: FIRST, delta: 1, reason: "Fixture" },
+    diagnostic: "forbids file",
+  },
+  {
+    name: "fractional deltas fail",
+    allowance: { metric: "as-casts", delta: 0.5, reason: "Fixture" },
+    diagnostic: "positive integer delta",
+  },
+  {
+    name: "zero deltas fail",
+    allowance: { metric: "as-casts", delta: 0, reason: "Fixture" },
+    diagnostic: "positive integer delta",
+  },
+  {
+    name: "unsafe repository paths fail",
+    allowance: {
+      metric: "direct-root-connection-imports",
+      file: "../escape.ts",
+      delta: 1,
+      reason: "Fixture",
+    },
+    diagnostic: "requires file as a repository path",
+  },
+]) {
+  test(
+    name,
+    () => {
+      withClone((root) => {
+        fund(root, allowance);
+        commit(root, "invalid allowance");
+        const result = check(root);
+        expect(result.code, result.output).toBe(1);
+        expect(result.output).toContain(diagnostic);
+        expect(result.output).toContain(ALLOWANCE);
+      });
+    },
+    30_000,
+  );
+}
+
+test("per-file funding cannot move to another file even when the total is unchanged", () => {
+  withClone((root) => {
+    const oldFile = "apps/api/src/old.ts";
+    const newFile = "apps/api/src/new.ts";
+    const occurrence = 'import { rootDb } from "@/db/root";\n';
+    write({ root, relative: oldFile, contents: occurrence });
+    commit(root, "base per-file occurrence");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    write({ root, relative: oldFile, contents: "" });
+    write({ root, relative: newFile, contents: occurrence });
+    fund(root, {
+      metric: "direct-root-connection-imports",
+      file: oldFile,
+      delta: 1,
+      reason: "Fixture move",
+    });
+    commit(root, "fund wrong file");
+    const rejected = check(root);
+    expect(rejected.code, rejected.output).toBe(1);
+    expect(rejected.output).toContain(
+      `direct-root-connection-imports (${newFile}): actual increase 1, funded 0`,
+    );
+    expect(rejected.output).toContain("actual increase 0, funded 1");
+    fund(root, {
+      metric: "direct-root-connection-imports",
+      file: newFile,
+      delta: 1,
+      reason: "Fixture move",
+    });
+    commit(root, "fund destination file");
+    const accepted = check(root);
+    expect(accepted.code, accepted.output).toBe(0);
+  });
+}, 30_000);
+
+test("merge-group base_sha funds only allowances absent from that event base", () => {
+  withClone((root) => {
+    const eventBase = git(root, "rev-parse", "HEAD");
+    fund(root, { metric: "as-casts", delta: 1, reason: "Fixture conversion" });
+    commit(root, "main allowance");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    write({ root, relative: FIRST, contents: casts(3) });
+    commit(root, "merge group increase");
+    const selected = Bun.spawnSync(["bash", "-c", selectionCommand], {
+      cwd: root,
+      env: {
+        ...process.env,
+        GITHUB_ENV: path.join(root, "github-env"),
+        MERGE_GROUP_BASE_SHA: eventBase,
+      },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(selected.exitCode, selected.stderr.toString()).toBe(0);
+    const selectedBase = readFileSync(path.join(root, "github-env"), "utf-8")
+      .trim()
+      .split("=")
+      .at(1);
+    expect(selectedBase).toBe(eventBase);
+    const accepted = check(root, "--base", selectedBase ?? "");
+    expect(accepted.code, accepted.output).toBe(0);
+    const inherited = check(root);
+    expect(inherited.code, inherited.output).toBe(1);
+    expect(inherited.output).toContain("actual increase 1, funded 0");
+  });
+}, 30_000);

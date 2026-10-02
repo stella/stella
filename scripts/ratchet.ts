@@ -1,13 +1,14 @@
 // Convention ratchet guard.
 //
 // Compare the working tree to a measured Git merge-base export. Every metric
-// may only decrease; per-file metrics also forbid moving violations to a new
-// file. Both trees use the current registry, so new counters measure the base
-// rather than inheriting an editable budget. No baseline write is required.
+// tightens by default; increases require exact, justified PR allowances.
+// Per-file metrics fund each file separately. Both trees use the current
+// registry, so new counters measure the base rather than inheriting an
+// editable budget. No baseline write is required.
 //
 // Modes:
 //   bun scripts/ratchet.ts                 report counts vs merge base
-//   bun scripts/ratchet.ts --check         fail on any increase
+//   bun scripts/ratchet.ts --check         fail on any unfunded increase
 //     --base <commit>                      explicit comparison revision
 //     RATCHET_BASE_REF                      CI comparison revision
 //   bun scripts/ratchet.ts --self-test     prove counter and gate behavior
@@ -2216,9 +2217,8 @@ export type RatchetMetric =
       /**
        * The baseline is an allowlist of files, and this text tells whoever
        * trips it what new code does instead and how an exception is justified.
-       * Needs `perFile`. A file below its own entry fails too, until `--write`
-       * shrinks the entry: an allowance must not outlive the use it was
-       * granted for, or the next use in that file would land unseen.
+       * Needs `perFile`. Each comparison measures the base tree anew, so
+       * removed uses cannot leave headroom for the next change.
        */
       readonly allowlist?: string;
     }
@@ -3748,6 +3748,162 @@ const comparisonBase = (): string => {
   ]);
 };
 
+const ALLOWANCE_DIRECTORY = "scripts/ratchet-allowances";
+
+type RatchetAllowance = {
+  metric: string;
+  file?: string;
+  delta: number;
+  reason: string;
+};
+
+const allowanceKey = ({
+  metric,
+  file,
+}: Pick<RatchetAllowance, "metric" | "file">) =>
+  JSON.stringify([metric, file ?? null]);
+
+// Presence in the measured base makes an allowance inert, even if HEAD edits
+// its contents. Read committed HEAD files so funding has the same Git boundary.
+const checkAllowances = (
+  base: string,
+  diffs: readonly MetricDiff[],
+): string[] => {
+  const errors: string[] = [];
+  const filesAt = (ref: string) =>
+    readGit([
+      "ls-tree",
+      "-r",
+      "--name-only",
+      "-z",
+      ref,
+      "--",
+      ALLOWANCE_DIRECTORY,
+    ])
+      .split("\0")
+      .filter(Boolean);
+  const inherited = new Set(filesAt(base));
+  const funding = new Map<string, { delta: number; paths: string[] }>();
+  for (const filename of filesAt("HEAD")) {
+    if (inherited.has(filename)) {
+      continue;
+    }
+    const parsed = Result.try((): unknown =>
+      JSON.parse(readGit(["show", `HEAD:${filename}`])),
+    );
+    if (parsed.isErr()) {
+      errors.push(`${filename}: allowance must be valid JSON`);
+      continue;
+    }
+    const value = parsed.value;
+    if (
+      !/^scripts\/ratchet-allowances\/[a-z0-9]+(?:-[a-z0-9]+)*\.json$/u.test(
+        filename,
+      ) ||
+      !isRecord(value) ||
+      Object.keys(value).some(
+        (key) => !["metric", "file", "delta", "reason"].includes(key),
+      ) ||
+      typeof value["metric"] !== "string" ||
+      typeof value["delta"] !== "number" ||
+      !Number.isSafeInteger(value["delta"]) ||
+      value["delta"] <= 0 ||
+      typeof value["reason"] !== "string" ||
+      value["reason"].trim().length === 0
+    ) {
+      errors.push(
+        `${filename}: expected a slug.json allowance with metric, positive integer delta, non-empty reason, optional file, and no unknown keys`,
+      );
+      continue;
+    }
+    const metric = RATCHET_METRICS.find(({ id }) => id === value["metric"]);
+    if (metric === undefined) {
+      const reportOnly = REPORT_ONLY_METRICS.some(
+        ({ id }) => id === value["metric"],
+      );
+      errors.push(
+        `${filename}: ${reportOnly ? "report-only metric takes no allowances" : "unknown metric"} ${value["metric"]}`,
+      );
+      continue;
+    }
+    const perFile = metricGate(metric).perFile === true;
+    const file = value["file"];
+    if (
+      (perFile &&
+        (typeof file !== "string" ||
+          file.length === 0 ||
+          file.includes("\\") ||
+          file.startsWith("/") ||
+          file
+            .split("/")
+            .some((part) => part === ".." || part === "." || part === ""))) ||
+      (!perFile && Object.hasOwn(value, "file"))
+    ) {
+      errors.push(
+        `${filename}: ${metric.id} ${perFile ? "requires file as a repository path" : "forbids file (metric gates the total)"}`,
+      );
+      continue;
+    }
+    const allowance = {
+      metric: metric.id,
+      ...(typeof file === "string" ? { file } : {}),
+      delta: value["delta"],
+      reason: value["reason"],
+    } satisfies RatchetAllowance;
+    const key = allowanceKey(allowance);
+    const previous = funding.get(key);
+    if (previous === undefined) {
+      funding.set(key, { delta: allowance.delta, paths: [filename] });
+    } else {
+      previous.delta += allowance.delta;
+      previous.paths.push(filename);
+    }
+  }
+
+  for (const [index, diff] of diffs.entries()) {
+    const metric =
+      RATCHET_METRICS.at(index) ?? panic("ratchet diff has no metric");
+    const increases =
+      metricGate(metric).perFile === true
+        ? diff.regressedFiles.map(({ file, from, to }) => ({
+            file,
+            delta: to - from,
+          }))
+        : [{ file: undefined, delta: diff.current - diff.baseline }].filter(
+            ({ delta }) => delta > 0,
+          );
+    for (const { file, delta } of increases) {
+      const key = allowanceKey({ metric: diff.id, file });
+      const funded = funding.get(key);
+      funding.delete(key);
+      if (funded?.delta === delta) {
+        continue;
+      }
+      const slug =
+        file === undefined
+          ? diff.id
+          : `${diff.id}-${Bun.hash(file).toString(16)}`;
+      const filename =
+        funded?.paths.at(0) ?? `${ALLOWANCE_DIRECTORY}/${slug}.json`;
+      const template = {
+        metric: diff.id,
+        ...(file === undefined ? {} : { file }),
+        delta,
+        reason: "Explain why this increase is needed",
+      };
+      errors.push(
+        `${diff.id}${file === undefined ? "" : ` (${file})`}: actual increase ${delta}, funded ${funded?.delta ?? 0} (${(funded?.delta ?? 0) > delta ? "over-funded" : "unfunded increase"}). ${funded === undefined ? "Add" : "Adjust"} ${filename} so added deltas total exactly ${delta}: ${JSON.stringify(template)}`,
+      );
+    }
+  }
+  for (const [key, { paths, delta }] of funding) {
+    errors.push(
+      `${paths.join(", ")}: ${key} actual increase 0, funded ${delta}; allowance with no increase, remove the added allowance`,
+    );
+  }
+  return errors;
+};
+
 const runCheck = (): number => {
   printReportOnlyMetrics(REPO_ROOT);
   const started = performance.now();
@@ -3788,14 +3944,18 @@ const runCheck = (): number => {
     );
   }
 
-  if (regressions.length === 0) {
+  const allowanceErrors = checkAllowances(base, assessment.diffs);
+  if (allowanceErrors.length === 0) {
     console.log(
-      `ratchet --check: OK. ${RATCHET_METRICS.length} metric(s) at or below baseline.`,
+      `ratchet --check: OK. ${RATCHET_METRICS.length} metric(s) at or below the measured base tree or exactly funded.`,
     );
     return 0;
   }
 
-  console.error("\nratchet --check: metric(s) rose above baseline:\n");
+  console.error("\nratchet --check: invalid increase allowances:\n");
+  for (const error of allowanceErrors) {
+    console.error(`  ${error}`);
+  }
   for (const diff of regressions) {
     console.error(
       `  ${diff.id}: ${diff.baseline} -> ${diff.current} (${formatDelta(diff.current - diff.baseline)})`,
@@ -3814,7 +3974,7 @@ const runCheck = (): number => {
     console.error(`\n${remedy}`);
   }
   console.error(
-    "\nThese metrics may only decrease relative to the measured base tree.",
+    "\nIncreases relative to the measured base tree require exact, justified allowances added in this PR.",
   );
   return 1;
 };
@@ -6099,10 +6259,7 @@ const runSelfTest = (): number => {
       );
     }
 
-    // Every tracked rule reaches the metric registry. The other direction —
-    // a registered metric with no baseline entry, or the reverse — is already
-    // enforced by `inspectConfiguration`, so a rule added to the table without
-    // a `--write` fails loudly instead of going quietly unbudgeted.
+    // Every tracked rule reaches the registry and is measured in both trees.
     const budgetIds = new Set(RATCHET_METRICS.map(({ id }) => id));
     for (const { rule } of TRACKED_SUPPRESSION_RULES) {
       if (!budgetIds.has(suppressionMetricId(rule))) {
