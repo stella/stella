@@ -8,8 +8,8 @@ import {
 
 test("the committed registry is off and enrolment validates its budget and reviewed dry run", () => {
   expect(
-    Object.values(REPLAY_ENROLMENT).every(({ mode }) => mode === "off"),
-  ).toBe(true);
+    new Set(Object.values(REPLAY_ENROLMENT).map(({ mode }) => mode)),
+  ).toEqual(new Set(["off"]));
   for (const dailyBudget of [
     0,
     -1,

@@ -250,7 +250,7 @@ describe("transferring a batch's packs", () => {
       documents,
     });
     if (planned.isErr()) {
-      return expect.unreachable();
+      expect.unreachable();
     }
     const controller = new AbortController();
     let canceled = false;
@@ -264,7 +264,11 @@ describe("transferring a batch's packs", () => {
             "abort",
             () => {
               canceled = true;
-              reject(signal.reason);
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new TypeError("Expected fixture abort error"),
+              );
             },
             { once: true },
           );
@@ -287,7 +291,7 @@ describe("transferring a batch's packs", () => {
       documents,
     });
     if (planned.isErr()) {
-      return expect.unreachable();
+      expect.unreachable();
     }
     const pack = planned.value.packs.at(0) ?? expect.unreachable();
     const controller = new AbortController();
@@ -304,7 +308,11 @@ describe("transferring a batch's packs", () => {
             "abort",
             () => {
               canceled = true;
-              reject(signal.reason);
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new TypeError("Expected fixture abort error"),
+              );
             },
             { once: true },
           );

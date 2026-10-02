@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readFileSync, readdirSync } from "node:fs";
 import path from "node:path";
@@ -163,15 +164,24 @@ describe("case-law maintenance lane", () => {
   test("an aborted bounded door refuses work before database initialization", async () => {
     const controller = new AbortController();
     controller.abort();
-    await expect(
-      enterCaseLawMaintenanceLane({
-        mode: "bounded",
-        signal: controller.signal,
-        statementTimeout: 5000,
-        lockTimeout: 5000,
-        work: async () => "must not run",
-      }),
-    ).rejects.toThrow("abort");
+    const rejected1 = await Result.tryPromise({
+      try: async () =>
+        await enterCaseLawMaintenanceLane({
+          mode: "bounded",
+          signal: controller.signal,
+          statementTimeout: 5000,
+          lockTimeout: 5000,
+          work: async () => "must not run",
+        }),
+      catch: (cause) => cause,
+    });
+    expect(rejected1.isErr()).toBe(true);
+    if (rejected1.isErr()) {
+      expect(rejected1.error).toBeInstanceOf(Error);
+      if (rejected1.error instanceof Error) {
+        expect(rejected1.error.message).toContain("abort");
+      }
+    }
   });
 
   // The structural rule: a case-law script that can reach the database does

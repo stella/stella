@@ -126,14 +126,22 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
             await client.unsafe(receipt.prepare);
           }
           await client.unsafe(receipt.insert);
-          expect(await client.unsafe(receipt.update)).toHaveLength(1);
+          expect(
+            await client.unsafe<Record<string, unknown>[]>(receipt.update),
+          ).toHaveLength(1);
           await client.unsafe(`SET LOCAL ROLE ${reader}`);
           expect(
-            await client.unsafe(`SELECT * FROM ${receipt.table}`),
+            await client.unsafe<Record<string, unknown>[]>(
+              `SELECT * FROM ${receipt.table}`,
+            ),
           ).toHaveLength(0);
-          expect(await client.unsafe(receipt.update)).toHaveLength(0);
           expect(
-            await client.unsafe(`DELETE FROM ${receipt.table} RETURNING *`),
+            await client.unsafe<Record<string, unknown>[]>(receipt.update),
+          ).toHaveLength(0);
+          expect(
+            await client.unsafe<Record<string, unknown>[]>(
+              `DELETE FROM ${receipt.table} RETURNING *`,
+            ),
           ).toHaveLength(0);
           await client.unsafe("SAVEPOINT denied_insert");
           const rejection: unknown = await client.unsafe(receipt.insert).then(
@@ -147,10 +155,14 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
           await client.unsafe("ROLLBACK TO SAVEPOINT denied_insert");
           await client.unsafe(`SET LOCAL ROLE ${owner}`);
           expect(
-            await client.unsafe(`SELECT * FROM ${receipt.table}`),
+            await client.unsafe<Record<string, unknown>[]>(
+              `SELECT * FROM ${receipt.table}`,
+            ),
           ).toHaveLength(1);
           expect(
-            await client.unsafe(`DELETE FROM ${receipt.table} RETURNING *`),
+            await client.unsafe<Record<string, unknown>[]>(
+              `DELETE FROM ${receipt.table} RETURNING *`,
+            ),
           ).toHaveLength(1);
           await client.unsafe("RESET ROLE");
         }

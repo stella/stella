@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -95,8 +96,8 @@ describe("scheduled replay entrypoint", () => {
 
   test("committed enrolment remains disabled for every source", () => {
     expect(
-      Object.values(REPLAY_ENROLMENT).every(({ mode }) => mode === "off"),
-    ).toBe(true);
+      new Set(Object.values(REPLAY_ENROLMENT).map(({ mode }) => mode)),
+    ).toEqual(new Set(["off"]));
   });
 
   test("default-off environment, global kill and unenrolled sources perform no setup", async () => {
@@ -116,7 +117,9 @@ describe("scheduled replay entrypoint", () => {
           environment,
           policies: [{ mode: "dry-run", dailyBudget: 1 }],
           runEnabled,
-          log: (record) => records.push(record),
+          log: (record) => {
+            records.push(record);
+          },
         }),
       ).toBe(0);
       expect(records).toEqual([
@@ -180,7 +183,9 @@ describe("scheduled replay entrypoint", () => {
         runEnabled: async () => {
           throw new TypeError("fixture setup failure");
         },
-        log: (record) => records.push(record),
+        log: (record) => {
+          records.push(record);
+        },
       }),
     ).toBe(1);
     expect(records).toMatchObject([
@@ -284,7 +289,9 @@ describe("scheduled replay entrypoint", () => {
           ticks++;
           return report("complete");
         },
-        log: (record) => records.push(record),
+        log: (record) => {
+          records.push(record);
+        },
       }),
     ).toBe(0);
     expect(resets).toEqual([adapterKey]);
@@ -377,7 +384,9 @@ describe("scheduled replay entrypoint", () => {
           [adapterKey]: { mode: "dry-run", dailyBudget: 1 },
         },
         resetDryRun: async () => false,
-        log: (record) => records.push(record),
+        log: (record) => {
+          records.push(record);
+        },
       }),
     ).toBe(0);
     expect(records).toEqual([
@@ -439,32 +448,63 @@ describe("replay runtime boundaries", () => {
       queryBackend: async () => 123,
       signal: controller.signal,
     });
-    await expect(
-      assertReplaySlot({
-        expectedBackend: 123,
-        queryBackend: async () => 456,
-        signal: controller.signal,
-      }),
-    ).rejects.toThrow("Heavy-work session was replaced");
-    await expect(
-      assertReplaySlot({
-        expectedBackend: 123,
-        queryBackend: async () => undefined,
-        signal: controller.signal,
-      }),
-    ).rejects.toThrow("Heavy-work session was replaced");
+    const rejected1 = await Result.tryPromise({
+      try: async () =>
+        await assertReplaySlot({
+          expectedBackend: 123,
+          queryBackend: async () => 456,
+          signal: controller.signal,
+        }),
+      catch: (cause) => cause,
+    });
+    expect(rejected1.isErr()).toBe(true);
+    if (rejected1.isErr()) {
+      expect(rejected1.error).toBeInstanceOf(Error);
+      if (rejected1.error instanceof Error) {
+        expect(rejected1.error.message).toContain(
+          "Heavy-work session was replaced",
+        );
+      }
+    }
+    const rejected2 = await Result.tryPromise({
+      try: async () =>
+        await assertReplaySlot({
+          expectedBackend: 123,
+          queryBackend: async () => undefined,
+          signal: controller.signal,
+        }),
+      catch: (cause) => cause,
+    });
+    expect(rejected2.isErr()).toBe(true);
+    if (rejected2.isErr()) {
+      expect(rejected2.error).toBeInstanceOf(Error);
+      if (rejected2.error instanceof Error) {
+        expect(rejected2.error.message).toContain(
+          "Heavy-work session was replaced",
+        );
+      }
+    }
     controller.abort(new DOMException("tick expired", "TimeoutError"));
     let queried = false;
-    await expect(
-      assertReplaySlot({
-        expectedBackend: 123,
-        queryBackend: async () => {
-          queried = true;
-          return 123;
-        },
-        signal: controller.signal,
-      }),
-    ).rejects.toThrow("tick expired");
+    const rejected3 = await Result.tryPromise({
+      try: async () =>
+        await assertReplaySlot({
+          expectedBackend: 123,
+          queryBackend: async () => {
+            queried = true;
+            return 123;
+          },
+          signal: controller.signal,
+        }),
+      catch: (cause) => cause,
+    });
+    expect(rejected3.isErr()).toBe(true);
+    if (rejected3.isErr()) {
+      expect(rejected3.error).toBeInstanceOf(Error);
+      if (rejected3.error instanceof Error) {
+        expect(rejected3.error.message).toContain("tick expired");
+      }
+    }
     expect(queried).toBe(false);
   });
 

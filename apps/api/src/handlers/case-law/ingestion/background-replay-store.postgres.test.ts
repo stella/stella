@@ -199,7 +199,9 @@ if (!databaseUrl || !enabled) {
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        onLag: (source) => observations.push(source),
+        onLag: (source) => {
+          observations.push(source);
+        },
       });
       const first = await store.chooseSource();
       const second = await store.chooseSource();
@@ -226,7 +228,9 @@ if (!databaseUrl || !enabled) {
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        onHeld: (source) => held.push(source.id),
+        onHeld: (source) => {
+          held.push(source.id);
+        },
       });
       expect((await heldStore.chooseSource())?.id).toBe(eu.source.id);
       expect((await heldStore.chooseSource())?.id).toBe(eu.source.id);
@@ -467,7 +471,7 @@ if (!databaseUrl || !enabled) {
               },
             });
             activeStore = killedStore;
-            const result = await Result.tryPromise(() =>
+            const result = await Result.tryPromise(async () =>
               firstRunner.completeBatch(reserved.batch, {
                 report: first,
                 durationMs: 1,
@@ -689,7 +693,7 @@ if (!databaseUrl || !enabled) {
                 }
                 let reads = 0;
                 let fenceChecks = 0;
-                let killed = false;
+                const cleanupState = { killed: false };
                 try {
                   await expectAcquisition(firstSlot, true);
                   await expectAcquisition(rivalSlot, false);
@@ -707,7 +711,7 @@ if (!databaseUrl || !enabled) {
                           { terminated: boolean }[]
                         >`SELECT pg_terminate_backend(${pid}, 5000) AS terminated`;
                         expect(terminated.at(0)?.terminated).toBe(true);
-                        killed = true;
+                        cleanupState.killed = true;
                         await expectAcquisition(rivalSlot, true);
                       }
                       return raw;
@@ -760,7 +764,7 @@ if (!databaseUrl || !enabled) {
                   expect(checkpoint?.cursor).toBeNull();
                 } finally {
                   await rivalSlot.close();
-                  if (!killed) {
+                  if (!cleanupState.killed) {
                     await firstSlot.close();
                   }
                   first.release();
@@ -936,7 +940,7 @@ if (!databaseUrl || !enabled) {
               await admin`SELECT pg_terminate_backend(${backend.pid}, 5000)`;
             },
           });
-          const result = await Result.tryPromise(() =>
+          const result = await Result.tryPromise(async () =>
             killedStore.completeBatch(reserved.batch, completion),
           );
           expect(reachedCheckpoint).toBe(true);
@@ -1206,12 +1210,7 @@ if (!databaseUrl || !enabled) {
       await db
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
-        .where(
-          eq(
-            caseLawDecisions.id,
-            second.batch.decisionId ?? panic("Expected replay decision id"),
-          ),
-        );
+        .where(eq(caseLawDecisions.id, second.batch.decisionId));
       await store.completeBatch(second.batch, applied(second.batch));
       for (
         let attempt = 2;
@@ -1939,7 +1938,9 @@ if (!databaseUrl || !enabled) {
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        onHeld: (row) => held.push(row),
+        onHeld: (row) => {
+          held.push(row);
+        },
       });
       await store.saveGateState(actual, {
         ...(await store.loadGateState(actual)),
@@ -2075,9 +2076,11 @@ if (!databaseUrl || !enabled) {
       );
       expect(Result.isError(rolledBack)).toBe(true);
       if (Result.isError(rolledBack)) {
-        expect(String(rolledBack.error)).toContain(
-          "restore compaction statistics",
-        );
+        expect(
+          rolledBack.error instanceof Error
+            ? rolledBack.error.message
+            : JSON.stringify(rolledBack.error),
+        ).toContain("restore compaction statistics");
       }
     });
 
@@ -2191,9 +2194,11 @@ if (!databaseUrl || !enabled) {
       );
       expect(Result.isError(rolledBack)).toBe(true);
       if (Result.isError(rolledBack)) {
-        expect(String(rolledBack.error)).toContain(
-          "restore synthetic plan statistics",
-        );
+        expect(
+          rolledBack.error instanceof Error
+            ? rolledBack.error.message
+            : JSON.stringify(rolledBack.error),
+        ).toContain("restore synthetic plan statistics");
       }
     });
   });

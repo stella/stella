@@ -79,7 +79,7 @@ export const createBackgroundReplayRunner = ({
     signal?.throwIfAborted();
     const lease = getLease();
     if (lease === null) {
-      return panic("Background replay completion lost its source lease");
+      panic("Background replay completion lost its source lease");
     }
     await lease.beforeDatabaseMark();
     signal?.throwIfAborted();
@@ -114,8 +114,7 @@ export const createBackgroundReplayRunner = ({
           row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED)
       ) {
         const recovered =
-          row !== undefined &&
-          row.redactedAt === null &&
+          row?.redactedAt === null &&
           row.parserVersion !== null &&
           row.parserVersion >= batch.targetParserVersion &&
           row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED;

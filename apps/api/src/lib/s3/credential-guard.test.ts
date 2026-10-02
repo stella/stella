@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -58,14 +59,23 @@ describe("createS3CredentialGuard", () => {
         options?.signal.throwIfAborted();
       },
     });
-    await expect(
-      guard.run(
-        async () => {
-          started = true;
-        },
-        { mode: "replay-strict", signal: controller.signal },
-      ),
-    ).rejects.toThrow("fixture tick expired");
+    const rejected1 = await Result.tryPromise({
+      try: async () =>
+        await guard.run(
+          async () => {
+            started = true;
+          },
+          { mode: "replay-strict", signal: controller.signal },
+        ),
+      catch: (cause) => cause,
+    });
+    expect(rejected1.isErr()).toBe(true);
+    if (rejected1.isErr()) {
+      expect(rejected1.error).toBeInstanceOf(Error);
+      if (rejected1.error instanceof Error) {
+        expect(rejected1.error.message).toContain("fixture tick expired");
+      }
+    }
     expect(started).toBe(false);
   });
 

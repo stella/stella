@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
@@ -197,14 +198,22 @@ test("invalid invocation bounds fail before reading or reserving a source", asyn
       selected = true;
       return state.source;
     };
-    await expect(
-      runBackgroundReplayTick({
-        dependencies: state.dependencies,
-        maxRows: 1,
-        maxDurationMs: 60_000,
-        ...bounds,
-      }),
-    ).rejects.toThrow("Replay tick bounds must be positive");
+    const result = await Result.tryPromise({
+      try: async () =>
+        await runBackgroundReplayTick({
+          dependencies: state.dependencies,
+          maxRows: 1,
+          maxDurationMs: 60_000,
+          ...bounds,
+        }),
+      catch: (cause) => cause,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        message: "Replay tick bounds must be positive",
+      });
+    }
     expect(selected).toBe(false);
     expect(state.counts().spent).toBe(0);
   }

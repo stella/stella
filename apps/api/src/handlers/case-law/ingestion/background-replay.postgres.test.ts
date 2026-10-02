@@ -80,7 +80,6 @@ const startReplayFixtureStorage = () => {
   const localCredentials =
     envBase.S3_CREDENTIALS_PROVIDER === "env" ||
     (envBase.S3_CREDENTIALS_PROVIDER === "auto" &&
-      endpoint !== undefined &&
       ["localhost", "127.0.0.1", "[::1]"].includes(new URL(endpoint).hostname));
   // Strict refresh must stay on static fixture credentials, never ECS/IMDS.
   expect(localCredentials).toBe(true);
@@ -298,7 +297,7 @@ if (!databaseUrl || !enabled) {
           replay: async (batch) => {
             await beforeReplay?.();
             if (lease === null) {
-              return panic("Fixture replay requires an ingestion lease");
+              panic("Fixture replay requires an ingestion lease");
             }
             await lease.beforeDatabaseMark();
             await db
@@ -417,7 +416,7 @@ if (!databaseUrl || !enabled) {
       const state = await fixture(10);
       const firstId = state.ids.at(0);
       if (firstId === undefined) {
-        return panic("Expected first fixture decision");
+        panic("Expected first fixture decision");
       }
       await db
         .update(caseLawDecisions)
@@ -496,7 +495,7 @@ if (!databaseUrl || !enabled) {
         const state = await fixture(3);
         const id = state.ids.at(0);
         if (id === undefined) {
-          return panic("Expected first fixture decision");
+          panic("Expected first fixture decision");
         }
         const fake = startReplayFixtureStorage();
         try {
@@ -578,7 +577,7 @@ if (!databaseUrl || !enabled) {
         healthy(),
       );
       if (batch.type !== "reserved") {
-        return panic("Expected reserved replay receipt");
+        panic("Expected reserved replay receipt");
       }
       await db
         .update(caseLawDecisions)
@@ -780,7 +779,7 @@ if (!databaseUrl || !enabled) {
           releaseDb,
         });
         if (lease === null) {
-          return panic("Expected available source lease");
+          panic("Expected available source lease");
         }
         await upgrade.sql.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
         const releasing = lease.release();
@@ -820,7 +819,7 @@ if (!databaseUrl || !enabled) {
       const state = await fixture(3);
       const id = state.ids.at(0);
       if (id === undefined) {
-        return panic("Expected first fixture decision");
+        panic("Expected first fixture decision");
       }
       const fake = startReplayFixtureStorage();
       fake.put(envBase.S3_BUCKET, `fixture/${id}`, "stored fixture bytes");
@@ -832,7 +831,7 @@ if (!databaseUrl || !enabled) {
       try {
         await withSlots({
           run: async ([slot, contender]) => {
-            const running = Result.tryPromise(() =>
+            const running = Result.tryPromise(async () =>
               tick({
                 fixture: state,
                 slot,
@@ -914,7 +913,7 @@ if (!databaseUrl || !enabled) {
       const state = await fixture(3);
       const id = state.ids.at(0);
       if (id === undefined) {
-        return panic("Expected first fixture decision");
+        panic("Expected first fixture decision");
       }
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const blocker = openClient();
@@ -926,7 +925,7 @@ if (!databaseUrl || !enabled) {
           "SELECT id FROM case_law_decisions WHERE id = $1 FOR UPDATE",
           [id],
         );
-        const running = Result.tryPromise(() =>
+        const running = Result.tryPromise(async () =>
           withLongRunningConnection(
             {
               statementTimeout: 10_000,
@@ -947,7 +946,7 @@ if (!databaseUrl || !enabled) {
                 )
               ).at(0)?.pid;
               if (pid === undefined) {
-                return panic("Expected dedicated replay backend");
+                panic("Expected dedicated replay backend");
               }
               backend.resolve(pid);
               await connection.unsafe(
@@ -983,7 +982,11 @@ if (!databaseUrl || !enabled) {
           const result = await running;
           expect(result.isErr()).toBe(true);
           if (result.isErr()) {
-            expect(String(result.error)).toMatch(/cancel|abort|deadline/u);
+            expect(
+              result.error instanceof Error
+                ? result.error.message
+                : JSON.stringify(result.error),
+            ).toMatch(/cancel|abort|deadline/u);
           }
           const acquired = await observer.sql.unsafe<{ acquired: boolean }[]>(
             "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
@@ -1021,7 +1024,7 @@ if (!databaseUrl || !enabled) {
         const state = await fixture(3);
         const id = state.ids.at(0);
         if (id === undefined) {
-          return panic("Expected first fixture decision");
+          panic("Expected first fixture decision");
         }
         await db
           .update(caseLawSources)

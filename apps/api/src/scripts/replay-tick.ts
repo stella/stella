@@ -744,7 +744,7 @@ export const runReplayTickScript = async ({
   resetDryRun = resetReplayDryRun,
   runEnabled = runEnabledReplayTick,
   log: writeLog = log,
-  timeoutSignal = AbortSignal.timeout,
+  timeoutSignal = (timeoutMs) => AbortSignal.timeout(timeoutMs),
 }: RunReplayTickScriptOptions = {}): Promise<number> => {
   const signal = timeoutSignal(BACKGROUND_REPLAY_LIMITS.hardDurationMs);
   const outcome = await Result.tryPromise(async () => {
@@ -769,7 +769,7 @@ export const runReplayTickScript = async ({
     }
     signal.throwIfAborted();
     if (command.type === "reset-dry-run") {
-      if (resetPolicy === null || resetPolicy.mode !== "dry-run") {
+      if (resetPolicy?.mode !== "dry-run") {
         panic("Replay reset command has no dry-run policy");
       }
       const reset = await resetDryRun({

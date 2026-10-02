@@ -1171,8 +1171,7 @@ const recordFailure = async (
         .limit(1)
     ).at(0);
     if (
-      decision !== undefined &&
-      decision.redactedAt === null &&
+      decision?.redactedAt === null &&
       decision.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
       (decision.parserVersion ?? -1) >= batch.targetParserVersion
     ) {
@@ -1403,12 +1402,11 @@ const completeBatch = async (
         .limit(1)
     ).at(0);
     const moved =
-      decision !== undefined &&
-      decision.redactedAt === null &&
+      decision?.redactedAt === null &&
       (decision.parserVersion ?? -1) >= batch.targetParserVersion;
     if (
       moved &&
-      decision?.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
+      decision.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
     ) {
       return "mirror-pending";
     }

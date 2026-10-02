@@ -11,11 +11,14 @@ ALTER TABLE "case_law_replay_batches"
   ADD COLUMN "failure_code" text,
   ADD COLUMN "failure_message_class" text;--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_attempt_state_check" CHECK ("attempt_state" IN ('idle', 'picked-up'));--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-constraint - the next statement immediately replaces this check and keeps every old status while admitting recovery states; old writers remain valid, and rollback after new states are stored requires converting them before restoring the old check.
 ALTER TABLE "case_law_replay_batches" DROP CONSTRAINT "case_law_replay_batches_status_check";--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_status_check" CHECK ("status" IN ('reserved', 'completed', 'superseded', 'failed', 'blocked'));--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_failure_code_check" CHECK ("failure_code" IS NULL OR "failure_code" IN ('stored-raw-timeout', 'stored-raw-too-large', 'stored-raw-read', 'adapter-exception', 'writer-retryable', 'receipt-write', 'tick-deadline', 'tick-cancelled', 'unexpected'));--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-constraint - the replacement preserves the existing count limits and adds nonnegative recovery counters; old writers use defaults, and transaction rollback restores the original check.
 ALTER TABLE "case_law_replay_batches" DROP CONSTRAINT "case_law_replay_batches_counts_check";--> statement-breakpoint
 ALTER TABLE "case_law_replay_batches" ADD CONSTRAINT "case_law_replay_batches_counts_check" CHECK ("systemic_failures" >= 0 AND "systemic_progress" >= 0 AND "attempts" >= 0 AND "attempted" > 0 AND "applied" >= 0 AND "blocked" >= 0 AND "failed" >= 0 AND "applied" + "blocked" + "failed" <= "attempted" AND "duration_ms" >= 0);--> statement-breakpoint
+-- stella-migration-safety: reviewed drop-constraint - the next check preserves every existing blocked reason and adds the recovery reason; rollback after it is written requires converting those rows before restoring the old check.
 ALTER TABLE "case_law_replay_blocked" DROP CONSTRAINT "case_law_replay_blocked_reason_check";--> statement-breakpoint
 ALTER TABLE "case_law_replay_blocked" ADD CONSTRAINT "case_law_replay_blocked_reason_check" CHECK ("reason" IN ('missing-payload', 'no-write-settled', 'redacted', 'superseded', 'retry-exhausted', 'incomplete-metadata', 'identity-mismatch', 'raw-fidelity-lost', 'unsupported-content', 'no-document', 'supplement'));--> statement-breakpoint
 CREATE INDEX "case_law_replay_batches_due_idx" ON "case_law_replay_batches" ("source_id", "status", "retry_at");--> statement-breakpoint

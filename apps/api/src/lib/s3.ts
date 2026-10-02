@@ -175,7 +175,7 @@ const fetchEcsCredentials = async ({
         ? await Bun.file(authorizationTokenFile).text()
         : await readFile(authorizationTokenFile, {
             encoding: "utf-8",
-            ...(signal === undefined ? {} : { signal }),
+            signal,
           }),
     );
     signal?.throwIfAborted();
@@ -732,9 +732,7 @@ export const writeS3ObjectWithRetry = async (
         await withTimeout(
           async (signal) =>
             await write(
-              operationSignal === undefined
-                ? object
-                : { ...object, ...(signal === undefined ? {} : { signal }) },
+              operationSignal === undefined ? object : { ...object, signal },
             ),
           {
             signal: operationSignal,
