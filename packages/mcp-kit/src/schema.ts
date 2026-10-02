@@ -85,23 +85,42 @@ const mapSchemaChildren = (
     }),
   );
 
-type CompactNodeOptions = { depth: number; describedDepth: number };
+type CompactNodeOptions = CompactSchemaOptions & {
+  depth: number;
+  describedDepth: number;
+};
 
 const compactNode = (
   node: unknown,
-  { depth, describedDepth }: CompactNodeOptions,
+  {
+    depth,
+    describedDepth,
+    omitMaxSafeInteger,
+    schemaDialect,
+  }: CompactNodeOptions,
 ): unknown => {
   if (!isRecord(node)) {
     return node;
   }
   const compacted = mapSchemaChildren(node, (schema, child) =>
-    compactNode(schema, { depth: depth + child.depth, describedDepth }),
+    compactNode(schema, {
+      depth: depth + child.depth,
+      describedDepth,
+      omitMaxSafeInteger,
+      schemaDialect,
+    }),
   );
   return Object.fromEntries(
     Object.entries(compacted).filter(
-      ([key]) =>
-        !ANNOTATION_KEYWORDS.has(key) ||
-        (key === "description" && depth > 0 && depth <= describedDepth),
+      ([key, value]) =>
+        !(
+          omitMaxSafeInteger &&
+          key === "maximum" &&
+          value === Number.MAX_SAFE_INTEGER
+        ) &&
+        !(schemaDialect === "omit" && key === "$schema") &&
+        (!ANNOTATION_KEYWORDS.has(key) ||
+          (key === "description" && depth > 0 && depth <= describedDepth)),
     ),
   );
 };
@@ -110,14 +129,27 @@ const compactNode = (
 export type CompactSchemaOptions = {
   /** Keep descriptions this many property levels deep; 0 (the default) keeps none. */
   describedDepth?: number;
+  /** Omit the safe-integer ceiling at schema positions only. Default: false. */
+  omitMaxSafeInteger?: boolean;
+  /** Preserve the dialect declaration by default, or omit it for compact advertising. */
+  schemaDialect?: "preserve" | "omit";
 };
 
 /** The schema without annotation keywords, descriptions kept only as deep as asked. */
 export const compactSchema = (
   schema: McpJsonSchema,
-  { describedDepth = 0 }: CompactSchemaOptions = {},
+  {
+    describedDepth = 0,
+    omitMaxSafeInteger = false,
+    schemaDialect = "preserve",
+  }: CompactSchemaOptions = {},
 ): McpJsonSchema => {
-  const compacted = compactNode(schema, { depth: 0, describedDepth });
+  const compacted = compactNode(schema, {
+    depth: 0,
+    describedDepth,
+    omitMaxSafeInteger,
+    schemaDialect,
+  });
   return isRecord(compacted) ? compacted : {};
 };
 

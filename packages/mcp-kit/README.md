@@ -71,6 +71,46 @@ rejected handlers return a generic `internal_error`; `onError(cause, event)` can
 record the original cause in host telemetry. The observer runs synchronously;
 its own failures cannot expose exception messages on the wire.
 
+## Downstream discovery options
+
+The default wire format stays unchanged. Downstream CLIs can select an outline
+format with short guidance and bare examples, a described full schema, and
+unwrapped capability results:
+
+```ts
+const surface = createToolSurface({
+  tools,
+  discovery: { type: "outline" },
+  fullSchema: "described",
+  capabilityResult: "payload",
+  validationResult: "input",
+  capabilityList: "minimal",
+  metaDescriptions: "enumerated",
+});
+```
+
+In outline discovery, `brief` is appended to the summary; `guide` remains full-only.
+Parameters are a name-to-type map with required markers, and `exampleInput`, when
+present, is returned as bare `example` arguments. Outline discovery has no byte
+budget. Full descriptions omit `domain` in this format; `fullSchema: "described"`
+selects `describedSchema ?? inputSchema` without changing invocation validation.
+`capabilityResult: "payload"` returns successful handler payloads directly.
+`validationResult: "input"` returns `{ valid: true, input }` with normalized
+arguments; this checks argument reading, not full-schema validity.
+`capabilityList: "minimal"` omits `limit`, item `description`, and false
+`destructive` fields. `metaDescriptions: "enumerated"` lists lazy tool names in
+the discovery tool description. Each option is independent.
+
+Use `compactSchema(schema, { omitMaxSafeInteger: true, schemaDialect: "omit" })`
+to omit safe-integer maximum bounds and dialect declarations in advertised
+schemas. These transformations only visit schema positions; enum, const and
+extension data remain intact. Prepare `direct.inputSchema` and `describedSchema`
+with these options as needed. Hoisting still preserves reference scopes and
+existing definitions.
+
+Published artifacts contain the bundled module and declarations; source contract
+tests run in this repository.
+
 ## What does not
 
 MCP transport/server wiring, strict JSON Schema validation, authorization,
