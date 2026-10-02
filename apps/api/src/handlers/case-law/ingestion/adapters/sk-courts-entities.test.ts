@@ -208,7 +208,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
           storedDocket: "7C/221/1991",
         }),
       );
-      expect(outcome.type).toBe("parsed");
+      expect(outcome).toMatchObject({ type: "parsed" });
       expect(outcome).not.toHaveProperty("legacyCaseNumber");
     });
 
