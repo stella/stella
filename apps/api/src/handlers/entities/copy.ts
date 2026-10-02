@@ -536,7 +536,9 @@ const copyToWorkspaceHandler = async function* ({
       sourceEntityId,
       sourceEntities: remappedEntities,
       sourceWorkspaceId,
-      transfer,
+      transfer: deleteSource
+        ? { type: "move", sourceWorkspaceId, sourceSnapshot: sourceEntities }
+        : { type: "copy" },
       fieldMapping:
         sourceFieldId === undefined
           ? { type: "omit" }

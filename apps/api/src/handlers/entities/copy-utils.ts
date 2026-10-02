@@ -1,11 +1,11 @@
 import { panic, Result, TaggedError } from "better-result";
-import { and, eq, isNull, like } from "drizzle-orm";
+import { deepEquals } from "bun";
+import { and, asc, eq, inArray, isNull, like } from "drizzle-orm";
 
 import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
 import type { Transaction } from "@/api/db/root";
-import { entities, workspaces } from "@/api/db/schema";
-import type { entityVersions } from "@/api/db/schema";
+import { entities, entityVersions, fields, workspaces } from "@/api/db/schema";
 import type { EntityKind, FieldContent } from "@/api/db/schema-validators";
 import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
@@ -15,7 +15,10 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
+import {
+  lockWorkspacesForEntityCap,
+  lockWorkspacesForEntityTransfer,
+} from "@/api/lib/entity-cap-lock";
 import {
   type CurrentVersionAssignment,
   insertEntityBatch,
@@ -147,7 +150,7 @@ export const ENTITY_SNAPSHOT_COLUMNS = {
   parentId: true,
   readOnly: true,
   currentVersionId: true,
-} as const;
+} as const satisfies Record<keyof Omit<EntitySnapshot, "versions">, true>;
 
 const VERSION_FIELDS_SELECT = {
   // Ascending field id is ascending creation order, the order
@@ -623,11 +626,13 @@ export const resolveEntityName = async ({
   return collisionName(maxSuffixNumber + 1);
 };
 
-export const getFolderSubtree = (
-  allEntities: EntitySnapshot[],
+export const getFolderSubtree = <
+  TEntity extends Pick<EntitySnapshot, "id" | "parentId">,
+>(
+  allEntities: TEntity[],
   rootId: SafeId<"entity">,
-): EntitySnapshot[] | null => {
-  const childrenByParentId = new Map<SafeId<"entity">, EntitySnapshot[]>();
+): TEntity[] | null => {
+  const childrenByParentId = new Map<SafeId<"entity">, TEntity[]>();
 
   for (const entity of allEntities) {
     if (!entity.parentId) {
@@ -648,7 +653,7 @@ export const getFolderSubtree = (
     return null;
   }
 
-  const subtree: EntitySnapshot[] = [];
+  const subtree: TEntity[] = [];
   const queue = [root];
   // The queue grows while it is walked, so a parent cycle in the snapshot
   // would enqueue forever. A cycle cannot exist in a well-formed tree; seeing
@@ -720,7 +725,13 @@ type CopyEntitiesProps = {
    * workspace, so only a move needs the source row locked — see the
    * lock-set comment below.
    */
-  transfer: EntityTransfer;
+  transfer:
+    | { type: "copy" }
+    | {
+        type: "move";
+        sourceWorkspaceId: SafeId<"workspace">;
+        sourceSnapshot: EntitySnapshot[];
+      };
   fieldMapping:
     | { type: "omit" }
     | { type: "single"; sourceFieldId: SafeId<"field"> };
@@ -881,8 +892,7 @@ const validateCopySources = ({
 
 type LockCopyWorkspacesOptions = {
   tx: Transaction;
-  transfer: EntityTransfer;
-  sourceWorkspaceId: SafeId<"workspace"> | undefined;
+  transfer: CopyEntitiesProps["transfer"];
   targetWorkspaceId: SafeId<"workspace">;
 };
 
@@ -893,22 +903,166 @@ type LockCopyWorkspacesOptions = {
  * there) for no correctness benefit. Only a cross-workspace MOVE also locks the
  * source, since the caller deletes the source rows in the same transaction and
  * that must serialize with concurrent source-side inserts. Both ids go through
- * `lockWorkspacesForEntityCap`, which sorts them ascending before locking — see
- * that function for why this closes the cross-workspace ABBA between an A->B
- * and a concurrent B->A move.
+ * the shared workspace lock owner, which sorts them ascending before locking.
+ * Moves use its transfer mode so source-side FK checks can finish while the
+ * transfer waits for source rows.
  */
 const lockCopyWorkspaces = async ({
   tx,
   transfer,
-  sourceWorkspaceId,
   targetWorkspaceId,
 }: LockCopyWorkspacesOptions): Promise<void> => {
-  await lockWorkspacesForEntityCap(
-    tx,
-    sourceWorkspaceId && transfer.type === "move"
-      ? [sourceWorkspaceId, targetWorkspaceId]
-      : [targetWorkspaceId],
+  if (transfer.type === "move") {
+    await lockWorkspacesForEntityTransfer(tx, [
+      transfer.sourceWorkspaceId,
+      targetWorkspaceId,
+    ]);
+    return;
+  }
+  await lockWorkspacesForEntityCap(tx, [targetWorkspaceId]);
+};
+
+const orderedSourceSnapshot = (snapshot: EntitySnapshot[]) =>
+  snapshot
+    .map(({ readOnly = false, versions, ...entity }) => ({
+      ...entity,
+      readOnly,
+      versions: versions
+        .map(({ fields: versionFields, ...version }) => ({
+          ...version,
+          fields: versionFields.toSorted(
+            (left, right) =>
+              Number(left.id > right.id) - Number(left.id < right.id),
+          ),
+        }))
+        .toSorted(
+          (left, right) =>
+            Number(left.id > right.id) - Number(left.id < right.id),
+        ),
+    }))
+    .toSorted(
+      (left, right) => Number(left.id > right.id) - Number(left.id < right.id),
+    );
+
+/** Row order is incidental; every carried column and row identity is not. */
+export const sourceSnapshotsMatch = (
+  expected: EntitySnapshot[],
+  current: EntitySnapshot[],
+): boolean =>
+  deepEquals(orderedSourceSnapshot(expected), orderedSourceSnapshot(current));
+
+type ValidateMoveSourceOptions = {
+  tx: Transaction;
+  sourceEntityId: SafeId<"entity">;
+  sourceWorkspaceId: SafeId<"workspace">;
+  sourceSnapshot: EntitySnapshot[];
+};
+
+/** The unremapped snapshot is the exact state a move is allowed to remove. */
+const validateMoveSource = async ({
+  tx,
+  sourceEntityId,
+  sourceWorkspaceId,
+  sourceSnapshot,
+}: ValidateMoveSourceOptions): Promise<Result<void, HandlerError>> => {
+  const sourceIds = sourceSnapshot.map(({ id }) => id);
+  const expectedVersionIds = new Set(
+    sourceSnapshot.flatMap(({ versions }) => versions.map(({ id }) => id)),
   );
+  const expectedFieldIds = new Set(
+    sourceSnapshot.flatMap(({ versions }) =>
+      versions.flatMap(({ fields: versionFields }) =>
+        versionFields.map(({ id }) => id),
+      ),
+    ),
+  );
+  await tx
+    .select({ id: entities.id })
+    .from(entities)
+    .where(
+      and(
+        eq(entities.workspaceId, sourceWorkspaceId),
+        inArray(entities.id, sourceIds),
+      ),
+    )
+    .orderBy(asc(entities.id))
+    .limit(sourceIds.length)
+    .for("update");
+  // Annotations and derived field content can change without an entity write.
+  // Lock those owners as well before reading the full carried state.
+  const liveVersions = await tx
+    .select({ id: entityVersions.id })
+    .from(entityVersions)
+    .where(
+      and(
+        eq(entityVersions.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .orderBy(asc(entityVersions.id))
+    .limit(expectedVersionIds.size + 1)
+    .for("update");
+  const liveFields = await tx
+    .select({ id: fields.id })
+    .from(fields)
+    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+    .where(
+      and(
+        eq(fields.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .orderBy(asc(fields.id))
+    .limit(expectedFieldIds.size + 1)
+    .for("update", { of: fields });
+
+  // Read full history only for the source set, never for the entire matter.
+  const currentEntities = await tx.query.entities.findMany({
+    where: {
+      workspaceId: { eq: sourceWorkspaceId },
+      id: { in: sourceIds },
+    },
+    columns: ENTITY_SNAPSHOT_COLUMNS,
+    with: EVERY_LIVE_VERSION_SELECT,
+    limit: sourceIds.length,
+  });
+  let membershipMatches = true;
+  if (
+    sourceSnapshot.find(({ id }) => id === sourceEntityId)?.kind === "folder"
+  ) {
+    // Workspace locks exclude inserts; source entity locks exclude moving a
+    // child out, and the folder-parent locks exclude moving a child in.
+    const workspaceEntities = await tx.query.entities.findMany({
+      where: { workspaceId: { eq: sourceWorkspaceId } },
+      columns: ENTITY_SNAPSHOT_COLUMNS,
+      limit: LIMITS.entitiesCount,
+    });
+    const currentSubtree = getFolderSubtree(workspaceEntities, sourceEntityId);
+    const expectedIds = new Set(sourceIds);
+    membershipMatches =
+      currentSubtree !== null &&
+      currentSubtree.length === expectedIds.size &&
+      currentSubtree.every(({ id }) => expectedIds.has(id));
+  }
+  if (
+    !membershipMatches ||
+    liveVersions.length !== expectedVersionIds.size ||
+    liveVersions.some(({ id }) => !expectedVersionIds.has(id)) ||
+    liveFields.length !== expectedFieldIds.size ||
+    liveFields.some(({ id }) => !expectedFieldIds.has(id)) ||
+    !sourceSnapshotsMatch(sourceSnapshot, currentEntities)
+  ) {
+    return Result.err(
+      new HandlerError({
+        status: 409,
+        code: "entity_transfer_source_changed",
+        message: "The source changed. Try moving it again.",
+      }),
+    );
+  }
+  return Result.ok();
 };
 
 type ValidateCopyTargetOptions = {
@@ -1413,19 +1567,34 @@ export const copyEntities = async ({
   recordAuditEvent,
   sourceEntityId,
   sourceEntities,
-  sourceWorkspaceId,
+  sourceWorkspaceId: copySourceWorkspaceId,
   targetRootEntityId,
   targetRootName,
   transfer,
   fieldMapping,
   dependencies = defaultCopyEntitiesDependencies,
 }: CopyEntitiesProps): Promise<Result<CopyEntitiesResult, HandlerError>> => {
+  const sourceWorkspaceId =
+    transfer.type === "move"
+      ? transfer.sourceWorkspaceId
+      : copySourceWorkspaceId;
   await lockCopyWorkspaces({
     tx,
     transfer,
-    sourceWorkspaceId,
     targetWorkspaceId,
   });
+
+  if (transfer.type === "move") {
+    const sourceValidated = await validateMoveSource({
+      tx,
+      sourceEntityId,
+      sourceWorkspaceId: transfer.sourceWorkspaceId,
+      sourceSnapshot: transfer.sourceSnapshot,
+    });
+    if (Result.isError(sourceValidated)) {
+      return sourceValidated;
+    }
+  }
 
   const targetValidated = await validateCopyTarget({
     tx,

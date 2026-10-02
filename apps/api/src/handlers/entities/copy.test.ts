@@ -1221,6 +1221,7 @@ describe("copy-to-workspace", () => {
     const insertedVersions: InsertedVersion[] = [];
 
     const sourceVersionId = toSafeId<"entityVersion">("version_1");
+    const moveSourceFieldId = toSafeId<"field">("move_source_field");
     const sourceEntity = {
       id: documentId,
       kind: "document" as const,
@@ -1234,7 +1235,13 @@ describe("copy-to-workspace", () => {
           versionNumber: 3,
           stamp: "2026/001/015.v3",
           label: "Final version",
-          fields: [{ propertyId: sourceFilePropertyId, content: fileContent }],
+          fields: [
+            {
+              id: moveSourceFieldId,
+              propertyId: sourceFilePropertyId,
+              content: fileContent,
+            },
+          ],
         },
       ],
     };
@@ -1274,7 +1281,29 @@ describe("copy-to-workspace", () => {
         },
       },
       $count: async () => 0,
-      select: () => {
+      select: (selection: unknown) => {
+        if (
+          isRecord(selection) &&
+          Object.keys(selection).length === 1 &&
+          "id" in selection
+        ) {
+          return {
+            from: (table: unknown) => {
+              const versionOrEntityId =
+                table === entityVersions ? sourceVersionId : documentId;
+              const lockedRows = [
+                {
+                  id: table === fields ? moveSourceFieldId : versionOrEntityId,
+                },
+              ];
+              const lock = { for: async () => lockedRows };
+              const where = () => ({
+                orderBy: () => ({ ...lock, limit: () => lock }),
+              });
+              return { where, innerJoin: () => ({ where }) };
+            },
+          };
+        }
         selectCallCount += 1;
 
         return {
