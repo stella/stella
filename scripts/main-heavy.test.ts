@@ -142,7 +142,9 @@ test("nightly, release pushes and dispatches run suites; ordinary pushes skip su
 });
 
 test("dropping the release filter breaks the trigger contract", () => {
-  expect(() => assertTriggerBehavior("true")).toThrow("expect(received)");
+  expect(() => assertTriggerBehavior("true")).toThrow(
+    "push: fix: ordinary change",
+  );
 });
 
 test("every main-heavy job has a job-level condition that skips ordinary pushes", () => {
