@@ -678,6 +678,7 @@ const isolationCases: IsolationCase[] = [
         fieldId: testIds.fieldB1,
         organizationId: testIds.orgA,
         workspaceId: testIds.wsA1,
+        recordAuditEvent: noopAuditRecorder,
       }),
     runBPositive: async ({ ids: testIds, workspaceB }) =>
       await runHandler(readEmailHtmlPreviewHandler, workspaceB, {
@@ -685,6 +686,7 @@ const isolationCases: IsolationCase[] = [
         fieldId: testIds.fieldB1,
         organizationId: testIds.orgB,
         workspaceId: testIds.wsB1,
+        recordAuditEvent: noopAuditRecorder,
       }),
     expectDenied: expectStatus(404),
     // The shared isolation fixture has a text field. A same-workspace lookup
