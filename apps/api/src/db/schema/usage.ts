@@ -1,3 +1,5 @@
+import { CONFIGURED_ACCESS_STATUSES } from "@/api/lib/usage/configured-access";
+
 import {
   destructiveEffectChunkColumns,
   destructiveEffectChunkConstraints,
@@ -7,6 +9,7 @@ import {
   member,
   organization,
   organizationCheck,
+  orgReadOnlyPolicies,
   p,
   pUuid,
   safeOrganizationId,
@@ -138,6 +141,7 @@ export const usagePolicies = p.pgTable(
     // `organization_member_capacity` database function together with the
     // seat count of a per-seat policy. Null = the policy sets no bound.
     maxMembers: p.integer("max_members"),
+    serviceActionsPerPeriod: p.integer("service_actions_per_period"),
     // Hidden by default: a seeded policy only appears in the catalog
     // endpoint once the operator explicitly marks it public.
     visibility: p
@@ -201,6 +205,10 @@ export const usagePolicies = p.pgTable(
       .uniqueIndex("usage_policies_hosted_policy_ref_uidx")
       .on(table.hostedPolicyRef)
       .where(sql`hosted_policy_ref IS NOT NULL`),
+    p.check(
+      "usage_policies_service_actions_positive",
+      sql`service_actions_per_period IS NULL OR service_actions_per_period > 0`,
+    ),
     p.check(
       "usage_policies_policy_key_format",
       sql`policy_key ~ '^[a-z0-9][a-z0-9_-]{0,63}$'`,
@@ -418,6 +426,60 @@ export const organizationAccessStates = p.pgTable(
       to: stella,
       using: sql`false`,
     }),
+  ],
+);
+
+const configuredAccessOwner = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.organization_configured_access'::regclass)`;
+
+// Separate from the original standing: feature disablement and older builds
+// read organization_access_states without observing or rewriting this overlay.
+export const organizationConfiguredAccess = p.pgTable(
+  "organization_configured_access",
+  {
+    organizationId: safeOrganizationId("organization_id")
+      .primaryKey()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    sourceSignature: p.text("source_signature").notNull(),
+    sourceEventAt: timestamptz("source_event_at"),
+    sourceEntitlementStatus: p
+      .text("source_entitlement_status", { enum: USAGE_ENTITLEMENT_STATUSES })
+      .notNull(),
+    sourceCancelAtPeriodEnd: p.boolean("source_cancel_at_period_end").notNull(),
+    configuredAccessStatus: p
+      .text("configured_access_status", { enum: CONFIGURED_ACCESS_STATUSES })
+      .notNull(),
+    configuredPeriodEndsAt: timestamptz("configured_period_ends_at"),
+    paymentRetryEndsAt: timestamptz("payment_retry_ends_at"),
+    serviceActionsPerPeriod: p.integer("service_actions_per_period"),
+    updatedAt: timestamptz("updated_at")
+      .notNull()
+      .defaultNow()
+      .$onUpdate(() => new Date()),
+  },
+  () => [
+    p.check(
+      "organization_configured_access_source_status",
+      sql`source_entitlement_status IN (${sql.join(
+        USAGE_ENTITLEMENT_STATUSES.map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "organization_configured_access_shape",
+      sql`((configured_access_status IN (${sql.join(
+        CONFIGURED_ACCESS_STATUSES.filter(
+          (status) => status === "active" || status === "ending",
+        ).map((status) => sql.raw(`'${status}'`)),
+        sql`, `,
+      )}) AND configured_period_ends_at IS NOT NULL AND payment_retry_ends_at IS NULL AND service_actions_per_period > 0) OR (configured_access_status = 'payment_retry' AND configured_period_ends_at IS NOT NULL AND payment_retry_ends_at IS NOT NULL AND service_actions_per_period > 0) OR (configured_access_status = 'disabled' AND configured_period_ends_at IS NULL AND payment_retry_ends_at IS NULL AND service_actions_per_period IS NULL)) IS TRUE`,
+    ),
+    p.pgPolicy("organization_configured_access_owner", {
+      for: "all",
+      to: "public",
+      using: configuredAccessOwner,
+      withCheck: configuredAccessOwner,
+    }),
+    ...orgReadOnlyPolicies("organization_configured_access"),
   ],
 );
 

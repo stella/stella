@@ -19,11 +19,14 @@ import {
 } from "@/api/db/schema";
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
-
-type AccessStateRow = Pick<
-  typeof organizationAccessStates.$inferSelect,
-  "state" | "evaluationEndsAt"
->;
+import {
+  CONFIGURED_ACCESS_STATE,
+  configuredAccessDeadline,
+} from "@/api/lib/usage/configured-access";
+import {
+  readOrganizationAccessSnapshot,
+  type OrganizationAccessSnapshot,
+} from "@/api/lib/usage/organization-access-snapshot";
 
 /**
  * Whether an organization without its own AI config may run on the instance
@@ -32,7 +35,7 @@ type AccessStateRow = Pick<
  * default.
  */
 export const allowsInstanceModels = (
-  row: AccessStateRow | undefined,
+  row: OrganizationAccessSnapshot | undefined,
   now: Date,
 ): boolean => {
   if (!row) {
@@ -42,6 +45,10 @@ export const allowsInstanceModels = (
     case ORGANIZATION_ACCESS_STATE.selfManagedKeys:
     case ORGANIZATION_ACCESS_STATE.evaluationEnded:
       return false;
+    case CONFIGURED_ACCESS_STATE: {
+      const deadline = configuredAccessDeadline(row.configuredAccess);
+      return deadline !== null && deadline > now;
+    }
     case ORGANIZATION_ACCESS_STATE.evaluationPeriod:
       return row.evaluationEndsAt !== null && row.evaluationEndsAt > now;
     default: {
@@ -62,15 +69,7 @@ export const mayUseInstanceModels = async (
   if (!env.FEATURE_ORG_ACCESS_STATE) {
     return true;
   }
-  const row = await db
-    .select({
-      state: organizationAccessStates.state,
-      evaluationEndsAt: organizationAccessStates.evaluationEndsAt,
-    })
-    .from(organizationAccessStates)
-    .where(eq(organizationAccessStates.organizationId, organizationId))
-    .limit(1)
-    .then((rows) => rows.at(0));
+  const row = await readOrganizationAccessSnapshot(db, organizationId);
   return allowsInstanceModels(row, new Date());
 };
 

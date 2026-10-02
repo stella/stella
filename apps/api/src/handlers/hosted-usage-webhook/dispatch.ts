@@ -26,6 +26,7 @@ import {
   usageSeatAssignments,
 } from "@/api/db/schema";
 import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
+import { env } from "@/api/env";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import type {
@@ -45,6 +46,8 @@ import {
   lockAssignmentCapacity,
   trimAssignmentsToCapacity,
 } from "@/api/lib/usage/assignment-capacity";
+import type { ConfiguredAccessEvent } from "@/api/lib/usage/configured-access";
+import { applyConfiguredAccessEvent } from "@/api/lib/usage/configured-access-store";
 import { allocateUsage } from "@/api/lib/usage/usage-ledger";
 
 export type DispatchOutcome =
@@ -55,6 +58,7 @@ export type DispatchOutcome =
 type PolicyLookup = {
   id: SafeId<"usagePolicy">;
   monthlyUsageUnits: number;
+  serviceActionsPerPeriod: number | null;
 };
 
 const resolvePolicyByHostedPolicyRef = async (
@@ -66,6 +70,7 @@ const resolvePolicyByHostedPolicyRef = async (
     .select({
       id: usagePolicies.id,
       monthlyUsageUnits: usagePolicies.monthlyUsageUnits,
+      serviceActionsPerPeriod: usagePolicies.serviceActionsPerPeriod,
     })
     .from(usagePolicies)
     .where(
@@ -214,6 +219,10 @@ const isStaleProviderEvent = ({
   }
   // At equal versions, terminal/cancellation facts dominate an active replay.
   return (
+    (env.FEATURE_CONFIGURED_ACCESS &&
+      existing.status === "past_due" &&
+      payload.status === "active" &&
+      payload.cancel_at_period_end !== true) ||
     (existing.status === "paused" &&
       payload.status !== "paused" &&
       !TERMINAL_PROVIDER_STATUSES.has(payload.status)) ||
@@ -222,9 +231,21 @@ const isStaleProviderEvent = ({
         payload.cancel_at_period_end === true)) ||
     (existing.cancelAtPeriodEnd &&
       payload.cancel_at_period_end !== true &&
-      payload.status !== "canceled")
+      payload.status !== "canceled" &&
+      !(env.FEATURE_CONFIGURED_ACCESS && payload.status === "past_due"))
   );
 };
+
+const cancellationFlagAtVersion = ({
+  existing,
+  payload,
+  occurredAt,
+}: StaleProviderEventParams) =>
+  (payload.cancel_at_period_end ?? false) ||
+  (env.FEATURE_CONFIGURED_ACCESS &&
+    existing.cancelAtPeriodEnd &&
+    occurredAt !== null &&
+    existing.hostedLastEventAt?.getTime() === occurredAt.getTime());
 
 const lastEventPatch = (
   existing: ExistingEntitlement,
@@ -341,12 +362,13 @@ const unknownProviderStatus = failureSink({
   expected: [],
 });
 
-const mapHostedProviderStatus = (
-  providerStatus: string,
-): UsageEntitlementStatus | null => {
+const mapHostedProviderStatus = (providerStatus: string) => {
   const parsed = v.safeParse(polarEntitlementStatusSchema, providerStatus);
   if (parsed.success) {
-    return HOSTED_PROVIDER_STATUS_MAP[parsed.output];
+    return {
+      providerStatus: parsed.output,
+      status: HOSTED_PROVIDER_STATUS_MAP[parsed.output],
+    };
   }
   observeFailure(
     new HostedProviderUnknownStatus({
@@ -448,19 +470,82 @@ const readHostedPeriod = (
     : { type: "open" as const, start, end };
 };
 
+type ProviderAccessOverride =
+  | { type: "deny" }
+  | {
+      type: "snapshot";
+      status: PolarEntitlementStatus;
+      cancelAtPeriodEnd: boolean;
+    };
+
+type ProviderAccessEventOptions = {
+  override?: ProviderAccessOverride | undefined;
+  status: PolarEntitlementStatus;
+  payload: HostedUsageEntitlementPayload;
+  periodEnd: Date;
+  serviceActionsPerPeriod: number | null;
+};
+
+const providerAccessEvent = ({
+  override,
+  status,
+  payload,
+  periodEnd,
+  serviceActionsPerPeriod,
+}: ProviderAccessEventOptions): ConfiguredAccessEvent => {
+  if (override?.type === "deny") {
+    return { type: "deny" };
+  }
+  const eventStatus = override?.status ?? status;
+  const cancelAtPeriodEnd =
+    override?.cancelAtPeriodEnd ?? payload.cancel_at_period_end ?? false;
+  switch (eventStatus) {
+    case "active":
+      return {
+        type: "active",
+        periodEndsAt: periodEnd,
+        serviceActionsPerPeriod,
+        cancelAtPeriodEnd,
+      };
+    case "past_due":
+      return {
+        type: "payment_retry",
+        occurredAt: parseOccurredAt(payload) ?? new Date(),
+        retryWindowMs:
+          env.PAYMENT_RETRY_WINDOW_MS ??
+          panic("PAYMENT_RETRY_WINDOW_MS is unset"),
+      };
+    case "canceled":
+      return {
+        type: cancelAtPeriodEnd ? "cancel" : "deny",
+      };
+    case "trialing":
+    case "incomplete":
+    case "incomplete_expired":
+    case "unpaid":
+    case "paused":
+      return { type: "deny" };
+    default:
+      eventStatus satisfies never;
+      return panic("Unhandled provider access status");
+  }
+};
+
 type HostedEntitlementUpsertParams = {
   tx: Transaction;
   payload: HostedUsageEntitlementPayload;
   eventId: string;
+  accessEvent?: ProviderAccessOverride;
 };
 
 export const handleHostedEntitlementUpsert = async ({
   tx,
   payload,
   eventId,
+  accessEvent,
 }: HostedEntitlementUpsertParams): Promise<DispatchOutcome> => {
-  const status = mapHostedProviderStatus(payload.status);
-  if (status === null) {
+  const mapped = mapHostedProviderStatus(payload.status);
+  if (mapped === null) {
     return await handleHostedEntitlementReconciliation({
       tx,
       payload,
@@ -468,6 +553,7 @@ export const handleHostedEntitlementUpsert = async ({
       reason: "unrecognized_status",
     });
   }
+  const status = mapped.status;
   const period = readHostedPeriod(payload, status);
   if (period === null) {
     return { kind: "ignored", reason: "invalid period dates" };
@@ -578,7 +664,11 @@ export const handleHostedEntitlementUpsert = async ({
           payload.created_at === undefined
             ? existingByProvider.hostedEntitlementCreatedAt
             : new Date(payload.created_at),
-        cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+        cancelAtPeriodEnd: cancellationFlagAtVersion({
+          existing: existingByProvider,
+          payload,
+          occurredAt,
+        }),
         ...lastEventPatch(existingByProvider, occurredAt),
       })
       .where(eq(usageEntitlements.id, existingByProvider.id));
@@ -666,7 +756,13 @@ export const handleHostedEntitlementUpsert = async ({
             payload.created_at === undefined
               ? previousCreatedAt
               : new Date(payload.created_at),
-          cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+          cancelAtPeriodEnd: replacesExternalId
+            ? (payload.cancel_at_period_end ?? false)
+            : cancellationFlagAtVersion({
+                existing: existingByAccountRef,
+                payload,
+                occurredAt,
+              }),
           // A replacement owns its own event clock, even when the previous
           // generation was modified more recently.
           ...(replacesExternalId
@@ -778,6 +874,26 @@ export const handleHostedEntitlementUpsert = async ({
         removed: { old: null, new: trimmedAssignments },
         seats: { old: null, new: seats },
       },
+    });
+  }
+
+  if (env.FEATURE_CONFIGURED_ACCESS) {
+    await applyConfiguredAccessEvent({
+      tx,
+      organizationId: ownerOrganizationId,
+      previousSource: previousRow,
+      mapping:
+        previousRow !== null &&
+        previousRow.hostedEntitlementExternalId !== payload.id
+          ? "replacement"
+          : "current",
+      event: providerAccessEvent({
+        override: accessEvent,
+        status: mapped.providerStatus,
+        payload,
+        periodEnd,
+        serviceActionsPerPeriod: policy.serviceActionsPerPeriod,
+      }),
     });
   }
 
@@ -895,14 +1011,9 @@ export const handleUsageEntitlementStatusChange = async ({
   eventKind,
 }: UsageEntitlementStatusUpdateParams): Promise<DispatchOutcome> => {
   // Revocation denies access independently of the reported snapshot status.
+  const mapped = mapHostedProviderStatus(payload.status);
   const mappedStatus =
-    eventKind === "revoked"
-      ? "cancelled"
-      : mapHostedProviderStatus(payload.status);
-  if (eventKind === "revoked") {
-    // Retain unknown-status detection without letting it veto a denial.
-    mapHostedProviderStatus(payload.status);
-  }
+    eventKind === "revoked" ? "cancelled" : (mapped?.status ?? null);
   if (mappedStatus === null) {
     return await handleHostedEntitlementReconciliation({
       tx,
@@ -951,6 +1062,16 @@ export const handleUsageEntitlementStatusChange = async ({
       return await handleHostedEntitlementUpsert({
         tx,
         eventId,
+        accessEvent:
+          eventKind === "revoked"
+            ? { type: "deny" }
+            : {
+                type: "snapshot",
+                status:
+                  mapped?.providerStatus ??
+                  panic("Accepted cancellation status is missing"),
+                cancelAtPeriodEnd: payload.cancel_at_period_end ?? false,
+              },
         payload: {
           ...payload,
           status: providerStatus,
@@ -1007,6 +1128,40 @@ export const handleUsageEntitlementStatusChange = async ({
       status: { old: null, new: update.status },
     },
   });
+  if (env.FEATURE_CONFIGURED_ACCESS) {
+    const policy = await tx
+      .select({
+        serviceActionsPerPeriod: usagePolicies.serviceActionsPerPeriod,
+        currentPeriodEnd: usageEntitlements.currentPeriodEnd,
+      })
+      .from(usageEntitlements)
+      .innerJoin(
+        usagePolicies,
+        eq(usagePolicies.id, usageEntitlements.usagePolicyId),
+      )
+      .where(eq(usageEntitlements.organizationId, existing.organizationId))
+      .limit(1)
+      .then(
+        (rows) => rows.at(0) ?? panic("Configured access policy is missing"),
+      );
+    await applyConfiguredAccessEvent({
+      tx,
+      organizationId: existing.organizationId,
+      previousSource: existing,
+      mapping: "current",
+      event:
+        eventKind === "revoked"
+          ? { type: "deny" }
+          : providerAccessEvent({
+              status:
+                mapped?.providerStatus ??
+                panic("Accepted cancellation status is missing"),
+              payload,
+              periodEnd: policy.currentPeriodEnd,
+              serviceActionsPerPeriod: policy.serviceActionsPerPeriod,
+            }),
+    });
+  }
   return { kind: "applied", entitlementId: existing.id };
 };
 

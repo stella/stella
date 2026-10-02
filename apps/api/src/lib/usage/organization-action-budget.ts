@@ -1,18 +1,19 @@
 import { panic } from "better-result";
-import { eq } from "drizzle-orm";
 
 import type { ScopedDb } from "@/api/db/safe-db";
-import {
-  ORGANIZATION_ACCESS_STATE,
-  organizationAccessStates,
-} from "@/api/db/schema";
+import { ORGANIZATION_ACCESS_STATE } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ActionPeriodPolicy } from "@/api/lib/rate-limit/action-period-budget";
+import {
+  CONFIGURED_ACCESS_STATE,
+  configuredAccessDeadline,
+} from "@/api/lib/usage/configured-access";
+import {
+  readOrganizationAccessSnapshot,
+  type OrganizationAccessSnapshot,
+} from "@/api/lib/usage/organization-access-snapshot";
 
-export type OrganizationActionState = Pick<
-  typeof organizationAccessStates.$inferSelect,
-  "state" | "evaluationEndsAt"
->;
+export type OrganizationActionState = OrganizationAccessSnapshot;
 
 export type OrganizationActionBudgetConfig = {
   periodMs: number | undefined;
@@ -47,6 +48,20 @@ export const resolveOrganizationActionBudget = ({
   let limit: number | undefined;
   let serviceDeadlineMs: number | null = null;
   switch (state.state) {
+    case CONFIGURED_ACCESS_STATE: {
+      const access = state.configuredAccess;
+      const deadline = configuredAccessDeadline(access);
+      if (
+        access.status === "disabled" ||
+        deadline === null ||
+        deadline <= now
+      ) {
+        return { status: "not_enabled" };
+      }
+      serviceDeadlineMs = deadline.getTime();
+      limit = access.serviceActionsPerPeriod;
+      break;
+    }
     case ORGANIZATION_ACCESS_STATE.evaluationEnded:
       return { status: "not_enabled" };
     case ORGANIZATION_ACCESS_STATE.evaluationPeriod:
@@ -83,14 +98,5 @@ export const readOrganizationActionState = async (
   organizationId: SafeId<"organization">,
 ) =>
   await scopedDb(
-    async (tx) =>
-      await tx
-        .select({
-          state: organizationAccessStates.state,
-          evaluationEndsAt: organizationAccessStates.evaluationEndsAt,
-        })
-        .from(organizationAccessStates)
-        .where(eq(organizationAccessStates.organizationId, organizationId))
-        .limit(1)
-        .then((rows) => rows.at(0)),
+    async (tx) => await readOrganizationAccessSnapshot(tx, organizationId),
   );
