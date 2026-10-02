@@ -1,7 +1,4 @@
 import { Result } from "better-result";
-import { useTranslations } from "use-intl";
-
-import { stellaToast } from "@stll/ui/toast";
 
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type {
@@ -10,15 +7,7 @@ import type {
 } from "@/routes/_protected.contacts/-components/types";
 
 export const useContactPatch = (contact: ContactData) => {
-  const t = useTranslations();
   const updateContact = useUpdateContact();
-  const handleError = (onError?: () => void) => {
-    stellaToast.add({
-      title: t("errors.actionFailed"),
-      type: "error",
-    });
-    onError?.();
-  };
 
   const saveContactPatch = (patch: ContactPatch, onError?: () => void) => {
     updateContact.mutate(
@@ -28,7 +17,7 @@ export const useContactPatch = (contact: ContactData) => {
         ...patch,
       },
       {
-        onError: () => handleError(onError),
+        onError: () => onError?.(),
       },
     );
   };
@@ -44,7 +33,6 @@ export const useContactPatch = (contact: ContactData) => {
       catch: (error) => error,
     });
     if (Result.isError(result)) {
-      handleError();
       return false;
     }
     return true;

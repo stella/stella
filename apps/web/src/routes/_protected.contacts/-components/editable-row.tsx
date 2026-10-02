@@ -1,3 +1,5 @@
+import { useState } from "react";
+
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
@@ -34,12 +36,17 @@ export const EditableRow = ({
 }: EditableRowProps) => {
   const t = useTranslations();
   const updateContact = useUpdateContact();
+  const [scope] = useState(() => ({
+    organizationId: contact.organizationId,
+    contactId: contact.id,
+  }));
 
   const policy = EDITABLE_FIELD_POLICY[field];
   const inputAttributes = getEditableFieldInputAttributes(field);
 
   const rename = useInlineRename({
     initial: value ?? "",
+    commitOnUnmount: true,
     // Every contact field handles the empty case explicitly in
     // `onCommit`: `displayName` toasts (it's required), the
     // numeric fields parse to `null`, and the remaining optional
@@ -83,21 +90,10 @@ export const EditableRow = ({
         payload = buildTextContactPayload(field, trimmed);
       }
 
-      updateContact.mutate(
-        {
-          organizationId: contact.organizationId,
-          contactId: contact.id,
-          ...payload,
-        },
-        {
-          onError: () => {
-            stellaToast.add({
-              title: t("errors.actionFailed"),
-              type: "error",
-            });
-          },
-        },
-      );
+      updateContact.mutate({
+        ...scope,
+        ...payload,
+      });
     },
   });
 

@@ -1,11 +1,14 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
+import { useTranslations } from "use-intl";
 
 import type { ContactType } from "@stll/api-contract";
+import { stellaToast } from "@stll/ui/toast";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { contactsKeys } from "@/lib/contacts/queries";
 import type { contactOptions } from "@/lib/contacts/queries";
+import { detached } from "@/lib/detached";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
@@ -147,6 +150,7 @@ type UpdateContactVars = {
 } & ContactUpdate;
 
 export const useUpdateContact = () => {
+  const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
 
@@ -163,26 +167,29 @@ export const useUpdateContact = () => {
     onSuccess: async (_data, vars) => {
       // Mutation callbacks outlive page observers. Use the submitted scope even
       // when the route has moved to another contact or organization meanwhile.
-      const invalidations = [
-        queryClient.invalidateQueries({
-          queryKey: contactsKeys.byId(vars.organizationId, vars.contactId),
-        }),
+      detached(
         queryClient.invalidateQueries({
           queryKey: contactsKeys.lists(vars.organizationId),
         }),
-      ];
+        "contacts.update-lists",
+      );
       if (
         vars.displayName !== undefined ||
         vars.responsibleAttorneyId !== undefined
       ) {
-        invalidations.push(
+        detached(
           queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
+          "contacts.update-workspaces",
         );
       }
-      await Promise.all(invalidations);
+      // Detail must settle before another array edit can read its source data.
+      await queryClient.invalidateQueries({
+        queryKey: contactsKeys.byId(vars.organizationId, vars.contactId),
+      });
     },
     onError: (error) => {
       analytics.captureError(error);
+      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
     },
   });
 };

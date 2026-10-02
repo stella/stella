@@ -3,19 +3,25 @@ import { useRef, useState } from "react";
 import { useTranslations } from "use-intl";
 
 import { Textarea } from "@stll/ui/textarea";
-import { stellaToast } from "@stll/ui/toast";
 
+import { useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
 export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
   const t = useTranslations();
   const updateContact = useUpdateContact();
+  const [scope] = useState(() => ({
+    organizationId: contact.organizationId,
+    contactId: contact.id,
+  }));
   const [draft, setDraft] = useState(contact.notes ?? "");
   const [latestServerNotes, setLatestServerNotes] = useState(
     contact.notes ?? "",
   );
   const skipNextSaveRef = useRef(false);
+  const submittedDraft = useRef<string | undefined>(undefined);
 
   // Reconcile the server notes prop into the local draft during render
   // (React's sanctioned "adjust state when a prop changes" pattern, tracking the
@@ -37,27 +43,27 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
     }
 
     const current = contact.notes ?? "";
-    if (draft === current) {
+    if (draft === current || draft === submittedDraft.current) {
       return;
     }
 
+    submittedDraft.current = draft;
     updateContact.mutate(
       {
-        organizationId: contact.organizationId,
-        contactId: contact.id,
+        ...scope,
         notes: draft.trim().length === 0 ? null : draft,
       },
       {
         onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+          submittedDraft.current = undefined;
           setDraft(current);
         },
       },
     );
   };
+
+  const flush = useLatestCallback(handleSave);
+  useMountEffect(() => () => flush());
 
   return (
     <Textarea
@@ -65,7 +71,10 @@ export const ContactNotesEditor = ({ contact }: { contact: ContactData }) => {
       className="min-h-28"
       disabled={updateContact.isPending}
       onBlur={handleSave}
-      onChange={(event) => setDraft(event.currentTarget.value)}
+      onChange={(event) => {
+        submittedDraft.current = undefined;
+        setDraft(event.currentTarget.value);
+      }}
       onKeyDown={(event) => {
         if (event.key === "Escape") {
           skipNextSaveRef.current = true;

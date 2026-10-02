@@ -1,10 +1,12 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
+import { useMountEffect } from "@/hooks/use-effect";
+import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
@@ -21,6 +23,10 @@ export const ContactPersonDetailsEditor = ({
 }) => {
   const t = useTranslations();
   const updateContact = useUpdateContact();
+  const [scope] = useState(() => ({
+    organizationId: contact.organizationId,
+    contactId: contact.id,
+  }));
   const [birthDate, setBirthDate] = useState<BirthDateDraft>(() =>
     birthDateDraft(contact.dateOfBirth),
   );
@@ -38,7 +44,12 @@ export const ContactPersonDetailsEditor = ({
     JSON.stringify(comparableBirthDate) !== JSON.stringify(currentBirthDate) ||
     nationalityCodes.join(",") !== contact.nationalityCodes.join(",");
 
+  const submittedDraft = useRef<string | undefined>(undefined);
   const save = () => {
+    const draftKey = JSON.stringify({ birthDate, nationalityCodes });
+    if (!dirty || submittedDraft.current === draftKey) {
+      return;
+    }
     const dateOfBirth = parseBirthDateDraft(birthDate);
     if (hasBirthDateInput && !dateOfBirth) {
       stellaToast.add({
@@ -47,10 +58,10 @@ export const ContactPersonDetailsEditor = ({
       });
       return;
     }
+    submittedDraft.current = draftKey;
     updateContact.mutate(
       {
-        organizationId: contact.organizationId,
-        contactId: contact.id,
+        ...scope,
         dateOfBirth,
         nationalityCodes,
       },
@@ -60,11 +71,14 @@ export const ContactPersonDetailsEditor = ({
           stellaToast.add({ title: t("contacts.saved"), type: "success" });
         },
         onError: () => {
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+          submittedDraft.current = undefined;
         },
       },
     );
   };
+
+  const flush = useLatestCallback(save);
+  useMountEffect(() => () => flush());
 
   return (
     <section className="rounded-lg border p-4">
@@ -74,8 +88,14 @@ export const ContactPersonDetailsEditor = ({
       <PersonDetailsFields
         birthDate={birthDate}
         nationalityCodes={nationalityCodes}
-        onBirthDateChange={setBirthDate}
-        onNationalityCodesChange={setNationalityCodes}
+        onBirthDateChange={(value) => {
+          submittedDraft.current = undefined;
+          setBirthDate(value);
+        }}
+        onNationalityCodesChange={(value) => {
+          submittedDraft.current = undefined;
+          setNationalityCodes(value);
+        }}
       />
       {dirty && (
         <div className="mt-4 flex justify-end">

@@ -10,7 +10,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@stll/ui/select";
-import { stellaToast } from "@stll/ui/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { useUpdateContact } from "@/lib/contacts/mutations";
@@ -61,21 +60,11 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
       return;
     }
 
-    updateContact.mutate(
-      {
-        organizationId: contact.organizationId,
-        contactId: contact.id,
-        ...contactOwnerPatch(field, nextValue),
-      },
-      {
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
-        },
-      },
-    );
+    updateContact.mutate({
+      organizationId: contact.organizationId,
+      contactId: contact.id,
+      ...contactOwnerPatch(field, nextValue),
+    });
   };
 
   return (

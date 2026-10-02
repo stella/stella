@@ -2,7 +2,7 @@ import type { ReactNode } from "react";
 
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
 import type { QueryClient as Client } from "@tanstack/react-query";
-import { afterAll, afterEach, expect, test } from "bun:test";
+import { afterAll, afterEach, expect, mock, spyOn, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
@@ -20,9 +20,29 @@ type PendingPost = {
   response: ReturnType<typeof Promise.withResolvers<Response>>;
 };
 const posts: PendingPost[] = [];
+const serverContacts = new Map<string, ContactData>();
+const heldContactReads = new Map<
+  string,
+  {
+    requested: ReturnType<typeof Promise.withResolvers<undefined>>;
+    response: ReturnType<typeof Promise.withResolvers<Response>>;
+  }
+>();
 globalThis.fetch = Object.assign(
   async (input: string | URL | Request, init?: RequestInit) => {
     const request = new Request(input, init);
+    if (request.method === "GET") {
+      const id = new URL(request.url).pathname.split("/").at(-1);
+      const held = id ? heldContactReads.get(id) : undefined;
+      if (held) {
+        held.requested.resolve(undefined);
+        return await held.response.promise;
+      }
+      const data = id ? serverContacts.get(id) : undefined;
+      if (data) {
+        return Response.json(data);
+      }
+    }
     if (request.method !== "POST") {
       throw new Error(`Unexpected request: ${request.method} ${request.url}`);
     }
@@ -44,6 +64,13 @@ const { IntlProvider } = await import("use-intl");
 const { default: messages } = await import("@/i18n/langs/en.json");
 const { Route: contactRoute } =
   await import("@/routes/_protected.contacts/$contactId");
+const { Input } = await import("@stll/ui/input");
+const { stellaToast } = await import("@stll/ui/toast");
+const { FormattingProvider } = await import("@/i18n/formatting-context");
+const { rootKeys } = await import("@/lib/auth-queries");
+const { organizationKeys } = await import("@/lib/organization/queries");
+const { Route: invoiceRoute } =
+  await import("@/routes/_protected.workspaces/$workspaceId/invoices/$invoiceId");
 const { ContactNotesEditor } =
   await import("@/routes/_protected.contacts/-components/contact-notes-editor");
 const { ContactCommunicationEditor } =
@@ -80,7 +107,7 @@ const contact = (id: typeof A, notes: string | null) =>
     phones: [],
     addresses: null,
     tags: null,
-    metadata: { dataBoxes: [], customFields: [] },
+    metadata: { version: 1, dataBoxes: [], customFields: [] },
     color: null,
     registrationNumber: null,
     taxId: null,
@@ -106,7 +133,10 @@ const contact = (id: typeof A, notes: string | null) =>
 
 afterEach(() => {
   testing.cleanup();
+  mock.restore();
   posts.length = 0;
+  serverContacts.clear();
+  heldContactReads.clear();
 });
 
 afterAll(async () => {
@@ -115,6 +145,12 @@ afterAll(async () => {
 });
 
 const mountPage = async (children: () => ReactNode, client: Client) => {
+  const remountDeps = contactRoute.options.remountDeps;
+  if (!remountDeps) {
+    throw new Error("Contact route must declare remountDeps");
+  }
+  client.setQueryData(rootKeys.role, "member");
+  client.setQueryData(organizationKeys.byOrganization(ORGANIZATION), null);
   let organizationId = ORGANIZATION;
   const root = router.createRootRoute({ component: router.Outlet });
   const protectedRoute = router.createRoute({
@@ -126,7 +162,7 @@ const mountPage = async (children: () => ReactNode, client: Client) => {
     getParentRoute: () => protectedRoute,
     path: "/contacts/$contactId",
     // Exercise the production route's identity policy with the real editors.
-    remountDeps: contactRoute.options.remountDeps,
+    remountDeps,
     component: children,
   });
   const appRouter = router.createRouter({
@@ -138,7 +174,9 @@ const mountPage = async (children: () => ReactNode, client: Client) => {
   const view = testing.render(
     <query.QueryClientProvider client={client}>
       <IntlProvider locale="en" messages={messages} timeZone="UTC">
-        <router.RouterProvider router={appRouter} />
+        <FormattingProvider locale="en" timeZone="UTC">
+          <router.RouterProvider router={appRouter} />
+        </FormattingProvider>
       </IntlProvider>
     </query.QueryClientProvider>,
   );
@@ -179,67 +217,6 @@ const notesPage = () => {
   );
   return <ContactNotesEditor contact={data} />;
 };
-
-test.each([null, "B's own notes"])(
-  "contact navigation initializes notes from the destination: %s",
-  async (bNotes) => {
-    const client = createClient();
-    client.setQueryData(
-      contactOptions(ORGANIZATION, A).queryKey,
-      contact(A, null),
-    );
-    client.setQueryData(
-      contactOptions(ORGANIZATION, B).queryKey,
-      contact(B, bNotes),
-    );
-    const { view, appRouter } = await mountPage(notesPage, client);
-    const source = view.getByRole("textbox", { name: messages.common.notes });
-    testing.fireEvent.change(source, { target: { value: "A's active draft" } });
-    source.focus();
-    expect(document.activeElement).toBe(source);
-
-    await testing.act(async () => {
-      await appRouter.navigate({
-        to: "/contacts/$contactId",
-        params: { contactId: B },
-      });
-    });
-    const destination = view.getByRole("textbox", {
-      name: messages.common.notes,
-    });
-    expect(destination).not.toBe(source);
-    expect(destination).toHaveProperty("value", bNotes ?? "");
-    testing.fireEvent.blur(destination);
-    expect(posts).toHaveLength(0);
-
-    destination.focus();
-    testing.fireEvent.change(destination, {
-      target: { value: "B's active draft" },
-    });
-    await testing.act(async () => appRouter.history.back());
-    await testing.waitFor(() =>
-      expect(view.getByRole("textbox")).toHaveProperty("value", ""),
-    );
-    view.getByRole("textbox").focus();
-    await testing.act(async () => appRouter.history.forward());
-    await testing.waitFor(() =>
-      expect(view.getByRole("textbox")).toHaveProperty("value", bNotes ?? ""),
-    );
-
-    testing.fireEvent.change(view.getByRole("textbox"), {
-      target: { value: "B's next note" },
-    });
-    testing.fireEvent.blur(view.getByRole("textbox"));
-    const post = await nextPost();
-    expect(post.url).toEndWith(`/contacts/${B}`);
-    expect(post.body).toEqual({ notes: "B's next note" });
-    view.unmount();
-    await testing.act(async () =>
-      post.response.resolve(Response.json({ success: true })),
-    );
-    client.clear();
-  },
-);
 
 test("a same-contact refetch preserves an active notes draft", async () => {
   const client = createClient();
@@ -305,10 +282,18 @@ test("contact drafts belong to the current route identity", async () => {
             bNotes ?? "",
           );
           testing.fireEvent.blur(view.getByRole("textbox"));
-          expect(posts).toHaveLength(0);
+          const flushed = await nextPost();
+          expect(flushed.url).toEndWith(`/contacts/${A}`);
+          expect(flushed.body).toEqual({ notes: `${aNotes ?? ""} changed` });
+          expect(posts).toHaveLength(1);
         } finally {
           view.unmount();
+          for (const post of posts) {
+            post.response.resolve(Response.json({ id: A }));
+          }
+          await testing.waitFor(() => expect(client.isMutating()).toBe(0));
           client.clear();
+          posts.length = 0;
         }
       },
     ),
@@ -321,6 +306,8 @@ test.each(["communication-first", "custom-fields-first"])(
   async (order) => {
     const client = createClient();
     const cached = contact(A, null);
+    client.setQueryData(contactsKeys.byId(ORGANIZATION, A), cached);
+    client.setQueryData(contactsKeys.lists(ORGANIZATION), []);
     const { view } = await mountPage(
       () => (
         <>
@@ -371,27 +358,19 @@ test.each(["communication-first", "custom-fields-first"])(
         ],
       },
     });
-    const serverMetadata = { ...cached.metadata };
     for (const post of order === "communication-first"
       ? [communication, custom]
       : [custom, communication]) {
-      if (
-        typeof post.body.metadata !== "object" ||
-        post.body.metadata === null
-      ) {
-        throw new Error("Expected metadata section");
-      }
-      Object.assign(serverMetadata, post.body.metadata);
       await testing.act(async () =>
-        post.response.resolve(Response.json({ success: true })),
+        post.response.resolve(Response.json({ id: A })),
       );
+      expect(
+        client.getQueryState(contactsKeys.byId(ORGANIZATION, A))?.isInvalidated,
+      ).toBe(true);
+      expect(
+        client.getQueryState(contactsKeys.lists(ORGANIZATION))?.isInvalidated,
+      ).toBe(true);
     }
-    expect(serverMetadata).toEqual({
-      dataBoxes: [{ id: "abc1234", isPrimary: true }],
-      customFields: [
-        { id: expect.any(String), label: "Reference", value: "42" },
-      ],
-    });
     client.clear();
   },
 );
@@ -401,6 +380,7 @@ test("section removals and field edits keep sibling metadata out of requests", a
   const cached = {
     ...contact(A, null),
     metadata: {
+      version: 1,
       dataBoxes: [{ id: "abc1234", isPrimary: true }],
       customFields: [{ id: "reference", label: "Reference", value: "old" }],
     },
@@ -463,6 +443,9 @@ test("section removals and field edits keep sibling metadata out of requests", a
 test.each([200, 500])(
   "update settlement after unmount refreshes only successful writes: %i",
   async (status) => {
+    const toast = spyOn(stellaToast, "add").mockImplementation(
+      () => "test-toast",
+    );
     const client = createClient();
     const keys = [
       contactsKeys.byId(ORGANIZATION, A),
@@ -534,6 +517,7 @@ test.each([200, 500])(
     expect(successes).toBe(0);
     expect(captures).toHaveLength(status === 200 ? 0 : 1);
     expect(posts).toHaveLength(1);
+    expect(toast).toHaveBeenCalledTimes(status === 200 ? 0 : 1);
     client.clear();
   },
 );
@@ -585,3 +569,320 @@ test.each(workspaceProjectionCases)(
     client.clear();
   },
 );
+
+const RealPage = () => {
+  const Component = contactRoute.options.component;
+  if (!Component) {
+    throw new Error("Contact route must declare a component");
+  }
+  return <Component />;
+};
+const warmPage = (client: Client) => {
+  for (const id of [A, B]) {
+    const data = {
+      ...contact(id, `${id === A ? "A" : "B"} notes`),
+      firstName: id === A ? "Alice" : "Bob",
+    };
+    serverContacts.set(id, data);
+    client.setQueryData(contactOptions(ORGANIZATION, id).queryKey, data);
+  }
+};
+const dirtyPage = (view: ReturnType<typeof testing.render>) => {
+  testing.fireEvent.click(view.getByRole("button", { name: "Alice" }));
+  testing.fireEvent.change(view.getByDisplayValue("Alice"), {
+    target: { value: "Edited Alice" },
+  });
+  testing.fireEvent.change(
+    view.getByRole("textbox", { name: messages.common.notes }),
+    { target: { value: "Edited notes" } },
+  );
+  const year = view.getByPlaceholderText(messages.contacts.fields.year);
+  testing.fireEvent.change(year, { target: { value: "1990" } });
+  expect(document.activeElement).toBe(view.getByDisplayValue("Edited Alice"));
+};
+const settlePosts = async (client: Client) => {
+  await testing.act(async () => {
+    for (const post of posts) {
+      post.response.resolve(Response.json({ id: A }));
+    }
+  });
+  await testing.waitFor(() => expect(client.isMutating()).toBe(0));
+};
+test.each(["link", "history"])(
+  "real contact page flushes its drafts on %s navigation",
+  async (navigation) => {
+    const client = createClient();
+    warmPage(client);
+    const { view, appRouter } = await mountPage(
+      () => (
+        <>
+          <RealPage />
+          <router.Link to="/contacts/$contactId" params={{ contactId: B }}>
+            {messages.common.next}
+          </router.Link>
+        </>
+      ),
+      client,
+    );
+    if (navigation === "history") {
+      await testing.act(async () => appRouter.history.push(`/contacts/${B}`));
+      await testing.waitFor(() =>
+        expect(view.getByRole("heading", { name: "Contact B" })).toBeDefined(),
+      );
+      await testing.act(async () => appRouter.history.back());
+      await testing.waitFor(() =>
+        expect(view.getByRole("heading", { name: "Contact A" })).toBeDefined(),
+      );
+    }
+    dirtyPage(view);
+    if (navigation === "link") {
+      await testing.act(async () =>
+        testing.fireEvent.click(
+          view.getByRole("link", { name: messages.common.next }),
+        ),
+      );
+    } else {
+      await testing.act(async () => appRouter.history.forward());
+    }
+    await testing.waitFor(() =>
+      expect(view.getByRole("heading", { name: "Contact B" })).toBeDefined(),
+    );
+    expect(view.getByRole("button", { name: "Bob" })).toBeDefined();
+    expect(
+      view.getByRole("textbox", { name: messages.common.notes }),
+    ).toHaveProperty("value", "B notes");
+    expect(
+      view.getByPlaceholderText(messages.contacts.fields.year),
+    ).toHaveProperty("value", "");
+    await testing.waitFor(() => expect(posts).toHaveLength(3));
+    expect(posts.map(({ url }) => url.split("/").at(-1))).toEqual([A, A, A]);
+    expect(posts.map(({ body }) => body)).toEqual(
+      expect.arrayContaining([
+        { firstName: "Edited Alice" },
+        { notes: "Edited notes" },
+        {
+          dateOfBirth: { precision: "year", year: 1990 },
+          nationalityCodes: [],
+        },
+      ]),
+    );
+    testing.fireEvent.blur(
+      view.getByRole("textbox", { name: messages.common.notes }),
+    );
+    expect(posts).toHaveLength(3);
+    await settlePosts(client);
+    if (navigation === "history") {
+      await testing.act(async () => appRouter.history.back());
+      await testing.waitFor(() =>
+        expect(view.getByRole("heading", { name: "Contact A" })).toBeDefined(),
+      );
+      await testing.act(async () => appRouter.history.forward());
+      await testing.waitFor(() =>
+        expect(view.getByRole("heading", { name: "Contact B" })).toBeDefined(),
+      );
+      expect(
+        view.getByRole("textbox", { name: messages.common.notes }),
+      ).toHaveProperty("value", "B notes");
+    }
+    view.unmount();
+    client.clear();
+  },
+);
+test("same-contact router invalidation preserves every active draft", async () => {
+  const client = createClient();
+  warmPage(client);
+  const { view, appRouter } = await mountPage(RealPage, client);
+  dirtyPage(view);
+  const row = view.getByDisplayValue("Edited Alice");
+  await testing.act(async () => await appRouter.invalidate());
+  expect(view.getByDisplayValue("Edited Alice")).toBe(row);
+  expect(
+    view.getByRole("textbox", { name: messages.common.notes }),
+  ).toHaveProperty("value", "Edited notes");
+  expect(
+    view.getByPlaceholderText(messages.contacts.fields.year),
+  ).toHaveProperty("value", "1990");
+  expect(posts).toHaveLength(0);
+  await testing.act(async () =>
+    appRouter.history.push(`/contacts/${A}?q=changed`),
+  );
+  await testing.waitFor(() =>
+    expect(appRouter.state.location.searchStr).toBe("?q=changed"),
+  );
+  expect(view.getByDisplayValue("Edited Alice")).toBe(row);
+  view.unmount();
+  await testing.waitFor(() => expect(posts).toHaveLength(3));
+  await settlePosts(client);
+  client.clear();
+});
+test("two quick data-box additions build on refreshed detail while lists refetch", async () => {
+  const client = createClient();
+  warmPage(client);
+  const listResponse = Promise.withResolvers<string[]>();
+  const fetchList = () => listResponse.promise;
+  const observer = new query.QueryObserver(client, {
+    queryKey: contactsKeys.lists(ORGANIZATION),
+    queryFn: fetchList,
+    initialData: [],
+    staleTime: Infinity,
+  });
+  const unsubscribe = observer.subscribe(() => undefined);
+  const { view } = await mountPage(RealPage, client);
+  const add = (id: string) => {
+    testing.fireEvent.change(
+      view.getByPlaceholderText(
+        messages.contacts.communication.dataBoxPlaceholder,
+      ),
+      { target: { value: id } },
+    );
+    testing.fireEvent.click(
+      view.getByRole("button", {
+        name: messages.contacts.communication.addDataBox,
+      }),
+    );
+  };
+  add("abc1234");
+  const first = await nextPost();
+  const detailRead = {
+    requested: Promise.withResolvers<undefined>(),
+    response: Promise.withResolvers<Response>(),
+  };
+  heldContactReads.set(A, detailRead);
+  const refreshed = {
+    ...contact(A, "A notes"),
+    metadata: {
+      version: 1,
+      dataBoxes: [{ id: "abc1234", isPrimary: true }],
+      customFields: [],
+    },
+  } satisfies ContactData;
+  serverContacts.set(A, refreshed);
+  await testing.act(async () => {
+    first.response.resolve(Response.json({ id: A }));
+    await detailRead.requested.promise;
+  });
+  expect(client.isMutating()).toBe(1);
+  expect(
+    view
+      .getByPlaceholderText(messages.contacts.communication.dataBoxPlaceholder)
+      .hasAttribute("disabled"),
+  ).toBe(true);
+  heldContactReads.delete(A);
+  await testing.act(async () =>
+    detailRead.response.resolve(Response.json(refreshed)),
+  );
+  await testing.waitFor(() =>
+    expect(
+      view
+        .getByPlaceholderText(
+          messages.contacts.communication.dataBoxPlaceholder,
+        )
+        .hasAttribute("disabled"),
+    ).toBe(false),
+  );
+  expect(observer.getCurrentResult().isFetching).toBe(true);
+  add("def5678");
+  const second = await nextPost(1);
+  expect(second.body).toEqual({
+    metadata: {
+      dataBoxes: [
+        { id: "abc1234", isPrimary: true },
+        { id: "def5678", isPrimary: false },
+      ],
+    },
+  });
+  view.unmount();
+  await testing.act(async () => {
+    second.response.resolve(Response.json({ id: A }));
+    listResponse.resolve([]);
+  });
+  await testing.waitFor(() => expect(client.isMutating()).toBe(0));
+  unsubscribe();
+  client.clear();
+});
+
+test("invoice draft identity ignores search changes", async () => {
+  const remountDeps = invoiceRoute.options.remountDeps;
+  if (!remountDeps) {
+    throw new Error("Invoice route must declare remountDeps");
+  }
+  const root = router.createRootRoute({ component: router.Outlet });
+  const protectedRoute = router.createRoute({
+    getParentRoute: () => root,
+    id: "_protected",
+  });
+  const page = router.createRoute({
+    getParentRoute: () => protectedRoute,
+    path: "/workspaces/$workspaceId/invoices/$invoiceId",
+    component: () => (
+      <Input aria-label="Invoice draft" defaultValue="original" />
+    ),
+  });
+  Object.assign(page.options, { remountDeps });
+  const appRouter = router.createRouter({
+    routeTree: root.addChildren([protectedRoute.addChildren([page])]),
+    history: router.createMemoryHistory({
+      initialEntries: ["/workspaces/matter-a/invoices/invoice-a"],
+    }),
+    isServer: false,
+  });
+  await appRouter.load();
+  const view = testing.render(<router.RouterProvider router={appRouter} />);
+  const input = view.getByRole("textbox", { name: "Invoice draft" });
+  testing.fireEvent.change(input, { target: { value: "active draft" } });
+  await testing.act(async () =>
+    appRouter.history.push("/workspaces/matter-a/invoices/invoice-a?q=next"),
+  );
+  await testing.waitFor(() =>
+    expect(appRouter.state.location.searchStr).toBe("?q=next"),
+  );
+  expect(view.getByRole("textbox", { name: "Invoice draft" })).toBe(input);
+  expect(input).toHaveProperty("value", "active draft");
+  await testing.act(async () =>
+    appRouter.history.push("/workspaces/matter-a/invoices/invoice-b?q=next"),
+  );
+  await testing.waitFor(() =>
+    expect(view.getByRole("textbox", { name: "Invoice draft" })).not.toBe(
+      input,
+    ),
+  );
+  expect(view.getByRole("textbox", { name: "Invoice draft" })).toHaveProperty(
+    "value",
+    "original",
+  );
+});
+
+test("cancelled notes and inline drafts do not flush when leaving", async () => {
+  const client = createClient();
+  warmPage(client);
+  const { view } = await mountPage(RealPage, client);
+  testing.fireEvent.click(view.getByRole("button", { name: "Alice" }));
+  const row = view.getByDisplayValue("Alice");
+  testing.fireEvent.change(row, { target: { value: "cancelled name" } });
+  testing.fireEvent.keyDown(row, { key: "Escape" });
+  const notes = view.getByRole("textbox", { name: messages.common.notes });
+  notes.focus();
+  testing.fireEvent.change(notes, { target: { value: "cancelled notes" } });
+  testing.fireEvent.keyDown(notes, { key: "Escape" });
+  view.unmount();
+  await testing.act(async () => undefined);
+  expect(posts).toHaveLength(0);
+  client.clear();
+});
+test("blurred notes and committed rows flush only once when leaving", async () => {
+  const client = createClient();
+  warmPage(client);
+  const { view } = await mountPage(RealPage, client);
+  testing.fireEvent.click(view.getByRole("button", { name: "Alice" }));
+  const row = view.getByDisplayValue("Alice");
+  testing.fireEvent.change(row, { target: { value: "saved name" } });
+  testing.fireEvent.blur(row);
+  const notes = view.getByRole("textbox", { name: messages.common.notes });
+  testing.fireEvent.change(notes, { target: { value: "saved notes" } });
+  testing.fireEvent.blur(notes);
+  await testing.waitFor(() => expect(posts).toHaveLength(2));
+  view.unmount();
+  await settlePosts(client);
+  expect(posts).toHaveLength(2);
+  client.clear();
+});

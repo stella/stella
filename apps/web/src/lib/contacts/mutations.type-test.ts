@@ -13,3 +13,6 @@ expectTypeOf<{ dataBoxes: []; customFields: [] }>().not.toExtend<
 >();
 expectTypeOf<{ metadata: { dataBoxes: [] } }>().toExtend<ContactPatch>();
 expectTypeOf<{ metadata: { customFields: [] } }>().toExtend<ContactPatch>();
+
+const emptyMetadata = { metadata: {} };
+expectTypeOf<typeof emptyMetadata>().not.toExtend<ContactPatch>();
