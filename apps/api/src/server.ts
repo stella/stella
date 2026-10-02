@@ -109,6 +109,7 @@ import {
 import { timeApprovalQueueRoute } from "@/api/handlers/time-entries/approval-queue/routes";
 import { internalTimeEntriesRoute } from "@/api/handlers/time-entries/internal/routes";
 import { myTimeEntriesRoute } from "@/api/handlers/time-entries/me/routes";
+import { memberTimeTargetsRoute } from "@/api/handlers/time-entries/members/routes";
 import { timeEntriesRoute } from "@/api/handlers/time-entries/routes";
 import { timeTimersRoute } from "@/api/handlers/time-timers/routes";
 import { uploadsRoute } from "@/api/handlers/uploads/routes";
@@ -422,6 +423,7 @@ const api = new Elysia()
       .use(timeApprovalQueueRoute)
       .use(internalTimeEntriesRoute)
       .use(myTimeEntriesRoute)
+      .use(memberTimeTargetsRoute)
       .use(timeTimersRoute),
   )
   .use(localDevPublicRoutes)
