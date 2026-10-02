@@ -329,6 +329,7 @@ const produceUntilCut = ({
     mode: "raw",
     heartbeat,
     owner: {
+      indexThread: async () => await Promise.resolve(),
       execution,
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
@@ -348,6 +349,7 @@ const produceUntilCut = ({
     await run.settle(async () => {
       unwrap(
         await persistInterruptedChatTurn({
+          indexThread: async () => await Promise.resolve(),
           execution,
           recordAuditEvent: noAudit,
           safeDb,
@@ -601,6 +603,7 @@ const OWNER_ENDS: OwnerEnd[] = [
     label: "fails before streaming",
     settle: async ({ execution, threadId }) =>
       await persistFailedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         code: "internal",
         execution,
         recordAuditEvent: noAudit,
@@ -615,6 +618,7 @@ const OWNER_ENDS: OwnerEnd[] = [
     label: "is disconnected before streaming",
     settle: async ({ execution, threadId }) =>
       await persistInterruptedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         execution,
         recordAuditEvent: noAudit,
         safeDb,

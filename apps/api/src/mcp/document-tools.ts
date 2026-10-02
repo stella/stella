@@ -58,6 +58,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedEntityVersionId,
@@ -691,7 +692,9 @@ const handleListDocumentsTool: TypedMcpToolHandler<
     }
   }
 
-  const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_LIST_LIMIT,
+  );
 
   const parentCondition = documentsParentCondition({ mode, parentId });
 
@@ -836,7 +839,7 @@ const loadVersionHistory = async ({
     }
   }
 
-  const limit = LIMITS.versionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(LIMITS.versionsPageSizeDefault);
   const keyset = boundary
     ? or(
         lt(entityVersions.versionNumber, boundary.versionNumber),
@@ -2171,7 +2174,9 @@ const handleListPropertiesTool: TypedMcpToolHandler<
       return invalidCursorResult({ cursor: parsed.output.cursor });
     }
   }
-  const limit = parsed.output.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(
+    parsed.output.limit ?? DEFAULT_LIST_LIMIT,
+  );
 
   const boundaryCondition = boundary
     ? propertyPageCursorCodec.keysetAfter({

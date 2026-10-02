@@ -18,6 +18,7 @@ import {
   isUuidPaginationCursorPart,
   type Page,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawCitationId } from "@/api/lib/safe-id-boundaries";
 
 const citedDecision = alias(caseLawDecisions, "cited_case_law_decision");
@@ -56,7 +57,9 @@ type ScannedCitation<T> = {
 const createScannedCitationPage = <T>(
   rows: readonly ScannedCitation<T>[],
 ): Page<T> => {
-  const limit = LIMITS.caseLawDecisionCitationPageSize;
+  const limit = normalizeTenantPageLimit(
+    LIMITS.caseLawDecisionCitationPageSize,
+  );
   const scanned = rows.slice(0, limit);
   const items: T[] = [];
   for (const row of scanned) {
@@ -101,7 +104,7 @@ export const listOutgoingDecisionCitations = async ({
       ),
     )
     .orderBy(asc(caseLawCitations.id))
-    .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
+    .limit(normalizeTenantPageLimit(LIMITS.caseLawDecisionCitationPageSize) + 1)
     .as("outgoing_citation_candidates");
   const rows = await tx
     .select({
@@ -125,7 +128,9 @@ export const listOutgoingDecisionCitations = async ({
     .leftJoin(citedDecision, eq(citedDecision.id, candidates.citedDecisionId))
     .leftJoin(citedSource, eq(citedSource.id, citedDecision.sourceId))
     .orderBy(asc(candidates.id))
-    .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
+    .limit(
+      normalizeTenantPageLimit(LIMITS.caseLawDecisionCitationPageSize) + 1,
+    );
 
   return createScannedCitationPage(rows);
 };
@@ -155,7 +160,7 @@ export const listIncomingDecisionCitations = async ({
       ),
     )
     .orderBy(asc(caseLawCitations.id))
-    .limit(LIMITS.caseLawDecisionCitationPageSize + 1)
+    .limit(normalizeTenantPageLimit(LIMITS.caseLawDecisionCitationPageSize) + 1)
     .as("incoming_citation_candidates");
   const rows = await tx
     .select({
@@ -179,7 +184,9 @@ export const listIncomingDecisionCitations = async ({
     )
     .leftJoin(citingSource, eq(citingSource.id, citingDecision.sourceId))
     .orderBy(asc(candidates.id))
-    .limit(LIMITS.caseLawDecisionCitationPageSize + 1);
+    .limit(
+      normalizeTenantPageLimit(LIMITS.caseLawDecisionCitationPageSize) + 1,
+    );
 
   return createScannedCitationPage(rows);
 };

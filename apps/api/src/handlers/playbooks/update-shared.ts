@@ -11,6 +11,7 @@ import type { SafeHandlerGenerator } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { assertUnchangedSince } from "@/api/lib/optimistic-concurrency";
 import type {
@@ -38,6 +39,7 @@ type UpdatePlaybookDefinitionArgs = {
   organizationId: SafeId<"organization">;
   playbookId: SafeId<"playbookDefinition">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   orgAIConfigStatus: OrgAIConfigStatus;
   promptCachingEnabled: boolean;
   recordAuditEvent: AuditRecorder;
@@ -49,6 +51,7 @@ export const updatePlaybookDefinitionHandler = async function* ({
   organizationId,
   playbookId,
   orgAIConfig,
+  managedAIResidency,
   orgAIConfigStatus,
   promptCachingEnabled,
   recordAuditEvent,
@@ -68,6 +71,7 @@ export const updatePlaybookDefinitionHandler = async function* ({
   const positions = await deriveAutoAsks(body.positions, {
     organizationId,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
   });

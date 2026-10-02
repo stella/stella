@@ -364,3 +364,24 @@ export const emitAnonymizationRefusalMetric = (
     }),
   );
 };
+
+const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+
+export const emitActionResponseOversizeMetric = (
+  transport: "http" | "mcp",
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["transport"]],
+          Metrics: [{ Name: ACTION_RESPONSE_OVERSIZE_METRIC, Unit: "Count" }],
+        },
+      ],
+    },
+    transport,
+    [ACTION_RESPONSE_OVERSIZE_METRIC]: 1,
+  });
+};

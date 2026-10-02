@@ -41,6 +41,7 @@ const prepareBilingualTranslation = createSafeHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     promptCachingEnabled,
     request,
     safeDb,
@@ -104,6 +105,7 @@ const prepareBilingualTranslation = createSafeHandler(
       organizationId,
       workspaceId,
       orgAIConfig,
+      managedAIResidency,
       promptCachingEnabled,
       abortSignal: AbortSignal.any([
         request.signal,

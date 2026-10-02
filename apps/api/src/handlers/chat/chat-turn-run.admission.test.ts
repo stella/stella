@@ -44,6 +44,7 @@ describe("chat run admission follows owned settlement", () => {
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
         owner: {
+          indexThread: async () => await Promise.resolve(),
           execution: {
             id: toSafeId<"chatTurn">("turn_processor_failure"),
             executionId: "execution_processor_failure",
@@ -164,6 +165,7 @@ describe("chat run admission follows owned settlement", () => {
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution: {
           id: toSafeId<"chatTurn">("turn_admission"),
           executionId: "execution_admission",
@@ -245,6 +247,7 @@ describe("chat run admission follows owned settlement", () => {
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution: {
           id: toSafeId<"chatTurn">("turn_finalizer"),
           executionId: "execution_finalizer",
@@ -366,6 +369,7 @@ describe("chat run admission follows owned settlement", () => {
         mode: "raw",
         ownership: new ChatTurnOwnership(),
         owner: {
+          indexThread: async () => await Promise.resolve(),
           execution: {
             id: toSafeId<"chatTurn">("turn_checkpoint"),
             executionId: "execution_checkpoint",
@@ -656,6 +660,7 @@ describe("chat run admission follows owned settlement", () => {
         ]);
       },
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution: {
           id: toSafeId<"chatTurn">("turn_hanging"),
           executionId: "execution_hanging",

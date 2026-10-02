@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Rehearse the merge queue's exact base schema before applying this checkout.
+# Rehearse an exact base schema before applying this checkout.
 # DATABASE_URL must point to an empty, disposable local PostgreSQL database.
 set -euo pipefail
 
@@ -69,7 +69,7 @@ start_phase 0
 candidate_commit="$(git -C "$repo_root" rev-parse HEAD)"
 : "${DATABASE_URL:?DATABASE_URL is required}"
 : "${CLEAN_DATABASE_URL:?CLEAN_DATABASE_URL is required for an isolated clean cluster}"
-: "${BASE_SHA:?BASE_SHA must identify the merge-group base commit}"
+: "${BASE_SHA:?BASE_SHA must identify the exact base commit}"
 
 log() {
   printf '==> %s\n' "$*"

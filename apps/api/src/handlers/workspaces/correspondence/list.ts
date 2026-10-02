@@ -14,6 +14,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandValidatedCorrespondenceCursorId } from "@/api/lib/safe-id-boundaries";
 
 type CorrespondenceRow = typeof correspondence.$inferSelect;
@@ -102,7 +103,7 @@ const listCorrespondence = createSafeHandler(
         }),
       );
     }
-    const limit = query.limit ?? PAGE_SIZE;
+    const limit = normalizeTenantPageLimit(query.limit ?? PAGE_SIZE);
     const rows = yield* Result.await(
       safeDb(
         async (tx) =>

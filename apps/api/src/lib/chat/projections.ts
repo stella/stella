@@ -55,6 +55,7 @@ import {
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -2616,6 +2617,7 @@ export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   promptCachingEnabled: v.optional(v.boolean()),
