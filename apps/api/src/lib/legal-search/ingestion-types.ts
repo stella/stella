@@ -1187,6 +1187,8 @@ export const sourceTotalRead = (value: number): SourceTotalCount =>
  * a result field is a column of the row, and the last two are not fields at all.
  */
 export type SourceFieldTarget =
+  /** A whole non-JSON response retained verbatim in a named raw part. */
+  | { readonly type: "rawText"; readonly part: string; readonly reason: string }
   /** Exact JSON field retained in a named raw part; `*` visits every array row. */
   | {
       readonly type: "raw";

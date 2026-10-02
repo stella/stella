@@ -21,11 +21,14 @@ const readPath = (value: unknown, path: readonly string[]): unknown => {
 
 export const readSourceRawField = (
   parts: SourceRawParts,
-  target: Extract<SourceFieldTarget, { type: "raw" }>,
+  target: Extract<SourceFieldTarget, { type: "raw" | "rawText" }>,
 ): unknown => {
   const part = parts[target.part];
   if (part === undefined) {
     return undefined;
+  }
+  if (target.type === "rawText") {
+    return part;
   }
   const parsed = Result.try({
     try: (): unknown => JSON.parse(part),

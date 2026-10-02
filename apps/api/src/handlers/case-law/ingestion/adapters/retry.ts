@@ -20,10 +20,10 @@ import {
   deferPublisherGate,
   reservePublisherSlot,
   reservePublisherGateSlot,
-  type PublisherGateId,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 import { logger } from "@/api/lib/observability/logger";
 
 import { abortableSleep } from "./publisher-request-gate";

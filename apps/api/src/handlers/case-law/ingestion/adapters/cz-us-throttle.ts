@@ -5,12 +5,12 @@ import { fetchWithTimeout } from "@stll/fetch";
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
   createPublisherSlot,
-  NALUS_DAILY_REQUEST_LIMIT,
   publisherRequestIntervalMs,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/lib/legal-search/publisher-gates";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
 /**

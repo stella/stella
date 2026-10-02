@@ -2,15 +2,14 @@ import { panic, Result } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
 
-import {
-  PUBLISHER_GATES,
-  reservePublisherGateSlot,
-} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { reservePublisherGateSlot } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { PUBLISHER_GATES } from "@/api/lib/legal-search/publisher-gates";
 import type {
   SoftLawFetch,
   SoftLawBlockReason,
   SoftLawResponse,
   SoftLawFetchError,
+  SoftLawFetchOptions,
 } from "@/api/lib/legal-search/soft-law-access-types";
 import {
   SoftLawAccessError,
@@ -169,7 +168,7 @@ export const createSoftLawFetch = ({
   };
   const fetchInternal = async (
     rawUrl: string,
-    options?: { expectedContentTypes: readonly string[] },
+    options: SoftLawFetchOptions,
   ) => {
     if (getLeaseState() === "lost") {
       return Result.err(
@@ -302,7 +301,10 @@ export const createSoftLawFetch = ({
         );
       }
       const mime = contentType.split(";").at(0)?.trim().toLowerCase();
-      if (options && !options.expectedContentTypes.includes(mime ?? "")) {
+      if (
+        options.expectedContentTypes &&
+        !options.expectedContentTypes.includes(mime ?? "")
+      ) {
         return Result.err(
           new SoftLawContentTypeMismatchError({
             message:
@@ -320,10 +322,7 @@ export const createSoftLawFetch = ({
     return await readPublisherBody({ reader, signal, read: bodyRead });
   };
   const fetch: SoftLawFetch = Object.assign(
-    async (
-      rawUrl: string,
-      options?: { expectedContentTypes: readonly string[] },
-    ) => {
+    async (rawUrl: string, options: SoftLawFetchOptions) => {
       const result = await Result.tryPromise({
         try: async () => await fetchInternal(rawUrl, options),
         catch: (cause) =>

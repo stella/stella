@@ -14,6 +14,7 @@ const metadata: SoftLawMetadata = {
   validity: { state: "not_stated", basis: "source_stated" },
 };
 const document: SoftLawDocumentInput = {
+  type: "document",
   metadata,
   raw: [
     {

@@ -32,12 +32,6 @@ import {
   type PublisherGateId,
 } from "@/api/lib/legal-search/publisher-gates";
 
-export {
-  NALUS_DAILY_REQUEST_LIMIT,
-  PUBLISHER_GATES,
-} from "@/api/lib/legal-search/publisher-gates";
-export type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
-
 /**
  * Which publisher each adapter spends against.
  *

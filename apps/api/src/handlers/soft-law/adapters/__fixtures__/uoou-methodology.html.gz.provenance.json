@@ -1,0 +1,33 @@
+{
+  "capture": "recorded",
+  "sha256": "0de78d3e449a3a9decc3561595b0c7d79ca9e0010da6a38c88197b0b1beea248",
+  "sourceUrl": "https://uoou.gov.cz/profesional/metodiky-a-doporuceni-pro-spravce/metodika-ke-kamerovym-systemum",
+  "capturedAt": "2026-10-02T11:24:24.080271+00:00",
+  "status": 200,
+  "contentType": "text/html; charset=UTF-8",
+  "lastModified": null,
+  "headerNames": [
+    "cache-control",
+    "connection",
+    "content-security-policy",
+    "content-type",
+    "date",
+    "expires",
+    "link",
+    "permissions-policy",
+    "pragma",
+    "referrer-policy",
+    "server",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-content-type-options",
+    "x-powered-by",
+    "x-robots-tag",
+    "x-xss-protection"
+  ],
+  "matchedMarker": null,
+  "byteLength": 33054,
+  "note": "Verbatim publisher response; compressed fixtures hash the uncompressed bytes."
+}

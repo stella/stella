@@ -1,0 +1,25 @@
+{
+  "capture": "recorded",
+  "sha256": "ec15c2785e12138d9cdd538d4a8811ca25b076605a4d44054564f299d7bd5553",
+  "sourceUrl": "https://uoou.gov.cz/media/publikace/dokumnety/doporuceni-uoou-02-2024-z-1-8-2024.pdf",
+  "capturedAt": "2026-10-02T11:21:34.566905+00:00",
+  "status": 200,
+  "contentType": "application/pdf",
+  "lastModified": "Mon, 12 Aug 2024 13:14:03 GMT",
+  "headerNames": [
+    "cache-control",
+    "connection",
+    "content-disposition",
+    "content-type",
+    "date",
+    "etag",
+    "last-modified",
+    "permissions-policy",
+    "server",
+    "transfer-encoding",
+    "x-powered-by"
+  ],
+  "matchedMarker": null,
+  "byteLength": 113116,
+  "note": "Verbatim publisher response; compressed fixtures hash the uncompressed bytes."
+}

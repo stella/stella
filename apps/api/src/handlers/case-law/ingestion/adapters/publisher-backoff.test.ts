@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
 
+import { PUBLISHER_GATES } from "@/api/lib/legal-search/publisher-gates";
+
 import {
   createPublisherGateSlot,
-  PUBLISHER_GATES,
   readPublisherCooldown,
 } from "./publisher-policy";
 import {

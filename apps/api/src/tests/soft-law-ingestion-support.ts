@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { eq, sql } from "drizzle-orm";
 
 import type { fetchWithTimeout } from "@stll/fetch";
@@ -26,22 +26,24 @@ export const entry = (
   url = "https://uoou.gov.cz/a",
   title = "Doporučení",
   reference = "02/2024",
-): SoftLawEntry => ({
-  url,
-  metadata: {
-    title,
-    kind: "recommendation",
-    statedReference: { state: "stated", value: reference },
-    issuedOn: { state: "not_stated" },
-    validity: { state: "not_stated", basis: "source_stated" },
-  },
-  sourceDates: {},
-});
+) =>
+  ({
+    url,
+    metadata: {
+      title,
+      kind: "recommendation",
+      statedReference: { state: "stated", value: reference },
+      issuedOn: { state: "not_stated" },
+      validity: { state: "not_stated", basis: "source_stated" },
+    },
+    sourceDates: {},
+  }) as const satisfies SoftLawEntry;
 export const document = (
   item: SoftLawEntry,
   content = "original",
 ): SoftLawDocumentInput => ({
-  metadata: item.metadata,
+  type: "document",
+  metadata: item.metadata ?? panic("Test document requires declared metadata"),
   raw: [
     {
       role: "document",
@@ -65,9 +67,9 @@ export const adapter = (
       userAgent: "Stella/1.0 (+https://stella.example/contact)",
       window: { type: "any_time" },
     },
-    discover: async () => ({ entries, nextCursor: null }),
+    discover: async () => Result.ok({ entries, nextCursor: null }),
     fetchDocument: async (item) => Result.ok(document(item, content)),
-    getTotalCount: async () => ({ type: "no-count-endpoint" }),
+    getTotalCount: async () => Result.ok({ type: "no-count-endpoint" }),
     sliceWalk: { type: "unsupported", reason: "Complete listing" },
     sourceFields: {
       status: "declared",

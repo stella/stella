@@ -148,6 +148,7 @@ const storedValueOf = (
   target: SourceFieldTarget,
 ): unknown => {
   switch (target.type) {
+    case "rawText":
     case "raw":
       return readSourceRawField(
         decodeSourceRawEnvelope(decision.sourceRaw ?? "") ?? {},
@@ -175,6 +176,8 @@ const storedValueOf = (
 
 const describeTarget = (target: SourceFieldTarget): string => {
   switch (target.type) {
+    case "rawText":
+      return `rawText.${target.part}`;
     case "raw":
       return `raw.${target.part}.${target.path.join(".")}`;
     case "metadata":

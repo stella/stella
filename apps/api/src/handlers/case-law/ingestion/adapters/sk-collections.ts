@@ -2,7 +2,6 @@ import { panic, Result } from "better-result";
 
 import { readCappedBytes } from "@stll/skills/streaming";
 
-import type { PublisherGateId } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   joinSkCollectionRecords,
@@ -11,6 +10,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/sk-collection-parser";
 import { INGESTION_USER_AGENT } from "@/api/lib/case-law/ingestion-user-agent";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import type { PublisherGateId } from "@/api/lib/legal-search/publisher-gates";
 import {
   SK_COLLECTION_SERIES,
   SK_COLLECTION_PARSER_VERSION,

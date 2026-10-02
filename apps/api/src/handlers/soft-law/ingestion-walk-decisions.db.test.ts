@@ -114,6 +114,7 @@ const deferredCandidate = (corpus: Corpus) => {
   });
   expect(deferred.observation.entry).toEqual(candidate());
   expect(deferred.observation.input).toEqual({
+    type: "document",
     metadata: candidate().metadata,
     text: CANDIDATE_BYTES,
     extractionQuality: "html",
@@ -148,15 +149,18 @@ if (!databaseUrl || !enabled) {
               ...adapter(entries),
               discover: async ({ cursor }) => {
                 if (layout === "same-page") {
-                  return { entries, nextCursor: null };
+                  return Result.ok({ entries, nextCursor: null });
                 }
                 if (cursor === null) {
-                  return {
+                  return Result.ok({
                     entries: entries.slice(0, 1),
                     nextCursor: "second-page",
-                  };
+                  });
                 }
-                return { entries: entries.slice(1), nextCursor: null };
+                return Result.ok({
+                  entries: entries.slice(1),
+                  nextCursor: null,
+                });
               },
               fetchDocument: async (item) =>
                 Result.ok(
@@ -202,7 +206,10 @@ if (!databaseUrl || !enabled) {
           ...adapter([candidate()]),
           discover: async ({ cursor }) => {
             if (cursor === null) {
-              return { entries: [candidate()], nextCursor: "finish-walk" };
+              return Result.ok({
+                entries: [candidate()],
+                nextCursor: "finish-walk",
+              });
             }
             const pending = await readCorpus({ db, sourceId });
             assertWinnerPreserved({ before, after: pending });
@@ -211,7 +218,7 @@ if (!databaseUrl || !enabled) {
               before.documents.at(0)?.id,
             );
             inspectedDeferred = true;
-            return { entries: [], nextCursor: null };
+            return Result.ok({ entries: [], nextCursor: null });
           },
           fetchDocument: async (item) => {
             candidateFetches++;
@@ -280,17 +287,20 @@ if (!databaseUrl || !enabled) {
             discover: async ({ cursor }) => {
               cursors.push(cursor);
               if (cursor === null) {
-                return { entries: [candidate()], nextCursor: "winner-page" };
+                return Result.ok({
+                  entries: [candidate()],
+                  nextCursor: "winner-page",
+                });
               }
               if (interrupted) {
-                return await Promise.reject(
+                return Result.err(
                   new SoftLawIngestionError({
                     message:
                       "Discovery interrupted after the durable candidate page",
                   }),
                 );
               }
-              return { entries: [winner()], nextCursor: null };
+              return Result.ok({ entries: [winner()], nextCursor: null });
             },
             fetchDocument: async (item) => {
               if (item.url === candidate().url) {
@@ -367,14 +377,17 @@ if (!databaseUrl || !enabled) {
           ...adapter([candidate(), winner()]),
           getTotalCount: async () => {
             calls.count++;
-            return { type: "no-count-endpoint" };
+            return Result.ok({ type: "no-count-endpoint" });
           },
           discover: async ({ cursor }) => {
             calls.discover++;
             if (cursor === null) {
-              return { entries: [candidate()], nextCursor: "winner-page" };
+              return Result.ok({
+                entries: [candidate()],
+                nextCursor: "winner-page",
+              });
             }
-            return { entries: [winner()], nextCursor: null };
+            return Result.ok({ entries: [winner()], nextCursor: null });
           },
           fetchDocument: async (item) => {
             calls.fetch++;
@@ -480,23 +493,23 @@ if (!databaseUrl || !enabled) {
           ...adapter(candidates),
           getTotalCount: async () => {
             calls.count++;
-            return { type: "no-count-endpoint" };
+            return Result.ok({ type: "no-count-endpoint" });
           },
           discover: async ({ cursor }) => {
             calls.discover++;
             if (cursor === null) {
-              return {
+              return Result.ok({
                 entries: candidates.slice(0, SOFT_LAW_BATCH_LIMIT),
                 nextCursor: "last-candidate",
-              };
+              });
             }
             if (cursor === "last-candidate") {
-              return {
+              return Result.ok({
                 entries: candidates.slice(SOFT_LAW_BATCH_LIMIT),
                 nextCursor: "winner-page",
-              };
+              });
             }
-            return { entries: [winner()], nextCursor: null };
+            return Result.ok({ entries: [winner()], nextCursor: null });
           },
           fetchDocument: async (item) => {
             calls.fetch++;

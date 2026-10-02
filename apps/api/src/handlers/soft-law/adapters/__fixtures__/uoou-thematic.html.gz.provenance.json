@@ -1,0 +1,33 @@
+{
+  "capture": "recorded",
+  "sha256": "b2a0488cbc96636661c8ebfb1bcf788e334b05fe8d4847a4bfd03e32c515745a",
+  "sourceUrl": "https://uoou.gov.cz/profesional/poverenec-pro-ochranu-osobnich-udaju/postaveni-a-ukoly-poverence",
+  "capturedAt": "2026-10-02T11:25:01.240284+00:00",
+  "status": 200,
+  "contentType": "text/html; charset=UTF-8",
+  "lastModified": null,
+  "headerNames": [
+    "cache-control",
+    "connection",
+    "content-security-policy",
+    "content-type",
+    "date",
+    "expires",
+    "link",
+    "permissions-policy",
+    "pragma",
+    "referrer-policy",
+    "server",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-content-type-options",
+    "x-powered-by",
+    "x-robots-tag",
+    "x-xss-protection"
+  ],
+  "matchedMarker": null,
+  "byteLength": 43682,
+  "note": "Verbatim publisher response; compressed fixtures hash the uncompressed bytes."
+}

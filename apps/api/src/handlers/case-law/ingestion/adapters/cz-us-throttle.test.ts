@@ -8,8 +8,8 @@ import {
   NALUS_REQUEST_INTERVAL_MS,
   NalusRateLimitedError,
 } from "@/api/handlers/case-law/ingestion/adapters/cz-us-throttle";
-import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
+import { NALUS_DAILY_REQUEST_LIMIT } from "@/api/lib/legal-search/publisher-gates";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 type GateTrace = {

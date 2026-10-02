@@ -1,0 +1,33 @@
+{
+  "capture": "recorded",
+  "sha256": "f86951752b65f5f9d02d996124a21efcd033d9dc50cabf998bfd2527c860cc36",
+  "sourceUrl": "https://uoou.gov.cz/verejnost/qa-otazky-a-odpovedi/kamerove-systemy",
+  "capturedAt": "2026-10-02T11:20:59.789346+00:00",
+  "status": 200,
+  "contentType": "text/html; charset=UTF-8",
+  "lastModified": null,
+  "headerNames": [
+    "cache-control",
+    "connection",
+    "content-security-policy",
+    "content-type",
+    "date",
+    "expires",
+    "link",
+    "permissions-policy",
+    "pragma",
+    "referrer-policy",
+    "server",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-content-type-options",
+    "x-powered-by",
+    "x-robots-tag",
+    "x-xss-protection"
+  ],
+  "matchedMarker": null,
+  "byteLength": 54693,
+  "note": "Verbatim publisher response; compressed fixtures hash the uncompressed bytes."
+}

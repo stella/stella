@@ -5,12 +5,12 @@ import {
   createPublisherSlot,
   publisherRequestIntervalMs,
   publisherRequestsPerDay,
-  PUBLISHER_GATES,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { connectedGateClient } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { rejectionOf } from "@/api/handlers/case-law/ingestion/adapters/test-utils";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { PUBLISHER_GATES } from "@/api/lib/legal-search/publisher-gates";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 describe("the shared publisher gate", () => {

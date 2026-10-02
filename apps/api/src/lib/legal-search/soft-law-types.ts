@@ -67,6 +67,8 @@ export const SOFT_LAW_ITEM_TAGS = [
   "ambiguous_locator",
   "invalid_document",
   "retry_exhausted",
+  "edpb_translation",
+  "third_party_publication",
 ] as const;
 export const SOFT_LAW_ATTEMPT_STATES = [
   "applied",
@@ -94,10 +96,13 @@ export type SoftLawMetadata = {
 };
 export type SoftLawEntry = {
   url: string;
-  metadata: SoftLawMetadata;
+  metadata: SoftLawMetadata | null;
   sourceDates: Readonly<Record<string, string>>;
+  /** Present only when the listing publishes a revision suitable for caching. */
+  cacheKey?: string;
 };
 export type SoftLawDocumentInput = {
+  type: "document";
   metadata: SoftLawMetadata;
   raw: readonly { role: string; bytes: Uint8Array; contentType: string }[];
   text: string | null;
@@ -112,6 +117,12 @@ export type SoftLawDeferredObservation = {
   contentHash: string;
   rawObjects: { role: string; key: string; contentType: string }[];
 };
+export type SoftLawDocumentFetchResult =
+  | SoftLawDocumentInput
+  | {
+      type: "excluded";
+      reason: "edpb_translation" | "third_party_publication";
+    };
 export type SoftLawAccessPolicy = {
   publisherGate: PublisherGateId;
   userAgent: `Stella/${string} (+https://${string})`;
@@ -132,23 +143,33 @@ export type SoftLawSourceAdapter = {
     cursor: string | null;
     signal: AbortSignal;
     fetch: SoftLawFetch;
-  }) => Promise<{
-    entries: readonly SoftLawEntry[];
-    nextCursor: string | null;
-  }>;
+  }) => Promise<
+    Result<
+      {
+        entries: readonly SoftLawEntry[];
+        nextCursor: string | null;
+      },
+      SoftLawIngestionError | SoftLawFetchError
+    >
+  >;
   fetchDocument: (
     entry: SoftLawEntry,
-    context: { signal: AbortSignal; fetch: SoftLawFetch },
+    context: { signal: AbortSignal; fetch: SoftLawFetch; maxRawBytes: number },
   ) => Promise<
     Result<
-      SoftLawDocumentInput,
-      SoftLawIngestionError | SoftLawItemError | SoftLawFetchError
+      SoftLawDocumentFetchResult,
+      | SoftLawIngestionError
+      | SoftLawItemError
+      | SoftLawFetchError
+      | SoftLawPageBudgetError
     >
   >;
   getTotalCount: (context: {
     signal: AbortSignal;
     fetch: SoftLawFetch;
-  }) => Promise<SourceTotalCount>;
+  }) => Promise<
+    Result<SourceTotalCount, SoftLawIngestionError | SoftLawFetchError>
+  >;
   sliceWalk: SourceSliceWalk | { type: "unsupported"; reason: string };
   sourceFields: SourceFieldInventory;
   sourceSurfaces: SourceSurfaceCensus;
@@ -164,3 +185,9 @@ export class SoftLawItemError extends TaggedError("SoftLawItemError")<{
 export class SoftLawListingIncompleteError extends TaggedError(
   "SoftLawListingIncompleteError",
 )<{ message: string }> {}
+
+export class SoftLawPageBudgetError extends TaggedError(
+  "SoftLawPageBudgetError",
+)<{
+  message: string;
+}> {}

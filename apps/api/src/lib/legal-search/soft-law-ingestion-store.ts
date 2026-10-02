@@ -28,6 +28,7 @@ import type {
   SoftLawDocumentInput,
   SoftLawDeferredObservation,
   SoftLawSourceAdapter,
+  SOFT_LAW_ITEM_TAGS,
 } from "@/api/lib/legal-search/soft-law-types";
 import { commitReplaySafeIngestionBatch } from "@/api/lib/replay-safe-ingestion";
 
@@ -172,7 +173,7 @@ export type SoftLawAttempt = {
   | { status: "rejected"; tag: "identity_collision"; identityKey: string }
   | {
       status: "rejected";
-      tag: "ambiguous_locator" | "invalid_document" | "retry_exhausted";
+      tag: Exclude<(typeof SOFT_LAW_ITEM_TAGS)[number], "identity_collision">;
     }
 );
 type LoadSoftLawMatchesOptions = {
@@ -244,6 +245,74 @@ const loadSoftLawMatches = async (
           ),
         ),
   );
+const loadCachedSoftLawObservations = async (
+  { sourceId, scopedDb }: SoftLawStoreContext,
+  entries: readonly SoftLawEntry[],
+): Promise<SoftLawObservation[]> => {
+  const revisions = new Map(
+    entries
+      .filter((entry) => entry.cacheKey && entry.metadata === null)
+      .map((entry) => [entry.url, entry]),
+  );
+  if (!revisions.size) {
+    return [];
+  }
+  const rows = await scopedDb(
+    async (tx) =>
+      await tx
+        .select({
+          document: softLawDocuments,
+          locator: softLawDocumentLocators,
+          version: softLawDocumentVersions,
+        })
+        .from(softLawDocumentLocators)
+        .innerJoin(
+          softLawDocuments,
+          eq(softLawDocumentLocators.documentId, softLawDocuments.id),
+        )
+        .innerJoin(
+          softLawDocumentVersions,
+          eq(softLawDocumentVersions.documentId, softLawDocuments.id),
+        )
+        .where(
+          and(
+            eq(softLawDocuments.sourceId, sourceId),
+            inArray(softLawDocumentLocators.url, [...revisions.keys()]),
+            eq(softLawDocumentLocators.state, "current"),
+            eq(
+              softLawDocumentLocators.cacheContentHash,
+              softLawDocumentVersions.contentHash,
+            ),
+            sql`${softLawDocumentVersions.observedTo} IS NULL`,
+          ),
+        ),
+  );
+  const observations: SoftLawObservation[] = [];
+  for (const row of rows) {
+    const entry =
+      revisions.get(row.locator.url) ??
+      panic("Cached query returned an unexpected locator");
+    if (entry.cacheKey !== row.locator.cacheKey) {
+      continue;
+    }
+    observations.push({
+      entry,
+      documentId: row.document.id,
+      identityKey: row.document.identityKey,
+      contentHash: row.version.contentHash,
+      input: {
+        type: "document",
+        metadata: row.version.metadata,
+        raw: [],
+        text: row.version.extractedText,
+        extractionQuality: row.version.extractionQuality,
+        sourceDates: row.version.sourceDates,
+      },
+      rawObjects: [...row.version.rawObjects],
+    });
+  }
+  return observations;
+};
 type PersistSoftLawAttemptsOptions = {
   attempts: readonly SoftLawAttempt[];
   sourceId: SafeId<"softLawSource">;
@@ -374,6 +443,8 @@ const persistSoftLawRows = async (
           sourceId,
           documentId: item.documentId,
           url: item.entry.url,
+          cacheKey: item.entry.cacheKey ?? null,
+          cacheContentHash: item.contentHash,
           state: "current" as const,
           firstSeenAt: observedAt,
           lastSeenAt: observedAt,
@@ -385,7 +456,13 @@ const persistSoftLawRows = async (
           softLawDocumentLocators.documentId,
           softLawDocumentLocators.url,
         ],
-        set: { state: "current", lastSeenAt: observedAt, lastSeenRun: runId },
+        set: {
+          state: "current",
+          lastSeenAt: observedAt,
+          lastSeenRun: runId,
+          cacheKey: sql`excluded.cache_key`,
+          cacheContentHash: sql`excluded.cache_content_hash`,
+        },
       });
   }
 };
@@ -942,6 +1019,8 @@ export const createSoftLawIngestionStore = (
     }) => await loadSoftLawAttempts(context, query),
     loadMatches: async (query: LoadSoftLawMatchesOptions) =>
       await loadSoftLawMatches(context, query),
+    loadCached: async (entries: readonly SoftLawEntry[]) =>
+      await loadCachedSoftLawObservations(context, entries),
     persistPage: async (page: PersistSoftLawPageOptions) =>
       await storeResult(async () => await persistSoftLawPage(context, page)),
     decideWalk: async (runId: string) =>

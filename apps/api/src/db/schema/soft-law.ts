@@ -196,6 +196,8 @@ export const softLawDocumentLocators = p.pgTable.withRLS(
     sourceId: safeUuid<"softLawSource">("source_id").notNull(),
     documentId: safeUuid<"softLawDocument">("document_id").notNull(),
     url: p.text().notNull(),
+    cacheKey: p.text("cache_key"),
+    cacheContentHash: p.text("cache_content_hash"),
     firstSeenAt: timestamptz("first_seen_at").notNull(),
     lastSeenAt: timestamptz("last_seen_at").notNull(),
     lastSeenRun: p.uuid("last_seen_run").notNull(),
@@ -206,6 +208,10 @@ export const softLawDocumentLocators = p.pgTable.withRLS(
     p.check(
       "soft_law_locators_state_check",
       sql`${t.state} IN (${values(SOFT_LAW_LOCATOR_STATES)})`,
+    ),
+    p.check(
+      "soft_law_locators_cache_check",
+      sql`${t.cacheKey} IS NULL OR ${t.cacheContentHash} IS NOT NULL`,
     ),
     p
       .uniqueIndex("soft_law_locators_current_url_unique")

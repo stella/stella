@@ -22,6 +22,7 @@ import type {
 import {
   SoftLawIngestionError,
   SoftLawItemError,
+  SoftLawPageBudgetError,
   SoftLawListingIncompleteError,
   SOFT_LAW_BATCH_LIMIT,
 } from "@/api/lib/legal-search/soft-law-types";
@@ -113,11 +114,18 @@ const fetchSoftLawItem = async ({
   count,
   maxRawBytes,
 }: FetchSoftLawItemOptions) => {
-  const fetched = await adapter.fetchDocument(entry, { signal, fetch });
+  const fetched = await adapter.fetchDocument(entry, {
+    signal,
+    fetch,
+    maxRawBytes,
+  });
   if (fetched.status === "error") {
     return fetched;
   }
   const input = fetched.value;
+  if (input.type === "excluded") {
+    return Result.ok(input);
+  }
   const identity = softLawIdentityKey(adapter.authority, input.metadata);
   if (identity.status === "error") {
     return identity;
@@ -141,13 +149,13 @@ const fetchSoftLawItem = async ({
   );
   if (rawByteLength > maxRawBytes) {
     return Result.err(
-      new SoftLawItemError({
+      new SoftLawPageBudgetError({
         message: "Page raw byte limit exceeded",
-        tag: "invalid_document",
       }),
     );
   }
   return Result.ok({
+    type: "fetched" as const,
     entry,
     input,
     identityKey,
@@ -195,7 +203,15 @@ const fetchSoftLawPage = async ({
     )
     .map((attempt) => attempt.entry);
   let retainedRawBytes = 0;
-  for (const entry of [...entries, ...pendingEntries]) {
+  const candidates = [...entries, ...pendingEntries];
+  const cached = new Map(
+    (await store.loadCached(candidates)).map((observation) => [
+      observation.entry.url,
+      observation,
+    ]),
+  );
+  const observations: SoftLawObservation[] = [];
+  for (const entry of candidates) {
     signal.throwIfAborted();
     const previous = prior.get(entry.url);
     if (previous && previous.status !== "retryable") {
@@ -206,6 +222,12 @@ const fetchSoftLawPage = async ({
     const renewed = await store.renew();
     if (renewed.status === "error") {
       return renewed;
+    }
+    const cache = cached.get(entry.url);
+    if (cache) {
+      observations.push(cache);
+      attempts.push({ entry, count, status: "unchanged", tag: null });
+      continue;
     }
     const maxRawBytes = PAGE_RAW_BYTE_LIMIT - retainedRawBytes;
     const attempted = await Result.tryPromise(
@@ -229,13 +251,35 @@ const fetchSoftLawPage = async ({
     }
     signal.throwIfAborted();
     if (result.status === "error") {
+      if (SoftLawPageBudgetError.is(result.error)) {
+        attempts.push(
+          retainedRawBytes === 0
+            ? { entry, count, status: "rejected", tag: "invalid_document" }
+            : {
+                entry,
+                count: previous?.count ?? 1,
+                status: "retryable",
+                tag: null,
+              },
+        );
+        continue;
+      }
       attempts.push(rejectedAttempt(entry, result.error, count));
+      continue;
+    }
+    if (result.value.type === "excluded") {
+      attempts.push({
+        entry,
+        count,
+        status: "rejected",
+        tag: result.value.reason,
+      });
       continue;
     }
     retainedRawBytes += result.value.rawByteLength;
     fetched.push(result.value);
   }
-  return Result.ok({ attempts, fetched });
+  return Result.ok({ attempts, fetched, observations });
 };
 const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
   const { store, sourceId, writeRaw, runId } = options;
@@ -243,15 +287,16 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
   if (page.status === "error") {
     return page;
   }
-  const { attempts, fetched } = page.value;
+  const { attempts, fetched, observations } = page.value;
   const known = fetched.length
     ? await store.loadMatches({
         entries: fetched.map((item) => item.entry),
         identityKeys: fetched.map((item) => item.identityKey),
       })
     : [];
-  const observations: SoftLawObservation[] = [];
-  const identities = new Map<string, SoftLawObservation>();
+  const identities = new Map(
+    observations.map((observation) => [observation.identityKey, observation]),
+  );
   for (const item of fetched) {
     const { entry, input, identityKey, contentHash, count } = item;
     const matches = known.filter(
@@ -343,6 +388,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
           contentHash: observation.contentHash,
           rawObjects: observation.rawObjects,
           input: {
+            type: "document",
             metadata: input.metadata,
             text: input.text,
             extractionQuality: input.extractionQuality,
@@ -430,11 +476,15 @@ export const runSoftLawIngestion = async ({
       if (source.row.runState === "deciding") {
         return await finishDeferredWalk({ store, runId, signal });
       }
-      const total = await adapter.getTotalCount({ signal, fetch });
+      const counted = await adapter.getTotalCount({ signal, fetch });
       const available = assertPublisherAvailable(fetch);
       if (available.status === "error") {
         return available;
       }
+      if (counted.status === "error") {
+        return counted;
+      }
+      const total = counted.value;
       if (total.type === "probe-failed") {
         return Result.err(
           new SoftLawListingIncompleteError({
@@ -460,11 +510,15 @@ export const runSoftLawIngestion = async ({
         if (renewed.status === "error") {
           return renewed;
         }
-        const page = await adapter.discover({ cursor, signal, fetch });
+        const discovered = await adapter.discover({ cursor, signal, fetch });
         const pageAvailable = assertPublisherAvailable(fetch);
         if (pageAvailable.status === "error") {
           return pageAvailable;
         }
+        if (discovered.status === "error") {
+          return discovered;
+        }
+        const page = discovered.value;
         if (
           page.entries.length > SOFT_LAW_BATCH_LIMIT ||
           new Set(page.entries.map((entry) => entry.url)).size !==

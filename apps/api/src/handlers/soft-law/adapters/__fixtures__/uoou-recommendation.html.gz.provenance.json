@@ -1,0 +1,33 @@
+{
+  "capture": "recorded",
+  "sha256": "0bc894cf8beefd3cdeec0808f1afa5ea8b3754345a429e8648bfcaa47f0aac78",
+  "sourceUrl": "https://uoou.gov.cz/profesional/metodiky-a-doporuceni-pro-spravce/doporuceni-uoou-c-022024-k-postaveni-poverencu-pro-ochranu-osobnich-udaju",
+  "capturedAt": "2026-10-02T11:20:17.990604+00:00",
+  "status": 200,
+  "contentType": "text/html; charset=UTF-8",
+  "lastModified": null,
+  "headerNames": [
+    "cache-control",
+    "connection",
+    "content-security-policy",
+    "content-type",
+    "date",
+    "expires",
+    "link",
+    "permissions-policy",
+    "pragma",
+    "referrer-policy",
+    "server",
+    "set-cookie",
+    "strict-transport-security",
+    "transfer-encoding",
+    "vary",
+    "x-content-type-options",
+    "x-powered-by",
+    "x-robots-tag",
+    "x-xss-protection"
+  ],
+  "matchedMarker": null,
+  "byteLength": 35076,
+  "note": "Verbatim publisher response; compressed fixtures hash the uncompressed bytes."
+}

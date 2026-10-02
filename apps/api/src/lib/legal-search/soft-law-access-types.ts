@@ -26,9 +26,15 @@ export type SoftLawFetchError =
   | SoftLawBlockedError
   | SoftLawAccessError
   | SoftLawContentTypeMismatchError;
+export type SoftLawFetchOptions =
+  | { surface: "page"; expectedContentTypes?: readonly string[] }
+  | {
+      surface: "attachment";
+      expectedContentTypes: readonly [string, ...string[]];
+    };
 export type SoftLawFetch = ((
   url: string,
-  options?: { expectedContentTypes: readonly string[] },
+  options: SoftLawFetchOptions,
 ) => Promise<Result<SoftLawResponse, SoftLawFetchError>>) & {
   readonly getBlockReason: () => SoftLawBlockReason | null;
   readonly getWindowState: () => "open" | "deferred_window";

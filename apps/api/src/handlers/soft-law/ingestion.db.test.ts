@@ -180,14 +180,16 @@ if (!databaseUrl || !enabled) {
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
             cursors.push(cursor);
             if (cursor === null) {
-              return { entries: [first], nextCursor: "second" };
+              return Result.ok({ entries: [first], nextCursor: "second" });
             }
             if (fail) {
-              throw new SoftLawIngestionError({
-                message: "Injected interruption",
-              });
+              return Result.err(
+                new SoftLawIngestionError({
+                  message: "Injected interruption",
+                }),
+              );
             }
-            return { entries: [second], nextCursor: null };
+            return Result.ok({ entries: [second], nextCursor: null });
           },
         };
         expect((await run(pages)).status).toBe("failed");
@@ -218,7 +220,7 @@ if (!databaseUrl || !enabled) {
           discover: async () => {
             entered();
             await wait;
-            return { entries: [item], nextCursor: null };
+            return Result.ok({ entries: [item], nextCursor: null });
           },
         };
         const first = run(slow);
@@ -246,8 +248,8 @@ if (!databaseUrl || !enabled) {
             fetch,
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
             requests++;
-            await fetch("https://uoou.gov.cz/a");
-            return { entries: [], nextCursor: null };
+            await fetch("https://uoou.gov.cz/a", { surface: "page" });
+            return Result.ok({ entries: [], nextCursor: null });
           },
         };
         expect(
@@ -397,8 +399,8 @@ if (!databaseUrl || !enabled) {
             cursor,
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) =>
             cursor === null
-              ? { entries: [entry()], nextCursor: "next" }
-              : { entries: [], nextCursor: null },
+              ? Result.ok({ entries: [entry()], nextCursor: "next" })
+              : Result.ok({ entries: [], nextCursor: null }),
         };
         expect((await run(pages, { scopedDb })).status).toBe("failed");
         expect(injected).toBe(true);
@@ -587,10 +589,11 @@ if (!databaseUrl || !enabled) {
         let poisonCalls = 0;
         const sourceAdapter = {
           ...adapter([]),
-          discover: async () => ({
-            entries: discovery++ === 0 ? [poison, later] : [later],
-            nextCursor: null,
-          }),
+          discover: async () =>
+            Result.ok({
+              entries: discovery++ === 0 ? [poison, later] : [later],
+              nextCursor: null,
+            }),
           fetchDocument: async (item: SoftLawEntry) => {
             if (item.url === poison.url) {
               poisonCalls++;
@@ -714,8 +717,10 @@ if (!databaseUrl || !enabled) {
                 discover: async ({
                   fetch,
                 }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
-                  await fetch("https://uoou.gov.cz/listing");
-                  return { entries: [], nextCursor: null };
+                  await fetch("https://uoou.gov.cz/listing", {
+                    surface: "page",
+                  });
+                  return Result.ok({ entries: [], nextCursor: null });
                 },
               },
               {
@@ -745,7 +750,7 @@ if (!databaseUrl || !enabled) {
           (
             await run({
               ...adapter([entry()]),
-              getTotalCount: async () => ({ type: "count", total: 2 }),
+              getTotalCount: async () => Result.ok({ type: "count", total: 2 }),
             })
           ).status,
         ).toBe("listing_incomplete");
@@ -780,14 +785,17 @@ if (!databaseUrl || !enabled) {
           const retained = [...initial.slice(0, 6), added];
           const result = await run({
             ...adapter(retained),
-            getTotalCount: async () => ({ type: "count", total: 7 }),
+            getTotalCount: async () => Result.ok({ type: "count", total: 7 }),
             discover: async ({ cursor }) => {
               if (cursor === null) {
                 starts.push(cursor);
               }
               return cursor === null
-                ? { entries: retained.slice(0, 4), nextCursor: "second" }
-                : { entries: retained.slice(4), nextCursor: null };
+                ? Result.ok({
+                    entries: retained.slice(0, 4),
+                    nextCursor: "second",
+                  })
+                : Result.ok({ entries: retained.slice(4), nextCursor: null });
             },
           });
           expect(result).toMatchObject({
@@ -871,6 +879,7 @@ if (!databaseUrl || !enabled) {
             { fetch }: Parameters<SoftLawSourceAdapter["fetchDocument"]>[1],
           ) => {
             const fetched = await fetch(value.url, {
+              surface: "attachment",
               expectedContentTypes: ["application/pdf"],
             });
             if (Result.isError(fetched)) {
@@ -957,12 +966,12 @@ if (!databaseUrl || !enabled) {
           {
             ...adapter([entry()]),
             fetchDocument: async (item, { fetch }) => {
-              await fetch(item.url);
+              await fetch(item.url, { surface: "page" });
               await db
                 .update(softLawSources)
                 .set({ leaseToken: createSafeId<"softLawIngestionLease">() })
                 .where(eq(softLawSources.id, sourceId));
-              const refused = await fetch(item.url);
+              const refused = await fetch(item.url, { surface: "page" });
               expect(Result.isError(refused)).toBe(true);
               return Result.ok(document(item));
             },
@@ -990,7 +999,7 @@ if (!databaseUrl || !enabled) {
           {
             ...adapter([entry()]),
             fetchDocument: async (item, { fetch }) => {
-              await fetch(item.url);
+              await fetch(item.url, { surface: "page" });
               return Result.ok(document(item));
             },
           },
@@ -1037,8 +1046,8 @@ if (!databaseUrl || !enabled) {
               item: SoftLawEntry,
               { fetch }: Parameters<SoftLawSourceAdapter["fetchDocument"]>[1],
             ) => {
-              const first = await fetch(item.url);
-              const second = await fetch(item.url);
+              const first = await fetch(item.url, { surface: "page" });
+              const second = await fetch(item.url, { surface: "page" });
               if (Result.isError(second)) {
                 refused++;
               }
@@ -1096,8 +1105,8 @@ if (!databaseUrl || !enabled) {
           discover: async ({
             fetch,
           }: Parameters<SoftLawSourceAdapter["discover"]>[0]) => {
-            await fetch(entry().url);
-            return { entries: [], nextCursor: null };
+            await fetch(entry().url, { surface: "page" });
+            return Result.ok({ entries: [], nextCursor: null });
           },
         } as const satisfies SoftLawSourceAdapter;
         expect(
@@ -1280,12 +1289,12 @@ if (!databaseUrl || !enabled) {
               ...adapter(listed),
               discover: async ({ cursor }) =>
                 separatePages
-                  ? {
+                  ? Result.ok({
                       entries:
                         cursor === null ? listed.slice(0, 1) : listed.slice(1),
                       nextCursor: cursor === null ? "second" : null,
-                    }
-                  : { entries: listed, nextCursor: null },
+                    })
+                  : Result.ok({ entries: listed, nextCursor: null }),
               fetchDocument: async (item) =>
                 Result.ok(
                   document(
@@ -1366,7 +1375,8 @@ if (!databaseUrl || !enabled) {
         let listed = [winner, loser, ...padding];
         const sourceAdapter = {
           ...adapter(listed),
-          discover: async () => ({ entries: listed, nextCursor: null }),
+          discover: async () =>
+            Result.ok({ entries: listed, nextCursor: null }),
           fetchDocument: async (item) => Result.ok(document(item, item.url)),
         } as const satisfies SoftLawSourceAdapter;
         expect(await run(sourceAdapter)).toEqual({ status: "complete" });
@@ -1437,7 +1447,8 @@ if (!databaseUrl || !enabled) {
         let listed = [winner, loser];
         const sourceAdapter = {
           ...adapter(listed),
-          discover: async () => ({ entries: listed, nextCursor: null }),
+          discover: async () =>
+            Result.ok({ entries: listed, nextCursor: null }),
           fetchDocument: async (item) => Result.ok(document(item, item.url)),
         } as const satisfies SoftLawSourceAdapter;
         expect(await run(sourceAdapter)).toEqual({ status: "complete" });
