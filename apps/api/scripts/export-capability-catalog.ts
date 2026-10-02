@@ -65,7 +65,6 @@ import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
 import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
-import { assertFeatureAccessDeclarations } from "./lib/auth/feature-access-declarations";
 import {
   type CapabilityDispatchRecord,
   type AccessResolution,
@@ -113,6 +112,7 @@ import {
   type ParsedExposure,
   REPO_ROOT,
 } from "./lib/enumerate-safe-handlers";
+import { assertFeatureAccessDeclarations } from "./lib/feature-access-declarations";
 
 const CATALOG_PATH = path.resolve(
   REPO_ROOT,
