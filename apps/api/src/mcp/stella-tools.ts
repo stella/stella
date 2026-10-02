@@ -10,8 +10,9 @@ import {
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
 import {
-  exactDecisionMatches,
+  type DecisionIdentityResolution,
   parseDecisionQuery,
+  resolveDecisionIdentity,
 } from "@stll/api-contract/decision-query-intent";
 import {
   DEFAULT_SEARCH_SORT,
@@ -29,7 +30,6 @@ import type {
   ContactPhone,
   FieldContent,
 } from "@/api/db/schema-validators";
-import { splitCaseReference } from "@/api/handlers/case-law/case-number";
 import {
   DECISION_DOCUMENT_HYDRATION,
   DECISION_DOCUMENT_STATE,
@@ -38,7 +38,10 @@ import {
   type DecisionDocumentHydration,
   type readGatedDecisionWithDocument,
 } from "@/api/handlers/case-law/decisions/get-deferred-document";
-import type { DecisionIdentityRow } from "@/api/handlers/case-law/decisions/lookup-by-identity";
+import {
+  decisionIdentityLocatorOf,
+  type DecisionIdentityRow,
+} from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import { interpretDecisionQuery } from "@/api/handlers/case-law/decisions/search-interpretation";
 import { parseUsableDocumentAst } from "@/api/handlers/case-law/document-ast";
 import { dateOfBirthFromColumns } from "@/api/handlers/contacts/person-details";
@@ -2770,7 +2773,32 @@ const decisionIdentityOf = (row: DecisionIdentityRow) => ({
 type DecisionLookupOutcome =
   | { type: "not_an_identifier" }
   | { type: "failed"; message: string }
-  | { type: "matches"; matches: readonly DecisionIdentityRow[] };
+  | {
+      type: "resolved";
+      resolution: DecisionIdentityResolution<DecisionIdentityRow>;
+    };
+
+/** Why a lookup lists candidates instead of naming one, in the agent's terms. */
+const ambiguityReasonText = (
+  reason: Extract<
+    DecisionIdentityResolution<DecisionIdentityRow>,
+    { status: "ambiguous" }
+  >["reason"],
+  { count, single }: { count: string; single: boolean },
+): string => {
+  switch (reason) {
+    case "several":
+      return `${count} carry this identifier: decisions of one file, or the same number at different courts or in different languages.`;
+    case "selector_unmatched":
+      return `No decision here is known to carry the sheet or part this reference names; ${count} of its file ${single ? "is" : "are"} listed instead.`;
+    case "file_incomplete":
+      return `${count} of this file ${single ? "is" : "are"} listed rather than chosen: the corpus may hold other decisions of the same file under their sheet number.`;
+    default: {
+      reason satisfies never;
+      return panic(`Unhandled ambiguity: ${String(reason)}`);
+    }
+  }
+};
 
 const lookupItemResult = ({
   identifier,
@@ -2796,37 +2824,47 @@ const lookupItemResult = ({
     };
   }
 
-  const [only, ...rest] = outcome.matches;
-  if (only === undefined) {
-    return {
-      identifier,
-      hint: SEARCH_INSTEAD_HINT,
-      message: "No decision in this corpus carries this identifier.",
-      status: DECISION_LOOKUP_STATUS.notFound,
-    };
+  const { resolution } = outcome;
+  switch (resolution.status) {
+    case "none":
+      return {
+        identifier,
+        hint: SEARCH_INSTEAD_HINT,
+        message: "No decision in this corpus carries this identifier.",
+        status: DECISION_LOOKUP_STATUS.notFound,
+      };
+    case "unique":
+      return {
+        identifier,
+        ...decisionIdentityOf(resolution.decision),
+        status: DECISION_LOOKUP_STATUS.found,
+      };
+    case "ambiguous": {
+      // The cap lands here, on what survived the exact-identity filter: the
+      // identity read is bounded wider than the listed maximum precisely
+      // because that filter drops rows whose key merely collided.
+      const { candidates } = resolution;
+      const listed = candidates.slice(0, LIMITS.caseLawLookupCandidatesMax);
+      const count =
+        candidates.length > LIMITS.caseLawLookupCandidatesMax
+          ? `More than ${String(LIMITS.caseLawLookupCandidatesMax)} decisions`
+          : `${String(candidates.length)} ${candidates.length === 1 ? "decision" : "decisions"}`;
+      const why = ambiguityReasonText(resolution.reason, {
+        count,
+        single: candidates.length === 1,
+      });
+      return {
+        identifier,
+        candidates: listed.map(decisionIdentityOf),
+        message: `${why} Pick one by its court, date and ECLI and pass its decisionId to read_case_law_decision.`,
+        status: DECISION_LOOKUP_STATUS.ambiguous,
+      };
+    }
+    default: {
+      resolution satisfies never;
+      return panic(`Unhandled identity resolution: ${String(resolution)}`);
+    }
   }
-  if (rest.length === 0) {
-    return {
-      identifier,
-      ...decisionIdentityOf(only),
-      status: DECISION_LOOKUP_STATUS.found,
-    };
-  }
-
-  // The cap lands here, on what survived the exact-identity filter: the
-  // identity read is bounded wider than the listed maximum precisely because
-  // that filter drops rows whose key merely collided.
-  const listed = outcome.matches.slice(0, LIMITS.caseLawLookupCandidatesMax);
-  const count =
-    outcome.matches.length > LIMITS.caseLawLookupCandidatesMax
-      ? `More than ${String(LIMITS.caseLawLookupCandidatesMax)} decisions`
-      : `${String(outcome.matches.length)} decisions`;
-  return {
-    identifier,
-    candidates: listed.map(decisionIdentityOf),
-    message: `${count} carry this identifier, at different courts or in different languages. Pick one by its court and date and pass its decisionId to read_case_law_decision.`,
-    status: DECISION_LOOKUP_STATUS.ambiguous,
-  };
 };
 
 const handleLookupCaseLawTool: TypedMcpToolHandler<
@@ -2865,10 +2903,10 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
       operation: async (
         identifier,
       ): Promise<readonly [string, DecisionLookupOutcome]> => {
-        // The sheet number names a page of the court file, not the decision,
-        // so it is dropped before the grammars see the reference.
-        const { caseNumber } = splitCaseReference(identifier);
-        const intent = parseDecisionQuery(caseNumber, {
+        // The docket reads the whole case file; a sheet or part the
+        // reference printed is kept, and narrows it to one decision only
+        // where a decision is known to carry it.
+        const intent = parseDecisionQuery(identifier, {
           grammar,
           reporters,
         });
@@ -2884,7 +2922,7 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
             await lookup({
               caseLawDb: caseLawPublicReadDb,
               country: publicCountry,
-              locator: { kind: intent.kind, value: intent.value },
+              locator: decisionIdentityLocatorOf(intent),
             }),
           catch: (cause) => cause,
         });
@@ -2897,12 +2935,14 @@ const handleLookupCaseLawTool: TypedMcpToolHandler<
         }
         // A second guard, cheap and independent of the statement above: an
         // entry only reports a decision that answers to the reference by one
-        // of its own identifiers.
+        // of its own identifiers, and only one when nothing else does.
         return [
           identifier,
           {
-            type: "matches",
-            matches: exactDecisionMatches(intent, read.value, { reporters }),
+            type: "resolved",
+            resolution: resolveDecisionIdentity(intent, read.value, {
+              reporters,
+            }),
           },
         ];
       },

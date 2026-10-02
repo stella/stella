@@ -2186,36 +2186,98 @@ describe("OpenAI-compatible MCP tools", () => {
       ),
     );
 
-  test("lookup_case_law resolves a docket through the identity columns", async () => {
+  test("lookup_case_law resolves references through the identity columns", async () => {
     lookupDecisionsByIdentityMock.mockResolvedValue([
-      createLookupRow(DECISION_ID, "Nejvyšší soud"),
+      { ...createLookupRow(DECISION_ID, "Nejvyšší soud"), ecli: CZ_ECLI },
     ]);
 
-    // The sheet number names a page of the court file, not the decision, so
-    // the reference resolves with or without it.
-    const payload = await lookup([`${CZ_DOCKET}-28`]);
+    const payload = await lookup([`${CZ_DOCKET}-28`, CZ_ECLI]);
 
-    expect(payload.items).toEqual([
-      {
-        appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
-        caseNumber: CZ_DOCKET,
-        court: "Nejvyšší soud",
-        decisionDate: "2020-05-01",
-        decisionId: DECISION_ID,
-        ecli: null,
-        identifier: `${CZ_DOCKET}-28`,
-        resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
-        status: "found",
-      },
-    ]);
+    // The file shows one decision, but nothing it carries is sheet 28: it
+    // may be a sibling of the decision named, so it is listed, not claimed.
+    const [bySheet, byEcli] = payload.items;
+    expect(bySheet?.status).toBe("ambiguous");
+    expect(bySheet?.decisionId).toBeUndefined();
+    expect(bySheet?.candidates).toHaveLength(1);
+    expect(bySheet?.message).toContain("sheet or part");
+    // An ECLI names its decision outright.
+    expect(byEcli).toEqual({
+      appUrl: `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/slug-${DECISION_ID}`,
+      caseNumber: CZ_DOCKET,
+      court: "Nejvyšší soud",
+      decisionDate: "2020-05-01",
+      decisionId: DECISION_ID,
+      ecli: CZ_ECLI,
+      identifier: CZ_ECLI,
+      resourceName: `stella://resource/case_law_decision/id=${DECISION_ID}`,
+      status: "found",
+    });
     // The docket reaches the identity read canonicalised, as a locator rather
-    // than as a query, and the ranked search is not consulted at all.
+    // than as a query: the case file to read and, apart from it, the sheet
+    // the reference printed. The ranked search is not consulted at all.
     expect(lookupDecisionsByIdentityMock).toHaveBeenCalledWith({
       caseLawDb: caseLawPublicReadDb,
       country: "CZE",
-      locator: { kind: "docket", value: CZ_DOCKET },
+      locator: {
+        kind: "docket",
+        value: `${CZ_DOCKET}-28`,
+        family: CZ_DOCKET,
+        selector: { kind: "sheet", value: "28" },
+      },
     });
     expect(searchDecisionsHandlerMock).not.toHaveBeenCalled();
+  });
+
+  test("lookup_case_law picks a sibling of one file only by the sheet it prints", async () => {
+    // Two decisions of one file issued the same day: the docket names both,
+    // and only the sheet, which this court's ECLI ends on, tells them apart.
+    const SIBLING_ID = "00000000-0000-4000-8000-0000000d0043";
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší správní soud"),
+        ecli: "ECLI:CZ:NSS:2020:22.CDO.1000.2020.2",
+      },
+      {
+        ...createLookupRow(SIBLING_ID, "Nejvyšší správní soud"),
+        ecli: "ECLI:CZ:NSS:2020:22.CDO.1000.2020.4",
+      },
+    ]);
+
+    const payload = await lookup([
+      CZ_DOCKET,
+      `č. j. ${CZ_DOCKET} – 4`,
+      `${CZ_DOCKET}-3`,
+    ]);
+
+    const [bare, bySheet, unknownSheet] = payload.items;
+    expect(bare?.status).toBe("ambiguous");
+    expect(bare?.candidates).toHaveLength(2);
+    expect(bySheet?.status).toBe("found");
+    expect(bySheet?.decisionId).toBe(SIBLING_ID);
+    // A sheet neither carries: the file comes back, never one of it.
+    expect(unknownSheet?.status).toBe("ambiguous");
+    expect(unknownSheet?.candidates).toHaveLength(2);
+    expect(unknownSheet?.decisionId).toBeUndefined();
+    expect(unknownSheet?.message).toContain("sheet or part");
+  });
+
+  test("lookup_case_law does not stand a decision of another sheet in for the one named", async () => {
+    // The only decision of the file the corpus holds carries sheet 86; the
+    // reference names sheet 98, which is another decision of that file.
+    lookupDecisionsByIdentityMock.mockResolvedValue([
+      {
+        ...createLookupRow(DECISION_ID, "Nejvyšší správní soud"),
+        ecli: "ECLI:CZ:NSS:2020:22.CDO.1000.2020.86",
+      },
+    ]);
+
+    const payload = await lookup([`${CZ_DOCKET} - 98`]);
+
+    const entry = payload.items.at(0) ?? panic("Missing lookup entry");
+    expect(entry.status).toBe("ambiguous");
+    expect(entry.decisionId).toBeUndefined();
+    expect(entry.candidates).toHaveLength(1);
+    expect(entry.message).toContain("1 decision of its file is listed");
   });
 
   test("lookup_case_law names the kind of a primary reference that is not a docket", async () => {
@@ -2223,11 +2285,12 @@ describe("OpenAI-compatible MCP tools", () => {
       {
         ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
         caseNumberType: DECISION_IDENTIFIER_TYPES.NEUTRAL_CITATION,
+        ecli: CZ_ECLI,
       },
     ]);
 
     const payload = asTestRaw<{ items: { caseNumberType?: string }[] }>(
-      await lookup([CZ_DOCKET]),
+      await lookup([CZ_ECLI]),
     );
 
     expect(payload.items.at(0)?.caseNumberType).toBe(
@@ -2239,6 +2302,7 @@ describe("OpenAI-compatible MCP tools", () => {
     lookupDecisionsByIdentityMock.mockResolvedValue([
       {
         ...createLookupRow(DECISION_ID, "Nejvyšší soud"),
+        ecli: CZ_ECLI,
         languageAlternates: [
           { language: "cs", id: DECISION_ID },
           { language: "en", id: CITING_DECISION_ID },
@@ -2246,7 +2310,7 @@ describe("OpenAI-compatible MCP tools", () => {
       },
     ]);
 
-    const payload = await lookup([CZ_DOCKET]);
+    const payload = await lookup([CZ_ECLI]);
 
     expect(payload.items.at(0)?.appUrl).toBe(
       `${APP_BASE_URL}/law/cze/cases/nejvyssi-soud/cs/slug-${DECISION_ID}`,
@@ -2338,7 +2402,7 @@ describe("OpenAI-compatible MCP tools", () => {
     // fifty is worth the forty-nine that resolved, and a failure is not
     // evidence that the corpus lacks the decision.
     expect(payload.items.map(({ status }) => status)).toEqual([
-      "found",
+      "ambiguous",
       "lookup_failed",
     ]);
     expect(payload.items.at(1)?.message).toContain("Retry this reference");
@@ -2360,12 +2424,15 @@ describe("OpenAI-compatible MCP tools", () => {
       CZ_ECLI,
     ]);
 
+    // A Czech file's lone decision is listed, not claimed: a sibling stored
+    // under its sheet is keyed apart from the file the read reached.
     expect(payload.items.map(({ status }) => status)).toEqual([
-      "found",
+      "ambiguous",
       "not_found",
-      "found",
+      "ambiguous",
       "not_found",
     ]);
+    expect(payload.items.at(0)?.message).toContain("listed rather than chosen");
     expect(payload.items.map(({ identifier }) => identifier)).toEqual([
       CZ_DOCKET,
       "the one about good morals",
@@ -2378,11 +2445,15 @@ describe("OpenAI-compatible MCP tools", () => {
     expect(
       lookupDecisionsByIdentityMock.mock.calls.map(
         (call) =>
-          asTestRaw<{ locator: { kind: string; value: string } }>(call.at(0))
-            .locator,
+          asTestRaw<{ locator: Record<string, unknown> }>(call.at(0)).locator,
       ),
     ).toEqual([
-      { kind: "docket", value: CZ_DOCKET },
+      {
+        kind: "docket",
+        value: CZ_DOCKET,
+        family: CZ_DOCKET,
+        selector: { kind: "none" },
+      },
       { kind: "ecli", value: CZ_ECLI },
     ]);
   });
