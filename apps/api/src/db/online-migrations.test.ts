@@ -33,6 +33,11 @@ const VALIDATE_CONSTRAINT_FRAGMENT = `VALIDATE CONSTRAINT "${DECISION_DATE_CONST
 const DELETE_RECEIPT_CONSTRAINT =
   "corpus_index_projection_intents_delete_receipt_paired";
 const VALIDATE_DELETE_RECEIPT_FRAGMENT = `VALIDATE CONSTRAINT "${DELETE_RECEIPT_CONSTRAINT}"`;
+const CLEANUP_STALL_CONSTRAINTS = [
+  "corpus_index_projection_intents_status_values",
+  "corpus_index_projection_intents_status_shape",
+  "corpus_index_projection_intents_delete_reissues_nonnegative",
+] as const;
 
 describe("online migrations", () => {
   /**
@@ -423,6 +428,54 @@ describe("online migrations", () => {
     ).toBe(-1);
     expect(
       indexOfStatement(harness.statements, "corrupt AS MATERIALIZED"),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("validates the cleanup-stall checks without walking the intents", async () => {
+    const harness = createHarness({
+      unvalidatedConstraints: CLEANUP_STALL_CONSTRAINTS,
+    });
+
+    await runOnlineMigrations(harness.pool);
+    await assertOnlineMigrationsApplied(harness.pool);
+
+    for (const constraint of CLEANUP_STALL_CONSTRAINTS) {
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `VALIDATE CONSTRAINT "${constraint}"`,
+        ),
+      ).toBeGreaterThan(-1);
+    }
+    expect(
+      indexOfStatement(
+        harness.statements,
+        'UPDATE public."corpus_index_projection_intents"',
+      ),
+    ).toBe(-1);
+    expect(harness.released()).toBe(true);
+  });
+
+  test("startup validation rejects an unvalidated cleanup-stall check without repairing", async () => {
+    const [constraint] = CLEANUP_STALL_CONSTRAINTS;
+    const harness = createHarness({ unvalidatedConstraints: [constraint] });
+
+    const rejection: unknown = await assertOnlineMigrationsApplied(
+      harness.pool,
+    ).then(
+      () => null,
+      (error: unknown) => error,
+    );
+
+    expect(rejection).toMatchObject({
+      message: `Online repair corpus-projection-cleanup-stall is not complete: constraint ${constraint} is not validated`,
+    });
+    expect(
+      indexOfStatement(
+        harness.statements,
+        `VALIDATE CONSTRAINT "${constraint}"`,
+      ),
     ).toBe(-1);
     expect(harness.released()).toBe(true);
   });

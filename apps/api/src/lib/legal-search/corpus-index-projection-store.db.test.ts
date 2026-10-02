@@ -23,7 +23,10 @@ import {
   legislationSources,
 } from "@/api/db/schema";
 import { toSafeId, type SafeId } from "@/api/lib/branded-types";
-import type { CorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import type {
+  CorpusIndexClient,
+  CorpusIndexSettlementSplit,
+} from "@/api/lib/legal-search/corpus-index-client";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
@@ -209,6 +212,8 @@ const settledProjectionClient = {
           laggingSplits: 0,
           minAppliedOpstamp: requiredOpstamp,
           settled: true,
+          laggingProvingSplits: [],
+          laggingExcludedSplits: [],
         }),
       ),
     ),
@@ -3672,6 +3677,18 @@ test("settlement proves the lease against the instant its delete task carries", 
             laggingSplits: excluded ? 0 : 1,
             minAppliedOpstamp: excluded ? requiredOpstamp : requiredOpstamp - 1,
             settled: excluded,
+            laggingProvingSplits: excluded
+              ? []
+              : [
+                  {
+                    splitId: "split-lagging",
+                    state: "Published",
+                    appliedOpstamp: requiredOpstamp - 1,
+                    publishedAt: DELETE_TASK_CREATED_AT,
+                    maturity: { type: "mature" },
+                  } satisfies CorpusIndexSettlementSplit,
+                ],
+            laggingExcludedSplits: [],
           });
         }),
       ),
