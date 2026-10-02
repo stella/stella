@@ -23,6 +23,7 @@ import {
   corpusIndexConfigFromManifest,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import { HIGHLIGHT_COPIES_PER_PASSAGE } from "@/api/lib/legal-search/corpus-index-pagination";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { LegislationV2ProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import {
@@ -35,6 +36,7 @@ import type {
   LegislationReadDb,
   LegislationReadTransaction,
 } from "@/api/lib/legislation-public-read-db";
+import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestPglite,
@@ -109,12 +111,27 @@ const relaxedVersions = Array.from({ length: 7 }, (_, index) =>
         : "Náhrada škody se posuzuje podle § 2051.",
   }),
 );
+const cappedStrictVersions = Array.from(
+  {
+    length:
+      LIMITS.corpusIndexSearchCandidateLimit *
+        LIMITS.corpusIndexSearchMaxRounds +
+      1,
+  },
+  () =>
+    fixtureVersion({
+      tail: "2002/701",
+      title: "Pravidla závazků",
+      text: "Závazek pohledávka patří do právního vztahu.",
+    }),
+);
 const VERSIONS = [
   strictOld,
   strictCurrent,
   amendment,
   code,
   ...relaxedVersions,
+  ...cappedStrictVersions,
 ];
 
 describe.skipIf(!runEngineTests)(
@@ -124,7 +141,10 @@ describe.skipIf(!runEngineTests)(
     let legislationDb: LegislationReadDb;
     let restoreSearch: (() => void) | undefined;
     let fixtureIndexCreated = false;
-    const previousProvider = envBase.LEGAL_SEARCH_PROVIDER;
+    const previousProviderDescriptor = Object.getOwnPropertyDescriptor(
+      envBase,
+      "LEGAL_SEARCH_PROVIDER",
+    );
     const searchCalls: Parameters<typeof corpusClient.search>[0][] = [];
 
     beforeAll(async () => {
@@ -251,12 +271,23 @@ describe.skipIf(!runEngineTests)(
         },
       );
       restoreSearch = () => searchSpy.mockRestore();
-      envBase.LEGAL_SEARCH_PROVIDER = "corpus-index";
+      Object.defineProperty(envBase, "LEGAL_SEARCH_PROVIDER", {
+        configurable: true,
+        value: "corpus-index",
+      });
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
       restoreSearch?.();
-      envBase.LEGAL_SEARCH_PROVIDER = previousProvider;
+      if (previousProviderDescriptor === undefined) {
+        Reflect.deleteProperty(envBase, "LEGAL_SEARCH_PROVIDER");
+      } else {
+        Object.defineProperty(
+          envBase,
+          "LEGAL_SEARCH_PROVIDER",
+          previousProviderDescriptor,
+        );
+      }
       const deleted = fixtureIndexCreated
         ? await corpusClient.deleteIndex(INDEX_ID, "unobserved")
         : null;
@@ -295,7 +326,7 @@ describe.skipIf(!runEngineTests)(
       },
     );
 
-    test("a short exhausted strict page appends relaxed hits with one additional native search", async () => {
+    test("a short exhausted strict page appends relaxed hits and highlights only emitted passages", async () => {
       const callStart = searchCalls.length;
       const result = await search({
         query: QUERY,
@@ -311,22 +342,58 @@ describe.skipIf(!runEngineTests)(
       ]);
       const relaxedCalls = calls.filter(
         (call) =>
-          call.snippetFields?.includes("text") &&
           !/\b(?:document_id|chunk_id):/u.test(call.query) &&
-          call.query.includes(" OR "),
+          call.query.startsWith('("smlouva" OR "náhrada")'),
       );
       expect(relaxedCalls).toHaveLength(1);
-      // The strict scan and its page-only highlight query retain their path.
-      expect(calls.length - relaxedCalls.length).toBe(2);
-      expect(
-        calls.filter((call) => /\b(?:document_id|chunk_id):/u.test(call.query)),
-      ).toHaveLength(1);
+      expect(relaxedCalls.at(0)?.snippetFields).toBeUndefined();
+      const highlights = calls.filter((call) =>
+        call.snippetFields?.includes("text"),
+      );
+      expect(highlights).toHaveLength(2);
+      for (const highlight of highlights) {
+        expect(/\b(?:document_id|chunk_id):/u.test(highlight.query)).toBe(true);
+        expect(highlight.maxHits).toBeLessThanOrEqual(
+          result.items.length * HIGHLIGHT_COPIES_PER_PASSAGE,
+        );
+      }
+      expect(calls).toHaveLength(4);
       expect(result.nextCursor).not.toBeNull();
       const cursor = decodeCorpusSearchCursor(
         result.nextCursor ?? panic("relaxed page has no continuation"),
       );
       expect(cursor?.phase?.type).toBe("relaxed");
       expect(cursor?.phase?.generation).toBe(MANIFEST.generation);
+    });
+
+    test("a short first strict page with a continuation defers relaxation", async () => {
+      const callStart = searchCalls.length;
+      const result = await search({
+        query: "závazek pohledávka",
+        jurisdiction: "CZE",
+        limit: 3,
+      });
+      expect(result.items).toHaveLength(1);
+      expect(result.items.length).toBeLessThan(3);
+      expect(result.items.at(0)?.match.type).toBe("strict");
+      const cursor = decodeCorpusSearchCursor(
+        result.nextCursor ??
+          panic("capped strict fixture did not reach a continuation"),
+      );
+      expect(cursor?.phase?.type).toBe("strict");
+      expect(cursor?.windowStart).toBe(
+        LIMITS.corpusIndexSearchCandidateLimit *
+          LIMITS.corpusIndexSearchMaxRounds,
+      );
+      const scans = searchCalls
+        .slice(callStart)
+        .filter((call) => !/\b(?:document_id|chunk_id):/u.test(call.query));
+      expect(scans).toHaveLength(LIMITS.corpusIndexSearchMaxRounds);
+      expect(
+        scans.every((call) =>
+          call.query.startsWith('("závazek" AND "pohledávka")'),
+        ),
+      ).toBe(true);
     });
 
     test("a full strict page never invokes the relaxed pass", async () => {
