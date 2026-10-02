@@ -18,6 +18,7 @@ import {
 
 const RULE_NAME = "no-swallowed-item-error";
 const MIN_REASON_LENGTH = 12;
+const SWALLOW_OK_PREFIX = "swallow-ok:";
 const PLACEHOLDER_OPENERS = new Set(["todo", "fixme", "tbd"]);
 const PLACEHOLDER_PHRASES = new Set([
   "placeholder",
@@ -228,10 +229,10 @@ export default eslintCompatPlugin({
               if (comment.type !== "Line") {
                 continue;
               }
-              const reason = /^\s*swallow-ok:\s*(.+)$/u
-                .exec(comment.value)
-                ?.at(1)
-                ?.trim();
+              const text = comment.value.trimStart();
+              const reason = text.startsWith(SWALLOW_OK_PREFIX)
+                ? text.slice(SWALLOW_OK_PREFIX.length).trim()
+                : undefined;
               if (
                 reason !== undefined &&
                 reason.length >= MIN_REASON_LENGTH &&
