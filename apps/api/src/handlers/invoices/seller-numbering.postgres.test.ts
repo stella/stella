@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
 
@@ -30,8 +31,8 @@ import {
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 setDefaultTimeout(120_000);
-const databaseUrl = process.env.DATABASE_URL;
-const runPostgres = process.env.STELLA_RUN_POSTGRES_TESTS === "true";
+const databaseUrl = process.env["DATABASE_URL"];
+const runPostgres = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 if (!databaseUrl || !runPostgres) {
   describe.skip("seller invoice numbering (postgres)", () => {
@@ -270,9 +271,10 @@ if (!databaseUrl || !runPostgres) {
         .from(invoices)
         .where(inArray(invoices.id, invoiceIds));
       expect(rows).toHaveLength(invoiceIds.length);
-      expect(new Set(rows.map((row) => row.invoiceNumber)).size).toBe(
-        invoiceIds.length,
+      const numbers = rows.map(
+        (row) => row.invoiceNumber ?? panic("Expected an assigned number"),
       );
+      expect(new Set(numbers).size).toBe(invoiceIds.length);
       for (const [sellerId, prefix] of [
         [sellerA, "A"],
         [sellerB, "B"],
@@ -306,7 +308,7 @@ if (!databaseUrl || !runPostgres) {
         .from(numberSeriesAllocations)
         .where(eq(numberSeriesAllocations.organizationId, orgId));
       expect(receipts.map((row) => row.number).toSorted()).toEqual(
-        rows.map((row) => row.invoiceNumber).toSorted(),
+        numbers.toSorted(),
       );
       expect(
         events.filter(
