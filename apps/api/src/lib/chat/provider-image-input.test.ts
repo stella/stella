@@ -159,7 +159,15 @@ describe("image input preparation", () => {
         throw new TypeError("Expected image");
       }
       if (size <= BEDROCK_IMAGE_MAX_BYTES) {
-        expect(image).toEqual(messages.at(0)?.content.at(1));
+        const original = messages.at(0)?.content;
+        if (!Array.isArray(original)) {
+          throw new TypeError("Expected original image content");
+        }
+        const originalImage = original.at(1);
+        if (originalImage?.type !== "image") {
+          throw new TypeError("Expected the original image part");
+        }
+        expect(image).toEqual(originalImage);
       } else {
         expect(image.source).toMatchObject({
           type: "data",

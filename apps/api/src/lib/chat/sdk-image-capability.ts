@@ -559,6 +559,7 @@ const SDK_IMAGE_CAPABILITY = {
     "z-ai/glm-5.3-prime": "unsupported",
     "z-ai/glm-5.3:batch": "unsupported",
     "z-ai/glm-5v-turbo": "accepts",
+    "openrouter/auto": "accepts",
   } as const satisfies SDKImageDecisions<OpenRouterModelInputModalitiesByName>,
   bedrock: {
     "openai.gpt-oss-120b-1:0": "unsupported",
