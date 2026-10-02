@@ -33,6 +33,7 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             releases += 1;
             await Promise.resolve();
@@ -40,9 +41,11 @@ describe("chat run admission follows owned settlement", () => {
         },
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
         owner: {
+          indexThread: async () => await Promise.resolve(),
           execution: {
             id: toSafeId<"chatTurn">("turn_processor_failure"),
             executionId: "execution_processor_failure",
@@ -114,6 +117,7 @@ describe("chat run admission follows owned settlement", () => {
           await run.settle(async () => {
             persisted += 1;
             await Promise.resolve();
+            return { type: "stored", outcome: { type: "completed" } };
           });
         },
       });
@@ -151,6 +155,7 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission: {
         signal: admission.signal,
+        reservePeriod: async () => Result.ok(undefined),
         release: async () => {
           releases += 1;
           await Promise.resolve();
@@ -158,9 +163,11 @@ describe("chat run admission follows owned settlement", () => {
       },
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 1, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution: {
           id: toSafeId<"chatTurn">("turn_admission"),
           executionId: "execution_admission",
@@ -181,6 +188,7 @@ describe("chat run admission follows owned settlement", () => {
         persistenceStarted.resolve(undefined);
         await persistenceMayFinish.promise;
         persisted += 1;
+        return { type: "stored", outcome: { type: "completed" } };
       });
       yield* [];
     };
@@ -228,6 +236,7 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission: {
         signal: new AbortController().signal,
+        reservePeriod: async () => Result.ok(undefined),
         release: async () => {
           releaseStarted.resolve(undefined);
           await releaseMayFinish.promise;
@@ -237,9 +246,11 @@ describe("chat run admission follows owned settlement", () => {
       },
       connectors: undefined,
       deadlineMs: 60_000,
+      mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution: {
           id: toSafeId<"chatTurn">("turn_finalizer"),
           executionId: "execution_finalizer",
@@ -286,6 +297,7 @@ describe("chat run admission follows owned settlement", () => {
         await run.settle(async () => {
           persisted += 1;
           persistenceFinished.resolve(undefined);
+          return { type: "stored", outcome: { type: "completed" } };
         });
       },
       processor: new StreamProcessor(),
@@ -350,6 +362,7 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             await Promise.resolve();
           },
@@ -357,8 +370,10 @@ describe("chat run admission follows owned settlement", () => {
         checkpoint,
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         ownership: new ChatTurnOwnership(),
         owner: {
+          indexThread: async () => await Promise.resolve(),
           execution: {
             id: toSafeId<"chatTurn">("turn_checkpoint"),
             executionId: "execution_checkpoint",
@@ -460,6 +475,7 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             releases += 1;
             await Promise.resolve();
@@ -468,6 +484,7 @@ describe("chat run admission follows owned settlement", () => {
         checkpoint,
         connectors: undefined,
         deadlineMs: 60_000,
+        mode: "raw",
         heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
         ownership: new ChatTurnOwnership(),
         owner: {
@@ -516,6 +533,7 @@ describe("chat run admission follows owned settlement", () => {
             await run.settle(async () => {
               discardedPersistence += 1;
               await Promise.resolve();
+              return { type: "stored", outcome: { type: "completed" } };
             });
           },
           processor: new StreamProcessor(),
@@ -595,6 +613,11 @@ describe("chat run admission follows owned settlement", () => {
       },
     };
     const acquired = await startChatExecutionAdmission({
+      mode: "action",
+      periodIdentity: {
+        actionKind: "chat.send",
+        logicalPhaseId: "thread:hanging",
+      },
       enabled: true,
       organizationId: toSafeId<"organization">("organization_hanging"),
       userId: toSafeId<"user">("user_hanging"),
@@ -621,6 +644,7 @@ describe("chat run admission follows owned settlement", () => {
       admission,
       connectors: undefined,
       deadlineMs,
+      mode: "raw",
       heartbeat: { intervalMs: 60_000, renewEvery: 1000 },
       ownership: new ChatTurnOwnership(),
       waitForUpstream: async <T>(
@@ -646,6 +670,7 @@ describe("chat run admission follows owned settlement", () => {
         ]);
       },
       owner: {
+        indexThread: async () => await Promise.resolve(),
         execution: {
           id: toSafeId<"chatTurn">("turn_hanging"),
           executionId: "execution_hanging",
@@ -665,6 +690,7 @@ describe("chat run admission follows owned settlement", () => {
         await run.settle(async () => {
           persisted += 1;
           await Promise.resolve();
+          return { type: "stored", outcome: { type: "completed" } };
         });
         yield* [];
       } finally {

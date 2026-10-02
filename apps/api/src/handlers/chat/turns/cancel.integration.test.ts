@@ -326,8 +326,10 @@ const produceUntilCut = ({
   const run = new ChatTurnRun({
     connectors: undefined,
     deadlineMs: 60_000,
+    mode: "raw",
     heartbeat,
     owner: {
+      indexThread: async () => await Promise.resolve(),
       execution,
       owningAssistantMessage: undefined,
       recordAuditEvent: noAudit,
@@ -347,6 +349,7 @@ const produceUntilCut = ({
     await run.settle(async () => {
       unwrap(
         await persistInterruptedChatTurn({
+          indexThread: async () => await Promise.resolve(),
           execution,
           recordAuditEvent: noAudit,
           safeDb,
@@ -355,6 +358,10 @@ const produceUntilCut = ({
           workspaceId: ids.wsA1,
         }),
       );
+      return {
+        type: "stored",
+        outcome: { reason: "client-disconnected", type: "interrupted" },
+      };
     });
   };
   const response = run.produce(output());
@@ -596,6 +603,7 @@ const OWNER_ENDS: OwnerEnd[] = [
     label: "fails before streaming",
     settle: async ({ execution, threadId }) =>
       await persistFailedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         code: "internal",
         execution,
         recordAuditEvent: noAudit,
@@ -610,6 +618,7 @@ const OWNER_ENDS: OwnerEnd[] = [
     label: "is disconnected before streaming",
     settle: async ({ execution, threadId }) =>
       await persistInterruptedChatTurn({
+        indexThread: async () => await Promise.resolve(),
         execution,
         recordAuditEvent: noAudit,
         safeDb,

@@ -8,7 +8,7 @@ import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
 import { createObservationBuffer } from "./buffer";
 import {
   currentActionCostIdentity,
-  recordExternalActionCall,
+  actionCallObserver,
   type ActionCostObservation,
 } from "./context";
 
@@ -35,6 +35,8 @@ const admissionOptions = {
 };
 
 const registeredKinds = {
+  "chat.send": "chat.send",
+  "chat.generate-thread-title": "chat.generate-thread-title",
   "chat.improve-prompt": "chat.improve-prompt",
   "chat.suggest-thread-title": "chat.suggest-thread-title",
   "mcp.services/call": "mcp.services/call",
@@ -57,7 +59,10 @@ for (const enabled of [true, false]) {
         },
         periodIdentity,
         costRecorder: recorderFor(observations),
-        run: async () => {
+        run: async (_signal, control) => {
+          expect(Result.isOk(await control.reservePeriod(periodIdentity))).toBe(
+            true,
+          );
           expect(currentActionCostIdentity(organizationId)).toEqual({
             organizationId,
             ...periodIdentity,
@@ -65,7 +70,7 @@ for (const enabled of [true, false]) {
           expect(
             currentActionCostIdentity(toSafeId<"organization">("other-org")),
           ).toBeUndefined();
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
           return "done";
         },
       });
@@ -119,7 +124,7 @@ test("refused actions produce no observations and disabled recording produces no
     },
     costRecorder: null,
     run: async () => {
-      recordExternalActionCall("fixture_provider");
+      actionCallObserver(organizationId)("fixture_provider");
       return await run();
     },
   });
@@ -175,7 +180,7 @@ test("nested same-identity work shares its observation scope, distinct phases re
         periodIdentity,
         costRecorder: recorder,
         run: async () => {
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
         },
       });
       await withActionAdmission({
@@ -186,7 +191,7 @@ test("nested same-identity work shares its observation scope, distinct phases re
         },
         costRecorder: recorder,
         run: async () => {
-          recordExternalActionCall("fixture_provider");
+          actionCallObserver(organizationId)("fixture_provider");
         },
       });
     },

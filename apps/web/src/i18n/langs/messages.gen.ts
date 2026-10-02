@@ -893,6 +893,7 @@ type Messages = {
     };
     "viewer": {
       "abstract": "Abstract";
+      "caseFileMayHoldOthers": "This case file may contain other decisions as well.";
       "citedBy": "Cited by";
       "cites": "Cites";
       "dissentByline": "Dissenting: <bdi>{names}</bdi>";
@@ -1118,6 +1119,7 @@ type Messages = {
     "focusSuggestion": "Focus suggestion: {topic}";
     "folioCitationFallback": "p. {n}";
     "forkFromHere": "Start a new chat from here";
+    "forkInSidePanel": "Start a new chat from here in the side panel";
     "forkedFrom": "Created from <bdi>{title}</bdi>";
     "forkedFromUnavailable": "Created from a chat that is no longer available";
     "forkedThread": "From another chat";
@@ -1125,6 +1127,10 @@ type Messages = {
     "greeting": "What would you like to work on?";
     "greetingSubtitle": "Start with a matter, document, or plain question.";
     "hideThread": "Hide conversation";
+    "historyContext": {
+      "overflow": "+{count, number}";
+      "unnamed": "{count, plural, one {and # more} other {and # more}}";
+    };
     "improvePrompt": "Improve prompt";
     "improvePromptDraftChanged": "Draft changed, so the improvement wasn't applied.";
     "improvePromptPlainTextOnly": "Prompt improvement is available for plain text only.";
@@ -1177,6 +1183,7 @@ type Messages = {
       "viaProvider": "via {provider}";
     };
     "newChat": "New chat";
+    "newChatInSidePanel": "The new chat is available in the side panel";
     "noPromptPresetOnly": "No message, preset only";
     "noThreads": "No conversations yet";
     "officeCitationUnavailable": "This citation is no longer available.";
@@ -1224,6 +1231,12 @@ type Messages = {
     "richContentLoading": "Loading interactive content…";
     "richContentTitle": "Interactive content";
     "richContentUnavailable": "This content cannot be displayed safely.";
+    "selection": {
+      "askInNewChat": "Ask in new chat";
+      "quoteInReply": "Quote in reply";
+      "quotedText": "“{quote}”";
+      "toolbarLabel": "Selected text";
+    };
     "sendError": "There was an issue sending your message. Contact support if the error persists.";
     "sendErrorAnonymizationBlocked": "stella could not anonymize one attachment, so nothing was sent. Remove the file or send this message without anonymization.";
     "sendErrorEmptyCompletion": "The AI returned an empty reply. Try again or rephrase your message.";
@@ -1622,6 +1635,7 @@ type Messages = {
     };
     "fact": "Fact";
     "failed": "Failed";
+    "files": "Files";
     "filter": "Filter";
     "filters": "Filters";
     "find": "Find";
@@ -3286,7 +3300,6 @@ type Messages = {
       "editSkill": "Edit skill";
       "enableSkill": "Enable skill";
       "fileExists": "A file with this path already exists";
-      "filesHeading": "Files";
       "howItRuns": "How it runs";
       "importFailureFetch": "The skill source could not be loaded.";
       "importFailureIntegrity": "The skill source changed after discovery. Review it again.";
@@ -6012,6 +6025,7 @@ type Messages = {
         "submit": "Export report";
         "templateLabel": "Report template";
         "title": "Export report";
+        "withoutAiSummaries": "Export without AI summaries";
       };
       "saveAsTemplate": "Save as preset…";
       "selectProperty": "Select property";

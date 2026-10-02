@@ -1,6 +1,7 @@
 import { panic, Result } from "better-result";
 
 import { isRecord } from "../shared/guards.js";
+import type { RegistryRequestObservation } from "../shared/request-observer.js";
 import {
   malformed,
   optionalText,
@@ -283,6 +284,7 @@ const parseAdisAnswer = (
 export const checkCzVatReliability = async (
   subject: CheckedEntityCheckSubject,
   signal: AbortSignal | undefined,
+  observer: RegistryRequestObservation,
 ): Promise<Result<CzVatAnswer, EntityCheckSourceError>> => {
   if (subject.type !== "tax-id") {
     // The runner derives a DIČ from an IČO and answers not-covered for
@@ -293,6 +295,7 @@ export const checkCzVatReliability = async (
   const digits = subject.value.replace(/^CZ/u, "");
   const body = await soapRequest({
     url: ENDPOINT,
+    observer,
     soapAction: `${SERVICE_NAMESPACE}${OPERATION}`,
     namespaces: { roz: SERVICE_NAMESPACE },
     body: `<roz:StatusNespolehlivySubjektRozsirenyV2Request><roz:dic>${escapeXml(digits)}</roz:dic></roz:StatusNespolehlivySubjektRozsirenyV2Request>`,

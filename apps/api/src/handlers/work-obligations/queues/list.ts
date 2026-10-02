@@ -21,6 +21,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import {
   resolveWorkAsOf,
@@ -62,6 +63,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "workflow_orchestration",
     consumesServices: false,
   },
@@ -100,7 +102,9 @@ const myWork = createSafeRootHandler(
     // that needs an answer from the owner rather than the widest slice.
     const queue = query.queue ?? MY_WORK_QUEUE.TO_ACKNOWLEDGE;
     const asOf = resolveWorkAsOf(query.asOf);
-    const limit = query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? WORK_QUEUE_PAGE_SIZE_DEFAULT,
+    );
     const conditions = [eq(workObligations.ownerUserId, user.id)];
 
     switch (queue) {

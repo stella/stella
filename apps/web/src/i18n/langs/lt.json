@@ -890,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Santrauka",
+      "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",
@@ -1115,6 +1116,7 @@
     "focusSuggestion": "Fokusuoti pasiūlymą: {topic}",
     "folioCitationFallback": "{n} p.",
     "forkFromHere": "Pradėti naują pokalbį nuo čia",
+    "forkInSidePanel": "Pradėti naują pokalbį nuo čia šoniniame skydelyje",
     "forkedFrom": "Sukurta iš <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Sukurta iš pokalbio, kuris nebepasiekiamas",
     "forkedThread": "Iš kito pokalbio",
@@ -1122,6 +1124,10 @@
     "greeting": "Prie ko norėtumėte dirbti?",
     "greetingSubtitle": "Pradėkite nuo bylos, dokumento arba paprasto klausimo.",
     "hideThread": "Slėpti pokalbį",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {ir dar #} few {ir dar #} many {ir dar #} other {ir dar #}}"
+    },
     "improvePrompt": "Patobulinti užklausą",
     "improvePromptDraftChanged": "Juodraštis pasikeitė, todėl patobulinimas nebuvo pritaikytas.",
     "improvePromptPlainTextOnly": "Užklausą galima tobulinti tik kaip paprastą tekstą.",
@@ -1174,6 +1180,7 @@
       "viaProvider": "per {provider}"
     },
     "newChat": "Naujas pokalbis",
+    "newChatInSidePanel": "Naujas pokalbis pasiekiamas šoniniame skydelyje",
     "noPromptPresetOnly": "Pranešimo nėra, tik išankstinis nustatymas",
     "noThreads": "Pokalbių dar nėra",
     "officeCitationUnavailable": "Ši citata nebepasiekiama.",
@@ -1221,6 +1228,12 @@
     "richContentLoading": "Įkeliamas interaktyvus turinys…",
     "richContentTitle": "Interaktyvus turinys",
     "richContentUnavailable": "Šio turinio negalima saugiai rodyti.",
+    "selection": {
+      "askInNewChat": "Klausti naujame pokalbyje",
+      "quoteInReply": "Cituoti atsakyme",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Pažymėtas tekstas"
+    },
     "sendError": "Siunčiant žinutę kilo problema. Jei klaida kartojasi, susisiekite su palaikymo komanda.",
     "sendErrorAnonymizationBlocked": "stella nepavyko anonimizuoti vieno priedo, todėl niekas nebuvo išsiųsta. Pašalinkite failą arba siųskite šią žinutę be anonimizavimo.",
     "sendErrorEmptyCompletion": "DI grąžino tuščią atsakymą. Bandykite dar kartą arba perfrazuokite žinutę.",
@@ -1619,6 +1632,7 @@
     },
     "fact": "Faktas",
     "failed": "Nepavyko",
+    "files": "Failai",
     "filter": "Filtras",
     "filters": "Filtrai",
     "find": "Ieškoti",
@@ -3283,7 +3297,6 @@
       "editSkill": "Redaguoti įgūdį",
       "enableSkill": "Įjungti įgūdį",
       "fileExists": "Failas šiuo keliu jau yra",
-      "filesHeading": "Failai",
       "howItRuns": "Kaip jis veikia",
       "importFailureFetch": "Nepavyko įkelti įgūdžio šaltinio.",
       "importFailureIntegrity": "Įgūdžio šaltinis po aptikimo pasikeitė. Peržiūrėkite jį dar kartą.",
@@ -6008,7 +6021,8 @@
         "openReport": "Atverti ataskaitą",
         "submit": "Eksportuoti ataskaitą",
         "templateLabel": "Ataskaitos šablonas",
-        "title": "Eksportuoti ataskaitą"
+        "title": "Eksportuoti ataskaitą",
+        "withoutAiSummaries": "Eksportuoti be DI santraukų"
       },
       "saveAsTemplate": "Išsaugoti kaip išankstinį nustatymą…",
       "selectProperty": "Pasirinkti savybę",

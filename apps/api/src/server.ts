@@ -6,7 +6,6 @@ import {
   CHAT_TURN_ID_HEADER,
   STELLA_API_VERSION_PREFIX,
 } from "@stll/api-contract";
-import { observeRegistryRequests } from "@stll/business-registries/shared/request-observer";
 import { redisConnectionConfig } from "@stll/redis-config";
 
 import { initApiBackgroundWorkers } from "@/api/api-background-workers";
@@ -126,7 +125,10 @@ import { workspaceEventsRoute } from "@/api/handlers/workspaces/events";
 import { workspacesRoute } from "@/api/handlers/workspaces/routes";
 import { detached } from "@/api/lib/analytics/capture";
 import { getAuth, realtimeAuthorizers } from "@/api/lib/auth";
-import { shouldRejectBrowserMutation } from "@/api/lib/browser-origin-guard";
+import {
+  isAllowedBrowserOrigin,
+  shouldRejectBrowserMutation,
+} from "@/api/lib/browser-origin-guard";
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
@@ -156,11 +158,17 @@ import {
 import {
   answerRequestError,
   completeRequest,
+  withFinalResponseCompletion,
 } from "@/api/lib/observability/request-lifecycle";
 import { runWithRequestScope } from "@/api/lib/observability/request-scope";
 import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
+import { closeMcpReadFenceRedis } from "@/api/lib/rate-limit/mcp-read-fence";
 import { rateLimit } from "@/api/lib/rate-limit/rate-limit";
 import { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
+import {
+  createTenantActionClassifier,
+  runTenantHttpAction,
+} from "@/api/lib/rate-limit/tenant-action-boundary";
 import {
   refreshCorpusS3,
   refreshS3,
@@ -174,19 +182,13 @@ import { createReapOwnerlessChatTurnsTask } from "@/api/lib/scheduler/tasks/chat
 import { securityCanaryInterceptor } from "@/api/lib/security-canary";
 import {
   finalizeResponseCachePolicy,
+  API_SECURITY_HEADERS,
   setSecurityHeaders,
 } from "@/api/lib/security-headers";
 import { startSse, stopSse } from "@/api/lib/sse";
 import { clearByokAdapterCache } from "@/api/lib/tanstack-ai-models";
 import { isUploadRateLimitedPath } from "@/api/lib/upload-rate-limit";
-import {
-  ACTION_COST_CALL_KIND,
-  recordExternalActionCall,
-} from "@/api/lib/usage/action-costs/context";
-import {
-  flushActionCostRecords,
-  reportActionCostObservationFailure,
-} from "@/api/lib/usage/action-costs/recorder";
+import { flushActionCostRecords } from "@/api/lib/usage/action-costs/recorder";
 import { isLocalDevOpen, runtimeMode } from "@/api/runtime-mode";
 import {
   API_SHUTDOWN_OUTCOME,
@@ -265,6 +267,13 @@ if (isLocalDevOpen()) {
 }
 
 const CORS_PREFLIGHT_MAX_AGE_SECONDS = 60 * 60;
+const CORS_EXPOSED_HEADERS = [
+  "set-auth-token",
+  "Content-Disposition",
+  "X-Ai-Field-Errors",
+  REQUEST_ID_HEADER,
+  CHAT_TURN_ID_HEADER,
+];
 
 const api = new Elysia()
   .mapResponse(({ responseValue, set }) =>
@@ -350,13 +359,7 @@ const api = new Elysia()
         SESSION_ID_HEADER,
         TANSTACK_RUN_ID_HEADER,
       ],
-      exposeHeaders: [
-        "set-auth-token",
-        "Content-Disposition",
-        "X-Ai-Field-Errors",
-        REQUEST_ID_HEADER,
-        CHAT_TURN_ID_HEADER,
-      ],
+      exposeHeaders: CORS_EXPOSED_HEADERS,
       maxAge: CORS_PREFLIGHT_MAX_AGE_SECONDS,
     }),
   )
@@ -583,10 +586,68 @@ export default api;
 // `x-request-id` header and the `x-db-queries` count both disappear if a future
 // release stops applying higher-order functions, and the route-smoke network
 // baseline fails on a budgeted endpoint whose response drops the count header.
+// Byte refusals happen before lifecycle hooks; keep their headers observable
+// through the same browser-origin and security policies as ordinary answers.
+const decorateActionSizeRefusal = (
+  response: Response,
+  request: Request,
+): Response => {
+  initRequestContext(request);
+  const headers = new Headers(response.headers);
+  for (const [name, value] of Object.entries(API_SECURITY_HEADERS)) {
+    headers.set(name, value);
+  }
+  const requestId = getRequestId(request);
+  if (requestId !== undefined) {
+    headers.set(REQUEST_ID_HEADER, requestId);
+  }
+  const origin = request.headers.get("origin");
+  if (
+    origin !== null &&
+    isAllowedBrowserOrigin(origin, ALLOWED_BROWSER_ORIGINS)
+  ) {
+    headers.set("access-control-allow-origin", origin);
+    headers.set("access-control-allow-credentials", "true");
+    headers.set(
+      "access-control-expose-headers",
+      CORS_EXPOSED_HEADERS.join(", "),
+    );
+    headers.append("vary", "Origin");
+  }
+  return new Response(response.body, { status: response.status, headers });
+};
+
 const scopeRequestAsyncStores = (): void => {
+  const isTenantAction = createTenantActionClassifier({
+    routes: api.routes,
+    staticRoutes: api.router.static,
+    strictPath: api.config.strictPath,
+    aot: api.config.aot,
+  });
   api.wrap(
-    (handleRequest) => (request: Request) =>
-      runWithRequestScope(() => handleRequest(request)),
+    (handleRequest) => async (request: Request) =>
+      runWithRequestScope(async () => {
+        if (!env.FEATURE_ACTION_ADMISSION) {
+          return handleRequest(request);
+        }
+        return withFinalResponseCompletion(request, async () =>
+          runTenantHttpAction(request, {
+            handleRequest: async (bounded) => {
+              // The private HOC types erase the response type; validate the
+              // framework boundary before applying serialized JSON limits.
+              const response: unknown = await Promise.resolve(
+                handleRequest(bounded),
+              );
+              if (!(response instanceof Response)) {
+                return panic("The HTTP framework returned an invalid response");
+              }
+              return response;
+            },
+            isTenantAction,
+            decorateRefusal: decorateActionSizeRefusal,
+          }),
+        );
+      }),
   );
 };
 
@@ -628,11 +689,6 @@ const startServer = async (): Promise<void> => {
     logger.info("redis.connection.mode", { mode });
   }
 
-  const stopRegistryObservation = observeRegistryRequests({
-    onRequest: () =>
-      recordExternalActionCall(ACTION_COST_CALL_KIND.registryRequest),
-    onError: reportActionCostObservationFailure,
-  });
   startMemoryPressureHandler();
 
   // Start the SSE keep-alive heartbeat and cross-instance Redis subscriber
@@ -730,8 +786,8 @@ const startServer = async (): Promise<void> => {
       flushActionCostRecords(),
       Bun.sleep(WORKER_SHUTDOWN_TIMEOUT_MS),
     ]);
-    stopRegistryObservation();
     closeActionAdmissionRedis();
+    closeMcpReadFenceRedis();
     switch (outcome) {
       case API_SHUTDOWN_OUTCOME.drained:
         logger.info("api.shutdown_complete", { signal });

@@ -231,6 +231,7 @@ describe("starter playbook content", () => {
         organizationId: ids.orgA,
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        managedAIResidency: "eu" as const,
         promptCachingEnabled: false,
         generate,
       });

@@ -130,7 +130,10 @@ const workflowStepRun = (job: string, stepName: string): string => {
   return (runEnd === -1 ? run : run.slice(0, runEnd)).trimEnd();
 };
 
-const detects = (scope: "core" | "landing" | "marketing", files: string[]) =>
+const detects = (
+  scope: "core" | "landing" | "marketing" | "pr-core",
+  files: string[],
+) =>
   Bun.spawnSync(["bash", script, scope, ...files], {
     stdout: "pipe",
   })
@@ -244,9 +247,17 @@ describe("detect-e2e-changes", () => {
       plan.indexOf("Check changed file scope"),
     );
     expect(plan).toContain("persist-credentials: false");
-    expect(
-      plan.match(/steps\.check\.outputs\.trusted == 'true'/gu),
-    ).toHaveLength(3);
+    for (const stepName of [
+      "Checkout",
+      "Resolve browser image",
+      "Plan release marketing screenshots",
+      "Setup Bun for dependency scope",
+      "Check changed file scope",
+    ]) {
+      expect(workflowStep(plan, stepName), stepName).toContain(
+        "steps.check.outputs.trusted == 'true'",
+      );
+    }
     expect(workflowStep(plan, "Resolve browser image")).toContain(
       "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
     );
@@ -256,7 +267,11 @@ describe("detect-e2e-changes", () => {
 
   test("runs Redis collaboration checks for every owning boundary", () => {
     const plan = workflowJob("ci-plan");
-    const collabRedis = workflowJob("collab-redis");
+    const serviceSuites = workflowJob("service-suites");
+    const collabRedis = workflowStep(
+      serviceSuites,
+      "Run cross-replica collaboration suite",
+    );
 
     for (const collaborationPath of [
       "apps/collab/*",
@@ -267,13 +282,21 @@ describe("detect-e2e-changes", () => {
     ]) {
       expect(plan).toContain(collaborationPath);
     }
+    expect(plan).toContain(
+      `service_suites_required: ${githubExpression("steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true'")}`,
+    );
+    expect(serviceSuites).toContain(
+      "needs.ci-plan.outputs.service_suites_required == 'true'",
+    );
     expect(collabRedis).toContain(
-      "needs.ci-plan.outputs.collab_redis_required",
+      `if: ${githubExpression("!cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true'")}`,
     );
     expect(collabRedis).toContain(
       "bun --filter @stll/collab test src/server.test.ts",
     );
-    expect(workflowJob("ci-result")).toContain("collab-redis");
+    const result = workflowJob("ci-result");
+    expect(result).toContain("service-suites,");
+    expect(result).toContain('"service-suites": "service_suites_required"');
   });
 
   test("keeps production, Vite canary, and landing work parallel", () => {
@@ -422,20 +445,22 @@ describe("detect-e2e-changes", () => {
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     const plan = workflowJob("ci-plan");
-    const codeQuality = workflowJob("code-quality");
-    expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-    expect(plan).toContain(".provenance.yml|provenance/*)");
-    expect(codeQuality).toContain(
-      `EVENT_NAME: ${githubExpression("github.event_name")}`,
-    );
-    expect(codeQuality).toContain(
-      'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
-    );
-    expect(codeQuality).toContain("bun run code-check\n");
-    expect(codeQuality).not.toContain("bun run typecheck\n");
-    expect(codeQuality).toContain(
-      'bun run code-check:affected -- --base "origin/$BASE_REF"',
-    );
+    for (const leg of ["api", "web", "rest"]) {
+      const codeQuality = workflowJob(`code-quality-${leg}`);
+      expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
+      expect(plan).toContain(".provenance.yml|provenance/*)");
+      expect(codeQuality).toContain(
+        `EVENT_NAME: ${githubExpression("github.event_name")}`,
+      );
+      expect(codeQuality).toContain(
+        'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
+      );
+      expect(codeQuality).toContain(`bun run code-check -- --leg ${leg}\n`);
+      expect(codeQuality).not.toContain("bun run typecheck\n");
+      expect(codeQuality).toContain(
+        `bun run code-check:affected -- --leg ${leg} --base "origin/$BASE_REF"`,
+      );
+    }
   });
 
   test("runs the full native compiler only at the release boundary", () => {
@@ -461,7 +486,7 @@ describe("detect-e2e-changes", () => {
   });
 
   test("revalidates release invariants on the merge queue tree", () => {
-    const ciChecks = workflowJob("ci-checks");
+    const ciChecks = workflowJob("ci-checks-rest");
     for (const stepName of [
       "Release changelog guard",
       "Release CLI coupling guard",
@@ -502,7 +527,7 @@ describe("detect-e2e-changes", () => {
     );
 
     const driftGuard = workflowStep(
-      workflowJob("ci-checks"),
+      workflowJob("ci-checks-rest"),
       "Model catalog snapshot drift guard",
     );
     expect(driftGuard).toContain(
@@ -517,16 +542,14 @@ describe("detect-e2e-changes", () => {
     expect(driftGuard).not.toContain("package_checks_required");
   });
 
-  test("fails the pull request that invalidates a shipped product screenshot", () => {
+  test("checks shipped product screenshots on planned releases", () => {
     const plan = workflowJob("ci-plan");
     expect(plan).toContain(
-      `marketing_screenshots_required: ${githubExpression("steps.changed-files.outputs.marketing_screenshots_required")}`,
+      `marketing_screenshots_required: ${githubExpression("steps.marketing-release.outputs.required")}`,
     );
-    expect(plan).toContain(
-      "marketing_screenshots_required=$(bash scripts/detect-e2e-changes.sh marketing",
+    expect(workflowStep(plan, "Plan release marketing screenshots")).toContain(
+      "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
     );
-    expect(plan).toContain('echo "marketing_screenshots_required=true"');
-    expect(plan).toContain('echo "marketing_screenshots_required=false"');
 
     const screenshots = workflowJob("marketing-screenshots");
     expect(screenshots).toContain("needs: [ci-plan, web-build]");
@@ -702,7 +725,7 @@ describe("detect-e2e-changes", () => {
         "      always()",
         "      && (needs.ci-plan.outputs.trusted == 'true'",
         "          || github.event_name == 'workflow_dispatch')",
-        "      && needs.ci-plan.outputs.e2e_core_required == 'true'",
+        "      && needs.ci-plan.outputs.e2e_production_required == 'true'",
         "      && needs.web-build.result == 'success'",
       ].join("\n"),
     );
@@ -746,7 +769,6 @@ describe("detect-e2e-changes", () => {
     const scope = "Check UI browser test scope";
     const setupSteps = [
       "Setup Bun",
-      "Install Safe Chain",
       "Turbo remote cache",
       "Install dependencies",
       "Prepare environment",
@@ -964,6 +986,71 @@ describe("detect-e2e-changes", () => {
       `E2E_OUTPUT_DIR: test-results/route-smoke-\${{ matrix.shard }}`,
     );
     expect(workflow).not.toContain("path: apps/web/test-results/blob-report/");
+  });
+});
+
+describe("PR production E2E scope", () => {
+  test("follows the production config's actual spec directory", () => {
+    const source = readFileSync(
+      path.join(import.meta.dirname, "../apps/web/e2e/playwright.config.ts"),
+      "utf-8",
+    );
+    const testDir = /\btestDir:\s*["']([^"']+)["']/u.exec(source)?.[1];
+    if (testDir === undefined) {
+      throw new TypeError("Production config must declare testDir");
+    }
+    const spec = path.posix.join("apps/web/e2e", testDir, "future.spec.ts");
+    expect(detects("pr-core", [spec])).toBe("true");
+  });
+
+  test("runs for specs, helpers, fixtures and Playwright configuration", () => {
+    for (const file of [
+      "apps/web/e2e/specs/new.spec.ts",
+      "apps/web/e2e/specs/nested/new.spec.ts",
+      "apps/web/e2e/helpers/test.ts",
+      "apps/web/e2e/fixtures/simple.docx",
+      "apps/web/e2e/playwright.config.ts",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("true");
+    }
+  });
+
+  test("leaves marketing-only inputs to the marketing workflow", () => {
+    for (const file of [
+      "apps/web/e2e/marketing/product-screenshots.spec.ts",
+      "apps/web/e2e/playwright.marketing.config.ts",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("false");
+      expect(detects("marketing", [file]), file).toBe("true");
+    }
+  });
+
+  test("does not widen PR shards for runtime or orchestration changes", () => {
+    for (const file of [
+      "apps/api/src/handlers/tasks/get.ts",
+      "apps/web/src/routes/index.tsx",
+      "packages/ui/src/button.tsx",
+      "README.md",
+      "apps/web/e2e/new.spec.ts",
+      "apps/web/e2e/collab/room.spec.ts",
+      "apps/web/e2e/playwright.collab.config.ts",
+      "apps/web/e2e/fixtures/generate.ts",
+      "bun.lock",
+      ".github/workflows/ci.yml",
+      "scripts/detect-e2e-changes.sh",
+    ]) {
+      expect(detects("pr-core", [file]), file).toBe("false");
+    }
+    expect(detects("pr-core", [])).toBe("false");
+  });
+
+  test("marketing exclusions cannot hide a core spec in the same diff", () => {
+    const files = [
+      "apps/web/e2e/marketing/product.spec.ts",
+      "apps/web/e2e/specs/new.spec.ts",
+    ];
+    expect(detects("pr-core", files)).toBe("true");
+    expect(detects("pr-core", files.toReversed())).toBe("true");
   });
 });
 

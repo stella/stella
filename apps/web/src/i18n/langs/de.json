@@ -890,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Zusammenfassung",
+      "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",
@@ -1115,6 +1116,7 @@
     "focusSuggestion": "Vorschlag fokussieren: {topic}",
     "folioCitationFallback": "S. {n}",
     "forkFromHere": "Ab hier einen neuen Chat starten",
+    "forkInSidePanel": "Ab hier einen neuen Chat in der Seitenleiste starten",
     "forkedFrom": "Erstellt aus <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Erstellt aus einem nicht mehr verfügbaren Chat",
     "forkedThread": "Aus einem anderen Chat",
@@ -1122,6 +1124,10 @@
     "greeting": "Woran möchten Sie arbeiten?",
     "greetingSubtitle": "Beginnen Sie mit einer Akte, einem Dokument oder einer einfachen Frage.",
     "hideThread": "Konversation ausblenden",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {und # weiteres} other {und # weitere}}"
+    },
     "improvePrompt": "Prompt verbessern",
     "improvePromptDraftChanged": "Der Entwurf wurde geändert, daher wurde die Verbesserung nicht übernommen.",
     "improvePromptPlainTextOnly": "Prompts können nur als Klartext verbessert werden.",
@@ -1174,6 +1180,7 @@
       "viaProvider": "über {provider}"
     },
     "newChat": "Neuer Chat",
+    "newChatInSidePanel": "Der neue Chat ist in der Seitenleiste verfügbar",
     "noPromptPresetOnly": "Keine Nachricht, nur Vorlage",
     "noThreads": "Noch keine Konversationen",
     "officeCitationUnavailable": "Diese Fundstelle ist nicht mehr verfügbar.",
@@ -1221,6 +1228,12 @@
     "richContentLoading": "Interaktiver Inhalt wird geladen…",
     "richContentTitle": "Interaktiver Inhalt",
     "richContentUnavailable": "Dieser Inhalt kann nicht sicher angezeigt werden.",
+    "selection": {
+      "askInNewChat": "In neuem Chat fragen",
+      "quoteInReply": "In Antwort zitieren",
+      "quotedText": "„{quote}“",
+      "toolbarLabel": "Markierter Text"
+    },
     "sendError": "Beim Senden Ihrer Nachricht ist ein Problem aufgetreten. Wenden Sie sich an den Support, wenn der Fehler weiterhin auftritt.",
     "sendErrorAnonymizationBlocked": "stella konnte einen Anhang nicht anonymisieren, daher wurde nichts gesendet. Entfernen Sie die Datei oder senden Sie diese Nachricht ohne Anonymisierung.",
     "sendErrorEmptyCompletion": "Die KI hat eine leere Antwort zurückgegeben. Versuchen Sie es erneut oder formulieren Sie Ihre Nachricht um.",
@@ -1619,6 +1632,7 @@
     },
     "fact": "Tatsache",
     "failed": "Fehlgeschlagen",
+    "files": "Dateien",
     "filter": "Filtern",
     "filters": "Filter",
     "find": "Suchen",
@@ -3283,7 +3297,6 @@
       "editSkill": "Skill bearbeiten",
       "enableSkill": "Skill aktivieren",
       "fileExists": "Eine Datei mit diesem Pfad existiert bereits",
-      "filesHeading": "Dateien",
       "howItRuns": "Ausführung",
       "importFailureFetch": "Die Skill-Quelle konnte nicht geladen werden.",
       "importFailureIntegrity": "Die Skill-Quelle hat sich nach der Erkennung geändert. Prüfen Sie sie erneut.",
@@ -6008,7 +6021,8 @@
         "openReport": "Bericht öffnen",
         "submit": "Bericht exportieren",
         "templateLabel": "Berichtsvorlage",
-        "title": "Bericht exportieren"
+        "title": "Bericht exportieren",
+        "withoutAiSummaries": "Ohne KI-Zusammenfassungen exportieren"
       },
       "saveAsTemplate": "Als Voreinstellung speichern…",
       "selectProperty": "Eigenschaft auswählen",

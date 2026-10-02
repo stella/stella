@@ -9,6 +9,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedRateTableId } from "@/api/lib/safe-id-boundaries";
 
 const readRateTablesQuerySchema = t.Object({
@@ -34,6 +35,7 @@ const readRateTables = createSafeHandler(
     permissions: { rate: ["read"] },
     mcp: {
       type: "capability",
+      readClass: "tenant",
       reason: "billing_admin",
       consumesServices: false,
     },
@@ -41,7 +43,9 @@ const readRateTables = createSafeHandler(
     query: readRateTablesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.rateTablesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.rateTablesPageSizeDefault,
+    );
     const conditions = [eq(rateTables.workspaceId, workspaceId)];
 
     if (query.cursor) {

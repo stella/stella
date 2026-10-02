@@ -26,6 +26,7 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -80,6 +81,7 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // import is erased at build time and never creates a runtime import cycle
 // (api-handlers must stay importable without pulling in the MCP graph).
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -244,12 +246,13 @@ export type McpInternalReason =
  *   and the approved permanent exclusions).
  */
 export type McpExposure =
-  | { type: "tool"; name: McpToolName }
-  | { type: "covered"; by: McpToolName }
+  | { type: "tool"; name: McpToolName; readClass?: McpReadClass }
+  | { type: "covered"; by: McpToolName; readClass?: McpReadClass }
   | {
       type: "capability";
       reason: McpCapabilityReason;
       consumesServices: ServiceClassification;
+      readClass?: McpReadClass;
     }
   | { type: "internal"; reason: McpInternalReason };
 
@@ -326,9 +329,16 @@ type CapabilityDescription = {
  * by inference — over-classifying a write is safe (it just requires write
  * consent), so writes need no affirmation.
  */
-type CapabilityAccess = {
-  access?: "read" | "write";
-};
+type CapabilityAccess =
+  | { access?: "write" }
+  | {
+      access: "read";
+      mcp:
+        | Exclude<McpExposure, { type: "capability" }>
+        | (Extract<McpExposure, { type: "capability" }> & {
+            readClass: McpReadClass;
+          });
+    };
 
 /**
  * How this capability's payload crosses the generic JSON transport (see
@@ -371,9 +381,11 @@ export type HandlerConfig = InputSchema &
  * route-level schema cannot shadow the segment the workspace macro resolves the
  * tenant from. `workspaceParams()` produces the shape.
  */
-export type WorkspaceHandlerConfig = Omit<HandlerConfig, "params"> & {
-  params?: WorkspaceParamsSchema;
-};
+type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
+  ? Omit<TConfig, "params"> & { params?: WorkspaceParamsSchema }
+  : never;
+
+export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
@@ -446,6 +458,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * `false` regardless of what call sites set.
      */
     promptCachingEnabled: boolean;
+    managedAIResidency: ManagedAIResidency;
     /**
      * Records an audit row in the supplied transaction. Identity
      * fields (org/user/IP/UA) are bound from the request context;
@@ -824,6 +837,7 @@ type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
   session: { activeOrganizationId: SafeId<"organization"> };
+  scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
 };
 
@@ -847,6 +861,7 @@ const runAdmittedFiniteHandler = async function* <
     admit({
       organizationId: ctx.session.activeOrganizationId,
       userId: ctx.user.id,
+      organizationStateDb: ctx.scopedDb,
       periodIdentity: {
         actionKind,
         // These finite endpoints have no client idempotency key.
@@ -1020,6 +1035,7 @@ export const resolveMeteringContext = ({
 }): ResolvedMeteringContext => {
   const modelRole = metering.modelRole ?? "chat";
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   const isByok = modelInfo.keySource === "byok";

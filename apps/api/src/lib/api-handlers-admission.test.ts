@@ -30,6 +30,7 @@ const context = (signal?: AbortSignal) => ({
   memberRole: { role: "owner" },
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
 });
 
 const config = {
@@ -170,7 +171,11 @@ describe("finite HTTP action admission", () => {
         {
           admit: async (options) => {
             identities.push(options.periodIdentity);
-            return Result.ok(await options.run(new AbortController().signal));
+            return Result.ok(
+              await options.run(new AbortController().signal, {
+                reservePeriod: async () => Result.ok(undefined),
+              }),
+            );
           },
         },
       );

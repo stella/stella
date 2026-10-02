@@ -107,7 +107,14 @@ const config = {
 
 const rewriteClause = createSafeRootHandler(
   config,
-  async function* ({ session, body, safeDb, user, orgAIConfig }) {
+  async function* ({
+    session,
+    body,
+    safeDb,
+    user,
+    orgAIConfig,
+    managedAIResidency,
+  }) {
     const organizationId = session.activeOrganizationId;
 
     // Editable paragraphs = non-directive with non-empty text; directives and
@@ -125,6 +132,7 @@ const rewriteClause = createSafeRootHandler(
     const numbered = editable.map((p) => `[${p.index}] ${p.text}`).join("\n");
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -144,8 +152,10 @@ const rewriteClause = createSafeRootHandler(
       Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
+            dataClass: "customer",
             role: "fast",
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             // Root-scoped handler: no workspace id is available here.
             tenantWorkspaceIds: [],

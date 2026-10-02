@@ -330,6 +330,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "document_processing",
     consumesServices: false,
   },

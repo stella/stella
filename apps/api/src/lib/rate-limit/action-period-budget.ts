@@ -157,3 +157,9 @@ if KEYS[3] then
   redis.call("PEXPIREAT", KEYS[3], ARGV[6])
 end
 `;
+
+// Checked only while acquiring, never while renewing already-admitted work.
+export const ACTION_SERVICE_DEADLINE_EXPIRED = -4;
+export const ACTION_SERVICE_DEADLINE_SCRIPT = `
+if ARGV[9] and now >= tonumber(ARGV[9]) then return ${ACTION_SERVICE_DEADLINE_EXPIRED} end
+`;

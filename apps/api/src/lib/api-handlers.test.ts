@@ -80,6 +80,7 @@ describe("createSafeHandler workspace audit binding", () => {
       pinServerValidatedWorkspaceId: () => false,
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       recordAuditEvent: noopAuditRecorder,
       createAuditRecorder: (options?: {
@@ -271,6 +272,7 @@ const createContext = (
     getWorkspaceAccess: async () => null,
     orgAIConfig,
     orgAIConfigStatus,
+    managedAIResidency: "eu",
     promptCachingEnabled: false,
     recordAuditEvent: noopAuditRecorder,
     createAuditRecorder: () => noopAuditRecorder,

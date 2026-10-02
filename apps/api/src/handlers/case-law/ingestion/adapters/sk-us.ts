@@ -77,7 +77,10 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  backoffMs,
+  fetchPublisher,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -812,6 +815,117 @@ export const skUsListingIdentity = (doc: SearchDocument): ListingIdentity => {
   return fields === null
     ? { type: "unidentifiable" }
     : { type: "document", sourceDocumentId: fields.documentId };
+};
+
+export type SkUsListingFetchOutcome =
+  | { type: "listing"; listing: string }
+  | { type: "listing_unavailable" }
+  | { type: "listing_identity_mismatch" }
+  | { type: "publisher_rate_limited"; error: AdapterFetchError }
+  | { type: "retry_later"; error: AdapterFetchError };
+
+type FetchSkUsListingOptions = {
+  documentId: string;
+  caseNumber: string;
+  signal?: AbortSignal;
+  request?: typeof fetchPublisher;
+  pause?: (milliseconds: number) => Promise<void>;
+};
+
+/** Refetch only the publisher row, using the crawl's gated HTTP boundary. */
+// parser-output-unchanged: listing fetch only; stored replay and parser inputs are unchanged.
+export const fetchSkUsListing = async ({
+  documentId,
+  caseNumber,
+  signal,
+  request = fetchPublisher,
+  pause = async (milliseconds) => {
+    await Bun.sleep(milliseconds);
+  },
+}: FetchSkUsListingOptions): Promise<SkUsListingFetchOutcome> => {
+  for (let attempt = 0; ; attempt += 1) {
+    const fetched = await Result.tryPromise({
+      try: async (): Promise<SkUsListingFetchOutcome> => {
+        const response = await request(SEARCH_URL, {
+          adapterKey: ADAPTER_KEYS.SK_US,
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "User-Agent": INGESTION_USER_AGENT,
+          },
+          body: JSON.stringify({
+            docType: DECISION_DOC_TYPE,
+            start: 0,
+            pageSize: 2,
+            searchFilter: {
+              filterNameValue: [
+                {
+                  type: "STRING",
+                  fieldName: "documentId",
+                  fieldValue: documentId,
+                },
+              ],
+            },
+            facetFilter: { facetFilterNameValue: [] },
+            facets: [],
+            fieldsToReturn: FIELDS_TO_RETURN,
+            clustering: false,
+          }),
+          signal,
+          timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+        });
+        if (response.status === 204) {
+          return { type: "listing_unavailable" };
+        }
+        if (!response.ok) {
+          throw new FetchBoundaryError({
+            url: SEARCH_URL,
+            status: response.status,
+            statusText: response.statusText,
+            message: `SK ÚS listing fetch failed: ${response.status}`,
+          });
+        }
+        const body = await response.text();
+        const data: unknown = JSON.parse(body);
+        if (!isSearchResponse(data)) {
+          throw new FetchBoundaryError({
+            url: SEARCH_URL,
+            message: "SK ÚS listing response has an invalid shape",
+          });
+        }
+        if (data.numFound === 0 && data.documents.length === 0) {
+          return { type: "listing_unavailable" };
+        }
+        const doc = data.documents.at(0);
+        const identity = doc === undefined ? null : skUsIdentityFields(doc);
+        if (
+          data.numFound !== 1 ||
+          data.documents.length !== 1 ||
+          identity?.documentId !== documentId ||
+          identity.caseNumber !== caseNumber
+        ) {
+          return { type: "listing_identity_mismatch" };
+        }
+        return { type: "listing", listing: JSON.stringify(doc) };
+      },
+      catch: adapterCatch(ADAPTER_KEYS.SK_US, null),
+    });
+    if (Result.isOk(fetched)) {
+      return fetched.value;
+    }
+    const cause = fetched.error.cause;
+    if (cause instanceof FetchBoundaryError && cause.status === 429) {
+      return { type: "publisher_rate_limited", error: fetched.error };
+    }
+    const retryable =
+      cause instanceof FetchBoundaryError &&
+      cause.status !== undefined &&
+      cause.status >= 500;
+    if (attempt >= 2 || signal?.aborted || !retryable) {
+      return { type: "retry_later", error: fetched.error };
+    }
+    await pause(backoffMs(attempt));
+  }
 };
 
 /**

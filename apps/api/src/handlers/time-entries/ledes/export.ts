@@ -252,7 +252,12 @@ const config = {
     "when an included entry has no effective rate, or when the selection " +
     "spans more than one currency, which the format cannot represent.",
   permissions: { timeEntry: ["approve"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: timeEntryExportQuerySchema,
 } satisfies WorkspaceHandlerConfig;

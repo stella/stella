@@ -27,6 +27,7 @@ import type {
   UnprojectedColumns,
   UnbackedProjectionKeys,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedTimeEntryId,
   brandPersistedUserId,
@@ -91,6 +92,7 @@ const listApprovalQueue = createSafeRootHandler(
     permissions: { timeEntry: ["read"] },
     mcp: {
       type: "capability",
+      readClass: "tenant",
       reason: "billing_admin",
       consumesServices: false,
     },
@@ -164,7 +166,9 @@ const listApprovalQueue = createSafeRootHandler(
         }),
       );
     }
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx
