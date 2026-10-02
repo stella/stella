@@ -132,7 +132,9 @@ const handleMcpToolCallWithCapturedObserver = async (
       ]);
     }
     const captured = capture.mock.results.at(-1);
-    if (captured?.type !== "return") {panic("Missing captured request observer");}
+    if (captured?.type !== "return") {
+      panic("Missing captured request observer");
+    }
     return { result, observer: captured.value };
   } finally {
     capture.mockRestore();
