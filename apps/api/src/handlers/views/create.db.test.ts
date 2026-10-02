@@ -16,6 +16,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { getDefaultViews } from "@/api/lib/views";
 import type { ViewLayout } from "@/api/lib/views-schema";
@@ -84,7 +85,7 @@ const runCreate = async (
   const context = asTestRaw<CreateCtx>({
     body: { id: viewId, name: "Mail", layout: correspondenceLayout() },
     createAuditRecorder: () => async () => undefined,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     recordAuditEvent: async () => undefined,
     request: new Request(`https://example.test/workspaces/${ids.wsA1}/views`),
     route: "/test/views/create",
