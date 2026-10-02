@@ -11,7 +11,8 @@
 # checks there.
 #
 # Usage:
-#   bun run verify           # affected packages vs origin/main (CI PR behavior)
+#   bun run verify           # affected packages vs the canonical repository's
+#                            # main (CI PR behavior; upstream/main in a fork)
 #   bun run verify --all     # full run, no --affected (CI nightly behavior)
 #   bun run verify --db-await-in-loop
 #                            # also run the whole-program database-await check,
@@ -24,7 +25,7 @@ repo_root="$(cd "$script_dir/.." && pwd)"
 cd "$repo_root"
 
 affected_flag="--affected"
-base_ref="origin/main"
+base_ref=""
 db_await_in_loop="false"
 
 while [[ $# -gt 0 ]]; do
@@ -52,6 +53,12 @@ while [[ $# -gt 0 ]]; do
       ;;
   esac
 done
+
+if [[ -z "$base_ref" ]]; then
+  source "$script_dir/canonical-base.sh"
+  base_ref="$(canonical_base_ref)" || exit 1
+fi
+echo "verify: comparing against $base_ref"
 
 if [[ -n "$affected_flag" ]]; then
   export TURBO_SCM_BASE="$base_ref"
@@ -138,7 +145,7 @@ run_ratchet_guard() {
   # first proves each counter counts what it claims, so a broken guard cannot
   # pass silently.
   bun scripts/ratchet.ts --self-test || return 1
-  bun scripts/ratchet.ts --check
+  bun scripts/ratchet.ts --check --base "$(git merge-base "$base_ref" HEAD)"
 }
 
 run_result_boundary_enrolment_guard() {

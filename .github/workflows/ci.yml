@@ -1221,6 +1221,10 @@ jobs:
           bash scripts/check-ai-skill-sync.test.sh
           bash scripts/verify-step.test.sh
 
+      - name: Check local base selection
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/canonical-base.test.sh
+
       - name: Check local skill overrides
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |
@@ -3276,11 +3280,17 @@ jobs:
           fi
 
       - name: Check route network baseline
+        id: network-baseline
         env:
           E2E_EXECUTION_PROFILE: network-baseline
           E2E_EXPECT_DEV_ROUTES: "false"
           PLAYWRIGHT_BLOB_OUTPUT_NAME: report-route-smoke-pr.zip
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts --project=route-smoke
+
+      - name: Explain network baseline failure
+        if: failure() && steps.network-baseline.outcome == 'failure'
+        run: |
+          echo "::error::Network baseline failed. Fix unintended regressions; for intentional route changes, add the baseline:record label to this PR, then review the recorded budgets and resolve the recorder's review thread."
 
       - name: Upload route smoke report
         if: always()
@@ -3288,6 +3298,16 @@ jobs:
         with:
           name: route-smoke-pr-blob
           path: apps/web/e2e/test-results/blob-report/
+          retention-days: 7
+
+      - name: Upload server logs
+        if: failure() && steps.e2e-stack.outputs.status == 'ready'
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: server-logs-route-smoke
+          path: |
+            /tmp/api.log
+            /tmp/web-production.log
           retention-days: 7
 
   e2e-production-shard:
