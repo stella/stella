@@ -247,6 +247,7 @@ test("scans every production source root without production exemptions", () => {
     "apps/api/src/handlers/time-timers/finalize.ts",
     "apps/api/src/lib/billing/time-entry-insert.ts",
     "apps/api/src/lib/billing/time-timers.ts",
+    "apps/api/src/lib/time-entry-offboarding.ts",
   ];
   expect(files.every(isTimeEntryPolicySource)).toBe(true);
   const excluded = [

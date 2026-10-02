@@ -12,8 +12,8 @@ import {
   createBackgroundAuditRecorder,
 } from "@/api/lib/audit-log";
 import {
-  DEFAULT_TIME_POLICY,
   getTimePeriodLockError,
+  lockTimePolicy,
   roundToBillingIncrement,
 } from "@/api/lib/billing-time";
 import {
@@ -25,8 +25,8 @@ import {
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
- * Close the removed member's single active timer while the caller's
- * offboarding transaction owns the user/workspace locks.
+ * Close the removed member's single active timer under policy, owner,
+ * and matter locks in the caller's offboarding transaction.
  */
 export const closeRemovedMemberActiveTimer = async ({
   organizationId,
@@ -37,6 +37,7 @@ export const closeRemovedMemberActiveTimer = async ({
   tx: Transaction;
   userId: SafeId<"user">;
 }) => {
+  const policy = await lockTimePolicy(tx, organizationId);
   const owner = { organizationId, userId };
   await lockTimerOwner(tx, owner);
   await tx.execute(sql`SELECT pg_advisory_xact_lock(hashtext(${userId}))`);
@@ -120,19 +121,7 @@ export const closeRemovedMemberActiveTimer = async ({
       : [];
 
     if (timer?.timerStartedAt) {
-      const settings = await tx.query.organizationSettings.findFirst({
-        where: { organizationId: { eq: organizationId } },
-        columns: {
-          timeMinimumUnitMinutes: true,
-          timeLockedThroughMonth: true,
-        },
-      });
-      if (
-        getTimePeriodLockError(
-          { ...DEFAULT_TIME_POLICY, ...settings },
-          timer.dateWorked,
-        )
-      ) {
+      if (getTimePeriodLockError(policy, timer.dateWorked)) {
         return Result.err(
           new APIError("BAD_REQUEST", {
             error: "time_period_locked",
@@ -141,9 +130,6 @@ export const closeRemovedMemberActiveTimer = async ({
           }),
         );
       }
-      const minimumUnitMinutes =
-        settings?.timeMinimumUnitMinutes ??
-        DEFAULT_TIME_POLICY.timeMinimumUnitMinutes;
       const now = new Date();
       const durationMinutes = Math.max(
         1,
@@ -156,7 +142,10 @@ export const closeRemovedMemberActiveTimer = async ({
       const billedMinutes =
         timer.activityGroup === TIME_ENTRY_ACTIVITY_GROUP.INTERNAL
           ? 0
-          : roundToBillingIncrement(durationMinutes, minimumUnitMinutes);
+          : roundToBillingIncrement(
+              durationMinutes,
+              policy.timeMinimumUnitMinutes,
+            );
       await tx
         .update(timeEntries)
         .set({

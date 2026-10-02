@@ -8,6 +8,7 @@ const SOURCE_ROOTS = [
   "apps/api/src/handlers/time-timers/",
   "apps/api/src/lib/billing/",
 ];
+const SOURCE_FILES = new Set(["apps/api/src/lib/time-entry-offboarding.ts"]);
 const POLICY_OWNER = "@/api/lib/billing-time";
 const MUTATIONS = new Set(["insert", "update", "delete"]);
 
@@ -18,7 +19,8 @@ export type TimeEntryPolicyFinding = {
 };
 
 export const isTimeEntryPolicySource = (file: string): boolean =>
-  SOURCE_ROOTS.some((root) => file.startsWith(root)) &&
+  (SOURCE_FILES.has(file) ||
+    SOURCE_ROOTS.some((root) => file.startsWith(root))) &&
   file.endsWith(".ts") &&
   !/\.(?:test|spec|d)\.ts$/u.test(file);
 
@@ -372,7 +374,7 @@ export const findTimeEntryPolicyLocks = (
 };
 
 const timeEntryPolicySources = (): string[] => {
-  const files: string[] = [];
+  const files = Array.from(SOURCE_FILES);
   for (const root of SOURCE_ROOTS) {
     for (const file of new Bun.Glob(`${root}**/*.ts`).scanSync({
       cwd: REPO_ROOT,
