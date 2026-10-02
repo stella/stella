@@ -71,12 +71,21 @@ const readBaseline = (source: v.InferOutput<typeof workflowSchema>["jobs"]) => {
 const baseline = readBaseline(baseJobs);
 
 type Step = v.InferOutput<typeof jobSchema>["steps"][number];
-// A pinned action's ref is version metadata that dependency updates bump; the
-// action path itself, and everything else about the step, must stay intact.
-const withoutActionRef = (step: Step): Step =>
-  typeof step["uses"] === "string"
-    ? { ...step, uses: step["uses"].replace(/@[^@]*$/u, "") }
-    : step;
+// A full commit SHA pin is version metadata that dependency updates bump; the
+// action path, the fact that it is pinned, and everything else about the step
+// must stay intact. A branch or tag ref is left as written, so moving a step
+// from a pin to a mutable ref still reads as a modified check.
+const PINNED_REF = /@[0-9a-f]{40}$/u;
+const usesOf = (step: Step): string | undefined =>
+  v.parse(v.looseObject({ uses: v.optional(v.string()) }), step).uses;
+const withoutActionRef = (step: Step): Step => {
+  const uses = usesOf(step);
+  return uses === undefined
+    ? step
+    : { ...step, uses: uses.replace(PINNED_REF, "@<pinned>") };
+};
+const setupSteps = (steps: readonly Step[]) =>
+  steps.filter(({ name }) => prerequisites.has(name)).map(withoutActionRef);
 const ownedSteps = (steps: readonly Step[]) =>
   steps
     .filter(({ name }) => !prerequisites.has(name))
@@ -167,15 +176,11 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
   ).toContain("needs.ci-plan.outputs.dependency_malware_required == 'true'");
   for (const base of baseline) {
     const { steps: originalSteps, ...originalScope } = base;
-    const originalSetup = originalSteps.filter(({ name }) =>
-      prerequisites.has(name),
-    );
+    const originalSetup = setupSteps(originalSteps);
     expect(originalSetup).toHaveLength(prerequisites.size);
     for (const { steps, ...scope } of partitions) {
       expect(scope).toEqual(originalScope);
-      expect(steps.filter(({ name }) => prerequisites.has(name))).toEqual(
-        originalSetup,
-      );
+      expect(setupSteps(steps)).toEqual(originalSetup);
       const installIndex = steps.findIndex(
         ({ name }) => name === "Install dependencies",
       );
@@ -223,34 +228,66 @@ test("CI coverage accepts a new check alongside every merge-base check", () => {
   ).toThrow("toEqual");
 });
 
-test("CI coverage accepts an action version bump but not a different action", () => {
-  const step = ownedSteps(baseSteps).find(
-    (current) => typeof current["uses"] === "string",
+const otherSha = "0".repeat(40);
+const pinnedAction = (
+  steps: readonly Step[],
+  names: (name: string) => boolean,
+) => {
+  const step = steps.find(
+    (current) => names(current.name) && PINNED_REF.test(usesOf(current) ?? ""),
   );
-  if (!step) {
-    panic("Merge-base CI checks contain no action step");
+  const uses = step === undefined ? undefined : usesOf(step);
+  if (step === undefined || uses === undefined) {
+    panic("Merge-base CI checks contain no SHA-pinned action step");
   }
-  const original = baseSteps.find(({ name }) => name === step.name);
-  if (typeof original?.["uses"] !== "string") {
-    panic("Merge-base action step lost its action");
-  }
-  const action = original["uses"].replace(/@[^@]*$/u, "");
-  const withUses = (uses: string) =>
-    baseSteps.map((current) =>
-      current.name === step.name ? { ...current, uses } : current,
+  const withUses = (next: string) =>
+    steps.map((current) =>
+      current.name === step.name ? { ...current, uses: next } : current,
     );
+  return { action: uses.replace(PINNED_REF, ""), withUses };
+};
+
+test("CI coverage accepts a pinned action bump but not a different action or a mutable ref", () => {
+  const { action, withUses } = pinnedAction(
+    baseSteps,
+    (name) => !prerequisites.has(name),
+  );
   expectCoverage({
-    current: withUses(`${action}@${"0".repeat(40)}`),
+    current: withUses(`${action}@${otherSha}`),
     base: baseSteps,
     removed: [],
   });
-  expect(() =>
-    expectCoverage({
-      current: withUses(`${action}-other@${"0".repeat(40)}`),
-      base: baseSteps,
-      removed: [],
-    }),
-  ).toThrow("toEqual");
+  for (const changed of [
+    `${action}-other@${otherSha}`,
+    `${action}@main`,
+    `${action}@v1`,
+  ]) {
+    expect(
+      () =>
+        expectCoverage({
+          current: withUses(changed),
+          base: baseSteps,
+          removed: [],
+        }),
+      changed,
+    ).toThrow("toEqual");
+  }
+});
+
+test("each leg's setup accepts a pinned action bump but not a mutable ref", () => {
+  const leg = partitions.at(0);
+  if (!leg) {
+    panic("CI checks have no legs");
+  }
+  const { action, withUses } = pinnedAction(leg.steps, (name) =>
+    prerequisites.has(name),
+  );
+  expect(setupSteps(withUses(`${action}@${otherSha}`))).toEqual(
+    setupSteps(leg.steps),
+  );
+  expect(setupSteps(withUses(`${action}@main`))).not.toEqual(
+    setupSteps(leg.steps),
+  );
 });
 
 test("CI coverage rejects duplicate and modified checks", () => {
