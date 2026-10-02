@@ -74,18 +74,22 @@ const CZ_EXPLANATORY_REPORT_PROFILE = {
     { open: "„", close: "“" },
     { open: '"', close: '"' },
   ],
-  ordinals: {
-    první: 1,
-    druhé: 2,
-    třetí: 3,
-    čtvrté: 4,
-    páté: 5,
-    šesté: 6,
-    sedmé: 7,
-    osmé: 8,
-    deváté: 9,
-    desáté: 10,
-  },
+  ordinals: Object.fromEntries(
+    [
+      ["první"],
+      ["druhé", "druhá"],
+      ["třetí"],
+      ["čtvrté", "čtvrtá"],
+      ["páté", "pátá"],
+      ["šesté", "šestá"],
+      ["sedmé", "sedmá"],
+      ["osmé", "osmá"],
+      ["deváté", "devátá"],
+      ["desáté", "desátá"],
+    ].flatMap((spellings, index) =>
+      spellings.map((spelling) => [spelling, index + 1] as const),
+    ),
+  ),
   levels: [
     {
       key: "section",

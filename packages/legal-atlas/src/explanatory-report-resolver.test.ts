@@ -501,6 +501,70 @@ describe("AST confirmed attachment outcomes", () => {
     expect(result?.status).toBe("unresolved_anchor");
   });
 
+  test("recorded anchors survive ordinal case changes in structural containers", () => {
+    const provision = ast.body.find(
+      (entry) =>
+        entry.type === "provision" &&
+        entry.kind === "section" &&
+        entry.anchorId !== "",
+    );
+    if (provision?.type !== "provision")
+      {return panic("Missing recorded section anchor");}
+    const ordinalCases = [
+      ["PRVNÍ", "první"],
+      ["DRUHÁ", "druhé"],
+      ["TŘETÍ", "třetí"],
+      ["ČTVRTÁ", "čtvrté"],
+      ["PÁTÁ", "páté"],
+      ["ŠESTÁ", "šesté"],
+      ["SEDMÁ", "sedmé"],
+      ["OSMÁ", "osmé"],
+      ["DEVÁTÁ", "deváté"],
+      ["DESÁTÁ", "desáté"],
+    ] as const;
+    const containers = [
+      { kind: "part", title: "ČÁST", heading: "části" },
+      { kind: "chapter", title: "HLAVA", heading: "hlavě" },
+    ] as const;
+    assertProperty(
+      "recorded anchors survive ordinal case changes in structural containers",
+      fc.property(
+        fc.constantFrom(...ordinalCases),
+        fc.constantFrom(...containers),
+        ([nominative, locative], { kind, title, heading }) => {
+          const container: ProvisionNode = {
+            type: "provision",
+            eId: "ordinal-container",
+            wId: "ordinal-container",
+            anchorId: "",
+            kind,
+            num: `${title} ${nominative}`.normalize("NFD"),
+            heading: null,
+            plainText: "",
+            children: [{ ...provision, children: [] }],
+          };
+          const result = resolveExplanatoryBlocks({
+            ...base,
+            works: [
+              {
+                workIdentifier: "358/2016 Sb.",
+                ast: { ...ast, body: [container] },
+              },
+            ],
+            blocks: [block(`K ${heading} ${locative}`.normalize("NFD"))],
+          }).at(0);
+          expect(result?.status).toBe("resolved");
+          if (result?.status !== "resolved") {return;}
+          expect(result.attachments).toHaveLength(1);
+          expect(result.attachments.at(0)?.provision.anchor).toBe(
+            provision.anchorId,
+          );
+          expect(result.attachments.at(0)?.level).toBe("section");
+        },
+      ),
+    );
+  });
+
   test("grouped targets retain levels and never drop an absent member", () => {
     const result = resolveExplanatoryBlocks({
       ...base,
