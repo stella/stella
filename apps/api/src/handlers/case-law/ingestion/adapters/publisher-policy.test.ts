@@ -61,7 +61,7 @@ describe("the shared publisher gate", () => {
     for (const args of commands) {
       expect(args.slice(1)).toEqual([
         "1",
-        "case-law-publisher-gate:{ris-bka}",
+        "case-law:publisher-gate:ris-bka",
         "5000",
       ]);
     }
@@ -87,9 +87,9 @@ describe("the shared publisher gate", () => {
     await reserveFor(ADAPTER_KEYS.AT_FINDOK)();
 
     expect(keys).toEqual([
-      "case-law-publisher-gate:{ris-bka}",
-      "case-law-publisher-gate:{ris-bka}",
-      "case-law-publisher-gate:{findok-bmf}",
+      "case-law:publisher-gate:ris-bka",
+      "case-law:publisher-gate:ris-bka",
+      "case-law:publisher-gate:findok-bmf",
     ]);
   });
 

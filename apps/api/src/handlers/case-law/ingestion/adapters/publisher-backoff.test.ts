@@ -2,9 +2,30 @@ import { describe, expect, test } from "bun:test";
 
 import {
   createPublisherGateSlot,
+  PUBLISHER_GATES,
   readPublisherCooldown,
 } from "./publisher-policy";
-import { createPublisherRequestSlot } from "./publisher-request-gate";
+import {
+  createPublisherRequestSlot,
+  publisherGateKeys,
+} from "./publisher-request-gate";
+
+// Redis Cluster uses CRC16/XMODEM over the first nonempty hash tag, or the full key.
+const redisKeySlot = (key: string) => {
+  const opening = key.indexOf("{");
+  const closing = opening === -1 ? -1 : key.indexOf("}", opening + 1);
+  const hashed = closing > opening + 1 ? key.slice(opening + 1, closing) : key;
+  let crc = 0;
+  for (const byte of new TextEncoder().encode(hashed)) {
+    // oxlint-disable-next-line no-bitwise -- CRC16/XMODEM combines each byte with the high register bits.
+    crc ^= byte << 8;
+    for (let bit = 0; bit < 8; bit += 1) {
+      // oxlint-disable-next-line no-bitwise -- CRC16/XMODEM shifts and reduces its 16-bit polynomial register.
+      crc = ((crc << 1) ^ ((crc & 0x80_00) === 0 ? 0 : 0x10_21)) & 0xff_ff;
+    }
+  }
+  return crc % 16_384;
+};
 
 const createGateClock = () => {
   let now = 0;
@@ -84,7 +105,23 @@ const CONFIG = {
 } as const;
 
 describe("a publisher cooldown shared across workers", () => {
-  test("production reservation keys share the same nonempty cluster hash tag", async () => {
+  test.each(Object.keys(PUBLISHER_GATES))(
+    "%s preserves its deployed gate key and colocates its cooldown",
+    (publisher) => {
+      const { key, cooldownKey } = publisherGateKeys(publisher);
+      expect(key).toBe(`case-law:publisher-gate:${publisher}`);
+      expect(cooldownKey).toBe(`{${key}}:cooldown`);
+      expect(redisKeySlot(cooldownKey)).toBe(redisKeySlot(key));
+    },
+  );
+
+  test("cluster slot calculation matches known Redis vectors", () => {
+    expect(redisKeySlot("123456789")).toBe(12_739);
+    expect(redisKeySlot("{user1000}.following")).toBe(3443);
+    expect(redisKeySlot("{user1000}.following")).toBe(redisKeySlot("user1000"));
+  });
+
+  test("production reservations use the unchanged gate and colocated cooldown", async () => {
     const commands: string[][] = [];
     const gate = createPublisherGateSlot("cellar-eu", {
       redis: () => ({
@@ -96,10 +133,10 @@ describe("a publisher cooldown shared across workers", () => {
       sleep: async () => {},
     });
     await gate();
-    const keys = commands.at(0)?.slice(2, 4);
-    expect(keys).toHaveLength(2);
-    const tags = keys?.map((key) => /\{([^{}]+)\}/u.exec(key)?.at(1));
-    expect(tags).toEqual(["cellar-eu", "cellar-eu"]);
+    expect(commands.at(0)?.slice(2, 4)).toEqual([
+      "case-law:publisher-gate:cellar-eu",
+      "{case-law:publisher-gate:cellar-eu}:cooldown",
+    ]);
   });
 
   test("cooldown reads expose the shared deadline and become null at expiry", async () => {

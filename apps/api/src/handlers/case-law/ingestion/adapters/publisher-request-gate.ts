@@ -4,7 +4,6 @@ import { TaggedError } from "better-result";
 import { Temporal } from "@stll/time";
 
 import type * as RedisClientModule from "@/api/lib/redis-client";
-import { coordinationKey } from "@/api/lib/redis-keys";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { isLocalDevOpen, isLocalTestRun } from "@/api/runtime-mode";
 
@@ -43,14 +42,13 @@ local untilAt = tonumber(redis.call("GET", KEYS[1])) or now
 return untilAt > now and untilAt or 0
 `;
 
-export const publisherGateKeys = (slot: string) => ({
-  key: coordinationKey({ scope: "case-law-publisher-gate", slot }),
-  cooldownKey: coordinationKey({
-    scope: "case-law-publisher-gate",
-    slot,
-    suffix: "cooldown",
-  }),
-});
+export const publisherGateKeys = (slot: string) => {
+  const key = `case-law:publisher-gate:${slot}`;
+  // Preserve deployed gate keys so rolling workers share pacing. Redis hashes
+  // an unbraced key in full; bracing that full key colocates the cooldown.
+  // coordinationKey prefixes its hash tag, so it cannot preserve this format.
+  return { key, cooldownKey: `{${key}}:cooldown` };
+};
 
 export type PublisherGateClient = {
   send: (command: string, args: string[]) => unknown;
