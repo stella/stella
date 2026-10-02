@@ -23,7 +23,11 @@ import {
 } from "@/api/lib/legal-search/cycle-deadline";
 import { logger } from "@/api/lib/observability/logger";
 import { withFreshIndicatorDatabase } from "@/api/tests/database-load-indicator-fixture";
-import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import {
+  copyIngestionTablePrivileges,
+  withGatedTestClients,
+  type GatedTestDb,
+} from "@/api/tests/gated-test-database";
 
 import { czNsAdapter } from "./adapters/cz-ns";
 import { runIngestionPipeline } from "./pipeline";
@@ -39,19 +43,36 @@ const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 // Generate the fixture from the actual owning table declarations, including
 // their constraints and policies; the load function comes from its migration.
-const installCorpusTables = async (db: GatedTestDb) => {
+const installCorpusTables = async (
+  db: GatedTestDb,
+  sourceDatabaseUrl: string,
+) => {
   await db.execute(sql`CREATE EXTENSION IF NOT EXISTS pg_trgm`);
-  const { pushSchema } = await import("drizzle-kit/api-postgres");
-  const { sqlStatements } = await pushSchema(
-    { caseLawSources, caseLawDecisions, caseLawIngestionEvents },
-    db,
-  );
+  const { generateDrizzleJson, generateMigration } =
+    await import("drizzle-kit/api-postgres");
+  const empty = await generateDrizzleJson({});
+  const corpus = await generateDrizzleJson({
+    caseLawSources,
+    caseLawDecisions,
+    caseLawIngestionEvents,
+  });
+  const sqlStatements = await generateMigration(empty, corpus);
   for (const statement of sqlStatements) {
+    // db-await-in-loop: canonical generated statements have ordered foreign-key dependencies.
     await db.execute(sql.raw(statement));
   }
-  await db.execute(
-    sql`GRANT SELECT, INSERT, UPDATE, DELETE ON case_law_sources, case_law_decisions, case_law_ingestion_events TO stella_ingestion`,
-  );
+  await withGatedTestClients(sourceDatabaseUrl, async ({ openClient }) => {
+    await copyIngestionTablePrivileges({
+      sourceDb: openClient().db,
+      targetDb: db,
+      targetSchema: "public",
+      tableNames: [
+        "case_law_sources",
+        "case_law_decisions",
+        "case_law_ingestion_events",
+      ],
+    });
+  });
 };
 
 const seedSource = async (db: GatedTestDb) => {
@@ -76,7 +97,7 @@ describe.skipIf(!enabled)(
 
     test("initial indicator admission aborts while the real schema lane remains exclusive", async () => {
       await withFreshIndicatorDatabase(databaseUrl, async ({ client, db }) => {
-        await installCorpusTables(db);
+        await installCorpusTables(db, databaseUrl);
         const scopedDb = createIngestionDb(markRlsDatabase(db));
         const holder = await client.reserve();
         const maintenance = createSourceStoredTotalMaintenanceRuntime(
@@ -115,7 +136,7 @@ describe.skipIf(!enabled)(
 
     test("the restricted SQL boundary rechecks load after the durable claim and connection setup", async () => {
       await withFreshIndicatorDatabase(databaseUrl, async ({ db }) => {
-        await installCorpusTables(db);
+        await installCorpusTables(db, databaseUrl);
         const sourceId = await seedSource(db);
         const scopedDb = createIngestionDb(markRlsDatabase(db));
         const deadline = startCycleDeadline({ budgetMs: 135_000 });
@@ -168,7 +189,7 @@ describe.skipIf(!enabled)(
         await withFreshIndicatorDatabase(
           databaseUrl,
           async ({ client, db, migration, unrelatedRole }) => {
-            await installCorpusTables(db);
+            await installCorpusTables(db, databaseUrl);
             const sourceId = await seedSource(db);
             const scopedDb = createIngestionDb(markRlsDatabase(db));
             const maintenance = createSourceStoredTotalMaintenanceRuntime(
@@ -309,7 +330,7 @@ describe.skipIf(!enabled)(
         await withFreshIndicatorDatabase(
           databaseUrl,
           async ({ client, db }) => {
-            await installCorpusTables(db);
+            await installCorpusTables(db, databaseUrl);
             const sourceId = await seedSource(db);
             const scopedDb = createIngestionDb(markRlsDatabase(db));
             const holder = await client.reserve();

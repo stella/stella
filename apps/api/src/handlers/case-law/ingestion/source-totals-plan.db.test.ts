@@ -84,8 +84,8 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
         name: "Other planner source",
       })),
     ]);
-    await db.execute(sql`INSERT INTO case_law_decisions (case_number, country, court, language, source_id)
-      SELECT id::text, 'CZE', 'Court', 'cs', CASE WHEN id <= 700 THEN ${first}::uuid ELSE ${second}::uuid END
+    await db.execute(sql`INSERT INTO case_law_decisions (id, case_number, country, court, language, source_id)
+      SELECT uuidv7(), id::text, 'CZE', 'Court', 'cs', CASE WHEN id <= 700 THEN ${first}::uuid ELSE ${second}::uuid END
       FROM generate_series(1, 1000) id`);
     await db.execute(sql`ANALYZE case_law_sources`);
     await db.execute(sql`ANALYZE case_law_decisions`);

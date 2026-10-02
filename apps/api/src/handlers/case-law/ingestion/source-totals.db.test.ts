@@ -38,6 +38,7 @@ import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
 import {
   openGatedTestDatabase,
+  copyIngestionTablePrivileges,
   type GatedTestDb,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
@@ -91,40 +92,12 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         `CREATE TABLE ${schema}.case_law_decisions (LIKE public.case_law_decisions INCLUDING ALL)`,
       ),
     );
-    await db.execute(
-      sql.raw(`GRANT USAGE ON SCHEMA ${schema} TO stella_ingestion`),
-    );
-    await db.execute(
-      sql.raw(
-        `GRANT SELECT ON ${schema}.case_law_decisions TO stella_ingestion`,
-      ),
-    );
-    // Copy actual production column grants, so a missing refresh-field grant fails this fixture.
-    const privileges =
-      await db.execute(sql`SELECT privilege_type, array_agg(column_name ORDER BY column_name) AS columns
-      FROM information_schema.column_privileges
-      WHERE table_schema = 'public' AND table_name = 'case_law_sources' AND grantee = 'stella_ingestion'
-      GROUP BY privilege_type`);
-    for (const grant of privileges) {
-      const privilege = grant["privilege_type"];
-      const columns = grant["columns"];
-      if (
-        (privilege !== "SELECT" &&
-          privilege !== "UPDATE" &&
-          privilege !== "INSERT") ||
-        !Array.isArray(columns) ||
-        !columns.every((column) => typeof column === "string")
-      ) {
-        continue;
-      }
-      // db-await-in-loop: copy the fixed set of production privileges to the isolated fixture.
-      await db.execute(
-        sql`GRANT ${sql.raw(privilege)} (${sql.join(
-          columns.map((column) => sql.identifier(column)),
-          sql`, `,
-        )}) ON ${sql.identifier(schema)}.case_law_sources TO stella_ingestion`,
-      );
-    }
+    await copyIngestionTablePrivileges({
+      sourceDb: db,
+      targetDb: db,
+      targetSchema: schema,
+      tableNames: ["case_law_sources", "case_law_decisions"],
+    });
     await db.execute(sql.raw(`SET search_path TO ${schema}, public`));
   });
 

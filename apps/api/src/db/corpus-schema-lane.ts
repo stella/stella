@@ -207,7 +207,14 @@ export const runUnderCorpusSchemaLane = async <
   const sleepMs = Math.min(CORPUS_SCHEMA_LANE_RETRY_MS, remainingMs);
   await sleep(sleepMs);
   return await runUnderCorpusSchemaLane(
-    { database, work, laneWaitMs, sleep, signal, clock },
+    {
+      database,
+      work,
+      laneWaitMs,
+      sleep,
+      clock,
+      ...(signal === undefined ? {} : { signal }),
+    },
     { startedAt, waitedMs: waitedMs + sleepMs },
   );
 };

@@ -1,4 +1,5 @@
 import { panic } from "better-result";
+import { SQL } from "bun";
 import { afterAll, beforeAll, expect, spyOn, test } from "bun:test";
 import { eq, isNotNull, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -312,8 +313,12 @@ test("the EMF hold gauge exposes the yielded alarm contract and clears after a g
 });
 
 test("a selection permission failure is observed and leaves the ingestion cycle's outcome recoverable", async () => {
-  const denied = Object.assign(new Error("selection permission denied"), {
-    code: "42501",
+  const denied = new SQL.PostgresError("selection permission denied", {
+    code: "ERR_POSTGRES_SERVER_ERROR",
+    errno: "42501",
+    detail: "",
+    hint: "",
+    severity: "ERROR",
   });
   const errorLog = spyOn(logger, "error").mockImplementation(() => {});
   let admissions = 0;
@@ -420,8 +425,12 @@ test("the maintenance runtime shares its database with heartbeat and observes da
     expect(JSON.parse(String(stdout.mock.calls.at(-1)?.at(0)))).toMatchObject({
       Backfill: "caseLaw.sourceStoredTotal",
     });
-    const failure = Object.assign(new Error("database connection closed"), {
+    const failure = new SQL.PostgresError("database connection closed", {
+      code: "ERR_POSTGRES_SERVER_ERROR",
       errno: "57P01",
+      detail: "",
+      hint: "",
+      severity: "ERROR",
     });
     runtime.observeHeartbeatFailure(failure);
     expect(warn.mock.calls.at(-1)).toMatchObject([

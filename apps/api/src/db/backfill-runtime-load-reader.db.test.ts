@@ -338,8 +338,8 @@ describe.skipIf(!enabled)(
         const warn = (...record: unknown[]) => {
           warnings.push(record);
         };
-        const outcome = await Result.tryPromise(
-          async () =>
+        const outcome = await Result.tryPromise({
+          try: async () =>
             await db.transaction(async (tx) => {
               if (failure === "function missing") {
                 await tx.execute(
@@ -390,7 +390,8 @@ describe.skipIf(!enabled)(
               // Restore the shared function atomically, including on failed assertions.
               tx.rollback();
             }),
-        );
+          catch: (error) => error,
+        });
         if (Result.isOk(outcome)) {
           panic("Expected explicit fixture rollback");
         }

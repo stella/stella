@@ -129,11 +129,14 @@ test("a batch that outlives its budget fails instead of entering the lane late",
 test("a budget that is not a multiple of the retry pause is honoured exactly", async () => {
   const granted = scriptedDatabase([false, false, true]);
   const sleeps: number[] = [];
+  let grantedNow = 0;
   const value = await runUnderCorpusSchemaLane({
     database: granted.database,
     work: async () => "done",
     laneWaitMs: 300,
+    clock: () => grantedNow,
     sleep: async (ms) => {
+      grantedNow += ms;
       sleeps.push(ms);
     },
   });
@@ -143,11 +146,15 @@ test("a budget that is not a multiple of the retry pause is honoured exactly", a
   expect(sleeps).toEqual([CORPUS_SCHEMA_LANE_RETRY_MS, 50]);
 
   const refused = scriptedDatabase([false, false, false]);
+  let refusedNow = 0;
   const rejection: unknown = await runUnderCorpusSchemaLane({
     database: refused.database,
     work: async () => "done",
     laneWaitMs: 300,
-    sleep: async () => {},
+    clock: () => refusedNow,
+    sleep: async (ms) => {
+      refusedNow += ms;
+    },
   }).then(
     () => null,
     (error: unknown) => error,
