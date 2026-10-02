@@ -2611,11 +2611,12 @@ test.each(["default-deny", "granted", "colleague"] as const)(
         });
         if (kind === "granted") {
           expect(result.isError).not.toBe(true);
-          if (validate_only)
-            {expect(parseToolPayload(result)).toEqual({
+          if (validate_only) {
+            expect(parseToolPayload(result)).toEqual({
               valid: true,
               capability: "time-entries.csv.export",
-            });}
+            });
+          }
         } else {
           expect(errorEnvelope(result)).toMatchObject({
             code: "not_found",
@@ -2651,14 +2652,15 @@ test.each(["default-deny", "granted", "colleague"] as const)(
       expect(select).toHaveBeenCalledTimes(kind === "granted" ? 2 : 1);
       expect(insert).not.toHaveBeenCalled();
     } finally {
-      if (previous === undefined)
-        {Reflect.deleteProperty(exportTimeEntriesCsv.config, "featureAccess");}
-      else
-        {Object.defineProperty(
+      if (previous === undefined) {
+        Reflect.deleteProperty(exportTimeEntriesCsv.config, "featureAccess");
+      } else {
+        Object.defineProperty(
           exportTimeEntriesCsv.config,
           "featureAccess",
           previous,
-        );}
+        );
+      }
     }
   },
 );

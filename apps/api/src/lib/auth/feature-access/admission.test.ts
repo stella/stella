@@ -323,8 +323,9 @@ test.each([
     expect(resourceOperations).toBe(granted ? 1 : 0);
     expect(database.getCallCount()).toBe(granted ? 1 : 0);
     expect(checkedQueries).toEqual(granted ? [] : [{ mode: "feature" }]);
-    if (!granted)
-      {expect(await selected.json()).toEqual({ message: "Not found" });}
+    if (!granted) {
+      expect(await selected.json()).toEqual({ message: "Not found" });
+    }
     const ordinary = await app.handle(
       new Request("http://localhost/query-fixture?mode=ordinary"),
     );
