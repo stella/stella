@@ -490,7 +490,7 @@ describe("detect-e2e-changes", () => {
     for (const stepName of [
       "Release changelog guard",
       "Release CLI coupling guard",
-      "Release marketing freshness warning",
+      "Release marketing staleness warning",
     ]) {
       expectPullRequestAndMergeGroup(workflowStep(ciChecks, stepName));
     }
@@ -528,7 +528,7 @@ describe("detect-e2e-changes", () => {
 
     const driftGuard = workflowStep(
       workflowJob("ci-checks-rest"),
-      "Model catalog snapshot drift guard",
+      "Model catalog snapshot drift check",
     );
     expect(driftGuard).toContain(
       "needs.ci-plan.outputs.model_catalog_drift_required == 'true'",

@@ -19,7 +19,7 @@ import {
   type InstallFreeInvocation,
 } from "./install-free-ci";
 
-// CI runs this file in "Test CI workflow invariants" without the dependency
+// CI runs this file in "Test install-free CI commands" without the dependency
 // install, which the check below enforces for this file too.
 
 const REPO_ROOT = path.resolve(import.meta.dir, "..");
@@ -83,6 +83,10 @@ const invocationProblems = (
     }
     case "unclassified": {
       return [`${at}: unclassified (${classification.reason})`];
+    }
+    default: {
+      classification satisfies never;
+      throw new Error(`Unhandled classification: ${String(type)}`);
     }
   }
 };
