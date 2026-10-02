@@ -12,7 +12,10 @@ import {
   resourceRef,
   RESOURCE_TYPE,
 } from "@stll/api-contract";
-import { ACTION_ADMISSION_CODES } from "@stll/api-contract/action-admission";
+import {
+  ACTION_ADMISSION_REFUSALS,
+  isActionAdmissionCode,
+} from "@stll/api-contract/action-admission";
 import type { SkillMetadata } from "@stll/skills";
 
 import type { SafeDb, SafeDbError, ScopedDb } from "@/api/db/safe-db";
@@ -261,6 +264,10 @@ import { resolveMemorySourceWorkspaceIds } from "@/api/lib/memory/memory-provena
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { sanitizeForPrompt, untrustedText } from "@/api/lib/prompt-safety";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/rate-limit/action-admission";
 import { brandPersistedChatMessageId } from "@/api/lib/safe-id-boundaries";
 import { extractFileTextResult } from "@/api/lib/search/extract-content";
 import { upsertChatThreadSearchDocument } from "@/api/lib/search/index-chat";
@@ -677,18 +684,31 @@ export class ChatSendLifecycle {
     return this.admission?.signal;
   }
 
-  checkAdmission(): Result<void, HandlerError> {
+  async checkAdmission(): Promise<Result<void, HandlerError>> {
     if (!this.admission?.signal.aborted) {
       return Result.ok(undefined);
     }
-    return Result.err(
-      new HandlerError({
-        status: 503,
-        code: "service_unavailable",
-        message: "Action admission is unavailable",
-        cause: this.admission.signal.reason,
-      }),
-    );
+    const error: unknown = this.admission.signal.reason;
+    const refusal = new HandlerError({
+      ...(ActionAdmissionError.is(error)
+        ? actionAdmissionRefusal(error)
+        : {
+            status: 503 as const,
+            code: "service_unavailable",
+            message: "Action admission is unavailable",
+          }),
+      cause: error,
+    });
+    if (
+      this.claimedTurn.status === "preflight" &&
+      !(await this.restorePreExecutionCheckpoint())
+    ) {
+      const settled = await this.refuseCurrentTurn(refusal);
+      if (Result.isError(settled)) {
+        return settled;
+      }
+    }
+    return Result.err(refusal);
   }
 
   private async restorePreExecutionCheckpoint(): Promise<boolean> {
@@ -802,14 +822,24 @@ export class ChatSendLifecycle {
     const settled = await persistTerminalAssistantTurn({
       execution: this.claimedTurn.execution,
       failure: { code: "boundary-refusal", retryable: false },
-      outcome: {
-        type: "failed",
-        error:
-          error.code === ACTION_ADMISSION_CODES.periodExhausted ||
-          error.status === 429
-            ? "quota_exhausted"
-            : "provider_unavailable",
-      },
+      outcome: isActionAdmissionCode(error.code)
+        ? {
+            type: "failed",
+            error: "unknown",
+            refusal: {
+              ...ACTION_ADMISSION_REFUSALS[error.code],
+              code: error.code,
+              ...(error.hint === undefined ? {} : { hint: error.hint }),
+              ...(error.contactUrl === undefined
+                ? {}
+                : { contactUrl: error.contactUrl }),
+            },
+          }
+        : {
+            type: "failed",
+            error:
+              error.status === 429 ? "quota_exhausted" : "provider_unavailable",
+          },
       owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
       recordAuditEvent: this.options.recordAuditEvent,
       safeDb: this.options.safeDb,
@@ -2345,7 +2375,7 @@ export const createSendMessage = (
                 : undefined,
           }),
         );
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
 
         const acceptedTurnResult = await acceptIncomingTurn({
           managedAIResidency,
@@ -2778,7 +2808,7 @@ export const createSendMessage = (
           sendMode: body.sendMode,
         });
 
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
         yield* Result.await(
           prepareDispatch({
             phase: "dispatch",
@@ -2790,7 +2820,7 @@ export const createSendMessage = (
           }),
         );
 
-        yield* lifecycle.checkAdmission();
+        yield* Result.await(lifecycle.checkAdmission());
 
         const isServerTool = (toolName: string) =>
           streamingTools[toolName]?.execute !== undefined;
