@@ -19,6 +19,12 @@ export const canManageTimeEntry = ({
 }: CanManageTimeEntryOptions): boolean =>
   entryUserId === currentUserId || canApproveTimeEntries(memberRole);
 
+/**
+ * Approving changes another timekeeper's entry, so the assigned approver path
+ * spends `timeEntry:update` even though the approval queue itself is open to
+ * readers. Every role that can read time entries holds it; a credential
+ * narrowed below it approves nothing, assigned or not.
+ */
 export const canApproveAssignedTimeEntry = ({
   memberRole,
   currentUserId,
@@ -27,4 +33,7 @@ export const canApproveAssignedTimeEntry = ({
   memberRole: AuthorizedMemberRole;
   currentUserId: SafeId<"user">;
   approverUserId: string | null;
-}) => canApproveTimeEntries(memberRole) || approverUserId === currentUserId;
+}) =>
+  canApproveTimeEntries(memberRole) ||
+  (approverUserId === currentUserId &&
+    hasMemberPermission(memberRole, { timeEntry: ["update"] }));

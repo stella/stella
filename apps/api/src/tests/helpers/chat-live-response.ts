@@ -62,6 +62,7 @@ export const relayLiveResponse = (
         if (next instanceof Error) {
           // A closed connection cancels the server's response, as a closed
           // socket does.
+          // swallow-ok: cancellation follows an explicit disconnect; the original disconnect error reaches the page below
           await reader.cancel(next).catch(() => undefined);
           finish("disconnected", next);
           return;
@@ -79,11 +80,13 @@ export const relayLiveResponse = (
       }
     } catch (error) {
       // The server's stream failed: the page's read fails the same way.
+      // swallow-ok: cancellation cannot replace the original stream failure, forwarded to the page below
       await reader.cancel(error).catch(() => undefined);
       finish("disconnected", error);
     } finally {
       // Every exit cancels: after the end of the response, or once cancelled
       // already, this is a no-op.
+      // swallow-ok: finally cancels an ended or already-cancelled reader before releasing its lock
       await reader.cancel().catch(() => undefined);
       reader.releaseLock();
     }

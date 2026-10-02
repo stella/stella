@@ -569,6 +569,7 @@ export const mintInternalSessionCookieHeader = async ({
   await rootDb.insert(session).values({
     id: `agent-idjag-${token}`,
     token,
+    refreshMode: "fixed",
     userId,
     activeOrganizationId: organizationId,
     expiresAt: new Date(now.getTime() + INTERNAL_SESSION_TTL_MS),

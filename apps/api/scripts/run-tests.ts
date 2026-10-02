@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { readdirSync, readFileSync, rmSync } from "node:fs";
 import { availableParallelism, tmpdir, totalmem } from "node:os";
 import path from "node:path";
@@ -13,7 +14,11 @@ import {
   TEST_ROOTS,
   type ComposedTestBatches,
 } from "./api-test-plan";
-import { maxRssBytesToMb } from "./resource-usage";
+import {
+  BATCH_MEMORY,
+  batchMemoryVerdict,
+  maxRssBytesToMb,
+} from "./resource-usage";
 import { TEST_BATCH_KIND, type TestBatchKind } from "./test-batch-plan";
 import {
   acquireCurrentSnapshot,
@@ -443,15 +448,26 @@ const runTests = async (
       `${executionMode} batch (${testFiles.length} files) peak RSS: ` +
         `${peakMb} MB (budget ${maxPeakRssMb} MB)`,
     );
-    if (exitCode === 0 && peakMb > maxPeakRssMb) {
-      log.err(
-        `Test batch exceeded the ${maxPeakRssMb} MB peak-RSS ` +
-          "budget. Find what grew (new fixtures held across files, " +
-          "unclosed pools/servers, oversized in-memory corpora) or split " +
-          "the offending files; raising the budget requires justification " +
-          "in the PR description.",
-      );
-      return 1;
+    if (exitCode === 0) {
+      const verdict = batchMemoryVerdict({
+        label,
+        peakMb,
+        budgetMb: maxPeakRssMb,
+        testFiles,
+      });
+      switch (verdict.type) {
+        case BATCH_MEMORY.within:
+          break;
+        case BATCH_MEMORY.nearCap:
+          log.out(verdict.annotation);
+          break;
+        case BATCH_MEMORY.over:
+          log.err(verdict.message);
+          return 1;
+        default:
+          verdict satisfies never;
+          panic("Unhandled batch memory verdict");
+      }
     }
   }
 

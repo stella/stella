@@ -2,6 +2,7 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import calendarTasks from "./list";
@@ -32,7 +33,7 @@ const createContext = ({
     workspaceId,
     user: { id: userId },
     session: { activeOrganizationId: organizationId },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     body,
     safeDb,
     request: new Request("https://example.test/v1/tasks/calendar"),

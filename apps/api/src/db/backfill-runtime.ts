@@ -29,6 +29,7 @@ import { executedRows } from "../lib/db/executed-rows";
 import { isPgError, PG_ERROR } from "../lib/pg-error";
 import type { IngestionTransactionRunner } from "../lib/replay-safe-ingestion";
 import { isRecord } from "../lib/type-guards";
+import type { BackfillCheckpoint } from "./adaptive-backfill";
 import { runAdaptiveBackfillBatch } from "./adaptive-backfill";
 import { createBoundedIndicatorQuery } from "./indicator-query";
 import type { IndicatorQuery } from "./indicator-query";
@@ -63,14 +64,17 @@ type DatabaseRuntimeOptions<BatchTransaction> = RuntimeOptions & {
   close: () => Promise<void>;
 };
 
-const decodeCheckpoint = (row: unknown) => {
+export const decodeCheckpoint = (row: unknown) => {
   if (!isRecord(row) || !isRecord(row["batch"])) {
     return panic("Invalid backfill checkpoint");
   }
   const b = row["batch"];
   const cursor = row["cursor"];
+  const holdCause = b["holdCause"];
+  if (cursor !== null && typeof cursor !== "string") {
+    return panic("Invalid backfill checkpoint cursor");
+  }
   if (
-    !(cursor === null || typeof cursor === "string") ||
     typeof b["size"] !== "number" ||
     typeof b["sleepMs"] !== "number" ||
     typeof b["stableBatches"] !== "number" ||
@@ -84,6 +88,10 @@ const decodeCheckpoint = (row: unknown) => {
   ) {
     return panic("Invalid backfill batch state");
   }
+  // Older checkpoints recorded no cause; unknown causes use that same policy.
+  const legacyCause = b["heldSince"] === null ? null : "other";
+  const decodedCause =
+    holdCause === "load" || holdCause === "other" ? holdCause : legacyCause;
   return {
     cursor,
     batch: {
@@ -93,9 +101,10 @@ const decodeCheckpoint = (row: unknown) => {
       holdCount: b["holdCount"],
       smoothedDurationMs: b["smoothedDurationMs"],
       heldSince: b["heldSince"],
+      holdCause: decodedCause,
       holdUntil: b["holdUntil"],
     },
-  };
+  } satisfies BackfillCheckpoint<string | null>;
 };
 
 const createVerdictReader = ({
@@ -196,6 +205,54 @@ const createRuntime = <BatchTransaction>({
       await indicatorQueries.settle();
     }
   };
+  const readCheckpoint = async (tx: BatchTransaction) => {
+    const q = transactionQuery(tx);
+    await setSharedQueryTimeouts(q, {
+      statementTimeoutMs: config.batchStatementTimeoutMs,
+      lockTimeoutMs: config.batchLockTimeoutMs,
+    });
+    await q(
+      "INSERT INTO database_backfill_states (name, batch) VALUES ($1, $2::text::jsonb) ON CONFLICT (name) DO NOTHING",
+      [
+        name,
+        JSON.stringify({ ...initialBatchState(config), size: initialSize }),
+      ],
+    );
+    const checkpoint = decodeCheckpoint(
+      (
+        await q(
+          "SELECT cursor, batch FROM database_backfill_states WHERE name = $1 FOR UPDATE",
+          [name],
+        )
+      ).at(0),
+    );
+    const size = Math.min(
+      config.maxSize,
+      Math.max(config.minSize, checkpoint.batch.size),
+    );
+    const sleepMs = Math.min(
+      config.maxSleepMs,
+      Math.max(config.minSleepMs, checkpoint.batch.sleepMs),
+    );
+    if (
+      size !== checkpoint.batch.size ||
+      sleepMs !== checkpoint.batch.sleepMs
+    ) {
+      log({
+        action: "checkpoint_clamped",
+        previous: {
+          size: checkpoint.batch.size,
+          sleepMs: checkpoint.batch.sleepMs,
+        },
+        size,
+        sleepMs,
+        config,
+      });
+      checkpoint.batch.size = size;
+      checkpoint.batch.sleepMs = sleepMs;
+    }
+    return checkpoint;
+  };
   const step = async <Value>(work: BatchWork<BatchTransaction, Value>) => {
     const completion: { result?: { value: Value } } = {};
     const result = await runAdaptiveBackfillBatch({
@@ -205,54 +262,7 @@ const createRuntime = <BatchTransaction>({
       log,
       readVerdict: readSettledVerdict,
       slot,
-      readCheckpoint: async (tx) => {
-        const q = transactionQuery(tx);
-        await setSharedQueryTimeouts(q, {
-          statementTimeoutMs: config.batchStatementTimeoutMs,
-          lockTimeoutMs: config.batchLockTimeoutMs,
-        });
-        await q(
-          "INSERT INTO database_backfill_states (name, batch) VALUES ($1, $2::text::jsonb) ON CONFLICT (name) DO NOTHING",
-          [
-            name,
-            JSON.stringify({ ...initialBatchState(config), size: initialSize }),
-          ],
-        );
-        const checkpoint = decodeCheckpoint(
-          (
-            await q(
-              "SELECT cursor, batch FROM database_backfill_states WHERE name = $1 FOR UPDATE",
-              [name],
-            )
-          ).at(0),
-        );
-        const size = Math.min(
-          config.maxSize,
-          Math.max(config.minSize, checkpoint.batch.size),
-        );
-        const sleepMs = Math.min(
-          config.maxSleepMs,
-          Math.max(config.minSleepMs, checkpoint.batch.sleepMs),
-        );
-        if (
-          size !== checkpoint.batch.size ||
-          sleepMs !== checkpoint.batch.sleepMs
-        ) {
-          log({
-            action: "checkpoint_clamped",
-            previous: {
-              size: checkpoint.batch.size,
-              sleepMs: checkpoint.batch.sleepMs,
-            },
-            size,
-            sleepMs,
-            config,
-          });
-          checkpoint.batch.size = size;
-          checkpoint.batch.sleepMs = sleepMs;
-        }
-        return checkpoint;
-      },
+      readCheckpoint,
       persistCheckpoint: async (tx, checkpoint) => {
         await transactionQuery(tx)(
           "UPDATE database_backfill_states SET cursor = $2, batch = $3::text::jsonb, updated_at = now() WHERE name = $1",

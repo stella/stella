@@ -34,6 +34,7 @@ import updateCorrespondence from "@/api/handlers/workspaces/correspondence/updat
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
 import { eraseCorrespondenceActorDisplays } from "@/api/lib/email/correspondence/offboarding";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -135,7 +136,7 @@ const parsedMessage = (provenance: CorrespondenceProvenance) =>
 const commonContext = () => ({
   safeDb: safeDbFor(ids.userA1, ids.wsA1),
   workspaceId: ids.wsA1,
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   request: new Request("https://api.example.test/v1/correspondence"),
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
@@ -241,7 +242,7 @@ describe("matter correspondence", () => {
     const common = {
       safeDb,
       workspaceId: ids.wsA1,
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       request: new Request("https://api.example.test/v1/correspondence"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
@@ -303,7 +304,7 @@ describe("matter correspondence", () => {
 
     const admin = {
       safeDb: safeDbFor(ids.userAdmin, ids.wsA1),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       request: new Request("https://api.example.test/v1/correspondence"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
@@ -430,7 +431,7 @@ describe("matter correspondence", () => {
       const common = {
         safeDb: safeDbFor(ids.userA1, ids.wsA1),
         workspaceId: ids.wsA1,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         request: new Request("https://api.example.test/v1/correspondence"),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },

@@ -160,9 +160,14 @@ jobs:
           WORKFLOW_SHA: ${{ github.workflow_sha }}
         run: |
           test "$(git rev-parse HEAD)" = "$WORKFLOW_SHA"
-          mkdir -p "$RUNNER_TEMP/main-validator/scripts"
-          cp package.json "$RUNNER_TEMP/main-validator/package.json"
+          mkdir -p "$RUNNER_TEMP/main-validator/scripts" "$RUNNER_TEMP/main-validator/apps/web/scripts"
+          cp package.json "$RUNNER_TEMP/main-validator/bun-version.json"
           cp scripts/network-baseline-scope.ts "$RUNNER_TEMP/main-validator/scripts/network-baseline-scope.ts"
+          cp apps/web/scripts/network-baseline-route-tree.ts "$RUNNER_TEMP/main-validator/apps/web/scripts/network-baseline-route-tree.ts"
+          cp apps/web/route-tree.config.ts "$RUNNER_TEMP/main-validator/apps/web/route-tree.config.ts"
+          # Main owns the dependency pin. No PR manifest, lockfile, configuration,
+          # lifecycle script, or cache participates in this isolated installation.
+          jq '{private: true, type: "module", dependencies: {"@tanstack/router-generator": .devDependencies["@tanstack/router-generator"]}}' apps/web/package.json > "$RUNNER_TEMP/main-validator/package.json"
 
       - name: Checkout the recorded pull request head
         if: steps.artifact.outputs.found == 'true' && steps.pr.outputs.push-allowed == 'true'
@@ -176,8 +181,15 @@ jobs:
         if: steps.artifact.outputs.found == 'true'
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
-          bun-version-file: ${{ runner.temp }}/main-validator/package.json
+          bun-version-file: ${{ runner.temp }}/main-validator/bun-version.json
           no-cache: true
+
+      - name: Install trusted route generator
+        if: steps.artifact.outputs.found == 'true' && steps.pr.outputs.push-allowed == 'true'
+        working-directory: ${{ runner.temp }}/main-validator
+        run: bun install --ignore-scripts --no-cache --no-save
+        env:
+          NPM_TOKEN: ""
 
       - name: Validate recorded JSON schema
         if: steps.artifact.outputs.found == 'true'
@@ -203,7 +215,8 @@ jobs:
           test "$(git rev-parse HEAD)" = "$HEAD_SHA"
           git fetch --no-tags origin "$BASE_SHA"
           git show "$BASE_SHA:apps/web/e2e/network-baseline.json" > "$RUNNER_TEMP/base-baseline.json"
-          git show "$BASE_SHA:apps/web/src/routeTree.gen.ts" > "$RUNNER_TEMP/base-route-tree.gen.ts"
+          (cd "$RUNNER_TEMP/main-validator" && bun --no-install --no-env-file apps/web/scripts/network-baseline-route-tree.ts "$GITHUB_WORKSPACE" "$BASE_SHA" "$RUNNER_TEMP/base-route-tree.gen.ts")
+          (cd "$RUNNER_TEMP/main-validator" && bun --no-install --no-env-file apps/web/scripts/network-baseline-route-tree.ts "$GITHUB_WORKSPACE" "$HEAD_SHA" "$RUNNER_TEMP/head-route-tree.gen.ts")
           git diff --name-only --no-renames "$BASE_SHA"..."$HEAD_SHA" -- apps/web/src/routes > "$RUNNER_TEMP/changed-routes"
           recorded="$RUNNER_TEMP/recorded/network-baseline.json"
           cp "$recorded" "$RUNNER_TEMP/scoped-baseline.json"
@@ -221,7 +234,7 @@ jobs:
             --recorded "$RUNNER_TEMP/scoped-baseline.json" \
             --changed "$RUNNER_TEMP/changed-routes" \
             --base-route-tree "$RUNNER_TEMP/base-route-tree.gen.ts" \
-            --route-tree "$GITHUB_WORKSPACE/apps/web/src/routeTree.gen.ts" "${args[@]}"
+            --route-tree "$RUNNER_TEMP/head-route-tree.gen.ts" "${args[@]}"
           cmp "$recorded" "$RUNNER_TEMP/scoped-baseline.json"
           cp "$recorded" "$GITHUB_WORKSPACE/apps/web/e2e/network-baseline.json"
 
