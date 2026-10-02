@@ -2211,3 +2211,165 @@ test.each([
   },
   TIMEOUT,
 );
+
+test.each(["contact", "firm"] as const)(
+  "%s opt-out rolls back every persisted effect on audit failure and audits duplicate requests once",
+  async (scope) => {
+    const organizationId = await isolatedOrganization();
+    const tenantDb = scopedFor(organizationId);
+    await activate("a");
+    const contact = await addContact(organizationId);
+    await commit(await prepare(contact), organizationId);
+    await db
+      .insert(organizationSettings)
+      .values({ organizationId, sanctionsMonitoringMode: "enabled" });
+    const snapshot = async () => ({
+      contacts: await db
+        .select()
+        .from(contacts)
+        .where(eq(contacts.organizationId, organizationId))
+        .orderBy(contacts.id),
+      settings: await db
+        .select()
+        .from(organizationSettings)
+        .where(eq(organizationSettings.organizationId, organizationId)),
+      coverage: await db
+        .select()
+        .from(sanctionsContactScreenings)
+        .where(eq(sanctionsContactScreenings.organizationId, organizationId))
+        .orderBy(
+          sanctionsContactScreenings.contactId,
+          sanctionsContactScreenings.sourceId,
+        ),
+      matches: await db
+        .select()
+        .from(sanctionsContactMatches)
+        .where(eq(sanctionsContactMatches.organizationId, organizationId))
+        .orderBy(
+          sanctionsContactMatches.contactId,
+          sanctionsContactMatches.sourceId,
+          sanctionsContactMatches.sourceEntryId,
+        ),
+      events: await db
+        .select()
+        .from(sanctionsScreeningEvents)
+        .where(eq(sanctionsScreeningEvents.organizationId, organizationId))
+        .orderBy(sanctionsScreeningEvents.id),
+      contactMarks: await db
+        .select()
+        .from(sanctionsContactMarks)
+        .where(eq(sanctionsContactMarks.organizationId, organizationId))
+        .orderBy(sanctionsContactMarks.contactId),
+      organizationMarks: await db
+        .select()
+        .from(sanctionsOrganizationMarks)
+        .where(eq(sanctionsOrganizationMarks.organizationId, organizationId)),
+    });
+    const before = await snapshot();
+    expect(before.coverage).toHaveLength(1);
+    expect(before.matches).toHaveLength(1);
+    const failAudit = async () => panic("synthetic opt-out audit failure");
+    await expectFailure(
+      async () =>
+        await tenantDb(async (tx) => {
+          const options = {
+            organizationId,
+            contactId: contact.id,
+            now,
+            recordAuditEvent: failAudit,
+          };
+          if (scope === "contact")
+            {return (await excludeSanctionsContact(tx, options)).unwrap();}
+          return await disableSanctionsMonitoring(tx, options);
+        }),
+      "synthetic opt-out audit failure",
+    );
+    expect(await snapshot()).toEqual(before);
+    const audits: AuditEvent[] = [];
+    const record = async (
+      _tx: Transaction,
+      event: AuditEvent | AuditEvent[],
+    ) => {
+      audits.push(...(Array.isArray(event) ? event : [event]));
+    };
+    const run = async () =>
+      await tenantDb(async (tx) => {
+        const options = {
+          organizationId,
+          contactId: contact.id,
+          now,
+          recordAuditEvent: record,
+        };
+        if (scope === "contact")
+          {return (await excludeSanctionsContact(tx, options)).unwrap();}
+        return await disableSanctionsMonitoring(tx, options);
+      });
+    expect(await run()).toEqual({
+      mode: scope === "contact" ? "excluded" : "disabled",
+    });
+    const first = await snapshot();
+    expect(first.coverage).toHaveLength(
+      scope === "contact" ? sanctionsSourceIds().length : 1,
+    );
+    expect(first.coverage.map(({ sourceId }) => sourceId).toSorted()).toEqual(
+      scope === "contact" ? sanctionsSourceIds().toSorted() : ["eu"],
+    );
+    expect(
+      first.coverage.every(
+        ({ status, editionId, reason, checkedAt }) =>
+          status === "excluded" &&
+          editionId === null &&
+          reason ===
+            (scope === "contact"
+              ? "contact-excluded"
+              : "monitoring-disabled") &&
+          checkedAt.getTime() === now.getTime(),
+      ),
+    ).toBe(true);
+    expect(first.events).toEqual(before.events);
+    expect(
+      first.matches.map(({ contactId, sourceId, sourceEntryId, state }) => ({
+        contactId,
+        sourceId,
+        sourceEntryId,
+        state,
+      })),
+    ).toEqual([
+      {
+        contactId: contact.id,
+        sourceId: "eu",
+        sourceEntryId: "one",
+        state: "lapsed",
+      },
+    ]);
+    const audit = {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType:
+        scope === "contact"
+          ? AUDIT_RESOURCE_TYPE.CONTACT
+          : AUDIT_RESOURCE_TYPE.ORGANIZATION_SETTINGS,
+      resourceId: scope === "contact" ? contact.id : organizationId,
+      workspaceId: null,
+      changes: {
+        sanctionsMonitoringMode: {
+          old: scope === "contact" ? "included" : "enabled",
+          new: scope === "contact" ? "excluded" : "disabled",
+        },
+      },
+    } satisfies AuditEvent;
+    expect(audits).toEqual([audit]);
+    await run();
+    const replay = await snapshot();
+    expect(replay.coverage).toEqual(first.coverage);
+    expect(replay.matches).toEqual(first.matches);
+    expect(replay.events).toEqual(first.events);
+    expect(replay.contactMarks).toEqual(first.contactMarks);
+    expect(replay.organizationMarks).toEqual(first.organizationMarks);
+    expect(
+      replay.contacts.map(({ updatedAt: _updatedAt, ...row }) => row),
+    ).toEqual(first.contacts.map(({ updatedAt: _updatedAt, ...row }) => row));
+    expect(replay.settings).toEqual(first.settings);
+    expect(audits).toEqual([audit]);
+  },
+  TIMEOUT,
+);
