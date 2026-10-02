@@ -88,7 +88,7 @@ export const ingestCorpusProjectionRequest = async (
   switch (commitMode) {
     case CORPUS_PROJECTION_APPEND_COMMIT_MODE.published:
     case CORPUS_PROJECTION_APPEND_COMMIT_MODE.queued:
-      return await client.ingestCommittedBatch(indexId, ndjson);
+      return await client.ingestCommittedBatch(indexId, ndjson, "unobserved");
     default:
       commitMode satisfies never;
       return panic(`Unhandled append commit mode: ${String(commitMode)}`);

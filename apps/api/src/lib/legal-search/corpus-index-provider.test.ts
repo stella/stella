@@ -12,11 +12,14 @@ import { InvalidLegalSearchCursorError } from "@/api/lib/legal-search/search-err
 // request input, and this assertion is only reachable at all because nothing
 // queried a database or an engine first.
 test("an undecodable cursor fails the read instead of restarting at page one", async () => {
-  const result = await corpusIndexProvider.search({
-    cursor: "not a cursor",
-    limit: 10,
-    query: "nájemné",
-  });
+  const result = await corpusIndexProvider.search(
+    {
+      cursor: "not a cursor",
+      limit: 10,
+      query: "nájemné",
+    },
+    "unobserved",
+  );
 
   expect(Result.isError(result)).toBe(true);
   if (Result.isOk(result)) {
