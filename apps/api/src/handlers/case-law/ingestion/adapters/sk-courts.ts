@@ -468,12 +468,17 @@ const decodeSkCourtRegistryRecord = (
 const skCourtsIdentityFields = (
   item: SkApiItem,
 ): SkCourtsIdentityFields | null => {
-  const caseNumber = decodeSkCourtText(item.spisovaZnacka);
-  const court = decodeSkCourtText(item.sud?.nazov);
-  if (!caseNumber || !court) {
+  const statedCaseNumber = toOptionalValue(item.spisovaZnacka);
+  const statedCourt = toOptionalValue(item.sud?.nazov);
+  if (!statedCaseNumber || !statedCourt) {
     return null;
   }
-  return { caseNumber, court };
+  // Stated markup-only labels must reach the required-label boundary with
+  // their evidence intact; an empty canonical form is not source absence.
+  return {
+    caseNumber: canonicalSkCourtText(statedCaseNumber) || statedCaseNumber,
+    court: canonicalSkCourtText(statedCourt) || statedCourt,
+  };
 };
 
 /**
@@ -495,9 +500,19 @@ export const skCourtsListingIdentity = (item: unknown): ListingIdentity => {
   if (sourceDocumentId !== undefined) {
     return { type: "document", sourceDocumentId };
   }
+  const caseNumber = toPlainText(fields.caseNumber);
+  const court = toPlainText(fields.court);
+  if (
+    caseNumber.isErr() ||
+    court.isErr() ||
+    !caseNumber.value ||
+    !court.value
+  ) {
+    return { type: "unidentifiable" };
+  }
   return {
     type: "case-number",
-    caseNumber: fields.caseNumber,
+    caseNumber: caseNumber.value,
     language: SK_COURTS_LANGUAGE,
   };
 };

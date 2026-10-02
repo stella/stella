@@ -1,8 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { encodeHTML } from "entities";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty, propertyConfig } from "@stll/property-testing";
 
 import {
   PlainTextError,
@@ -38,17 +39,20 @@ describe("plain text preserves publisher wording without presentation syntax", (
     expect(toPlainText(raw).unwrap() === expected).toBe(true);
   });
 
-  test.each(["{\\rtf1\\ansi court}", "court \\'e8", "\\par court"])(
-    "rejects undecodable syntax %s",
-    (raw) => {
-      const result = toPlainText(raw);
-      expect(result.isErr()).toBe(true);
-      if (result.isErr()) {
-        expect(result.error).toBeInstanceOf(PlainTextError);
-        expect(result.error.reason).toBe("rtf-syntax");
-      }
-    },
-  );
+  test.each([
+    "{\\rtf1\\ansi court}",
+    "court \\'e8",
+    "\\par court",
+    "&#92;par court",
+    "&amp;#92;rtf1 court",
+  ])("rejects undecodable syntax %s", (raw) => {
+    const result = toPlainText(raw);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toBeInstanceOf(PlainTextError);
+      expect(result.error.reason).toBe("rtf-syntax");
+    }
+  });
 
   test("malformed runtime input returns a typed decoding failure", () => {
     const result = toPlainText(asTestRaw<string>(null));
@@ -118,6 +122,52 @@ describe("plain text preserves publisher wording without presentation syntax", (
         expect(toPlainText(output).unwrap()).toBe(output);
       }),
       propertyConfig({ numRuns: 300 }),
+    );
+  });
+
+  test("nested publisher encodings preserve wording and normalize structural whitespace", () => {
+    assertProperty(
+      "nested publisher encodings preserve wording and normalize structural whitespace",
+      fc.property(
+        fc.array(
+          fc.constantFrom(
+            "Český",
+            "Najvyšší",
+            "Sąd",
+            "Kúria",
+            "東京",
+            "المحكمة",
+          ),
+          { minLength: 1, maxLength: 8 },
+        ),
+        fc.integer({ min: 1, max: 12 }),
+        fc.constantFrom("<span title='a > b'>", "<p>", "<b>"),
+        (words, depth, opening) => {
+          const expected = `${words.join(" ")}\n\nCourt`;
+          let raw = `${opening} \t${words.join(" \t ")}\r\n\r\n\r\n Court </span><!-- publisher note -->`;
+          for (let layer = 0; layer < depth; layer++) {
+            raw = encodeHTML(raw);
+          }
+          const output = toPlainText(raw).unwrap();
+          expect(output.toString()).toBe(expected);
+          expect(toPlainText(output).unwrap()).toBe(output);
+          expect(containsTagLikeMarkup(output)).toBe(false);
+          let nestedRaw: unknown = raw;
+          let nestedExpected: unknown = expected;
+          for (let layer = 0; layer < depth; layer++) {
+            nestedRaw = layer % 2 === 0 ? [nestedRaw] : { label: nestedRaw };
+            nestedExpected =
+              layer % 2 === 0 ? [nestedExpected] : { label: nestedExpected };
+          }
+          expect(
+            Bun.deepEquals(
+              toPlainTextMetadata(nestedRaw).unwrap(),
+              nestedExpected,
+            ),
+          ).toBe(true);
+        },
+      ),
+      { numRuns: 150 },
     );
   });
 

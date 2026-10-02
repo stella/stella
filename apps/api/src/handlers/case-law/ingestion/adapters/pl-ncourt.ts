@@ -1212,6 +1212,9 @@ export const assemblePlNcourtDecision = ({
     sourceRaw,
     sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
   });
+  if (decision.plainTextOutcome.type === "item_build_failed") {
+    return { type: "built", decision };
+  }
   return standaloneReasons
     ? {
         type: "supplement",
@@ -2047,6 +2050,7 @@ const buildRows = async (
           case "built":
             return outcome.decision;
           case "supplement":
+            return outcome.supplement.document;
           case "unkeyable":
             return undefined;
           default:

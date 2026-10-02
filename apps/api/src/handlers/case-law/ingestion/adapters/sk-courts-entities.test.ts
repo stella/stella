@@ -127,6 +127,52 @@ describe("Slovak court display text decodes publisher entities to stable text", 
     );
   });
 
+  test.each(["spisovaZnacka", "court"] as const)(
+    "a markup-only required %s keeps its publisher identity and raw in quarantine",
+    (field) => {
+      const parts = fixture();
+      const item = {
+        ...parts.item,
+        spisovaZnacka:
+          field === "spisovaZnacka" ? "<p></p>" : parts.item.spisovaZnacka,
+        sud: {
+          ...parts.item.sud,
+          nazov: field === "court" ? "&lt;br/&gt;" : parts.item.sud.nazov,
+        },
+      };
+      const decision = assembleSkCourtsDecision({ ...parts, item });
+      expect(decision).not.toBeNull();
+      if (decision === null) {
+        return panic("stated labels must reach quarantine");
+      }
+      expect(decision.plainTextOutcome.type).toBe("item_build_failed");
+      expect(decision.sourceDocumentId).toBe(item.guid);
+      expect(decision.isListingOnly).toBe(true);
+      expect(
+        decodeSourceRawEnvelope(decision.sourceRaw ?? "")?.["listing"],
+      ).toBe(JSON.stringify(item));
+      expect(skCourtsListingIdentity(item)).toEqual({
+        type: "document",
+        sourceDocumentId: item.guid,
+      });
+    },
+  );
+
+  test("a rejected docket without a publisher id is not a lookup for an unstored raw docket", () => {
+    const parts = fixture();
+    const item = {
+      ...parts.item,
+      guid: null,
+      spisovaZnacka: "\\rtf1 rejected",
+    };
+    const decision =
+      assembleSkCourtsDecision({ ...parts, item }) ??
+      panic("stated labels must reach quarantine");
+    expect(decision.plainTextOutcome.type).toBe("item_build_failed");
+    expect(decision.caseNumber.toString()).not.toBe(item.spisovaZnacka);
+    expect(skCourtsListingIdentity(item)).toEqual({ type: "unidentifiable" });
+  });
+
   test("stored raw replay preserves the same decoded fields", () => {
     const original =
       assembleSkCourtsDecision(fixture()) ?? panic("fixture is unkeyable");
