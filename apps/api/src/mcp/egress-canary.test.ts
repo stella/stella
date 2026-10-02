@@ -4,7 +4,6 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
@@ -374,8 +373,7 @@ const canaryTestsFor = <const TToolName extends AnonymizingMcpToolName>(
 };
 
 describe("MCP anonymization canary corpus", () => {
-  test("list_matters propagates contact read refusal instead of a partial overview", async () => {
-    const message = "Contact links must be reduced before reading this matter.";
+  test("list_matters returns visible contacts with an overflow flag", async () => {
     readWorkspaceHandlerMock.mockResolvedValue({
       id: "00000000-0000-4000-8000-0000000a0001",
       name: "Fixture matter",
@@ -383,26 +381,43 @@ describe("MCP anonymization canary corpus", () => {
       status: "active",
       client: null,
     });
+    readOverviewHandlerMock.mockResolvedValue({
+      entityCount: 0,
+      documentCount: 0,
+      taskCount: 0,
+      recentEntities: [],
+    });
+    readWorkspaceMembersHandlerMock.mockResolvedValue([]);
     readWorkspaceContactsHandlerMock.mockResolvedValue(
-      Result.err(
-        new HandlerError({
-          status: 409,
-          code: "matter_contact_capacity_exceeded",
-          message,
-          hint: "Remove a contact link and read the matter again.",
-          retryable: false,
-        }),
-      ),
+      Result.ok({
+        contacts: [
+          {
+            id: "wc_1",
+            role: "witness",
+            contact: {
+              id: "00000000-0000-4000-8000-0000000c0001",
+              type: "person",
+              displayName: "Visible party",
+            },
+          },
+        ],
+        overflow: true,
+      }),
     );
 
     const result = await STELLA_TOOL_HANDLERS.list_matters({
       args: { matter_id: "00000000-0000-4000-8000-0000000a0001" },
       context: buildContext(),
     });
-
     expect(result).toMatchObject({
-      status: "error",
-      error: { type: "structured", message },
+      egress: "structured",
+      payload: {
+        matter: { name: "Fixture matter" },
+        contacts: [
+          { workspaceContactId: "wc_1", displayName: "Visible party" },
+        ],
+        contactsOverflow: true,
+      },
     });
   });
 
@@ -594,17 +609,20 @@ describe("MCP anonymization canary corpus", () => {
         ],
       });
       readWorkspaceContactsHandlerMock.mockResolvedValue(
-        Result.ok([
-          {
-            id: "wc_1",
-            role: "client",
-            contact: {
-              id: "00000000-0000-4000-8000-0000000c0001",
-              type: "person",
-              displayName: contactDisplayNameSeed,
+        Result.ok({
+          contacts: [
+            {
+              id: "wc_1",
+              role: "client",
+              contact: {
+                id: "00000000-0000-4000-8000-0000000c0001",
+                type: "person",
+                displayName: contactDisplayNameSeed,
+              },
             },
-          },
-        ]),
+          ],
+          overflow: false,
+        }),
       );
       readWorkspaceMembersHandlerMock.mockResolvedValue([
         {

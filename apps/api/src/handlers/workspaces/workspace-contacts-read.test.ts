@@ -5,7 +5,6 @@ import { organization } from "@/api/db/auth-schema";
 import { contacts, workspaceContacts, workspaces } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
-import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -84,7 +83,9 @@ test("contact links are returned in stable creation and identity order", async (
       createdAt: new Date("2026-02-02"),
     },
   ]);
-  expect((await read()).unwrap().map(({ id }) => id)).toEqual([
+  const initialRead = (await read()).unwrap();
+  expect(initialRead.overflow).toBe(false);
+  expect(initialRead.contacts.map(({ id }) => id)).toEqual([
     olderId,
     middleId,
     newerId,
@@ -93,7 +94,7 @@ test("contact links are returned in stable creation and identity order", async (
     .update(workspaceContacts)
     .set({ createdAt: new Date("2026-02-01") })
     .where(eq(workspaceContacts.workspaceId, workspaceId));
-  expect((await read()).unwrap().map(({ id }) => id)).toEqual(
+  expect((await read()).unwrap().contacts.map(({ id }) => id)).toEqual(
     [olderId, middleId, newerId].toSorted(),
   );
   await db
@@ -101,7 +102,7 @@ test("contact links are returned in stable creation and identity order", async (
     .where(eq(workspaceContacts.workspaceId, workspaceId));
 });
 
-test("an overflowing matter returns an explicit refusal instead of a partial party list", async () => {
+test("an overflowing matter returns visible contacts and an overflow flag", async () => {
   // A stored overflow is simulated at the read boundary; the database capacity
   // test separately proves that ordinary writes cannot create one.
   const rows = Array.from(
@@ -122,16 +123,9 @@ test("an overflowing matter returns an explicit refusal instead of a partial par
       }),
   );
   const result = await readWorkspaceContactsHandler({ workspaceId, scopedDb });
-  expect(result.isErr()).toBe(true);
-  if (result.isOk()) {
-    throw new HandlerError({
-      status: 500,
-      message: "Expected overflow refusal",
-    });
-  }
-  expect(result.error).toMatchObject({
-    code: "matter_contact_capacity_exceeded",
-    retryable: false,
-    status: 409,
+  expect(result.isOk()).toBe(true);
+  expect(result.unwrap()).toEqual({
+    contacts: rows.slice(0, LIMITS.workspaceContactsCount),
+    overflow: true,
   });
 });

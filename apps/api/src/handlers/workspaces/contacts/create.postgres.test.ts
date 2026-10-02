@@ -15,6 +15,7 @@ import {
 import { createSafeDb, createScopedDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { isPgConstraintError } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -36,9 +37,80 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("matter contact capacity concurrency (postgres)", () => {
-    test.each(["witness", "expert_witness"] as const)(
-      "serializes the final contact place when %s arrives first",
-      async (firstRole) => {
+    test("capacity recount requires READ COMMITTED isolation", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const setup = openClient();
+        const writer = openClient();
+        const organizationId = mintAuthProviderId<"organization">();
+        const workspaceId = createSafeId<"workspace">();
+        const contactId = createSafeId<"contact">();
+        try {
+          await setup.db.insert(organization).values({
+            id: organizationId,
+            name: "Isolation fixture",
+            slug: organizationId,
+            createdAt: new Date(),
+          });
+          await setup.db.insert(workspaces).values({
+            id: workspaceId,
+            organizationId,
+            name: "Isolation fixture",
+            reference: "CONTACT-ISOLATION",
+          });
+          await setup.db.insert(contacts).values({
+            id: contactId,
+            organizationId,
+            type: "person",
+            displayName: "Isolation fixture",
+          });
+          const outcome = await Result.tryPromise(
+            async () =>
+              await writer.sql.begin(async (tx) => {
+                await tx`SET TRANSACTION ISOLATION LEVEL REPEATABLE READ`;
+                await tx`INSERT INTO workspace_contacts (id, organization_id, workspace_id, contact_id, role) VALUES (${createSafeId<"workspaceContact">()}, ${organizationId}, ${workspaceId}, ${contactId}, 'other')`;
+              }),
+          );
+          expect(outcome.isErr()).toBe(true);
+          if (outcome.isOk())
+            {panic("Capacity recount must refuse a fixed transaction snapshot");}
+          expect(
+            isPgConstraintError(
+              outcome.error,
+              "0A000",
+              "workspace_contacts_capacity_isolation",
+            ),
+          ).toBe(true);
+          expect(
+            await setup.db.$count(
+              workspaceContacts,
+              eq(workspaceContacts.workspaceId, workspaceId),
+            ),
+          ).toBe(0);
+        } finally {
+          await setup.db
+            .delete(organization)
+            .where(eq(organization.id, organizationId));
+        }
+      });
+    });
+    test.each([
+      { firstRole: "witness", firstWriter: "handler", secondWriter: "handler" },
+      {
+        firstRole: "expert_witness",
+        firstWriter: "handler",
+        secondWriter: "handler",
+      },
+      { firstRole: "witness", firstWriter: "raw", secondWriter: "raw" },
+      { firstRole: "expert_witness", firstWriter: "raw", secondWriter: "raw" },
+      { firstRole: "witness", firstWriter: "raw", secondWriter: "handler" },
+      {
+        firstRole: "expert_witness",
+        firstWriter: "handler",
+        secondWriter: "raw",
+      },
+    ] as const)(
+      "serializes the final contact place for $firstWriter then $secondWriter ($firstRole)",
+      async ({ firstRole, firstWriter, secondWriter }) => {
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const setup = openClient();
           const first = openClient();
@@ -61,8 +133,14 @@ if (!databaseUrl || !runPostgresTests) {
             firstRole === "witness" ? expertContactId : witnessContactId;
           const releaseFirst = Promise.withResolvers<undefined>();
           const firstCallbackDone = Promise.withResolvers<undefined>();
-          let firstAddition: ReturnType<typeof addContact> | undefined;
-          let secondAddition: ReturnType<typeof addContact> | undefined;
+          let firstAddition:
+            | ReturnType<typeof addContact>
+            | ReturnType<typeof insertRawContact>
+            | undefined;
+          let secondAddition:
+            | ReturnType<typeof addContact>
+            | ReturnType<typeof insertRawContact>
+            | undefined;
           const secondQueries: string[] = [];
           const attemptedContactInsert = () =>
             secondQueries.some(
@@ -154,7 +232,9 @@ if (!databaseUrl || !runPostgresTests) {
               panic("Contact capacity fixture sessions need backend pids");
             }
 
-            firstAddition = addContact({
+            firstAddition = (
+              firstWriter === "raw" ? insertRawContact : addContact
+            )({
               safeDb: heldSafeDb,
               organizationId,
               workspaceId,
@@ -177,7 +257,9 @@ if (!databaseUrl || !runPostgresTests) {
             }
 
             let secondSettled = false;
-            secondAddition = addContact({
+            secondAddition = (
+              secondWriter === "raw" ? insertRawContact : addContact
+            )({
               safeDb: secondSafeDb,
               organizationId,
               workspaceId,
@@ -192,7 +274,9 @@ if (!databaseUrl || !runPostgresTests) {
             const deadline = performance.now() + BLOCK_OBSERVATION_DEADLINE_MS;
             let blockedByFirst = false;
             while (performance.now() < deadline) {
-              if (secondSettled) {break;}
+              if (secondSettled) {
+                break;
+              }
               const row = (
                 await setup.sql<{ blocked: boolean }[]>`
                   SELECT ${firstSession.pid} = ANY(pg_blocking_pids(${secondSession.pid})) AS blocked
@@ -206,7 +290,7 @@ if (!databaseUrl || !runPostgresTests) {
             expect(blockedByFirst).toBe(true);
             // A database trigger would wait after an INSERT was issued. The
             // handler must serialize before attempting that write.
-            expect(attemptedContactInsert()).toBe(false);
+            expect(attemptedContactInsert()).toBe(secondWriter === "raw");
 
             releaseFirst.resolve(undefined);
             const [firstOutcome, secondOutcome] = await Promise.all([
@@ -218,12 +302,22 @@ if (!databaseUrl || !runPostgresTests) {
             if (secondOutcome.isOk()) {
               panic("Second contact addition must refuse a full matter");
             }
-            expect(secondOutcome.error).toMatchObject({
-              status: 400,
-              code: "matter_contact_capacity_reached",
-              retryable: false,
-            });
-            expect(attemptedContactInsert()).toBe(false);
+            if (secondWriter === "raw") {
+              expect(
+                isPgConstraintError(
+                  secondOutcome.error,
+                  "23514",
+                  "workspace_contacts_workspace_capacity",
+                ),
+              ).toBe(true);
+            } else {
+              expect(secondOutcome.error).toMatchObject({
+                status: 400,
+                code: "matter_contact_capacity_reached",
+                retryable: false,
+              });
+            }
+            expect(attemptedContactInsert()).toBe(secondWriter === "raw");
 
             const stored = await setup.db
               .select()
@@ -252,9 +346,9 @@ if (!databaseUrl || !runPostgresTests) {
                 readResult.error,
               );
             }
-            expect(readResult.value.map((row) => row.id).toSorted()).toEqual(
-              stored.map((row) => row.id).toSorted(),
-            );
+            expect(
+              readResult.value.contacts.map((row) => row.id).toSorted(),
+            ).toEqual(stored.map((row) => row.id).toSorted());
           } finally {
             releaseFirst.resolve(undefined);
             await Promise.all([firstAddition, secondAddition]);
@@ -285,3 +379,23 @@ const addContact = (options: AddContactOptions) =>
       },
     }),
   );
+
+const insertRawContact = ({
+  safeDb,
+  organizationId,
+  workspaceId,
+  body,
+}: AddContactOptions) =>
+  safeDb(async (tx) => {
+    const [created] = await tx
+      .insert(workspaceContacts)
+      .values({
+        organizationId,
+        workspaceId,
+        contactId: body.contactId,
+        role: body.role,
+      })
+      .returning();
+    if (!created) {panic("Raw contact fixture insert did not return a link");}
+    return created;
+  });

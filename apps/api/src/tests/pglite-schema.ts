@@ -578,7 +578,7 @@ export const installPgliteWorkspaceContactCapacity = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261003123500_workspace_contact_capacity",
+      "20261003123700_workspace_contact_capacity",
       "migration.sql",
     ),
   ).filter((statement) => !executableSql(statement).startsWith("SET "));

@@ -18,7 +18,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { PG_ERROR } from "@/api/lib/pg-error";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
 import { flushWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-flush";
 import { enqueueWorkspaceSearchRepairs } from "@/api/lib/search/projection-repair-queue";
 
@@ -44,6 +44,17 @@ const config = {
   body: createWorkspaceContactBodySchema,
 } satisfies WorkspaceHandlerConfig;
 
+const WORKSPACE_CONTACT_CAPACITY_CONSTRAINT =
+  "workspace_contacts_workspace_capacity";
+const CONTACT_CAPACITY_REFUSAL = {
+  status: 400,
+  code: MATTER_CONTACT_CAPACITY_CODE.reached,
+  retryable: false,
+  hint: "Call link_matter_contact with matter_id and matter_contact_id (without role) to remove an existing link, then link the new contact.",
+  message:
+    "This matter has reached its contact limit. Remove a contact link before adding another.",
+} as const;
+
 export type CreateWorkspaceContactHandlerProps = {
   safeDb: SafeDb;
   organizationId: SafeId<"organization">;
@@ -67,8 +78,8 @@ export const createWorkspaceContactHandler = async function* ({
   dependencies = { flushWorkspaceSearchRepairs },
 }: CreateWorkspaceContactHandlerProps) {
   const txResult = await safeDb(async (tx) => {
-    // Parent first, as for matter members and entity capacity. Child rows
-    // cannot serialize a count against links that do not exist yet.
+    // The parent matter lock precedes the contact count and insert, matching
+    // matter members and entity capacity.
     await lockWorkspacesForEntityCap(tx, [workspaceId]);
     const contact = await tx.query.contacts.findFirst({
       where: {
@@ -93,12 +104,7 @@ export const createWorkspaceContactHandler = async function* ({
     if (linkCount >= LIMITS.workspaceContactsCount) {
       return {
         ok: false as const,
-        status: 400 as const,
-        code: MATTER_CONTACT_CAPACITY_CODE.reached,
-        retryable: false,
-        hint: "Call link_matter_contact with matter_id and matter_contact_id (without role) to remove an existing link, then link the new contact.",
-        message:
-          "This matter has reached its contact limit. Remove a contact link before adding another.",
+        ...CONTACT_CAPACITY_REFUSAL,
       };
     }
 
@@ -150,6 +156,15 @@ export const createWorkspaceContactHandler = async function* ({
           message: "Contact already has this role on the matter",
         }),
       );
+    }
+    if (
+      isPgConstraintError(
+        txResult.error,
+        PG_ERROR.CHECK_VIOLATION,
+        WORKSPACE_CONTACT_CAPACITY_CONSTRAINT,
+      )
+    ) {
+      return yield* Result.err(new HandlerError(CONTACT_CAPACITY_REFUSAL));
     }
     return yield* Result.err(txResult.error);
   }

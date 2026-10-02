@@ -1433,7 +1433,7 @@ const readMatterOverview = async ({
     status: workspace.status,
     clientName: workspace.client?.displayName ?? null,
   };
-  const contactCards = contacts.value.flatMap((workspaceContact) => {
+  const contactCards = contacts.value.contacts.flatMap((workspaceContact) => {
     if (!workspaceContact.contact) {
       return [];
     }
@@ -1472,6 +1472,7 @@ const readMatterOverview = async ({
     matter,
     overview: overviewWithoutAvatarUrls,
     contacts: contactCards,
+    contactsOverflow: contacts.value.overflow,
     members: memberCards,
   } satisfies v.InferInput<typeof LIST_MATTERS_DETAIL_PROJECTION>;
 

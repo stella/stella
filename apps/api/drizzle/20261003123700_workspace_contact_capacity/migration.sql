@@ -17,6 +17,14 @@ BEGIN
     RETURN NEW;
   END IF;
 
+  -- The recount needs a fresh statement snapshot after waiting for the parent
+  -- lock. Require READ COMMITTED so every previously committed link is visible.
+  IF current_setting('transaction_isolation') <> 'read committed' THEN
+    RAISE EXCEPTION 'matter contact capacity requires READ COMMITTED isolation'
+      USING ERRCODE = 'feature_not_supported',
+            CONSTRAINT = 'workspace_contacts_capacity_isolation';
+  END IF;
+
   PERFORM 1 FROM public.workspaces
    WHERE id = NEW.workspace_id
      AND organization_id = NEW.organization_id

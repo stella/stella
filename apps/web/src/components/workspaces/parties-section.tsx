@@ -65,9 +65,8 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const queryClient = useQueryClient();
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
   const workspace = workspaceQuery.data;
-  const { data: parties = [] } = useQuery(
-    workspaceContactsOptions(workspaceId),
-  );
+  const { data: contactRead } = useQuery(workspaceContactsOptions(workspaceId));
+  const parties = contactRead?.contacts ?? [];
   const updateWorkspace = useUpdateWorkspace();
   const createContact = useCreateContact();
 
@@ -129,62 +128,66 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   }
 
   const { client } = workspace;
-  if (!client) {
-    return (
-      <div className="flex flex-col p-3">
-        <section className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
-          <div className="flex items-center gap-2">
-            <LockIcon className="text-muted-foreground size-4" />
-            <h3 className="text-sm font-medium">
-              {t("workspaces.parties.personalLabel")}
-            </h3>
-          </div>
-          <p className="text-muted-foreground text-sm">
-            {t("workspaces.parties.personalDescription")}
-          </p>
-          <PromoteDialog workspaceId={workspaceId} />
-        </section>
-      </div>
-    );
-  }
+  const personalSection = !client ? (
+    <div className="flex flex-col p-3">
+      <section className="bg-muted/30 flex flex-col gap-2 rounded-md border p-3">
+        <div className="flex items-center gap-2">
+          <LockIcon className="text-muted-foreground size-4" />
+          <h3 className="text-sm font-medium">
+            {t("workspaces.parties.personalLabel")}
+          </h3>
+        </div>
+        <p className="text-muted-foreground text-sm">
+          {t("workspaces.parties.personalDescription")}
+        </p>
+        <PromoteDialog workspaceId={workspaceId} />
+      </section>
+    </div>
+  ) : null;
+  if (!client && parties.length === 0) {return personalSection;}
 
   return (
     <div className="flex flex-col">
+      {personalSection}
       {/* Client sub-section */}
-      <section>
-        <div
-          className={cn(
-            "flex items-center justify-between gap-2 px-3",
-            TOOLBAR_ROW_HEIGHT,
-          )}
-        >
-          <h3 className="text-muted-foreground text-sm font-medium">
-            {t("workspaces.parties.client")}
-          </h3>
-          <ChangeClientDialog
-            onCreate={handleCreateAndSetClient}
-            onSelect={handleSetClient}
-          />
-        </div>
-        <div className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}>
-          {client.type === "person" ? (
-            <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-              <UserIcon className="text-muted-foreground size-4" />
-            </span>
-          ) : (
-            <span className={MATTER_INFO_ICON_SLOT_CLASS}>
-              <BuildingIcon className="text-muted-foreground size-4" />
-            </span>
-          )}
-          <Link
-            className="min-w-0 truncate text-sm font-medium hover:underline"
-            params={{ contactId: client.id }}
-            to="/contacts/$contactId"
+      {client && (
+        <section>
+          <div
+            className={cn(
+              "flex items-center justify-between gap-2 px-3",
+              TOOLBAR_ROW_HEIGHT,
+            )}
           >
-            <BidiText>{client.displayName}</BidiText>
-          </Link>
-        </div>
-      </section>
+            <h3 className="text-muted-foreground text-sm font-medium">
+              {t("workspaces.parties.client")}
+            </h3>
+            <ChangeClientDialog
+              onCreate={handleCreateAndSetClient}
+              onSelect={handleSetClient}
+            />
+          </div>
+          <div
+            className={cn("flex items-center gap-2 px-3", TOOLBAR_ROW_HEIGHT)}
+          >
+            {client.type === "person" ? (
+              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                <UserIcon className="text-muted-foreground size-4" />
+              </span>
+            ) : (
+              <span className={MATTER_INFO_ICON_SLOT_CLASS}>
+                <BuildingIcon className="text-muted-foreground size-4" />
+              </span>
+            )}
+            <Link
+              className="min-w-0 truncate text-sm font-medium hover:underline"
+              params={{ contactId: client.id }}
+              to="/contacts/$contactId"
+            >
+              <BidiText>{client.displayName}</BidiText>
+            </Link>
+          </div>
+        </section>
+      )}
 
       {/* Parties sub-section */}
       <section>
@@ -199,6 +202,11 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
           </h3>
           <AddPartyDialog showTriggerLabel={false} workspaceId={workspaceId} />
         </div>
+        {contactRead?.overflow && (
+          <p className="text-muted-foreground px-3 py-2 text-sm" role="status">
+            {t("errors.apiCodes.matterContactCapacityExceeded")}
+          </p>
+        )}
         {parties.length > 0 ? (
           <ul>
             {parties.map((party) => (
@@ -437,7 +445,7 @@ type PartyData = NonNullable<
       NonNullable<ReturnType<typeof workspaceContactsOptions>["queryFn"]>
     >
   >
->[number];
+>["contacts"][number];
 
 type PartyRowProps = {
   party: PartyData;

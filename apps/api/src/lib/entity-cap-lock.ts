@@ -55,6 +55,10 @@ import type { SafeId } from "@/api/lib/branded-types";
  *     confusingly, with unrelated property-write and time-entry
  *     locks); see that file's comment for why the move is safe.
  *
+ *   - `workspaces/contacts/create.ts` — takes the parent lock before its
+ *     contact count and insert; the contact-capacity trigger uses the same
+ *     parent row for direct link writers.
+ *
  * Explicitly NOT a participant: `workspaces/duplicate.ts` (whole
  * -workspace clone). It always inserts into a brand-new
  * `targetWorkspaceId` created inside the same transaction, so there
