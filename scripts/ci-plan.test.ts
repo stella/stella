@@ -335,7 +335,7 @@ test("a pull request builds the API image for arm64 unless it releases", () => {
     }),
     propertyConfig({ numRuns: 10 }),
   );
-});
+}, 15_000);
 
 const workflowJobs = (source: string) =>
   v.parse(
@@ -375,6 +375,11 @@ const resultStep = v.parse(
 const jobScopes = v.parse(
   v.record(v.string(), v.nullable(v.string())),
   JSON.parse(resultStep.env["JOB_SCOPES"] ?? ""),
+);
+
+const fastJobScopes = v.parse(
+  v.record(v.string(), v.string()),
+  JSON.parse(resultStep.env["FAST_JOB_SCOPES"] ?? ""),
 );
 
 const foldedSuites = v.parse(
@@ -483,6 +488,7 @@ const evaluateResult = ({
   const plan = Object.fromEntries(
     [
       ...Object.values(jobScopes),
+      ...Object.values(fastJobScopes),
       ...Object.values(foldedSuites).flatMap(Object.values),
     ].flatMap((scope) =>
       scope === null
@@ -603,6 +609,7 @@ const evaluateResult = ({
       FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
       NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
+      FAST_JOB_SCOPES: resultStep.env["FAST_JOB_SCOPES"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
       PR_NUMBER: event === EVENT.pullRequest ? PULL_REQUEST.number : "",
       REPO: PULL_REQUEST.repo,
@@ -696,7 +703,11 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
       ),
     ].map((match) => match[1]);
     const scope = jobScopes[job];
-    expect(selectedBy, job).toEqual(scope === null ? [] : [scope]);
+    expect(selectedBy, job).toEqual(
+      scope === null
+        ? []
+        : [scope, ...(fastJobScopes[job] ? [fastJobScopes[job]] : [])],
+    );
   }
 });
 
@@ -887,7 +898,12 @@ test("only a pull request or a manual run skips heavy suites or passes a superse
   const fast = SUITE_DEPTH.fast;
   for (const event of FAST_DEPTH_EVENTS) {
     expect(
-      evaluateResult({ event, results: skippedHeavy, suiteDepth: fast }),
+      evaluateResult({
+        event,
+        results: skippedHeavy,
+        suiteDepth: fast,
+        unplannedScopes: Object.values(fastJobScopes),
+      }),
       event,
     ).toBe(0);
     expect(
@@ -1032,9 +1048,11 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
   expect(fastRequired.length).toBeGreaterThan(0);
   for (const job of fastRequired) {
     expect(jobScopes).toHaveProperty(job);
-    const scope = jobScopes[job];
+    const scope = fastJobScopes[job] ?? jobScopes[job];
     // A scope-less job always runs; a scoped job must be selected by the plan.
-    expect(heavyJobs, job).not.toContain(job);
+    if (fastJobScopes[job] === undefined) {
+      expect(heavyJobs, job).not.toContain(job);
+    }
     const event = EVENT.pullRequest;
     expect(evaluateResult({ event, results: { [job]: "success" } }), job).toBe(
       0,
@@ -1889,7 +1907,7 @@ test("folded service suites preserve both scopes and independent verdicts", () =
   expect(collabPort).not.toBe(valkeyPort);
   expect(services.services["redis"]?.ports).toEqual([`${collabPort}:6379`]);
   expect(services.services["valkey"]?.ports).toEqual([`${valkeyPort}:6379`]);
-  for (const event of FULL_DEPTH_EVENTS) {
+  for (const event of [...FULL_DEPTH_EVENTS, EVENT.pullRequest]) {
     for (const result of ["failure", "cancelled", "skipped"]) {
       expect(
         evaluateResult({ event, results: { "service-suites": result } }),
@@ -1899,7 +1917,10 @@ test("folded service suites preserve both scopes and independent verdicts", () =
       evaluateResult({
         event,
         results: { "service-suites": "skipped" },
-        unplannedScopes: ["service_suites_required"],
+        unplannedScopes: [
+          "service_suites_required",
+          "service_suites_pr_required",
+        ],
       }),
     ).toBe(0);
   }
@@ -2115,6 +2136,7 @@ test("the production changed-file step skips scans for unrelated or empty diffs"
     const outputs = runChangedFilesStep(options);
     expect(outputs.get("dependency_malware_required")).toBe("false");
     expect(outputs.get("e2e_core_required")).toBe("false");
+    expect(outputs.get("service_suites_pr_required")).toBe("false");
   }
 });
 
@@ -2122,6 +2144,7 @@ test("an unknown diff base plans malware and e2e scans", () => {
   const outputs = runChangedFilesStep({ baseRef: "missing-base" });
   expect(outputs.get("dependency_malware_required")).toBe("true");
   expect(outputs.get("e2e_core_required")).toBe("true");
+  expect(outputs.get("service_suites_pr_required")).toBe("true");
 });
 
 test("a changed-file diff failure plans malware and e2e scans", () => {
@@ -2266,6 +2289,77 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
     for (const result of ["failure", "cancelled", "skipped"]) {
       expect(evaluateResult({ event, results: { "ci-browser": result } })).toBe(
         1,
+      );
+    }
+  }
+});
+
+test("service-suite PR scope binds planning, execution, and the fast result gate", () => {
+  const scope = "service_suites_pr_required";
+  const condition = jobIf(ciJobs["service-suites"]);
+  expect(condition).toContain("needs.ci-plan.outputs.suite_depth == 'fast'");
+  expect(condition).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
+  expect(fastJobScopes["service-suites"]).toBe(scope);
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  expect(plan.outputs[scope]).toBe(
+    `\${{ steps.changed-files.outputs.${scope} }}`,
+  );
+  for (const { file, required } of [
+    { file: "apps/api/src/db/schema/new.ts", required: true },
+    { file: "apps/api/drizzle/123_new.sql", required: true },
+    { file: "apps/api/src/lib/scheduler/new.ts", required: true },
+    {
+      file: "apps/api/src/handlers/legislation/new-backfill.ts",
+      required: true,
+    },
+    { file: "apps/api/scripts/run-postgres-tests.ts", required: true },
+    { file: "apps/api/src/tests/setup-env.ts", required: true },
+    {
+      file: "apps/api/src/lib/scheduler/runner.postgres.test.ts",
+      required: true,
+    },
+    { file: "apps/collab/src/server.test.ts", required: true },
+    {
+      file: "apps/api/src/handlers/case-law/ingestion/citation-extractor.ts",
+      required: true,
+    },
+    { file: "docs/guide.md", required: false },
+    { file: "apps/web/src/new.tsx", required: false },
+    { file: "apps/api/src/unused-new-handler.ts", required: false },
+  ]) {
+    const planned = runSelector([file], [scope]).at(0) === "true";
+    expect(planned, file).toBe(required);
+    // Evaluate the actual job condition with planner outputs at both depths.
+    for (const suiteDepth of ["fast", "full"]) {
+      const executable = condition
+        .replaceAll("needs.ci-plan.outputs.service_suites_required", "'true'")
+        .replaceAll(
+          `needs.ci-plan.outputs.${scope}`,
+          () => `'${String(planned)}'`,
+        )
+        .replaceAll(
+          "needs.ci-plan.outputs.suite_depth",
+          () => `'${suiteDepth}'`,
+        )
+        .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
+        .replaceAll("github.event_name", "'pull_request'");
+      expect(
+        Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
+      ).toBe(suiteDepth === "full" || planned ? 0 : 1);
+    }
+    for (const result of ["success", "failure", "skipped", "cancelled"]) {
+      expect(
+        evaluateResult({
+          event: EVENT.pullRequest,
+          results: { "service-suites": result },
+          unplannedScopes: planned ? [] : [scope],
+        }),
+        `${file} ${result}`,
+      ).toBe(
+        result === "success" || (result === "skipped" && !planned) ? 0 : 1,
       );
     }
   }

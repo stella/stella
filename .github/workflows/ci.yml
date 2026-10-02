@@ -51,8 +51,8 @@ jobs:
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
-      # services, other platforms). Every heavy job gates on
-      # `suite_depth == 'full'`.
+      # services, other platforms). Service suites also run at fast depth
+      # when their dependencies change.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -74,6 +74,7 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      service_suites_pr_required: ${{ steps.changed-files.outputs.service_suites_pr_required }}
       service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
@@ -267,6 +268,7 @@ jobs:
               echo "docker_checks_required=true"
               echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
+              echo "service_suites_pr_required=true"
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
@@ -299,6 +301,7 @@ jobs:
               echo "docker_checks_required=false"
               echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
+              echo "service_suites_pr_required=false"
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
@@ -344,6 +347,7 @@ jobs:
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
+          service_suites_pr_required=$(bun scripts/detect-service-suite-changes.ts "${changed_files[@]}")
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
           api_image_deps_required=false
@@ -542,6 +546,7 @@ jobs:
             echo "docker_checks_required=$docker_checks_required"
             echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
+            echo "service_suites_pr_required=$service_suites_pr_required"
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
@@ -1741,6 +1746,9 @@ jobs:
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ci-plan.test.ts
 
+      - name: Test service-suite dependency scope
+        run: bun test scripts/detect-service-suite-changes.test.ts
+
       - name: Test nightly rehearsal and retry guards
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/nightly-exact-base.test.ts scripts/check-test-retries.test.ts
@@ -2453,7 +2461,7 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
           fi
 
-  # API suites that need real services, at full depth only. The Postgres
+  # API suites that need real services, at full depth or on scoped PRs. The Postgres
   # suites use behavior PGlite cannot reproduce (partial indexes, advisory
   # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
   # workers. Each runner derives its file set from the gate the suites declare,
@@ -2466,7 +2474,9 @@ jobs:
       needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -4040,8 +4050,10 @@ jobs:
             {"docker-checks": {"agent-sandbox-docker": "agent_sandbox_docker_required", "api-image-deps": "api_image_deps_required"}}
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
+          FAST_JOB_SCOPES: >-
+            {"service-suites": "service_suites_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "web-image-smoke"]
+            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "service-suites", "web-image-smoke"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled
@@ -4159,7 +4171,7 @@ jobs:
               fi
               # Fast-required jobs must run when their scope is planned;
               # scope-less jobs are always planned.
-              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --argjson required "$FAST_REQUIRED" '
+              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '
                 [to_entries[] | .key as $job | select($required | index($job))
                   | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")
                   | "\($job) (planned, skipped)"]
