@@ -145,6 +145,7 @@ describe("send lifecycle checkpoint indexing", () => {
       const indexedThreads: string[] = [];
       const threadId = toSafeId<"chatThread">("thread_lifecycle");
       const lifecycle = new ChatSendLifecycle({
+        mode: "raw",
         indexThread: async (indexedThreadId) => {
           indexedThreads.push(indexedThreadId);
         },

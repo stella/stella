@@ -88,7 +88,7 @@ const AI_ERROR_RETRYABLE = {
  * The failure code a failed run settles its turn with, when the caller names
  * none: what the model or its provider did, by error kind.
  */
-const AI_ERROR_FAILURE_CODE = {
+export const AI_ERROR_FAILURE_CODE = {
   empty_completion: "empty-response",
   loop_detected: "provider-error",
   model_unavailable: "provider-error",
