@@ -390,7 +390,7 @@ if (!databaseUrl || !runPostgres) {
         code: 409,
         response: {
           message: "No default number series configured for this document type",
-          hint: "Create or update a number series with this documentType and isDefault=true for this seller or all sellers, then finalize again.",
+          hint: "Create a number series for this documentType and this seller or all sellers, set it as default, then finalize again.",
         },
       });
       expect(
