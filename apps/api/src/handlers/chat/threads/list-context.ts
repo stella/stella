@@ -80,9 +80,12 @@ export const EMPTY_CHAT_THREAD_CONTEXT: ChatThreadContext = {
   matters: [],
 };
 
+type ChatThreadFileType =
+  (typeof CHAT_THREAD_FILE_TYPE)[keyof typeof CHAT_THREAD_FILE_TYPE];
+
 type ChatThreadContextRow = {
   color: string | null;
-  fileType: string | null;
+  fileType: ChatThreadFileType | null;
   itemId: string;
   itemType: "file" | "matter";
   kind: string | null;
@@ -96,6 +99,10 @@ type ChatThreadContextRow = {
 const isNullableString = (value: unknown): value is string | null =>
   value === null || typeof value === "string";
 
+const isChatThreadFileType = (value: unknown): value is ChatThreadFileType =>
+  value === CHAT_THREAD_FILE_TYPE.entity ||
+  value === CHAT_THREAD_FILE_TYPE.upload;
+
 const isChatThreadContextRow = (
   value: unknown,
 ): value is ChatThreadContextRow =>
@@ -106,7 +113,7 @@ const isChatThreadContextRow = (
   typeof value["name"] === "string" &&
   typeof value["total"] === "number" &&
   isNullableString(value["color"]) &&
-  isNullableString(value["fileType"]) &&
+  (value["fileType"] === null || isChatThreadFileType(value["fileType"])) &&
   isNullableString(value["kind"]) &&
   isNullableString(value["matterId"]) &&
   isNullableString(value["mimeType"]);
