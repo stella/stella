@@ -8,6 +8,7 @@ import {
   getRequestId,
   initRequestContext,
 } from "@/api/lib/observability/request-context";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import {
   installRecordingAnalytics,
   installRecordingLogger,
@@ -67,7 +68,7 @@ const failingLookupContext = (
     scopedDb: asTestRaw<CallbackCtx["scopedDb"]>(async () => undefined),
     session: { activeOrganizationId: orgA },
     user: { id: userA },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     recordAuditEvent: async () => {},
   });
 

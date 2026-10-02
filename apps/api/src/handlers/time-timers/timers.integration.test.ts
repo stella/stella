@@ -30,6 +30,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -90,7 +91,7 @@ const context = (workspaceIds = [ids.wsA1]) => ({
   session: { activeOrganizationId: ids.orgA },
   user: { id: ids.userA1 },
   workspaceId: ids.wsA1,
-  memberRole: { role: "member" as const },
+  memberRole: sessionMemberRole("member"),
   getWorkspaceAccess: async () => ({ id: ids.wsA1, status: "active" as const }),
   pinServerValidatedWorkspaceId: () => true,
   recordAuditEvent: async (_tx: unknown, event: unknown) => {

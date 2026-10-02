@@ -75,7 +75,6 @@
       }
       .value {
         color: #f5f5f7;
-        direction: ltr;
         display: block;
         font-size: 12px;
         line-height: 1.4;
@@ -162,25 +161,39 @@
       const strings = JSON.parse(params.get("strings") || "{}");
       const webOrigin = params.get("webOrigin") || "";
       const apiBaseUrl = params.get("apiBaseUrl") || "";
+      const accountMode = params.get("mode") === "account";
 
       document.documentElement.lang = params.get("lang") || "en";
       document.documentElement.dir = params.get("dir") || "ltr";
-      document.title = strings.selfHostWindowTitle || "";
+      document.title = accountMode
+        ? strings.accountWindowTitle
+        : strings.selfHostWindowTitle;
 
-      document.getElementById("title").textContent = strings.selfHostTitle;
-      document.getElementById("subtitle").textContent =
-        strings.selfHostSubtitle;
-      document.getElementById("webOriginLabel").textContent = strings.webOrigin;
-      document.getElementById("apiBaseUrlLabel").textContent = strings.apiUrl;
+      document.getElementById("title").textContent = accountMode
+        ? strings.accountTitle
+        : strings.selfHostTitle;
+      document.getElementById("subtitle").textContent = accountMode
+        ? strings.accountSubtitle
+        : strings.selfHostSubtitle;
+      document.getElementById("webOriginLabel").textContent = accountMode
+        ? strings.accountEmail
+        : strings.webOrigin;
+      document.getElementById("apiBaseUrlLabel").textContent = accountMode
+        ? strings.organizationName
+        : strings.apiUrl;
       document.getElementById("cancelBtn").textContent = strings.cancel;
       document.getElementById("connectBtn").textContent = strings.connect;
 
       // The origins stay left-to-right whichever way the dialog reads: a URL
       // reordered by the bidi algorithm is a different URL to the eye.
       document.getElementById("webOrigin").dir = "ltr";
-      document.getElementById("apiBaseUrl").dir = "ltr";
-      document.getElementById("webOrigin").textContent = webOrigin;
-      document.getElementById("apiBaseUrl").textContent = apiBaseUrl;
+      document.getElementById("apiBaseUrl").dir = accountMode ? "auto" : "ltr";
+      document.getElementById("webOrigin").textContent = accountMode
+        ? params.get("accountEmail")
+        : webOrigin;
+      document.getElementById("apiBaseUrl").textContent = accountMode
+        ? params.get("organizationName")
+        : apiBaseUrl;
 
       function respond(approved) {
         if (window.__TAURI_INTERNALS__) {

@@ -10,7 +10,7 @@ import type {
 import { status, t } from "elysia";
 
 import type { ModelRole } from "@stll/ai-catalog";
-import type { PermissionInput, roles } from "@stll/permissions";
+import type { PermissionInput } from "@stll/permissions";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { UsageActionType, UsageServiceTier } from "@/api/db/schema";
@@ -60,7 +60,11 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  readAuthorizedMemberRole,
+} from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
@@ -435,9 +439,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
     pinServerValidatedWorkspaceId: (
       workspaceId: SafeId<"workspace">,
     ) => boolean;
-    memberRole: {
-      role: keyof typeof roles;
-    };
+    memberRole: AuthorizedMemberRole;
     orgAIConfig: OrgAIConfig | null;
     /**
      * Whether `orgAIConfig` reflects the org's stored configuration.
@@ -873,6 +875,16 @@ const runAdmittedFiniteHandler = async function* <
           getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
+        // A disconnected request may carry no reason after signal composition.
+        if (ctx.request.signal.aborted) {
+          return Result.err(
+            new HandlerError({
+              status: 400,
+              message: "Request aborted",
+              cause: ctx.request.signal.reason,
+            }),
+          );
+        }
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
         ctx.actionSignal.throwIfAborted();
         const outcome = await Result.gen(() => handler(ctx));
@@ -956,7 +968,8 @@ const createSafeScopedHandler = <
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-    if (!hasMemberPermission(ctx.memberRole, config.permissions)) {
+    const memberRole = readAuthorizedMemberRole(ctx);
+    if (!memberRole || !hasMemberPermission(memberRole, config.permissions)) {
       return toSafeStatusResponse(403, {
         code: API_ERROR_CODE.forbidden,
         message: "Forbidden",

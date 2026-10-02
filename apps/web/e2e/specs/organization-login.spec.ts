@@ -22,27 +22,35 @@ const createOrganizationSelectionSession = async ({
   const loginApi = await playwrightRequest.newContext(requestOptions);
   try {
     await signInWithEmailOtp(loginApi, email);
-    // Creating an organization activates it and refreshes the cached session
-    // cookie. Preserve the signed pre-create snapshot, then create two real
-    // memberships so the route shows its picker instead of auto-selecting the
-    // sole organization.
-    const storageStateWithoutActiveOrganization = await loginApi.storageState();
+    // Two real memberships make the route show its picker instead of
+    // auto-selecting the sole organization. Neither create activates its
+    // organization, so the stored session has none, as after a fresh sign-in.
     const primaryCreateResponse = await loginApi.post(
       `${API_BASE_URL}/api/auth/organization/create`,
-      { data: primaryOrganization },
+      { data: { ...primaryOrganization, keepCurrentActiveOrganization: true } },
     );
     expect(primaryCreateResponse.ok(), await primaryCreateResponse.text()).toBe(
       true,
     );
     const secondaryCreateResponse = await loginApi.post(
       `${API_BASE_URL}/api/auth/organization/create`,
-      { data: secondaryOrganization },
+      {
+        data: { ...secondaryOrganization, keepCurrentActiveOrganization: true },
+      },
     );
     expect(
       secondaryCreateResponse.ok(),
       await secondaryCreateResponse.text(),
     ).toBe(true);
-    return storageStateWithoutActiveOrganization;
+    const storedSession = await loginApi.get(
+      `${API_BASE_URL}/api/auth/get-session`,
+      { params: { disableCookieCache: "true" } },
+    );
+    expect(storedSession.ok()).toBe(true);
+    expect(await storedSession.json()).toMatchObject({
+      session: { activeOrganizationId: null },
+    });
+    return await loginApi.storageState();
   } finally {
     await loginApi.dispose();
   }

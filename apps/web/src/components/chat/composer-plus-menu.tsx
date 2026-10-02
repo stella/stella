@@ -39,6 +39,7 @@ import {
   MenuTrigger,
 } from "@stll/ui/menu";
 import { stellaToast } from "@stll/ui/toast";
+import { typedCharacter } from "@stll/ui/typed-character";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -236,15 +237,10 @@ export const ComposerPlusMenu = ({
       }
 
       const shortcut = resolveComposerMenuShortcut({
-        altKey: event.altKey,
         charBeforeCaret: charBeforeCaret(shortcutEditor.state.selection.$from),
-        ctrlKey: event.ctrlKey,
+        character: typedCharacter(event),
         hasContext: hasContextShortcut,
         hasSkills: hasSkillsShortcut,
-        isAltGraph: event.getModifierState("AltGraph"),
-        isComposing: event.isComposing,
-        key: event.key,
-        metaKey: event.metaKey,
       });
       if (!shortcut) {
         return;
