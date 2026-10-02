@@ -26,6 +26,7 @@ import {
 } from "@/api/lib/hosted-usage-provider/polar/contract";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { getPgErrorCode } from "@/api/lib/pg-error";
+import { isEntitlementConsumableAt } from "@/api/lib/usage/usage-ledger";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   installRecordingAnalytics,
@@ -312,6 +313,179 @@ describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
           eventId,
         });
         expect(await readState(tx, fixture.organizationId)).toEqual(first);
+      });
+    });
+  }
+
+  const closedNativeStatuses = POLAR_ENTITLEMENT_STATUSES.filter(
+    (status) =>
+      statusExpectations[status] === "paused" ||
+      statusExpectations[status] === "cancelled",
+  );
+  const denyingDeliveries = [
+    { type: "subscription.paused", status: "paused", expected: "paused" },
+    {
+      type: "subscription.revoked",
+      status: "canceled",
+      expected: "cancelled",
+    },
+    ...["subscription.created", "subscription.updated"].flatMap((type) =>
+      closedNativeStatuses.map((status) => ({
+        type,
+        status,
+        expected: statusExpectations[status],
+      })),
+    ),
+  ];
+  for (const { type, status, expected } of denyingDeliveries) {
+    test(`fresh denying ${type} ${status} never allocates a positive period`, async () => {
+      await withFixture(async (tx, fixture) => {
+        const data = { ...fixture.data, status, current_period_end: END };
+        expect(new Date(END).getTime()).toBeGreaterThan(
+          new Date(START).getTime(),
+        );
+        const eventId = await deliver({ tx, type, data });
+        const first = await readState(tx, fixture.organizationId);
+        expect(first.entitlements).toHaveLength(1);
+        expect(first.entitlements.at(0)).toMatchObject({
+          status: expected,
+          currentPeriodStart: new Date(START),
+          currentPeriodEnd: new Date(END),
+        });
+        expect(
+          first.entitlements.some((entitlement) =>
+            isEntitlementConsumableAt(
+              entitlement,
+              new Date("2026-06-15T00:00:00Z"),
+            ),
+          ),
+        ).toBe(false);
+        expect(first.allocations).toHaveLength(0);
+        expect(
+          first.audits.filter(
+            ({ triggerSourceId }) => triggerSourceId === eventId,
+          ),
+        ).toMatchObject([
+          { action: "create", resourceType: "usage_entitlement" },
+        ]);
+        await deliver({ tx, type, data, eventId });
+        expect(await readState(tx, fixture.organizationId)).toEqual(first);
+      });
+    });
+  }
+
+  const revokedSnapshots = [...POLAR_ENTITLEMENT_STATUSES, "UNKNOWN"].flatMap(
+    (status) =>
+      ["absent", "active"].flatMap((priorState) =>
+        [END, null].map((periodEnd) => ({ status, priorState, periodEnd })),
+      ),
+  );
+  for (const { status, priorState, periodEnd } of revokedSnapshots) {
+    test(`revoked snapshot ${status} denies ${priorState} state with ${periodEnd ?? "null"} end and applies once`, async () => {
+      await withFixture(async (tx, fixture) => {
+        if (priorState === "active") {
+          await deliver({
+            tx,
+            type: "subscription.created",
+            data: fixture.data,
+          });
+        }
+        const before = await readState(tx, fixture.organizationId);
+        if (priorState === "active") {
+          expect(before.entitlements).toHaveLength(1);
+          expect(
+            before.entitlements.some((entitlement) =>
+              isEntitlementConsumableAt(
+                entitlement,
+                new Date("2026-06-15T00:00:00Z"),
+              ),
+            ),
+          ).toBe(true);
+          expect(before.allocations).toHaveLength(1);
+        }
+        const logs = installRecordingLogger();
+        const analytics = installRecordingAnalytics();
+        try {
+          const data = {
+            ...fixture.data,
+            status,
+            seats: 7,
+            modified_at: "2026-06-03T00:00:00Z",
+            current_period_end: periodEnd,
+          };
+          const eventId = await deliver({
+            tx,
+            type: "subscription.revoked",
+            data,
+          });
+          const first = await readState(tx, fixture.organizationId);
+          expect(first.entitlements).toHaveLength(1);
+          expect(first.entitlements.at(0)).toMatchObject({
+            status: "cancelled",
+            cancelAtPeriodEnd: false,
+          });
+          expect(
+            first.entitlements.some((entitlement) =>
+              isEntitlementConsumableAt(
+                entitlement,
+                new Date("2026-06-15T00:00:00Z"),
+              ),
+            ),
+          ).toBe(false);
+          expect(first.allocations).toEqual(before.allocations);
+          expect(first.audits).toHaveLength(before.audits.length + 1);
+          expect(
+            first.audits.filter(
+              ({ triggerSourceId }) => triggerSourceId === eventId,
+            ),
+          ).toMatchObject([
+            {
+              action: priorState === "active" ? "update" : "create",
+              resourceType: "usage_entitlement",
+              performerType: "service",
+              triggerType: "webhook",
+              organizationId: fixture.organizationId,
+            },
+          ]);
+          expect(
+            logs
+              .at("ERROR")
+              .filter(
+                ({ message }) =>
+                  message === "usage_provider.webhook.unknown_status",
+              ),
+          ).toHaveLength(status === "UNKNOWN" ? 1 : 0);
+          expect(analytics.exceptions()).toHaveLength(
+            status === "UNKNOWN" ? 1 : 0,
+          );
+          expect(
+            await tx
+              .select()
+              .from(hostedUsageWebhookEvents)
+              .where(eq(hostedUsageWebhookEvents.eventId, eventId)),
+          ).toMatchObject([{ result: "ok" }]);
+          await deliver({
+            tx,
+            type: "subscription.revoked",
+            data,
+            eventId,
+          });
+          expect(await readState(tx, fixture.organizationId)).toEqual(first);
+          expect(
+            logs
+              .at("ERROR")
+              .filter(
+                ({ message }) =>
+                  message === "usage_provider.webhook.unknown_status",
+              ),
+          ).toHaveLength(status === "UNKNOWN" ? 1 : 0);
+          expect(analytics.exceptions()).toHaveLength(
+            status === "UNKNOWN" ? 1 : 0,
+          );
+        } finally {
+          logs.restore();
+          analytics.restore();
+        }
       });
     });
   }

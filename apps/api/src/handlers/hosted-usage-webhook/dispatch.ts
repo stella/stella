@@ -425,9 +425,7 @@ const readHostedPeriod = (
   payload: HostedUsageEntitlementPayload,
   status: UsageEntitlementStatus,
 ) => {
-  const closedPeriod =
-    payload.current_period_end === null &&
-    closedEntitlementStatuses.has(status);
+  const closedPeriod = closedEntitlementStatuses.has(status);
   if (payload.current_period_end === null && !closedPeriod) {
     return null;
   }
@@ -896,7 +894,15 @@ export const handleUsageEntitlementStatusChange = async ({
   eventId,
   eventKind,
 }: UsageEntitlementStatusUpdateParams): Promise<DispatchOutcome> => {
-  const mappedStatus = mapHostedProviderStatus(payload.status);
+  // Revocation denies access independently of the reported snapshot status.
+  const mappedStatus =
+    eventKind === "revoked"
+      ? "cancelled"
+      : mapHostedProviderStatus(payload.status);
+  if (eventKind === "revoked") {
+    // Retain unknown-status detection without letting it veto a denial.
+    mapHostedProviderStatus(payload.status);
+  }
   if (mappedStatus === null) {
     return await handleHostedEntitlementReconciliation({
       tx,
