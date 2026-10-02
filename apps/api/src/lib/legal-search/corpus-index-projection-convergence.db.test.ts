@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { and, eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
@@ -13,6 +14,12 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
+import type {
+  CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION} from "@/api/lib/legal-search/corpus-index-projection-contract";
+import {
+  CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES,
+  type CorpusIndexIntentStatus,
+} from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { readCorpusIndexProjectionConvergenceTx } from "@/api/lib/legal-search/corpus-index-projection-convergence";
 import { corpusIndexAppendPublishDelayMs } from "@/api/lib/legal-search/corpus-index-projection-engine";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -44,6 +51,10 @@ const UNREFERENCED_ENTITY_ID = "0198e331-e578-7000-8000-000000000307";
 const UNREFERENCED_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000308",
 );
+const BLOCKING_INTENT_ID = toSafeId<"corpusIndexProjectionIntent">(
+  "0198e331-e578-7000-8000-000000000311",
+);
+const LEASE_TOKEN = "0198e331-e578-7000-8000-000000000312";
 const INDEX_ID = "case_law_v5_cs_sk";
 const FINGERPRINT = "a".repeat(64);
 const ERASING_FINGERPRINT = "d".repeat(64);
@@ -223,6 +234,86 @@ test("the launch probe waits out the engine publish delay", async () => {
       appliedAt: published,
     })
     .where(eq(corpusIndexProjectionIntents.id, APPLIED_INTENT_ID));
+  expect(await readStatus()).toBe("ready_for_census");
+});
+
+type BlockingIntentStatus = {
+  [
+    Status in CorpusIndexIntentStatus
+  ]: (typeof CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION)[Status] extends "blocking"
+    ? Status
+    : never;
+}[CorpusIndexIntentStatus];
+
+/** The lifecycle columns each blocking status requires, per its shape check. */
+const BLOCKING_REVISION_SHAPES = {
+  reserved: { leaseToken: LEASE_TOKEN, leaseExpiresAt: NOW },
+  append_started: {
+    leaseToken: LEASE_TOKEN,
+    leaseExpiresAt: NOW,
+    appendStartedAt: NOW,
+  },
+  append_committed: {
+    leaseToken: LEASE_TOKEN,
+    leaseExpiresAt: NOW,
+    appendStartedAt: NOW,
+    appendCommittedAt: NOW,
+    expectedDocumentCount: 1,
+  },
+  cleanup_pending: {
+    appendStartedAt: NOW,
+    appendPublishBarrierAt: NOW,
+    cleanupNotBefore: NOW,
+  },
+  cleanup_started: {
+    appendStartedAt: NOW,
+    appendPublishBarrierAt: NOW,
+    cleanupNotBefore: NOW,
+    cleanupStartedAt: NOW,
+  },
+  cleanup_committed: {
+    appendStartedAt: NOW,
+    appendPublishBarrierAt: NOW,
+    cleanupNotBefore: NOW,
+    cleanupStartedAt: NOW,
+    deleteOpstamp: 7n,
+    deleteTaskCreatedAt: NOW,
+  },
+} as const satisfies Record<
+  BlockingIntentStatus,
+  Partial<typeof corpusIndexProjectionIntents.$inferInsert>
+>;
+
+const isBlockingIntentStatus = (
+  status: CorpusIndexIntentStatus,
+): status is BlockingIntentStatus =>
+  Object.hasOwn(BLOCKING_REVISION_SHAPES, status);
+
+// Each blocking status is its own index probe, so each one is checked.
+test("every blocking revision status holds the census", async () => {
+  expect(await readStatus()).toBe("ready_for_census");
+  for (const status of CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES) {
+    if (!isBlockingIntentStatus(status)) {
+      return panic(`No revision shape for blocking status ${status}`);
+    }
+    await db.insert(corpusIndexProjectionIntents).values({
+      id: BLOCKING_INTENT_ID,
+      ...TARGET,
+      entityId: ENTITY_ID,
+      epoch: 2n,
+      fingerprint: "f".repeat(64),
+      indexId: INDEX_ID,
+      status,
+      ...BLOCKING_REVISION_SHAPES[status],
+    });
+    expect({ status, convergence: await readStatus() }).toEqual({
+      status,
+      convergence: "intent_outstanding",
+    });
+    await db
+      .delete(corpusIndexProjectionIntents)
+      .where(eq(corpusIndexProjectionIntents.id, BLOCKING_INTENT_ID));
+  }
   expect(await readStatus()).toBe("ready_for_census");
 });
 
