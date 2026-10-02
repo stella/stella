@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test";
 
+import { cents } from "@stll/money";
+
 import {
   buildContactRatePayload,
   buildNumericContactPayload,
@@ -122,7 +124,10 @@ describe("contact hourly rates", () => {
       for (const trimmedInput of ["150,50", "150.50"]) {
         expect(
           buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
-        ).toEqual({ status: "valid", payload: { defaultHourlyRate: 15_050 } });
+        ).toEqual({
+          status: "valid",
+          payload: { defaultHourlyRate: cents(15_050) },
+        });
       }
       expect(
         buildContactRatePayload({
@@ -130,21 +135,30 @@ describe("contact hourly rates", () => {
           currency: "EUR",
           locale,
         }),
-      ).toEqual({ status: "valid", payload: { defaultHourlyRate: 101 } });
+      ).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: cents(101) },
+      });
       expect(
         buildContactRatePayload({
           trimmedInput: "150,500",
           currency: "KWD",
           locale,
         }),
-      ).toEqual({ status: "valid", payload: { defaultHourlyRate: 150_500 } });
+      ).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: cents(150_500) },
+      });
       expect(
         buildContactRatePayload({
           trimmedInput: "150,50",
           currency: "JPY",
           locale,
         }),
-      ).toEqual({ status: "valid", payload: { defaultHourlyRate: 151 } });
+      ).toEqual({
+        status: "valid",
+        payload: { defaultHourlyRate: cents(151) },
+      });
     }
     expect(
       buildContactRatePayload({
@@ -152,7 +166,10 @@ describe("contact hourly rates", () => {
         currency: "EUR",
         locale: "ar-u-nu-arab",
       }),
-    ).toEqual({ status: "valid", payload: { defaultHourlyRate: 15_050 } });
+    ).toEqual({
+      status: "valid",
+      payload: { defaultHourlyRate: cents(15_050) },
+    });
     expect(
       buildContactRatePayload({
         trimmedInput: "150,50",
@@ -206,7 +223,7 @@ describe("contact hourly rates", () => {
         }),
       ).toEqual({
         status: "valid",
-        payload: { defaultHourlyRate: minorUnits },
+        payload: { defaultHourlyRate: cents(minorUnits) },
       });
       expect(contactRateInput(0, currency)).toBe(zeroText);
     });
