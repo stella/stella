@@ -24,6 +24,7 @@ import { cn } from "@stll/ui/utils";
 import { InlineEdit } from "@/components/inline-edit";
 import Tooltip from "@/components/tooltip";
 import { useMatterContextMenu } from "@/components/workspaces/matter-context-menu";
+import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useFormatter } from "@/i18n/formatting-context";
 import { detached } from "@/lib/detached";
 import { getMatterColor } from "@/lib/matter-colors";
@@ -35,7 +36,6 @@ import type {
   WorkspaceGroup,
 } from "@/lib/workspaces/types";
 import { ALL_COLUMNS, isFilterableColumnId } from "@/lib/workspaces/types";
-import { TeamAvatars } from "@/routes/_protected.workspaces/-components/team-avatars";
 import { ColumnFilterButton } from "@/routes/_protected.workspaces/-filters/column-filter-button";
 import { useColumnLabels } from "@/routes/_protected.workspaces/-hooks/use-column-labels";
 import { useSortLabels } from "@/routes/_protected.workspaces/-hooks/use-sort-labels";

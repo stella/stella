@@ -2703,6 +2703,153 @@ test("every browser suite belongs to exactly one required matrix leg", () => {
   }
 });
 
+test("route-relevant pull requests plan the required route smoke job", () => {
+  const scope = "route_smoke_required";
+  const selectedBy = jobIf(ciJobs["route-smoke"]);
+  expect(selectedBy).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
+  expect(selectedBy).toContain("github.event_name == 'pull_request'");
+  expect(selectedBy).toContain("needs.web-build.result == 'success'");
+  expect(heavyJobs).not.toContain("route-smoke");
+  expect(jobScopes["route-smoke"]).toBe(scope);
+  expect(fastRequired).toContain("route-smoke");
+  for (const file of [
+    "apps/web/src/routes/_authenticated/matters.tsx",
+    "apps/web/src/routeTree.gen.ts",
+    "apps/web/src/lib/react-query.ts",
+    "apps/web/src/components/new-query-component.tsx",
+    "apps/api/src/handlers/tasks/get.ts",
+    "packages/ui/src/button.tsx",
+    "apps/web/e2e/network-baseline.json",
+    "scripts/network-baseline-scope.ts",
+    "scripts/network-baseline-scope.test.ts",
+    "apps/web/e2e/specs/route-smoke.spec.ts",
+    "apps/web/e2e/helpers/network.ts",
+    "apps/web/e2e/helpers/workspace.ts",
+    "apps/web/e2e/playwright.config.ts",
+  ]) {
+    expect(runSelector([file], [scope]), file).toEqual(["true"]);
+  }
+  expect(runSelector(["docs/example.md"], [scope])).toEqual(["false"]);
+  expect(runSelector([], [scope])).toEqual(["false"]);
+  for (const event of [EVENT.mergeGroup, EVENT.workflowDispatch]) {
+    expect(
+      runSelector(
+        ["apps/web/src/routes/new.tsx"],
+        [scope],
+        "full",
+        "false",
+        event,
+      ),
+    ).toEqual(["false"]);
+  }
+  const event = EVENT.pullRequest;
+  expect(evaluateResult({ event, results: { "route-smoke": "skipped" } })).toBe(
+    1,
+  );
+  expect(
+    evaluateResult({
+      event,
+      results: { "route-smoke": "skipped" },
+      unplannedScopes: [scope],
+    }),
+  ).toBe(0);
+});
+
+test("route smoke consumes the production build and fails when its stack cannot run", () => {
+  const plan = jobSteps(ciJobs["ci-plan"]).find(
+    ({ name }) => name === "Check changed file scope",
+  );
+  // Keep the dependency implication executable: baseline-scope edits need a
+  // build even when the ordinary app-source build filter would not select it.
+  const implicationStart = workflow.indexOf(
+    "          # The production e2e shards",
+  );
+  const implicationEnd = workflow.indexOf(
+    "          printf 'Changed files:",
+    implicationStart,
+  );
+  expect(implicationEnd).toBeGreaterThan(implicationStart);
+  const implication = workflow.slice(implicationStart, implicationEnd);
+  const result = Bun.spawnSync([
+    "bash",
+    "-e",
+    "-c",
+    `e2e_core_required=false; route_smoke_required=true; web_build_required=false
+${implication}
+[[ "$web_build_required" == true ]]`,
+  ]);
+  expect(result.exitCode).toBe(0);
+  expect(plan?.run).toContain(
+    'echo "route_smoke_required=$route_smoke_required"',
+  );
+  expect(workflow).toContain(
+    [
+      "route_smoke_required: $",
+      "{{ steps.changed-files.outputs.route_smoke_required }}",
+    ].join(""),
+  );
+  const upload = jobSteps(ciJobs["web-build"]).find(
+    ({ name }) => name === "Upload production E2E web build",
+  );
+  expect(upload?.if).toContain(
+    "needs.ci-plan.outputs.route_smoke_required == 'true'",
+  );
+  const steps = jobSteps(ciJobs["route-smoke"]);
+  const smoke = steps.find(
+    ({ name }) => name === "Check route network baseline",
+  );
+  expect(smoke?.run).toContain("route-smoke.spec.ts --project=route-smoke");
+  const ready = steps.find(
+    ({ name }) => name === "Require production browser stack",
+  );
+  expect(ready?.run).toBeDefined();
+  for (const status of ["ready", "rate-limited", ""]) {
+    const check = Bun.spawnSync(["bash", "-e", "-c", ready?.run ?? "exit 2"], {
+      env: { STACK_STATUS: status },
+      stdout: "ignore",
+      stderr: "ignore",
+    });
+    expect(check.exitCode, status).toBe(status === "ready" ? 0 : 1);
+  }
+});
+
+test("an unreadable PR diff requires route smoke while manual and queue runs retain their suites", () => {
+  const start = workflow.indexOf(
+    "          # An unreadable diff must widen every scope",
+  );
+  const end = workflow.indexOf(
+    "          desktop_rust_checks_required=$(",
+    start,
+  );
+  expect(start).toBeGreaterThan(-1);
+  expect(end).toBeGreaterThan(start);
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "route-smoke-plan-"));
+  const output = nodePath.join(directory, "output");
+  try {
+    for (const event of Object.values(EVENT)) {
+      writeFileSync(output, "");
+      const result = Bun.spawnSync(
+        ["bash", "-e", "-c", workflow.slice(start, end)],
+        {
+          env: {
+            EVENT_NAME: event,
+            SUITE_DEPTH: "full",
+            scope_unknown: "true",
+            GITHUB_OUTPUT: output,
+          },
+          stdout: "ignore",
+          stderr: "pipe",
+        },
+      );
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8"))
+        .toContain(`route_smoke_required=${event === EVENT.pullRequest}
+`);
+    }
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+});
 test("service-suite PR scope binds planning, execution, and the fast result gate", () => {
   const scope = "service_suites_pr_required";
   const condition = jobIf(ciJobs["service-suites"]);
@@ -2923,155 +3070,6 @@ test("the production service-scope capture rejects crashed or malformed detector
     rmSync(directory, { recursive: true, force: true });
   }
 });
-
-test("route-relevant pull requests plan the required route smoke job", () => {
-  const scope = "route_smoke_required";
-  const selectedBy = jobIf(ciJobs["route-smoke"]);
-  expect(selectedBy).toContain(`needs.ci-plan.outputs.${scope} == 'true'`);
-  expect(selectedBy).toContain("github.event_name == 'pull_request'");
-  expect(selectedBy).toContain("needs.web-build.result == 'success'");
-  expect(heavyJobs).not.toContain("route-smoke");
-  expect(jobScopes["route-smoke"]).toBe(scope);
-  expect(fastRequired).toContain("route-smoke");
-  for (const file of [
-    "apps/web/src/routes/_authenticated/matters.tsx",
-    "apps/web/src/routeTree.gen.ts",
-    "apps/web/src/lib/react-query.ts",
-    "apps/web/src/components/new-query-component.tsx",
-    "apps/api/src/handlers/tasks/get.ts",
-    "packages/ui/src/button.tsx",
-    "apps/web/e2e/network-baseline.json",
-    "scripts/network-baseline-scope.ts",
-    "scripts/network-baseline-scope.test.ts",
-    "apps/web/e2e/specs/route-smoke.spec.ts",
-    "apps/web/e2e/helpers/network.ts",
-    "apps/web/e2e/helpers/workspace.ts",
-    "apps/web/e2e/playwright.config.ts",
-  ]) {
-    expect(runSelector([file], [scope]), file).toEqual(["true"]);
-  }
-  expect(runSelector(["docs/example.md"], [scope])).toEqual(["false"]);
-  expect(runSelector([], [scope])).toEqual(["false"]);
-  for (const event of [EVENT.mergeGroup, EVENT.workflowDispatch]) {
-    expect(
-      runSelector(
-        ["apps/web/src/routes/new.tsx"],
-        [scope],
-        "full",
-        "false",
-        event,
-      ),
-    ).toEqual(["false"]);
-  }
-  const event = EVENT.pullRequest;
-  expect(evaluateResult({ event, results: { "route-smoke": "skipped" } })).toBe(
-    1,
-  );
-  expect(
-    evaluateResult({
-      event,
-      results: { "route-smoke": "skipped" },
-      unplannedScopes: [scope],
-    }),
-  ).toBe(0);
-});
-
-test("route smoke consumes the production build and fails when its stack cannot run", () => {
-  const plan = jobSteps(ciJobs["ci-plan"]).find(
-    ({ name }) => name === "Check changed file scope",
-  );
-  // Keep the dependency implication executable: baseline-scope edits need a
-  // build even when the ordinary app-source build filter would not select it.
-  const implicationStart = workflow.indexOf(
-    "          # The production e2e shards",
-  );
-  const implicationEnd = workflow.indexOf(
-    "          printf 'Changed files:",
-    implicationStart,
-  );
-  expect(implicationEnd).toBeGreaterThan(implicationStart);
-  const implication = workflow.slice(implicationStart, implicationEnd);
-  const result = Bun.spawnSync([
-    "bash",
-    "-e",
-    "-c",
-    `e2e_core_required=false; route_smoke_required=true; web_build_required=false
-${implication}
-[[ "$web_build_required" == true ]]`,
-  ]);
-  expect(result.exitCode).toBe(0);
-  expect(plan?.run).toContain(
-    'echo "route_smoke_required=$route_smoke_required"',
-  );
-  expect(workflow).toContain(
-    [
-      "route_smoke_required: $",
-      "{{ steps.changed-files.outputs.route_smoke_required }}",
-    ].join(""),
-  );
-  const upload = jobSteps(ciJobs["web-build"]).find(
-    ({ name }) => name === "Upload production E2E web build",
-  );
-  expect(upload?.if).toContain(
-    "needs.ci-plan.outputs.route_smoke_required == 'true'",
-  );
-  const steps = jobSteps(ciJobs["route-smoke"]);
-  const smoke = steps.find(
-    ({ name }) => name === "Check route network baseline",
-  );
-  expect(smoke?.run).toContain("route-smoke.spec.ts --project=route-smoke");
-  const ready = steps.find(
-    ({ name }) => name === "Require production browser stack",
-  );
-  expect(ready?.run).toBeDefined();
-  for (const status of ["ready", "rate-limited", ""]) {
-    const check = Bun.spawnSync(["bash", "-e", "-c", ready?.run ?? "exit 2"], {
-      env: { STACK_STATUS: status },
-      stdout: "ignore",
-      stderr: "ignore",
-    });
-    expect(check.exitCode, status).toBe(status === "ready" ? 0 : 1);
-  }
-});
-
-test("an unreadable PR diff requires route smoke while manual and queue runs retain their suites", () => {
-  const start = workflow.indexOf(
-    "          # An unreadable diff must widen every scope",
-  );
-  const end = workflow.indexOf(
-    "          desktop_rust_checks_required=$(",
-    start,
-  );
-  expect(start).toBeGreaterThan(-1);
-  expect(end).toBeGreaterThan(start);
-  const directory = mkdtempSync(nodePath.join(tmpdir(), "route-smoke-plan-"));
-  const output = nodePath.join(directory, "output");
-  try {
-    for (const event of Object.values(EVENT)) {
-      writeFileSync(output, "");
-      const result = Bun.spawnSync(
-        ["bash", "-e", "-c", workflow.slice(start, end)],
-        {
-          env: {
-            EVENT_NAME: event,
-            SUITE_DEPTH: "full",
-            scope_unknown: "true",
-            GITHUB_OUTPUT: output,
-          },
-          stdout: "ignore",
-          stderr: "pipe",
-        },
-      );
-      expect(result.exitCode, result.stderr.toString()).toBe(0);
-      expect(readFileSync(output, "utf-8"))
-        .toContain(`route_smoke_required=${event === EVENT.pullRequest}
-`);
-    }
-  } finally {
-    rmSync(directory, { recursive: true, force: true });
-  }
-});
-
 const queueOnlyJobs = v.parse(
   v.record(
     v.string(),

@@ -6,6 +6,7 @@ import { Temporal } from "@stll/time";
 
 import type { SafeDbError } from "@/api/db/safe-db";
 import { toPersistableChatMessage } from "@/api/handlers/chat/chat-message-parts";
+import { COMPACTION_SUMMARY_MESSAGE_ID } from "@/api/handlers/chat/compaction";
 import type { ClientMessage } from "@/api/handlers/chat/message-page";
 import type {
   ChatMessage,
@@ -188,6 +189,11 @@ const withServedHistory = ({
   );
   const presented: SnapshotMessage[] = [];
   for (const message of messages) {
+    // Interrupt snapshots include the model-only summary as a user message.
+    // Keep it in the engine's history, but never present it as a posted turn.
+    if (message.id === COMPACTION_SUMMARY_MESSAGE_ID) {
+      continue;
+    }
     if (message.role === "tool" && servedCallIds.has(message.toolCallId)) {
       continue;
     }

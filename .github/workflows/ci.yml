@@ -1216,6 +1216,12 @@ jobs:
           bash scripts/check-ai-skill-sync.test.sh
           bash scripts/verify-step.test.sh
 
+      - name: Check local skill overrides
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: |
+          bash scripts/check-local-skill-overrides.sh .
+          bash scripts/check-local-skill-overrides.test.sh
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:
@@ -1261,7 +1267,7 @@ jobs:
       - name: Changeset present for published package changes
         # The repository owner publishes this versioned shared contract.
         if: github.event_name == 'pull_request'
-        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
+        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -4284,7 +4290,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-web", "code-quality-rest", "dependency-malware", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke"]
+            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled
