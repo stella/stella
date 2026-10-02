@@ -897,6 +897,7 @@
       "name": "@stll/property-testing",
       "version": "0.0.0",
       "dependencies": {
+        "better-result": "catalog:",
         "fast-check": "catalog:",
       },
       "devDependencies": {

@@ -2078,7 +2078,7 @@
       "packages/mojibake/package.json": 4,
       "packages/money/package.json": 3,
       "packages/permissions/package.json": 2,
-      "packages/property-testing/package.json": 2,
+      "packages/property-testing/package.json": 3,
       "packages/redis-config/package.json": 3,
       "packages/runtime-mode/package.json": 2,
       "packages/sanctions/package.json": 6,

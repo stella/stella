@@ -1816,7 +1816,11 @@ export default defineConfig({
       // Repository and workspace tooling: CLIs that print reports, plus the
       // on-demand eval runs. Anchored so `apps/api/src/scripts`, which ships
       // as runtime workers and backfills, keeps the product rules.
-      files: [...toolingScriptFiles, "apps/*/evals/**"],
+      files: [
+        ...toolingScriptFiles,
+        "apps/*/evals/**",
+        "packages/property-testing/src/index.ts",
+      ],
       rules: {
         "no-console": "off",
         // `noPropertyAccessFromIndexSignature` requires bracket access on the
