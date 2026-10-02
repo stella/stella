@@ -28,11 +28,8 @@ export const readWorkspaceContactsHandler = async ({
         }),
       ),
   );
-  if (result.isErr()) {
-    return result;
-  }
-  return Result.ok({
-    contacts: result.value.slice(0, LIMITS.workspaceContactsCount),
-    overflow: result.value.length > LIMITS.workspaceContactsCount,
-  });
+  return result.map((contacts) => ({
+    contacts: contacts.slice(0, LIMITS.workspaceContactsCount),
+    overflow: contacts.length > LIMITS.workspaceContactsCount,
+  }));
 };

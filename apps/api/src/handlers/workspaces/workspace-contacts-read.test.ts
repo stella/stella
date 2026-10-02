@@ -1,3 +1,4 @@
+import type { InferOk } from "better-result";
 import { afterAll, beforeAll, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
@@ -107,7 +108,20 @@ test("an overflowing matter returns visible contacts and an overflow flag", asyn
   // test separately proves that ordinary writes cannot create one.
   const rows = Array.from(
     { length: LIMITS.workspaceContactsCount + 1 },
-    () => ({ id: createSafeId<"workspaceContact">() }),
+    () =>
+      ({
+        id: createSafeId<"workspaceContact">(),
+        organizationId,
+        workspaceId,
+        contactId,
+        role: "witness",
+        isPrimary: false,
+        notes: null,
+        createdAt: new Date("2026-02-01"),
+        contact: null,
+      }) as const satisfies InferOk<
+        Awaited<ReturnType<typeof readWorkspaceContactsHandler>>
+      >["contacts"][number],
   );
   const scopedDb = asTestRaw<
     Parameters<typeof readWorkspaceContactsHandler>[0]["scopedDb"]

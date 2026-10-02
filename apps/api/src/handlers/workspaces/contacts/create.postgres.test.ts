@@ -71,8 +71,9 @@ if (!databaseUrl || !runPostgresTests) {
               }),
           );
           expect(outcome.isErr()).toBe(true);
-          if (outcome.isOk())
-            {panic("Capacity recount must refuse a fixed transaction snapshot");}
+          if (outcome.isOk()) {
+            panic("Capacity recount must refuse a fixed transaction snapshot");
+          }
           expect(
             isPgConstraintError(
               outcome.error,
@@ -151,7 +152,11 @@ if (!databaseUrl || !runPostgresTests) {
           const secondDatabase = drizzle({
             client: second.sql,
             relations: databaseRelations,
-            logger: { logQuery: (query) => secondQueries.push(query) },
+            logger: {
+              logQuery: (query) => {
+                secondQueries.push(query);
+              },
+            },
           });
           const firstSafeDb = createSafeDb(
             markRlsDatabase(first.db),
@@ -256,7 +261,9 @@ if (!databaseUrl || !runPostgresTests) {
               );
             }
 
-            let secondSettled = false;
+            const secondState: { status: "pending" | "settled" } = {
+              status: "pending",
+            };
             secondAddition = (
               secondWriter === "raw" ? insertRawContact : addContact
             )({
@@ -268,13 +275,13 @@ if (!databaseUrl || !runPostgresTests) {
                 role: firstRole === "witness" ? "expert_witness" : "witness",
               },
             }).finally(() => {
-              secondSettled = true;
+              secondState.status = "settled";
             });
 
             const deadline = performance.now() + BLOCK_OBSERVATION_DEADLINE_MS;
             let blockedByFirst = false;
             while (performance.now() < deadline) {
-              if (secondSettled) {
+              if (secondState.status === "settled") {
                 break;
               }
               const row = (
@@ -369,8 +376,8 @@ type AddContactOptions = Pick<
   "safeDb" | "organizationId" | "workspaceId" | "body"
 >;
 
-const addContact = (options: AddContactOptions) =>
-  Result.gen(() =>
+const addContact = async (options: AddContactOptions) =>
+  await Result.gen(() =>
     createWorkspaceContactHandler({
       ...options,
       recordAuditEvent: async () => {},
@@ -380,13 +387,13 @@ const addContact = (options: AddContactOptions) =>
     }),
   );
 
-const insertRawContact = ({
+const insertRawContact = async ({
   safeDb,
   organizationId,
   workspaceId,
   body,
 }: AddContactOptions) =>
-  safeDb(async (tx) => {
+  await safeDb(async (tx) => {
     const [created] = await tx
       .insert(workspaceContacts)
       .values({
@@ -396,6 +403,8 @@ const insertRawContact = ({
         role: body.role,
       })
       .returning();
-    if (!created) {panic("Raw contact fixture insert did not return a link");}
+    if (!created) {
+      panic("Raw contact fixture insert did not return a link");
+    }
     return created;
   });

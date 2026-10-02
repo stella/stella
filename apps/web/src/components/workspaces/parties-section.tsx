@@ -66,7 +66,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
   const workspaceQuery = useQuery(workspaceOptions(workspaceId));
   const workspace = workspaceQuery.data;
   const { data: contactRead } = useQuery(workspaceContactsOptions(workspaceId));
-  const parties = contactRead?.contacts ?? [];
+  const parties = contactRead?.contacts;
   const updateWorkspace = useUpdateWorkspace();
   const createContact = useCreateContact();
 
@@ -144,7 +144,9 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
       </section>
     </div>
   ) : null;
-  if (!client && parties.length === 0) {return personalSection;}
+  if (!client && (!parties || parties.length === 0)) {
+    return personalSection;
+  }
 
   return (
     <div className="flex flex-col">
@@ -207,7 +209,7 @@ export const PartiesSection = ({ workspaceId }: PartiesSectionProps) => {
             {t("errors.apiCodes.matterContactCapacityExceeded")}
           </p>
         )}
-        {parties.length > 0 ? (
+        {parties && parties.length > 0 ? (
           <ul>
             {parties.map((party) => (
               <PartyRow
