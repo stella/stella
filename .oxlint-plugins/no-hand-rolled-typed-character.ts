@@ -112,16 +112,17 @@ const comparesTypedCharacter = (node: AstNode): boolean => {
   );
 };
 
-const isOrChain = (node: unknown): node is AstNode =>
+const isOrChain = (node: unknown): boolean =>
   isAstNode(node) &&
   node.type === "LogicalExpression" &&
   node.operator === "||";
 
 const orOperands = (node: unknown): unknown[] => {
   const expression = unwrapExpression(node);
-  return isOrChain(expression)
-    ? [...orOperands(expression.left), ...orOperands(expression.right)]
-    : [expression];
+  if (expression === null || !isOrChain(expression)) {
+    return [expression];
+  }
+  return [...orOperands(expression.left), ...orOperands(expression.right)];
 };
 
 type Parents = Map<AstNode, AstNode | null>;
