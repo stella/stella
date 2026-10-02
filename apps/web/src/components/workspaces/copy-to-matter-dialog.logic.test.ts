@@ -24,7 +24,7 @@ describe("move refusal messages", () => {
         "entity_transfer_source_referenced",
         "workspaces.copyToMatter.sourceReferenced",
       ],
-    ]) {
+    ] as const) {
       expect(getCopyToMatterErrorKey({ code, message: "Server details" })).toBe(
         key,
       );

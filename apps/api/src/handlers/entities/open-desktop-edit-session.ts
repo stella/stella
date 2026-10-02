@@ -392,7 +392,17 @@ export const openDesktopEditSessionHandler = async function* ({
     );
   }
 
-  const runOpenSession = async ({ allowInsert }: { allowInsert: boolean }) => {
+  type RunOpenSessionResult = Result<
+    | Awaited<ReturnType<typeof buildExistingOpenDesktopEditSessionResponse>>
+    | { error: { message: string; statusCode: 400 | 409 } },
+    SafeDbError | HandlerError<409>
+  >;
+
+  const runOpenSession = async ({
+    allowInsert,
+  }: {
+    allowInsert: boolean;
+  }): Promise<RunOpenSessionResult> => {
     const result = await safeDb(async (tx) => {
       await lockDesktopEditTarget({
         entityId,

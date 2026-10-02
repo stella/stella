@@ -116,7 +116,7 @@ test("entity-transfer.carried-state-invariance", () => {
                 toSafeId<"user">("contributor"),
               ],
             },
-            detectedLanguage: { detectedLanguage: "cs" },
+            detectedLanguage: { detectedLanguage: "CS" },
             fields: { fields: [] },
           } satisfies {
             [Key in keyof EntityVersionSnapshot]: Pick<

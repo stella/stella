@@ -154,7 +154,6 @@ test("the mounted move dialog localizes deferred refusals for complete and parti
         fireEvent.click(
           view.getByRole("button", {
             name: messages.workspaces.copyToMatter.moveButton,
-            exact: true,
           }),
         );
         await started.promise;

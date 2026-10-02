@@ -18,6 +18,7 @@ import {
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { FOLIO_COLLAB_ROOM_ACTIVITY_TIMEOUT_MS } from "@/api/lib/folio-collab-room-contract";
+import { cents } from "@/api/lib/money";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
@@ -218,7 +219,7 @@ const cases = {
       timezoneId: "UTC",
       durationMinutes: 1,
       billedMinutes: 1,
-      rateAtEntry: 0,
+      rateAtEntry: cents(0),
       currency: "EUR",
       narrative: "Source",
       source: "manual",
@@ -235,7 +236,7 @@ const cases = {
       workspaceId: f.workspaceId,
       matterId: f.entityId,
       dateIncurred: "2026-10-02",
-      amount: 1,
+      amount: cents(1),
       currency: "EUR",
       category: "other",
       description: "Source",

@@ -25,6 +25,7 @@ import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { createFileKey } from "@/api/lib/file-key";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
 import { LIMITS } from "@/api/lib/limits";
+import { cents } from "@/api/lib/money";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -340,7 +341,7 @@ const removalBlockers = {
       timezoneId: "UTC",
       durationMinutes: 1,
       billedMinutes: 1,
-      rateAtEntry: 0,
+      rateAtEntry: cents(0),
       currency: "EUR",
       narrative: "Source",
       source: "manual",
@@ -357,7 +358,7 @@ const removalBlockers = {
       workspaceId: f.sourceWorkspaceId,
       matterId: f.documentId,
       dateIncurred: "2026-10-02",
-      amount: 1,
+      amount: cents(1),
       currency: "EUR",
       category: "other",
       description: "Source",
@@ -379,7 +380,7 @@ test.each(Object.entries(removalBlockers))(
       const referenced = kind === "time" || kind === "expense";
       expect(await f.run(true)).toMatchObject({
         code: 409,
-        value: {
+        response: {
           code: referenced
             ? "entity_transfer_source_referenced"
             : "entity_transfer_source_in_use",
@@ -490,7 +491,7 @@ test("move refuses a source beyond the live-version read limit without suggestin
     const objects = [...f.fake.objects.entries()];
     expect(await f.run(true)).toMatchObject({
       code: 409,
-      value: { code: "entity_transfer_source_limit", retryable: false },
+      response: { code: "entity_transfer_source_limit", retryable: false },
     });
     expect(f.fake.requests.filter(({ method }) => method === "COPY")).toEqual(
       [],

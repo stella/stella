@@ -15,7 +15,7 @@ import {
   properties,
   workspaces,
 } from "@/api/db/schema";
-import { createSafeDb } from "@/api/db/scoped";
+import { createSafeDb, markRlsDatabase } from "@/api/db/scoped";
 import { createSafeId } from "@/api/lib/branded-types";
 import { lockDesktopEditTarget } from "@/api/lib/entity-versions/desktop-edit-session-utils";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
@@ -252,7 +252,7 @@ if (!databaseUrl || !runPostgresTests) {
               case "version":
                 return await tx
                   .update(entityVersions)
-                  .set({ detectedLanguage: "cs" })
+                  .set({ detectedLanguage: "CS" })
                   .where(eq(entityVersions.id, versionId))
                   .returning({ id: entityVersions.id });
               case "field":
@@ -465,7 +465,7 @@ if (!databaseUrl || !runPostgresTests) {
               expect(after?.name).toBe("Changed.txt");
             }
             if (owner === "version") {
-              expect(after?.versions.at(0)?.detectedLanguage).toBe("cs");
+              expect(after?.versions.at(0)?.detectedLanguage).toBe("CS");
             }
             if (owner === "field") {
               const content = after?.versions.at(0)?.fields.at(0)?.content;
@@ -545,7 +545,7 @@ if (!databaseUrl || !runPostgresTests) {
                     recordAuditEvent: noAudit,
                     safeDb: asTestRaw<SafeDb>(
                       createSafeDb(
-                        sessionDb,
+                        markRlsDatabase(sessionDb),
                         [sourceWorkspaceId],
                         organizationId,
                         userId,

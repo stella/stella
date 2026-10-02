@@ -1022,9 +1022,6 @@ const validateMoveSource = async (
     return checked.value;
   }
   if (getPgErrorCode(checked.error) !== PG_ERROR.LOCK_NOT_AVAILABLE) {
-    captureError(checked.error, {
-      source: "entity-transfer-source-validation",
-    });
     return Result.err(
       new HandlerError({
         cause: checked.error,
