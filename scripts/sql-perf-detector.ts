@@ -643,6 +643,10 @@ const sourceFilteredSql = (statement: string): boolean => {
       new RegExp(
         `${SOURCE_EQUALITY_VALUE}\\s*=\\s*(?:[a-z_]\\w*\\.)?source_id\\b`,
         "iu",
+      ).test(text) ||
+      new RegExp(
+        String.raw`\bsource_id\b\s+IN\s*\(\s*${SOURCE_EQUALITY_VALUE}\s*\)`,
+        "iu",
       ).test(text)
     );
   });
@@ -673,6 +677,31 @@ const isSourceRestrictionColumn = (
     (column.name.text === "adapterKey" || column.name.text === "id") &&
     SOURCE_RELATION.test(owner)
   );
+};
+
+const singletonSourceValue = (
+  value: ts.Expression | undefined,
+  bindings: ConstBindings,
+): ts.Expression | undefined => {
+  if (
+    value === undefined ||
+    !ts.isArrayLiteralExpression(value) ||
+    value.elements.length !== 1
+  ) {
+    return undefined;
+  }
+  const element = value.elements.at(0);
+  if (element === undefined || ts.isSpreadElement(element)) {
+    return undefined;
+  }
+  const resolved = resolve(element, bindings);
+  if (
+    ts.isPropertyAccessExpression(resolved) &&
+    resolved.name.text === "sourceId"
+  ) {
+    return undefined;
+  }
+  return resolved;
 };
 
 const drizzleSourceCount = (
@@ -784,14 +813,39 @@ const drizzleSourceCount = (
         inspectedSources.add(value);
       }
       if (
-        ts.isCallExpression(value) &&
-        drizzleCallName(value, imports) === "eq"
+        ts.isTaggedTemplateExpression(value) &&
+        (isSqlTag(value) ||
+          (ts.isIdentifier(value.tag) &&
+            imports.names.get(value.tag.text) === "sql"))
       ) {
+        const predicate = sqlWithoutLiterals(
+          expandedSql({
+            ...sqlParts(file, value.template),
+            bindings,
+            file,
+          }).replace(SQL_STRING, "__SQL_EXPR_0__"),
+        );
+        state.source ||= sourceFilteredSql(
+          `WHERE ${sqlTableName(predicate.replaceAll('"', ""))}`,
+        );
+      }
+      if (
+        ts.isCallExpression(value) &&
+        ["eq", "inArray"].includes(drizzleCallName(value, imports) ?? "")
+      ) {
+        const singletonMembership =
+          drizzleCallName(value, imports) === "inArray";
         for (const [index, argument] of value.arguments.entries()) {
+          if (singletonMembership && index !== 0) {
+            continue;
+          }
           const column = resolve(argument, bindings);
           const other = value.arguments.at(index === 0 ? 1 : 0);
-          const otherValue =
+          let otherValue =
             other === undefined ? undefined : resolve(other, bindings);
+          if (singletonMembership) {
+            otherValue = singletonSourceValue(otherValue, bindings);
+          }
           if (
             ts.isPropertyAccessExpression(column) &&
             (column.name.text === "sourceId" ||

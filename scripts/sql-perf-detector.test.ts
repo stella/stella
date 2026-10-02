@@ -637,6 +637,81 @@ test.each([
   expect(kinds(source)).toContain("per-source-full-count");
 });
 
+test.each([
+  [
+    "direct SQL fragment",
+    'import { count, sql } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(sql`${caseLawDecisions.sourceId} = ${sourceId}`);',
+  ],
+  [
+    "SQL fragment inside and",
+    'import { count, sql, and, eq } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(and(eq(caseLawDecisions.country, country), sql`${caseLawDecisions.sourceId} = ${sourceId}`));',
+  ],
+  [
+    "aliased SQL tag and reversed equality",
+    'import { count, sql as fragment } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(fragment`${sourceId} = ${caseLawDecisions.sourceId}`);',
+  ],
+  [
+    "nested fragment bindings",
+    'import { count, sql } from "drizzle-orm"; const sourceFilter = sql`${caseLawDecisions.sourceId} = ${sourceId}`; const predicate = sql`${sourceFilter}`; db.select({ total: count() }).from(caseLawDecisions).where(predicate);',
+  ],
+  [
+    "table alias in fragment",
+    'import { count, sql, alias } from "drizzle-orm"; const decisions = alias(caseLawDecisions, "d"); db.select({ total: count() }).from(decisions).where(sql`${decisions.sourceId} = ${sourceId}`);',
+  ],
+])("SQL fragment source restriction remains guarded: %s", (_, source) => {
+  expect(kinds(source)).toContain("per-source-full-count");
+});
+
+test.each([
+  'import { count, sql } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(sql`${caseLawDecisions.sourceId} = ${other.sourceId}`);',
+  'import { count, sql, and, eq } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(and(eq(caseLawDecisions.country, country), sql`${other.sourceId} = ${caseLawDecisions.sourceId}`));',
+  'import { count, sql } from "drizzle-orm"; const correlation = sql`${caseLawDecisions.sourceId} = ${other.sourceId}`; const predicate = sql`${correlation}`; db.select({ total: count() }).from(caseLawDecisions).where(predicate);',
+])(
+  "SQL fragment correlation remains outside the source-total guard: %s",
+  (source) => {
+    expect(kinds(source)).not.toContain("per-source-full-count");
+  },
+);
+
+test.each([
+  'query("SELECT count(*) FROM case_law_decisions WHERE source_id IN ($1)", [sourceId])',
+  "sql`SELECT count(*) FROM case_law_decisions WHERE source_id IN (${sourceId})`",
+  'import { count, sql } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(sql`${caseLawDecisions.sourceId} IN (${sourceId})`);',
+  'import { count, inArray } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(inArray(caseLawDecisions.sourceId, [sourceId]));',
+])(
+  "single-value source membership has the same scan cost as equality: %s",
+  (source) => {
+    expect(kinds(source)).toContain("per-source-full-count");
+  },
+);
+
+test.each([
+  "sql`SELECT count(*) FROM case_law_decisions WHERE source_id IN ($1, $2)`",
+  "sql`SELECT count(*) FROM case_law_decisions WHERE source_id IN (other.source_id)`",
+  'import { count, sql } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(sql`${caseLawDecisions.sourceId} IN (${firstId}, ${secondId})`);',
+  'import { count, inArray } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(inArray(caseLawDecisions.sourceId, [firstId, secondId]));',
+  'import { count, inArray } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(inArray(caseLawDecisions.sourceId, [other.sourceId]));',
+])(
+  "multiple-source membership and singleton correlation remain out of scope: %s",
+  (source) => {
+    expect(kinds(source)).not.toContain("per-source-full-count");
+  },
+);
+
+test("SQL fragment source counts require the same concrete exemption", () => {
+  const source =
+    'import { count, sql } from "drizzle-orm";\nconst total = db.select({ total: count() }).from(caseLawDecisions).where(sql`${caseLawDecisions.sourceId} = ${sourceId}`);';
+  expect(kinds(source)).toContain("per-source-full-count");
+  const exempted = source.replace(
+    "const total",
+    "// sql-perf-allow: bounded by an offline scheduled maintenance budget\nconst total",
+  );
+  expect(analyzeSqlPerf(exempted, "apps/api/src/handlers/example.ts")).toEqual({
+    hits: [],
+    commentErrors: [],
+  });
+});
+
 test("every high-volume relation receives the per-source count guard", () => {
   for (const table of HIGH_VOLUME_TABLES) {
     expect(
