@@ -125,11 +125,11 @@ if (!databaseUrl || !runPostgresTests) {
         });
         return id;
       };
-      const create = (
+      const create = async (
         sellerProfileId?: SafeId<"sellerProfile">,
         database: GatedTestDb = db,
       ) =>
-        createSeries.handler(
+        await createSeries.handler(
           asTestRaw<Parameters<typeof createSeries.handler>[0]>({
             ...contextFor(database),
             body: {
@@ -159,8 +159,8 @@ if (!databaseUrl || !runPostgresTests) {
             body: { sellerProfileId },
           }),
         );
-      const defaults = () =>
-        db.query.numberSeries.findMany({
+      const defaults = async () =>
+        await db.query.numberSeries.findMany({
           where: {
             organizationId: { eq: orgId },
             isDefault: { eq: true },
@@ -169,8 +169,8 @@ if (!databaseUrl || !runPostgresTests) {
           columns: { id: true, sellerProfileId: true },
           limit: 20,
         });
-      const stored = () =>
-        db
+      const stored = async () =>
+        await db
           .select({
             id: numberSeries.id,
             isDefault: numberSeries.isDefault,
@@ -252,8 +252,8 @@ if (!databaseUrl || !runPostgresTests) {
         .update(numberSeries)
         .set({ isDefault: false, archivedAt: new Date() })
         .where(eq(numberSeries.id, archived));
-      const result = await f.scopedDb((tx) =>
-        findDefaultNumberSeries(tx, "invoice", f.sellerA),
+      const result = await f.scopedDb(
+        async (tx) => await findDefaultNumberSeries(tx, "invoice", f.sellerA),
       );
       expect(result?.id).toBe(all);
     });
@@ -328,8 +328,8 @@ if (!databaseUrl || !runPostgresTests) {
           databaseUrl,
           async ({ openClient }) =>
             await Promise.all(
-              [openClient().db, openClient().db].map((connection) =>
-                f.create(seller, connection),
+              [openClient().db, openClient().db].map(
+                async (connection) => await f.create(seller, connection),
               ),
             ),
         );

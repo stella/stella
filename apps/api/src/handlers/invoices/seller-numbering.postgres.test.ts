@@ -203,13 +203,13 @@ if (!databaseUrl || !runPostgres) {
       invoiceId: SafeId<"invoice">;
       events?: AuditEvent[];
     };
-    const finalize = ({
+    const finalize = async ({
       db: connection,
       scenario: { wsId, orgId, userId },
       invoiceId,
       events = [],
     }: FinalizeOptions) =>
-      transitionInvoice.handler(
+      await transitionInvoice.handler(
         asTestRaw<Parameters<typeof transitionInvoice.handler>[0]>({
           params: { workspaceId: wsId, invoiceId },
           workspaceId: wsId,
@@ -246,17 +246,24 @@ if (!databaseUrl || !runPostgres) {
       const { sellerA, sellerB, aSeries, bSeries, orgId } = scenario;
       const sellers = [sellerA, sellerB, sellerA, sellerB, sellerA, sellerB];
       const invoiceIds = await Promise.all(
-        sellers.map((sellerProfileId) =>
-          seedInvoice(scenario, { sellerProfileId }),
+        sellers.map(
+          async (sellerProfileId) =>
+            await seedInvoice(scenario, { sellerProfileId }),
         ),
       );
       const events: AuditEvent[] = [];
       const outcomes = await withGatedTestClients(
         databaseUrl,
         async ({ openClient }) =>
-          Promise.all(
-            invoiceIds.map((invoiceId) =>
-              finalize({ scenario, db: openClient().db, invoiceId, events }),
+          await Promise.all(
+            invoiceIds.map(
+              async (invoiceId) =>
+                await finalize({
+                  scenario,
+                  db: openClient().db,
+                  invoiceId,
+                  events,
+                }),
             ),
           ),
       );
@@ -327,9 +334,10 @@ if (!databaseUrl || !runPostgres) {
       const outcomes = await withGatedTestClients(
         databaseUrl,
         async ({ openClient }) =>
-          Promise.all(
-            [openClient().db, openClient().db].map((connection) =>
-              finalize({ scenario, db: connection, invoiceId }),
+          await Promise.all(
+            [openClient().db, openClient().db].map(
+              async (connection) =>
+                await finalize({ scenario, db: connection, invoiceId }),
             ),
           ),
       );
