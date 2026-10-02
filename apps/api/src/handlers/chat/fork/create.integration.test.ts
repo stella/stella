@@ -38,6 +38,7 @@ import {
   removeOrganizationFilesBytes,
 } from "@/api/lib/files/organization-file-usage";
 import { createUserFileKey } from "@/api/lib/files/utils";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { toUserFileUrl } from "@/api/lib/user-files/types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -266,7 +267,7 @@ const forkContext = ({
       await Promise.resolve(
         id === ids.wsA1 ? { id: ids.wsA1, status: "active" } : null,
       ),
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     params: { threadId },
     query: workspaceId ? { workspaceId } : {},
     recordAuditEvent: async () => await Promise.resolve(),
@@ -278,7 +279,7 @@ const forkContext = ({
 
 const threadsContext = (): ThreadsCtx =>
   asTestRaw<ThreadsCtx>({
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     query: { limit: 100 },
     safeDb,
     session: { activeOrganizationId: ids.orgA },
@@ -757,7 +758,7 @@ test("get-messages reports the fork's provenance and loses it when the parent go
     const response = await getMessages.handler(
       asTestRaw<MessagesCtx>({
         getWorkspaceAccess: async () => await Promise.resolve(null),
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         managedAIResidency: "eu" as const,
@@ -824,7 +825,7 @@ test("a parent outside the reader's scope reports as unavailable, not by title",
   const response = await getMessages.handler(
     asTestRaw<MessagesCtx>({
       getWorkspaceAccess: async () => await Promise.resolve(null),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,
@@ -849,7 +850,7 @@ test("a thread that was never forked reports no provenance", async () => {
   const response = await getMessages.handler(
     asTestRaw<MessagesCtx>({
       getWorkspaceAccess: async () => await Promise.resolve(null),
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
       managedAIResidency: "eu" as const,

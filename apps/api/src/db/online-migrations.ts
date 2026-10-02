@@ -79,6 +79,14 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE UNIQUE INDEX CONCURRENTLY "session_priorTokenHash_idx" ON public."session" USING btree ("prior_token_hash")',
+    definitionBody: "ON public.session USING btree (prior_token_hash)",
+    isUnique: true,
+    name: "session_priorTokenHash_idx",
+    tableName: "session",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "time_entries_org_status_date_id_idx" ON public."time_entries" USING btree ("organization_id", "status", "date_worked", "id")',
     definitionBody:
       "ON public.time_entries USING btree (organization_id, status, date_worked, id)",

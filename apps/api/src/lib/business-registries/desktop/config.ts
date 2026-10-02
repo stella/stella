@@ -8,6 +8,10 @@ export const DESKTOP_REGISTRY_KEY_PREFIX = DESKTOP_ACCOUNT_POLICY.keyPrefix;
 // A revocable seven-day account link replaces the hourly registry prototype.
 export const DESKTOP_REGISTRY_KEY_SECONDS =
   DESKTOP_ACCOUNT_POLICY.credentialLifetimeSeconds;
+export const DESKTOP_ACCOUNT_PERMISSION = {
+  workspace: ["read"],
+} satisfies PermissionInput;
+
 /**
  * The desktop search key is the member's own integration: the same grant
  * gates minting one and every later request the key carries, so a member who

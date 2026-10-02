@@ -150,7 +150,19 @@ export const runAdaptiveBackfillBatch = async <Transaction, Item, Cursor>({
             persistItems,
             persistCheckpoint: async (transaction, cursor) => {
               const completed = nextBatch({
-                state: checkpoint.batch,
+                // Sizing uses the pre-batch numbers once; the accepted batch
+                // already cleared its hold. A reading aging during committed
+                // work cannot retroactively hold that successful batch.
+                state: {
+                  size: checkpoint.batch.size,
+                  sleepMs: checkpoint.batch.sleepMs,
+                  smoothedDurationMs: checkpoint.batch.smoothedDurationMs,
+                  stableBatches: checkpoint.batch.stableBatches,
+                  holdCount: decision.state.holdCount,
+                  heldSince: decision.state.heldSince,
+                  holdUntil: decision.state.holdUntil,
+                  holdCause: decision.state.holdCause,
+                },
                 verdict,
                 lastDurationMs: Math.max(0, clock() - began),
                 config,

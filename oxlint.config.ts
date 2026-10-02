@@ -139,6 +139,15 @@ const fixtureRuleOverrides = [
     "drizzle/enforce-delete-with-where",
     "drizzle/enforce-update-with-where",
   ]),
+  ...[
+    "no-swallowed-item-error.fixture.ts",
+    "no-swallowed-item-error.fixture.legacy.ts",
+    "no-swallowed-item-error.fixture.stale.ts",
+  ].map((file) =>
+    fixtureRuleOverride(file, [
+      "no-swallowed-item-error/no-swallowed-item-error",
+    ]),
+  ),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -187,6 +196,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-ad-hoc-find-shortcut.fixture.ts", [
     "no-ad-hoc-find-shortcut/no-ad-hoc-find-shortcut",
+  ]),
+  fixtureRuleOverride("no-hand-rolled-typed-character.fixture.ts", [
+    "no-hand-rolled-typed-character/no-hand-rolled-typed-character",
   ]),
   fixtureRuleOverride("no-ambient-hotkey-format.fixture.ts", [
     "no-ambient-hotkey-format/no-ambient-hotkey-format",
@@ -1176,6 +1188,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-raw-foreground-opacity.ts",
     "./.oxlint-plugins/no-inline-style-colors.ts",
     "./.oxlint-plugins/no-ad-hoc-find-shortcut.ts",
+    "./.oxlint-plugins/no-hand-rolled-typed-character.ts",
     "./.oxlint-plugins/no-ambient-hotkey-format.ts",
     "./.oxlint-plugins/no-ambient-nondeterminism.ts",
     "./.oxlint-plugins/no-physical-properties.ts",
@@ -1229,6 +1242,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
+    "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
     "./.oxlint-plugins/mcp-security.ts",
@@ -2727,6 +2741,16 @@ export default defineConfig({
       },
     },
     {
+      // Which character a keystroke typed is decided by `typedCharacter` in
+      // `@stll/ui/typed-character`; hand-rolled Alt checks drop text typed
+      // with Option on macOS layouts or AltGr on Windows.
+      files: ["apps/*/src/**/*.{ts,tsx}", "packages/*/src/**/*.{ts,tsx}"],
+      rules: {
+        "no-hand-rolled-typed-character/no-hand-rolled-typed-character":
+          "error",
+      },
+    },
+    {
       // Locale-aware number/date formatting. Folio is excluded: its
       // document surface stays LTR-based and formats with its own
       // resolved locales rather than the UI numbering preference.
@@ -3070,6 +3094,14 @@ export default defineConfig({
         "no-direct-ingestion-checkpoint-write/no-direct-ingestion-checkpoint-write":
           "error",
       },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture*.ts",
+      ],
+      excludeFiles: ["**/*.test.ts"],
+      rules: { "no-swallowed-item-error/no-swallowed-item-error": "error" },
     },
     {
       files: [

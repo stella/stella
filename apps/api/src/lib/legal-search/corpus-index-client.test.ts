@@ -1,5 +1,8 @@
+import { Result } from "better-result";
 import { afterEach, beforeEach, expect, test } from "bun:test";
+import fc from "fast-check";
 
+import { assertProperty } from "@stll/property-testing";
 import { Temporal } from "@stll/time";
 
 import { envBase } from "@/api/env-base";
@@ -10,6 +13,7 @@ import {
   CORPUS_INDEX_COMMIT_WAIT_TIMEOUT_MS,
   CORPUS_INDEX_ENGINE_INGEST_MAX_BYTES,
   CORPUS_INDEX_INGEST_TIMEOUT_MS,
+  type CorpusIndexDeleteSettlementRead,
   corpusIndexScoredSearchRequest,
   getCorpusIndexClient,
   parseCorpusIndexScoredSearchResponse,
@@ -772,10 +776,35 @@ const publishedSplit = ({
   publish_timestamp: publishedAtSeconds,
 });
 
-const readSettlement = async (requiredOpstamp: number) =>
-  await getCorpusIndexClient("q09").readDeleteSettlement({
+type SettlementTask = {
+  requiredOpstamp: number;
+  deleteCreatedAt: Temporal.Instant | null;
+};
+
+const readSettlements = async (tasks: readonly SettlementTask[]) =>
+  await getCorpusIndexClient("q09").readDeleteSettlements({
     observer: "unobserved",
     indexId: "legal_corpus_v1_cze",
+    tasks,
+  });
+
+const readOnlySettlement = async (
+  task: SettlementTask,
+): Promise<CorpusIndexDeleteSettlementRead> => {
+  const read = await readSettlements([task]);
+  if (read.isErr()) {
+    return Result.err(read.error);
+  }
+  expect(read.value).toHaveLength(1);
+  const settlement = read.value.at(0);
+  if (settlement === undefined) {
+    throw new Error("expected one settlement for one delete task");
+  }
+  return settlement;
+};
+
+const readSettlement = async (requiredOpstamp: number) =>
+  await readOnlySettlement({
     requiredOpstamp,
     deleteCreatedAt: DELETE_TASK_CREATED_AT,
   });
@@ -914,9 +943,7 @@ test("delete settlement without a delete instant keeps every split", async () =>
     ],
   };
 
-  const result = await getCorpusIndexClient("q09").readDeleteSettlement({
-    observer: "unobserved",
-    indexId: "legal_corpus_v1_cze",
+  const result = await readOnlySettlement({
     requiredOpstamp: 42,
     deleteCreatedAt: null,
   });
@@ -936,6 +963,7 @@ test("delete settlement rejects an invalid required opstamp", async () => {
   if (result.isErr()) {
     expect(result.error.message).toContain("invalid opstamp");
   }
+  expect(requests).toEqual([]);
 });
 
 test("delete settlement rejects a split without a usable delete opstamp", async () => {
@@ -1096,6 +1124,271 @@ test("delete settlement rejects the first split beyond its ceiling", async () =>
   if (result.isErr()) {
     expect(result.error.message).toContain("exceeds 10000");
   }
+});
+
+test("delete settlement lists an index's splits once for every task it judges", async () => {
+  // Two pages per pass, and an append between passes that every task excludes.
+  let firstPageReads = 0;
+  responseBodyForUrl = (url) => {
+    const offset = Number(url.searchParams.get("offset") ?? "0");
+    if (offset === 0) {
+      firstPageReads += 1;
+    }
+    const pageSize = Math.min(1000, Math.max(1500 - offset, 0));
+    return {
+      splits: [
+        ...Array.from({ length: pageSize }, (_, index) =>
+          publishedSplit({ id: `split-${offset + index}`, deleteOpstamp: 42 }),
+        ),
+        ...(offset === 1000
+          ? [
+              publishedSplit({
+                id: `split-appended-${firstPageReads}`,
+                deleteOpstamp: 41,
+                publishedAtSeconds: DELETE_TASK_SECONDS + 1,
+              }),
+            ]
+          : []),
+      ],
+    };
+  };
+  const task = (requiredOpstamp: number): SettlementTask => ({
+    requiredOpstamp,
+    deleteCreatedAt: DELETE_TASK_CREATED_AT,
+  });
+
+  const one = await readSettlements([task(42)]);
+  const oneTaskRequests = requests.length;
+  requests = [];
+  firstPageReads = 0;
+  const many = await readSettlements(
+    Array.from({ length: 8 }, (_, index) => task(35 + index)),
+  );
+
+  expect(one.isOk() && many.isOk()).toBe(true);
+  // One stable pass pair over two pages, independent of the task count.
+  expect(oneTaskRequests).toBe(4);
+  expect(requests).toHaveLength(oneTaskRequests);
+  if (many.isOk()) {
+    expect(many.value.map((settlement) => settlement.isOk())).toEqual(
+      Array.from({ length: 8 }, () => true),
+    );
+  }
+});
+
+const METASTORE_SECONDS_SPREAD = 2;
+const PROPERTY_SPLIT_IDS = ["split-a", "split-b", "split-c", "split-d"];
+
+type PropertySplit = {
+  split_id: string;
+  split_state: "Published" | "Staged";
+  delete_opstamp: number;
+  publish_timestamp: number | null;
+};
+
+const propertySplitArb: fc.Arbitrary<PropertySplit> = fc.record({
+  split_id: fc.constantFrom(...PROPERTY_SPLIT_IDS),
+  split_state: fc.constantFrom("Published", "Staged"),
+  delete_opstamp: fc.integer({ min: 40, max: 44 }),
+  publish_timestamp: fc.option(
+    fc.integer({
+      min: DELETE_TASK_SECONDS - METASTORE_SECONDS_SPREAD,
+      max: DELETE_TASK_SECONDS + METASTORE_SECONDS_SPREAD,
+    }),
+    { nil: null },
+  ),
+});
+
+const propertyPassArb = fc.array(propertySplitArb, { maxLength: 6 });
+
+/**
+ * A pass either churns freely or repeats the pass before it with opstamps
+ * that only move forward, the shape a settling index reads as.
+ */
+const propertyPassesArb = fc
+  .tuple(
+    propertyPassArb,
+    fc.array(fc.tuple(fc.boolean(), propertyPassArb), {
+      minLength: 2,
+      maxLength: 2,
+    }),
+  )
+  .map(([first, rest]) => {
+    const passes = [first];
+    for (const [repeat, churned] of rest) {
+      const previous = passes.at(-1) ?? first;
+      passes.push(
+        repeat
+          ? previous.map(
+              (
+                { split_id, split_state, delete_opstamp, publish_timestamp },
+                index,
+              ) => ({
+                split_id,
+                split_state,
+                publish_timestamp,
+                delete_opstamp: Math.max(
+                  delete_opstamp,
+                  churned.at(index)?.delete_opstamp ?? delete_opstamp,
+                ),
+              }),
+            )
+          : churned,
+      );
+    }
+    return passes;
+  });
+
+const propertyTaskArb: fc.Arbitrary<SettlementTask> = fc
+  .record({
+    requiredOpstamp: fc.integer({ min: -1, max: 45 }),
+    createdAtMs: fc.option(
+      fc.integer({
+        min: (DELETE_TASK_SECONDS - METASTORE_SECONDS_SPREAD) * 1000,
+        max: (DELETE_TASK_SECONDS + METASTORE_SECONDS_SPREAD) * 1000 + 999,
+      }),
+      { nil: null },
+    ),
+  })
+  .map(({ requiredOpstamp, createdAtMs }) => ({
+    requiredOpstamp,
+    deleteCreatedAt:
+      createdAtMs === null
+        ? null
+        : Temporal.Instant.fromEpochMilliseconds(createdAtMs),
+  }));
+
+type SettlementVerdict =
+  | {
+      status: "settlement";
+      requiredOpstamp: number;
+      provingSplits: number;
+      excludedSplits: number;
+      laggingSplits: number;
+      minAppliedOpstamp: number | null;
+      settled: boolean;
+    }
+  | { status: "invalid-opstamp" }
+  | { status: "unstable" };
+
+type OracleVerdict = {
+  verdict: SettlementVerdict;
+  /** Split-list passes one task proved alone would have read. */
+  passesRead: number;
+};
+
+/**
+ * One task proved alone against the same sequence of split-list passes: read
+ * a pass, keep the splits not published after the task's second, and accept
+ * the first pass whose proving identities equal the previous pass's (an empty
+ * set before the first); give up after three passes.
+ */
+const proveTaskAlone = (
+  passes: readonly (readonly PropertySplit[])[],
+  { requiredOpstamp, deleteCreatedAt }: SettlementTask,
+): OracleVerdict => {
+  if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
+    return { verdict: { status: "invalid-opstamp" }, passesRead: 0 };
+  }
+  const cutoff =
+    deleteCreatedAt === null
+      ? null
+      : Math.floor(deleteCreatedAt.epochMilliseconds / 1000);
+  let previousIds = JSON.stringify([]);
+  for (const [index, pass] of passes.slice(0, 3).entries()) {
+    const proving = new Map<string, number>();
+    let excludedSplits = 0;
+    for (const split of pass) {
+      if (
+        cutoff !== null &&
+        split.publish_timestamp !== null &&
+        split.publish_timestamp > cutoff
+      ) {
+        excludedSplits += 1;
+        continue;
+      }
+      proving.set(
+        split.split_id,
+        Math.min(
+          proving.get(split.split_id) ?? split.delete_opstamp,
+          split.delete_opstamp,
+        ),
+      );
+    }
+    const ids = JSON.stringify([...proving.keys()].toSorted());
+    if (ids === previousIds) {
+      const opstamps = [...proving.values()];
+      const laggingSplits = opstamps.filter(
+        (opstamp) => opstamp < requiredOpstamp,
+      ).length;
+      return {
+        verdict: {
+          status: "settlement",
+          requiredOpstamp,
+          provingSplits: proving.size,
+          excludedSplits,
+          laggingSplits,
+          minAppliedOpstamp:
+            opstamps.length === 0 ? null : Math.min(...opstamps),
+          settled: laggingSplits === 0,
+        },
+        passesRead: index + 1,
+      };
+    }
+    previousIds = ids;
+  }
+  return { verdict: { status: "unstable" }, passesRead: 3 };
+};
+
+const verdictOf = (
+  read: CorpusIndexDeleteSettlementRead,
+): SettlementVerdict => {
+  if (read.isOk()) {
+    return { status: "settlement", ...read.value };
+  }
+  if (read.error.message.includes("invalid opstamp")) {
+    return { status: "invalid-opstamp" };
+  }
+  if (read.error.message.includes("stable proving-split set")) {
+    return { status: "unstable" };
+  }
+  throw read.error;
+};
+
+test("delete settlements judged together match each task judged alone", async () => {
+  await assertProperty(
+    "delete settlements judged together match each task judged alone",
+    fc.asyncProperty(
+      propertyPassesArb,
+      fc.array(propertyTaskArb, { minLength: 1, maxLength: 8 }),
+      async (passes, tasks) => {
+        requests = [];
+        let passesServed = 0;
+        responseBodyForUrl = () => {
+          passesServed += 1;
+          const pass = passes.at(passesServed - 1);
+          if (pass === undefined) {
+            throw new Error("settlement read more passes than the ceiling");
+          }
+          return { splits: pass };
+        };
+
+        const read = await readSettlements(tasks);
+
+        if (read.isErr()) {
+          throw read.error;
+        }
+        const alone = tasks.map((task) => proveTaskAlone(passes, task));
+        expect(read.value.map(verdictOf)).toEqual(
+          alone.map(({ verdict }) => verdict),
+        );
+        // The shared read stops where the most demanding task alone would.
+        expect(requests).toHaveLength(
+          Math.max(0, ...alone.map(({ passesRead }) => passesRead)),
+        );
+      },
+    ),
+  );
 });
 
 test("ingest sends the commit mode the caller asked for", async () => {
@@ -1551,10 +1844,9 @@ test("cached corpus clients honor each request observer and observe every settle
   const failures: unknown[] = [];
   for (const owner of ["first", "second"] as const) {
     const before = requests.length;
-    const result = await client.readDeleteSettlement({
+    const result = await client.readDeleteSettlements({
       indexId: "fixture-index",
-      requiredOpstamp: 42,
-      deleteCreatedAt: null,
+      tasks: [{ requiredOpstamp: 42, deleteCreatedAt: null }],
       observer: {
         onRequest: () => {
           calls[owner] += 1;

@@ -29,6 +29,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -98,7 +99,7 @@ const context = <TContext>(
   return asTestRaw<TContext>({
     ...request,
     workspaceId,
-    memberRole: { role: actor },
+    memberRole: sessionMemberRole(actor),
     session: { activeOrganizationId: ids.orgA },
     user: { id: actorId },
     safeDb: createSafeDb(db, [workspaceId], ids.orgA, actorId),

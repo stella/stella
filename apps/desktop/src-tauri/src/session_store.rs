@@ -43,6 +43,8 @@ pub struct SessionStorePayload {
   pub linked_account: Option<LinkedAccountSnapshot>,
   #[serde(default)]
   pub linked_account_web_origin: Option<String>,
+  #[serde(default)]
+  pub selected_self_host_connection: Option<TrustedSelfHostConnection>,
   pub notification_preferences: Option<DesktopNotificationPreferences>,
   pub sessions: Vec<PersistedDesktopSession>,
   #[serde(default)]
@@ -59,6 +61,7 @@ pub struct LoadedSessionStore {
   pub cleanup_paths: Vec<String>,
   pub linked_account: Option<LinkedAccountSnapshot>,
   pub linked_account_web_origin: Option<String>,
+  pub selected_self_host_connection: Option<TrustedSelfHostConnection>,
   pub notification_preferences: Option<DesktopNotificationPreferences>,
   pub sessions: Vec<PersistedDesktopSession>,
   pub trusted_self_host_connections: Vec<TrustedSelfHostConnection>,
@@ -70,6 +73,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
     cleanup_paths: Vec::new(),
     linked_account: None,
     linked_account_web_origin: None,
+    selected_self_host_connection: None,
     notification_preferences: None,
     sessions: Vec::new(),
     trusted_self_host_connections: Vec::new(),
@@ -92,6 +96,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
       cleanup_paths: payload.cleanup_paths,
       linked_account: payload.linked_account,
       linked_account_web_origin: payload.linked_account_web_origin,
+      selected_self_host_connection: payload.selected_self_host_connection,
       notification_preferences: payload.notification_preferences,
       sessions: payload.sessions,
       trusted_self_host_connections: payload.trusted_self_host_connections,
@@ -106,12 +111,7 @@ pub async fn load_session_store(store_path: &Path) -> LoadedSessionStore {
 
 pub async fn persist_session_store(
   store_path: &Path,
-  cleanup_paths: &[String],
-  linked_account: &Option<LinkedAccountSnapshot>,
-  linked_account_web_origin: &Option<String>,
-  notification_preferences: &DesktopNotificationPreferences,
-  sessions: &[PersistedDesktopSession],
-  trusted_self_host_connections: &[TrustedSelfHostConnection],
+  payload: &SessionStorePayload,
 ) -> Result<(), String> {
   if let Some(parent) = store_path.parent() {
     fs::create_dir_all(parent)
@@ -119,16 +119,7 @@ pub async fn persist_session_store(
       .map_err(|e| format!("mkdir failed: {e}"))?;
   }
 
-  let payload = SessionStorePayload {
-    cleanup_paths: cleanup_paths.to_vec(),
-    linked_account: linked_account.clone(),
-    linked_account_web_origin: linked_account_web_origin.clone(),
-    notification_preferences: Some(notification_preferences.clone()),
-    sessions: sessions.to_vec(),
-    trusted_self_host_connections: trusted_self_host_connections.to_vec(),
-  };
-
-  let json = serde_json::to_string_pretty(&payload)
+  let json = serde_json::to_string_pretty(payload)
     .map_err(|e| format!("serialize failed: {e}"))?;
 
   let temp_path = format!(
@@ -192,6 +183,7 @@ mod tests {
         verified_at: "2026-01-01T00:00:00Z".into(),
       }),
       linked_account_web_origin: Some("https://selfhost.example".into()),
+      selected_self_host_connection: None,
       notification_preferences: Some(DesktopNotificationPreferences::default()),
       sessions: vec![make_session()],
       trusted_self_host_connections: vec![TrustedSelfHostConnection {
@@ -302,16 +294,19 @@ mod tests {
 
     persist_session_store(
       &path,
-      &["/tmp/cleanup.docx".into()],
-      &linked,
-      &Some("https://selfhost.example".into()),
-      &prefs,
-      &[session],
-      &[TrustedSelfHostConnection {
-        api_base_url: "https://api.selfhost.example".into(),
-        trusted_at: "2026-04-25T00:00:00Z".into(),
-        web_origin: "https://selfhost.example".into(),
-      }],
+      &SessionStorePayload {
+        cleanup_paths: vec!["/tmp/cleanup.docx".into()],
+        linked_account: linked,
+        linked_account_web_origin: Some("https://selfhost.example".into()),
+        selected_self_host_connection: None,
+        notification_preferences: Some(prefs),
+        sessions: vec![session],
+        trusted_self_host_connections: vec![TrustedSelfHostConnection {
+          api_base_url: "https://api.selfhost.example".into(),
+          trusted_at: "2026-04-25T00:00:00Z".into(),
+          web_origin: "https://selfhost.example".into(),
+        }],
+      },
     )
     .await
     .unwrap();

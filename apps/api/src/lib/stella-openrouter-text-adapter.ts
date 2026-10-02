@@ -5,9 +5,11 @@ import type {
   createOpenRouterText,
   OpenRouterConfig,
 } from "@tanstack/ai-openrouter";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { checkManagedOpenRouterModel } from "@/api/lib/chat/managed-provider-checks";
 import {
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
@@ -153,7 +155,61 @@ const withoutModelVariant = (model: string): string => {
   return variantStart === -1 ? model : model.slice(0, variantStart);
 };
 
-class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
+const INSTANCE_DEBUG_LOGGER = {
+  group: () => undefined,
+  groupEnd: () => undefined,
+  log: () => undefined,
+} satisfies NonNullable<OpenRouterConfig["debugLogger"]>;
+
+class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
+  constructor(config: OpenRouterConfig, model: OpenRouterModel) {
+    // A truthy logger also prevents OPENROUTER_DEBUG from enabling SDK logs.
+    super({ ...config, debugLogger: INSTANCE_DEBUG_LOGGER }, model);
+  }
+
+  override chatStream(options: OpenRouterTextOptions) {
+    return super.chatStream({ ...options, logger: resolveDebugOption(false) });
+  }
+
+  override structuredOutputStream(options: OpenRouterStructuredOptions) {
+    return super.structuredOutputStream({
+      ...options,
+      chatOptions: {
+        ...options.chatOptions,
+        logger: resolveDebugOption(false),
+      },
+    });
+  }
+
+  override async structuredOutput(options: OpenRouterStructuredOptions) {
+    return await super.structuredOutput({
+      ...options,
+      chatOptions: {
+        ...options.chatOptions,
+        logger: resolveDebugOption(false),
+      },
+    });
+  }
+
+  protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    const { models: _models, ...modelOptions } = options.modelOptions ?? {};
+    return super.mapOptionsToRequest({ ...options, modelOptions });
+  }
+}
+
+class ManagedOpenRouterTextAdapter extends InstanceOpenRouterTextAdapter {
+  private readonly residency: ManagedAIResidency;
+
+  constructor(
+    config: OpenRouterConfig,
+    {
+      model,
+      managedAIResidency,
+    }: Pick<ManagedOpenRouterTextOptions, "model" | "managedAIResidency">,
+  ) {
+    super(config, model);
+    this.residency = managedAIResidency;
+  }
   override chatStream(options: OpenRouterTextOptions) {
     return withManagedRoutingErrors(super.chatStream(options));
   }
@@ -177,6 +233,11 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    const model = withoutModelVariant(options.model);
+    const availability = checkManagedOpenRouterModel(model, this.residency);
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
     const {
       plugins: _plugins,
       variant: _variant,
@@ -184,16 +245,11 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
     } = options.modelOptions ?? {};
     const request = super.mapOptionsToRequest({
       ...options,
-      model: withoutModelVariant(options.model),
+      model,
       modelOptions,
     });
     return {
       ...request,
-      ...(request.models === undefined
-        ? {}
-        : {
-            models: request.models.map((model) => withoutModelVariant(model)),
-          }),
       provider: {
         ...request.provider,
         ...PROVIDER_DATA_POLICY.customer.openrouter.provider,
@@ -220,6 +276,15 @@ export const createManagedOpenRouterText = ({
       serverURL:
         PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[managedAIResidency],
     },
+    { model, managedAIResidency },
+  );
+
+export const createInstanceOpenRouterText = (
+  model: OpenRouterModel,
+  apiKey: string,
+): StellaOpenRouterTextAdapter =>
+  new InstanceOpenRouterTextAdapter(
+    { apiKey, retryConfig: OPENROUTER_RETRY },
     model,
   );
 

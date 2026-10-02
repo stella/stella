@@ -13,6 +13,7 @@ import { exportPdfHandler } from "@/api/handlers/time-entries/pdf/export";
 import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -101,7 +102,7 @@ test("a mixed client/internal invoice request refuses before claiming either row
       route: "/invoices",
       workspaceId: ids.wsA2,
       user: { id: ids.userAdmin },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
       safeDb: createSafeDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
       scopedDb: createScopedDb(db, [ids.wsA2], ids.orgA, ids.userAdmin),
