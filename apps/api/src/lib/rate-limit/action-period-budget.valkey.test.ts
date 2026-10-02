@@ -10,7 +10,11 @@ import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
 import { createRedisClient } from "@/api/lib/redis-client";
 
 import { withActionAdmission } from "./action-admission";
-import { resolveActionPeriodBudget } from "./action-period-budget";
+import {
+  ACTION_SERVICE_DEADLINE_EXPIRED,
+  resolveActionPeriodBudget,
+  staleActionPeriodTime,
+} from "./action-period-budget";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
 const policy = {
@@ -45,6 +49,126 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   });
 } else {
   describe("periodic action admission (valkey)", () => {
+    for (const timing of ["active", "delayed", "stale-retry"] as const) {
+      test(`deferred evaluation reservation ${timing} admits provider work only before expiry`, async () => {
+        await withStore(async ({ client, organizationId }) => {
+          const clock = await client.send("TIME", []);
+          if (!Array.isArray(clock)) {
+            throw new TypeError("Missing store clock");
+          }
+          const storeNow = Number(clock.at(0)) * 1000;
+          const staleRetry = timing === "stale-retry";
+          const expired = timing !== "active";
+          const deadline = {
+            active: storeNow + 60_000,
+            delayed: storeNow - 1,
+            "stale-retry": storeNow + 1,
+          }[timing];
+          const reservations: string[][] = [];
+          const replies: unknown[] = [];
+          let concurrencyAcquisitions = 0;
+          let stateReads = 0;
+          let providerCalls = 0;
+          const result = await withActionAdmission({
+            mode: "concurrency-only",
+            organizationId,
+            userId,
+            enabled: true,
+            policy,
+            costRecorder: null,
+            serviceBudgetsEnabled: true,
+            serviceBudgetConfig: {
+              periodMs: 86_400_000,
+              evaluationActions: 3,
+              selfManagedActions: 5,
+            },
+            budgetNow: () =>
+              staleRetry
+                ? storeNow - 86_400_000
+                : Math.min(storeNow, deadline - 1),
+            readOrganizationState: async () => {
+              stateReads += 1;
+              return {
+                state: ORGANIZATION_ACCESS_STATE.evaluationPeriod,
+                evaluationEndsAt: new Date(deadline),
+              };
+            },
+            redis: {
+              send: async (command, args) => {
+                if (args.at(0)?.includes("ZREMRANGEBYSCORE")) {
+                  concurrencyAcquisitions += 1;
+                }
+                if (args.at(1) !== "3") {
+                  return await client.send(command, args);
+                }
+                const script = args.at(0);
+                if (script === undefined) {
+                  throw new TypeError("Missing reservation script");
+                }
+                expect(script).toContain(
+                  'redis.call("ZSCORE", KEYS[1], ARGV[4])',
+                );
+                // Execute the production Lua in Valkey. Only the stale case's
+                // clock is fixed to cross expiry exactly between two attempts.
+                const now = reservations.length === 0 ? storeNow : deadline;
+                const clockLiteral = `{${Math.floor(now / 1000)}, ${(now % 1000) * 1000}}`;
+                const clockedScript = staleRetry
+                  ? script.replace('redis.call("TIME")', () => clockLiteral)
+                  : script;
+                reservations.push([...args]);
+                const reply = await client.send(command, [
+                  clockedScript,
+                  ...args.slice(1),
+                ]);
+                replies.push(reply);
+                return reply;
+              },
+            },
+            run: async (_signal, control) => {
+              expect(stateReads).toBe(0);
+              const reserved = await control.reservePeriod({
+                actionKind: "chat.send",
+                logicalPhaseId: JSON.stringify(["owned-turn", "phase-run"]),
+              });
+              if (Result.isOk(reserved)) {
+                providerCalls += 1;
+              }
+              return reserved;
+            },
+          });
+          expect(Result.isOk(result)).toBe(true);
+          if (Result.isError(result)) {
+            throw result.error;
+          }
+          expect(Result.isError(result.value)).toBe(expired);
+          if (Result.isError(result.value)) {
+            expect(result.value.error.code).toBe(
+              ACTION_ADMISSION_CODES.notEnabled,
+            );
+          }
+          expect(providerCalls).toBe(expired ? 0 : 1);
+          expect(stateReads).toBe(1);
+          expect(concurrencyAcquisitions).toBe(1);
+          expect(reservations).toHaveLength(staleRetry ? 2 : 1);
+          for (const reservation of reservations) {
+            expect(reservation.at(13)).toBe(String(deadline));
+            expect(await client.send("EXISTS", reservation.slice(4, 5))).toBe(
+              expired ? 0 : 1,
+            );
+          }
+          expect(replies.at(-1)).toBe(
+            expired ? ACTION_SERVICE_DEADLINE_EXPIRED : 1,
+          );
+          if (staleRetry) {
+            expect(staleActionPeriodTime(replies.at(0))).toBe(storeNow);
+            expect(reservations.at(1)?.at(9)).not.toBe(
+              reservations.at(0)?.at(9),
+            );
+          }
+        });
+      });
+    }
+
     test("atomic Lua fences delayed evaluation expiry and stale retries before mutation", async () => {
       for (const staleRetry of [false, true]) {
         await withStore(async ({ client, organizationId }) => {
