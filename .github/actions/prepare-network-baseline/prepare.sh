@@ -4,9 +4,15 @@ purpose=${NETWORK_BASELINE_PURPOSE:-comparison}
 case "$purpose" in comparison|recording) ;; *) exit 1 ;; esac
 [[ "$BASE_SHA" =~ ^[a-f0-9]{40}$ ]]
 git fetch --no-tags origin "$BASE_SHA"
-# Checkout is the tested merge commit. Compute the actual common ancestor,
-# rather than reading the mutable tip of main during a long-lived PR.
+# Default to the common ancestor for head checkouts and merge queues.
 base=$(git merge-base HEAD "$BASE_SHA")
+# GitHub's PR merge ref includes newer main commits than the event's recorded
+# base. Its first parent is the main tree actually under test.
+read -r -a parents <<< "$(git show -s --format=%P HEAD)"
+if [[ "${GITHUB_EVENT_NAME:-}" == pull_request && ${#parents[@]} == 2 ]] &&
+  git merge-base --is-ancestor "$BASE_SHA" "${parents[0]}"; then
+  base=${parents[0]}
+fi
 if [[ "$purpose" == recording && "$base" != "$(git rev-parse HEAD)" ]]; then
   echo 'Recording must seed the checked-out main commit' >&2
   exit 1

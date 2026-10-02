@@ -456,6 +456,139 @@ describe("reviewed network budgets", () => {
 });
 
 describe("merge-base preparation integration", () => {
+  test("PR merge refs use advanced main rather than the recorded event base", () => {
+    const directory = mkdtempSync(path.join(os.tmpdir(), "network-pr-merge-"));
+    const root = path.join(import.meta.dirname, "..");
+    const runnerPath = process.env["PATH"];
+    if (typeof runnerPath !== "string") {
+      expect.unreachable("integration fixture requires PATH");
+    }
+    const run = (args: string[], env: Record<string, string> = {}) =>
+      Bun.spawnSync(args, { cwd: directory, env: { ...process.env, ...env } });
+    const checked = (args: string[]) => {
+      const result = run(args);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      return result.stdout.toString().trim();
+    };
+    const baselinePath = path.join(
+      directory,
+      "apps/web/e2e/network-baseline.json",
+    );
+    const treePath = path.join(directory, "apps/web/src/routeTree.gen.ts");
+    const mainBaseline = { "/chat": entry(8), "/settings": entry(2) };
+    const mainTree = `${routeTree}\n// main advances\n`;
+    try {
+      mkdirSync(path.dirname(baselinePath), { recursive: true });
+      mkdirSync(path.dirname(treePath), { recursive: true });
+      mkdirSync(path.join(directory, "scripts"));
+      mkdirSync(path.join(directory, "bin"));
+      writeFileSync(
+        path.join(directory, "scripts/network-baseline-scope.ts"),
+        readFileSync(path.join(root, "scripts/network-baseline-scope.ts")),
+      );
+      writeFileSync(
+        baselinePath,
+        JSON.stringify({ "/chat": entry(1), "/settings": entry(2) }),
+      );
+      writeFileSync(treePath, routeTree);
+      checked(["git", "init", "-b", "main"]);
+      checked(["git", "config", "user.name", "Fixture"]);
+      checked(["git", "config", "user.email", "fixture@example.test"]);
+      checked(["git", "config", "commit.gpgsign", "false"]);
+      checked(["git", "add", "apps", "scripts"]);
+      checked(["git", "commit", "-m", "recorded base"]);
+      const recordedBase = checked(["git", "rev-parse", "HEAD"]);
+      checked(["git", "remote", "add", "origin", directory]);
+      checked(["git", "switch", "-c", "feature"]);
+      writeFileSync(path.join(directory, "feature.txt"), "feature");
+      checked(["git", "add", "feature.txt"]);
+      checked(["git", "commit", "-m", "feature"]);
+      const feature = checked(["git", "rev-parse", "HEAD"]);
+      expect(
+        checked(["git", "diff", "--name-only", recordedBase, feature]),
+      ).toBe("feature.txt");
+      checked(["git", "switch", "main"]);
+      writeFileSync(baselinePath, JSON.stringify(mainBaseline));
+      writeFileSync(treePath, mainTree);
+      checked(["git", "add", "apps"]);
+      checked(["git", "commit", "-m", "main recording advances"]);
+      const advancedMain = checked(["git", "rev-parse", "HEAD"]);
+      checked(["git", "merge", "--no-ff", "--no-edit", "feature"]);
+      expect(checked(["git", "rev-parse", "HEAD^1"])).toBe(advancedMain);
+      expect(checked(["git", "merge-base", "HEAD", recordedBase])).toBe(
+        recordedBase,
+      );
+      expect(
+        checked(["git", "diff", "--name-only", recordedBase, "HEAD"]),
+      ).toContain("apps/web/e2e/network-baseline.json");
+      const gh = path.join(directory, "bin/gh");
+      writeFileSync(
+        gh,
+        "#!/usr/bin/env bash\nprintf '%s\\n' '{\"artifacts\":[],\"workflow_runs\":[]}'\n",
+      );
+      chmodSync(gh, 0o755);
+      const summary = path.join(directory, "summary");
+      writeFileSync(summary, "");
+      const prepareScript = path.join(
+        root,
+        ".github/actions/prepare-network-baseline/prepare.sh",
+      );
+      const prepare = (script: string) =>
+        run(["bash", script], {
+          PATH: `${path.join(directory, "bin")}:${runnerPath}`,
+          BASE_SHA: recordedBase,
+          GITHUB_EVENT_NAME: "pull_request",
+          NETWORK_BASELINE_PURPOSE: "comparison",
+          REPOSITORY: "fixture/fixture",
+          RUNNER_TEMP: directory,
+          GITHUB_STEP_SUMMARY: summary,
+        });
+      const result = prepare(prepareScript);
+      expect(result.exitCode, result.stderr.toString()).toBe(0);
+      expect(JSON.parse(readFileSync(baselinePath, "utf-8"))).toEqual(
+        mainBaseline,
+      );
+      expect(
+        JSON.parse(
+          readFileSync(
+            path.join(directory, "apps/web/e2e/.network-baseline-base.json"),
+            "utf-8",
+          ),
+        ),
+      ).toEqual(mainBaseline);
+      expect(
+        readFileSync(
+          path.join(directory, "apps/web/e2e/.network-baseline-base-tree.ts"),
+          "utf-8",
+        ),
+      ).toBe(mainTree);
+      expect(
+        readFileSync(
+          path.join(directory, "apps/web/e2e/.network-baseline-changed"),
+          "utf-8",
+        ).trim(),
+      ).toBe("feature.txt");
+      expect(readFileSync(summary, "utf-8")).toContain(
+        `merge base ${advancedMain}`,
+      );
+      const script = readFileSync(prepareScript, "utf-8");
+      const mutant = script.replace(
+        /if \[\[ "\$\{GITHUB_EVENT_NAME:-\}"[\s\S]*?^fi\n/mu,
+        "",
+      );
+      expect(mutant).not.toBe(script);
+      const mutantPath = path.join(directory, "prepare-mutant.sh");
+      writeFileSync(mutantPath, mutant);
+      const mutation = prepare(mutantPath);
+      expect(mutation.exitCode).not.toBe(0);
+      expect(mutation.stderr.toString()).toContain(
+        "PRs must declare network budget changes instead of editing network-baseline.json",
+      );
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  }, 60_000);
+
   test("merging main changes the baseline source without editing the PR JSON", () => {
     const directory = mkdtempSync(
       path.join(os.tmpdir(), "network-merge-base-"),
@@ -543,6 +676,7 @@ esac
           {
             PATH: `${path.join(directory, "bin")}:${runnerPath}`,
             BASE_SHA: base,
+            GITHUB_EVENT_NAME: "push",
             REPOSITORY: "fixture/fixture",
             RUNNER_TEMP: directory,
             GITHUB_STEP_SUMMARY: summary,
@@ -736,6 +870,7 @@ esac
         {
           PATH: `${path.join(directory, "bin")}:${runnerPath}`,
           BASE_SHA: nextBase,
+          GITHUB_EVENT_NAME: "push",
           REPOSITORY: "fixture/fixture",
           RUNNER_TEMP: directory,
           GITHUB_STEP_SUMMARY: summary,
