@@ -10,6 +10,7 @@ import {
   isActionAdmissionCode,
 } from "@stll/api-contract/action-admission";
 import { PUBLIC_COUNTRY_UNAVAILABLE_CODE } from "@stll/api-contract/public-country-capability";
+import { MATTER_CONTACT_CAPACITY_CODE } from "@stll/api-contract/workspace-contacts";
 
 import type { TranslationKey } from "@/i18n/types";
 import { API_ERROR_TAG } from "@/lib/errors/api-tag";
@@ -97,6 +98,10 @@ const RAW_INTERNAL_TOOL_ERROR_CODE = {
 } as const;
 
 const CODE_ERROR_KEYS = {
+  [MATTER_CONTACT_CAPACITY_CODE.reached]:
+    "errors.apiCodes.matterContactCapacityReached",
+  [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
+    "errors.apiCodes.matterContactCapacityExceeded",
   [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",

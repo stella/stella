@@ -4,6 +4,7 @@ import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { encryptContent } from "@/api/lib/content-encryption";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { McpRequestContext } from "@/api/mcp/context";
 import type { AnonymizingMcpToolName } from "@/api/mcp/static-tool-definitions";
 import {
@@ -373,6 +374,38 @@ const canaryTestsFor = <const TToolName extends AnonymizingMcpToolName>(
 };
 
 describe("MCP anonymization canary corpus", () => {
+  test("list_matters propagates contact read refusal instead of a partial overview", async () => {
+    const message = "Contact links must be reduced before reading this matter.";
+    readWorkspaceHandlerMock.mockResolvedValue({
+      id: "00000000-0000-4000-8000-0000000a0001",
+      name: "Fixture matter",
+      reference: "REF-1",
+      status: "active",
+      client: null,
+    });
+    readWorkspaceContactsHandlerMock.mockResolvedValue(
+      Result.err(
+        new HandlerError({
+          status: 409,
+          code: "matter_contact_capacity_exceeded",
+          message,
+          hint: "Remove a contact link and read the matter again.",
+          retryable: false,
+        }),
+      ),
+    );
+
+    const result = await STELLA_TOOL_HANDLERS.list_matters({
+      args: { matter_id: "00000000-0000-4000-8000-0000000a0001" },
+      context: buildContext(),
+    });
+
+    expect(result).toMatchObject({
+      status: "error",
+      error: { type: "structured", message },
+    });
+  });
+
   test("every anonymize-mode tool in the registry has a canary fixture", () => {
     const anonymizeToolNames = ANONYMIZED_MCP_TOOL_DEFINITIONS.filter(
       (tool) => tool.anonymized.exposure === "anonymize",
@@ -560,17 +593,19 @@ describe("MCP anonymization canary corpus", () => {
           },
         ],
       });
-      readWorkspaceContactsHandlerMock.mockResolvedValue([
-        {
-          id: "wc_1",
-          role: "client",
-          contact: {
-            id: "00000000-0000-4000-8000-0000000c0001",
-            type: "person",
-            displayName: contactDisplayNameSeed,
+      readWorkspaceContactsHandlerMock.mockResolvedValue(
+        Result.ok([
+          {
+            id: "wc_1",
+            role: "client",
+            contact: {
+              id: "00000000-0000-4000-8000-0000000c0001",
+              type: "person",
+              displayName: contactDisplayNameSeed,
+            },
           },
-        },
-      ]);
+        ]),
+      );
       readWorkspaceMembersHandlerMock.mockResolvedValue([
         {
           id: "wm_1",

@@ -2247,6 +2247,8 @@
       "internalServerError": "Etwas ist schiefgelaufen. Bitte versuchen Sie es erneut.",
       "legalSourceEntityLimitReached": "Diese Akte hat das Limit für Einträge erreicht, daher konnte das Dokument nicht erstellt werden.",
       "legalSourceFilePropertyMissing": "In dieser Akte fehlt eine Dateieigenschaft, daher konnte das Dokument nicht erstellt werden.",
+      "matterContactCapacityExceeded": "Diese Akte enthält mehr Kontakte, als angezeigt werden können. Entfernen Sie Kontaktverknüpfungen, bevor Sie die Liste öffnen.",
+      "matterContactCapacityReached": "Diese Akte hat die Höchstzahl an Kontakten erreicht. Entfernen Sie eine Kontaktverknüpfung, bevor Sie einen weiteren Kontakt hinzufügen.",
       "notOrganizationMember": "Sie sind kein Mitglied dieser Organisation.",
       "providerKeyRejected": "Der Anbieter hat den API-Schlüssel abgelehnt.",
       "providerRateLimited": "Das Anfragelimit des Anbieters wurde erreicht. Versuchen Sie es in Kürze erneut.",

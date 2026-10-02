@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { type InferOk, panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { TIME_ENTRY_ACTIVITY_GROUP } from "@stll/api-contract";
@@ -430,27 +430,31 @@ const CONTRACT_CORPUS = {
             },
           ],
         } satisfies Awaited<ReturnType<typeof readOverviewHandler>>);
-        readWorkspaceContactsHandlerMock.mockResolvedValue([
-          {
-            id: toSafeId<"workspaceContact">(uid(6)),
-            organizationId: ORGANIZATION_ID,
-            workspaceId: toSafeId<"workspace">(WS),
-            contactId: toSafeId<"contact">(uid(7)),
-            // Not "client": that relationship lives on `workspaces.clientId`,
-            // not a `workspaceContacts` row; "client" is not one of this
-            // table's roles.
-            role: "co_counsel",
-            isPrimary: false,
-            notes: null,
-            createdAt: new Date("2026-01-01"),
-            contact: {
-              id: toSafeId<"contact">(uid(7)),
-              type: "person",
-              displayName: "Jan Novák",
-              color: null,
+        readWorkspaceContactsHandlerMock.mockResolvedValue(
+          Result.ok([
+            {
+              id: toSafeId<"workspaceContact">(uid(6)),
+              organizationId: ORGANIZATION_ID,
+              workspaceId: toSafeId<"workspace">(WS),
+              contactId: toSafeId<"contact">(uid(7)),
+              // Not "client": that relationship lives on `workspaces.clientId`,
+              // not a `workspaceContacts` row; "client" is not one of this
+              // table's roles.
+              role: "co_counsel",
+              isPrimary: false,
+              notes: null,
+              createdAt: new Date("2026-01-01"),
+              contact: {
+                id: toSafeId<"contact">(uid(7)),
+                type: "person",
+                displayName: "Jan Novák",
+                color: null,
+              },
             },
-          },
-        ] satisfies Awaited<ReturnType<typeof readWorkspaceContactsHandler>>);
+          ] satisfies InferOk<
+            Awaited<ReturnType<typeof readWorkspaceContactsHandler>>
+          >),
+        );
         readWorkspaceMembersHandlerMock.mockResolvedValue([
           {
             id: toSafeId<"workspaceMember">(uid(8)),

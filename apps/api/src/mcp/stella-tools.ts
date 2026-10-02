@@ -158,6 +158,7 @@ import {
   ensureWorkspaceAccess,
   errorResult,
   handlerResultMessage,
+  internalFailureResult,
   ISO_DATE_SCHEMA,
   MCP_CONTENT_MAX_CHARS,
   MAX_LIST_LIMIT,
@@ -1421,6 +1422,10 @@ const readMatterOverview = async ({
     return notFoundResult("Matter not found or not accessible");
   }
 
+  if (contacts.isErr()) {
+    return internalFailureResult(contacts.error);
+  }
+
   const matter = {
     id: workspace.id,
     name: workspace.name,
@@ -1428,7 +1433,7 @@ const readMatterOverview = async ({
     status: workspace.status,
     clientName: workspace.client?.displayName ?? null,
   };
-  const contactCards = contacts.flatMap((workspaceContact) => {
+  const contactCards = contacts.value.flatMap((workspaceContact) => {
     if (!workspaceContact.contact) {
       return [];
     }

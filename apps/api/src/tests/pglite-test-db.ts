@@ -28,6 +28,7 @@ import {
   installPgliteProvisionExtractionState,
   installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
+  installPgliteWorkspaceContactCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
   installPgliteStatuteCitationCounts,
@@ -725,6 +726,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPglitePdfSigningTokenScopes(db);
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
+  await installPgliteWorkspaceContactCapacity(db);
   await installPgliteChatRunLogRls(db);
   await installPgliteSchedulerJobPauseLog(db);
 

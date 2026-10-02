@@ -2616,7 +2616,8 @@ export const MATTER_TOOL_DEFINITIONS = [
       "other), or remove such a link. Pass contact_id with role to link. To " +
       "unlink, pass matter_contact_id (precise, from list_matters) " +
       "or contact_id alone; contact_id alone is rejected when the contact " +
-      "holds several roles on the matter.",
+      "holds several roles on the matter. At the contact limit, unlink an existing " +
+      "matter_contact_id (without role) before linking another contact.",
     inputSchema: linkMatterContactArgsSchema,
     jsonSchemaProjectionWaiver: {
       ignoreActions: ["partial_check"],

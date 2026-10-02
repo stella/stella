@@ -46,6 +46,25 @@ describe("API request retries", () => {
 });
 
 describe("toAPIError", () => {
+  test.each([
+    [
+      "matter_contact_capacity_reached",
+      "This matter has reached its contact limit. Remove a contact link before adding another.",
+    ],
+    [
+      "matter_contact_capacity_exceeded",
+      "This matter has more contacts than can be displayed. Remove contact links before opening the list.",
+    ],
+  ])("localizes matter contact capacity code %s", (code, expected) => {
+    const error = toAPIError({
+      status: 422,
+      value: { code, message: "Raw capacity refusal", retryable: false },
+    });
+    expect(error.code).toBe(code);
+    expect(error.message).toBe(expected);
+    expect(error.rawMessage).toBe("Raw capacity refusal");
+    expect(shouldRetryAPIRequest(0, error)).toBe(false);
+  });
   test("localizes string payloads by status and preserves the raw message", () => {
     const error = toAPIError({
       status: 400,
