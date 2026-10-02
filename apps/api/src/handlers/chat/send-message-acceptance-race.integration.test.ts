@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { asc, eq, inArray } from "drizzle-orm";
 
@@ -221,13 +221,11 @@ describe("a regeneration of the latest user turn", () => {
       userId: ids.userA1,
       workspaceId: null,
     });
-    const [regenerated, staleAnswer, newerQuestion, newerAnswer] = Array.from(
-      { length: 4 },
-      () => toSafeId<"chatMessage">(Bun.randomUUIDv7()),
-    );
-    if (!regenerated || !staleAnswer || !newerQuestion || !newerAnswer) {
-      return panic("four message ids");
-    }
+    const messageId = () => toSafeId<"chatMessage">(Bun.randomUUIDv7());
+    const regenerated = messageId();
+    const staleAnswer = messageId();
+    const newerQuestion = messageId();
+    const newerAnswer = messageId();
     const insertMessage = async ({
       id,
       offset,
@@ -260,7 +258,7 @@ describe("a regeneration of the latest user turn", () => {
       threadId,
     });
     if (Result.isError(target) || target.value === null) {
-      return panic("the target resolves");
+      throw new Error("seed precondition failed: the target resolves");
     }
     expect(target.value.hasLaterUserMessage).toBe(false);
     expect(target.value.deleteMessageIdsBeforeLatest).toEqual([staleAnswer]);

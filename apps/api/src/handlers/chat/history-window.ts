@@ -260,11 +260,10 @@ export const isChatHistorySnapshotCurrentOnTx = async ({
     .limit(snapshot.rows.length + 1);
   return (
     current.length === snapshot.rows.length &&
-    current.every(
-      ({ id, version }, index) =>
-        snapshot.rows[index]?.id === id &&
-        snapshot.rows[index]?.version === version,
-    )
+    current.every(({ id, version }, index) => {
+      const read = snapshot.rows.at(index);
+      return read?.id === id && read.version === version;
+    })
   );
 };
 
