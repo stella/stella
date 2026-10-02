@@ -34,6 +34,7 @@ const connection = await client.reserve();
 try {
   const result = await runMigrationsUntilSettled({
     connection,
+    databaseUrl: url,
     migrationsFolder,
     ebs: ebs.value,
   });

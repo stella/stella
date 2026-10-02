@@ -102,6 +102,8 @@ const withCorpusBundle = async (work: (folder: string) => Promise<void>) => {
 };
 
 type Scratch = {
+  /** The scratch database, which a real online phase observes. */
+  scratchUrl: string;
   observer: SQL;
   openClient: () => SQL;
   run: (
@@ -123,11 +125,13 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
     try {
       const url = new URL(databaseUrl);
       url.pathname = `/${name}`;
+      const scratchUrl = url.toString();
       await withGatedTestClients(
-        url.toString(),
+        scratchUrl,
         async ({ openClient: openScratchClient }) => {
           const observer = openScratchClient().sql;
           await work({
+            scratchUrl,
             observer,
             openClient: () => openScratchClient().sql,
             run: async (folder, onOnline) => {
@@ -137,6 +141,7 @@ const withScratch = async (work: (scratch: Scratch) => Promise<void>) => {
                   connection,
                   migrationsFolder: folder,
                   ebs: DISABLED_EBS,
+                  databaseUrl: scratchUrl,
                   runOnline: async () => {
                     await onOnline?.();
                     return ONLINE_COMPLETE;
@@ -380,7 +385,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
 
     test("a second session waits on the lane and applies no duplicate SQL", async () => {
       await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
-        await withScratch(async ({ observer, openClient }) => {
+        await withScratch(async ({ scratchUrl, observer, openClient }) => {
           const first = await openClient().reserve();
           const second = await openClient().reserve();
           const [pidRow] = await second.unsafe<{ pid: number }[]>(
@@ -395,6 +400,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             connection: first,
             migrationsFolder: folder,
             ebs: DISABLED_EBS,
+            databaseUrl: scratchUrl,
             runOnline: async () => {
               entered.resolve(undefined);
               await release.promise;
@@ -407,6 +413,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               connection: second,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
+              databaseUrl: scratchUrl,
               runOnline: async () => ONLINE_COMPLETE,
             });
             await waitUntilBlocked(observer, pidRow.pid);
@@ -434,7 +441,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
      */
     test("a deferred online phase releases the lane while it waits and settles on a later run", async () => {
       await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
-        await withScratch(async ({ observer, openClient }) => {
+        await withScratch(async ({ scratchUrl, observer, openClient }) => {
           const laneOpenToWriters = async () =>
             await observer.begin(async (tx) =>
               isCorpusSchemaLaneGranted(
@@ -452,6 +459,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
+              databaseUrl: scratchUrl,
               runOnline: async () => {
                 expect(await laneOpenToWriters()).toBe(false);
                 return deferred;
@@ -475,6 +483,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
+              databaseUrl: scratchUrl,
               runOnline: async (_pool, options) => {
                 holds.add(options.indexGate.hold);
                 expect(await laneOpenToWriters()).toBe(false);
@@ -512,7 +521,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
      */
     test("a terminated online session surfaces the online error and frees the lane", async () => {
       await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
-        await withScratch(async ({ observer, openClient }) => {
+        await withScratch(async ({ scratchUrl, observer, openClient }) => {
           const laneOpenToWriters = async () =>
             await observer.begin(async (tx) =>
               isCorpusSchemaLaneGranted(
@@ -526,6 +535,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
               connection,
               migrationsFolder: folder,
               ebs: DISABLED_EBS,
+              databaseUrl: scratchUrl,
               runOnline: async (pool) => {
                 const { terminate } = await pool.reserve();
                 if (terminate === undefined) {
@@ -731,7 +741,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
             sourceMigrations.find(({ name }) => name === alias.fileName)?.hash,
           );
         }
-        await withScratch(async ({ observer, openClient }) => {
+        await withScratch(async ({ scratchUrl, observer, openClient }) => {
           const initialConnection = await openClient().reserve();
           try {
             const initial = appliedResult(
@@ -739,6 +749,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                 connection: initialConnection,
                 migrationsFolder: corpusFolder,
                 ebs: DISABLED_EBS,
+                databaseUrl: scratchUrl,
               }),
             );
             expect(initial.insertedNames).toHaveLength(corpusMigrations.length);
@@ -767,6 +778,7 @@ if (!runPostgresTests || databaseUrl === undefined) {
                     connection,
                     migrationsFolder: corpusFolder,
                     ebs: DISABLED_EBS,
+                    databaseUrl: scratchUrl,
                     runOnline: async () => ONLINE_COMPLETE,
                   }),
                 );

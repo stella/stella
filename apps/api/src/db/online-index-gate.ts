@@ -17,6 +17,7 @@ import {
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
 
+import { resolveDatabaseUrl } from "../db-url";
 import { readOnlineIndexConfig } from "../env-online-index";
 import type { OnlineIndexConfig } from "../env-online-index";
 import { createEbsSignalReader } from "../lib/db/ebs-signal-reader";
@@ -109,8 +110,13 @@ class OnlineIndexMonitoringError extends TaggedError(
   cause: unknown;
 }> {}
 
+// pg_cancel_backend reaches any backend in the cluster, so cancellation only
+// needs a session the stalled migrator does not hold.
 const cancelWithIndependentObserver = async (pid: number) => {
-  const observer = await openOnlineIndexObserver();
+  const observer = await openOnlineIndexObserver(
+    resolveDatabaseUrl() ??
+      panic("Online index cancellation requires a database connection"),
+  );
   try {
     return await cancelIndexBackend(observer, pid);
   } finally {

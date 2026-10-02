@@ -23,6 +23,7 @@ import {
 } from "./corpus-schema-lane";
 import { createOnlineIndexHold } from "./online-index-gate";
 import type { OnlineIndexHoldRef } from "./online-index-gate";
+import { openOnlineIndexObserver } from "./online-index-observer";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import { runOnlineMigrations } from "./online-migrations";
 import { APPLICATION_RLS_ROLE_NAME } from "./role-names";
@@ -287,6 +288,8 @@ const preflightAndAdopt = async ({
 
 type RunMigrationsOptions = {
   connection: ReservedSQL;
+  /** The database `connection` belongs to; index builds observe it apart. */
+  databaseUrl: string;
   migrationsFolder: string;
   /** Resolved before the migrator connects; a missing one never gets here. */
   ebs: ConfiguredEbsConfiguration;
@@ -298,6 +301,7 @@ type RunMigrationsOptions = {
 
 export const runMigrations = async ({
   connection,
+  databaseUrl,
   migrationsFolder,
   ebs,
   migrationsSchema = "drizzle",
@@ -409,7 +413,10 @@ export const runMigrations = async ({
     };
     const online = await runOnline(
       { reserve: async () => await Promise.resolve(onlineConnection) },
-      { indexGate: { ebs, hold: onlineIndexHold } },
+      {
+        indexGate: { ebs, hold: onlineIndexHold },
+        reserveObserver: async () => await openOnlineIndexObserver(databaseUrl),
+      },
     );
     const predictedNames = predicted.map(({ name }) => name);
     const insertedNames = inserted.map(({ name }) => name);

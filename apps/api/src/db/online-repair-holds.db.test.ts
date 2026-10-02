@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import type { ReservedSQL, SQL } from "bun";
 import { describe, expect, test } from "bun:test";
 import { getTableName } from "drizzle-orm";
@@ -244,6 +245,9 @@ describe.skipIf(!enabled)(
           const runnerOptions = {
             repairs: [repair],
             indexGate: { ebs: { type: "disabled" } },
+            // The adapter reports every index ready, so no build observes.
+            reserveObserver: () =>
+              panic("Repair holds never build an online index"),
             log: (record: unknown) => {
               events.push(record);
             },

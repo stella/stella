@@ -10,7 +10,6 @@ import { CORPUS_PROJECTION_DELETE_RECEIPT_REPAIR } from "./corpus-projection-del
 import { DECISION_DATE_CEILING_REPAIR } from "./decision-date-ceiling-repair";
 import { createOnlineIndexGate } from "./online-index-gate";
 import type { OnlineIndexGateOptions } from "./online-index-gate";
-import { openOnlineIndexObserver } from "./online-index-observer";
 import type {
   OnlineMigrationConnection,
   OnlineMigrationPool,
@@ -374,14 +373,17 @@ type OnlineIndexState = { type: "missing" } | PresentIndexState;
 
 /** Only repair builds indexes, so only repair carries the index gate. */
 type OnlineMigrationMode =
-  | { operation: "repair"; indexGate: OnlineIndexGateOptions }
+  | {
+      operation: "repair";
+      indexGate: OnlineIndexGateOptions;
+      reserveObserver: () => Promise<OnlineMigrationConnection>;
+    }
   | { operation: "validate" };
 
 type OnlineMigrationOperation = OnlineMigrationMode["operation"];
 
 type OnlineMigrationOptions = {
   repairs?: readonly OnlineRepair[];
-  reserveObserver?: () => Promise<OnlineMigrationConnection>;
   log?: (record: {
     event: "online_repair_pending";
     repair: string;
@@ -403,15 +405,17 @@ const COMPLETE = { type: "complete" } as const satisfies OnlineMigrationOutcome;
 
 export type OnlineRepairOptions = OnlineMigrationOptions & {
   indexGate: OnlineIndexGateOptions;
+  /** Opens a separate session in the database `pool` reserves from. */
+  reserveObserver: () => Promise<OnlineMigrationConnection>;
 };
 
 export const runOnlineMigrations = async (
   pool: OnlineMigrationPool,
-  { indexGate, ...options }: OnlineRepairOptions,
+  { indexGate, reserveObserver, ...options }: OnlineRepairOptions,
 ): Promise<OnlineMigrationOutcome> =>
   await processOnlineMigrations(
     pool,
-    { operation: "repair", indexGate },
+    { operation: "repair", indexGate, reserveObserver },
     options,
   );
 
@@ -458,7 +462,6 @@ const processOnlineMigrations = async (
     const indexes = await processOnlineIndexAt({
       connection,
       mode,
-      options,
     });
     if (indexes.type === "deferred") {
       return indexes;
@@ -466,7 +469,6 @@ const processOnlineMigrations = async (
     const cutovers = await processOnlineIndexCutoverAt({
       connection,
       mode,
-      options,
     });
     if (cutovers.type === "deferred") {
       return cutovers;
@@ -497,14 +499,12 @@ const processOnlineMigrations = async (
 type OnlineIndexWalkOptions = {
   connection: OnlineMigrationConnection;
   mode: OnlineMigrationMode;
-  options: OnlineMigrationOptions;
   offset?: number;
 };
 
 const processOnlineIndexAt = async ({
   connection,
   mode,
-  options,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
   const index = ONLINE_MIGRATION_INDEXES.at(offset);
@@ -517,7 +517,7 @@ const processOnlineIndexAt = async ({
       connection,
       index,
       gate: mode.indexGate,
-      reserveObserver: options.reserveObserver,
+      reserveObserver: mode.reserveObserver,
     });
     if (outcome.type === "deferred") {
       return outcome;
@@ -528,7 +528,6 @@ const processOnlineIndexAt = async ({
   return await processOnlineIndexAt({
     connection,
     mode,
-    options,
     offset: offset + 1,
   });
 };
@@ -536,7 +535,6 @@ const processOnlineIndexAt = async ({
 const processOnlineIndexCutoverAt = async ({
   connection,
   mode,
-  options,
   offset = 0,
 }: OnlineIndexWalkOptions): Promise<OnlineMigrationOutcome> => {
   const cutover = ONLINE_MIGRATION_INDEX_CUTOVERS.at(offset);
@@ -548,8 +546,7 @@ const processOnlineIndexCutoverAt = async ({
     const outcome = await completeIndexCutover({
       connection,
       cutover,
-      gate: mode.indexGate,
-      options,
+      repair: mode,
     });
     if (outcome.type === "deferred") {
       return outcome;
@@ -560,7 +557,6 @@ const processOnlineIndexCutoverAt = async ({
   return await processOnlineIndexCutoverAt({
     connection,
     mode,
-    options,
     offset: offset + 1,
   });
 };
@@ -826,14 +822,14 @@ type EnsureOnlineIndexOptions = {
   connection: OnlineMigrationConnection;
   index: OnlineIndex;
   gate: OnlineIndexGateOptions;
-  reserveObserver?: (() => Promise<OnlineMigrationConnection>) | undefined;
+  reserveObserver: () => Promise<OnlineMigrationConnection>;
 };
 
 export const ensureOnlineIndexValid = async ({
   connection,
   index,
   gate,
-  reserveObserver = openOnlineIndexObserver,
+  reserveObserver,
 }: EnsureOnlineIndexOptions): Promise<OnlineMigrationOutcome> => {
   const initialState = await readIndexState(connection, index);
   if (initialState.type === "present") {
@@ -911,15 +907,13 @@ export const ensureOnlineIndexValid = async ({
 type CompleteIndexCutoverOptions = {
   connection: OnlineMigrationConnection;
   cutover: OnlineIndexCutover;
-  gate: OnlineIndexGateOptions;
-  options: OnlineMigrationOptions;
+  repair: Extract<OnlineMigrationMode, { operation: "repair" }>;
 };
 
 const completeIndexCutover = async ({
   connection,
   cutover: { final, staged },
-  gate,
-  options,
+  repair: { indexGate, reserveObserver },
 }: CompleteIndexCutoverOptions): Promise<OnlineMigrationOutcome> => {
   const finalState = await readIndexState(connection, final);
 
@@ -946,8 +940,8 @@ const completeIndexCutover = async ({
   const stagedOutcome = await ensureOnlineIndexValid({
     connection,
     index: staged,
-    gate,
-    reserveObserver: options.reserveObserver,
+    gate: indexGate,
+    reserveObserver,
   });
   if (stagedOutcome.type === "deferred") {
     return stagedOutcome;
