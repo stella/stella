@@ -156,29 +156,13 @@ type KnownRule = {
   oracles: readonly OracleViolation["oracle"][];
 };
 
-/** The page of a summarized thread shows the thread, never the summary the
- *  model reads in its place, including when the turn pauses on a card. */
-const COMPACTION_SUMMARY_RULE: KnownRule = {
-  name: "a compacted thread's summary stays off the page",
-  oracles: [CHAT_ORACLE.liveEqualsReload],
-};
-
 /**
  * The rules a combination's turn does not keep yet. Each such combination
  * runs as a known finding under the rules' names: it must still break them,
  * and only them, so a broken setup fails it like any other test, and it
- * fails loudly once the turn keeps the rules and the entry goes.
+ * fails loudly once the turn keeps the rules and the entry goes. None today.
  */
-const knownTurnRulesOf = ({
-  position,
-  shape,
-}: TurnCombination): KnownRule[] => {
-  const rules: KnownRule[] = [];
-  if (shape === "tool-call" && position === "after-compaction") {
-    rules.push(COMPACTION_SUMMARY_RULE);
-  }
-  return rules;
-};
+const knownTurnRulesOf = (_combination: TurnCombination): KnownRule[] => [];
 
 let testDb: TestDatabase;
 let ids: TestIds;

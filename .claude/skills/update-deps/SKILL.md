@@ -3,6 +3,8 @@ name: update-deps
 description: "Inventory, assess, update, and validate third-party dependencies across Bun, Python/uv, Cargo, Docker, and GitHub Actions without hiding ecosystem or supply-chain risk."
 ---
 
+<!-- This local skill replaces the shared update-deps skill (.ai/shared/skills/update-deps/SKILL.md) to add the anonymizer rules below. When the shared skill changes, reconcile this file with it and record the new base in .ai/local-skills/shared-bases.sha256; scripts/check-local-skill-overrides.sh fails until then. -->
+
 # Update Dependencies
 
 Review or update the dependency scope requested by the user. Discover the

@@ -396,7 +396,7 @@ describe("property-test convention", () => {
   });
 
   /**
-   * Guard: the nightly property job runs `turbo run test:property`, so a
+   * Guard: the nightly sweep runs each workspace's `test:property`, so a
    * property test in a workspace without that script never gets the scaled
    * numRuns budget; it runs at its PR budget forever while looking covered.
    * Conversely a workspace with the script but no property file would run
