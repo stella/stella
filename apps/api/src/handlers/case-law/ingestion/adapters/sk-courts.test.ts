@@ -1,3 +1,7 @@
+import { panic } from "better-result";
+import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
+
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 /**
  * What this adapter does with the record its publisher serves.
  *
@@ -14,11 +18,6 @@
  * are made against what the publisher sent rather than against a payload
  * written to match the code.
  */
-
-import { panic } from "better-result";
-import { afterEach, describe, expect, mock, spyOn, test } from "bun:test";
-
-import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -26,11 +25,15 @@ import {
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
+  SK_COURTS_METADATA_URL_SCHEMA,
   assembleSkCourtsDecision,
   skCourtsAdapter,
   SK_COURTS_SOURCE_FIELD_PATHS,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-courts";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { readGzipJson } from "@/api/lib/gzip-json";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -572,14 +575,93 @@ describe("derived general-court metadata", () => {
   });
 });
 
-test("rejected source links retain a plain publisher-stated URL", () => {
-  for (const url of ["data:text/plain,blocked", "not a URL", "", "   "]) {
+test("rejected source links omit the address and retain a diagnostic", () => {
+  for (const { url, reason } of [
+    { url: "data:text/plain,blocked", reason: "unsafe-protocol" },
+    { url: "not a URL", reason: "invalid-url" },
+    { url: "", reason: "empty-url" },
+    { url: "   ", reason: "empty-url" },
+  ]) {
     const decision = assembleSkCourtsDecision({
       item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
       detail: { dokument: { url } },
     });
     expect(decision?.sourceUrl).toBeUndefined();
     expect(decision?.metadata["sourceUrlStatus"] === "rejected-url").toBe(true);
-    expect(decision?.metadata["statedSourceUrl"] === url.trim()).toBe(true);
+    expect(decision?.metadata["statedSourceUrl"]).toBeUndefined();
+    expect(decision?.metadata["metadataUrlDiagnostics"]).toEqual([
+      {
+        address: "statedSourceUrl",
+        reason,
+      },
+    ]);
+  }
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(entry.input, async () => {
+      const { input } = entry;
+      const decision =
+        assembleSkCourtsDecision({
+          item: {
+            spisovaZnacka: "1C/1/2024",
+            guid: "decision-id",
+            sud: { nazov: "Okresný súd" },
+          },
+          detail: {
+            dokument: { url: input },
+            odkazovanePredpisy: [{ nazov: "Zákon", url: input }],
+          },
+        }) ?? panic("URL regression payload built no decision");
+      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          SK_COURTS_METADATA_URL_SCHEMA,
+        ),
+      ).unwrap();
+      const addresses = ["referencedLegislation[0].url", "statedSourceUrl"];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            expect(metadata).toHaveProperty(address, entry.expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("reason" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toEqual(
+            expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+          );
+        }
+      }
+    });
   }
 });

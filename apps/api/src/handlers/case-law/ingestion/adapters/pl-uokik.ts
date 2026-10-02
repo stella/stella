@@ -129,9 +129,11 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { MetadataUrlDefect, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -1276,16 +1278,26 @@ type PageMetadataOptions = {
   files: readonly PlUokikFetchedFile[];
 };
 
-const addressOf = (id: string | undefined, file: PlUokikFile) =>
-  id === undefined ? undefined : (plUokikFileUrl(id, file.name) ?? undefined);
+const metadataAddressOf = (id: string | undefined, file: PlUokikFile) => {
+  if (id === undefined) {
+    return undefined;
+  }
+  const address = plUokikFileUrl(id, file.name);
+  return address === null
+    ? new MetadataUrlDefect({
+        message: "Attachment name cannot construct a safe metadata URL",
+        reason: "invalid-url",
+      })
+    : toMetadataUrl(address, "constructed");
+};
 
 /** What the decision page states, under the keys the inventory names. */
-const pageMetadataOf = ({
-  detail,
-  files,
-  id,
-  row,
-}: PageMetadataOptions): Record<string, unknown> => {
+export const PL_UOKIK_METADATA_URL_SCHEMA = {
+  decisionFiles: { items: { documentUrl: "url" } },
+  appealRulings: { items: { documentUrl: "url" } },
+} as const;
+
+const pageMetadataOf = ({ detail, files, id, row }: PageMetadataOptions) => {
   const practices = listOf(
     fieldText(detail, PL_UOKIK_LABEL.PRACTICE)?.replaceAll("\n", ";"),
   );
@@ -1325,7 +1337,7 @@ const pageMetadataOf = ({
         return {
           name: file.name,
           title: file.title,
-          documentUrl: addressOf(id, file),
+          documentUrl: metadataAddressOf(id, file),
           status: fetched?.status,
           sha256:
             fetched?.bytes === undefined ? undefined : sha256(fetched.bytes),
@@ -1338,7 +1350,7 @@ const pageMetadataOf = ({
     appealRulings: fieldFiles(detail, PL_UOKIK_LABEL.RULINGS).map((file) => ({
       name: file.name,
       title: file.title,
-      documentUrl: addressOf(id, file),
+      documentUrl: metadataAddressOf(id, file),
       sourceDocumentId:
         id === undefined ? undefined : plUokikRulingId(id, file.name),
     })),
@@ -1478,33 +1490,38 @@ export const assemblePlUokikDecision = async ({
     ...(sourceUrl === undefined ? {} : { sourceUrl }),
     ...(firstFileUrl === undefined ? {} : { documentUrl: firstFileUrl }),
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata({
-      caseNumber,
-      court: authority,
-      decisionDate,
-      decisionType: PL_UOKIK_DECISION_TYPE,
-      unid: row.unid,
-      noteId: row.noteId,
-      register,
-      decisionNumber: number.length === 0 ? undefined : number,
-      decisionNumberAsListed: row.decisionNumber,
-      decisionDateAsListed: row.datePrinted,
-      ...pageMetadataOf({
-        detail,
-        row,
-        id: quarantined ? undefined : id,
-        files,
-      }),
-      ...(missing === undefined ? {} : { detailStatus: missing }),
-      ...(courtUnknown ? { quarantineReason: "court-not-stated" } : {}),
-      ...appealWatchOf(detail),
-      ...documentStateOf({
-        listingOnly,
-        read,
-        files,
-        listed: decisionFiles.length,
-      }),
-    }),
+    metadata: checkedDecisionMetadata(
+      approveMetadataUrls(
+        {
+          caseNumber,
+          court: authority,
+          decisionDate,
+          decisionType: PL_UOKIK_DECISION_TYPE,
+          unid: row.unid,
+          noteId: row.noteId,
+          register,
+          decisionNumber: number.length === 0 ? undefined : number,
+          decisionNumberAsListed: row.decisionNumber,
+          decisionDateAsListed: row.datePrinted,
+          ...pageMetadataOf({
+            detail,
+            row,
+            id: quarantined ? undefined : id,
+            files,
+          }),
+          ...(missing === undefined ? {} : { detailStatus: missing }),
+          ...(courtUnknown ? { quarantineReason: "court-not-stated" } : {}),
+          ...appealWatchOf(detail),
+          ...documentStateOf({
+            listingOnly,
+            read,
+            files,
+            listed: decisionFiles.length,
+          }),
+        },
+        PL_UOKIK_METADATA_URL_SCHEMA,
+      ),
+    ),
     // The files are stored beside the envelope rather than in it, so a
     // corrected file under an unchanged page has to change the hash too.
     rawHash: hashContent(

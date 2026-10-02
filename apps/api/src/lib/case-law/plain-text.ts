@@ -6,6 +6,12 @@ import {
   containsTagLikeMarkup,
   TAG_LIKE_MARKUP_SOURCE,
 } from "@/api/lib/case-law/plain-text-markup";
+import {
+  approvedMetadataUrl,
+  preserveMetadataUrlDeclarations,
+} from "@/api/lib/legal-search/metadata-urls";
+import type { SafeHref } from "@/api/lib/sanitize-url";
+import { isRecord } from "@/api/lib/type-guards";
 
 const plainTextBrand = Symbol("PlainText");
 const plainTextSchema = v.pipe(v.string(), v.brand(plainTextBrand));
@@ -13,6 +19,7 @@ export type PlainText = v.InferOutput<typeof plainTextSchema>;
 
 export type PlainTextMetadataValue =
   | PlainText
+  | SafeHref
   | number
   | boolean
   | null
@@ -100,17 +107,17 @@ export const toPlainTextMetadata = (
     return Result.ok(value);
   }
   if (Array.isArray(value)) {
-    return Result.all(value.map(toPlainTextMetadata));
-  }
-  if (
-    typeof value === "object" &&
-    Object.getPrototypeOf(value) === Object.prototype
-  ) {
     return Result.all(
-      Object.entries(value).map(([key, entry]) =>
-        toPlainTextMetadata(entry).map((plain) => [key, plain] as const),
-      ),
-    ).map(Object.fromEntries);
+      value.map((entry: unknown, index) => {
+        const approved = approvedMetadataUrl(value, String(index));
+        return approved === undefined
+          ? toPlainTextMetadata(entry)
+          : Result.ok(approved);
+      }),
+    ).map((plain) => preserveMetadataUrlDeclarations(value, plain));
+  }
+  if (isRecord(value) && Object.getPrototypeOf(value) === Object.prototype) {
+    return toPlainTextMetadataObject(value);
   }
   return Result.err(
     new PlainTextError({
@@ -119,3 +126,20 @@ export const toPlainTextMetadata = (
     }),
   );
 };
+
+/** Project the container as a whole so exact URL declarations remain attached. */
+export const toPlainTextMetadataObject = (
+  value: Record<string, unknown>,
+): Result<Record<string, PlainTextMetadataValue>, PlainTextError> =>
+  Result.all(
+    Object.entries(value).map(([key, entry]) => {
+      const approved = approvedMetadataUrl(value, key);
+      const projected =
+        approved === undefined
+          ? toPlainTextMetadata(entry)
+          : Result.ok(approved);
+      return projected.map((plain) => [key, plain] as const);
+    }),
+  ).map((entries) =>
+    preserveMetadataUrlDeclarations(value, Object.fromEntries(entries)),
+  );

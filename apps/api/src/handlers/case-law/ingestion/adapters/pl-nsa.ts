@@ -96,8 +96,10 @@ import {
 import type { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CorpusSourceDescriptor } from "@/api/lib/legal-search/corpus-source";
+import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const PL_NSA_LANGUAGE = "pl";
@@ -286,6 +288,11 @@ type RelatedDocket = {
   judgment_date: string | null;
   judgment_type: string | null;
 };
+
+export const PL_NSA_METADATA_URL_SCHEMA = {
+  citedProvisions: { items: { link: "url" } },
+  relatedDecisions: { items: { sourceUrl: "url" } },
+} as const;
 
 type LegalBasis = {
   link: string | null;
@@ -1150,64 +1157,78 @@ export const assemblePlNsaDecision = ({
       summary: absentTextField(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
     },
     judges: judgesOf(row),
-    metadata: checkedDecisionMetadata({
-      caseNumber,
-      court: court.name,
-      courtAsPublished: row.court_name ?? undefined,
-      courtStatedBy: court.statedBy,
-      courtLevel: court.level,
-      courtSeat: court.seat,
-      courtBranch: court.branch,
-      courtEra: court.era,
-      decisionDate,
-      decisionType: kind.type,
-      decisionForm: row.judgment_type ?? undefined,
-      bench: kind.bench,
-      documentId: identity.id,
-      identityKind: identity.kind,
-      docketAsPublished: row.docket_number ?? undefined,
-      docketRecognised: docket?.recognised,
-      docketRangeMembers: rangeMembers.length === 0 ? undefined : rangeMembers,
-      finality: plNsaFinality(row.finality, snapshot.snapshotDate),
-      filedDate: warsawDate(row.submission_date),
-      judges: row.judges ?? undefined,
-      presiding: row.presiding_judge ?? undefined,
-      rapporteur: row.judge_rapporteur ?? undefined,
-      caseSymbols: row.case_type_description?.map(caseSymbol),
-      keywords: row.keywords ?? undefined,
-      relatedDecisions: row.related_docket_numbers?.map((related) => {
-        const relatedId = plNsaDocumentId(related.judgment_id);
-        return {
-          documentId: relatedId?.id ?? null,
-          caseNumber: normalizeDocket(related.docket_number),
-          decisionDate: warsawDate(related.judgment_date) ?? null,
-          decisionForm: related.judgment_type,
-          sourceUrl:
-            relatedId?.portal === true ? plNsaPortalUrl(relatedId.id) : null,
-        };
-      }),
-      rulingKeys: plAdministrativeCourtRulingKeys({
-        caseNumber,
-        court: court.name,
-        decisionDate,
-        decisionType: kind.type,
-        portalDocumentId: identity.kind === "portal" ? identity.id : undefined,
-      }),
-      challengedAuthority: nonEmpty(row.challenged_authority) ?? undefined,
-      outcome: row.decision ?? undefined,
-      citedProvisions: row.extracted_legal_bases ?? undefined,
-      officialCollection: row.official_collection ?? undefined,
-      glossInformation: row.glosa_information ?? undefined,
-      textSections: sectionPresence(row),
-      textComplete: parsed.validation.ok,
-      textSource: parsed.textSource,
-      dataset: {
-        ...snapshotPart,
-        country: row.country,
-        courtType: row.court_type,
-        source: row.source,
-      },
-    }),
+    metadata: checkedDecisionMetadata(
+      approveMetadataUrls(
+        {
+          caseNumber,
+          court: court.name,
+          courtAsPublished: row.court_name ?? undefined,
+          courtStatedBy: court.statedBy,
+          courtLevel: court.level,
+          courtSeat: court.seat,
+          courtBranch: court.branch,
+          courtEra: court.era,
+          decisionDate,
+          decisionType: kind.type,
+          decisionForm: row.judgment_type ?? undefined,
+          bench: kind.bench,
+          documentId: identity.id,
+          identityKind: identity.kind,
+          docketAsPublished: row.docket_number ?? undefined,
+          docketRecognised: docket?.recognised,
+          docketRangeMembers:
+            rangeMembers.length === 0 ? undefined : rangeMembers,
+          finality: plNsaFinality(row.finality, snapshot.snapshotDate),
+          filedDate: warsawDate(row.submission_date),
+          judges: row.judges ?? undefined,
+          presiding: row.presiding_judge ?? undefined,
+          rapporteur: row.judge_rapporteur ?? undefined,
+          caseSymbols: row.case_type_description?.map(caseSymbol),
+          keywords: row.keywords ?? undefined,
+          relatedDecisions: row.related_docket_numbers?.map((related) => {
+            const relatedId = plNsaDocumentId(related.judgment_id);
+            return {
+              documentId: relatedId?.id ?? null,
+              caseNumber: normalizeDocket(related.docket_number),
+              decisionDate: warsawDate(related.judgment_date) ?? null,
+              decisionForm: related.judgment_type,
+              sourceUrl: toMetadataUrl(
+                relatedId?.portal === true
+                  ? plNsaPortalUrl(relatedId.id)
+                  : undefined,
+                "constructed",
+              ),
+            };
+          }),
+          rulingKeys: plAdministrativeCourtRulingKeys({
+            caseNumber,
+            court: court.name,
+            decisionDate,
+            decisionType: kind.type,
+            portalDocumentId:
+              identity.kind === "portal" ? identity.id : undefined,
+          }),
+          challengedAuthority: nonEmpty(row.challenged_authority) ?? undefined,
+          outcome: row.decision ?? undefined,
+          citedProvisions: row.extracted_legal_bases?.map((provision) => ({
+            ...provision,
+            link: toMetadataUrl(provision.link, "transport-json"),
+          })),
+          officialCollection: row.official_collection ?? undefined,
+          glossInformation: row.glosa_information ?? undefined,
+          textSections: sectionPresence(row),
+          textComplete: parsed.validation.ok,
+          textSource: parsed.textSource,
+          dataset: {
+            ...snapshotPart,
+            country: row.country,
+            courtType: row.court_type,
+            source: row.source,
+          },
+        },
+        PL_NSA_METADATA_URL_SCHEMA,
+      ),
+    ),
     rawHash: hashContent(sourceRaw),
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_NSA],
     documentAst: parsed.documentAst ?? EMPTY_AST,

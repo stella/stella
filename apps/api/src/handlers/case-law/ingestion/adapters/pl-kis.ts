@@ -108,9 +108,11 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 // ── Publisher boundary ───────────────────────────────────
@@ -1066,6 +1068,11 @@ const statedDay = (
 ): string | undefined =>
   plKisDay(optionalString(row[key])) ?? plKisDay(detailString(detail, key));
 
+export const PL_KIS_METADATA_URL_SCHEMA = {
+  otherSourceUrl: "url",
+  relatedDocuments: { items: { sourceUrl: "url" } },
+} as const;
+
 /**
  * What the categories other than an interpretation state: a ruling's validity
  * and classification, a general interpretation's place of publication.
@@ -1073,12 +1080,15 @@ const statedDay = (
 const supplementaryMetadata = (
   row: Record<string, unknown>,
   detail: PlKisDetail | undefined,
-): Record<string, unknown> => {
+) => {
   const attachments = detail?.fields.get("ZALACZNIKI")?.value;
   return {
     attachments: Array.isArray(attachments) ? attachments : [],
     officialPublication: statedString(row, detail, "MIEJ_PUB"),
-    otherSourceUrl: statedString(row, detail, "INN_ZROD"),
+    otherSourceUrl: toMetadataUrl(
+      statedString(row, detail, "INN_ZROD"),
+      "transport-json",
+    ),
     decisionKind: labelsOf(row["RODZAJ_DECYZJI"])[0],
     decisionKindId: detailString(detail, "RODZAJ_DECYZJI"),
     validFrom: statedDay(row, detail, "DAT_WAZ_OD"),
@@ -1114,7 +1124,7 @@ const relatedDocumentsOf = (
         {
           relation: category?.relation ?? "amends",
           eurekaId: amended,
-          sourceUrl: plKisWebUrl(amended),
+          sourceUrl: toMetadataUrl(plKisWebUrl(amended), "constructed"),
         },
       ];
 };
@@ -1278,46 +1288,56 @@ export const assemblePlKisDecision = async ({
       ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
       headnote: thesisField(statedString(row, detail, "TEZA")),
     },
-    metadata: checkedDecisionMetadata({
-      eurekaId: id,
-      caseNumber,
-      court,
-      decisionDate,
-      decisionType,
-      category:
-        category === undefined
-          ? { id: categoryId, label: categoryLabels[0] }
-          : {
-              id: category.id,
-              label: categoryLabels[0],
-              disposition: category.disposition,
-            },
-      authorities,
-      authorityIds: detailIds(detail, "AUTOR"),
-      status: statusOf(statusId),
-      statusId,
-      statusLabel: statusLabels[0],
-      publishedAt: statedDay(row, detail, "DATA_PUBLIKACJI"),
-      keywords,
-      keywordIds: detailIds(detail, "SLOWA_KLUCZOWE"),
-      provisions,
-      provisionIds: detailIds(detail, "PRZEPISY"),
-      taxTags: [...new Set(provisions.flatMap(({ taxTags }) => taxTags))],
-      issues: issues.map((label) => ({ path: issuePathOf(label), raw: label })),
-      issueIds: detailIds(detail, "ZAGADNIENIA"),
-      taxes: [
-        ...new Set(issues.flatMap((label) => issuePathOf(label).slice(0, 1))),
-      ],
-      relatedDocuments: relatedDocumentsOf(row, detail, includedCategory),
-      ...supplementaryMetadata(row, detail),
-      ...(parsed === undefined ? {} : { documentFrom: parsed.from }),
-      ...(unmapped.length === 0 ? {} : { unmappedSourceFields: unmapped }),
-      ...(listingOnly
-        ? { detailStatus: detailProblem ?? "document-empty" }
-        : {}),
-      sourceAttribution:
-        "System Informacji Skarbowej EUREKA, Ministerstwo Finansów",
-    }),
+    metadata: checkedDecisionMetadata(
+      approveMetadataUrls(
+        {
+          eurekaId: id,
+          caseNumber,
+          court,
+          decisionDate,
+          decisionType,
+          category:
+            category === undefined
+              ? { id: categoryId, label: categoryLabels[0] }
+              : {
+                  id: category.id,
+                  label: categoryLabels[0],
+                  disposition: category.disposition,
+                },
+          authorities,
+          authorityIds: detailIds(detail, "AUTOR"),
+          status: statusOf(statusId),
+          statusId,
+          statusLabel: statusLabels[0],
+          publishedAt: statedDay(row, detail, "DATA_PUBLIKACJI"),
+          keywords,
+          keywordIds: detailIds(detail, "SLOWA_KLUCZOWE"),
+          provisions,
+          provisionIds: detailIds(detail, "PRZEPISY"),
+          taxTags: [...new Set(provisions.flatMap(({ taxTags }) => taxTags))],
+          issues: issues.map((label) => ({
+            path: issuePathOf(label),
+            raw: label,
+          })),
+          issueIds: detailIds(detail, "ZAGADNIENIA"),
+          taxes: [
+            ...new Set(
+              issues.flatMap((label) => issuePathOf(label).slice(0, 1)),
+            ),
+          ],
+          relatedDocuments: relatedDocumentsOf(row, detail, includedCategory),
+          ...supplementaryMetadata(row, detail),
+          ...(parsed === undefined ? {} : { documentFrom: parsed.from }),
+          ...(unmapped.length === 0 ? {} : { unmappedSourceFields: unmapped }),
+          ...(listingOnly
+            ? { detailStatus: detailProblem ?? "document-empty" }
+            : {}),
+          sourceAttribution:
+            "System Informacji Skarbowej EUREKA, Ministerstwo Finansów",
+        },
+        PL_KIS_METADATA_URL_SCHEMA,
+      ),
+    ),
     // The PDF is stored beside the envelope rather than in it, so a corrected
     // rendition under an unchanged detail has to change the hash too.
     rawHash:

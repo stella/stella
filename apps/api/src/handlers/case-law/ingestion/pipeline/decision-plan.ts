@@ -48,7 +48,7 @@ import type { CaseLawCorpusDependencies } from "@/api/handlers/case-law/ingestio
 import { RECONCILE_CONTENTION } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import type { SafeId } from "@/api/lib/branded-types";
-import { toPlainTextMetadata } from "@/api/lib/case-law/plain-text";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import {
   corpusCarriesDocument,
   payloadCarriesDocument,
@@ -64,6 +64,7 @@ import {
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
+import { preserveMetadataUrlDeclarations } from "@/api/lib/legal-search/metadata-urls";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   TEXT_ENCODING_INCOMPLETE,
@@ -563,18 +564,15 @@ export const planDecisionWrite = async ({
           ),
         }
       : ordinaryMetadata;
-  const plainMetadata = Result.all(
-    Object.entries(preparedMetadata).map(([key, value]) =>
-      toPlainTextMetadata(value).map((plain) => [key, plain] as const),
-    ),
-  );
+  preserveMetadataUrlDeclarations(result.metadata, preparedMetadata);
+  const plainMetadata = toPlainTextMetadataObject(preparedMetadata);
   if (plainMetadata.isErr()) {
     return Result.err(plainMetadata.error);
   }
   const preparedResult = {
     ...result,
     documentAst: finalAst,
-    metadata: Object.fromEntries(plainMetadata.value),
+    metadata: plainMetadata.value,
   };
 
   reportStoredDocumentQuality({

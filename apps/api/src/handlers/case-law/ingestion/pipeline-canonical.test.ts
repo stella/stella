@@ -36,7 +36,12 @@ import {
   sanitizeResult,
   partialObservationFromMetadata,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import {
+  approveMetadataUrls,
+  rehydrateMetadataUrls,
+} from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { caseLawSourceRow } from "@/api/tests/helpers/case-law-source-row";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -612,6 +617,69 @@ describe("processDecision — canonical storage mode", () => {
     // pass no longer owns, and the decision comes back for the next batch.
     expect(settledDecisionRows()).toEqual([]);
   });
+
+  test.each(["&amp;", "&amp;amp;", "%26"])(
+    "keeps declared URL scalars through normalization and the row write (%s)",
+    async (queryEncoding) => {
+      const stated = `https://example.org/?a=1${queryEncoding}b=2`;
+      const schema = {
+        href: "url",
+        referencedLegislation: { items: { url: "url" } },
+      } as const;
+      const input = plainTextIngestionResult({
+        ...decision,
+        fulltext: undefined,
+        sourceRaw: JSON.stringify({ url: stated, invalid: "/relative" }),
+        metadata: approveMetadataUrls(
+          {
+            href: toMetadataUrl(stated, "transport-json"),
+            referencedLegislation: [
+              {
+                url: toMetadataUrl(stated, "transport-json"),
+                nazov: "Law &amp; order",
+              },
+              {
+                url: toMetadataUrl("/relative", "transport-json"),
+                nazov: "Invalid link",
+              },
+            ],
+            ordinaryText: stated,
+          },
+          schema,
+        ),
+      });
+      const normalized = sanitizeResult(input);
+      expect(sanitizeResult(normalized).metadata).toEqual(normalized.metadata);
+      const outcome = await processDecision({
+        input,
+        observationOrder: 1n,
+        sourceId: createSafeId<"caseLawSource">(),
+        scopedDb,
+        observedAt: new Date("2026-07-31T12:00:00.000Z"),
+      });
+      expect(outcome.status).toBe("complete");
+      const metadata = insertedRows.at(0)?.["metadata"];
+      expect(metadata).toMatchObject({
+        href: stated,
+        ordinaryText:
+          queryEncoding === "%26" ? stated : "https://example.org/?a=1&b=2",
+        referencedLegislation: [
+          { url: stated, nazov: "Law & order" },
+          { nazov: "Invalid link" },
+        ],
+        metadataUrlDiagnostics: [
+          { address: "referencedLegislation[1].url", reason: "invalid-url" },
+        ],
+      });
+      const serialized = JSON.stringify(metadata);
+      const reloaded = rehydrateMetadataUrls(JSON.parse(serialized), schema);
+      expect(
+        sanitizeResult(
+          plainTextIngestionResult({ ...input, metadata: reloaded }),
+        ).metadata,
+      ).toEqual(metadata);
+    },
+  );
 
   test("stores nothing and settles null pointers for a metadata-only decision", async () => {
     const outcome = await processDecision({

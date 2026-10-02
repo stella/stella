@@ -22,7 +22,7 @@ import type { DocumentAst } from "@/api/lib/case-law/document-ast";
 import {
   toPlainText,
   PlainTextError,
-  toPlainTextMetadata,
+  toPlainTextMetadataObject,
   type PlainText,
   type PlainTextMetadataValue,
 } from "@/api/lib/case-law/plain-text";
@@ -396,13 +396,7 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       court: yield* requiredLabel(raw.court),
       decisionType: yield* optionalPlainText(raw.decisionType),
-      metadata: Object.fromEntries(
-        yield* Result.all(
-          Object.entries(raw.metadata).map(([key, value]) =>
-            toPlainTextMetadata(value).map((plain) => [key, plain] as const),
-          ),
-        ),
-      ),
+      metadata: yield* toPlainTextMetadataObject(raw.metadata),
       judges:
         raw.judges === undefined
           ? undefined

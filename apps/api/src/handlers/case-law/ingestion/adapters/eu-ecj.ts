@@ -1,4 +1,3 @@
-// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -94,8 +93,14 @@ import {
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
+import {
+  approveMetadataUrls,
+  rehydrateMetadataUrls,
+  preserveMetadataUrlDeclarations,
+} from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 /**
@@ -1359,37 +1364,56 @@ const presentEntries = (
   );
 
 /** What the notice states about this variant, as the row keeps it. */
-const noticeMetadata = (facts: EcjNoticeFacts): Record<string, unknown> =>
-  presentEntries({
-    noticeCelex: facts.celex,
-    noticeEcli: facts.ecli,
-    noticeDecisionDates: facts.decisionDate,
-    noticeCourtCodes: facts.courtCode,
-    lodgedOn: facts.lodgedOn,
-    form: facts.form,
-    celexType: facts.celexType,
-    recordVersion: facts.recordVersion,
-    referringCountry: facts.referringCountry,
-    procedureLanguage: facts.procedureLanguage,
-    procedureType: facts.procedureType,
-    observations: facts.observations,
-    nationalJudgment: facts.nationalJudgment,
-    interprets: facts.interprets,
-    doctrine: facts.doctrine,
-    subjectMatter: facts.subjectMatter,
-    caseLawSubjectMatter: facts.caseLawSubjectMatter,
-    caseLawDirectory: facts.caseLawDirectory,
-    caseLawDirectoryNew: facts.caseLawDirectoryNew,
-    publishedInReports: facts.publishedInReports,
-    reportsReference: facts.reportsReference,
-    ojNotice: facts.ojNotice,
-    dossier: facts.dossier,
-    caseEventWorks: facts.caseEventWorks,
-    abstractCelex: facts.abstractCelex,
-    title: facts.title,
-    caseIdentifier: facts.caseIdentifier,
-    manifestations: facts.manifestations,
-  });
+export const EU_ECJ_METADATA_URL_SCHEMA = {
+  manifestationUri: "url",
+  languageUri: "url",
+  cdmType: "url",
+  manifestations: { items: { uri: "url" } },
+} as const;
+
+const EU_ECJ_NOTICE_URL_SCHEMA = {
+  manifestations: EU_ECJ_METADATA_URL_SCHEMA.manifestations,
+} as const;
+
+const noticeMetadata = (facts: EcjNoticeFacts): Record<string, unknown> => {
+  const approved = approveMetadataUrls(
+    {
+      noticeCelex: facts.celex,
+      noticeEcli: facts.ecli,
+      noticeDecisionDates: facts.decisionDate,
+      noticeCourtCodes: facts.courtCode,
+      lodgedOn: facts.lodgedOn,
+      form: facts.form,
+      celexType: facts.celexType,
+      recordVersion: facts.recordVersion,
+      referringCountry: facts.referringCountry,
+      procedureLanguage: facts.procedureLanguage,
+      procedureType: facts.procedureType,
+      observations: facts.observations,
+      nationalJudgment: facts.nationalJudgment,
+      interprets: facts.interprets,
+      doctrine: facts.doctrine,
+      subjectMatter: facts.subjectMatter,
+      caseLawSubjectMatter: facts.caseLawSubjectMatter,
+      caseLawDirectory: facts.caseLawDirectory,
+      caseLawDirectoryNew: facts.caseLawDirectoryNew,
+      publishedInReports: facts.publishedInReports,
+      reportsReference: facts.reportsReference,
+      ojNotice: facts.ojNotice,
+      dossier: facts.dossier,
+      caseEventWorks: facts.caseEventWorks,
+      abstractCelex: facts.abstractCelex,
+      title: facts.title,
+      caseIdentifier: facts.caseIdentifier,
+      manifestations: facts.manifestations.map((manifestation) => ({
+        ...manifestation,
+        uri: toMetadataUrl(manifestation.uri, "decoded"),
+      })),
+    },
+    EU_ECJ_NOTICE_URL_SCHEMA,
+  );
+  return preserveMetadataUrlDeclarations(approved, presentEntries(approved));
+};
 
 /**
  * Build the ingestion result for one stored envelope.
@@ -1449,6 +1473,7 @@ const ecjDecisionFromParts = ({
   const judges = facts === undefined ? [] : noticeJudges(facts);
   const converterVersion = ecjConverterVersion(html);
 
+  const notice = facts === undefined ? {} : noticeMetadata(facts);
   return plainTextIngestionResult({
     caseNumber,
     sourceDocumentId: ecjSourceDocumentId(celex, language),
@@ -1476,26 +1501,31 @@ const ecjDecisionFromParts = ({
     ...(facts === undefined || facts.citedWorks.length === 0
       ? {}
       : { publisherCitedCases: facts.citedWorks }),
-    metadata: checkedDecisionMetadata({
-      ...metadata,
-      ...(facts === undefined ? {} : noticeMetadata(facts)),
-      ...presentEntries({ publisherCaseNumber: bibliography?.caseNumber }),
-      ...(bibliography === undefined
-        ? {}
-        : presentEntries({
-            formexCelex: bibliography.celex,
-            formexEcli: bibliography.ecli,
-            formexAuthors: bibliography.author,
-            reportsSequence: bibliography.sequence,
-            reportsPages: bibliography.pages,
-          })),
-      celex,
-      ecli,
-      decisionDate,
-      decisionType,
-      keywords,
-      ...presentEntries({ converterVersion }),
-    }),
+    metadata: checkedDecisionMetadata(
+      preserveMetadataUrlDeclarations(
+        metadata,
+        preserveMetadataUrlDeclarations(notice, {
+          ...metadata,
+          ...notice,
+          ...presentEntries({ publisherCaseNumber: bibliography?.caseNumber }),
+          ...(bibliography === undefined
+            ? {}
+            : presentEntries({
+                formexCelex: bibliography.celex,
+                formexEcli: bibliography.ecli,
+                formexAuthors: bibliography.author,
+                reportsSequence: bibliography.sequence,
+                reportsPages: bibliography.pages,
+              })),
+          celex,
+          ecli,
+          decisionDate,
+          decisionType,
+          keywords,
+          ...presentEntries({ converterVersion }),
+        }),
+      ),
+    ),
     textFields,
     rawHash: hashContent(
       `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
@@ -1642,7 +1672,9 @@ const reparseStoredRaw = (
       (publishedLanguage && eurLexSourceUrl(publishedLanguage, celex)),
     documentUrl: stored.documentUrl ?? undefined,
     parts,
-    metadata: checkedDecisionMetadata(metadata),
+    metadata: checkedDecisionMetadata(
+      rehydrateMetadataUrls(metadata, EU_ECJ_METADATA_URL_SCHEMA),
+    ),
     textFields,
   });
 
@@ -1846,11 +1878,20 @@ export const buildDecision = async (
     documentUrl: served.url,
     parts,
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: {
-      manifestationUri: binding.manifestation.value,
-      languageUri: binding.language.value,
-      cdmType: binding.type.value,
-    },
+    metadata: checkedDecisionMetadata(
+      approveMetadataUrls(
+        {
+          manifestationUri: toMetadataUrl(
+            binding.manifestation.value,
+            "transport-json",
+          ),
+          languageUri: toMetadataUrl(binding.language.value, "transport-json"),
+          cdmType: toMetadataUrl(binding.type.value, "transport-json"),
+          manifestations: undefined,
+        },
+        EU_ECJ_METADATA_URL_SCHEMA,
+      ),
+    ),
   });
 };
 

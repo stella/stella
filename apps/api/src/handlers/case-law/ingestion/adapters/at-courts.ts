@@ -57,7 +57,9 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
@@ -719,11 +721,21 @@ type RisListingMetadata = ReturnType<typeof readDecisionMetadata>;
  * dispositions, so a field declared stored at a metadata key is written to
  * that key by construction rather than by a second hand-kept list.
  */
+export const AT_RIS_METADATA_URL_SCHEMA = {
+  decisionTextDocument: "url",
+  documentParts: { items: { formats: { items: { url: "url" } } } },
+} as const;
+
+export const AT_RIS_HEADNOTE_METADATA_URL_SCHEMA = {
+  ...AT_RIS_METADATA_URL_SCHEMA,
+  headnotes: { items: { documentUrl: "url" } },
+} as const;
+
 const decisionMetadata = (
   source: AtRisSourceDefinition,
   data: RisListingMetadata,
   sections: RisDocumentSections,
-): Record<string, unknown> => ({
+) => ({
   ecli: data.ecli,
   court: data.court,
   decisionDate: data.decisionDate,
@@ -736,8 +748,17 @@ const decisionMetadata = (
   submitter: data.submitter,
   documentKind: data.documentKind,
   keywords: data.keywords,
-  decisionTextDocument: data.decisionTextDocument,
-  documentParts: data.documentParts,
+  decisionTextDocument: toMetadataUrl(
+    data.decisionTextDocument,
+    "transport-json",
+  ),
+  documentParts: data.documentParts.map((part) => ({
+    ...part,
+    formats: part.formats.map((format) => ({
+      ...format,
+      url: toMetadataUrl(format.url, "transport-json"),
+    })),
+  })),
   contentFormats: data.contentFormats,
   ...atRisStoredValues(profileOf(source), {
     branch: data.sourceMetadata,
@@ -892,16 +913,19 @@ const headnoteNamesDecision = (
   );
 };
 
-const headnoteSummary = (
-  headnote: Record<string, unknown>,
-): Record<string, unknown> => {
+const headnoteSummary = (headnote: Record<string, unknown>) => {
   const judicature = nestedRecord(headnote, "Data", "Metadaten", "Judikatur");
   return {
     sourceDocumentId: rawSourceDocumentIdOf(headnote),
     caseNumbers: itemValues(judicature?.["Geschaeftszahl"]),
     ecli: optionalString(judicature?.["EuropeanCaseLawIdentifier"]),
-    documentUrl: optionalString(
-      nestedRecord(headnote, "Data", "Metadaten", "Allgemein")?.["DokumentUrl"],
+    documentUrl: toMetadataUrl(
+      optionalString(
+        nestedRecord(headnote, "Data", "Metadaten", "Allgemein")?.[
+          "DokumentUrl"
+        ],
+      ),
+      "transport-json",
     ),
   };
 };
@@ -947,7 +971,7 @@ const headnotesOf = (
   source: AtRisSourceDefinition,
   headnoteListing: string | undefined,
   sourceDocumentId: string,
-): readonly Record<string, unknown>[] => {
+) => {
   if (headnoteListing === undefined) {
     return [];
   }
@@ -1036,11 +1060,16 @@ const buildListingOnly = ({
     // The listing states a text of its own for some applications, so a row
     // without its document is still not a row whose publisher wrote nothing.
     textFields: decisionTextFields(source, data, NO_SECTIONS),
-    metadata: checkedDecisionMetadata({
-      ...decisionMetadata(source, data, NO_SECTIONS),
-      court,
-      detailStatus: reason,
-    }),
+    metadata: checkedDecisionMetadata(
+      approveMetadataUrls(
+        {
+          ...decisionMetadata(source, data, NO_SECTIONS),
+          court,
+          detailStatus: reason,
+        },
+        AT_RIS_METADATA_URL_SCHEMA,
+      ),
+    ),
     rawHash: hashContent(raw.sourceRaw),
     documentAst: EMPTY_AST,
     parserVersion: PARSER_VERSIONS[source.key],
@@ -1233,10 +1262,15 @@ export const assembleAtRisDecision = (
       "html",
     ),
     textFields: decisionTextFields(source, data, parsed.sections),
-    metadata: checkedDecisionMetadata({
-      ...decisionMetadata(source, data, parsed.sections),
-      headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
-    }),
+    metadata: checkedDecisionMetadata(
+      approveMetadataUrls(
+        {
+          ...decisionMetadata(source, data, parsed.sections),
+          headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
+        },
+        AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+      ),
+    ),
     rawHash: hashContent(raw.sourceRaw),
     documentAst: parsed.documentAst,
     sections: sectionsFromAst(parsed.documentAst.blocks),

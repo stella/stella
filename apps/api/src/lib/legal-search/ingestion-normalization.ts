@@ -46,6 +46,7 @@ import {
   type IngestionResult,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { preserveMetadataUrlDeclarations } from "@/api/lib/legal-search/metadata-urls";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
@@ -352,6 +353,7 @@ export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
 
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
+  preserveMetadataUrlDeclarations(result.metadata, metadata);
   return plainTextIngestionResult({
     ...result,
     caseNumber: storedCaseNumberOf(result),

@@ -44,9 +44,14 @@ import {
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  approveMetadataUrls,
+  metadataUrlAddresses,
+} from "@/api/lib/legal-search/metadata-urls";
 import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import {
   atFindokFixture,
   atRisFixture,
@@ -73,6 +78,7 @@ import {
   isClassifiedMetadataKey,
   METADATA_TEXT_DISPOSITIONS,
   metadataDisplayTextOf,
+  unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 
 import { courtListenerConformanceFixture } from "./courtlistener/conformance-fixture";
@@ -243,7 +249,7 @@ const metadataDisplayTextCensus = (metadata: Record<string, unknown>) => {
       unclassified.push(key);
       return [];
     }
-    return metadataDisplayTextOf(key, value);
+    return metadataDisplayTextOf(key, value, metadata);
   });
   return { texts, unclassified };
 };
@@ -267,6 +273,10 @@ describe("every adapter accounts for the fields its source states", () => {
       }
       const parts = storedPartsOf(key, decision);
 
+      expect(
+        unclassifiedMetadataAddresses(decision.metadata),
+        `${key}: address fields require exact producer declarations`,
+      ).toEqual([]);
       const metadataCensus = metadataDisplayTextCensus(decision.metadata);
       expect(
         metadataCensus.unclassified,
@@ -421,10 +431,58 @@ describe("the display-text census classifies exactly the metadata adapters emit"
     ).toEqual([]);
   });
 
-  test("an inspected value is read at every depth, past only its excluded properties", () => {
-    const texts = metadataDisplayTextOf("referencedLegislation", [
-      { nazov: "Z&#225;kon", url: "https://example.org/?a=1&amp;b=2" },
+  test("display text is inspected while exactly declared nested URLs are excluded", () => {
+    const metadata = approveMetadataUrls(
+      {
+        referencedLegislation: [
+          {
+            nazov: "Z&#225;kon",
+            url: toMetadataUrl(
+              "https://example.org/?a=1&amp;b=2",
+              "transport-json",
+            ),
+          },
+        ],
+      },
+      { referencedLegislation: { items: { url: "url" } } },
+    );
+    const texts = metadataDisplayTextOf(
+      "referencedLegislation",
+      metadata.referencedLegislation,
+      metadata,
+    );
+    expect(unclassifiedMetadataAddresses(metadata)).toEqual([]);
+    expect(metadataUrlAddresses(metadata)).toEqual([
+      "referencedLegislation[*].url",
     ]);
+    const scalarArray = approveMetadataUrls(
+      {
+        publications: [
+          toMetadataUrl("https://example.org/?a=&amp;", "transport-json"),
+        ],
+      },
+      { publications: { items: "url" } },
+    );
+    expect(
+      metadataDisplayTextOf(
+        "publications",
+        scalarArray.publications,
+        scalarArray,
+      ),
+    ).toEqual([]);
+    expect(
+      unclassifiedMetadataAddresses({
+        referencedLegislation: [{ url: "https://example.org/" }],
+      }),
+    ).toEqual(["metadata.referencedLegislation.0.url"]);
+    expect(
+      unclassifiedMetadataAddresses({
+        unclassified: { nested: [{ href: null }] },
+      }),
+    ).toEqual(["metadata.unclassified.nested.0.href"]);
+    expect(unclassifiedMetadataAddresses({ guid: { href: "opaque" } })).toEqual(
+      ["metadata.guid.href"],
+    );
     expect(texts).toEqual([
       { field: "metadata.referencedLegislation.0.nazov", value: "Z&#225;kon" },
     ]);

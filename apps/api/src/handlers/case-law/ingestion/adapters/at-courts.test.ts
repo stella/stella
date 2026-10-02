@@ -762,3 +762,70 @@ describe("Austrian RIS adapter", () => {
     ).toEqual([]);
   });
 });
+
+describe("RIS metadata URL provenance", () => {
+  for (const candidate of [
+    " https://example.org/document?a=1&amp;b=2#part ",
+    "https://example.org/%26amp%3B?a=1&b=2",
+    "//example.org/document",
+    "/document",
+    "ftp://example.org/document",
+    "data:text/plain,document",
+    "mailto:publisher@example.org",
+  ]) {
+    it(`keeps or omits every declared address for ${candidate}`, async () => {
+      const item = listingItem();
+      nestedValue(item, ["Data", "Metadaten", "Judikatur"])[
+        "EntscheidungstextUrl"
+      ] = candidate;
+      for (const format of contentUrlsOf(item)) {
+        format["Url"] = candidate;
+      }
+      const headnote = headnoteItem();
+      nestedValue(headnote, ["Data", "Metadaten", "Allgemein"])["DokumentUrl"] =
+        candidate;
+      const decision = assembleAtRisDecision(AT_COURTS_SOURCE, item, {
+        documentXml: await fixtureXml(),
+        headnoteListing: await listingResponse([headnote]).text(),
+      });
+      const parts = decision.metadata["documentParts"];
+      const part = Array.isArray(parts) ? parts.at(0) : undefined;
+      const formats = isRecord(part) ? part["formats"] : undefined;
+      const format = Array.isArray(formats) ? formats.at(0) : undefined;
+      const headnotes = decision.metadata["headnotes"];
+      const summary = Array.isArray(headnotes) ? headnotes.at(0) : undefined;
+      if (candidate.trim().startsWith("https://")) {
+        expect(decision.metadata["decisionTextDocument"]).toBe(
+          candidate.trim(),
+        );
+        expect(isRecord(format) ? format["url"] : undefined).toBe(
+          candidate.trim(),
+        );
+        expect(isRecord(summary) ? summary["documentUrl"] : undefined).toBe(
+          candidate.trim(),
+        );
+        expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      } else {
+        expect(Object.hasOwn(decision.metadata, "decisionTextDocument")).toBe(
+          false,
+        );
+        expect(isRecord(format) && Object.hasOwn(format, "url")).toBe(false);
+        expect(isRecord(summary) && Object.hasOwn(summary, "documentUrl")).toBe(
+          false,
+        );
+        expect(decision.metadata["metadataUrlDiagnostics"]).toEqual([
+          { address: "decisionTextDocument", reason: expect.any(String) },
+          {
+            address: "documentParts[0].formats[0].url",
+            reason: expect.any(String),
+          },
+          {
+            address: "documentParts[0].formats[1].url",
+            reason: expect.any(String),
+          },
+          { address: "headnotes[0].documentUrl", reason: expect.any(String) },
+        ]);
+      }
+    });
+  }
+});

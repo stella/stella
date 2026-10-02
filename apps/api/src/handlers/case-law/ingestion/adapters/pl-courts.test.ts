@@ -1,3 +1,10 @@
+import { panic } from "better-result";
+import { describe, expect, test } from "bun:test";
+
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * What this adapter makes of the payloads SAOS actually serves.
  *
@@ -8,25 +15,21 @@
  * complement — it fills every field so the conformance suites can exercise
  * every disposition, which no single real decision does.
  */
-
-import { panic } from "better-result";
-import { describe, expect, test } from "bun:test";
-
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   SourceRawParts,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  PL_COURTS_METADATA_URL_SCHEMA,
   buildPlDecision,
   normalizeSaosDumpItem,
   plCourtsAdapter,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-courts";
 import { parsePlDecisionContent } from "@/api/handlers/case-law/ingestion/parsers/pl-courts";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import {
   installRecordingAnalytics,
@@ -395,4 +398,88 @@ describe("pl-courts replays a stored row", () => {
 
     expect(outcome.type).toBe("rejected");
   });
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(entry.input, async () => {
+      const { input } = entry;
+      const recorded = await detailRecord(CHAMBER_DETAIL);
+      const division = isRecord(recorded["division"])
+        ? recorded["division"]
+        : {};
+      const court = isRecord(division["court"]) ? division["court"] : {};
+      const source = isRecord(recorded["source"]) ? recorded["source"] : {};
+      const decision = decisionFrom({
+        listingRow: recorded,
+        detail: {
+          ...recorded,
+          href: input,
+          division: {
+            ...division,
+            href: input,
+            court: { ...court, href: input },
+            chamber: { id: 1, name: "Chamber", href: input },
+          },
+          chambers: [{ id: 1, name: "Chamber", href: input }],
+          source: { ...source, judgmentUrl: input },
+        },
+      });
+      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          PL_COURTS_METADATA_URL_SCHEMA,
+        ),
+      ).unwrap();
+      const addresses = [
+        "href",
+        "division.href",
+        "division.court.href",
+        "division.chamber.href",
+        "chambers[0].href",
+        "source.judgmentUrl",
+      ];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            expect(metadata).toHaveProperty(address, entry.expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("reason" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toEqual(
+            expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+          );
+        }
+      }
+    });
+  }
 });

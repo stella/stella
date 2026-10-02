@@ -1,3 +1,6 @@
+import { panic, Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
+import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 /**
  * pl-nsa against rows the dataset serves.
  *
@@ -7,10 +10,6 @@
  * without judges. `pl-nsa-rows.parquet` is the same rows under the dataset's
  * own schema, which is what the reader and the cursor are driven over.
  */
-
-import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, spyOn, test } from "bun:test";
-import { parquetMetadataAsync, parquetSchema } from "hyparquet";
 import { mkdtemp, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import nodePath from "node:path";
@@ -18,6 +17,7 @@ import nodePath from "node:path";
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  PL_NSA_METADATA_URL_SCHEMA,
   assemblePlNsaDecision,
   composePlNsaFullText,
   createPlNsaCrawler,
@@ -54,6 +54,9 @@ import {
   normalizeDecisionIdentifier,
 } from "@/api/handlers/case-law/ingestion/citation-extractor";
 import { parsePlNsaDecision } from "@/api/handlers/case-law/ingestion/parsers/pl-nsa";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -400,6 +403,21 @@ describe("the recorded dataset rows", () => {
   test("related decisions link the court's own pages", async () => {
     const decision = await byCase("multiple-related");
     const related = decision.metadata["relatedDecisions"];
+    const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+    const serializedMetadata = JSON.stringify(decision.metadata);
+    const restored = toPlainTextMetadataObject(
+      rehydrateMetadataUrls(
+        JSON.parse(serializedMetadata),
+        PL_NSA_METADATA_URL_SCHEMA,
+      ),
+    ).unwrap();
+    expect(repeated["relatedDecisions"]).toEqual(
+      decision.metadata["relatedDecisions"],
+    );
+    expect(restored["relatedDecisions"]).toEqual(
+      decision.metadata["relatedDecisions"],
+    );
+
     expect(Array.isArray(related) && related.length >= 2).toBe(true);
     for (const item of Array.isArray(related) ? related : []) {
       expect(item).toMatchObject({
@@ -1448,4 +1466,71 @@ describe("unreadable timestamps", () => {
     expect(decision.isListingOnly).toBeUndefined();
     expect(decision.decisionDate).toBe("2010-04-02");
   });
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(entry.input, async () => {
+      const { input } = entry;
+      const recorded =
+        (await recordedRows()).at(0) ?? panic("No recorded NSA row");
+      const decision = build({
+        ...recorded,
+        values: {
+          ...recorded.values,
+          extracted_legal_bases: [
+            { link: input, article: "art. 1", journal: "Dz.U.", law: "Ustawa" },
+          ],
+        },
+      });
+      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          PL_NSA_METADATA_URL_SCHEMA,
+        ),
+      ).unwrap();
+      const addresses = ["citedProvisions[0].link"];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            expect(metadata).toHaveProperty(address, entry.expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("reason" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toEqual(
+            expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+          );
+        }
+      }
+    });
+  }
 });

@@ -2,8 +2,8 @@
  * What the display-text residue census does with every metadata key an
  * enrolled adapter's fixture emits.
  *
- * The census walks every string a key holds, at any depth, unless the key or
- * one of its nested properties is excluded here with the reason. The map is
+ * The census walks display strings at every depth; URL exclusions come from
+ * the producer's exact address declarations, preserved through projection. The map is
  * total over the keys the fixtures exercise and checked in both directions by
  * `source-field-inventory.test.ts`: a key an adapter starts emitting fails the
  * census until it is classified, and a key no fixture emits any longer fails
@@ -11,28 +11,24 @@
  * not display text: a link that must stay byte-exact to resolve, or an opaque
  * publisher identifier stored as the publisher spells it.
  */
+import {
+  metadataUrlKeys,
+  META_URL_DIAGNOSTICS,
+} from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
 
 type MetadataTextDisposition =
   | {
       type: "inspected";
-      /** Nested properties, at any depth, that are not display text. */
-      excludedProperties: Readonly<Record<string, string>>;
     }
   | { type: "excluded"; reason: string };
 
-const LINK = "a link or resource address, kept byte-exact so it still resolves";
 const PUBLISHER_ID =
   "an opaque publisher identifier, stored as the publisher spells it";
 
 const INSPECTED = {
   type: "inspected",
-  excludedProperties: {},
 } as const satisfies MetadataTextDisposition;
-
-const inspected = (
-  excludedProperties: Readonly<Record<string, string>>,
-): MetadataTextDisposition => ({ type: "inspected", excludedProperties });
 
 const excluded = (reason: string): MetadataTextDisposition => ({
   type: "excluded",
@@ -53,7 +49,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   announcedOn: INSPECTED,
   appealed: INSPECTED,
   appealFrom: INSPECTED,
-  appealRulings: inspected({ documentUrl: LINK }),
+  appealRulings: INSPECTED,
   appealWatch: INSPECTED,
   archivePath: INSPECTED,
   area: INSPECTED,
@@ -68,7 +64,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   bhgyIdentifier: INSPECTED,
   bipCommentNote: INSPECTED,
   bipComments: INSPECTED,
-  caseDocuments: inspected({ url: LINK }),
+  caseDocuments: INSPECTED,
   caseEventWorks: INSPECTED,
   caseId: excluded(PUBLISHER_ID),
   caseIdentifier: INSPECTED,
@@ -88,7 +84,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   caseType: INSPECTED,
   category: INSPECTED,
   cause: INSPECTED,
-  cdmType: excluded(LINK),
+  cdmType: INSPECTED,
   celex: excluded(PUBLISHER_ID),
   celexType: INSPECTED,
   chairman: INSPECTED,
@@ -98,10 +94,10 @@ export const METADATA_TEXT_DISPOSITIONS = {
   challengedLegislation: INSPECTED,
   challengedProvisions: INSPECTED,
   chamber: INSPECTED,
-  chambers: inspected({ href: LINK }),
+  chambers: INSPECTED,
   citation: INSPECTED,
   citedDecisions: INSPECTED,
-  citedProvisions: inspected({ link: LINK }),
+  citedProvisions: INSPECTED,
   clarificationOfLegalRegulation: INSPECTED,
   classification: INSPECTED,
   collection: INSPECTED,
@@ -151,7 +147,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   decisionDateAsListed: INSPECTED,
   decisionDateAsPrinted: INSPECTED,
   decisionDateSource: INSPECTED,
-  decisionFiles: inspected({ documentUrl: LINK }),
+  decisionFiles: INSPECTED,
   decisionForm: INSPECTED,
   decisionKind: INSPECTED,
   decisionKindId: excluded(PUBLISHER_ID),
@@ -159,7 +155,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   decisionNature: INSPECTED,
   decisionNumber: INSPECTED,
   decisionNumberAsListed: INSPECTED,
-  decisionTextDocument: excluded(LINK),
+  decisionTextDocument: INSPECTED,
   decisionType: INSPECTED,
   decisionTypeKey: INSPECTED,
   decisionTypeRaw: INSPECTED,
@@ -176,7 +172,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   dissentingOnReasons: INSPECTED,
   dissentingOpinion: INSPECTED,
   dissentingOpinions: INSPECTED,
-  division: inspected({ href: LINK }),
+  division: INSPECTED,
   docketAsPublished: INSPECTED,
   docketDates: INSPECTED,
   docketNumberCore: INSPECTED,
@@ -195,7 +191,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   documentKind: INSPECTED,
   documentName: INSPECTED,
   documentNumberKind: INSPECTED,
-  documentParts: inspected({ url: LINK }),
+  documentParts: INSPECTED,
   documentSize: INSPECTED,
   documentStatus: INSPECTED,
   documentTitle: INSPECTED,
@@ -228,10 +224,10 @@ export const METADATA_TEXT_DISPOSITIONS = {
   handlingUnit: INSPECTED,
   headnoteNumber: INSPECTED,
   headnoteNumbers: INSPECTED,
-  headnotes: inspected({ documentUrl: LINK }),
+  headnotes: INSPECTED,
   headnoteStatutes: INSPECTED,
   history: INSPECTED,
-  href: excluded(LINK),
+  href: INSPECTED,
   identifikacneCislo: excluded(PUBLISHER_ID),
   identityKind: INSPECTED,
   includeToZnaU: INSPECTED,
@@ -258,7 +254,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   kindOfOtherProposer: INSPECTED,
   kollegiums: INSPECTED,
   languages: INSPECTED,
-  languageUri: excluded(LINK),
+  languageUri: INSPECTED,
   lastUpdate: INSPECTED,
   lawReportsNumber: INSPECTED,
   legalArea: INSPECTED,
@@ -271,8 +267,8 @@ export const METADATA_TEXT_DISPOSITIONS = {
   linkedRulings: INSPECTED,
   lodgedOn: INSPECTED,
   lowerCourtJudgments: INSPECTED,
-  manifestations: inspected({ uri: LINK }),
-  manifestationUri: excluded(LINK),
+  manifestations: INSPECTED,
+  manifestationUri: INSPECTED,
   meansOfAppeal: INSPECTED,
   mentionedStatutes: INSPECTED,
   metadataTable: INSPECTED,
@@ -305,7 +301,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   originCourtRegistreGuid: excluded(PUBLISHER_ID),
   otherDates: INSPECTED,
   otherProvisions: INSPECTED,
-  otherSourceUrl: excluded(LINK),
+  otherSourceUrl: INSPECTED,
   outcome: INSPECTED,
   panel: INSPECTED,
   panelType: INSPECTED,
@@ -343,7 +339,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   provisions: INSPECTED,
   publication: INSPECTED,
   publicationDate: INSPECTED,
-  publications: inspected({ url: LINK }),
+  publications: INSPECTED,
   publicator: INSPECTED,
   publicDefendant: INSPECTED,
   published: INSPECTED,
@@ -368,7 +364,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   recorder: INSPECTED,
   recordVersion: INSPECTED,
   referencedCourtCases: INSPECTED,
-  referencedLegislation: inspected({ url: LINK }),
+  referencedLegislation: INSPECTED,
   referencedRegulations: INSPECTED,
   references: INSPECTED,
   referringCountry: INSPECTED,
@@ -376,8 +372,8 @@ export const METADATA_TEXT_DISPOSITIONS = {
   register: INSPECTED,
   registeredAt: INSPECTED,
   regulations: INSPECTED,
-  relatedDecisions: inspected({ sourceUrl: LINK }),
-  relatedDocuments: inspected({ sourceUrl: LINK }),
+  relatedDecisions: INSPECTED,
+  relatedDocuments: INSPECTED,
   relatedProceedings: INSPECTED,
   reporterCitation: INSPECTED,
   reporters: INSPECTED,
@@ -400,14 +396,14 @@ export const METADATA_TEXT_DISPOSITIONS = {
   signedOnAuthority: INSPECTED,
   significance: INSPECTED,
   solver: INSPECTED,
-  source: inspected({ judgmentUrl: LINK }),
+  source: INSPECTED,
   sourceAttribution: INSPECTED,
   sourceUrlStatus: INSPECTED,
   specialistAreas: INSPECTED,
   specialType: INSPECTED,
   stage: INSPECTED,
   stammNr: INSPECTED,
-  statedSourceUrl: excluded(LINK),
+  statedSourceUrl: INSPECTED,
   status: INSPECTED,
   statusId: excluded(PUBLISHER_ID),
   statusLabel: INSPECTED,
@@ -450,48 +446,84 @@ export const METADATA_TEXT_DISPOSITIONS = {
   violator: INSPECTED,
   volumeOfLawReports: INSPECTED,
   webTitle: INSPECTED,
-  wordDocumentUrl: excluded(LINK),
+  wordDocumentUrl: INSPECTED,
   yearOfLawReports: INSPECTED,
   zverejnenoNaWebu: INSPECTED,
 } as const satisfies Record<string, MetadataTextDisposition>;
 
 export const isClassifiedMetadataKey = (
   key: string,
-): key is keyof typeof METADATA_TEXT_DISPOSITIONS =>
+): key is
+  | keyof typeof METADATA_TEXT_DISPOSITIONS
+  | typeof META_URL_DIAGNOSTICS =>
+  key === META_URL_DIAGNOSTICS ||
   Object.hasOwn(METADATA_TEXT_DISPOSITIONS, key);
 
 type DisplayText = { field: string; value: string };
 
-const stringLeavesOf = (
-  field: string,
-  value: unknown,
-  excludedProperties: Readonly<Record<string, string>>,
-): DisplayText[] => {
+const stringLeavesOf = (field: string, value: unknown): DisplayText[] => {
   if (typeof value === "string") {
     return [{ field, value }];
   }
   if (Array.isArray(value)) {
     return value.flatMap((item, index) =>
-      stringLeavesOf(`${field}.${index}`, item, excludedProperties),
+      metadataUrlKeys(value).has(String(index))
+        ? []
+        : stringLeavesOf(`${field}.${index}`, item),
     );
   }
   if (!isRecord(value)) {
     return [];
   }
   return Object.entries(value).flatMap(([property, item]) =>
-    Object.hasOwn(excludedProperties, property)
+    metadataUrlKeys(value).has(property)
       ? []
-      : stringLeavesOf(`${field}.${property}`, item, excludedProperties),
+      : stringLeavesOf(`${field}.${property}`, item),
   );
 };
 
 /** Every display string a classified metadata value holds, by its path. */
 export const metadataDisplayTextOf = (
-  key: keyof typeof METADATA_TEXT_DISPOSITIONS,
+  key: keyof typeof METADATA_TEXT_DISPOSITIONS | typeof META_URL_DIAGNOSTICS,
   value: unknown,
+  metadata: Record<string, unknown> = {},
 ): DisplayText[] => {
+  if (key === META_URL_DIAGNOSTICS || metadataUrlKeys(metadata).has(key)) {
+    return [];
+  }
   const disposition: MetadataTextDisposition = METADATA_TEXT_DISPOSITIONS[key];
   return disposition.type === "excluded"
     ? []
-    : stringLeavesOf(`metadata.${key}`, value, disposition.excludedProperties);
+    : stringLeavesOf(`metadata.${key}`, value);
+};
+
+/** Discover address fields by name; declarations are exact container keys, never value sniffing. */
+export const unclassifiedMetadataAddresses = (
+  metadata: Record<string, unknown>,
+): string[] => {
+  const missing: string[] = [];
+  const visit = (value: unknown, address: string) => {
+    if (Array.isArray(value)) {
+      for (const [index, item] of value.entries()) {
+        visit(item, `${address}.${index}`);
+      }
+      return;
+    }
+    if (!isRecord(value)) {
+      return;
+    }
+    const declared = metadataUrlKeys(value);
+    for (const [key, item] of Object.entries(value)) {
+      if (key === META_URL_DIAGNOSTICS) {
+        continue;
+      }
+      const path = `${address}.${key}`;
+      if (/(?:url|href|uri|link)$/iu.test(key) && !declared.has(key)) {
+        missing.push(path);
+      }
+      visit(item, path);
+    }
+  };
+  visit(metadata, "metadata");
+  return missing;
 };

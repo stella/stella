@@ -1,3 +1,7 @@
+import { panic, Result } from "better-result";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+
+import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
 /**
  * pl-kis against payloads eureka.mf.gov.pl served.
  *
@@ -6,17 +10,13 @@
  * stubbed transport, because the behaviour under test is the cursor's.
  */
 
-import { Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
-
-import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
-
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
+  PL_KIS_METADATA_URL_SCHEMA,
   assemblePlKisDecision,
   encodePlKisCursor,
   parsePlKisCursor,
@@ -41,6 +41,9 @@ import {
   readPlKisListing,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
 import type { PlKisBuildResult } from "@/api/handlers/case-law/ingestion/adapters/pl-kis";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
+import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-types";
+import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
@@ -405,6 +408,20 @@ describe("every ingested category, as the service served it", () => {
       ? decision.metadata["relatedDocuments"]
       : [];
     expect(relation).toMatchObject({ relation: "amends" });
+    const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+    const serializedMetadata = JSON.stringify(decision.metadata);
+    const restored = toPlainTextMetadataObject(
+      rehydrateMetadataUrls(
+        JSON.parse(serializedMetadata),
+        PL_KIS_METADATA_URL_SCHEMA,
+      ),
+    ).unwrap();
+    expect(repeated["relatedDocuments"]).toEqual(
+      decision.metadata["relatedDocuments"],
+    );
+    expect(restored["relatedDocuments"]).toEqual(
+      decision.metadata["relatedDocuments"],
+    );
   });
 
   test("a detail without its HTML is read from the PDF rendition", async () => {
@@ -1281,4 +1298,72 @@ describe("the reconciliation listing", () => {
       stub.restore();
     }
   });
+});
+
+describe("declared metadata URLs remain scalar across projection and reload", () => {
+  for (const entry of [
+    {
+      input: "https://publisher.example/item?a=1&amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&amp;amp;b=2",
+      expected: "https://publisher.example/item?a=1&amp;amp;b=2",
+    },
+    {
+      input: "https://publisher.example/item?a=1&b=2",
+      expected: "https://publisher.example/item?a=1&b=2",
+    },
+    {
+      input: "  https://publisher.example/item?x=%26amp%3B  ",
+      expected: "https://publisher.example/item?x=%26amp%3B",
+    },
+    { input: "/item?a=1&amp;b=2", reason: "invalid-url" },
+    { input: "ftp://publisher.example/item", reason: "unsafe-protocol" },
+    {
+      input: '<a href="https://publisher.example/item">link</a>',
+      reason: "invalid-url",
+    },
+  ]) {
+    test(entry.input, async () => {
+      const { input } = entry;
+      const recorded =
+        (await readListingFixture("01-ind")).at(0) ??
+        panic("No recorded KIS row");
+      const row = { ...recorded, INN_ZROD: input };
+      const built = await assemblePlKisDecision({
+        row,
+        rawParts: plKisRawPartsOf(row, await readDetailFixture("01-ind")),
+      });
+      const decision =
+        built.type === "built"
+          ? built.decision
+          : panic("URL regression payload built no decision");
+      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const serializedMetadata = JSON.stringify(decision.metadata);
+      const restored = toPlainTextMetadataObject(
+        rehydrateMetadataUrls(
+          JSON.parse(serializedMetadata),
+          PL_KIS_METADATA_URL_SCHEMA,
+        ),
+      ).unwrap();
+      const addresses = ["otherSourceUrl"];
+      for (const metadata of [decision.metadata, repeated, restored]) {
+        for (const address of addresses) {
+          if ("expected" in entry) {
+            expect(metadata).toHaveProperty(address, entry.expected);
+          } else {
+            expect(metadata).not.toHaveProperty(address);
+          }
+        }
+        if ("reason" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toEqual(
+            expect.arrayContaining(
+              addresses.map((address) => ({ address, reason: entry.reason })),
+            ),
+          );
+        }
+      }
+    });
+  }
 });
