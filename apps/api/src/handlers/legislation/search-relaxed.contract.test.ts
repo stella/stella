@@ -31,12 +31,14 @@ import {
 import { HIGHLIGHT_COPIES_PER_PASSAGE } from "@/api/lib/legal-search/corpus-index-pagination";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { LegislationV2ProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
+import { relaxedLegislationClause } from "@/api/lib/legal-search/legislation-query";
 import type {
   LegislationReadDb,
   LegislationReadTransaction,
@@ -531,6 +533,40 @@ describe.skipIf(!runEngineTests)(
         true,
       );
     });
+
+    test.each(["1.1.2024 50 000 42", "jak musí být a nebo"])(
+      "an exhausted strict query %s with no relaxed terms returns no unrelated coverage",
+      async (query) => {
+        const unrelated = await search({
+          query: QUERY,
+          jurisdiction: "CZE",
+          limit: 1,
+        });
+        expect(unrelated.items.at(0)?.match.type).toBe("strict");
+        expect(
+          unrelated.items.some((hit) =>
+            [String(strictCurrent.id), String(amendment.id)].includes(
+              hit.documentId,
+            ),
+          ),
+        ).toBe(true);
+
+        const body = { query, jurisdiction: "CZE", limit: 3 };
+        expect(relaxedLegislationClause(body)).toBeNull();
+        const strictClause =
+          corpusFreeTextClause(query) ?? panic("fixture has no strict terms");
+        const callStart = searchCalls.length;
+        const result = await search(body);
+        expect(result.items).toEqual([]);
+        expect(result.nextCursor).toBeNull();
+        const calls = searchCalls.slice(callStart);
+        expect(calls).toHaveLength(1);
+        expect(calls.at(0)?.query.startsWith(`${strictClause} AND `)).toBe(
+          true,
+        );
+        expect(calls.at(0)?.snippetFields).toBeUndefined();
+      },
+    );
 
     test(
       "paging visits every Work once and strict hits precede relaxed hits",
