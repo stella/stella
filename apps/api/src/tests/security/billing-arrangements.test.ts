@@ -147,6 +147,115 @@ describe("billing arrangement scope", () => {
     expect(rows.every((row) => row.capAmount === 10_000)).toBe(true);
   });
 
+  test("delete requires both the matter and organization scope", async () => {
+    for (const denied of [
+      { scope: [matterA], target: otherMatterA },
+      { scope: [matterB], target: matterB },
+      { scope: [matterA, matterB], target: matterB },
+    ]) {
+      expect(
+        await scopedQuery(
+          denied.scope,
+          ids.orgA,
+          async (tx) =>
+            await tx
+              .delete(billingArrangements)
+              .where(eq(billingArrangements.workspaceId, denied.target))
+              .returning({ workspaceId: billingArrangements.workspaceId }),
+          ids.userA1,
+        ),
+      ).toEqual([]);
+    }
+    const retained = await testDb
+      .select({ workspaceId: billingArrangements.workspaceId })
+      .from(billingArrangements)
+      .where(inArray(billingArrangements.workspaceId, [otherMatterA, matterB]));
+    expect(retained.map((row) => row.workspaceId).toSorted()).toEqual(
+      [otherMatterA, matterB].toSorted(),
+    );
+  });
+
+  test("insert requires both the matter and organization scope", async () => {
+    const own = createSafeId<"workspace">();
+    const other = createSafeId<"workspace">();
+    const foreign = createSafeId<"workspace">();
+    matterIds.push(own, other, foreign);
+    await testDb.insert(workspaces).values([
+      { id: own, organizationId: ids.orgA, name: "Insert own", reference: own },
+      {
+        id: other,
+        organizationId: ids.orgA,
+        name: "Insert other",
+        reference: other,
+      },
+      {
+        id: foreign,
+        organizationId: ids.orgB,
+        name: "Insert foreign",
+        reference: foreign,
+      },
+    ]);
+    await testDb.insert(workspaceMembers).values([
+      { workspaceId: own, userId: ids.userA1 },
+      { workspaceId: other, userId: ids.userA1 },
+      { workspaceId: foreign, userId: ids.userB1 },
+    ]);
+    for (const denied of [
+      { scope: [own], target: other, organizationId: ids.orgA },
+      { scope: [foreign], target: foreign, organizationId: ids.orgB },
+      { scope: [own, foreign], target: foreign, organizationId: ids.orgB },
+    ]) {
+      await expect(
+        scopedQuery(
+          denied.scope,
+          ids.orgA,
+          async (tx) =>
+            await tx.insert(billingArrangements).values({
+              workspaceId: denied.target,
+              organizationId: denied.organizationId,
+              mode: "hourly",
+              currency: "USD",
+            }),
+          ids.userA1,
+        ),
+      ).rejects.toThrow(/row-level security/u);
+    }
+    expect(
+      await scopedQuery(
+        [own],
+        ids.orgA,
+        async (tx) =>
+          await tx
+            .insert(billingArrangements)
+            .values({
+              workspaceId: own,
+              organizationId: ids.orgA,
+              mode: "hourly",
+              currency: "USD",
+            })
+            .returning({ workspaceId: billingArrangements.workspaceId }),
+        ids.userA1,
+      ),
+    ).toEqual([{ workspaceId: own }]);
+    const persisted = await testDb
+      .select({ workspaceId: billingArrangements.workspaceId })
+      .from(billingArrangements)
+      .where(inArray(billingArrangements.workspaceId, [own, other, foreign]));
+    expect(persisted).toEqual([{ workspaceId: own }]);
+    expect(
+      await scopedQuery(
+        [own],
+        ids.orgA,
+        async (tx) =>
+          await tx
+            .delete(billingArrangements)
+            .where(eq(billingArrangements.workspaceId, own))
+            .returning({ workspaceId: billingArrangements.workspaceId }),
+        ids.userA1,
+      ),
+    ).toEqual([{ workspaceId: own }]);
+  });
+
   test("every application policy requires matter and organization scope", async () => {
     const policies = await testDb.execute<{
       command: string;

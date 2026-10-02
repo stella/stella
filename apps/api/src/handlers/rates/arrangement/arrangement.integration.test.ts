@@ -637,3 +637,149 @@ test("legacy draft time reservations are counted once before and after line mate
     totalAmount: "0",
   });
 });
+
+test("usage prices billed minutes and rounds each entry before adding approved and legacy work", async () => {
+  await set(capped);
+  const invoiceId = createSafeId<"invoice">();
+  await db.insert(invoices).values({
+    id: invoiceId,
+    workspaceId,
+    organizationId: ids.orgA,
+    invoiceDate: "2026-10-04",
+    currency: "USD",
+  });
+  // Each half-minor-unit charge rounds up independently. Rounding their sum
+  // or using the six actual minutes would produce a different total.
+  const { orgA: organizationId, userAdmin: userId } = ids;
+  for (const status of ["approved", "billed"] as const) {
+    await db.insert(timeEntries).values(
+      [createSafeId<"timeEntry">(), createSafeId<"timeEntry">()].map((id) => ({
+        id,
+        organizationId,
+        workspaceId,
+        userId,
+        dateWorked: "2026-10-04",
+        timezoneId: "UTC",
+        durationMinutes: 6,
+        billedMinutes: 1,
+        rateAtEntry: cents(30),
+        currency: "USD",
+        narrative: "Fractional charge",
+        status,
+        billable: true,
+        invoiceId: status === "billed" ? invoiceId : null,
+      })),
+    );
+  }
+  expect(await summary()).toMatchObject({
+    billedAmount: "2",
+    approvedAmount: "2",
+    totalAmount: "4",
+    remainingInvoiceCapAmount: "9998",
+    remainingWipCapAmount: "9996",
+  });
+});
+
+test("unbilled usage excludes non-chargeable work and other matters from amounts and currency mismatches", async () => {
+  await set(capped);
+  await seedApproved(600);
+  await db.insert(timeEntries).values(
+    (
+      [
+        { status: "draft", billable: true, noCharge: false, workspaceId },
+        { status: "approved", billable: false, noCharge: false, workspaceId },
+        { status: "approved", billable: true, noCharge: true, workspaceId },
+        {
+          status: "approved",
+          billable: true,
+          noCharge: false,
+          workspaceId: secondWorkspaceId,
+        },
+      ] as const
+    ).map(({ status, billable, noCharge, workspaceId: entryWorkspaceId }) => ({
+      id: createSafeId<"timeEntry">(),
+      organizationId: ids.orgA,
+      userId: ids.userAdmin,
+      dateWorked: "2026-10-04",
+      timezoneId: "UTC",
+      durationMinutes: 60,
+      billedMinutes: 60,
+      rateAtEntry: cents(5000),
+      currency: "EUR",
+      narrative: "Work outside chargeable usage",
+      status,
+      billable,
+      noCharge,
+      workspaceId: entryWorkspaceId,
+    })),
+  );
+  expect(await summary()).toMatchObject({
+    status: "below_threshold",
+    billedAmount: "0",
+    approvedAmount: "600",
+    totalAmount: "600",
+    remainingWipCapAmount: "9400",
+  });
+  await db
+    .update(timeEntries)
+    .set({ currency: "USD" })
+    .where(inArray(timeEntries.workspaceId, testWorkspaceIds));
+  expect(await summary()).toMatchObject({
+    status: "below_threshold",
+    approvedAmount: "600",
+    totalAmount: "600",
+  });
+});
+
+test("usage preserves exact large sums and products for approved and legacy charges", async () => {
+  await set(capped);
+  await seedApproved(Number.MAX_SAFE_INTEGER);
+  await db
+    .update(timeEntries)
+    .set({ billedMinutes: 1440 })
+    .where(eq(timeEntries.id, entryId));
+  // The stored rate is safe, but rate × minutes exceeds PostgreSQL bigint;
+  // the prorated result exceeds JavaScript's exact-number range.
+  expect(await summary()).toMatchObject({
+    status: "cap_reached",
+    approvedAmount: "216172782113783784",
+    billedAmount: "0",
+    totalAmount: "216172782113783784",
+    remainingWipCapAmount: "0",
+  });
+  const invoiceId = createSafeId<"invoice">();
+  await db.insert(invoices).values({
+    id: invoiceId,
+    workspaceId,
+    organizationId: ids.orgA,
+    invoiceDate: "2026-10-04",
+    currency: "USD",
+  });
+  await db
+    .update(timeEntries)
+    .set({ invoiceId, status: "billed" })
+    .where(eq(timeEntries.id, entryId));
+  await db.insert(timeEntries).values({
+    id: createSafeId<"timeEntry">(),
+    organizationId: ids.orgA,
+    workspaceId,
+    userId: ids.userAdmin,
+    dateWorked: "2026-10-04",
+    timezoneId: "UTC",
+    durationMinutes: 60,
+    billedMinutes: 1440,
+    rateAtEntry: cents(Number.MAX_SAFE_INTEGER),
+    currency: "USD",
+    narrative: "Exact aggregate",
+    status: "approved",
+    billable: true,
+  });
+  expect(await summary()).toMatchObject({
+    status: "cap_reached",
+    billedAmount: "216172782113783784",
+    approvedAmount: "216172782113783784",
+    totalAmount: "432345564227567568",
+    remainingInvoiceCapAmount: "0",
+    remainingWipCapAmount: "0",
+  });
+});
