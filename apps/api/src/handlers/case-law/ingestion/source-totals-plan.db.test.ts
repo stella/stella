@@ -37,6 +37,11 @@ const assertNotExecuted = (node: Record<string, unknown>) => {
 
 describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
   if (databaseUrl === undefined) {
+    if (enabled) {
+      panic(
+        "DATABASE_URL required for PostgreSQL stored-total planner regression",
+      );
+    }
     return;
   }
   const fixture = openGatedTestDatabase(databaseUrl, { max: 1 });
@@ -67,6 +72,27 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
       ),
     );
     await db.execute(sql.raw(`SET search_path TO ${schema}, public`));
+    const attemptColumn =
+      await db.execute(sql`SELECT 1 FROM information_schema.columns
+      WHERE table_schema = ${schema} AND table_name = 'case_law_sources'
+        AND column_name = ${caseLawSources.storedTotalAttemptedAt.name}`);
+    if (attemptColumn.length === 0) {
+      // The owning migration names an unqualified table, so this fixture's path owns the change.
+      const migration = await Bun.file(
+        new URL(
+          "../../../../drizzle/20261003123500_case_law_source_stored_total_attempt/migration.sql",
+          import.meta.url,
+        ),
+      ).text();
+      await db.transaction(async (tx) => {
+        for (const statement of migration.split("--> statement-breakpoint")) {
+          if (statement.trim().length > 0) {
+            // db-await-in-loop: preserve the exact migration's ordered column and privilege changes.
+            await tx.execute(sql.raw(statement));
+          }
+        }
+      });
+    }
     await db.insert(caseLawSources).values([
       {
         id: first,
@@ -116,8 +142,16 @@ describe.skipIf(!enabled)("stored total planning on PostgreSQL 18", () => {
       assertNotExecuted(root);
       const scans = scanOccurrences(root);
       const sourceScan = scans.find(
-        ({ relation }) => relation === "case_law_sources",
+        ({ relation, alias }) =>
+          relation === "case_law_sources" && alias === "case_law_sources",
       );
+      // The spacing InitPlan reads the same table under the distinct recent alias.
+      expect(
+        scans.some(
+          ({ relation, alias }) =>
+            relation === "case_law_sources" && alias === "recent",
+        ),
+      ).toBe(true);
       expect(sourceScan).toBeDefined();
       expect(sourceScan?.nodeType).toBe("Index Scan");
       expect(sourceScan?.index).toContain("pkey");

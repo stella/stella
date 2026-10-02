@@ -547,6 +547,7 @@ const CORPUS_COUNT_TABLE = new RegExp(
 );
 
 type SqlSourceClause = { kind: "where" | "group" | "on" | null; text: string };
+const SOURCE_EQUALITY_VALUE = String.raw`(?<![\w.$])(?:\$\d+|__SQL_EXPR_\d+__|[+-]?\d+(?:\.\d+)?)(?![\w.])`;
 
 /** Keep outer predicates when a nested SELECT introduces its own FROM. */
 const sourceClauses = (statement: string): SqlSourceClause[] => {
@@ -619,35 +620,36 @@ const sourceFilteredSql = (statement: string): boolean => {
     }
   }
   return sourceClauses(statement).some(({ kind, text }) => {
-    const sourceSelector = [...sourceAliases].some((alias) =>
-      new RegExp(`\\b${alias}\\.(?:adapter_key|id)\\b`, "iu").test(text),
-    );
-    if (kind === "where" || kind === "group") {
-      return SOURCE_COLUMN.test(text) || sourceSelector;
+    if (kind !== "where" && kind !== "on") {
+      return false;
     }
     const restrictedSourceJoin = [...sourceAliases].some(
       (alias) =>
         new RegExp(
-          `\\b${alias}\\.(?:adapter_key|id)\\s*=\\s*(?:\\(\\s*)*(?:\\$\\d+|__SQL_EXPR_\\d+__)`,
+          `\\b${alias}\\.(?:adapter_key|id)\\s*=\\s*(?:\\(\\s*)*${SOURCE_EQUALITY_VALUE}`,
           "iu",
         ).test(text) ||
         new RegExp(
-          `(?:\\$\\d+|__SQL_EXPR_\\d+__)\\s*=\\s*${alias}\\.(?:adapter_key|id)\\b`,
+          `${SOURCE_EQUALITY_VALUE}\\s*=\\s*${alias}\\.(?:adapter_key|id)\\b`,
           "iu",
         ).test(text),
     );
     return (
       restrictedSourceJoin ||
-      /\bsource_id\b\s*=\s*(?:\(\s*)*(?:\$\d+|__SQL_EXPR_\d+__)/iu.test(text) ||
-      /(?:\$\d+|__SQL_EXPR_\d+__)\s*=\s*(?:[a-z_]\w*\.)?source_id\b/iu.test(
-        text,
-      )
+      new RegExp(
+        `\\bsource_id\\b\\s*=\\s*(?:\\(\\s*)*${SOURCE_EQUALITY_VALUE}`,
+        "iu",
+      ).test(text) ||
+      new RegExp(
+        `${SOURCE_EQUALITY_VALUE}\\s*=\\s*(?:[a-z_]\\w*\\.)?source_id\\b`,
+        "iu",
+      ).test(text)
     );
   });
 };
 
 const fullSourceCount = (text: string): boolean =>
-  sqlWithoutLiterals(text)
+  sqlWithoutLiterals(text.replace(SQL_STRING, "__SQL_EXPR_0__"))
     .split(";")
     .some(
       (statement) =>
@@ -692,7 +694,6 @@ const drizzleSourceCount = (
   ) {
     return false;
   }
-  const joining = node.expression.name.text.endsWith("Join");
   const dollarCount = node.expression.name.text === "$count";
   const countTable = dollarCount ? node.arguments.at(0) : undefined;
   const state = {
@@ -783,33 +784,27 @@ const drizzleSourceCount = (
         inspectedSources.add(value);
       }
       if (
-        joining &&
         ts.isCallExpression(value) &&
-        COMPARISONS.has(drizzleCallName(value, imports) ?? "")
+        drizzleCallName(value, imports) === "eq"
       ) {
         for (const [index, argument] of value.arguments.entries()) {
           const column = resolve(argument, bindings);
           const other = value.arguments.at(index === 0 ? 1 : 0);
+          const otherValue =
+            other === undefined ? undefined : resolve(other, bindings);
           if (
             ts.isPropertyAccessExpression(column) &&
             (column.name.text === "sourceId" ||
               column.name.text === "adapterKey" ||
               column.name.text === "id") &&
-            other !== undefined &&
-            !ts.isPropertyAccessExpression(resolve(other, bindings))
+            otherValue !== undefined &&
+            (!ts.isPropertyAccessExpression(otherValue) ||
+              (!isSourceRestrictionColumn(otherValue, context) &&
+                !isCorpusColumn(otherValue.getText(file), bindings)))
           ) {
             state.source ||= isSourceRestrictionColumn(column, context);
           }
         }
-      }
-      if (
-        !joining &&
-        ts.isPropertyAccessExpression(value) &&
-        (value.name.text === "sourceId" ||
-          value.name.text === "adapterKey" ||
-          value.name.text === "id")
-      ) {
-        state.source ||= isSourceRestrictionColumn(value, context);
       }
       if (value !== child) {
         ts.forEachChild(value, inspectSource);

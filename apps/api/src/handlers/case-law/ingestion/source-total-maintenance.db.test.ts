@@ -73,6 +73,41 @@ const installCorpusTables = async (
       ],
     });
   });
+  const refreshColumns = [
+    caseLawSources.storedTotalAttemptedAt,
+    caseLawSources.storedTotalNextRefreshAt,
+    caseLawSources.storedTotalHeldSince,
+    caseLawSources.storedTotalWarnedSlot,
+  ];
+  const refreshGrant = (
+    await db.execute(sql`SELECT bool_and(
+    has_column_privilege('stella_ingestion', 'public.case_law_sources', column_name, 'UPDATE')
+  ) AS granted FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'case_law_sources'
+      AND column_name IN (${sql.join(
+        refreshColumns.map((column) => sql`${column.name}`),
+        sql`, `,
+      )})`)
+  ).at(0);
+  if (refreshGrant?.["granted"] !== true) {
+    // The host can predate these columns; the fresh database already has their canonical DDL.
+    const migration = await Bun.file(
+      new URL(
+        "../../../../drizzle/20261003123500_case_law_source_stored_total_attempt/migration.sql",
+        import.meta.url,
+      ),
+    ).text();
+    const grant = migration
+      .split("--> statement-breakpoint")
+      .find((statement) => statement.trim().startsWith("GRANT UPDATE ("));
+    if (grant === undefined) {
+      return panic(
+        "The stored-total refresh migration must own its column grant",
+      );
+    }
+    // Only this disposable database receives the exact owning migration's new-column grant.
+    await db.execute(sql.raw(grant));
+  }
 };
 
 const seedSource = async (db: GatedTestDb) => {
@@ -92,12 +127,16 @@ describe.skipIf(!enabled)(
   "production stored-total admission composition",
   () => {
     if (databaseUrl === undefined) {
+      if (enabled) {
+        panic("Stored-total maintenance PostgreSQL tests require DATABASE_URL");
+      }
       return;
     }
+    const url = databaseUrl;
 
     test("initial indicator admission aborts while the real schema lane remains exclusive", async () => {
-      await withFreshIndicatorDatabase(databaseUrl, async ({ client, db }) => {
-        await installCorpusTables(db, databaseUrl);
+      await withFreshIndicatorDatabase(url, async ({ client, db }) => {
+        await installCorpusTables(db, url);
         const scopedDb = createIngestionDb(markRlsDatabase(db));
         const holder = await client.reserve();
         const maintenance = createSourceStoredTotalMaintenanceRuntime(
@@ -135,8 +174,8 @@ describe.skipIf(!enabled)(
     }, 60_000);
 
     test("the restricted SQL boundary rechecks load after the durable claim and connection setup", async () => {
-      await withFreshIndicatorDatabase(databaseUrl, async ({ db }) => {
-        await installCorpusTables(db, databaseUrl);
+      await withFreshIndicatorDatabase(url, async ({ db }) => {
+        await installCorpusTables(db, url);
         const sourceId = await seedSource(db);
         const scopedDb = createIngestionDb(markRlsDatabase(db));
         const deadline = startCycleDeadline({ budgetMs: 135_000 });
@@ -187,9 +226,9 @@ describe.skipIf(!enabled)(
     for (const failure of ["missing", "no-execute", "blind-owner"] as const) {
       test(`${failure} indicators hold real pipeline work until visibility returns`, async () => {
         await withFreshIndicatorDatabase(
-          databaseUrl,
+          url,
           async ({ client, db, migration, unrelatedRole }) => {
-            await installCorpusTables(db, databaseUrl);
+            await installCorpusTables(db, url);
             const sourceId = await seedSource(db);
             const scopedDb = createIngestionDb(markRlsDatabase(db));
             const maintenance = createSourceStoredTotalMaintenanceRuntime(
@@ -327,99 +366,96 @@ describe.skipIf(!enabled)(
 
     for (const transition of ["expire", "abort", "stop"] as const) {
       test(`a reserved count cannot start after ${transition} while the actual schema lane is held`, async () => {
-        await withFreshIndicatorDatabase(
-          databaseUrl,
-          async ({ client, db }) => {
-            await installCorpusTables(db, databaseUrl);
-            const sourceId = await seedSource(db);
-            const scopedDb = createIngestionDb(markRlsDatabase(db));
-            const holder = await client.reserve();
-            const reserved = Promise.withResolvers<undefined>();
-            const releaseAdmission = Promise.withResolvers<undefined>();
-            const controller = new AbortController();
-            const monotonic = spyOn(performance, "now");
-            const startedAt = performance.now();
-            const deadline = startCycleDeadline({
-              budgetMs: 135_000,
-              abortEarlyOn: [controller.signal],
+        await withFreshIndicatorDatabase(url, async ({ client, db }) => {
+          await installCorpusTables(db, url);
+          const sourceId = await seedSource(db);
+          const scopedDb = createIngestionDb(markRlsDatabase(db));
+          const holder = await client.reserve();
+          const reserved = Promise.withResolvers<undefined>();
+          const releaseAdmission = Promise.withResolvers<undefined>();
+          const controller = new AbortController();
+          const monotonic = spyOn(performance, "now");
+          const startedAt = performance.now();
+          const deadline = startCycleDeadline({
+            budgetMs: 135_000,
+            abortEarlyOn: [controller.signal],
+          });
+          let stopped = false;
+          let counts = 0;
+          const admit = createSourceStoredTotalAdmission({
+            readVerdict: async () => ({
+              kind: stopped ? "stop" : "normal",
+              signals: [],
+            }),
+          });
+          try {
+            const refresh = refreshSourceStoredTotal({
+              scopedDb,
+              sourceId,
+              deadline,
+              acquireAdmission: async (phase) => {
+                const admitted = await admit({
+                  deadline,
+                  ...(phase === undefined ? {} : { phase }),
+                });
+                if (phase === undefined && admitted === "granted") {
+                  await holder.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
+                  reserved.resolve(undefined);
+                  await releaseAdmission.promise;
+                }
+                return admitted;
+              },
+              countSource: async (id, options) => {
+                counts += 1;
+                return await countSourceThroughIngestionRole({
+                  database: markRlsDatabase(db),
+                  sourceId: id,
+                  ...options,
+                });
+              },
             });
-            let stopped = false;
-            let counts = 0;
-            const admit = createSourceStoredTotalAdmission({
-              readVerdict: async () => ({
-                kind: stopped ? "stop" : "normal",
-                signals: [],
-              }),
-            });
-            try {
-              const refresh = refreshSourceStoredTotal({
-                scopedDb,
-                sourceId,
-                deadline,
-                acquireAdmission: async (phase) => {
-                  const admitted = await admit({
-                    deadline,
-                    ...(phase === undefined ? {} : { phase }),
-                  });
-                  if (phase === undefined && admitted === "granted") {
-                    await holder.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
-                    reserved.resolve(undefined);
-                    await releaseAdmission.promise;
-                  }
-                  return admitted;
-                },
-                countSource: async (id, options) => {
-                  counts += 1;
-                  return await countSourceThroughIngestionRole({
-                    database: markRlsDatabase(db),
-                    sourceId: id,
-                    ...options,
-                  });
-                },
-              });
-              await reserved.promise;
-              expect(remainingCycleMs(deadline)).toBeLessThanOrEqual(5000);
-              switch (transition) {
-                case "expire":
-                  monotonic.mockReturnValue(startedAt + 135_001);
-                  break;
-                case "abort":
-                  controller.abort();
-                  break;
-                case "stop":
-                  stopped = true;
-                  break;
-              }
-              const returnedAt = Date.now();
-              releaseAdmission.resolve(undefined);
-              // STOP is checked after acquiring the real lane; expiration and abort
-              // must return while it remains locked, rather than its 20-minute default.
-              if (transition === "stop") {
-                await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-              }
-              expect(await refresh).toBe("held");
-              expect(Date.now() - returnedAt).toBeLessThan(5000);
-              expect(counts).toBe(0);
-              const row = (
-                await db
-                  .select()
-                  .from(caseLawSources)
-                  .where(eq(caseLawSources.id, sourceId))
-              ).at(0);
-              expect(row?.storedTotal).toBe(77);
-              expect(row?.storedTotalAsOf).toEqual(
-                new Date("2020-01-01T00:00:00Z"),
-              );
-              expect(row?.storedTotalAttemptedAt).toBeNull();
-              expect(row?.storedTotalNextRefreshAt).toEqual(new Date(0));
-            } finally {
-              monotonic.mockRestore();
-              releaseAdmission.resolve(undefined);
-              await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
-              holder.release();
+            await reserved.promise;
+            expect(remainingCycleMs(deadline)).toBeLessThanOrEqual(5000);
+            switch (transition) {
+              case "expire":
+                monotonic.mockReturnValue(startedAt + 135_001);
+                break;
+              case "abort":
+                controller.abort();
+                break;
+              case "stop":
+                stopped = true;
+                break;
             }
-          },
-        );
+            const returnedAt = Date.now();
+            releaseAdmission.resolve(undefined);
+            // STOP is checked after acquiring the real lane; expiration and abort
+            // must return while it remains locked, rather than its 20-minute default.
+            if (transition === "stop") {
+              await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+            }
+            expect(await refresh).toBe("held");
+            expect(Date.now() - returnedAt).toBeLessThan(5000);
+            expect(counts).toBe(0);
+            const row = (
+              await db
+                .select()
+                .from(caseLawSources)
+                .where(eq(caseLawSources.id, sourceId))
+            ).at(0);
+            expect(row?.storedTotal).toBe(77);
+            expect(row?.storedTotalAsOf).toEqual(
+              new Date("2020-01-01T00:00:00Z"),
+            );
+            expect(row?.storedTotalAttemptedAt).toBeNull();
+            expect(row?.storedTotalNextRefreshAt).toEqual(new Date(0));
+          } finally {
+            monotonic.mockRestore();
+            releaseAdmission.resolve(undefined);
+            await holder.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
+            holder.release();
+          }
+        });
       }, 60_000);
     }
   },

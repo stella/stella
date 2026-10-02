@@ -1,6 +1,7 @@
 // Guard reviewable SQL scan shapes. Existing unsuppressed hits are held by a
 // per-file shrink-only baseline; a new hit reports every unsuppressed site in
 // that file. A nearby sql-perf-allow comment must give a concrete bound.
+// Per-source counts require single-source equality; grouped source facets are not covered.
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 import path from "node:path";

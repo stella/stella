@@ -46,9 +46,13 @@ describe.skipIf(!enabled)(
   "database load admission through bounded indicator function",
   () => {
     if (databaseUrl === undefined) {
+      if (enabled) {
+        panic("Database load reader PostgreSQL tests require DATABASE_URL");
+      }
       return;
     }
-    const fixture = openGatedTestDatabase(databaseUrl, { max: 1 });
+    const url = databaseUrl;
+    const fixture = openGatedTestDatabase(url, { max: 1 });
     const { db } = fixture;
     const suffix = Bun.randomUUIDv7().replaceAll("-", "");
     const schema = `load_reader_${suffix}`;
@@ -197,7 +201,7 @@ describe.skipIf(!enabled)(
     });
 
     test("ingestion receives the age of another role's real transaction despite caller lookalikes", async () => {
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      await withGatedTestClients(url, async ({ openClient }) => {
         const holder = await openClient().sql.reserve();
         try {
           await holder`BEGIN`;
@@ -402,7 +406,7 @@ describe.skipIf(!enabled)(
     }
 
     test("an unrelated transaction is absent from both scoped indicator reads", async () => {
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      await withGatedTestClients(url, async ({ openClient }) => {
         const holder = await openClient().sql.reserve();
         const observer = openClient().sql;
         try {
@@ -435,7 +439,7 @@ describe.skipIf(!enabled)(
           `INSERT INTO ${target} SELECT id, repeat(md5(id::text), 100) FROM generate_series(1, 2048) id`,
         ),
       );
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      await withGatedTestClients(url, async ({ openClient }) => {
         const worker = await openClient({
           connection: { statement_timeout: 30_000 },
         }).sql.reserve();
@@ -527,12 +531,16 @@ describe.skipIf(!enabled)(
   "fresh indicator migration and real automatic maintenance",
   () => {
     if (databaseUrl === undefined) {
+      if (enabled) {
+        panic("Database load reader PostgreSQL tests require DATABASE_URL");
+      }
       return;
     }
+    const url = databaseUrl;
 
     test("checked-in definition grants effective execute only to owner and ingestion", async () => {
       await withFreshIndicatorDatabase(
-        databaseUrl,
+        url,
         async ({ client, migration, unrelatedRole }) => {
           const definition = (
             await client`
@@ -588,7 +596,7 @@ describe.skipIf(!enabled)(
     }, 15_000);
 
     test("real autovacuum and autoanalyze on A degrade only A", async () => {
-      await withFreshIndicatorDatabase(databaseUrl, async ({ client, db }) => {
+      await withFreshIndicatorDatabase(url, async ({ client, db }) => {
         await client.unsafe(`CREATE TABLE public.target_a (id integer, payload text) WITH (
         autovacuum_enabled = true, autovacuum_vacuum_threshold = 0,
         autovacuum_vacuum_scale_factor = 0, autovacuum_vacuum_insert_threshold = 0,

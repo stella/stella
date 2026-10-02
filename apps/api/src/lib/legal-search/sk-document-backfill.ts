@@ -1199,8 +1199,8 @@ export const parkDocumentFetch = async ({
 /**
  * The source's parked decisions.
  *
- * Parked rows are few and the pending backlog they sit in is most of the
- * source, so both parked reads below must come from
+ * The pending backlog may greatly exceed the parked set, so both parked
+ * reads below must come from
  * `case_law_decisions_document_parked_idx` (source, id) rather than from the
  * pending index; `parkedDocumentPredicate` is written so the planner can
  * match it. Exported as statement builders so the query-plan test explains
@@ -1209,11 +1209,12 @@ export const parkDocumentFetch = async ({
 const parkedDocumentsOf = (sourceId: SafeId<"caseLawSource">) =>
   and(eq(caseLawDecisions.sourceId, sourceId), parkedDocumentPredicate);
 
-/** Count of the source's parked decisions, one bounded index scan. */
+/** Exact parked count for the manual requeue report. */
 export const parkedDocumentCountQuery = (
   tx: Transaction,
   sourceId: SafeId<"caseLawSource">,
 ) =>
+  // sql-perf-allow: index case_law_decisions_document_parked_idx; exact parked count runs once per manual requeue-sk-documents invocation.
   tx
     .select({ parked: sql<number>`count(*)::int` })
     .from(caseLawDecisions)

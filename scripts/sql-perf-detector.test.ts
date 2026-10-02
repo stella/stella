@@ -610,10 +610,6 @@ test.each([
     "sql`SELECT count(*) FROM case_law_decisions WHERE source_id = ${source} LIMIT 1`",
   ],
   [
-    "grouped totals",
-    "sql`SELECT source_id, count(*) FROM legislation_documents GROUP BY source_id`",
-  ],
-  [
     "Drizzle count",
     'import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, source));',
   ],
@@ -648,6 +644,43 @@ test("every high-volume relation receives the per-source count guard", () => {
     ).toEqual(["per-source-full-count"]);
   }
 });
+
+test.each([
+  "sql`SELECT source_id, count(*) FROM legislation_documents WHERE country = ${country} GROUP BY source_id`",
+  'import { count, eq } from "drizzle-orm"; db.select({ source: legislationDocuments.sourceId, count: count() }).from(legislationDocuments).where(eq(legislationDocuments.country, country)).groupBy(legislationDocuments.sourceId);',
+  "sql`SELECT source_id, count(*) FROM legislation_documents GROUP BY source_id`",
+])(
+  "grouped facet over a filtered set: out of scope of this rule: %s",
+  (source) => {
+    expect(kinds(source)).not.toContain("per-source-full-count");
+  },
+);
+
+test.each([
+  "sql`SELECT count(*) FROM legislation_documents work WHERE work.source_id = listed.source_id AND work.eli = listed.eli AND work.language = listed.language`",
+  "const sameWork = sql`work.source_id = ${legislationDocuments.sourceId} AND work.eli = ${legislationDocuments.eli} AND work.language = ${legislationDocuments.language}`; const amendmentCount = sql`SELECT greatest(count(*) - 1, 0) FROM legislation_documents work WHERE ${sameWork}`;",
+  'import { count, eq, and, alias } from "drizzle-orm"; const work = alias(legislationDocuments, "work"); db.select({ total: count() }).from(work).where(and(eq(work.sourceId, legislationDocuments.sourceId), eq(work.eli, legislationDocuments.eli), eq(work.language, legislationDocuments.language)));',
+])(
+  "correlated Work identity does not restrict a count to one source: %s",
+  (source) => {
+    expect(kinds(source)).not.toContain("per-source-full-count");
+  },
+);
+
+test.each([
+  "sql`SELECT count(*) FROM case_law_decisions WHERE source_id = '00000000-0000-0000-0000-000000000001'`",
+  "sql`SELECT count(*) FROM case_law_decisions WHERE source_id = 42`",
+  "sql`SELECT count(*) FROM case_law_decisions WHERE 42 = source_id`",
+  "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON s.id = d.source_id WHERE s.adapter_key = 'cz-ns'`",
+  "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON s.id = d.source_id WHERE 'cz-ns' = s.adapter_key`",
+  'import * as d from "drizzle-orm"; db.select({ total: d.count() }).from(caseLawDecisions).where(d.eq(42, caseLawDecisions.sourceId));',
+  'import { count, eq, and } from "drizzle-orm"; db.select({ total: count() }).from(legislationDocuments).where(and(eq(legislationDocuments.sourceId, sourceId), eq(legislationDocuments.eli, eli), eq(legislationDocuments.language, language)));',
+])(
+  "single-source equality remains guarded with fixed values and additional filters: %s",
+  (source) => {
+    expect(kinds(source)).toContain("per-source-full-count");
+  },
+);
 
 test.each([
   "sql`SELECT stored_total FROM case_law_sources WHERE id = ${source}`",

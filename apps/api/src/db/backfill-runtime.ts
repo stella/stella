@@ -426,17 +426,18 @@ export const createDatabaseLoadVerdictReader = ({
     // Pooled reads own their operation budget; concurrent callers cannot replace
     // one another's schema-lane deadline or abort signal.
     const indicators = createBoundedIndicatorQuery({
-      runInTransaction: (work) => db.transaction(work, options),
+      runInTransaction: async (work) => await db.transaction(work, options),
       transactionQuery: (tx: Transaction) => drizzleQuery(tx),
       readTimeoutMs: config.readTimeoutMs,
     });
     const result = await Result.tryPromise(async () => {
-      const snapshot = await indicators.query(
+      const snapshotRead = indicators.query(
         `SELECT transaction_age_ms AS "ageMs", vacuum_active AS active,
           pg_catalog.to_char(observed_at AT TIME ZONE 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "observedAt"
          FROM public.stella_database_load_indicators($1::regclass)`,
         [tableName.includes(".") ? tableName : `public.${tableName}`],
       );
+      const snapshot = await snapshotRead;
       const row = snapshot.at(0);
       if (
         !isRecord(row) ||
@@ -464,7 +465,7 @@ export const createDatabaseLoadVerdictReader = ({
         } as const satisfies Verdict;
       }
       const read = createVerdictReader({
-        query: async () => snapshot,
+        query: async () => await snapshotRead,
         tableName,
         clock,
         config,

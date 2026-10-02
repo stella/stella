@@ -61,9 +61,13 @@ const scopedDb: ScopedDb = async (callback) =>
 
 describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
   if (databaseUrl === undefined) {
+    if (enabled) {
+      panic("Stored-total PostgreSQL tests require DATABASE_URL");
+    }
     return;
   }
-  const fixture = openGatedTestDatabase(databaseUrl, { max: 1 });
+  const url = databaseUrl;
+  const fixture = openGatedTestDatabase(url, { max: 1 });
   db = fixture.db;
   const schema = `source_totals_${Bun.randomUUIDv7().replaceAll("-", "")}`;
   fixture.cleanUp(async () => {
@@ -803,7 +807,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       storedTotalAsOf: asOf,
       storedTotalNextRefreshAt: attempted,
     });
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    await withGatedTestClients(url, async ({ openClient }) => {
       const worker = openClient();
       await worker.db.execute(sql.raw(`SET search_path TO ${schema}, public`));
       const workerScope: ScopedDb = async (callback) =>
@@ -856,7 +860,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       storedTotal: 7,
       storedTotalAsOf: asOf,
     });
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    await withGatedTestClients(url, async ({ openClient }) => {
       const worker = openClient();
       await worker.db.execute(sql.raw(`SET search_path TO ${schema}, public`));
       const restartScope: ScopedDb = async (callback) =>
@@ -910,7 +914,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
 
   test("overlapping independent workers claim once before invoking the estimator", async () => {
     const sourceId = await seedCountedSource(0);
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    await withGatedTestClients(url, async ({ openClient }) => {
       const firstDb = openClient().db;
       const secondDb = openClient().db;
       const locker = await openClient().sql.reserve();
@@ -1464,7 +1468,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     try {
       await entered.promise;
       expect(counts).toBe(0);
-      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      await withGatedTestClients(url, async ({ openClient }) => {
         const observer = openClient().db;
         await observer.execute(sql.raw(`SET search_path TO ${schema}, public`));
         const observed = (
@@ -1670,7 +1674,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           .limit(1)
       ).at(0)?.at,
     ).toEqual(previous);
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    await withGatedTestClients(url, async ({ openClient }) => {
       const restartedDb = openClient().db;
       await restartedDb.execute(
         sql.raw(`SET search_path TO ${schema}, public`),
@@ -1731,7 +1735,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       Array.from({ length: 6 }, async () => await seedCountedSource(0)),
     );
     let counts = 0;
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    await withGatedTestClients(url, async ({ openClient }) => {
       const workers = Array.from({ length: 4 }, () => openClient());
       const pids: number[] = [];
       const scopes: ScopedDb[] = [];
@@ -1826,7 +1830,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         );
       expect(claimed).toHaveLength(1);
     });
-    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+    await withGatedTestClients(url, async ({ openClient }) => {
       const restarted = openClient();
       await restarted.db.execute(
         sql.raw(`SET search_path TO ${schema}, public`),
