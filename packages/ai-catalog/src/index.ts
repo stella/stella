@@ -944,7 +944,9 @@ const MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID: Readonly<Record<string, string>> =
   MODEL_CATALOG_ID_ALIASES;
 
 export const normalizeModelCatalogId = (modelId: string): string =>
-  MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID[modelId] ?? modelId;
+  Object.hasOwn(MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID, modelId)
+    ? (MODEL_CATALOG_ID_ALIAS_TARGET_BY_ID[modelId] ?? modelId)
+    : modelId;
 
 const MODEL_TEMPERATURE_POLICY_BY_ID: Readonly<
   Record<string, TemperaturePolicy>
