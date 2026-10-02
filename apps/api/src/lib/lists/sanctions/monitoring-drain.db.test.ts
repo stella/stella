@@ -33,6 +33,7 @@ import {
   SANCTIONS_MARK_LEASE_MS,
 } from "@/api/lib/lists/sanctions/monitoring-drain";
 import { queueSanctionsMonitoringBackfills } from "@/api/lib/lists/sanctions/monitoring-fanout";
+import type { SanctionsMonitoringContact } from "@/api/lib/lists/sanctions/monitoring-input";
 import {
   monitoringFingerprint,
   monitoringSubject,
@@ -1388,6 +1389,132 @@ test(
           .where(eq(sanctionsSources.id, source.id));
       }
     }
+  },
+  TIMEOUT,
+);
+
+test(
+  "every monitored identity field schedules a new generation while unrelated and no-op edits do not",
+  async () => {
+    const { organizationId, scoped } = await isolatedMonitoringOrganization(
+      "drain-identity-fields",
+    );
+    const cases = {
+      type: { initial: {}, update: { type: "organization" } },
+      displayName: { initial: {}, update: { displayName: "Edited Identity" } },
+      organizationName: {
+        initial: {
+          type: "organization",
+          organizationName: "Original Corporation",
+        },
+        update: { organizationName: "Edited Corporation" },
+      },
+      registrationNumber: {
+        initial: { type: "organization" },
+        update: { registrationNumber: "REG-200" },
+      },
+      taxId: {
+        initial: { type: "organization" },
+        update: { taxId: "TAX-200" },
+      },
+      dateOfBirthYear: { initial: {}, update: { dateOfBirthYear: 1981 } },
+      dateOfBirthMonth: { initial: {}, update: { dateOfBirthMonth: 4 } },
+      dateOfBirthDay: { initial: {}, update: { dateOfBirthDay: 6 } },
+      nationalityCodes: { initial: {}, update: { nationalityCodes: ["SK"] } },
+      sanctionsMonitoringMode: {
+        initial: {},
+        update: { sanctionsMonitoringMode: "excluded" },
+      },
+    } satisfies Record<
+      Exclude<keyof SanctionsMonitoringContact, "id" | "organizationId">,
+      {
+        initial: Partial<SanctionsMonitoringContact>;
+        update: Partial<SanctionsMonitoringContact>;
+      }
+    >;
+    const ids = [];
+    for (const { initial, update } of Object.values(cases)) {
+      const contact =
+        (
+          await scoped(
+            async (tx) =>
+              await tx
+                .insert(contacts)
+                .values({
+                  organizationId,
+                  type: "person",
+                  displayName: "Original Identity",
+                  dateOfBirthYear: 1980,
+                  dateOfBirthMonth: 3,
+                  dateOfBirthDay: 5,
+                  nationalityCodes: ["CZ"],
+                  ...initial,
+                })
+                .returning(),
+          )
+        ).at(0) ?? panic("Identity-field fixture missing");
+      ids.push(contact.id);
+      expect((await markFor(contact.id))?.generation).toBe(1n);
+      const changed =
+        (
+          await scoped(
+            async (tx) =>
+              await tx
+                .update(contacts)
+                .set(update)
+                .where(eq(contacts.id, contact.id))
+                .returning(),
+          )
+        ).at(0) ?? panic("Edited identity-field fixture missing");
+      expect(monitoringFingerprint(changed)).not.toBe(
+        monitoringFingerprint(contact),
+      );
+      expect((await markFor(contact.id))?.generation).toBe(2n);
+      await scoped(
+        async (tx) =>
+          await tx
+            .update(contacts)
+            .set(update)
+            .where(eq(contacts.id, contact.id)),
+      );
+      expect((await markFor(contact.id))?.generation).toBe(2n);
+      await scoped(
+        async (tx) =>
+          await tx
+            .update(contacts)
+            .set({ notes: "Unrelated contact edit" })
+            .where(eq(contacts.id, contact.id)),
+      );
+      expect((await markFor(contact.id))?.generation).toBe(2n);
+    }
+    const firstChangedId = ids.at(1) ?? panic("First bulk identity missing");
+    const secondChangedId = ids.at(8) ?? panic("Second bulk identity missing");
+    const changedIds = [firstChangedId, secondChangedId];
+    await scoped(
+      async (tx) =>
+        await tx
+          .update(contacts)
+          .set({
+            notes: "Bulk unrelated edit",
+            nationalityCodes: sql`CASE WHEN ${contacts.id} IN (${firstChangedId}, ${secondChangedId}) THEN ARRAY['DE']::text[] ELSE ${contacts.nationalityCodes} END`,
+          })
+          .where(eq(contacts.organizationId, organizationId)),
+    );
+    const marks = await scoped(
+      async (tx) => await tx.select().from(sanctionsContactMarks),
+    );
+    expect(marks.map(({ contactId }) => contactId).toSorted()).toEqual(
+      ids.toSorted(),
+    );
+    expect(
+      marks
+        .filter(({ generation }) => generation === 3n)
+        .map(({ contactId }) => contactId)
+        .toSorted(),
+    ).toEqual(changedIds.toSorted());
+    expect(marks.filter(({ generation }) => generation === 2n)).toHaveLength(
+      ids.length - changedIds.length,
+    );
   },
   TIMEOUT,
 );
