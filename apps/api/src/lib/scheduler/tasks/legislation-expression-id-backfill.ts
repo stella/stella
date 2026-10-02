@@ -353,7 +353,9 @@ export const createLegislationExpressionIdBackfill =
     if (settled.isErr()) {
       if (settled.error instanceof BackfillHeldError) {
         logger.info("scheduler.legislation_expression_ids_held", {
-          holdUntil: settled.error.holdUntil,
+          ...(settled.error.holdUntil === null
+            ? {}
+            : { holdUntil: settled.error.holdUntil }),
           ...(settled.error.heldSince === null
             ? {}
             : { heldSince: settled.error.heldSince }),

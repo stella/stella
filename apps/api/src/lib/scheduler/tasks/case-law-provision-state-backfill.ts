@@ -236,7 +236,9 @@ export const createCaseLawProvisionStateBackfillTask =
       }
       if (run.error.cause instanceof BackfillHeldError) {
         logger.info("scheduler.case_law_provision_state_backfill_held", {
-          holdUntil: run.error.cause.holdUntil,
+          ...(run.error.cause.holdUntil === null
+            ? {}
+            : { holdUntil: run.error.cause.holdUntil }),
           ...(run.error.cause.heldSince === null
             ? {}
             : { heldSince: run.error.cause.heldSince }),

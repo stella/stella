@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { describe, expect } from "bun:test";
 import { sql } from "drizzle-orm";
 
@@ -8,10 +9,10 @@ const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 describe.skipIf(!enabled)("expression backfill on PostgreSQL 18", () => {
-  if (databaseUrl === undefined) {
-    return;
-  }
-  const fixture = openGatedTestDatabase(databaseUrl, { max: 1 });
+  const url =
+    databaseUrl ??
+    panic("Expression backfill PostgreSQL tests require DATABASE_URL");
+  const fixture = openGatedTestDatabase(url, { max: 1 });
   const { db } = fixture;
   const testSchema = `expression_backfill_${Bun.randomUUIDv7().replaceAll("-", "")}`;
   fixture.cleanUp(async () => {
