@@ -1,3 +1,4 @@
+import { HTTPClient } from "@openrouter/sdk/lib/http.js";
 import { EventType } from "@tanstack/ai";
 import type { AdapterYieldChunk, ContentPart } from "@tanstack/ai";
 import { OpenRouterTextAdapter } from "@tanstack/ai-openrouter";
@@ -11,12 +12,16 @@ import { Result } from "better-result";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { checkManagedOpenRouterModel } from "@/api/lib/chat/managed-provider-checks";
 import {
+  fetchManagedOpenRouterCompletion,
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
 import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
-import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
+import {
+  readEvidence,
+  readProviderStatus,
+} from "@/api/lib/observability/failure-evidence";
 
 type OpenRouterModel = Parameters<typeof createOpenRouterText>[0];
 type OpenRouterTextOptions = Parameters<
@@ -106,6 +111,8 @@ const OPENROUTER_RETRY: NonNullable<OpenRouterConfig["retryConfig"]> = {
   retryConnectionErrors: true,
 };
 
+const OPENROUTER_DATA_REGION_FILTER = "Filter by Data Region";
+
 const isManagedRoutingRefusal = (error: unknown): boolean => {
   const status = readProviderStatus(error)?.status;
   if (status !== 404 || typeof error !== "object" || error === null) {
@@ -115,12 +122,16 @@ const isManagedRoutingRefusal = (error: unknown): boolean => {
     "error" in error && typeof error.error === "object" && error.error !== null
       ? error.error
       : error;
-  if (!("message" in body) || typeof body.message !== "string") {
+  if (
+    !("metadata" in body) ||
+    typeof body.metadata !== "object" ||
+    body.metadata === null ||
+    !("failed_routing_step" in body.metadata) ||
+    body.metadata.failed_routing_step !== OPENROUTER_DATA_REGION_FILTER
+  ) {
     return false;
   }
-  return /^No endpoints found (?:supporting your data region|matching your data policy)\.(?:\s|$)/iu.test(
-    body.message,
-  );
+  return true;
 };
 
 const withManagedRoutingErrors = async function* (
@@ -164,7 +175,32 @@ const INSTANCE_DEBUG_LOGGER = {
 class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   constructor(config: OpenRouterConfig, model: OpenRouterModel) {
     // A truthy logger also prevents OPENROUTER_DEBUG from enabling SDK logs.
-    super({ ...config, debugLogger: INSTANCE_DEBUG_LOGGER }, model);
+    super(
+      {
+        ...config,
+        debugLogger: INSTANCE_DEBUG_LOGGER,
+        httpClient: new HTTPClient({
+          fetcher: async (input, init) =>
+            await fetchManagedOpenRouterCompletion(new Request(input, init)),
+        }),
+      },
+      model,
+    );
+    // The SDK wraps transport errors before the adapter sees them. Unwrap our
+    // refusal at this shared request boundary so streams retain its typed code.
+    const sendRequest = this.orClient.chat._do.bind(this.orClient.chat);
+    this.orClient.chat._do = async (...args) => {
+      const result = await sendRequest(...args);
+      if (
+        !result.ok &&
+        readEvidence(result.error).nodes.some(
+          ({ code }) => code === MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        )
+      ) {
+        throw managedProviderUnavailable("openrouter");
+      }
+      return result;
+    };
   }
 
   override chatStream(options: OpenRouterTextOptions) {
