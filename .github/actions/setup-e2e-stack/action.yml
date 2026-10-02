@@ -23,6 +23,13 @@ outputs:
 runs:
   using: composite
   steps:
+    - name: Prepare content encryption key
+      shell: bash
+      run: |
+        content_encryption_key=$(openssl rand -hex 32)
+        echo "::add-mask::$content_encryption_key"
+        echo "CONTENT_ENCRYPTION_KEY=$content_encryption_key" >> "$GITHUB_ENV"
+
     - name: Check Docker Hub credentials
       id: dockerhub
       # Keep Docker Hub credentials scoped to this trusted inline check and
