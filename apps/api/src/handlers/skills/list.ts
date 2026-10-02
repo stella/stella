@@ -51,6 +51,7 @@ const config = {
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "agent_tool_authoring",
     consumesServices: false,
   },

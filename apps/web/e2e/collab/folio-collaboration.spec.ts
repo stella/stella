@@ -30,6 +30,25 @@ type EntityWithFields = {
 const readDocumentText = async (page: Page) =>
   (await page.locator(".layout-run-text").allTextContents()).join("");
 
+const expectCollaborativeDocumentReady = async ({
+  expectedText,
+  page,
+}: {
+  expectedText: string;
+  page: Page;
+}) => {
+  // Publication is enabled only after the editor has joined and synced.
+  await expect(
+    page.getByRole("button", { exact: true, name: "Create version" }).first(),
+  ).toBeEnabled({ timeout: 45_000 });
+  await expect(
+    page.getByRole("status").filter({ hasText: "Synced" }).first(),
+  ).toBeVisible();
+  await expect
+    .poll(async () => await readDocumentText(page), { timeout: 45_000 })
+    .toContain(expectedText);
+};
+
 const openCollaborativeDocument = async ({
   entityId,
   expectedText,
@@ -50,15 +69,7 @@ const openCollaborativeDocument = async ({
       `?entity=${entityId}&field=${fieldId}&editing=true`,
     { timeout: 90_000, waitUntil: "commit" },
   );
-  await expect(
-    page.getByRole("button", { exact: true, name: "Create version" }).first(),
-  ).toBeEnabled({ timeout: 45_000 });
-  await expect(
-    page.getByRole("status").filter({ hasText: "Synced" }).first(),
-  ).toBeVisible();
-  await expect
-    .poll(async () => await readDocumentText(page), { timeout: 45_000 })
-    .toContain(expectedText);
+  await expectCollaborativeDocumentReady({ expectedText, page });
 };
 
 test.describe("lockless DOCX collaboration", () => {
@@ -223,9 +234,10 @@ test.describe("lockless DOCX collaboration", () => {
       await collaboratorContext.close();
       collaboratorContext = null;
       await page.reload({ timeout: 90_000, waitUntil: "commit" });
-      await expect(
-        page.getByRole("status").filter({ hasText: "Synced" }).first(),
-      ).toBeVisible();
+      await expectCollaborativeDocumentReady({
+        expectedText: whilePublishingToken,
+        page,
+      });
       const publishedEntity = await apiGet<EntityWithFields>(
         request,
         `/entities/${testWorkspace.id}/entity/${uploaded.entityId}`,

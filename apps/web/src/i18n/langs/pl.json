@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Streszczenie",
+      "caseFileMayHoldOthers": "Akta tej sprawy mogą zawierać także inne orzeczenia.",
       "citedBy": "Cytowane przez",
       "cites": "Cytuje",
       "dissentByline": "Zdanie odrębne: <bdi>{names}</bdi>",
@@ -2175,6 +2176,7 @@
       "forbidden": "Nie masz uprawnień do wykonania tej czynności.",
       "notFound": "Nie udało się znaleźć żądanego elementu.",
       "payloadTooLarge": "Żądanie jest zbyt duże.",
+      "publicCountryUnavailable": "Przepisy i orzecznictwo tego kraju nie są dostępne. Wybierz inny kraj.",
       "rateLimited": "Zbyt wiele żądań. Spróbuj ponownie później.",
       "server": "Coś poszło nie tak. Spróbuj ponownie.",
       "serviceUnavailable": "Usługa jest tymczasowo niedostępna. Spróbuj ponownie.",

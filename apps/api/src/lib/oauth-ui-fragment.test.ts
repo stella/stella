@@ -4,7 +4,7 @@ import {
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
-} from "@/api/lib/auth-paths";
+} from "@/api/lib/auth/auth-paths";
 import {
   bridgeOauthUiInteraction,
   bridgeOauthUiRedirect,

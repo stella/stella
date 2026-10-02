@@ -102,6 +102,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "knowledge_library_admin",
     consumesServices: false,
   },

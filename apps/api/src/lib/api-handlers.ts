@@ -24,6 +24,8 @@ import {
 import { captureObservedError } from "@/api/lib/analytics/capture";
 import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
+import { checkDemoAccountOperation } from "@/api/lib/auth/demo-account";
+import { requiresStandardAccount } from "@/api/lib/auth/demo-account-policy";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
@@ -81,6 +83,7 @@ import { assertUsageAvailable } from "@/api/lib/usage/usage-ledger";
 // import is erased at build time and never creates a runtime import cycle
 // (api-handlers must stay importable without pulling in the MCP graph).
 import type { MCP_STATIC_TOOL_NAMES } from "@/api/mcp/static-tool-definitions";
+import type { McpReadClass } from "@/api/mcp/tool-types";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 /**
@@ -245,12 +248,13 @@ export type McpInternalReason =
  *   and the approved permanent exclusions).
  */
 export type McpExposure =
-  | { type: "tool"; name: McpToolName }
-  | { type: "covered"; by: McpToolName }
+  | { type: "tool"; name: McpToolName; readClass?: McpReadClass }
+  | { type: "covered"; by: McpToolName; readClass?: McpReadClass }
   | {
       type: "capability";
       reason: McpCapabilityReason;
       consumesServices: ServiceClassification;
+      readClass?: McpReadClass;
     }
   | { type: "internal"; reason: McpInternalReason };
 
@@ -327,9 +331,16 @@ type CapabilityDescription = {
  * by inference — over-classifying a write is safe (it just requires write
  * consent), so writes need no affirmation.
  */
-type CapabilityAccess = {
-  access?: "read" | "write";
-};
+type CapabilityAccess =
+  | { access?: "write" }
+  | {
+      access: "read";
+      mcp:
+        | Exclude<McpExposure, { type: "capability" }>
+        | (Extract<McpExposure, { type: "capability" }> & {
+            readClass: McpReadClass;
+          });
+    };
 
 /**
  * How this capability's payload crosses the generic JSON transport (see
@@ -372,9 +383,11 @@ export type HandlerConfig = InputSchema &
  * route-level schema cannot shadow the segment the workspace macro resolves the
  * tenant from. `workspaceParams()` produces the shape.
  */
-export type WorkspaceHandlerConfig = Omit<HandlerConfig, "params"> & {
-  params?: WorkspaceParamsSchema;
-};
+type WorkspaceHandlerConfigOf<TConfig> = TConfig extends HandlerConfig
+  ? Omit<TConfig, "params"> & { params?: WorkspaceParamsSchema }
+  : never;
+
+export type WorkspaceHandlerConfig = WorkspaceHandlerConfigOf<HandlerConfig>;
 
 export type SessionHandlerConfig = InputSchema &
   CapabilityDescription &
@@ -395,6 +408,7 @@ type SessionHandlerContext<
 > = Context<SessionConfigRouteSchema<TConfig>> & {
   user: {
     id: SafeId<"user">;
+    email: string;
   };
 };
 
@@ -402,6 +416,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
   Context<ConfigRouteSchema<TConfig>> & {
     user: {
       id: SafeId<"user">;
+      email: string;
     };
     session: {
       activeOrganizationId: SafeId<"organization">;
@@ -826,6 +841,7 @@ type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
 type FiniteActionContext = SafeHandlerLogContext & {
   user: { id: SafeId<"user"> };
   session: { activeOrganizationId: SafeId<"organization"> };
+  scopedDb: ScopedDb;
   actionSignal?: AbortSignal;
 };
 
@@ -849,6 +865,7 @@ const runAdmittedFiniteHandler = async function* <
     admit({
       organizationId: ctx.session.activeOrganizationId,
       userId: ctx.user.id,
+      organizationStateDb: ctx.scopedDb,
       periodIdentity: {
         actionKind,
         // These finite endpoints have no client idempotency key.
@@ -932,6 +949,7 @@ export const admitFiniteAction = async function* <
 
 type HandlerAdmissionDependencies = {
   admit?: typeof withActionAdmission;
+  checkAccountOperation?: typeof checkDemoAccountOperation;
 };
 
 const createSafeScopedHandler = <
@@ -941,7 +959,10 @@ const createSafeScopedHandler = <
 >(
   config: TConfig,
   handler: SafeHandlerFn<TContext, TResult>,
-  { admit = withActionAdmission }: HandlerAdmissionDependencies = {},
+  {
+    admit = withActionAdmission,
+    checkAccountOperation = checkDemoAccountOperation,
+  }: HandlerAdmissionDependencies = {},
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
@@ -952,6 +973,15 @@ const createSafeScopedHandler = <
       });
     }
 
+    if (requiresStandardAccount(config.permissions)) {
+      const accountAccess = checkAccountOperation(ctx.user.email);
+      if (Result.isError(accountAccess)) {
+        return toSafeStatusResponse(403, {
+          code: "account_access_unavailable",
+          message: "This operation is unavailable for this account.",
+        });
+      }
+    }
     // A handler that declares AI usage must not run when this request could
     // not read the org's stored config, or the org is barred from the
     // instance provider: `ctx.orgAIConfig` is null there, and resolving a
