@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { eq, getTableColumns } from "drizzle-orm";
+import { eq, getColumns } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -121,7 +121,7 @@ export const readOrganizationAccessSnapshot = async (
           usageEntitlements.hostedEntitlementExternalId,
         hostedEntitlementCreatedAt:
           usageEntitlements.hostedEntitlementCreatedAt,
-        configured: getTableColumns(organizationConfiguredAccess),
+        configured: getColumns(organizationConfiguredAccess),
       })
       .from(usageEntitlements)
       .leftJoin(
