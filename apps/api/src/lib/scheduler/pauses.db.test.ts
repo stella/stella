@@ -27,17 +27,15 @@ type Fixture = {
 };
 
 const withJob = async (exercise: (fixture: Fixture) => Promise<void>) => {
-  if (!databaseUrl) {
-    return panic("Scheduler pause tests require DATABASE_URL");
-  }
-  await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+  const url =
+    databaseUrl ?? panic("Scheduler pause tests require DATABASE_URL");
+  await withGatedTestClients(url, async ({ openClient }) => {
     const { db, sql: client } = openClient();
     const jobId = `test.pause.${Bun.randomUUIDv7()}`;
     const taskName = `${jobId}.task`;
-    const definition = DECLARED_SCHEDULER_JOBS.at(0);
-    if (!definition) {
-      return panic("Scheduler declarations must not be empty");
-    }
+    const definition =
+      DECLARED_SCHEDULER_JOBS.at(0) ??
+      panic("Scheduler declarations must not be empty");
     try {
       await upsertSchedulerJob(
         {
@@ -168,11 +166,18 @@ if (!databaseUrl || !runPostgresTests) {
             { pausedBy: PAUSED_BY, pauseReason: "   " },
             { pausedBy: PAUSED_BY, pauseReason: " 1234567 " },
           ]) {
-            await expect(
-              client`UPDATE scheduler_jobs
+            // bun-types declares `.rejects.toThrow` as void, so awaiting it
+            // trips type-aware lint; capture the refusal explicitly instead.
+            const refusal = await client`UPDATE scheduler_jobs
               SET paused_until = ${pausedUntil}, paused_by = ${attribution.pausedBy}, pause_reason = ${attribution.pauseReason}
-              WHERE id = ${jobId}`.execute(),
-            ).rejects.toThrow("scheduler_jobs_pause_attribution_check");
+              WHERE id = ${jobId}`
+              .execute()
+              .then(
+                () => "accepted",
+                (error: unknown) =>
+                  error instanceof Error ? error.message : String(error),
+              );
+            expect(refusal).toContain("scheduler_jobs_pause_attribution_check");
           }
           await db
             .update(schedulerJobs)

@@ -392,6 +392,9 @@ export const startLeaseHeartbeat = ({
   signal,
 }: StartLeaseHeartbeatOptions): LeaseHeartbeat => {
   let stopped = false;
+  // Read through a function: `stopped` changes in `stop()` while a renewal
+  // awaits, which flow narrowing cannot see.
+  const isStopped = (): boolean => stopped;
   let lost = false;
   // The claim just set the lease, so it runs from here at the latest.
   let lastRenewedAt = performance.now();
@@ -454,7 +457,7 @@ export const startLeaseHeartbeat = ({
         ),
       )
       .limit(1);
-    if (stopped) {
+    if (isStopped()) {
       return;
     }
     if (pausedJob) {
@@ -582,6 +585,9 @@ export const runJob = async ({
   }
 
   let leaseLost = false;
+  // Read through a function: the heartbeat sets `leaseLost` from a callback,
+  // which flow narrowing cannot see.
+  const isLeaseLost = (): boolean => leaseLost;
   const heartbeat = startLeaseHeartbeat({
     db,
     intervalMs: heartbeatIntervalMs,
@@ -666,7 +672,7 @@ export const runJob = async ({
 
   // A short task can finish between heartbeats after a pause commits. Report
   // that overlap while still recording completed work once, avoiding replay.
-  if (!leaseLost) {
+  if (!isLeaseLost()) {
     const completionTime = now
       ? sql`${new Date(now())}::timestamptz`
       : sql`now()`;
