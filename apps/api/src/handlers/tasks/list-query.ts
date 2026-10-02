@@ -28,6 +28,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedEntityId } from "@/api/lib/safe-id-boundaries";
 import {
   TASK_ASSIGNEE_FILTER,
@@ -181,9 +182,11 @@ export const listTasksPage = async ({
   workspaceIds,
   query,
 }: ListTasksPageOptions) => {
-  const limit = Math.min(
-    query.limit ?? LIMITS.myTasksPageSizeDefault,
-    LIMITS.myTasksPageSizeMax,
+  const limit = normalizeTenantPageLimit(
+    Math.min(
+      query.limit ?? LIMITS.myTasksPageSizeDefault,
+      LIMITS.myTasksPageSizeMax,
+    ),
   );
   const rows = await safeDb((tx) =>
     tx

@@ -36,6 +36,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
 const HISTORY_READ_STEP = "provisionHistory.corpusAst";
@@ -114,8 +115,9 @@ export const readProvisionHistoryHandler = async ({
   query,
   legislationDb,
 }: ProvisionHistoryOptions) => {
-  const limit =
-    query.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.legislationProvisionHistoryPageSizeDefault,
+  );
   let cursor: VersionCursor | null = null;
 
   if (query.cursor !== undefined) {

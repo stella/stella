@@ -534,17 +534,21 @@ const VerticalTab = ({
   }, [active, activationSeq]);
 
   // Targeted flash: flash this tab when something asks for it by id
-  // (e.g. clicking a field in the document), regardless of active state.
+  // (e.g. clicking a field in the document, or a chat just opened here),
+  // regardless of active state. The request is consumed once shown, so a
+  // tab created in the same update flashes as it mounts and a later
+  // remount does not repeat it.
   const flashSeq = useInspectorTabsStore((s) => s.flashSeq);
   const flashTabId = useInspectorTabsStore((s) => s.flashTabId);
-  const prevFlashSeq = useRef(flashSeq);
+  const clearTabFlash = useInspectorTabsStore((s) => s.clearTabFlash);
   useExternalSyncEffect(() => {
     const el = tabRef.current;
-    if (el && flashSeq !== prevFlashSeq.current && flashTabId === tab.id) {
-      flashTabElement(el);
+    if (el === null || flashTabId !== tab.id) {
+      return;
     }
-    prevFlashSeq.current = flashSeq;
-  }, [flashSeq, flashTabId, tab.id]);
+    flashTabElement(el);
+    clearTabFlash(tab.id);
+  }, [clearTabFlash, flashSeq, flashTabId, tab.id]);
 
   return (
     <>
