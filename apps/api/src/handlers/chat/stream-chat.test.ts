@@ -17,7 +17,7 @@ import type {
   UIMessage,
 } from "@tanstack/ai";
 import { createOpenaiChat } from "@tanstack/ai-openai";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { describe, expect, spyOn, test } from "bun:test";
 import * as v from "valibot";
 
@@ -27,9 +27,15 @@ import {
   CHAT_TRANSPORT_ERROR_CODE,
 } from "@stll/anonymize-chat";
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
+import {
+  ACTION_ADMISSION_CODES,
+  ACTION_ADMISSION_REFUSALS,
+} from "@stll/api-contract/action-admission";
 
 import {
   createChatAttachmentPart,
+  chatMessageContentFromMessage,
+  chatMessageFromPersisted,
   toPersistableChatMessage,
 } from "@/api/handlers/chat/chat-message-parts";
 import {
@@ -836,6 +842,74 @@ const persistAdmissionLoss = async ({
   });
 };
 
+describe("admission loss before message production identifies the persisted assistant", () => {
+  for (const exit of ["drain", "throw", "adapter-error"] as const) {
+    test(`${exit} announces one mapped assistant before its refusal`, async () => {
+      const admission = new AbortController();
+      const source = async function* (): AsyncIterable<StreamChunk> {
+        admission.abort(
+          new ActionAdmissionError({
+            reason: "unavailable",
+            message: "Admission lost",
+          }),
+        );
+        if (exit === "throw") {
+          throw new HandlerError({ status: 503, message: "Provider aborted" });
+        }
+        if (exit === "adapter-error") {
+          yield {
+            type: EventType.RUN_ERROR,
+            code: "provider_unavailable",
+            message: "Provider aborted",
+          };
+        }
+      };
+      const { emitted, finish } = await persistNativeInterruptTurn(source(), {
+        abortSignal: admission.signal,
+        deadlineSignal: new AbortController().signal,
+      });
+      expect(
+        emitted.filter((chunk) => chunk.type === EventType.TEXT_MESSAGE_START),
+      ).toEqual([
+        expect.objectContaining({
+          messageId: finish?.responseMessage.id,
+          role: "assistant",
+        }),
+      ]);
+      const client = new StreamProcessor();
+      for (const chunk of emitted) {
+        client.processChunk(chunk);
+      }
+      if (finish === null) {
+        panic("Admission loss did not settle");
+      }
+      const reloaded = chatMessageFromPersisted({
+        id: finish.responseMessage.id,
+        role: finish.responseMessage.role,
+        content: structuredClone(
+          chatMessageContentFromMessage(finish.responseMessage),
+        ),
+      });
+      expect(reloaded.metadata?.turnOutcome).toEqual(finish.outcome);
+      expect(
+        new Set([...client.getMessages(), reloaded].map(({ id }) => id)).size,
+      ).toBe(1);
+      expect(client.getMessages()).toHaveLength(1);
+      expect(client.getMessages().at(0)?.id).toBe(finish.responseMessage.id);
+      expect(emitted.at(0)?.type).toBe(EventType.TEXT_MESSAGE_START);
+      expect(emitted.at(1)).toEqual(
+        expect.objectContaining({
+          type: EventType.RUN_ERROR,
+          code: ACTION_ADMISSION_CODES.admissionUnavailable,
+        }),
+      );
+      expect(finish.responseMessage.metadata.turnOutcome).toEqual(
+        finish.outcome,
+      );
+    });
+  }
+});
+
 describe("admission loss preserves complete interaction checkpoints", () => {
   for (const exit of ["drain", "throw", "teardown", "adapter-error"] as const) {
     for (const checkpoint of [
@@ -851,7 +925,16 @@ describe("admission loss preserves complete interaction checkpoints", () => {
         });
         expect(finish?.outcome).toEqual(
           checkpoint === "incomplete"
-            ? { type: "failed", error: "provider_unavailable" }
+            ? {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              }
             : {
                 type: "awaiting-user",
                 interaction: { type: checkpoint, toolCallId: "call-1" },
@@ -859,7 +942,7 @@ describe("admission loss preserves complete interaction checkpoints", () => {
         );
         expect(
           emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
-        ).toBe(false);
+        ).toBe(checkpoint === "incomplete" && exit !== "teardown");
         expect(
           finish?.responseMessage.parts.some(
             (part) => part.type === "tool-call",
@@ -981,7 +1064,16 @@ describe("late admission loss retains a completed and charged response", () => {
         expect(finish?.outcome).toEqual(
           completed
             ? { type: "completed" }
-            : { type: "failed", error: "provider_unavailable" },
+            : {
+                type: "failed",
+                error: "provider_unavailable",
+                refusal: {
+                  code: ACTION_ADMISSION_CODES.admissionUnavailable,
+                  ...ACTION_ADMISSION_REFUSALS[
+                    ACTION_ADMISSION_CODES.admissionUnavailable
+                  ],
+                },
+              },
         );
         expect(finish?.responseMessage.parts).toContainEqual({
           type: "text",
@@ -990,7 +1082,7 @@ describe("late admission loss retains a completed and charged response", () => {
         expect(charges).toBe(completed ? 1 : 0);
         expect(
           emitted.some((chunk) => chunk.type === EventType.RUN_ERROR),
-        ).toBe(false);
+        ).toBe(!completed && exit !== "teardown");
         if (completed && exit !== "teardown") {
           expect(
             emitted.filter((chunk) => chunk.type === EventType.RUN_FINISHED),

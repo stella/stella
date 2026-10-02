@@ -16,7 +16,11 @@ import {
   resolveStellaSandboxRun,
   type StellaSandboxRunInput,
 } from "@stll/agent-engine";
-import type { ModelRole, ReasoningEffort } from "@stll/ai-catalog";
+import {
+  getModelImageInputCapability,
+  type ModelRole,
+  type ReasoningEffort,
+} from "@stll/ai-catalog";
 import {
   CHAT_SEND_MODE,
   createThirdPartyBoundaryRefusalPayload,
@@ -165,7 +169,6 @@ import {
 } from "@/api/lib/chat/provider-stream-contract";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatRunLog } from "@/api/lib/chat/run-log";
-import { getModelImageCapability } from "@/api/lib/chat/sdk-image-capability";
 import {
   createStreamMessageCapture,
   type ChatStreamProcessor,
@@ -191,7 +194,10 @@ import { errorFingerprint } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import type { PromptCacheMetricSurface } from "@/api/lib/observability/request-metrics";
 import { providerSafeJsonSchemaOptionsForTanStackProvider } from "@/api/lib/provider-safe-json-schema";
-import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal,
+} from "@/api/lib/rate-limit/action-admission";
 import { resolveTanStackTextModel } from "@/api/lib/tanstack-ai-generate";
 import { modelAcceptsStreamingToolUse } from "@/api/lib/tanstack-ai-models";
 import type { ResolvedTanStackTextModel } from "@/api/lib/tanstack-ai-models";
@@ -508,7 +514,8 @@ export const streamChat = async ({
     message.parts.some((part) => part.type === "image"),
   );
   const modelRejectsImages = (model: ResolvedTanStackTextModel): boolean =>
-    hasImageAttachments && getModelImageCapability(model) === "unsupported";
+    hasImageAttachments &&
+    getModelImageInputCapability(model) === "unsupported";
   const modelRejectsStreamingTools = (
     model: ResolvedTanStackTextModel,
   ): boolean =>
@@ -1940,6 +1947,7 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
   terminal: { state: "open" | "settled" };
@@ -1960,6 +1968,7 @@ const createStreamSettlement = ({
   toolCallsWithCompleteInput,
   getUsage,
   getProducedAnswer,
+  announceBeforeFailure,
   terminal,
 }: StreamSettlementOptions) => {
   const admissionLost = () =>
@@ -1975,8 +1984,8 @@ const createStreamSettlement = ({
       abortSignal: streamControlSignal(abortSignal, runSignal),
       deadlineSignal,
     });
-  const admissionLossOutcome = () =>
-    resolveAdmissionLossOutcome({
+  const admissionLossOutcome = (): ChatTurnOutcome => {
+    const outcome = resolveAdmissionLossOutcome({
       deferredRunFinishedChunks,
       getRestorableCheckpoint,
       getResponseMessage,
@@ -1984,6 +1993,19 @@ const createStreamSettlement = ({
       producedAnswer: getProducedAnswer(),
       toolCallsWithCompleteInput,
     });
+    if (
+      outcome.type !== "failed" ||
+      outcome.error === "empty_completion" ||
+      !ActionAdmissionError.is(abortSignal.reason)
+    ) {
+      return outcome;
+    }
+    return {
+      type: "failed",
+      error: outcome.error,
+      refusal: actionAdmissionRefusal(abortSignal.reason),
+    };
+  };
   const terminalize = async ({
     flushProcessor = false,
     outcome,
@@ -2041,11 +2063,28 @@ const createStreamSettlement = ({
     terminal.state = "settled";
     await onFinish({ outcome, responseMessage: terminalResponseMessage });
   };
+  const admissionFailureChunks = function* (
+    outcome: ChatTurnOutcome,
+  ): Generator<PublicStreamChunk> {
+    if (outcome.type !== "failed" || outcome.refusal === undefined) {
+      return;
+    }
+    const refusal = outcome.refusal;
+    yield* announceBeforeFailure();
+    yield {
+      type: EventType.RUN_ERROR,
+      code: refusal.code,
+      message: refusal.message,
+      rawEvent: refusal,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    };
+  };
   return {
     admissionLost,
     admissionCutByControl,
     cutShortOutcome,
     admissionLossOutcome,
+    admissionFailureChunks,
     terminalize,
   };
 };
@@ -2186,6 +2225,7 @@ export const processServerChatStream = async function* ({
     admissionCutByControl,
     cutShortOutcome,
     admissionLossOutcome,
+    admissionFailureChunks,
     terminalize,
   } = createStreamSettlement({
     abortSignal,
@@ -2202,6 +2242,7 @@ export const processServerChatStream = async function* ({
     toolCallsWithCompleteInput,
     getUsage: () => usage,
     getProducedAnswer: () => producedAnswer,
+    announceBeforeFailure: () => announceBeforeFailure(),
     terminal,
   });
   // Whether the client has been told which message this turn writes.
@@ -2246,15 +2287,14 @@ export const processServerChatStream = async function* ({
         (admissionLost() || admissionCutByControl())
       ) {
         usage = tokenUsageFromTerminalChunk(sourceChunk) ?? usage;
-        await terminalize({
-          flushProcessor: admissionCutByControl(),
-          outcome: admissionCutByControl()
-            ? cutShortOutcome()
-            : admissionLossOutcome(),
-        });
+        const outcome = admissionCutByControl()
+          ? cutShortOutcome()
+          : admissionLossOutcome();
+        await terminalize({ flushProcessor: admissionCutByControl(), outcome });
         for (const finish of deferredRunFinishedChunks.splice(0)) {
           yield finish;
         }
+        yield* admissionFailureChunks(outcome);
         return;
       }
       const processed = processPersistenceChunk({
@@ -2289,15 +2329,14 @@ export const processServerChatStream = async function* ({
     }
 
     if (admissionLost() || admissionCutByControl()) {
-      await terminalize({
-        flushProcessor: admissionCutByControl(),
-        outcome: admissionCutByControl()
-          ? cutShortOutcome()
-          : admissionLossOutcome(),
-      });
+      const outcome = admissionCutByControl()
+        ? cutShortOutcome()
+        : admissionLossOutcome();
+      await terminalize({ flushProcessor: admissionCutByControl(), outcome });
       for (const chunk of deferredRunFinishedChunks.splice(0)) {
         yield chunk;
       }
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
@@ -2331,10 +2370,12 @@ export const processServerChatStream = async function* ({
     }
   } catch (error) {
     if (admissionLost()) {
-      await terminalize({ outcome: admissionLossOutcome() });
+      const outcome = admissionLossOutcome();
+      await terminalize({ outcome });
       for (const finish of deferredRunFinishedChunks.splice(0)) {
         yield finish;
       }
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const kind = classifyAIError(error);
