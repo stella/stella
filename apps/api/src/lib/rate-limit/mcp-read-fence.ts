@@ -1,8 +1,12 @@
 import { Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import { TimeoutError } from "@/api/lib/errors/tagged-errors";
 import { ActionAdmissionError } from "@/api/lib/rate-limit/action-admission";
+import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import { withCommandTimeout } from "@/api/lib/rate-limit/redis-command-timeout";
 import {
   createLazyRedisClient,
@@ -19,6 +23,10 @@ export type McpReadFencePolicy = {
 };
 
 const COMMAND_TIMEOUT_MS = 500;
+// Require API/Valkey clocks to agree within the 100 ms margin. The earlier
+// server deadline prevents delayed commands from charging a refused output.
+const CHARGE_DEADLINE_MS = 400;
+const CANCELLATION_MARGIN_MS = 500;
 const fenceRedis = createLazyRedisClient(() =>
   createRedisClient({
     connectionTimeout: COMMAND_TIMEOUT_MS,
@@ -80,14 +88,17 @@ export const resolveMcpReadFencePolicy = (): Result<
 const CHARGE_SCRIPT = `
 local clock = redis.call("TIME")
 local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+if now >= tonumber(ARGV[5]) then return -1 end
+if redis.call("EXISTS", KEYS[#KEYS]) == 1 then return -1 end
 local window = tonumber(ARGV[1])
 local maximum = tonumber(ARGV[2])
 local bytes = tonumber(ARGV[3])
 local cutoff = now - window
-for i, key in ipairs(KEYS) do
+for i = 1, #KEYS - 1 do
+  local key = KEYS[i]
   local entries = redis.call("ZRANGEBYSCORE", key, "(" .. cutoff, "+inf", "LIMIT", 0, maximum + 1)
   if #entries >= maximum then return 0 end
-  local limit = tonumber(ARGV[4 + i])
+  local limit = tonumber(ARGV[5 + i])
   local total = 0
   for _, entry in ipairs(entries) do
     local amount = tonumber(string.match(entry, "^(%d+):"))
@@ -97,10 +108,22 @@ for i, key in ipairs(KEYS) do
   end
   if bytes > limit - total then return 0 end
 end
-for _, key in ipairs(KEYS) do
+for i = 1, #KEYS - 1 do
+  local key = KEYS[i]
   redis.call("ZREMRANGEBYSCORE", key, "-inf", cutoff)
   redis.call("ZADD", key, now, ARGV[3] .. ":" .. ARGV[4])
   redis.call("PEXPIRE", key, window)
+end
+return 1
+`;
+
+const CANCEL_SCRIPT = `
+local clock = redis.call("TIME")
+local now = clock[1] * 1000 + math.floor(clock[2] / 1000)
+local ttl = math.max(1, tonumber(ARGV[2]) - now + tonumber(ARGV[3]))
+redis.call("SET", KEYS[#KEYS], "1", "PX", ttl)
+for i = 1, #KEYS - 1 do
+  redis.call("ZREM", KEYS[i], ARGV[1])
 end
 return 1
 `;
@@ -134,6 +157,7 @@ export const chargeMcpReadBytes = async ({
   }
   const limits = resolved.value;
   if (
+    limits.maxEntries > MCP_READ_MAX_ENTRIES ||
     ![
       bytes,
       limits.windowMs,
@@ -166,19 +190,34 @@ export const chargeMcpReadBytes = async ({
       limit: limits[kind].userBytes,
     },
   ]);
+  const operationId = Bun.randomUUIDv7();
+  const member = `${bytes}:${operationId}`;
+  const deadline =
+    Temporal.Now.instant().epochMilliseconds + CHARGE_DEADLINE_MS;
+  const keys = [
+    ...counters.map((counter) => counter.key),
+    coordinationKey({
+      scope: "mcp-read-fence",
+      slot: organizationId,
+      suffix: `cancel:${operationId}`,
+    }),
+  ];
+  const client =
+    redis === undefined ? fenceRedis.ready() : Promise.resolve(redis);
   const charged = await Result.tryPromise({
     try: async () =>
       await withCommandTimeout({
         command: (async () => {
-          const client = redis ?? (await fenceRedis.ready());
-          const reply: unknown = await client.send("EVAL", [
+          const connection = await client;
+          const reply: unknown = await connection.send("EVAL", [
             CHARGE_SCRIPT,
-            String(counters.length),
-            ...counters.map((counter) => counter.key),
+            String(keys.length),
+            ...keys,
             String(limits.windowMs),
             String(limits.maxEntries),
             String(bytes),
-            Bun.randomUUIDv7(),
+            operationId,
+            String(deadline),
             ...counters.map((counter) => String(counter.limit)),
           ]);
           return reply;
@@ -189,6 +228,40 @@ export const chargeMcpReadBytes = async ({
     catch: (cause) => unavailable(cause),
   });
   if (Result.isError(charged)) {
+    if (!(charged.error.cause instanceof TimeoutError)) {
+      return charged;
+    }
+    const cancelled = await Result.tryPromise({
+      try: async () =>
+        await withCommandTimeout({
+          command: (async () => {
+            const connection = await client;
+            const reply: unknown = await connection.send("EVAL", [
+              CANCEL_SCRIPT,
+              String(keys.length),
+              ...keys,
+              member,
+              String(deadline),
+              String(CANCELLATION_MARGIN_MS),
+            ]);
+            return reply;
+          })(),
+          commandTimeoutMs: COMMAND_TIMEOUT_MS,
+          label: "mcp-read-fence-cancel",
+        }),
+      catch: (cause) => unavailable(cause),
+    });
+    // Disconnected clients can reject cancellation. Keep the conservative
+    // overcount, refuse delivery, and propagate through the existing
+    // read-fence unavailable telemetry at the MCP boundary.
+    if (Result.isError(cancelled)) {
+      return Result.err(
+        unavailable({ charge: charged.error, cancellation: cancelled.error }),
+      );
+    }
+    if (cancelled.value !== 1) {
+      return Result.err(unavailable(cancelled.value));
+    }
     return charged;
   }
   if (charged.value === 1) {

@@ -1,6 +1,8 @@
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
+import { Temporal } from "@stll/time";
+
 import { toSafeId } from "@/api/lib/branded-types";
 import {
   chargeMcpReadBytes,
@@ -71,7 +73,120 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
   ) =>
     coordinationKey({ scope: "mcp-read-fence", slot: organizationId, suffix });
 
+  type DelayedChargeOptions = {
+    client: ReturnType<typeof createRedisClient>;
+    organizationId: ReturnType<typeof organization>;
+    userId: ReturnType<typeof user>;
+    beforeCancel?: (args: string[]) => Promise<void>;
+  };
+  const delayedCharge = async ({
+    client,
+    organizationId,
+    userId,
+    beforeCancel,
+  }: DelayedChargeOptions) => {
+    const pending = Promise.withResolvers<unknown>();
+    const sent = Promise.withResolvers<string[]>();
+    let first = true;
+    const outcome = await chargeMcpReadBytes({
+      organizationId,
+      userId,
+      bytes: 17,
+      readClass: "both",
+      policy,
+      enabled: true,
+      redis: {
+        send: async (command, args) => {
+          if (first) {
+            first = false;
+            sent.resolve(args);
+            return await pending.promise;
+          }
+          const charge = await sent.promise;
+          await beforeCancel?.(charge);
+          const reply: unknown = await client.send(command, args);
+          return reply;
+        },
+      },
+    });
+    pending.resolve(-1);
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(outcome.error.reason).toBe("unavailable");
+    }
+    const charge = await sent.promise;
+    const count = Number(charge.at(1));
+    return {
+      charge,
+      counters: charge.slice(2, count + 1),
+      tombstone: charge.at(count + 1) ?? panic("Missing cancellation key"),
+      deadlineIndex: count + 6,
+    };
+  };
+
+  const expectEmptyCounters = async (
+    client: ReturnType<typeof createRedisClient>,
+    counters: string[],
+  ) => {
+    for (const counter of counters) {
+      expect(await client.send("ZCARD", [counter])).toBe(0);
+    }
+  };
+
   describe("shared read windows (Valkey)", () => {
+    test("late execution after the deadline leaves every window unchanged", async () =>
+      fixture(async ({ client, organizationId, userId }) => {
+        const delayed = await delayedCharge({ client, organizationId, userId });
+        await client.send("DEL", [delayed.tombstone]);
+        expect(await client.send("EVAL", delayed.charge)).toBe(-1);
+        await expectEmptyCounters(client, delayed.counters);
+      }));
+
+    test("cancellation before a delayed charge prevents it even before the deadline", async () =>
+      fixture(async ({ client, organizationId, userId }) => {
+        const delayed = await delayedCharge({ client, organizationId, userId });
+        delayed.charge[delayed.deadlineIndex] = String(
+          Temporal.Now.instant().epochMilliseconds + 200,
+        );
+        expect(await client.send("EXISTS", [delayed.tombstone])).toBe(1);
+        expect(await client.send("EVAL", delayed.charge)).toBe(-1);
+        await expectEmptyCounters(client, delayed.counters);
+      }));
+
+    test("cancellation after an acknowledged late charge removes all four entries", async () =>
+      fixture(async ({ client, organizationId, userId }) => {
+        const delayed = await delayedCharge({
+          client,
+          organizationId,
+          userId,
+          beforeCancel: async (args) => {
+            const count = Number(args.at(1));
+            args[count + 6] = String(
+              Temporal.Now.instant().epochMilliseconds + 200,
+            );
+            expect(await client.send("EVAL", args)).toBe(1);
+            for (const counter of args.slice(2, count + 1)) {
+              expect(await client.send("ZCARD", [counter])).toBe(1);
+            }
+          },
+        });
+        await expectEmptyCounters(client, delayed.counters);
+      }));
+
+    test("cancellation tombstones have a bounded expiry and do not recreate charges", async () =>
+      fixture(async ({ client, organizationId, userId }) => {
+        const delayed = await delayedCharge({ client, organizationId, userId });
+        const ttl: unknown = await client.send("PTTL", [delayed.tombstone]);
+        if (typeof ttl !== "number") {
+          panic("Unexpected tombstone TTL");
+        }
+        expect(ttl).toBeGreaterThan(0);
+        expect(ttl).toBeLessThanOrEqual(500);
+        await Bun.sleep(ttl + 20);
+        expect(await client.send("EXISTS", [delayed.tombstone])).toBe(0);
+        expect(await client.send("EVAL", delayed.charge)).toBe(-1);
+        await expectEmptyCounters(client, delayed.counters);
+      }));
     test("concurrent extraction never emits more than either byte bound", async () =>
       fixture(async ({ charge }) => {
         const outcomes = await Promise.all(

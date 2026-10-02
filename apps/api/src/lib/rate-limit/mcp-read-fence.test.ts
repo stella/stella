@@ -9,6 +9,7 @@ import {
   chargeMcpReadBytes,
   resolveMcpReadFencePolicy,
 } from "@/api/lib/rate-limit/mcp-read-fence";
+import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 
 const identity = {
   organizationId: toSafeId<"organization">("org_read_a"),
@@ -22,6 +23,15 @@ const policy = {
 };
 
 describe("shared read windows", () => {
+  test("entry ceiling accepts its boundary and rejects the next value", () => {
+    const schema = envApiServerSchema.MCP_READ_WINDOW_MAX_ENTRIES;
+    expect(v.safeParse(schema, String(MCP_READ_MAX_ENTRIES)).success).toBe(
+      true,
+    );
+    expect(v.safeParse(schema, String(MCP_READ_MAX_ENTRIES + 1)).success).toBe(
+      false,
+    );
+  });
   test("the fence defaults off and operator values must be positive safe integers", () => {
     expect(v.parse(envApiServerSchema.FEATURE_MCP_READ_FENCE, undefined)).toBe(
       false,
@@ -88,14 +98,15 @@ describe("shared read windows", () => {
     expect(Result.isOk(result)).toBe(true);
     const args = commands.at(0);
     expect(args?.slice(1, 6)).toEqual([
-      "4",
+      "5",
       "mcp-read-fence:{org_read_a}:tenant:organization",
       "mcp-read-fence:{org_read_a}:tenant:user:user_read_a",
       "mcp-read-fence:{org_read_a}:public:organization",
       "mcp-read-fence:{org_read_a}:public:user:user_read_a",
     ]);
-    expect(args?.slice(6, 9)).toEqual(["137", "11", "73"]);
-    expect(args?.slice(10)).toEqual(["271", "131", "541", "269"]);
+    expect(args?.at(6)).toStartWith("mcp-read-fence:{org_read_a}:cancel:");
+    expect(args?.slice(7, 10)).toEqual(["137", "11", "73"]);
+    expect(args?.slice(12)).toEqual(["271", "131", "541", "269"]);
   });
 
   test("exhaustion and every malformed reply or store failure preserve canonical refusal codes", async () => {
@@ -161,6 +172,7 @@ describe("shared read windows", () => {
     for (const malformed of [
       { ...policy, windowMs: 0 },
       { ...policy, maxEntries: -3 },
+      { ...policy, maxEntries: MCP_READ_MAX_ENTRIES + 1 },
       { ...policy, tenant: { organizationBytes: 0, userBytes: 7 } },
     ]) {
       expect(
@@ -186,6 +198,43 @@ describe("shared read windows", () => {
       expect(Result.isError(resolveMcpReadFencePolicy())).toBe(true);
     } finally {
       env.MCP_READ_WINDOW_MS = previous;
+    }
+  });
+
+  test("a timeout with disconnected cancellation stays unavailable with both causes", async () => {
+    const pending = Promise.withResolvers<unknown>();
+    let calls = 0;
+    const outcome = await chargeMcpReadBytes({
+      ...identity,
+      readClass: "both",
+      bytes: 7,
+      policy,
+      enabled: true,
+      redis: {
+        send: async () => {
+          calls++;
+          if (calls === 1) {
+            return await pending.promise;
+          }
+          return await Promise.reject(
+            new TypeError("Connection is closed and offline queue is disabled"),
+          );
+        },
+      },
+    });
+    pending.resolve(1);
+    expect(calls).toBe(2);
+    expect(Result.isError(outcome)).toBe(true);
+    if (Result.isError(outcome)) {
+      expect(outcome.error.code).toBe("action_admission_unavailable");
+      expect(outcome.error.cause).toMatchObject({
+        charge: { cause: { label: "mcp-read-fence" } },
+        cancellation: {
+          cause: {
+            message: "Connection is closed and offline queue is disabled",
+          },
+        },
+      });
     }
   });
 });

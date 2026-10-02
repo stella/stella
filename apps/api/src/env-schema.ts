@@ -11,6 +11,7 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
+import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
@@ -386,7 +387,7 @@ export const envApiServerSchema = {
       v.toNumber(),
       v.integer(),
       v.minValue(1),
-      v.maxValue(Number.MAX_SAFE_INTEGER),
+      v.maxValue(MCP_READ_MAX_ENTRIES),
     ),
   ),
   ACTION_LIMIT_CONTACT_URL: v.optional(
