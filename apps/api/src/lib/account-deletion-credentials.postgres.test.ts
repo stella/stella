@@ -1,6 +1,6 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { asc, eq, getTableName, sql } from "drizzle-orm";
+import { asc, DrizzleQueryError, eq, getTableName, sql } from "drizzle-orm";
 
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
@@ -296,11 +296,14 @@ if (!databaseUrl || !enabled) {
           });
           expect(Result.isError(interrupted)).toBe(true);
           if (Result.isError(interrupted)) {
-            expect(interrupted.error).toBeInstanceOf(Error);
-            expect(interrupted.error).toHaveProperty(
-              "message",
-              expect.stringContaining("account deletion fixture failure"),
-            );
+            const { error } = interrupted;
+            expect(error).toBeInstanceOf(DrizzleQueryError);
+            if (error instanceof DrizzleQueryError) {
+              expect(error.cause).toBeInstanceOf(Error);
+              expect(error.cause?.message).toContain(
+                "account deletion fixture failure",
+              );
+            }
           }
 
           expect(await countsForUser({ transaction, userId })).toEqual(
