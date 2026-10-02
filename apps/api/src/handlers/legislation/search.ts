@@ -127,6 +127,11 @@ type RawRow = Record<string, unknown>;
 type SearchLegislationDependencies = {
   provider?: typeof envBase.LEGAL_SEARCH_PROVIDER;
   loadSearchConfigs: () => Promise<readonly FtsSearchConfig[]>;
+  countryAdmission?: {
+    unavailable: typeof publicCountryUnavailable;
+    isAdmitted: typeof isPublicLegislationCountry;
+  };
+  readServingGeneration?: typeof readServingCorpusIndexGenerationTx;
 };
 
 const defaultSearchLegislationDependencies: SearchLegislationDependencies = {
@@ -1117,7 +1122,9 @@ export const searchLegislationHandler = async (
   const unavailable =
     body.jurisdiction === undefined
       ? null
-      : publicCountryUnavailable(body.jurisdiction);
+      : (
+          dependencies.countryAdmission?.unavailable ?? publicCountryUnavailable
+        )(body.jurisdiction);
   if (unavailable !== null) {
     return status(503, unavailable);
   }
@@ -1131,7 +1138,9 @@ export const searchLegislationHandler = async (
   if (
     body.jurisdiction !== undefined &&
     (!isCorpusIndexJurisdiction(body.jurisdiction) ||
-      !isPublicLegislationCountry(body.jurisdiction))
+      !(
+        dependencies.countryAdmission?.isAdmitted ?? isPublicLegislationCountry
+      )(body.jurisdiction))
   ) {
     return status(400, {
       message: `Invalid jurisdiction. ${PUBLIC_JURISDICTIONS_DESCRIPTION}`,
@@ -1165,7 +1174,10 @@ export const searchLegislationHandler = async (
     (dependencies.provider ?? envBase.LEGAL_SEARCH_PROVIDER) === "corpus-index"
       ? await legislationDb(
           async (tx) =>
-            await readServingCorpusIndexGenerationTx(tx, "legislation"),
+            await (
+              dependencies.readServingGeneration ??
+              readServingCorpusIndexGenerationTx
+            )(tx, "legislation"),
         )
       : null;
   let expectedPhase: CorpusSearchPhase | undefined;

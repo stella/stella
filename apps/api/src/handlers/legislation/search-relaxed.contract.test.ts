@@ -5,6 +5,10 @@ import { DrizzleQueryError } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import fc from "fast-check";
 
+import {
+  PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+  publicCountryUnavailable,
+} from "@stll/api-contract/public-country-capability";
 import { assertProperty } from "@stll/property-testing";
 
 import {
@@ -18,6 +22,7 @@ import { searchLegislationHandler } from "@/api/handlers/legislation/search";
 import type { SearchLegislationBody } from "@/api/handlers/legislation/search-schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import { getCorpusIndexClient } from "@/api/lib/legal-search/corpus-index-client";
+import { readServingCorpusIndexGenerationTx } from "@/api/lib/legal-search/corpus-index-generation-store";
 import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexConfigFromManifest,
@@ -54,7 +59,42 @@ const ENGINE_TIMEOUT_MS = 120_000;
 const FINGERPRINT = "a".repeat(64);
 const QUERY = "smlouva náhrada";
 const sourceId = createSafeId<"legislationSource">();
+const differentSourceId = createSafeId<"legislationSource">();
 const corpusClient = getCorpusIndexClient("q09");
+
+type RequestFilters = Omit<SearchLegislationBody, "query" | "limit" | "cursor">;
+
+const PRESENT_FILTERS = {
+  jurisdiction: "CZE",
+  documentType: "act",
+  status: "current",
+  source: sourceId,
+  language: "cs",
+  dateFrom: "1999-01-01",
+  dateTo: "2030-01-01",
+} as const satisfies Required<RequestFilters>;
+
+const DIFFERENT_FILTERS = {
+  jurisdiction: { jurisdiction: "SVK" },
+  documentType: { documentType: "regulation" },
+  status: { status: "repealed" },
+  source: { source: differentSourceId },
+  language: { language: "sk" },
+  dateFrom: { dateFrom: "1998-01-01" },
+  dateTo: { dateTo: "2031-01-01" },
+} as const satisfies {
+  [Field in keyof RequestFilters]-?: Required<Pick<RequestFilters, Field>>;
+};
+
+// A second admission lets the fingerprint boundary be tested independently of
+// today's public capability gate, whose pending-country response is checked too.
+const admittedFixtureCountries = {
+  unavailable: (country: string) =>
+    country === "CZE" || country === "SVK"
+      ? null
+      : publicCountryUnavailable(country),
+  isAdmitted: (country: string) => country === "CZE" || country === "SVK",
+};
 
 type FixtureVersionOptions = {
   tail: string;
@@ -180,6 +220,7 @@ describe.skipIf(!runEngineTests)(
               language: "cs",
               documentType: "act",
               status: "current",
+              effectiveDate: version.validFrom,
               versionValidFrom: version.validFrom,
               versionValidTo: version.validTo,
               contentHash: FINGERPRINT,
@@ -301,12 +342,18 @@ describe.skipIf(!runEngineTests)(
       }
     }, ENGINE_TIMEOUT_MS);
 
-    const search = async (body: SearchLegislationBody) => {
+    const search = async (
+      body: SearchLegislationBody,
+      dependencies?: Parameters<typeof searchLegislationHandler>[3],
+    ) => {
       const result = await searchLegislationHandler(
         body,
         legislationDb,
         "unobserved",
-        { provider: "corpus-index", loadSearchConfigs: async () => [] },
+        dependencies ?? {
+          provider: "corpus-index",
+          loadSearchConfigs: async () => [],
+        },
       );
       return "items" in result
         ? result
@@ -596,6 +643,130 @@ describe.skipIf(!runEngineTests)(
           response: { message: "Invalid cursor" },
         });
       }
+      expect(searchCalls.length).toBe(callStart);
+    });
+
+    test.each(["strict", "relaxed"] as const)(
+      "%s cursors reject every changed request filter before engine work",
+      async (phase) => {
+        const dependencies = {
+          provider: "corpus-index",
+          loadSearchConfigs: async () => [],
+          countryAdmission: admittedFixtureCountries,
+        } as const satisfies NonNullable<
+          Parameters<typeof searchLegislationHandler>[3]
+        >;
+        const variants = [
+          {
+            filters: {},
+            changes: Object.entries(PRESENT_FILTERS).map(([field, value]) => ({
+              [field]: value,
+            })),
+          },
+          {
+            filters: PRESENT_FILTERS,
+            changes: Object.values(DIFFERENT_FILTERS),
+          },
+        ];
+        for (const { filters, changes: filterChanges } of variants) {
+          const body = {
+            query: QUERY,
+            ...filters,
+            limit: phase === "strict" ? 1 : 3,
+          } satisfies SearchLegislationBody;
+          // db-await-in-loop: each request shape must issue its own real cursor
+          const page = await search(body, dependencies);
+          const cursor = page.nextCursor ?? panic("fixture issued no cursor");
+          expect(decodeCorpusSearchCursor(cursor)?.phase?.type).toBe(phase);
+
+          const controlStart = searchCalls.length;
+          // db-await-in-loop: controls reuse this exact issued cursor
+          const control = await search({ ...body, cursor }, dependencies);
+          expect(control.items.length).toBeGreaterThan(0);
+          expect(searchCalls.length).toBeGreaterThan(controlStart);
+          const resizedStart = searchCalls.length;
+          // db-await-in-loop: page size is deliberately outside the fingerprint
+          const resized = await search(
+            { ...body, cursor, limit: 2 },
+            dependencies,
+          );
+          expect(resized.items.length).toBeGreaterThan(0);
+          expect(searchCalls.length).toBeGreaterThan(resizedStart);
+
+          const changes = [{ query: "náhrada smlouva" }, ...filterChanges];
+          for (const change of changes) {
+            const callStart = searchCalls.length;
+            // db-await-in-loop: assert each mutation's own typed boundary response
+            const response = await searchLegislationHandler(
+              { ...body, ...change, cursor },
+              legislationDb,
+              "unobserved",
+              dependencies,
+            );
+            expect(response).toMatchObject({
+              code: 400,
+              response: { message: "Invalid cursor" },
+            });
+            expect(searchCalls.length).toBe(callStart);
+          }
+        }
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    test("an actual strict cursor rejects a changed serving generation before engine work", async () => {
+      const body = { query: QUERY, jurisdiction: "CZE", limit: 1 };
+      const page = await search(body);
+      const cursor =
+        page.nextCursor ?? panic("fixture issued no strict cursor");
+      expect(decodeCorpusSearchCursor(cursor)?.phase?.type).toBe("strict");
+      const control = await search({ ...body, cursor });
+      expect(control.items.length).toBeGreaterThan(0);
+
+      const callStart = searchCalls.length;
+      const response = await searchLegislationHandler(
+        { ...body, cursor },
+        legislationDb,
+        "unobserved",
+        {
+          provider: "corpus-index",
+          loadSearchConfigs: async () => [],
+          readServingGeneration: async (tx, family) => ({
+            ...(await readServingCorpusIndexGenerationTx(tx, family)),
+            generation: CORPUS_INDEX_MANIFESTS.case_law_v7.generation,
+          }),
+        },
+      );
+      expect(response).toMatchObject({
+        code: 400,
+        response: { message: "Invalid cursor" },
+      });
+      expect(searchCalls.length).toBe(callStart);
+    });
+
+    test("a real cursor for a pending country returns capability unavailability before fingerprint comparison", async () => {
+      const page = await search({
+        query: QUERY,
+        jurisdiction: "CZE",
+        limit: 1,
+      });
+      const cursor =
+        page.nextCursor ?? panic("fixture issued no strict cursor");
+      const callStart = searchCalls.length;
+      const response = await searchLegislationHandler(
+        { query: QUERY, jurisdiction: "SVK", limit: 1, cursor },
+        legislationDb,
+        "unobserved",
+        { provider: "corpus-index", loadSearchConfigs: async () => [] },
+      );
+      expect(response).toMatchObject({
+        code: 503,
+        response: {
+          code: PUBLIC_COUNTRY_UNAVAILABLE_CODE,
+          country: "SVK",
+          reason: "pending_public",
+        },
+      });
       expect(searchCalls.length).toBe(callStart);
     });
   },
