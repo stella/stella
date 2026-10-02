@@ -117,20 +117,33 @@ type AdmitReplayBatchOptions = {
   source: BackgroundReplaySource;
   dependencies: BackgroundReplayDependencies;
   after: SafeId<"caseLawDecision"> | null;
+  stopRequested: () => Promise<"killed" | "time-limit" | null>;
 };
+
+type ReplayAdmission =
+  | BackgroundReplayReservation
+  | {
+      type: "stopped";
+      status: "killed" | "time-limit";
+    };
 
 /** Resume durable work before inspecting current parser lag or reserving new work. */
 const admitReplayBatch = async ({
   source,
   dependencies,
   after,
-}: AdmitReplayBatchOptions): Promise<BackgroundReplayReservation> => {
+  stopRequested,
+}: AdmitReplayBatchOptions): Promise<ReplayAdmission> => {
   if (source.mode === "dry-run") {
     const batch = await dependencies.previewBatch(source, after);
     return batch === null ? { type: "empty" } : { type: "reserved", batch };
   }
   const utcDay = new Date(dependencies.now()).toISOString().slice(0, 10);
   const pending = await dependencies.pendingBatch(source, utcDay);
+  const stopped = await stopRequested();
+  if (stopped !== null) {
+    return { type: "stopped", status: stopped };
+  }
   switch (pending.type) {
     case "reserved":
     case "budget-exhausted":
@@ -194,12 +207,18 @@ const runReplayLoop = async ({
     let state = await loadReplayGate({ dependencies, source, config });
     let lastDurationMs: number | null = null;
     let after: SafeId<"caseLawDecision"> | null = null;
-    while (report.attempted < rowLimit) {
-      if (dependencies.now() - start >= maxDurationMs) {
-        return finish("time-limit");
-      }
+    const stopRequested = async () => {
       if (await dependencies.killRequested(source)) {
-        return finish("killed");
+        return "killed" as const;
+      }
+      return dependencies.now() - start >= maxDurationMs
+        ? ("time-limit" as const)
+        : null;
+    };
+    while (report.attempted < rowLimit) {
+      const beforeHealth = await stopRequested();
+      if (beforeHealth !== null) {
+        return finish(beforeHealth);
       }
       if (state.holdUntil !== null && dependencies.now() < state.holdUntil) {
         return finish("held");
@@ -220,11 +239,9 @@ const runReplayLoop = async ({
         return finish("held");
       }
       // A kill flipped during health I/O must not reserve another row.
-      if (await dependencies.killRequested(source)) {
-        return finish("killed");
-      }
-      if (dependencies.now() - start >= maxDurationMs) {
-        return finish("time-limit");
+      const afterHealth = await stopRequested();
+      if (afterHealth !== null) {
+        return finish(afterHealth);
       }
       if (source.mode === "enrolled") {
         releaseSlot = await dependencies.acquireHeavySlot();
@@ -232,7 +249,19 @@ const runReplayLoop = async ({
           return finish("slot-unavailable");
         }
       }
-      const admission = await admitReplayBatch({ source, dependencies, after });
+      const afterSlot = await stopRequested();
+      if (afterSlot !== null) {
+        return finish(afterSlot);
+      }
+      const admission = await admitReplayBatch({
+        source,
+        dependencies,
+        after,
+        stopRequested,
+      });
+      if (admission.type === "stopped") {
+        return finish(admission.status);
+      }
       if (admission.type === "budget-exhausted") {
         return finish("budget-exhausted");
       }
@@ -240,6 +269,10 @@ const runReplayLoop = async ({
         return finish("complete");
       }
       const batch = admission.batch;
+      const afterAdmission = await stopRequested();
+      if (afterAdmission !== null) {
+        return finish(afterAdmission);
+      }
       const batchStart = dependencies.now();
       const replayed = await dependencies.replay(batch, {
         apply: source.mode === "enrolled",

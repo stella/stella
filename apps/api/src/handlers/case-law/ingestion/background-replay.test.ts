@@ -161,6 +161,56 @@ test("every tick respects both the daily reservation budget and its own bound", 
   }
 });
 
+test("invalid invocation bounds fail before reading or reserving a source", async () => {
+  const cases = [
+    ...[0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY].map((maxRows) => ({
+      maxRows,
+    })),
+    ...[0, -1, Number.NaN, Number.POSITIVE_INFINITY].map((maxDurationMs) => ({
+      maxDurationMs,
+    })),
+    ...[-0.1, 1.1, Number.NaN, Number.POSITIVE_INFINITY].map(
+      (errorRateCeiling) => ({ errorRateCeiling }),
+    ),
+  ];
+  for (const bounds of cases) {
+    const state = fixture();
+    let selected = false;
+    state.dependencies.chooseSource = async () => {
+      selected = true;
+      return state.source;
+    };
+    await expect(
+      runBackgroundReplayTick({
+        dependencies: state.dependencies,
+        maxRows: 1,
+        maxDurationMs: 60_000,
+        errorRateCeiling: 0.1,
+        ...bounds,
+      }),
+    ).rejects.toThrow("Replay tick bounds must be positive");
+    expect(selected).toBe(false);
+    expect(state.counts().spent).toBe(0);
+  }
+});
+
+test("an empty selection exits without acquiring ownership or charging rows", async () => {
+  const state = fixture();
+  state.dependencies.chooseSource = async () => null;
+  expect(await state.run()).toMatchObject({
+    status: "empty",
+    source: null,
+    attempted: 0,
+  });
+  expect(state.counts()).toEqual({
+    spent: 0,
+    completed: 0,
+    writes: 0,
+    leased: false,
+    slotted: false,
+  });
+});
+
 test("budget exhaustion exits and a fresh UTC day's budget permits more work", async () => {
   const state = fixture(2);
   expect((await state.run()).status).toBe("budget-exhausted");
@@ -210,6 +260,52 @@ test("dry runs never acquire writing ownership or mutate durable state", async (
     leased: false,
     slotted: false,
   });
+});
+
+test("cancellation or elapsed bounds during admission prevent replay and release ownership", async () => {
+  for (const boundary of ["slot", "pending", "reservation"] as const) {
+    for (const stop of ["killed", "time-limit"] as const) {
+      const state = fixture();
+      let killed = false;
+      state.dependencies.killRequested = async () => killed;
+      const interrupt = async () => {
+        if (stop === "killed") {
+          killed = true;
+        } else {
+          await state.dependencies.sleep(60_000);
+        }
+      };
+      if (boundary === "slot") {
+        const acquire = state.dependencies.acquireHeavySlot;
+        state.dependencies.acquireHeavySlot = async () => {
+          const release = await acquire();
+          await interrupt();
+          return release;
+        };
+      } else if (boundary === "pending") {
+        const pending = state.dependencies.pendingBatch;
+        state.dependencies.pendingBatch = async (...args) => {
+          const result = await pending(...args);
+          await interrupt();
+          return result;
+        };
+      } else {
+        const reserve = state.dependencies.reserveBatch;
+        state.dependencies.reserveBatch = async (...args) => {
+          const result = await reserve(...args);
+          await interrupt();
+          return result;
+        };
+      }
+      const report = await state.run();
+      expect(report.status).toBe(stop);
+      expect(report.attempted).toBe(0);
+      expect(state.counts().spent).toBe(boundary === "reservation" ? 1 : 0);
+      expect(state.counts().completed).toBe(0);
+      expect(state.counts().leased).toBe(false);
+      expect(state.counts().slotted).toBe(false);
+    }
+  }
 });
 
 test("overlapping ticks admit only one owner while replay waits on external I/O", async () => {

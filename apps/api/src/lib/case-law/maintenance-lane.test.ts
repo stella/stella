@@ -5,12 +5,13 @@ import path from "node:path";
 import {
   CASE_LAW_MAINTENANCE_LANE,
   holdCaseLawMaintenanceLane,
+  tryEnterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 
 const API_SRC = path.resolve(import.meta.dir, "../..");
 const SCRIPTS_DIR = path.join(API_SRC, "scripts");
 
-/** The two doors; a case-law script imports at least one, and nothing else. */
+/** A case-law script imports a sanctioned lane door. */
 const LANE_MODULE = "@/api/lib/case-law/maintenance-lane";
 const DOORS = [
   "enterCaseLawMaintenanceLane",
@@ -264,5 +265,30 @@ describe("case-law maintenance lane", () => {
     };
     const hold = await holdCaseLawMaintenanceLane({ sql: fake, now: () => 0 });
     expect(hold.release()).rejects.toThrow("Maintenance lane was not held");
+  });
+
+  test("scheduled lane refusal and failed acquisition both close their lock connection", async () => {
+    for (const fails of [false, true]) {
+      let closed = 0;
+      const sql = {
+        unsafe: async () => {
+          if (fails) {
+            throw new TypeError("lane connection unavailable");
+          }
+          return [{ acquired: false }];
+        },
+        end: async () => {
+          closed += 1;
+        },
+      };
+      if (fails) {
+        await expect(tryEnterCaseLawMaintenanceLane({ sql })).rejects.toThrow(
+          "lane connection unavailable",
+        );
+      } else {
+        expect(await tryEnterCaseLawMaintenanceLane({ sql })).toBeNull();
+      }
+      expect(closed).toBe(1);
+    }
   });
 });

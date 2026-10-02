@@ -44,7 +44,7 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
       const reader = `replay_reader_${suffix}`;
       const migration = await Bun.file(
         new URL(
-          "../../drizzle/20261002001500_case_law_replay_receipts/migration.sql",
+          "../../drizzle/20261003123500_case_law_replay_receipts/migration.sql",
           import.meta.url,
         ),
       ).text();

@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type { Verdict } from "@stll/db-load-gate/health";
+import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -26,6 +27,7 @@ import { createBackgroundReplayRunner } from "@/api/handlers/case-law/ingestion/
 import { createBackgroundReplayStore } from "@/api/handlers/case-law/ingestion/background-replay-store";
 import {
   REPLAY_ROW_OUTCOME,
+  replayCaseLawSource,
   selectScopeEnd,
 } from "@/api/handlers/case-law/ingestion/replay";
 import { REPLAY_ENROLMENT } from "@/api/handlers/case-law/ingestion/replay-enrolment";
@@ -498,6 +500,235 @@ if (!databaseUrl || !enabled) {
         ).toHaveLength(1);
       } finally {
         await firstLease.release();
+        fake.stop();
+      }
+    });
+
+    test("lost heavy-slot sessions fence parser stamps and document writes before any effect", async () => {
+      const registered = getAdapter(ADAPTER_KEYS.EU_ECJ);
+      if (!registered) {
+        throw new TypeError("Expected registered replay adapter");
+      }
+      const fake = startFakeS3();
+      try {
+        for (const mode of ["parser-stamp", "document-write"] as const) {
+          const { source, store } = await fixture(1);
+          const reserved = await store.reserveBatch(
+            source,
+            "2026-10-01",
+            verdict(),
+          );
+          if (reserved.type !== "reserved") {
+            throw new TypeError("Expected fenced replay reservation");
+          }
+          let fulltext = "Text rozhodnutí před opravou parseru.";
+          const adapter = {
+            ...registered,
+            reparseStoredRaw: (
+              stored: Parameters<
+                NonNullable<typeof registered.reparseStoredRaw>
+              >[0],
+            ) => ({
+              type: "parsed" as const,
+              result: {
+                caseNumber: stored.caseNumber,
+                court: stored.court,
+                country: "CZE",
+                language: stored.language,
+                metadata: stored.metadata,
+                parserVersion: 2,
+                rawHash: "replay-slot-fence",
+                textFields: absentDecisionTextFields(
+                  TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+                ),
+                fulltext,
+                documentAst: EMPTY_AST,
+              },
+            }),
+          };
+          const lease = await acquireCaseLawSourceIngestionLease({
+            scopedDb,
+            sourceId: source.id,
+          });
+          if (!lease) {
+            throw new TypeError("Expected fenced replay source lease");
+          }
+          const raw = new TextEncoder().encode("<html>stored decision</html>");
+          try {
+            const seeded = createBackgroundReplayRunner({
+              rootDb: db,
+              ingestionDb: scopedDb,
+              getLease: () => lease,
+              assertSlot: async () => {},
+              store,
+              log: () => {},
+              adapterFor: () => adapter,
+              readStoredRaw: async () => raw,
+            });
+            expect(
+              (await seeded.replay(reserved.batch, { apply: true })).outcomes
+                .applied,
+            ).toBe(1);
+            const fixedPoint = await replayCaseLawSource({
+              adapter,
+              scopedDb,
+              sourceId: source.id,
+              scope: {
+                type: "decision",
+                decisionId: reserved.batch.decisionId,
+              },
+              bound: { type: "at-most", limit: 1 },
+              pageSize: 1,
+              sourceLease: null,
+              readStoredRaw: async () => raw,
+            });
+            if (fixedPoint.type !== "ran") {
+              throw new TypeError("Expected seeded replay fixed point");
+            }
+            expect(fixedPoint.report.outcomes.unchanged).toBe(1);
+            await db
+              .update(caseLawDecisions)
+              .set({ parserVersion: 1 })
+              .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+            if (mode === "document-write") {
+              fulltext = "Text rozhodnutí po opravě parseru.";
+            }
+            const before = (
+              await db
+                .select()
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+            ).at(0);
+            if (before === undefined) {
+              throw new TypeError("Expected seeded decision before fencing");
+            }
+            const writesBefore = fake.requests.filter(
+              ({ method }) => method === "PUT",
+            ).length;
+            await withGatedTestClients(
+              databaseUrl,
+              async ({ openClient }) => {
+                const first = await openClient().sql.reserve();
+                const rival = await openClient().sql.reserve();
+                const admin = openClient().sql;
+                const makeSlot = (session: typeof first) =>
+                  createHeavyWorkSlot({
+                    kind: "backfill_batch",
+                    session: {
+                      query: async (statement, parameters) =>
+                        await session.unsafe<{ acquired: boolean }[]>(
+                          statement,
+                          [...parameters],
+                        ),
+                    },
+                  });
+                const firstSlot = makeSlot(first);
+                const rivalSlot = makeSlot(rival);
+                const expectAcquisition = async (
+                  slot: typeof firstSlot,
+                  expected: boolean,
+                ) => {
+                  const acquired = await slot.tryAcquire();
+                  if (acquired.isErr()) {
+                    throw acquired.error;
+                  }
+                  expect(acquired.value).toBe(expected);
+                };
+                const pid = (
+                  await first.unsafe<{ pid: number }[]>(
+                    "SELECT pg_backend_pid() AS pid",
+                  )
+                ).at(0)?.pid;
+                if (pid === undefined) {
+                  throw new TypeError("Missing heavy-slot backend identity");
+                }
+                let reads = 0;
+                let fenceChecks = 0;
+                let killed = false;
+                try {
+                  await expectAcquisition(firstSlot, true);
+                  await expectAcquisition(rivalSlot, false);
+                  const runner = createBackgroundReplayRunner({
+                    rootDb: db,
+                    ingestionDb: scopedDb,
+                    getLease: () => lease,
+                    store,
+                    log: () => {},
+                    adapterFor: () => adapter,
+                    readStoredRaw: async () => {
+                      reads += 1;
+                      if (reads === 2) {
+                        const terminated = await admin<
+                          { terminated: boolean }[]
+                        >`SELECT pg_terminate_backend(${pid}, 5000) AS terminated`;
+                        expect(terminated.at(0)?.terminated).toBe(true);
+                        killed = true;
+                        await expectAcquisition(rivalSlot, true);
+                      }
+                      return raw;
+                    },
+                    assertSlot: async () => {
+                      fenceChecks += 1;
+                      const current = (
+                        await first.unsafe<{ pid: number }[]>(
+                          "SELECT pg_backend_pid() AS pid",
+                        )
+                      ).at(0)?.pid;
+                      if (current !== pid) {
+                        throw new TypeError("Heavy-work session was replaced");
+                      }
+                    },
+                  });
+                  const replayed = await runner.replay(reserved.batch, {
+                    apply: true,
+                  });
+                  expect(reads).toBe(2);
+                  expect(killed).toBe(true);
+                  expect(fenceChecks).toBeGreaterThan(0);
+                  expect(replayed.outcomes.applied).toBe(0);
+                  expect(replayed.haltReason).not.toBeNull();
+                  expect(
+                    await db
+                      .select()
+                      .from(caseLawDecisions)
+                      .where(
+                        eq(caseLawDecisions.id, reserved.batch.decisionId),
+                      ),
+                  ).toEqual([before]);
+                  expect(
+                    fake.requests.filter(({ method }) => method === "PUT"),
+                  ).toHaveLength(writesBefore);
+                  expect(
+                    await store.pendingBatch(source, "2026-10-01"),
+                  ).toEqual(reserved);
+                  const checkpoint = (
+                    await db
+                      .select()
+                      .from(databaseBackfillStates)
+                      .where(
+                        eq(
+                          databaseBackfillStates.name,
+                          `case-law-replay:${source.id}:2`,
+                        ),
+                      )
+                  ).at(0);
+                  expect(checkpoint?.cursor).toBeNull();
+                } finally {
+                  await rivalSlot.close();
+                  if (!killed) {
+                    await firstSlot.close();
+                  }
+                  first.release();
+                  rival.release();
+                }
+              },
+              { closeTimeout: 0 },
+            );
+          } finally {
+            await lease.release();
+          }
+        }
+      } finally {
         fake.stop();
       }
     });

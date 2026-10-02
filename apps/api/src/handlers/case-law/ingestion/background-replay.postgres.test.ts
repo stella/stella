@@ -3,7 +3,10 @@ import { describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
 import { defaultConfig, type Verdict } from "@stll/db-load-gate/health";
-import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
+import {
+  createHeavyWorkSlot,
+  type HeavyWorkKind,
+} from "@stll/db-load-gate/slot";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
@@ -225,6 +228,7 @@ if (!databaseUrl || !enabled) {
       });
     };
     type SlotTestOptions = {
+      contenderKind?: HeavyWorkKind;
       run: (
         slots: readonly [
           ReturnType<typeof createHeavyWorkSlot>,
@@ -232,13 +236,16 @@ if (!databaseUrl || !enabled) {
         ],
       ) => Promise<void>;
     };
-    const withSlots = async ({ run }: SlotTestOptions) =>
+    const withSlots = async ({
+      run,
+      contenderKind = "backfill_batch",
+    }: SlotTestOptions) =>
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const first = await openClient().sql.reserve();
         const second = await openClient().sql.reserve();
-        const makeSlot = (session: typeof first) =>
+        const makeSlot = (session: typeof first, kind: HeavyWorkKind) =>
           createHeavyWorkSlot({
-            kind: "backfill_batch",
+            kind,
             session: {
               query: async (statement, parameters) =>
                 await session.unsafe<{ acquired: boolean }[]>(statement, [
@@ -246,7 +253,10 @@ if (!databaseUrl || !enabled) {
                 ]),
             },
           });
-        const slots = [makeSlot(first), makeSlot(second)] as const;
+        const slots = [
+          makeSlot(first, "backfill_batch"),
+          makeSlot(second, contenderKind),
+        ] as const;
         try {
           await run(slots);
         } finally {
@@ -299,6 +309,94 @@ if (!databaseUrl || !enabled) {
           ]);
         },
       });
+    });
+
+    test("index build and repair intents let the current replay row finish and prevent another reservation", async () => {
+      for (const contenderKind of ["index_build", "index_repair"] as const) {
+        const state = await fixture(3);
+        const firstId = state.ids.at(0);
+        if (firstId === undefined) {
+          throw new TypeError("Expected first replay decision");
+        }
+        await withSlots({
+          contenderKind,
+          run: async ([replaySlot, indexSlot]) => {
+            const acquire = async (slot: typeof replaySlot) => {
+              const result = await slot.tryAcquire();
+              if (result.isErr()) {
+                throw result.error;
+              }
+              return result.value;
+            };
+            let batches = 0;
+            const report = await tick({
+              fixture: state,
+              slot: replaySlot,
+              beforeReplay: async () => {
+                batches += 1;
+                expect(await acquire(indexSlot)).toBe(false);
+                expect((await state.checkpoint())?.cursor).toBeNull();
+              },
+            });
+            expect(batches).toBe(1);
+            expect(report).toMatchObject({
+              status: "slot-unavailable",
+              attempted: 1,
+              applied: 1,
+            });
+            expect((await state.checkpoint())?.cursor).toBe(state.ids.at(0));
+            const receipts = await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.sourceId, state.source.id));
+            expect(receipts).toHaveLength(1);
+            expect(receipts.at(0)).toMatchObject({
+              status: "completed",
+              firstDecisionId: state.ids.at(0),
+            });
+            expect(
+              await db
+                .select()
+                .from(caseLawReplayDailyRows)
+                .where(eq(caseLawReplayDailyRows.sourceId, state.source.id)),
+            ).toHaveLength(1);
+            const decisions = await db
+              .select({
+                id: caseLawDecisions.id,
+                parserVersion: caseLawDecisions.parserVersion,
+              })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.sourceId, state.source.id));
+            expect(
+              decisions
+                .filter(({ parserVersion }) => parserVersion === 2)
+                .map(({ id }) => id),
+            ).toEqual([firstId]);
+            expect(await acquire(indexSlot)).toBe(true);
+            const held = await tick({ fixture: state, slot: replaySlot });
+            expect(held).toMatchObject({
+              status: "slot-unavailable",
+              attempted: 0,
+              applied: 0,
+            });
+            expect(
+              await db
+                .select()
+                .from(caseLawReplayBatches)
+                .where(eq(caseLawReplayBatches.sourceId, state.source.id)),
+            ).toEqual(receipts);
+            expect((await state.checkpoint())?.cursor).toBe(state.ids.at(0));
+            await indexSlot.close();
+            const resumed = await tick({
+              fixture: state,
+              slot: replaySlot,
+              maxRows: 1,
+            });
+            expect(resumed.applied).toBe(1);
+            expect((await state.checkpoint())?.cursor).toBe(state.ids.at(1));
+          },
+        });
+      }
     });
 
     test("a gate trip preserves the committed cursor and creates no next reservation", async () => {

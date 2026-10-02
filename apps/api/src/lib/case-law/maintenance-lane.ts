@@ -246,10 +246,18 @@ export const tryEnterCaseLawMaintenanceLane = async ({
   "sql"
 > = {}): Promise<MaintenanceLaneSession | null> => {
   const lock = providedSql ?? (await openLaneConnection());
-  const rows = await lock.unsafe(
-    "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
-    [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
+  const acquisition = await Result.tryPromise(
+    async () =>
+      await lock.unsafe(
+        "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
+        [CASE_LAW_MAINTENANCE_LANE.domain, CASE_LAW_MAINTENANCE_LANE.lane],
+      ),
   );
+  if (acquisition.isErr()) {
+    await lock.end();
+    throw acquisition.error;
+  }
+  const rows = acquisition.value;
   if (rows.at(0)?.["acquired"] !== true) {
     await lock.end();
     return null;

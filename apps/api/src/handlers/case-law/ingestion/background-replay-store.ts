@@ -16,6 +16,10 @@ import {
   caseLawReplayDailyRows,
   databaseBackfillStates,
 } from "@/api/db/schema";
+import {
+  setSharedLockTimeout,
+  setSharedStatementTimeout,
+} from "@/api/db/shared-pool-timeouts";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import {
   ADAPTER_KEYS,
@@ -46,8 +50,8 @@ const withReplayTransaction = async <T>(
   work: (tx: Transaction) => Promise<T>,
 ) =>
   await db.transaction(async (tx) => {
-    await tx.execute(sql`SET LOCAL statement_timeout = '5s'`);
-    await tx.execute(sql`SET LOCAL lock_timeout = '1s'`);
+    await setSharedStatementTimeout(tx, 5000);
+    await setSharedLockTimeout(tx, 1000);
     return await work(tx);
   });
 
