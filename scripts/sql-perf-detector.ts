@@ -628,7 +628,7 @@ const sourceFilteredSql = (statement: string): boolean => {
     const restrictedSourceJoin = [...sourceAliases].some(
       (alias) =>
         new RegExp(
-          `\\b${alias}\\.(?:adapter_key|id)\\s*=\\s*\\(*\\s*(?:\\$\\d+|__SQL_EXPR_\\d+__)`,
+          `\\b${alias}\\.(?:adapter_key|id)\\s*=\\s*(?:\\(\\s*)*(?:\\$\\d+|__SQL_EXPR_\\d+__)`,
           "iu",
         ).test(text) ||
         new RegExp(
@@ -638,7 +638,7 @@ const sourceFilteredSql = (statement: string): boolean => {
     );
     return (
       restrictedSourceJoin ||
-      /\bsource_id\b\s*=\s*\(*\s*(?:\$\d+|__SQL_EXPR_\d+__)/iu.test(text) ||
+      /\bsource_id\b\s*=\s*(?:\(\s*)*(?:\$\d+|__SQL_EXPR_\d+__)/iu.test(text) ||
       /(?:\$\d+|__SQL_EXPR_\d+__)\s*=\s*(?:[a-z_]\w*\.)?source_id\b/iu.test(
         text,
       )

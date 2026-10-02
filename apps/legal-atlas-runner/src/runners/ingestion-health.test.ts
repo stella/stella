@@ -50,7 +50,7 @@ describe("independent stored-total heartbeat refresh", () => {
         heartbeatAttempts += 1;
         throw failure;
       },
-      warnHeartbeatFailure: (error) => {
+      observeHeartbeatFailure: (error) => {
         warnings.push(error);
       },
       refreshCredentials: async () => {
@@ -87,7 +87,7 @@ describe("independent stored-total heartbeat refresh", () => {
           throw new Error("heartbeat read unavailable");
         }
       },
-      warnHeartbeatFailure: (error) => {
+      observeHeartbeatFailure: (error) => {
         warnings.push(error);
       },
       refreshCredentials: async () => {

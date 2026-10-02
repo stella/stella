@@ -10,7 +10,7 @@ import {
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
-import { logger } from "@/api/lib/observability/logger";
+import { logger } from "@/api/lib/observability/logger-core";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   openGatedTestDatabase,

@@ -917,6 +917,55 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     });
   });
 
+  test("initial scheduling batches distinct source phases and preserves scheduled rows", async () => {
+    const recent = await seedCountedSource(0);
+    const unmeasured = await seedCountedSource(0);
+    const scheduled = await seedCountedSource(0);
+    await db
+      .update(caseLawSources)
+      .set({
+        storedTotal: 0,
+        storedTotalAsOf: NOW,
+        storedTotalNextRefreshAt: null,
+      })
+      .where(eq(caseLawSources.id, recent));
+    await db
+      .update(caseLawSources)
+      .set({
+        storedTotalAsOf: null,
+        storedTotalAttemptedAt: null,
+        storedTotalNextRefreshAt: null,
+      })
+      .where(eq(caseLawSources.id, unmeasured));
+    const future = new Date(
+      NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS * 3,
+    );
+    await setDue(scheduled, future);
+    let admissions = 0;
+    expect(
+      await refreshNextSourceStoredTotal({
+        scopedDb,
+        readDatabaseNow: async () => NOW,
+        acquireAdmission: async () => {
+          admissions += 1;
+          return "held";
+        },
+        countSource: async () => panic("Held initialization must not count"),
+      }),
+    ).toBe("held");
+    expect(admissions).toBe(1);
+    expect(await readScheduledDue(recent)).toEqual(
+      sourceStoredTotalNextRefreshAt(recent, new Date(NOW.getTime() + 1)),
+    );
+    expect(await readScheduledDue(unmeasured)).toEqual(
+      sourceStoredTotalNextRefreshAt(
+        unmeasured,
+        new Date(NOW.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS + 1),
+      ),
+    );
+    expect(await readScheduledDue(scheduled)).toEqual(future);
+  });
+
   test("legacy successes resume their own phase while independent due sources remain eligible", async () => {
     const first = await seedCountedSource(0);
     const second = await seedCountedSource(0);

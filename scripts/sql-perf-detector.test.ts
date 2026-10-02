@@ -804,6 +804,14 @@ test.each([
     "sql`SELECT count(*) FROM case_law_decisions d WHERE EXISTS (SELECT 1 FROM flags f WHERE f.enabled = true) AND d.source_id = $1`",
   ],
   [
+    "nested whitespace in a source-id join restriction",
+    "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON d.source_id = ( ( $1 ) ) AND s.id = d.source_id`",
+  ],
+  [
+    "nested whitespace in a source alias join restriction",
+    "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON s.adapter_key = ( ( $1 ) ) AND s.id = d.source_id`",
+  ],
+  [
     "parenthesized join restriction",
     "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON d.source_id = (${sourceId}) AND s.id = d.source_id`",
   ],

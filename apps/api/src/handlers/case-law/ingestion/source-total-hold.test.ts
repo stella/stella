@@ -15,10 +15,11 @@ import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import {
   emitSourceStoredTotalHoldHeartbeats,
-  recordSourceStoredTotalHold,
   sourceStoredTotalHoldHeartbeat,
 } from "./source-total-hold";
 import {
+  createSourceStoredTotalMaintenanceRuntime,
+  recordSourceStoredTotalHold,
   refreshNextSourceStoredTotal,
   refreshSourceStoredTotal,
 } from "./source-totals";
@@ -401,5 +402,34 @@ test("the emitted fixed-dimension gauge includes only due held sources on the da
     expect((await read(due)).heldSince).toEqual(dueHeldSince);
   } finally {
     stdout.mockRestore();
+  }
+});
+
+test("the maintenance runtime shares its database with heartbeat and observes database lifecycle failures", async () => {
+  const stdout = spyOn(process.stdout, "write").mockImplementation(() => true);
+  const warn = spyOn(logger, "warn").mockImplementation(() => {});
+  try {
+    const runtime = createSourceStoredTotalMaintenanceRuntime(scopedDb);
+    expect(await runtime.acquireAdmission({ deadline: undefined })).toBe(
+      "held",
+    );
+    await runtime.emitHoldHeartbeat();
+    expect(JSON.parse(String(stdout.mock.calls.at(-1)?.at(0)))).toMatchObject({
+      Backfill: "caseLaw.sourceStoredTotal",
+    });
+    const failure = Object.assign(new Error("database connection closed"), {
+      errno: "57P01",
+    });
+    runtime.observeHeartbeatFailure(failure);
+    expect(warn.mock.calls.at(-1)).toMatchObject([
+      "case_law.source_stored_total.heartbeat_failed",
+      {
+        "failure.grade": "transient",
+        "failure.reason": "pg_connection_lifecycle",
+      },
+    ]);
+  } finally {
+    stdout.mockRestore();
+    warn.mockRestore();
   }
 });

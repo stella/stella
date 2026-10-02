@@ -1385,6 +1385,8 @@ export const OWNERSHIP = [
       "apps/api/src/lib/observability/failure.ts",
       "apps/api/src/lib/observability/observe-failure.ts",
       "apps/api/src/lib/observability/failure-shadow.ts",
+      "apps/api/src/lib/observability/logger-core.ts",
+      "apps/api/src/lib/observability/logger.ts",
     ],
     summary:
       "One bounded, read-once evidence snapshot per error feeds every failure " +
@@ -1394,7 +1396,9 @@ export const OWNERSHIP = [
       "rather than a property a foreign error could carry. observeFailure " +
       "composes the record, owned fields last, and owns severity, capture and " +
       "the transient metric. The direct-failure-sinks ratchet counts the " +
-      "emissions still outside it, per file.",
+      "emissions still outside it, per file. Structured logging keeps " +
+      "environment-free emission in logger-core; the application logger " +
+      "initializes optional export and re-exports the same logging owner.",
     enforcement: { kind: "none" },
   },
   ...ROOT_CONNECTION_DOORS,

@@ -34,7 +34,7 @@ type IngestionHealthRefreshOptions = {
   clock: () => number;
   emitStoredTotalHeartbeat: () => Promise<void>;
   refreshCredentials: () => Promise<void>;
-  warnHeartbeatFailure: (error: unknown) => void;
+  observeHeartbeatFailure: (error: unknown) => void;
 };
 
 /** A failed telemetry read must neither hot-loop nor starve credential refresh. */
@@ -42,7 +42,7 @@ export const createIngestionHealthRefresh = ({
   clock,
   emitStoredTotalHeartbeat,
   refreshCredentials,
-  warnHeartbeatFailure,
+  observeHeartbeatFailure,
 }: IngestionHealthRefreshOptions) => {
   let nextStoredTotalHeartbeatAt = 0;
   let warningStatus: "unreported" | "reported" = "unreported";
@@ -57,7 +57,7 @@ export const createIngestionHealthRefresh = ({
       });
       if (heartbeat.isErr() && warningStatus === "unreported") {
         warningStatus = "reported";
-        warnHeartbeatFailure(heartbeat.error);
+        observeHeartbeatFailure(heartbeat.error);
       }
     }
     await refreshCredentials();

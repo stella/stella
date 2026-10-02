@@ -1,11 +1,13 @@
-import { Result, TaggedError } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
 import type { ReservedSQL } from "bun";
-import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, inArray, isNull, or, sql } from "drizzle-orm";
+import type { SQL } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import * as v from "valibot";
 
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
+import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
@@ -16,10 +18,14 @@ import { captureError } from "@/api/lib/analytics/capture";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { pgErrorFields } from "@/api/lib/pg-error";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
-import { recordSourceStoredTotalHold } from "./source-total-hold";
+import { createSourceStoredTotalAdmission } from "./source-total-admission";
+import { emitSourceStoredTotalHoldHeartbeats } from "./source-total-hold";
 
 /**
  * Both halves of a source's coverage figure, and the only writer of either.
@@ -41,6 +47,103 @@ import { recordSourceStoredTotalHold } from "./source-total-hold";
  * code. The bound is the lint-visible statement of that.
  */
 const SOURCE_READ_LIMIT = 100;
+
+type SourceTotalValues = Pick<
+  typeof caseLawSources.$inferInsert,
+  | "reportedTotal"
+  | "reportedTotalAsOf"
+  | "reportedTotalOrigin"
+  | "storedTotal"
+  | "storedTotalAsOf"
+  | "storedTotalAttemptedAt"
+  | "storedTotalNextRefreshAt"
+  | "storedTotalHeldSince"
+  | "storedTotalWarnedSlot"
+>;
+
+type WriteSourceTotalsOptions = {
+  tx: Transaction;
+  values: { [Key in keyof SourceTotalValues]?: SourceTotalValues[Key] | SQL };
+  where: SQL | undefined;
+};
+
+/** One mutation owner for public coverage figures and their refresh state. */
+const writeSourceTotals = ({ tx, values, where }: WriteSourceTotalsOptions) => {
+  if (where === undefined) {
+    return panic("Source total writes require an explicit source predicate");
+  }
+  // audit: skip — public case-law corpus bookkeeping, no workspace data
+  return tx.update(caseLawSources).set(values).where(where).returning({
+    id: caseLawSources.id,
+  });
+};
+
+const UNKNOWN_HOLD_CAUSE = "indicators_unavailable";
+
+type RecordSourceHoldOptions = {
+  scopedDb: ScopedDb;
+  sourceId: SafeId<"caseLawSource">;
+  now: Date;
+  slot: Date;
+  admission: "held" | "unknown";
+};
+
+/** Persist every due gate hold; a row lock deduplicates UNKNOWN warnings. */
+export const recordSourceStoredTotalHold = async ({
+  scopedDb,
+  sourceId,
+  now,
+  slot,
+  admission,
+}: RecordSourceHoldOptions) => {
+  const warn = await scopedDb(async (tx) => {
+    const row = (
+      await tx
+        .select({
+          due: caseLawSources.storedTotalNextRefreshAt,
+          heldSince: caseLawSources.storedTotalHeldSince,
+          warnedSlot: caseLawSources.storedTotalWarnedSlot,
+        })
+        .from(caseLawSources)
+        .where(eq(caseLawSources.id, sourceId))
+        .limit(1)
+        .for("update")
+    ).at(0);
+    if (
+      row === undefined ||
+      (row.due?.getTime() ?? 0) !== slot.getTime() ||
+      (row.due !== null && row.due.getTime() > now.getTime())
+    ) {
+      return false;
+    }
+    const shouldWarn =
+      admission === "unknown" && row.warnedSlot?.getTime() !== slot.getTime();
+    if (row.heldSince !== null && !shouldWarn) {
+      return false;
+    }
+    await writeSourceTotals({
+      tx,
+      values: {
+        storedTotalHeldSince: row.heldSince ?? now,
+        storedTotalWarnedSlot: shouldWarn ? slot : row.warnedSlot,
+      },
+      where: eq(caseLawSources.id, sourceId),
+    });
+    return shouldWarn;
+  });
+  if (warn) {
+    logger.warn("case_law.source_stored_total.held_unknown", {
+      sourceId,
+      holdCause: UNKNOWN_HOLD_CAUSE,
+      slot: slot.toISOString(),
+    });
+  }
+};
+
+const sourceStoredTotalBackoffFailure = failureSink({
+  event: "case_law.source_stored_total.backoff_unavailable",
+  expected: [],
+});
 
 /**
  * `reportedTotal` is a PostgreSQL `integer`. A larger value is rejected here
@@ -108,16 +211,15 @@ export const setSourceReportedTotal = async ({
   }
 
   return await scopedDb(async (tx) => {
-    // audit: skip — public case-law corpus bookkeeping, no workspace data
-    const updated = await tx
-      .update(caseLawSources)
-      .set({
+    const updated = await writeSourceTotals({
+      tx,
+      values: {
         reportedTotal: total,
         reportedTotalAsOf: asOf,
         reportedTotalOrigin: origin,
-      })
-      .where(eq(caseLawSources.adapterKey, adapterKey))
-      .returning({ adapterKey: caseLawSources.adapterKey });
+      },
+      where: eq(caseLawSources.adapterKey, adapterKey),
+    });
 
     return updated.length > 0;
   });
@@ -243,7 +345,7 @@ const readSourceRefreshDatabaseNow = async (tx: Transaction): Promise<Date> => {
     ),
   ).at(0);
   const clock = v.parse(
-    v.object({ epoch_ms: v.pipe(v.number(), v.check(Number.isFinite)) }),
+    v.object({ epoch_ms: v.pipe(v.number(), v.finite()) }),
     row,
   );
   return new Date(clock.epoch_ms);
@@ -261,28 +363,25 @@ export const sourceStoredTotalRefreshClaim = ({
   sourceId,
   now,
 }: SourceStoredTotalRefreshClaimOptions) =>
-  // audit: skip — public case-law corpus bookkeeping, no workspace data
-  tx
-    .update(caseLawSources)
-    .set({
+  writeSourceTotals({
+    tx,
+    values: {
       storedTotalAttemptedAt: now,
       storedTotalHeldSince: null,
       storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
         sourceId,
         new Date(now.getTime() + 1),
       ),
-    })
-    .where(
-      and(
-        eq(caseLawSources.id, sourceId),
-        sourceStoredTotalSpacingAvailable(now),
-        or(
-          isNull(caseLawSources.storedTotalNextRefreshAt),
-          sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
-        ),
+    },
+    where: and(
+      eq(caseLawSources.id, sourceId),
+      sourceStoredTotalSpacingAvailable(now),
+      or(
+        isNull(caseLawSources.storedTotalNextRefreshAt),
+        sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
       ),
-    )
-    .returning({ id: caseLawSources.id });
+    ),
+  });
 
 const initialSourceRefreshSlot = (
   sourceId: SafeId<"caseLawSource">,
@@ -362,21 +461,18 @@ export const refreshSourceStoredTotal = async ({
     claimedAt = claimed;
     const total = v.parse(storedTotalCountSchema, await countSource(sourceId));
     return await scopedDb(async (tx) => {
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      const written = await tx
-        .update(caseLawSources)
-        .set({ storedTotal: total, storedTotalAsOf: claimed })
-        .where(
-          and(
-            eq(caseLawSources.id, sourceId),
-            sql`${caseLawSources.storedTotalAttemptedAt} = ${claimed.toISOString()}::timestamptz`,
-            or(
-              isNull(caseLawSources.storedTotalAsOf),
-              sql`${caseLawSources.storedTotalAsOf} <= ${claimed.toISOString()}::timestamptz`,
-            ),
+      const written = await writeSourceTotals({
+        tx,
+        values: { storedTotal: total, storedTotalAsOf: claimed },
+        where: and(
+          eq(caseLawSources.id, sourceId),
+          sql`${caseLawSources.storedTotalAttemptedAt} = ${claimed.toISOString()}::timestamptz`,
+          or(
+            isNull(caseLawSources.storedTotalAsOf),
+            sql`${caseLawSources.storedTotalAsOf} <= ${claimed.toISOString()}::timestamptz`,
           ),
-        )
-        .returning({ id: caseLawSources.id });
+        ),
+      });
       return written.length > 0 ? ("refreshed" as const) : ("fresh" as const);
     });
   });
@@ -391,10 +487,9 @@ export const refreshSourceStoredTotal = async ({
       const backoff = await Result.tryPromise(
         async () =>
           await scopedDb(async (tx) => {
-            // audit: skip — failed public corpus refresh retains durable daily backoff.
-            await tx
-              .update(caseLawSources)
-              .set({
+            await writeSourceTotals({
+              tx,
+              values: {
                 storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
                   sourceId,
                   new Date(
@@ -402,19 +497,18 @@ export const refreshSourceStoredTotal = async ({
                       SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
                   ),
                 ),
-              })
-              .where(
-                and(
-                  eq(caseLawSources.id, sourceId),
-                  sql`${caseLawSources.storedTotalAttemptedAt} = ${failedClaim.toISOString()}::timestamptz`,
-                ),
-              );
+              },
+              where: and(
+                eq(caseLawSources.id, sourceId),
+                sql`${caseLawSources.storedTotalAttemptedAt} = ${failedClaim.toISOString()}::timestamptz`,
+              ),
+            });
           }),
       );
       if (Result.isError(backoff)) {
-        logger.warn("case_law.source_stored_total.backoff_unavailable", {
-          sourceId,
-          ...pgErrorFields(backoff.error),
+        observeFailure(backoff.error, {
+          sink: sourceStoredTotalBackoffFailure,
+          ctx: { source: sourceId },
         });
       }
     }
@@ -442,23 +536,27 @@ export const refreshNextSourceStoredTotal = async (
           .from(caseLawSources)
           .where(isNull(caseLawSources.storedTotalNextRefreshAt))
           .limit(SOURCE_READ_LIMIT);
-        for (const source of unscheduled) {
-          // db-await-in-loop: the fixed adapter catalog is bounded to SOURCE_READ_LIMIT; initialize durable phases in one transaction.
-          // audit: skip — public case-law corpus bookkeeping, no workspace data
-          await tx
-            .update(caseLawSources)
-            .set({
-              storedTotalNextRefreshAt: initialSourceRefreshSlot(
-                source.id,
-                now,
+        if (unscheduled.length > 0) {
+          await writeSourceTotals({
+            tx,
+            values: {
+              storedTotalNextRefreshAt: sqlCaseFragment({
+                operand: sql`${caseLawSources.id}`,
+                branches: unscheduled.map(
+                  (source) =>
+                    sql`WHEN ${source.id} THEN ${initialSourceRefreshSlot(source.id, now)}::timestamptz`,
+                ),
+                fallback: sql`${caseLawSources.storedTotalNextRefreshAt}`,
+              }),
+            },
+            where: and(
+              inArray(
+                caseLawSources.id,
+                unscheduled.map((source) => source.id),
               ),
-            })
-            .where(
-              and(
-                eq(caseLawSources.id, source.id),
-                isNull(caseLawSources.storedTotalNextRefreshAt),
-              ),
-            );
+              isNull(caseLawSources.storedTotalNextRefreshAt),
+            ),
+          });
         }
         return (
           await tx
@@ -515,3 +613,29 @@ export const readSourceReportedTotals = async (
         .orderBy(caseLawSources.adapterKey)
         .limit(SOURCE_READ_LIMIT),
   );
+
+const sourceStoredTotalHeartbeatFailure = failureSink({
+  event: "case_law.source_stored_total.heartbeat_failed",
+  expected: [],
+});
+
+/** One bound refresh runtime shares its admission budget and hold telemetry across runner cycles. */
+export const createSourceStoredTotalMaintenanceRuntime = (
+  scopedDb: ScopedDb,
+  clock = () => Temporal.Now.instant().epochMilliseconds,
+) => {
+  const readVerdict = createDatabaseLoadVerdictReader({
+    db: { transaction: scopedDb },
+    tableName: "case_law_decisions",
+    clock,
+  });
+  const acquireAdmission = createSourceStoredTotalAdmission({ readVerdict });
+  return {
+    acquireAdmission,
+    emitHoldHeartbeat: async () =>
+      await emitSourceStoredTotalHoldHeartbeats(scopedDb),
+    observeHeartbeatFailure: (error: unknown) => {
+      observeFailure(error, { sink: sourceStoredTotalHeartbeatFailure });
+    },
+  };
+};

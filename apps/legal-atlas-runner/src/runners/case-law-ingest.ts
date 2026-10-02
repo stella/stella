@@ -20,7 +20,6 @@ import { Temporal } from "@stll/time";
  * With an adapter key, runs only that source once and exits.
  */
 
-import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
 import { corpusStorageMode } from "@/api/env-base";
 import {
@@ -53,9 +52,8 @@ import {
   RECONCILIATION_UNIT_SETTLE_MS,
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
-import { createSourceStoredTotalAdmission } from "@/api/handlers/case-law/ingestion/source-total-admission";
-import { emitSourceStoredTotalHoldHeartbeats } from "@/api/handlers/case-law/ingestion/source-total-hold";
 import {
+  createSourceStoredTotalMaintenanceRuntime,
   readSourceReportedTotals,
   setSourceReportedTotal,
 } from "@/api/handlers/case-law/ingestion/source-totals";
@@ -384,17 +382,13 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 );
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
-let storedTotalAdmission:
-  | ReturnType<typeof createSourceStoredTotalAdmission>
+let storedTotalMaintenance:
+  | ReturnType<typeof createSourceStoredTotalMaintenanceRuntime>
   | undefined;
-const getStoredTotalAdmission = () => {
-  storedTotalAdmission ??= createSourceStoredTotalAdmission({
-    readVerdict: createDatabaseLoadVerdictReader({
-      db: { transaction: ingestionDb },
-      tableName: "case_law_decisions",
-    }),
-  });
-  return storedTotalAdmission;
+const getStoredTotalMaintenance = () => {
+  storedTotalMaintenance ??=
+    createSourceStoredTotalMaintenanceRuntime(ingestionDb);
+  return storedTotalMaintenance;
 };
 
 /**
@@ -688,7 +682,7 @@ const runOneCycle = async (
       source,
       sourceLease,
       scopedDb: ingestionDb,
-      acquireStoredTotalAdmission: getStoredTotalAdmission(),
+      acquireStoredTotalAdmission: getStoredTotalMaintenance().acquireAdmission,
       dbSlot: dbWriteSemaphore,
       cycle: {
         budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
@@ -1045,13 +1039,9 @@ export const runCaseLawIngest = async (
   // Health loop: heartbeat + S3 credential refresh.
   const refreshHealth = createIngestionHealthRefresh({
     clock: () => Temporal.Now.instant().epochMilliseconds,
-    emitStoredTotalHeartbeat: async () =>
-      await emitSourceStoredTotalHoldHeartbeats(ingestionDb),
-    warnHeartbeatFailure: (error) => {
-      logger.warn("case_law.source_stored_total.heartbeat_failed", {
-        "error.type": errorTag(error),
-      });
-    },
+    emitStoredTotalHeartbeat: getStoredTotalMaintenance().emitHoldHeartbeat,
+    observeHeartbeatFailure:
+      getStoredTotalMaintenance().observeHeartbeatFailure,
     refreshCredentials: async () => {
       if (isS3Stale()) {
         await refreshS3();
