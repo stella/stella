@@ -39,7 +39,10 @@ describe("instance provider redirect policy", () => {
           const redirectedHost = "redirected-provider.invalid";
           globalThis.fetch = Object.assign(
             async (input: Parameters<typeof fetch>[0], init?: RequestInit) => {
-              const request = new Request(input, init);
+              const request =
+                input instanceof Request
+                  ? input
+                  : new Request(input.toString(), init);
               requests.push(request);
               expect(await request.clone().text()).toContain("fixture request");
               const redirect = new Response(null, {

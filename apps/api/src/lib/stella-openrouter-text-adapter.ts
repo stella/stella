@@ -1,4 +1,4 @@
-import { HTTPClient } from "@openrouter/sdk/lib/http.js";
+import { HTTPClient } from "@openrouter/sdk";
 import { EventType } from "@tanstack/ai";
 import type { AdapterYieldChunk, ContentPart } from "@tanstack/ai";
 import { OpenRouterTextAdapter } from "@tanstack/ai-openrouter";
@@ -136,12 +136,14 @@ const isManagedRoutingRefusal = (error: unknown): boolean => {
 
 const withManagedRoutingErrors = async function* (
   stream: AsyncIterable<AdapterYieldChunk>,
+  isUnavailable: (error: unknown) => boolean = isManagedRoutingRefusal,
 ): AsyncGenerator<AdapterYieldChunk> {
   for await (const chunk of stream) {
     if (
       chunk.type !== EventType.RUN_ERROR ||
       chunk.code === "aborted" ||
-      !isManagedRoutingRefusal(chunk.rawEvent ?? chunk)
+      (chunk.code !== MANAGED_PROVIDER_UNAVAILABLE_CODE &&
+        !isUnavailable(chunk.rawEvent ?? chunk))
     ) {
       yield chunk;
       continue;
@@ -180,41 +182,59 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
         ...config,
         debugLogger: INSTANCE_DEBUG_LOGGER,
         httpClient: new HTTPClient({
-          fetcher: async (input, init) =>
-            await fetchManagedOpenRouterCompletion(new Request(input, init)),
+          fetcher: async (input, init) => {
+            const request =
+              input instanceof Request
+                ? input
+                : new Request(input.toString(), init);
+            const result = await fetchManagedOpenRouterCompletion(request);
+            if (Result.isError(result)) {
+              throw result.error;
+            }
+            return result.value;
+          },
         }),
       },
       model,
     );
-    // The SDK wraps transport errors before the adapter sees them. Unwrap our
-    // refusal at this shared request boundary so streams retain its typed code.
-    const sendRequest = this.orClient.chat._do.bind(this.orClient.chat);
-    this.orClient.chat._do = async (...args) => {
-      const result = await sendRequest(...args);
-      if (
-        !result.ok &&
-        readEvidence(result.error).nodes.some(
-          ({ code }) => code === MANAGED_PROVIDER_UNAVAILABLE_CODE,
-        )
-      ) {
-        throw managedProviderUnavailable("openrouter");
+    // Normalize after the SDK promise settles; rejecting its internal result
+    // promise leaves a second APIPromise branch unhandled.
+    const sendRequest = this.orClient.chat.send.bind(this.orClient.chat);
+    this.orClient.chat.send = async (...args) => {
+      const result = await Result.tryPromise({
+        try: async () => await sendRequest(...args),
+        catch: (error) =>
+          readEvidence(error).nodes.some(
+            ({ code }) => code === MANAGED_PROVIDER_UNAVAILABLE_CODE,
+          )
+            ? managedProviderUnavailable("openrouter")
+            : error,
+      });
+      if (Result.isError(result)) {
+        throw result.error;
       }
-      return result;
+      return result.value;
     };
   }
 
   override chatStream(options: OpenRouterTextOptions) {
-    return super.chatStream({ ...options, logger: resolveDebugOption(false) });
+    return withManagedRoutingErrors(
+      super.chatStream({ ...options, logger: resolveDebugOption(false) }),
+      () => false,
+    );
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return super.structuredOutputStream({
-      ...options,
-      chatOptions: {
-        ...options.chatOptions,
-        logger: resolveDebugOption(false),
-      },
-    });
+    return withManagedRoutingErrors(
+      super.structuredOutputStream({
+        ...options,
+        chatOptions: {
+          ...options.chatOptions,
+          logger: resolveDebugOption(false),
+        },
+      }),
+      () => false,
+    );
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {

@@ -109,30 +109,33 @@ export const fetchManagedOpenRouterCompletion = async (request: Request) => {
   const endpoint =
     request.url === publicEndpoint ? publicEndpoint : regionalEndpoint;
   if (endpoint !== request.url) {
-    throw managedProviderUnavailable("openrouter");
+    return Result.err(managedProviderUnavailable("openrouter"));
   }
   // Manual mode exposes redirects without forwarding the request body.
-  const response = await fetchWithTimeout(endpoint, {
-    method: request.method,
-    headers: request.headers,
-    body: request.body,
-    signal: request.signal,
-    timeoutMs: MANAGED_PROVIDER_REQUEST_TIMEOUT_MS,
-    redirect: "manual",
+  const fetched = await Result.tryPromise({
+    try: async () =>
+      await fetchWithTimeout(endpoint, {
+        method: request.method,
+        headers: request.headers,
+        body: request.body,
+        signal: request.signal,
+        timeoutMs: MANAGED_PROVIDER_REQUEST_TIMEOUT_MS,
+        redirect: "manual",
+      }),
+    catch: () => managedProviderUnavailable("openrouter"),
   });
+  if (Result.isError(fetched)) {
+    return fetched;
+  }
+  const response = fetched.value;
   if (
     response.type === "opaqueredirect" ||
     (response.status >= 300 && response.status < 400)
   ) {
-    const cancelled = await Result.tryPromise(
-      async () => await response.body?.cancel(),
-    );
-    throw managedProviderUnavailable(
-      "openrouter",
-      Result.isError(cancelled) ? cancelled.error : undefined,
-    );
+    await Result.tryPromise(async () => await response.body?.cancel());
+    return Result.err(managedProviderUnavailable("openrouter"));
   }
-  return response;
+  return Result.ok(response);
 };
 
 export const isManagedProviderAvailable = (
