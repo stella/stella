@@ -393,7 +393,8 @@ export const openDesktopEditSessionHandler = async function* ({
   }
 
   type RunOpenSessionResult = Result<
-    | Awaited<ReturnType<typeof buildExistingOpenDesktopEditSessionResponse>>
+    | OpenDesktopEditSessionResponse
+    | null
     | { error: { message: string; statusCode: 400 | 409 } },
     SafeDbError | HandlerError<409>
   >;

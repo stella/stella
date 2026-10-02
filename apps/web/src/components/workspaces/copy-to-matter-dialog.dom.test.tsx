@@ -104,7 +104,9 @@ test("the mounted move dialog localizes deferred refusals for complete and parti
               ancestorIds: [],
             }))}
             initialTargetWorkspaceId="target-matter"
-            onOpenChange={(open) => closed.push(open)}
+            onOpenChange={(open) => {
+              closed.push(open);
+            }}
             open
             sourceWorkspaceId="source-matter"
           />
