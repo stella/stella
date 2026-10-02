@@ -57,6 +57,7 @@ jobs:
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
       docker_checks_required: ${{ steps.changed-files.outputs.docker_checks_required }}
+      docker_checks_pr_required: ${{ steps.changed-files.outputs.docker_checks_pr_required }}
       # JSON matrix `include` list for api-image-smoke.
       api_image_platforms: ${{ steps.changed-files.outputs.api_image_platforms }}
       api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
@@ -68,6 +69,7 @@ jobs:
       fix_tests_on_base_required: ${{ steps.changed-files.outputs.fix_tests_on_base_required }}
       landing_build_required: ${{ steps.changed-files.outputs.landing_build_required }}
       legal_atlas_image_required: ${{ steps.changed-files.outputs.legal_atlas_image_required }}
+      legal_atlas_image_pr_required: ${{ steps.changed-files.outputs.legal_atlas_image_pr_required }}
       dependency_malware_required: ${{ steps.changed-files.outputs.dependency_malware_required }}
       lockfile_ages_required: ${{ steps.changed-files.outputs.lockfile_ages_required }}
       marketing_screenshots_required: ${{ steps.marketing-release.outputs.required }}
@@ -279,6 +281,7 @@ jobs:
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
               echo "docker_checks_required=true"
+              echo "docker_checks_pr_required=true"
               echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
               echo "postgres_suites_required=true"
@@ -294,6 +297,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=$landing_build_required"
               echo "legal_atlas_image_required=true"
+              echo "legal_atlas_image_pr_required=true"
               echo "dependency_malware_required=true"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=true"
@@ -321,6 +325,7 @@ jobs:
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
               echo "docker_checks_required=false"
+              echo "docker_checks_pr_required=false"
               echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
               echo "postgres_suites_required=$empty_api_suites"
@@ -336,6 +341,7 @@ jobs:
               echo "fix_tests_on_base_required=false"
               echo "landing_build_required=false"
               echo "legal_atlas_image_required=false"
+              echo "legal_atlas_image_pr_required=false"
               echo "dependency_malware_required=false"
               echo "lockfile_ages_required=false"
               echo "migration_rehearsal_required=false"
@@ -398,6 +404,7 @@ jobs:
           collab_redis_required=false
           landing_build_required=false
           legal_atlas_image_required=false
+          image_inputs_changed=false
           lockfile_ages_required=false
           migration_rehearsal_required=false
           mobile_build_required=false
@@ -497,6 +504,14 @@ jobs:
                 e2e_core_required=true
                 ;;
             esac
+            # Pull requests build the images only when their own inputs
+            # change: Dockerfiles, manifests, the runner and its packages.
+            # The merge queue keeps the broad selection above.
+            case "$file" in
+              */Dockerfile|*.Dockerfile|*/package.json|package.json|bun.lock|bunfig.toml|.npmrc|patches/*|turbo.json|scripts/pull-base-images.sh|apps/legal-atlas-runner/*|packages/legal-atlas/*|packages/agent-engine/docker/*)
+                image_inputs_changed=true
+                ;;
+            esac
             case "$file" in
               apps/legal-atlas-runner/*|apps/api/*|packages/legal-atlas/*|packages/typescript-config/*|bun.lock|bunfig.toml|package.json|.npmrc|turbo.json|scripts/pull-base-images.sh|scripts/retry.sh|.github/workflows/ci.yml)
                 legal_atlas_image_required=true
@@ -587,6 +602,14 @@ jobs:
           if [[ "$agent_sandbox_docker_required" == "true" || "$api_image_deps_required" == "true" ]]; then
             docker_checks_required=true
           fi
+          docker_checks_pr_required=false
+          if [[ "$docker_checks_required" == "true" && "$image_inputs_changed" == "true" ]]; then
+            docker_checks_pr_required=true
+          fi
+          legal_atlas_image_pr_required=false
+          if [[ "$legal_atlas_image_required" == "true" && "$image_inputs_changed" == "true" ]]; then
+            legal_atlas_image_pr_required=true
+          fi
 
           # Full depth preserves the original broad folded-suite selection.
           if [[ "$SUITE_DEPTH" == full ]]; then
@@ -608,6 +631,7 @@ jobs:
             echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
             echo "docker_checks_required=$docker_checks_required"
+            echo "docker_checks_pr_required=$docker_checks_pr_required"
             echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
             echo "postgres_suites_required=$postgres_suites_required"
@@ -623,6 +647,7 @@ jobs:
             echo "fix_tests_on_base_required=$fix_tests_on_base_required"
             echo "landing_build_required=$landing_build_required"
             echo "legal_atlas_image_required=$legal_atlas_image_required"
+            echo "legal_atlas_image_pr_required=$legal_atlas_image_pr_required"
             echo "dependency_malware_required=$dependency_malware_required"
             echo "lockfile_ages_required=$lockfile_ages_required"
             echo "migration_rehearsal_required=$migration_rehearsal_required"
@@ -656,7 +681,9 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.docker_checks_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.docker_checks_pr_required == 'true'))
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
@@ -3880,7 +3907,9 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.legal_atlas_image_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.legal_atlas_image_pr_required == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -4286,9 +4315,9 @@ jobs:
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_JOB_SCOPES: >-
-            {"service-suites": "service_suites_pr_required"}
+            {"service-suites": "service_suites_pr_required", "docker-checks": "docker_checks_pr_required", "legal-atlas-image": "legal_atlas_image_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "service-suites", "web-image-smoke", "e2e-production-shard", "route-smoke", "desktop-clippy", "windows-scripts"]
+            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "service-suites", "web-image-smoke", "e2e-production-shard", "route-smoke", "desktop-clippy", "windows-scripts", "docker-checks", "legal-atlas-image"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled
