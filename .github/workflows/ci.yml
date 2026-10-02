@@ -1121,6 +1121,10 @@ jobs:
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 
+      - name: Ratchet scanner invariants
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bun test scripts/ratchet-scan.test.ts
+
       - name: Documentation source policy rule
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         # Every direct dependency must have an exact llms.txt source or a

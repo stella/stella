@@ -100,6 +100,7 @@ const withClone = (exercise: (root: string) => void) => {
       "scripts/db-await-in-loop.ts",
       "scripts/lint-suppressions.ts",
       "scripts/ownership.ts",
+      "scripts/parse-memo.ts",
       "scripts/generated-artifacts.ts",
       "scripts/result-boundary-globs.ts",
       "scripts/root-connection-shapes.ts",
@@ -167,7 +168,7 @@ test("a metric increase fails even with a forged committed budget", () => {
     const script = path.join(root, "scripts/ratchet.ts");
     const original = readFileSync(script, "utf-8");
     const mutant = original.replaceAll(
-      "const baseline = scanMergeBase(base);",
+      "const baseline = scanMergeBase({ ref: base, previous: head });",
       "const baseline = scanAll(REPO_ROOT);",
     );
     expect(mutant).not.toBe(original);
@@ -783,8 +784,8 @@ test("untracked files cannot increase file, duplication, directory or dependency
     const script = path.join(root, "scripts/ratchet.ts");
     const original = readFileSync(script, "utf-8");
     const mutant = original.replaceAll(
-      "const current = scanAll(REPO_ROOT, { trackedFiles });",
-      "const current = scanAll(REPO_ROOT);",
+      "const tree = openSourceTree(REPO_ROOT, { trackedFiles });",
+      "const tree = openSourceTree(REPO_ROOT);",
     );
     expect(mutant).not.toBe(original);
     writeFileSync(script, mutant);
