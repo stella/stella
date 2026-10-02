@@ -1,7 +1,7 @@
 import { EventType } from "@tanstack/ai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
-import { describe, expect, spyOn, test } from "bun:test";
+import { describe, expect, jest, spyOn, test } from "bun:test";
 
 import { env } from "@/api/env";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
@@ -13,6 +13,10 @@ import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-
 import type { startNonOverlappingInterval } from "@/api/lib/non-overlapping-interval";
 import { createManagedOpenRouterText } from "@/api/lib/stella-openrouter-text-adapter";
 import { createTanStackTextAdapterFactory } from "@/api/lib/tanstack-ai-models";
+import {
+  API_SHUTDOWN_OUTCOME,
+  shutdownApiServices,
+} from "@/api/server-shutdown";
 
 const MODEL = "google/gemini-2.5-flash";
 const chatOptions = {
@@ -385,3 +389,89 @@ for (const residency of MANAGED_AI_RESIDENCIES) {
     }
   }
 }
+
+test("termination aborts stalled catalog requests within the service deadline", async () => {
+  jest.useFakeTimers();
+  const previous = saveSettings();
+  const originalFetch = globalThis.fetch;
+  const scheduled: {
+    options?: Parameters<typeof startNonOverlappingInterval>[0];
+  } = {};
+  const started = Promise.withResolvers<undefined>();
+  const stalled = Promise.withResolvers<Response>();
+  const releaseClose = Promise.withResolvers<undefined>();
+  const signals: AbortSignal[] = [];
+  let requests = 0;
+  let httpStopped = false;
+  let close: (() => Promise<void>) | undefined;
+  Object.assign(env, {
+    FEATURE_MANAGED_PROVIDER_CHECKS: true,
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS: 53_000,
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 30_000,
+    OPENROUTER_API_KEY: "fixture-key",
+  });
+  globalThis.fetch = Object.assign(
+    async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+      requests++;
+      if (requests <= 2) {
+        return Response.json({ data: [{ id: MODEL }] });
+      }
+      const signal = init?.signal;
+      if (signal === null || signal === undefined) {
+        panic("Catalog request did not receive its cancellation signal");
+      }
+      signals.push(signal);
+      if (signals.length === 2) {
+        started.resolve(undefined);
+      }
+      return await stalled.promise;
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  try {
+    close = await startManagedProviderChecks((options) => {
+      scheduled.options = options;
+      // Even a non-cooperative close must remain inside the server deadline.
+      return async () => await releaseClose.promise;
+    });
+    const options = scheduled.options;
+    if (options === undefined) {
+      panic("Scheduler was not registered");
+    }
+    const refresh = options.run();
+    await started.promise;
+    expect(signals).toHaveLength(2);
+    expect(signals.every((signal) => !signal.aborted)).toBe(true);
+    const deadlineMs = 31;
+    const outcome = shutdownApiServices({
+      closeManagedProviderChecks: close,
+      closeBackgroundWorkers: async () => undefined,
+      closeDatabaseLoginProbe: undefined,
+      drainScheduler: undefined,
+      onHttpStopError: () => undefined,
+      relinquishChatTurnRuns: async () => "stored",
+      stopHttp: async () => {
+        httpStopped = true;
+      },
+      stopScheduler: () => undefined,
+      stopSse: () => undefined,
+      timeout: new Promise<void>((resolve) => {
+        setTimeout(resolve, deadlineMs);
+      }),
+    });
+    expect(httpStopped).toBe(true);
+    expect(signals.every((signal) => signal.aborted)).toBe(true);
+    jest.advanceTimersByTime(deadlineMs);
+    expect(await outcome).toBe(API_SHUTDOWN_OUTCOME.timedOut);
+    await refresh;
+    for (const residency of MANAGED_AI_RESIDENCIES) {
+      expect(checkManagedOpenRouterModel(MODEL, residency).isErr()).toBe(true);
+    }
+  } finally {
+    releaseClose.resolve(undefined);
+    await close?.();
+    globalThis.fetch = originalFetch;
+    Object.assign(env, previous);
+    jest.useRealTimers();
+  }
+});

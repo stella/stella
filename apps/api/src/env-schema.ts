@@ -29,6 +29,7 @@ type EmailProviderInput = {
 const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
 // Larger timer delays are clamped to one millisecond by the runtime.
 const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const MAX_MANAGED_PROVIDER_CHECK_TIMEOUT_MS = 30_000;
 
 export const resolveEmailProvider = ({
   EMAIL_PROVIDER,
@@ -100,7 +101,7 @@ export const envApiServerSchema = {
       v.toNumber(),
       v.integer(),
       v.minValue(1),
-      v.maxValue(MAX_TIMER_DELAY_MS),
+      v.maxValue(MAX_MANAGED_PROVIDER_CHECK_TIMEOUT_MS),
     ),
   ),
   OPENAI_API_KEY: v.optional(v.string()),

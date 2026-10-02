@@ -96,6 +96,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "CORPUS_MEMBER_LAYOUT",
   "CORPUS_STORAGE_ENABLED",
   "CORPUS_STORAGE_MODE",
+  "MANAGED_PROVIDER_CHECK_INTERVAL_MS",
+  "MANAGED_PROVIDER_CHECK_TIMEOUT_MS",
   "DATABASE_POOL_IDLE_TIMEOUT_S",
   "DATABASE_POOL_MAX_LIFETIME_S",
   "DATABASE_STATEMENT_TIMEOUT_MS",
@@ -127,6 +129,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_INBOX_DOCUMENT_SCOUTS",
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
+  "FEATURE_MANAGED_PROVIDER_CHECKS",
   "FEATURE_MCP",
   "FEATURE_MCP_READ_FENCE",
   "FEATURE_ORG_ACCESS_STATE",
@@ -336,6 +339,12 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Enforce the per-organization access state before a model call falls back to the instance provider.",
   FEATURE_FILE_USAGE_LIMITS:
     "Enforce organization file byte reservations at storage writes.",
+  FEATURE_MANAGED_PROVIDER_CHECKS:
+    "Check regional model availability before managed requests. Requires AI_PROVIDER=openrouter, OPENROUTER_API_KEY, and explicit check interval/timeout settings.",
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS:
+    "Regional catalog refresh interval in milliseconds. Required when FEATURE_MANAGED_PROVIDER_CHECKS is enabled; must exceed the check timeout.",
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS:
+    "Regional catalog check deadline in milliseconds, at most 30000. Required when FEATURE_MANAGED_PROVIDER_CHECKS is enabled.",
   ORG_EVALUATION_PERIOD_DAYS:
     "Length in days of the evaluation period a new organization starts.",
   FEATURE_PUBLIC_TOOLS:
@@ -953,6 +962,8 @@ export const AMBIENT_ENV_KEYS = new Set([
   "GH_TOKEN",
   "HOSTNAME",
   "NODE_ENV",
+  // Read by the provider SDK; managed request tests verify it cannot enable logging.
+  "OPENROUTER_DEBUG",
   "PATH",
   "RAILWAY_GIT_COMMIT_SHA",
   "STELLA_LOCAL_DEV",

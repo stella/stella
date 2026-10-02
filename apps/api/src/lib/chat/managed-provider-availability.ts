@@ -33,6 +33,7 @@ type ManagedProviderAvailabilityOptions = {
   apiKey: string;
   intervalMs: number;
   timeoutMs: number;
+  signal?: AbortSignal | undefined;
   fetchCatalog: (url: string, init: RequestInit) => Promise<Response>;
   now: () => number;
 };
@@ -43,6 +44,7 @@ export const createManagedProviderAvailability = ({
   apiKey,
   intervalMs,
   timeoutMs,
+  signal: parentSignal,
   fetchCatalog,
   now,
 }: ManagedProviderAvailabilityOptions) => {
@@ -82,7 +84,11 @@ export const createManagedProviderAvailability = ({
                 );
                 return new Set(catalog.data.map(({ id }) => id));
               },
-              { label: "Managed provider catalog check", timeoutMs },
+              {
+                label: "Managed provider catalog check",
+                timeoutMs,
+                signal: parentSignal,
+              },
             ),
           catch: (cause) =>
             classifyFailure(

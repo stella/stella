@@ -763,9 +763,9 @@ const startServer = async (): Promise<void> => {
     }
     shuttingDown = true;
     logger.info("api.shutdown_started", { signal });
-    await closeManagedProviderChecks();
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: backgroundWorkers.close,
+      closeManagedProviderChecks,
       closeDatabaseLoginProbe,
       // Undefined when the signal beat scheduler registration; there is
       // nothing claimed to drain.

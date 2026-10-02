@@ -45,10 +45,12 @@ export const startManagedProviderChecks = async (
   ) {
     return panic("Managed provider check configuration was not validated.");
   }
+  const controller = new AbortController();
   const monitor = createManagedProviderAvailability({
     apiKey,
     intervalMs,
     timeoutMs,
+    signal: controller.signal,
     fetchCatalog: async (url, init) =>
       await fetchManagedProviderCatalog(url, {
         ...init,
@@ -59,7 +61,11 @@ export const startManagedProviderChecks = async (
   });
   availability = monitor;
   const refresh = async () => {
-    for (const result of await monitor.refresh()) {
+    const results = await monitor.refresh();
+    if (controller.signal.aborted) {
+      return;
+    }
+    for (const result of results) {
       if (Result.isError(result)) {
         captureError(result.error, {
           context: { residency: result.error.residency },
@@ -76,6 +82,7 @@ export const startManagedProviderChecks = async (
   });
   return async () => {
     availability = undefined;
+    controller.abort();
     await close();
   };
 };

@@ -94,6 +94,21 @@ test("managed checks require an explicit supported provider and bounded configur
       expect(v.safeParse(schema, invalid).success).toBe(false);
     }
     expect(v.parse(schema, "17")).toBe(17);
-    expect(v.parse(schema, "2147483647")).toBe(2_147_483_647);
   }
+});
+
+test("catalog check deadlines have a bounded operator ceiling", () => {
+  expect(
+    v.parse(envApiServerSchema.MANAGED_PROVIDER_CHECK_TIMEOUT_MS, "30000"),
+  ).toBe(30_000);
+  expect(
+    v.safeParse(envApiServerSchema.MANAGED_PROVIDER_CHECK_TIMEOUT_MS, "30001")
+      .success,
+  ).toBe(false);
+  expect(
+    v.parse(
+      envApiServerSchema.MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+      "2147483647",
+    ),
+  ).toBe(2_147_483_647);
 });
