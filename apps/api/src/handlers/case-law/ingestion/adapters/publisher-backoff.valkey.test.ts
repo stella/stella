@@ -93,8 +93,8 @@ const positiveTtl = async (client: PublisherStore["first"], key: string) => {
  * The gate admits once Redis time reaches the cooldown deadline, compared at
  * millisecond precision, while the key itself lapses on its own TTL, which can
  * outlast that deadline by under a millisecond. "The cooldown is over" is
- * therefore: no deadline in the future, at most that rounding left on the key,
- * and the key gone once its own TTL lapses.
+ * therefore: no deadline in the future, at most that boundary millisecond left
+ * on the key, and the key gone once Redis time is past the deadline.
  */
 const expectCooldownLapsed = async (
   client: PublisherStore["first"],
@@ -110,8 +110,19 @@ const expectCooldownLapsed = async (
     throw new TypeError("Redis PTTL did not return a number");
   }
   expect(ttl === -2 || (ttl >= 0 && ttl <= 1)).toBe(true);
-  if (ttl >= 0) {
-    await abortableSleep(ttl + 1);
+  // Redis expires the key once its own clock is past the deadline, so wait on
+  // that clock rather than a local timer.
+  if (deadline !== null) {
+    let observed = now;
+    for (
+      let attempt = 0;
+      attempt < 50 && observed <= Number(deadline);
+      attempt += 1
+    ) {
+      await abortableSleep(1);
+      observed = await redisNow(client);
+    }
+    expect(observed).toBeGreaterThan(Number(deadline));
   }
   expect(await client.send("EXISTS", [cooldownKey])).toBe(0);
 };
