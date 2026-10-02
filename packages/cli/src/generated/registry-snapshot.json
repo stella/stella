@@ -3693,6 +3693,75 @@
           "minItems": 1,
           "description": "Ordered clause body paragraphs; required when creating. Each paragraph carries text and optional formatting."
         },
+        "expected_body": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "text": {
+                "type": "string",
+                "description": "Paragraph plain text"
+              },
+              "style": {
+                "type": "string",
+                "description": "Optional paragraph style name"
+              },
+              "level": {
+                "type": "integer",
+                "description": "Optional heading/outline level"
+              },
+              "runs": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "text": {
+                      "type": "string",
+                      "description": "Run text"
+                    },
+                    "bold": {
+                      "type": "boolean",
+                      "description": "Render the run bold"
+                    },
+                    "italic": {
+                      "type": "boolean",
+                      "description": "Render the run italic"
+                    }
+                  },
+                  "required": ["text"],
+                  "additionalProperties": false
+                },
+                "description": "Optional inline formatting runs whose text concatenates to the paragraph"
+              },
+              "list_kind": {
+                "enum": ["bullet", "ordered"],
+                "type": "string",
+                "description": "List item kind when the paragraph is a list item"
+              },
+              "list_level": {
+                "type": "integer",
+                "description": "0-based list nesting depth for a list item"
+              },
+              "is_directive": {
+                "type": "boolean",
+                "description": "Whether the paragraph is a template directive marker"
+              },
+              "directive_kind": {
+                "enum": ["if", "elif", "else", "endif", "for", "endfor"],
+                "type": "string",
+                "description": "Directive kind when is_directive is set"
+              },
+              "directive_expression": {
+                "type": "string",
+                "description": "Directive expression for an if/each directive"
+              }
+            },
+            "required": ["text"],
+            "additionalProperties": false
+          },
+          "minItems": 1,
+          "description": "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving."
+        },
         "category_id": {
           "anyOf": [
             {

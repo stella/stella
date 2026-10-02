@@ -442,6 +442,78 @@ describe("MCP knowledge tools", () => {
     );
   });
 
+  test("save_clause limits expected_body to updates", async () => {
+    const result = await handleMcpToolCall({
+      args: {
+        title: "Clause",
+        body: [{ text: "New" }],
+        expected_body: [{ text: "Read" }],
+      },
+      context: createContext(),
+      toolName: "save_clause",
+    });
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: { code: "validation_error" },
+    });
+  });
+
+  for (const expectation of ["matching", "stale"] as const) {
+    test(`save_clause maps ${expectation} expected_body paragraph fields into update preconditions`, async () => {
+      let writes = 0;
+      const stored = {
+        id: CLAUSE_ID,
+        title: "Clause",
+        currentVersion: 1,
+        body: [{ text: "Read", listKind: "bullet", listLevel: 1 }],
+      };
+      const scopedDb = asTestRaw<McpRequestContext["scopedDb"]>(
+        async (run: (tx: unknown) => unknown) =>
+          await run({
+            query: { clauses: { findFirst: async () => stored } },
+            select: () => ({
+              from: () => ({ where: () => ({ for: async () => [stored] }) }),
+            }),
+            update: () => ({
+              set: () => ({
+                where: () => ({
+                  returning: async () => {
+                    writes += 1;
+                    return [stored];
+                  },
+                }),
+              }),
+            }),
+          }),
+      );
+      const result = await handleMcpToolCall({
+        args: {
+          clause_id: CLAUSE_ID,
+          usage_notes: "Updated notes",
+          expected_body: [
+            {
+              text: expectation === "matching" ? "Read" : "Older",
+              list_kind: "bullet",
+              list_level: 1,
+            },
+          ],
+        },
+        context: createContext({ scopedDb }),
+        toolName: "save_clause",
+      });
+      if (expectation === "matching") {
+        expect(result.isError).toBeFalsy();
+        expect(writes).toBe(1);
+      } else {
+        expect(result.isError).toBe(true);
+        expect(parseToolPayload(result)).toMatchObject({
+          error: { code: "conflict" },
+        });
+        expect(writes).toBe(0);
+      }
+    });
+  }
+
   test("save_playbook creates from a name and returns the next save's token", async () => {
     const { savedAt, scopedDb, writes } = createPlaybookWriteScopedDb();
 
