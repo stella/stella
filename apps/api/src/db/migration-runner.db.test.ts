@@ -498,6 +498,56 @@ if (!runPostgresTests || databaseUrl === undefined) {
       });
     });
 
+    /**
+     * The index gate terminates the migrator session when it can neither
+     * monitor nor cancel a build. Its error must reach the caller, and the
+     * lane must be free because the backend exited.
+     */
+    test("a terminated online session surfaces the online error and frees the lane", async () => {
+      await withBundle([{ name: A, sql: CREATE_PROBE }], async (folder) => {
+        await withScratch(async ({ observer, openClient }) => {
+          const laneOpenToWriters = async () =>
+            await observer.begin(async (tx) =>
+              isCorpusSchemaLaneGranted(
+                await tx.unsafe(CORPUS_SCHEMA_LANE_TRY_SHARED_XACT_SQL),
+              ),
+            );
+          const onlineError = new Error("online monitoring and cancel failed");
+          const connection = await openClient().reserve();
+          try {
+            const run = runMigrations({
+              connection,
+              migrationsFolder: folder,
+              runOnline: async (pool) => {
+                const { terminate } = await pool.reserve();
+                if (terminate === undefined) {
+                  throw new Error(
+                    "Expected the migrator session to be terminable",
+                  );
+                }
+                await terminate();
+                throw onlineError;
+              },
+            });
+            await expect(run).rejects.toBe(onlineError);
+            // The server drops the advisory lock when the closed backend exits,
+            // which can trail the client-side close by a moment.
+            let laneOpen = await laneOpenToWriters();
+            for (let attempt = 0; !laneOpen && attempt < 50; attempt += 1) {
+              await Bun.sleep(100);
+              laneOpen = await laneOpenToWriters();
+            }
+            expect(laneOpen).toBe(true);
+            expect(
+              (await ledgerRows(observer)).map(({ name }) => name),
+            ).toEqual([A]);
+          } finally {
+            connection.release();
+          }
+        });
+      });
+    });
+
     test("rollback across an alias rewrite and a newer migration no-ops, starts, or refuses pending SQL", async () => {
       await withBundle(
         [{ name: A, sql: CREATE_PROBE }],

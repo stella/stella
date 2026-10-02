@@ -302,6 +302,9 @@ export const runMigrations = async ({
   onlineIndexHold = createOnlineIndexHold(),
 }: RunMigrationsOptions) => {
   let laneHeld = false;
+  // A terminated session already dropped its advisory locks; unlocking on the
+  // closed connection would replace the monitoring error with a close error.
+  const session: { state: "open" | "terminated" } = { state: "open" };
   try {
     await connection.unsafe(bootstrapRoleSql);
     const [liftTimeout, takeLane, restoreTimeout] =
@@ -389,7 +392,10 @@ export const runMigrations = async ({
       remedy: "Migration completion requires every bundled migration hash.",
     });
     const onlineConnection: OnlineMigrationConnection = {
-      terminate: async () => await connection.close({ timeout: 0 }),
+      terminate: async () => {
+        session.state = "terminated";
+        await connection.close({ timeout: 0 });
+      },
       execute: async (query, params = []) => {
         await connection.unsafe(query, [...params]);
       },
@@ -414,7 +420,7 @@ export const runMigrations = async ({
     }
     return { status: "applied" as const, predictedNames, insertedNames };
   } finally {
-    if (laneHeld) {
+    if (laneHeld && session.state === "open") {
       await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);
     }
   }
