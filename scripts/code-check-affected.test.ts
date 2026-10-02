@@ -602,6 +602,24 @@ describe("full and affected code-check parity", () => {
       expect.arrayContaining(["apps/extension", "apps/landing"]),
     );
     for (const { name } of generating) {
+      const producers = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).filter((dependency) => dependency.startsWith("generate:"));
+      if (producers.length > 0) {
+        // A dedicated cached producer owns the artifact; both compiler tasks
+        // await it instead of making lint await the entire typecheck.
+        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual(
+          expect.arrayContaining(producers),
+        );
+        for (const producer of producers) {
+          expect(
+            taskField(tasks, `${name}#${producer}`, "outputs").length,
+          ).toBeGreaterThan(0);
+        }
+        continue;
+      }
       expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual([
         "typecheck",
       ]);

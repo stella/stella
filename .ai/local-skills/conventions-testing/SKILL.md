@@ -1,6 +1,6 @@
 ---
 name: conventions-testing
-description: 'Apply when writing or reviewing tests.'
+description: "Apply when writing or reviewing tests."
 ---
 
 # Testing Conventions
@@ -132,3 +132,18 @@ the flag alone can never prove the projection landed.
 
 Treat the reconciler as part of the feature, not follow-up work: without it the
 first divergence is invisible until a user reports missing data.
+
+## Property failure discipline
+
+Use `assertProperty(id, property, params?)` from `@stll/property-testing` for
+new properties; give it an explicit stable id matching the test title so the
+printed `bun test -t` command selects the property. Keep arbitraries beside the
+code under test. PR and merge-queue runs use deterministic seeds; exploratory
+runs belong to the private nightly tier.
+
+A failing seed is a real bug: fix it, then pin the seed and counterexample path
+in `packages/property-testing/property-seeds.json` after the fix merges. Extend
+the generator or oracle to cover the input class. Never rerun until green.
+Use neutral public seed notes; report sensitive counterexamples privately.
+When an oracle conflicts with a documented contract, the contract wins: adapt
+the oracle rather than changing intended behavior.

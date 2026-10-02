@@ -1,4 +1,4 @@
-// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: fetch-stage telemetry and publisher retries only; parser decision fields are unchanged.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -42,7 +42,10 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchPublisher,
+  PublisherRateLimitRefusalError,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -493,6 +496,7 @@ const queryDecisions = async ({
   const response = await fetchPublisher(SPARQL_URL, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     method: "POST",
     signal,
     timeoutMs,
@@ -800,6 +804,7 @@ const readDocumentResponse = async ({
   const response = await fetchPublisher(url, {
     fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -937,12 +942,14 @@ const fetchManifestation = async ({
         signal,
       }),
     catch: (cause) =>
-      new AdapterFetchError({
-        message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        cursor: null,
-        cause,
-      }),
+      cause instanceof AdapterFetchError
+        ? cause
+        : new AdapterFetchError({
+            message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor: null,
+            cause,
+          }),
   });
   if (Result.isError(fetched)) {
     return fetched;
@@ -1675,6 +1682,7 @@ const fetchNotice = async (
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -1729,6 +1737,7 @@ const fetchFormex = async (
   const response = await fetchPublisher(contentUrl.value, {
     fetchStage: "document",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -2755,6 +2764,7 @@ export const euEcjAdapter = defineSourceAdapter({
       const response = await fetchPublisher(SPARQL_URL, {
         fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.EU_ECJ,
+        retryPolicy: "publisher-backoff",
         method: "POST",
         signal,
         timeoutMs: 60_000,
@@ -2844,7 +2854,19 @@ export const euEcjAdapter = defineSourceAdapter({
 
         return { decisions, nextCursor };
       },
-      catch: adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor),
+      catch: (cause) => {
+        const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);
+        if (error instanceof PublisherRateLimitRefusalError) {
+          return new PublisherRateLimitRefusalError({
+            publisherKey: error.publisherKey,
+            status: error.status,
+            cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor,
+          });
+        }
+        return error;
+      },
     });
   },
 });

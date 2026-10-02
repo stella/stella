@@ -52,6 +52,7 @@ import {
   useI18nStore,
 } from "@/i18n/i18n-store";
 import { pendingDeletionTasksOptions } from "@/lib/account/queries";
+import { hideSessionDocument } from "@/lib/account/session-document";
 import { signalSessionChange } from "@/lib/account/session-signal";
 import { releaseUserStorage } from "@/lib/account/user-scoped-storage";
 import { getAnalytics } from "@/lib/analytics/provider";
@@ -291,6 +292,7 @@ function ProfilePageBody() {
       }
       releaseUserStorage();
       signalSessionChange();
+      hideSessionDocument();
       window.location.href = "/auth";
     },
     onError: (err: unknown) => {

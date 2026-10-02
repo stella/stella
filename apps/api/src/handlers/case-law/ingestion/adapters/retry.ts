@@ -1,28 +1,34 @@
-// parser-output-unchanged: fetch-stage observation preserves publisher response and error identity.
+// parser-output-unchanged: retries and fetch-stage observation affect request scheduling and diagnostics only, not parsed output.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
- * {@link fetchPublisher} is one gated request; {@link fetchWithRetry} adds
- * exponential backoff with jitter over it. Both reserve the publisher's slot
+ * {@link fetchPublisher} gates each request and accepts an opt-in publisher
+ * backoff policy; {@link fetchWithRetry} retains the legacy retry policy.
+ * Both reserve the publisher's slot
  * first, so an adapter cannot spend a request the budget in
  * `publisher-policy.ts` never saw, and neither can forget to.
  */
 
-import { panic } from "better-result";
+import { Result, panic } from "better-result";
 
 import { fetchWithTimeout, type FetchWithTimeoutInit } from "@stll/fetch";
 import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
+import { Temporal } from "@stll/time";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
+  ADAPTER_PUBLISHER_GATES,
+  deferPublisherGate,
   reservePublisherSlot,
   reservePublisherGateSlot,
   type PublisherGateId,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 import { logger } from "@/api/lib/observability/logger";
 
+import { abortableSleep } from "./publisher-request-gate";
 import { INGESTION_USER_AGENT, isTimeoutError } from "./utils";
 
 export type PublisherFetchInit = FetchWithTimeoutInit & {
@@ -32,32 +38,41 @@ export type PublisherFetchInit = FetchWithTimeoutInit & {
   /** A supplementary publisher, distinct from the decision listing's host. */
   publisherGate?: PublisherGateId | undefined;
   expectedContentType?: "pdf" | undefined;
+  retryPolicy?: "publisher-backoff";
+  /** Publisher-defined redirect target; use manual redirects to inspect it. */
+  isRateLimitRedirect?: (response: Response) => boolean;
 };
 
 /**
- * One request to a case-law publisher, behind that publisher's gate.
+ * A case-law publisher request, with optional retries behind the shared gate.
  *
  * The slot is reserved before the request, not after it: a reservation that
  * followed the call would pace the loop while letting the burst through.
  */
 export const fetchPublisher = async (
   url: string | URL,
-  {
+  { retryPolicy, ...init }: PublisherFetchInit,
+): Promise<Response> => {
+  if (retryPolicy === "publisher-backoff") {
+    return await retryPublisherRequest(url, init);
+  }
+  const {
     adapterKey,
     publisherGate,
     fetchStage,
     expectedContentType,
-    ...init
-  }: PublisherFetchInit,
-): Promise<Response> => {
+    isRateLimitRedirect: _isRateLimitRedirect,
+    ...requestInit
+  } = init;
   if (publisherGate === undefined) {
-    await reservePublisherSlot(adapterKey, init.signal);
+    await reservePublisherSlot(adapterKey, requestInit.signal);
   } else {
-    await reservePublisherGateSlot(publisherGate, init.signal);
+    await reservePublisherGateSlot(publisherGate, requestInit.signal);
   }
+  // Each publisher-backoff attempt re-enters here, so every attempt is gated and observed.
   const request = async () =>
     // oxlint-disable-next-line require-safe-outbound-target/require-safe-outbound-target -- the publisher fetch boundary: the lint rule checks each target where fetchPublisher or fetchWithRetry is called
-    await fetchWithTimeout(url, init);
+    await fetchWithTimeout(url, requestInit);
   if (fetchStage === "listing") {
     return await request();
   }
@@ -208,4 +223,199 @@ export const fetchWithRetry = async (
 
   // Unreachable: the loop always returns or throws
   return panic("fetchWithRetry: unreachable");
+};
+
+type PublisherRateLimitRefusalErrorOptions = {
+  cursor: string | null;
+  publisherKey: PublisherGateId;
+  status: number;
+  cooldownUntilEpochMs: number;
+  adapterKey: AdapterKey;
+};
+
+/** A terminal refusal for this cycle; its shared cooldown uses the Redis TIME clock. */
+export class PublisherRateLimitRefusalError extends AdapterFetchError {
+  readonly publisherKey: PublisherGateId;
+  readonly status: number;
+  readonly cooldownUntilEpochMs: number;
+
+  constructor({
+    publisherKey,
+    status,
+    cooldownUntilEpochMs,
+    adapterKey,
+    cursor,
+  }: PublisherRateLimitRefusalErrorOptions) {
+    super({
+      message: `Publisher rate limit refused: ${status}`,
+      adapterKey,
+      cursor,
+      httpStatus: status,
+    });
+    this.name = "PublisherRateLimitRefusalError";
+    this.publisherKey = publisherKey;
+    this.status = status;
+    this.cooldownUntilEpochMs = cooldownUntilEpochMs;
+  }
+}
+
+const PUBLISHER_MAX_ATTEMPTS = 6;
+const PUBLISHER_BASE_DELAY_MS = 2000;
+const PUBLISHER_MAX_DELAY_MS = 300_000;
+const RETRY_AFTER_MAX_MS = 900_000;
+const PUBLISHER_RETRY_STATUSES = new Set([408, 502, 503, 504]);
+
+type PublisherRetryDelayOptions = {
+  attempt: number;
+  retryAfter: string | null;
+  now: number;
+  random: number;
+};
+
+/** Full jitter, with the publisher's bounded Retry-After as a minimum. */
+export const publisherRetryDelay = ({
+  attempt,
+  retryAfter,
+  now,
+  random,
+}: PublisherRetryDelayOptions): number => {
+  const jitter =
+    random *
+    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+  if (retryAfter === null) {
+    return jitter;
+  }
+  const value = retryAfter.trim();
+  // The platform date parser accepts bare numbers and non-HTTP dates; reject those rather
+  // than interpreting malformed delta-seconds as a calendar date.
+  let parsed = Number.NaN;
+  if (/^\d+$/u.test(value)) {
+    parsed = Number(value) * 1000;
+  } else if (
+    /^(?:(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun), \d{2} [A-Z][a-z]{2} \d{4} \d{2}:\d{2}:\d{2} GMT|(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday), \d{2}-[A-Z][a-z]{2}-\d{2} \d{2}:\d{2}:\d{2} GMT|(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun) [A-Z][a-z]{2} [ \d]\d \d{2}:\d{2}:\d{2} \d{4})$/u.test(
+      value,
+    )
+  ) {
+    // HTTP-date is a legacy protocol grammar rather than Temporal's ISO grammar.
+    parsed = new Date(value).getTime() - now;
+  }
+  if (Number.isNaN(parsed)) {
+    return jitter;
+  }
+  return Math.max(jitter, Math.min(Math.max(0, parsed), RETRY_AFTER_MAX_MS));
+};
+
+const isPublisherTimeout = (cause: unknown): boolean =>
+  isTimeoutError(cause) ||
+  (cause instanceof Error &&
+    "code" in cause &&
+    (cause.code === "ETIMEDOUT" || cause.code === "ESOCKETTIMEDOUT"));
+
+type PublisherRetryDependencies = {
+  request: (url: string | URL, init: PublisherFetchInit) => Promise<Response>;
+  defer: (durationMs: number, signal?: AbortSignal) => Promise<number>;
+  sleep: (durationMs: number, signal?: AbortSignal) => Promise<void>;
+  now: () => number;
+  random: () => number;
+};
+
+/** Opt-in retry policy; existing publishers retain their request semantics. */
+export const retryPublisherRequest = async (
+  url: string | URL,
+  init: PublisherFetchInit,
+  dependencies?: PublisherRetryDependencies,
+): Promise<Response> => {
+  const runtime = dependencies ?? {
+    request: fetchPublisher,
+    defer: async (durationMs: number, signal?: AbortSignal) =>
+      await deferPublisherGate(
+        init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey],
+        durationMs,
+        signal,
+      ),
+    sleep: abortableSleep,
+    now: () => Temporal.Now.instant().epochMilliseconds,
+    random: Math.random,
+  };
+  const {
+    retryPolicy: _retryPolicy,
+    isRateLimitRedirect,
+    ...requestInit
+  } = init;
+  for (let attempt = 0; attempt < PUBLISHER_MAX_ATTEMPTS; attempt++) {
+    init.signal?.throwIfAborted();
+    const fetched = await Result.tryPromise({
+      try: async () => await runtime.request(url, requestInit),
+      catch: (cause) =>
+        new AdapterFetchError({
+          message: "Publisher request failed",
+          adapterKey: init.adapterKey,
+          cursor: null,
+          cause,
+        }),
+    });
+    init.signal?.throwIfAborted();
+    if (Result.isError(fetched) && !isPublisherTimeout(fetched.error.cause)) {
+      throw fetched.error;
+    }
+    if (
+      Result.isOk(fetched) &&
+      (fetched.value.status === 429 || isRateLimitRedirect?.(fetched.value))
+    ) {
+      const delay = Math.ceil(
+        publisherRetryDelay({
+          attempt,
+          retryAfter: fetched.value.headers.get("Retry-After"),
+          now: runtime.now(),
+          random: runtime.random(),
+        }),
+      );
+      const cooldownUntilEpochMs = await runtime.defer(delay, init.signal);
+      await fetched.value.body?.cancel();
+      throw new PublisherRateLimitRefusalError({
+        cursor: null,
+        publisherKey:
+          init.publisherGate ?? ADAPTER_PUBLISHER_GATES[init.adapterKey],
+        status: fetched.value.status,
+        cooldownUntilEpochMs,
+        adapterKey: init.adapterKey,
+      });
+    }
+    if (
+      Result.isOk(fetched) &&
+      !PUBLISHER_RETRY_STATUSES.has(fetched.value.status)
+    ) {
+      return fetched.value;
+    }
+    if (attempt === PUBLISHER_MAX_ATTEMPTS - 1) {
+      if (Result.isError(fetched)) {
+        throw fetched.error;
+      }
+      await fetched.value.body?.cancel();
+      throw new AdapterFetchError({
+        message: `Publisher retry budget exhausted: ${fetched.value.status}`,
+        adapterKey: init.adapterKey,
+        cursor: null,
+        httpStatus: fetched.value.status,
+      });
+    }
+    const delay = Math.ceil(
+      publisherRetryDelay({
+        attempt,
+        retryAfter: Result.isOk(fetched)
+          ? fetched.value.headers.get("Retry-After")
+          : null,
+        now: runtime.now(),
+        random: runtime.random(),
+      }),
+    );
+    // Publish the cooldown before sleeping. The Redis gate checks it before
+    // every ECJ request, including slots reserved before this backoff began.
+    await runtime.defer(delay, init.signal);
+    if (Result.isOk(fetched)) {
+      await fetched.value.body?.cancel();
+    }
+    await runtime.sleep(delay, init.signal);
+  }
+  return panic("retryPublisherRequest: unreachable");
 };
