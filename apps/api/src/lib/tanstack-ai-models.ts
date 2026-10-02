@@ -60,6 +60,7 @@ import {
   isManagedProviderAvailable,
   managedProviderUnavailable,
 } from "@/api/lib/chat/provider-data-policy";
+import { withProviderImageInput } from "@/api/lib/chat/provider-image-input";
 import { withProviderStreamContract } from "@/api/lib/chat/provider-stream-contract";
 import { validateDataUrl } from "@/api/lib/data-url";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -828,15 +829,19 @@ export const createTanStackTextAdapterFactory = (
       throw availability.error;
     }
   }
-  const factory = createProviderTextAdapterFactory(options);
-  return (modelId) => withProviderStreamContract(factory(modelId), stopReasons);
+  const provider = resolveTanStackTextProvider(options);
+  const factory = createProviderTextAdapterFactory({ ...options, provider });
+  return (modelId) =>
+    withProviderStreamContract(
+      withProviderImageInput(factory(modelId), provider),
+      stopReasons,
+    );
 };
 
 const createProviderTextAdapterFactory = (
-  options: TanStackModelFactoryOptions,
+  options: TanStackModelFactoryOptions & { provider: TanStackTextProvider },
 ): TanStackTextAdapterFactory => {
-  const { provider, apiKey, region } = options;
-  const supportedProvider = resolveTanStackTextProvider({ provider, region });
+  const { provider: supportedProvider, apiKey } = options;
 
   switch (supportedProvider) {
     case "google": {
