@@ -4,6 +4,7 @@ import {
   isOptionalArrayOf,
 } from "../shared/guards.js";
 import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
+import type { RegistryClientOptions } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import { PrhAPIError, PrhRequestError, PrhValidationError } from "./errors.js";
 import { parseCompany, parseSearchEntry } from "./parse.js";
@@ -109,9 +110,14 @@ const parseErrorBody = (value: unknown): PrhErrorResponse => {
   return result;
 };
 
-const prhGet = async (url: string): Promise<PrhCompaniesResponse> => {
+const prhGet = async (
+  url: string,
+  options: RegistryClientOptions,
+): Promise<PrhCompaniesResponse> => {
   const response = await performRegistryRequest({
     url,
+    observer: options.observer,
+    signal: options.signal,
     init: { headers: { Accept: "application/json" } },
     wrapRequestError: (cause) =>
       new PrhRequestError(url, "PRH request failed", { cause }),
@@ -159,18 +165,19 @@ const prhGet = async (url: string): Promise<PrhCompaniesResponse> => {
  */
 export const lookupByBusinessId = async (
   businessId: string,
+  options: RegistryClientOptions,
 ): Promise<PrhCompany | null> => {
   const normalized = normalizeBusinessId(businessId);
   if (!validateBusinessId(normalized)) {
     throw new PrhValidationError(`Invalid Y-tunnus: ${businessId}`);
   }
   const params = new URLSearchParams({ businessId: normalized });
-  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`);
+  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`, options);
   const hit = data.companies.at(0);
   return hit ? parseCompany(hit) : null;
 };
 
-export type SearchOptions = {
+export type SearchOptions = RegistryClientOptions & {
   /** Maximum number of results. PRH caps each page at 100. @default 50 */
   limit?: number;
 };
@@ -187,19 +194,19 @@ export type SearchOptions = {
  */
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<PrhSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     throw new PrhValidationError("Search name must not be empty");
   }
-  const requestedLimit = options?.limit ?? DEFAULT_SEARCH_LIMIT;
+  const requestedLimit = options.limit ?? DEFAULT_SEARCH_LIMIT;
   const limit = clampSearchLimit(requestedLimit, MAX_SEARCH_LIMIT);
   const params = new URLSearchParams({
     name: trimmed,
     maxResults: limit.toString(),
   });
-  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`);
+  const data = await prhGet(`${COMPANIES_URL}?${params.toString()}`, options);
   // Slice defensively in case PRH returns more than the requested
   // maxResults; callers should still get exactly the clamped limit.
   return data.companies.slice(0, limit).map(parseSearchEntry);

@@ -296,6 +296,9 @@ describe("the hits that are the named decision", () => {
       kind: "docket",
       jurisdiction: "USA",
       value: "No. 21-123",
+      // Every digit is the docket's own: no sheet is read off it.
+      family: "No. 21-123",
+      selector: { kind: "none" },
     });
     expect(
       parseDecisionQuery("2079", { grammar: DECISION_DOCKET_GRAMMARS.USA }),

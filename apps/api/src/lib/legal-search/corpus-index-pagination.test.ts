@@ -121,6 +121,7 @@ const readPage = async (
   order: CorpusSearchOrder = RELEVANCE_ORDER,
 ) =>
   await readCorpusIndexSearchPage({
+    observer: "unobserved",
     cluster: "q09",
     indexId: "case_law_v5_cs_sk",
     query: "text:promlčení",
@@ -289,6 +290,7 @@ describe("a page settles within one scan round", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
@@ -409,6 +411,7 @@ describe("the scan is bounded by engine round trips", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
@@ -530,6 +533,7 @@ describe("a passage flood does not strand the reader", () => {
     parsedCursor: SearchCursor | null = null,
   ) =>
     await readCorpusIndexSearchPage({
+      observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
       query: "text:smlouva",
@@ -625,6 +629,7 @@ describe("residual filters preserve progress past empty scan windows", () => {
     order: CorpusSearchOrder,
   ) =>
     await readCorpusIndexSearchPage({
+      observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_cs_sk",
       query: "text:promlčení",
@@ -743,6 +748,7 @@ describe("split legislation stays one hit across cursor pages", () => {
 
     const readLegislationPage = async (parsedCursor: SearchCursor | null) =>
       await readCorpusIndexSearchPage({
+        observer: "unobserved",
         cluster: "q09",
         indexId: "legislation_v2",
         query: "text:ustanovení",
@@ -797,6 +803,7 @@ describe("ranker-folded candidates stay folded across pages", () => {
     parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
+      observer: "unobserved",
       cluster: "q09",
       indexId: "case_law_v5_eu",
       query: "text:google",
@@ -1240,6 +1247,7 @@ describe("folded acts stay folded across capped windows", () => {
     parsedCursor: SearchCursor | null,
   ) =>
     await readCorpusIndexSearchPage({
+      observer: "unobserved",
       cluster: "q09",
       indexId: "legislation_v2_cze",
       query: "text:smlouva",
