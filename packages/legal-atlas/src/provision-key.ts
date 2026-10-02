@@ -2,8 +2,10 @@ import { Result } from "better-result";
 import * as v from "valibot";
 
 import type { CaseLawJurisdiction } from "@stll/api-contract/case-law-jurisdictions";
-import { provisionIdentitySchemas } from "@stll/api-contract/provision-key";
-import type { ProvisionRef } from "@stll/api-contract/provision-key";
+import type {
+  ProvisionKey,
+  ProvisionRef,
+} from "@stll/api-contract/provision-key";
 import { provisionReferenceSchema } from "@stll/legal-ast/provision-reference";
 import type { ProvisionReference } from "@stll/legal-ast/provision-reference";
 
@@ -17,7 +19,38 @@ const supportedJurisdictions = supportedGrammars.map(
 );
 export type SupportedProvisionJurisdiction =
   (typeof supportedJurisdictions)[number];
-const schemas = provisionIdentitySchemas(supportedJurisdictions);
+const keyPartSchema = v.pipe(
+  v.string(),
+  v.minLength(1),
+  v.check(
+    (value) =>
+      value.isWellFormed() &&
+      !/[\p{Cc}\p{Cf}]/u.test(value) &&
+      value === value.normalize("NFC"),
+    "Expected canonical provision identity",
+  ),
+);
+const entries = {
+  jurisdiction: v.picklist(supportedJurisdictions),
+  workIdentifier: keyPartSchema,
+  anchor: keyPartSchema,
+};
+// Private brand pipes: exported operations validate semantic identity before minting.
+const keySchema = v.pipe(
+  v.object(entries),
+  v.brand("ProvisionKey"),
+  v.readonly(),
+) satisfies v.GenericSchema<ProvisionKey<SupportedProvisionJurisdiction>>;
+const refSchema = v.pipe(
+  v.object({
+    ...entries,
+    workEli: v.nullable(keyPartSchema),
+    reference: v.pipe(provisionReferenceSchema, v.readonly()),
+  }),
+  v.brand("ProvisionKey"),
+  v.brand("ProvisionRef"),
+  v.readonly(),
+) satisfies v.GenericSchema<ProvisionRef<SupportedProvisionJurisdiction>>;
 const keyTuple = v.strictTuple([
   v.picklist(supportedJurisdictions),
   v.string(),
@@ -35,7 +68,7 @@ export const parseProvisionKey = (raw: string) => {
     return null;
   }
   const [jurisdiction, workIdentifier, anchor] = tuple.output;
-  const key = v.safeParse(schemas.key, {
+  const key = v.safeParse(keySchema, {
     jurisdiction,
     workIdentifier,
     anchor,
@@ -48,6 +81,13 @@ export const parseProvisionKey = (raw: string) => {
   if (work?.identifier !== key.output.workIdentifier) {
     return null;
   }
+  const reference = grammar.parseAnchor(key.output.anchor);
+  if (
+    reference === null ||
+    !v.safeParse(provisionReferenceSchema, reference).success ||
+    grammar.anchor(reference) !== key.output.anchor
+  )
+    {return null;}
   return key.output;
 };
 
@@ -88,7 +128,7 @@ export const provisionRefOf = ({
   if (normalized === null) {
     return { status: "invalid_reference" };
   }
-  const provision = v.safeParse(schemas.ref, {
+  const provision = v.safeParse(refSchema, {
     jurisdiction: grammar.jurisdiction,
     workIdentifier: work.identifier,
     workEli: work.eli,

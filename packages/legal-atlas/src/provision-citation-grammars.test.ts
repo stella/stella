@@ -44,7 +44,7 @@ const testGrammar = (
       canonicalAbbreviation: "test.",
       ...entry,
     })),
-    anchor: (reference) => `par_${String(reference.section)}`,
+    anchorSeparator: "-",
     connectors: [","],
     gazette: {
       eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -52,7 +52,14 @@ const testGrammar = (
       source: String.raw`(?<number>\d+)\/(?<year>\d{4}) Gz\.`,
     },
     jurisdiction: "EU",
-    levels: [{ key: "section", marker: "§", value: String.raw`\d+` }],
+    levels: [
+      {
+        key: "section",
+        marker: "§",
+        value: String.raw`\d+`,
+        anchorMarker: "par_",
+      },
+    ],
     unit: "section",
   });
 
@@ -65,12 +72,7 @@ const articleGrammar = createProvisionCitationGrammar({
       patternSource: String.raw`k\.p\.c\.`,
     },
   ],
-  anchor: (reference) =>
-    [
-      `art_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
-      ...(reference.subsection === null ? [] : [`ust_${reference.subsection}`]),
-      ...(reference.point === null ? [] : [`pkt_${reference.point}`]),
-    ].join("-"),
+  anchorSeparator: "-",
   connectors: [",", String.raw`i(?=\s)`, String.raw`oraz(?=\s)`],
   gazette: {
     eli: ({ number, year }) => `https://example.test/${year}/${number}`,
@@ -79,9 +81,24 @@ const articleGrammar = createProvisionCitationGrammar({
   },
   jurisdiction: "POL",
   levels: [
-    { key: "section", marker: String.raw`art\.`, value: String.raw`\d+[a-z]?` },
-    { key: "subsection", marker: String.raw`ust\.`, value: String.raw`\d+` },
-    { key: "point", marker: "pkt", value: String.raw`\d+` },
+    {
+      key: "section",
+      marker: String.raw`art\.`,
+      value: String.raw`\d+[a-z]?`,
+      anchorMarker: "art_",
+    },
+    {
+      key: "subsection",
+      marker: String.raw`ust\.`,
+      value: String.raw`\d+`,
+      anchorMarker: "ust_",
+    },
+    {
+      key: "point",
+      marker: "pkt",
+      value: String.raw`\d+`,
+      anchorMarker: "pkt_",
+    },
   ],
   unit: "article",
 });

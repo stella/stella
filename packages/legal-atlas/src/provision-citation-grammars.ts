@@ -71,13 +71,14 @@ export type ProvisionLevel = {
    * typography can be matched and dropped (`(?<value>[a-z])\)?`).
    */
   value: string;
+  /** Publisher anchor prefix for this level, including its delimiter. */
+  anchorMarker: string;
 };
 
 type ProvisionCitationGrammarSpec<TJurisdiction extends CaseLawJurisdiction> = {
   /** Abbreviations courts of this jurisdiction use for its own acts. */
   abbreviations: readonly StatuteAbbreviationEntry[];
-  /** Anchor id in this jurisdiction's statute AST for a parsed reference. */
-  anchor: (reference: ProvisionReference) => string;
+  anchorSeparator: string;
   /**
    * RegExp sources that join provisions in one citation (`,`, `a`, `i`).
    * Whitespace around a connector is the parser's; a word connector guards
@@ -104,6 +105,7 @@ export type SupportedProvisionCitationGrammar<
   TJurisdiction extends CaseLawJurisdiction = CaseLawJurisdiction,
 > = {
   anchor: (reference: ProvisionReference) => string;
+  parseAnchor: (raw: string) => ProvisionReference | null;
   unit: ProvisionUnit;
   gazette: {
     eli: (work: GazetteWork) => string;
@@ -233,7 +235,7 @@ export const createProvisionCitationGrammar = <
   const TJurisdiction extends CaseLawJurisdiction,
 >({
   abbreviations,
-  anchor,
+  anchorSeparator,
   connectors,
   gazette,
   jurisdiction,
@@ -247,6 +249,39 @@ export const createProvisionCitationGrammar = <
       value: sticky(value),
     }),
   );
+  const anchor = (reference: ProvisionReference): string =>
+    levels
+      .flatMap((level) => {
+        const value =
+          level.key === "section"
+            ? `${String(reference.section)}${reference.sectionSuffix ?? ""}`
+            : reference[level.key];
+        return value === null
+          ? []
+          : [`${level.anchorMarker}${canonicalDesignator(value)}`];
+      })
+      .join(anchorSeparator);
+  const parseAnchor = (raw: string): ProvisionReference | null => {
+    const parts = raw.split(anchorSeparator);
+    const values: (string | null)[] = [];
+    let index = 0;
+    for (const level of levels) {
+      const part = parts.at(index);
+      if (part === undefined || !part.startsWith(level.anchorMarker)) {
+        values.push(null);
+        continue;
+      }
+      const value = part.slice(level.anchorMarker.length);
+      const compiled = compiledLevels.at(values.length);
+      if (compiled === undefined) {return null;}
+      const match = matchAt(compiled.value, value, 0);
+      if (match === null || match[0].length !== value.length) {return null;}
+      values.push(valueOf(match));
+      index++;
+    }
+    if (index !== parts.length) {return null;}
+    return referenceOf(compiledLevels, values, unit);
+  };
   const head = new RegExp(levels[0].marker, "giu");
   const connector = sticky(`\\s*(?:${connectors.join("|")})\\s*`);
   const abbreviationAfter =
@@ -466,6 +501,7 @@ export const createProvisionCitationGrammar = <
       return referenceOf(compiledLevels, element.values, unit);
     },
     anchor,
+    parseAnchor,
     gazette: {
       eli: gazette.eli,
       parse: (raw) => {
@@ -539,18 +575,6 @@ const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
   jurisdiction: TJurisdiction,
 ) => ({ jurisdiction, status: "unsupported" as const });
 
-const czechProvisionAnchor = (reference: ProvisionReference): string =>
-  [
-    `par_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
-    ...(reference.subsection === null
-      ? []
-      : [`odst_${canonicalDesignator(reference.subsection)}`]),
-    ...(reference.letter === null ? [] : [`pism_${reference.letter}`]),
-    ...(reference.point === null
-      ? []
-      : [`bod_${canonicalDesignator(reference.point)}`]),
-  ].join("-");
-
 /**
  * The public legislation corpus holds Czech acts only. A grammar for a
  * jurisdiction whose acts no reader can open would locate links that resolve
@@ -566,7 +590,7 @@ export const PROVISION_CITATION_GRAMMARS = {
         patternSource: String.raw`s\s*\.?\s*ř\s*\.?\s*s\s*\.?(?![\p{L}\p{N}])`,
       },
     ],
-    anchor: czechProvisionAnchor,
+    anchorSeparator: "-",
     connectors: [",", String.raw`a(?=\s)`, String.raw`ve\s+spojení\s+s(?=\s)`],
     gazette: {
       eli: ({ number, year }) =>
@@ -586,19 +610,27 @@ export const PROVISION_CITATION_GRAMMARS = {
     },
     jurisdiction: "CZE",
     levels: [
-      { key: "section", marker: "§§?", value: String.raw`\d{1,4}[a-z]?` },
+      {
+        key: "section",
+        marker: "§§?",
+        value: String.raw`\d{1,4}[a-z]?`,
+        anchorMarker: "par_",
+      },
       {
         key: "subsection",
+        anchorMarker: "odst_",
         marker: String.raw`odst\.`,
         value: String.raw`\d+[a-z]?`,
       },
       {
         key: "letter",
+        anchorMarker: "pism_",
         marker: String.raw`písm\.`,
         value: String.raw`(?<value>[a-z])\)?`,
       },
       {
         key: "point",
+        anchorMarker: "bod_",
         marker: String.raw`bod(?![\p{L}])`,
         value: String.raw`\d+`,
       },

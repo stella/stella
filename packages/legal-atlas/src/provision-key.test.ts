@@ -67,11 +67,12 @@ describe("provision identity construction", () => {
           const { provision } = constructed;
           expect(provision.reference).toEqual(ref);
           expect(provision.workEli).toBe(work.eli);
-          expect(parseProvisionKey(formatProvisionKey(provision))).toEqual({
-            jurisdiction: provision.jurisdiction,
-            workIdentifier: work.identifier,
-            anchor: provision.anchor,
-          });
+          const decoded = parseProvisionKey(formatProvisionKey(provision));
+          expect(decoded).not.toBeNull();
+          if (decoded === null) {return;}
+          expect(decoded.jurisdiction).toBe(provision.jurisdiction);
+          expect(decoded.workIdentifier).toBe(work.identifier);
+          expect(decoded.anchor).toBe(provision.anchor);
         },
       ),
     );
@@ -123,7 +124,23 @@ describe("provision identity construction", () => {
         expect(constructed.provision.workIdentifier).toBe(
           capture.workIdentifier,
         );
-        expect(constructed.provision.anchor).toBe(url.value.split("#").at(1));
+        const recordedPath = new URL(
+          url.value,
+          "https://www.e-sbirka.cz",
+        ).pathname.split("/");
+        const collection = recordedPath.at(1);
+        const year = recordedPath.at(2);
+        const number = recordedPath.at(3);
+        expect(collection).toBe("sb");
+        expect(year).toMatch(/^\d{4}$/u);
+        expect(number).toMatch(/^\d+$/u);
+        expect(constructed.provision.workEli).toBe(
+          `https://www.e-sbirka.cz/eli/cz/${collection}/${year}/${number}`,
+        );
+        expect(constructed.provision.anchor).toBe(
+          new URL(url.value, "https://www.e-sbirka.cz").hash.slice(1),
+        );
+        expect(grammar.parseAnchor(constructed.provision.anchor)).toEqual(ref);
       }
     },
   );
@@ -163,7 +180,7 @@ describe("provision identity construction", () => {
             return;
           }
           expect(constructed.provision.anchor).toBe(
-            row.url.value.split("#").at(1),
+            new URL(row.url.value, "https://www.e-sbirka.cz").hash.slice(1),
           );
         },
       ),
@@ -185,24 +202,56 @@ describe("provision identity construction", () => {
       { minLength: 1, maxLength: 40 },
     )
     .map((parts) => parts.join(""));
-  test("provision keys preserve delimiter-heavy anchors and normalize Unicode", () => {
+  test("non-provision anchors cannot become branded keys", () => {
     assertProperty(
-      "provision keys preserve delimiter-heavy anchors and normalize Unicode",
+      "non-provision anchors cannot become branded keys",
       fc.property(weightedAnchors, (anchor) => {
-        const parsed = parseProvisionKey(
-          JSON.stringify(["CZE", "89/2012 Sb.", anchor]),
-        );
-        expect(parsed).not.toBeNull();
-        if (parsed === null) {
-          return;
-        }
-        expect(parsed.anchor).toBe(anchor.normalize("NFC"));
-        expect(formatProvisionKey(parsed)).toBe(
-          JSON.stringify(["CZE", "89/2012 Sb.", anchor.normalize("NFC")]),
-        );
-        expect(parseProvisionKey(formatProvisionKey(parsed))).toEqual(parsed);
+        expect(
+          parseProvisionKey(JSON.stringify(["CZE", "89/2012 Sb.", anchor])),
+        ).toBeNull();
       }),
     );
+  });
+
+  test("controls and lone surrogates cannot enter provision keys", () => {
+    assertProperty(
+      "controls and lone surrogates cannot enter provision keys",
+      fc.property(
+        fc.oneof(
+          fc.integer({ min: 0, max: 31 }),
+          fc.integer({ min: 127, max: 159 }),
+          fc.integer({ min: 0xd8_00, max: 0xdf_ff }),
+        ),
+        (code) => {
+          expect(
+            parseProvisionKey(
+              JSON.stringify([
+                "CZE",
+                "89/2012 Sb.",
+                `par_5${String.fromCodePoint(code)}`,
+              ]),
+            ),
+          ).toBeNull();
+        },
+      ),
+    );
+  });
+
+  test.each([
+    "par_05",
+    "par_5-odst_01",
+    "par_5-pism_a)",
+    "par_5-pism_A",
+    "par_5-bod_2-odst_1",
+    "par_0",
+    "par_5-odst_",
+    "]",
+    "par_5e\u0301",
+    "par_5é",
+  ])("rejects noncanonical publisher anchor %s", (anchor) => {
+    expect(
+      parseProvisionKey(JSON.stringify(["CZE", "89/2012 Sb.", anchor])),
+    ).toBeNull();
   });
 
   test.each([
@@ -321,22 +370,20 @@ describe("provision identity construction", () => {
       sentence: null,
       openEnded: false,
     } as const;
-    expect(
-      provisionRefOf({
-        jurisdiction: "CZE",
-        workIdentifier: "č. 00089/2012 Sb.",
-        reference: ref,
-      }),
-    ).toEqual({
-      status: "resolved",
-      provision: {
-        jurisdiction: "CZE",
-        workIdentifier: "89/2012 Sb.",
-        workEli: "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
-        reference: ref,
-        anchor: "par_5-odst_2",
-      },
+    const normalized = provisionRefOf({
+      jurisdiction: "CZE",
+      workIdentifier: "č. 00089/2012 Sb.",
+      reference: ref,
     });
+    expect(normalized.status).toBe("resolved");
+    if (normalized.status !== "resolved") {return;}
+    expect(normalized.provision.jurisdiction).toBe("CZE");
+    expect(normalized.provision.workIdentifier).toBe("89/2012 Sb.");
+    expect(normalized.provision.workEli).toBe(
+      "https://www.e-sbirka.cz/eli/cz/sb/2012/89",
+    );
+    expect(normalized.provision.reference).toEqual(ref);
+    expect(normalized.provision.anchor).toBe("par_5-odst_2");
     expect(
       provisionRefOf({
         jurisdiction: "CZE",
