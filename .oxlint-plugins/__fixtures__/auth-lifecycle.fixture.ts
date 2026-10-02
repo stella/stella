@@ -22,6 +22,30 @@ declare const failure: Error;
 declare const scope: Parameters<typeof removeMember>[1];
 declare const transaction: Parameters<typeof removeMember>[0];
 
+export const notificationOrganizationOptions = {
+  // oxlint-disable-next-line auth-lifecycle/member-removal-revokes-artifacts -- fixture: required before hook
+  organizationHooks: {
+    afterRemoveMember: () => db.delete(unrelatedTable),
+  },
+};
+export const spreadOrganizationOptions = {
+  // oxlint-disable-next-line auth-lifecycle/member-removal-revokes-artifacts -- fixture: explicit before hook required
+  organizationHooks: { ...{} },
+};
+export const completeOrganizationOptions = {
+  // expect-clean: auth-lifecycle/member-removal-revokes-artifacts
+  organizationHooks: {
+    // expect-clean: auth-lifecycle/member-removal-revokes-artifacts
+    beforeRemoveMember: async () => {
+      await rootDb.transaction(async (tx) => {
+        await removeMember(tx, scope);
+      });
+    },
+    // expect-clean: auth-lifecycle/member-removal-revokes-artifacts
+    afterRemoveMember: () => db.delete(unrelatedTable),
+  },
+};
+
 export const afterNotificationHooks = {
   // expect-clean: auth-lifecycle/member-removal-revokes-artifacts
   afterRemoveMember: () => db.delete(unrelatedTable),

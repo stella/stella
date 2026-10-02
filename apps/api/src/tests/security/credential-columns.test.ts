@@ -21,10 +21,12 @@ import { assertProperty } from "@stll/property-testing";
 import { agentDelegation } from "@/api/db/agent-auth-schema";
 import { oauthConsent } from "@/api/db/auth-schema";
 import { bytea } from "@/api/db/columns";
+import { matterInboundAddresses } from "@/api/db/schema";
 import { ACCOUNT_DELETION_MANUAL_TABLES } from "@/api/lib/account-deletion-steps";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
+import drizzleConfig from "../../../drizzle.config";
 import classificationData from "./credential-column-classifications.json";
 
 const reasonSchema = v.pipe(v.string(), v.trim(), v.minLength(1));
@@ -56,7 +58,6 @@ type ClassificationRegistry = v.InferOutput<typeof registrySchema>;
 const classifications = v.parse(registrySchema, classificationData);
 
 const API_ROOT = path.resolve(import.meta.dir, "../../..");
-const DB_ROOT = path.join(API_ROOT, "src/db");
 const REGISTRY_PATH =
   "apps/api/src/tests/security/credential-column-classifications.json";
 const REPO_ROOT = path.resolve(API_ROOT, "../..");
@@ -96,20 +97,25 @@ const OPAQUE_CREDENTIAL_COLUMNS = new Set([
 ]);
 
 const discoverTables = async () => {
+  const schema = drizzleConfig.schema;
+  if (schema === undefined) {
+    panic("Migration schema configuration is empty");
+  }
+  const entries = typeof schema === "string" ? [schema] : schema;
+  const filenames = new Set<string>();
+  for (const entry of entries) {
+    const matches = [
+      ...new Bun.Glob(entry).scanSync({ cwd: API_ROOT, onlyFiles: true }),
+    ];
+    if (matches.length === 0) {
+      panic(`Migration schema entry matches no modules: ${entry}`);
+    }
+    for (const filename of matches) {
+      filenames.add(path.join(API_ROOT, filename));
+    }
+  }
   const tables = new Map<string, PgTable>();
-  for (const relativePath of new Bun.Glob("**/*.ts").scanSync({
-    cwd: DB_ROOT,
-    onlyFiles: true,
-  })) {
-    if (relativePath.endsWith(".test.ts") || relativePath.endsWith(".d.ts")) {
-      continue;
-    }
-    const filename = path.join(DB_ROOT, relativePath);
-    if (
-      !/\b(?:pgTable|p\.pgTable)\s*\(/u.test(readFileSync(filename, "utf-8"))
-    ) {
-      continue;
-    }
+  for (const filename of filenames) {
     const module = await import(pathToFileURL(filename).href);
     for (const value of Object.values(module)) {
       if (!is(value, PgTable)) {
@@ -286,6 +292,13 @@ const missingCleanupTables = (handled: ReadonlySet<string>) =>
   organizationCredentialTables().filter((name) => !handled.has(name));
 
 describe("stored credential column classifications", () => {
+  test("discovers migration schema tables registered through withRLS", () => {
+    expect(tables).toContain(matterInboundAddresses);
+    expect(
+      credentialColumns(tables).has("matter_inbound_addresses.token"),
+    ).toBe(true);
+  });
+
   test("classifies every selected schema column and keeps no stale decisions", () => {
     expect(compareRegistry({ tables, registry: classifications })).toEqual({
       unclassified: [],

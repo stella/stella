@@ -251,9 +251,21 @@ export default eslintCompatPlugin({
         },
       },
       createOnce(context) {
+        const organizationHooks: AstNode[] = [];
         return {
+          before() {
+            organizationHooks.length = 0;
+          },
           Property(node) {
             const hookName = getPropertyName(node.key);
+            if (
+              hookName === "organizationHooks" &&
+              isAstNode(node.value) &&
+              node.value.type === "ObjectExpression"
+            ) {
+              organizationHooks.push(node);
+              return;
+            }
             if (
               hookName !== "beforeRemoveMember" &&
               hookName !== "afterRemoveMember"
@@ -289,6 +301,26 @@ export default eslintCompatPlugin({
               node,
               messageId: "missingAuthArtifactCleanup",
             });
+          },
+          "Program:exit"() {
+            for (const node of organizationHooks) {
+              if (
+                isAstNode(node.value) &&
+                Array.isArray(node.value.properties) &&
+                node.value.properties.some(
+                  (property) =>
+                    isAstNode(property) &&
+                    property.type === "Property" &&
+                    getPropertyName(property.key) === "beforeRemoveMember",
+                )
+              ) {
+                continue;
+              }
+              context.report({
+                node,
+                messageId: "missingAuthArtifactCleanup",
+              });
+            }
           },
         };
       },
