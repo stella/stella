@@ -2,6 +2,7 @@ import { panic, Result } from "better-result";
 import { and, desc, eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
+import { AGENT_INPUT_NORMALIZATION_KIND } from "@stll/agent-input";
 import { resourceRef, RESOURCE_TYPE } from "@stll/api-contract";
 import { DECISION_READ_RESOLUTION } from "@stll/api-contract/case-law-decision-resolution";
 import {
@@ -109,6 +110,7 @@ import { decodeCursor } from "@/api/lib/search/cursor";
 import { getSearchReader } from "@/api/lib/search/provider";
 import { withTimeout } from "@/api/lib/with-timeout";
 import { resolveCourtFilter } from "@/api/mcp/case-law-court-filter";
+import { decisionOutline } from "@/api/mcp/case-law-decision-outline";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { hasEffectiveAuthority } from "@/api/mcp/effective-authority";
 import { loadPracticeJurisdictions } from "@/api/mcp/practice-jurisdictions";
@@ -154,7 +156,7 @@ import {
   MAX_SEARCH_LIMIT,
   notFoundResult,
   nullAsAbsent,
-  resolveWindowBounds,
+  resolveTextWindowBounds,
   structuredErrorResult,
   toolDataResult,
   toPlainCorpusText,
@@ -793,6 +795,7 @@ const DECISION_READ_INCLUDE = [
   "textFields",
   "source",
   "citations",
+  "outline",
 ] as const;
 
 const readCaseLawDecisionArgsSchema = nullAsAbsent(
@@ -805,6 +808,17 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
         `The decisions to read, at most ${LIMITS.caseLawDecisionBatchMax} per call. Each id is answered on its own, so one unknown id does not sink the rest.`,
       ),
     ),
+    max_chars: v.optional(
+      v.pipe(
+        v.number(),
+        v.integer(),
+        v.minValue(1),
+        v.maxValue(MCP_CONTENT_MAX_CHARS),
+        v.description(
+          `Text window size, 1–${MCP_CONTENT_MAX_CHARS} characters. Accepted only alongside a single decision id.`,
+        ),
+      ),
+    ),
     cursor: cursorInput({
       description:
         "Opaque cursor from a previous call to read the next window of one decision's text and citations. Accepted only alongside a single decision id.",
@@ -813,7 +827,7 @@ const readCaseLawDecisionArgsSchema = nullAsAbsent(
       v.pipe(
         v.array(v.picklist(DECISION_READ_INCLUDE)),
         v.description(
-          "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window.",
+          "Optional fields to return: details (court, dates, identifiers and URLs), metadata, textFields (abstract, headnote, legalSentence, summary), source, citations (both directions), outline (single decision only). Omit for all on the cursor-less window and only unfinished citation pages on continuations. An empty list returns text and identity only. Pass selected fields again with a cursor to request them on that window.",
         ),
       ),
     ),
@@ -1056,17 +1070,23 @@ export const STELLA_TOOL_DEFINITIONS = [
       openWorldHint: false,
     },
     description:
-      "Read decisions by `decision_ids[]`, answered in input order: `found` " +
-      "carries a decision, `not_found` and `pending` carry a message. Batch " +
-      "ids to share the text budget; read one id for a full window. Static " +
-      "details (metadata, textFields, source, URLs) appear on the cursor-less " +
-      "window only. `include` selects optional fields on any window; [] " +
-      "returns text and identity only. Text and unfinished citation lists " +
-      "are paged: pass nextCursor as cursor with that one id. Citation ids " +
-      "carry neither treatment nor surrounding text; for those call " +
+      "Read decisions by `decision_ids[]`, answered in input order. Batch ids " +
+      "share the text budget; `max_chars` sizes one id’s text window. Static " +
+      "details appear only on the cursor-less window. A single id also gets " +
+      "up to 100 outline headings or numbered paragraphs: pass an outline " +
+      "cursor with that id to jump there. `include` selects optional fields " +
+      "on any window; [] returns text and identity only. Text and unfinished " +
+      "citation lists are paged: pass nextCursor with that one id. Citation " +
+      "ids carry neither treatment nor surrounding text; for those call " +
       "read_case_law_citations ({ decision_id: '<uuid>', direction: 'cited_by' }).",
     inputSchema: readCaseLawDecisionArgsSchema,
-    inputNormalization: { include: { kind: "string-list" } },
+    inputNormalization: {
+      max_chars: {
+        kind: AGENT_INPUT_NORMALIZATION_KIND.number,
+        range: "clamp",
+      },
+      include: { kind: "string-list" },
+    },
     access: "read",
     anonymized: { exposure: "passthrough" },
     // Backed by the public case-law corpus (caseLawPublicReadDb), the same
@@ -2126,6 +2146,7 @@ const handleSearchCaseLawTool: TypedMcpToolHandler<
     const subCursor = resolved.cursors[index];
     const body = {
       query,
+      sentenceAlignedExcerpt: true,
       limit: perQueryLimit,
       ...(typeof subCursor === "string" ? { cursor: subCursor } : {}),
       ...(courtFilter === undefined ? {} : { court: courtFilter }),
@@ -2364,6 +2385,7 @@ type DecisionItemOptions = {
   readsSharedCorpus: boolean;
   /** The window this entry's share of the call's text budget allows. */
   maxTextChars: number;
+  outline: "include" | "omit";
   read: GatedDecisionRead;
   textOffset: number;
   firstWindow: boolean;
@@ -2371,9 +2393,28 @@ type DecisionItemOptions = {
   citationsCursor: DecisionCursorState["citations"];
 };
 
+const decisionIncludedFields = ({
+  include,
+  firstWindow,
+  citationsCursor,
+}: Pick<
+  DecisionItemOptions,
+  "include" | "firstWindow" | "citationsCursor"
+>) => {
+  if (include !== undefined) {
+    return new Set(include);
+  }
+  const fields = new Set(firstWindow ? DECISION_READ_INCLUDE : []);
+  if (citationsCursor !== null) {
+    fields.add("citations");
+  }
+  return fields;
+};
+
 const decisionItemResult = ({
   decisionId,
   maxTextChars,
+  outline,
   read,
   readsSharedCorpus,
   textOffset,
@@ -2407,24 +2448,34 @@ const decisionItemResult = ({
     id: brandPersistedCaseLawDecisionId(read.id),
   });
 
+  const blocks = aiTextAllowed
+    ? (parseUsableDocumentAst(read.documentAst)?.blocks ?? null)
+    : null;
   const plainText = aiTextAllowed
     ? toPlainCorpusText({
-        blocks: parseUsableDocumentAst(read.documentAst)?.blocks ?? null,
+        blocks,
         fulltext: read.fulltext,
       })
     : null;
   const textLength = plainText === null ? 0 : plainText.length;
 
-  const textBounds = resolveWindowBounds(textLength, textOffset, maxTextChars);
-  const includeCitations =
-    include === undefined
-      ? citationsCursor !== null
-      : include.includes("citations");
+  const textBounds = resolveTextWindowBounds({
+    text: plainText ?? "",
+    offset: textOffset,
+    size: maxTextChars,
+  });
+  const includedFields = decisionIncludedFields({
+    include,
+    firstWindow,
+    citationsCursor,
+  });
+  const includeCitations = includedFields.has("citations");
   const retainedCitationsCursor =
     citationsCursor === undefined ? DECISION_CITATIONS_START : citationsCursor;
   const nextCitationsCursor = includeCitations
     ? read.citationsNextCursor
     : retainedCitationsCursor;
+
   const hasMore =
     textBounds.nextOffset !== null ||
     (includeCitations && read.citationsNextCursor !== null);
@@ -2441,7 +2492,7 @@ const decisionItemResult = ({
       : null,
     status: DECISION_READ_STATUS.found,
     decision: {
-      ...((include === undefined ? firstWindow : include.includes("details"))
+      ...(includedFields.has("details")
         ? {
             appUrl: buildCaseLawDecisionAppUrl({
               caseNumber: read.caseNumber,
@@ -2468,15 +2519,11 @@ const decisionItemResult = ({
       caseNumber: read.caseNumber,
       decisionId: read.id,
       resourceName: serializeAuthorizedCorpusMcpResourceName(resource),
-      ...((include === undefined ? firstWindow : include.includes("metadata"))
-        ? { metadata: read.metadata }
-        : {}),
-      ...((include === undefined ? firstWindow : include.includes("textFields"))
+      ...(includedFields.has("metadata") ? { metadata: read.metadata } : {}),
+      ...(includedFields.has("textFields")
         ? { textFields: read.textFields }
         : {}),
-      ...((include === undefined ? firstWindow : include.includes("source"))
-        ? { source: read.source }
-        : {}),
+      ...(includedFields.has("source") ? { source: read.source } : {}),
       ...(includeCitations
         ? { citationsFrom: read.citationsFrom, citationsTo: read.citationsTo }
         : {}),
@@ -2484,6 +2531,11 @@ const decisionItemResult = ({
         plainText === null || textBounds.start >= textBounds.end
           ? null
           : plainText.slice(textBounds.start, textBounds.end),
+      ...(outline === "include" &&
+      plainText !== null &&
+      includedFields.has("outline")
+        ? { outline: decisionOutline({ blocks, text: plainText }) }
+        : {}),
       charCount: plainText === null ? null : textLength,
       truncated: textBounds.nextOffset !== null,
       ...(aiTextAllowed
@@ -2513,7 +2565,12 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   if (!parsed.success) {
     return validationErrorResult(parsed.issues);
   }
-  const { cursor, decision_ids: decisionIds, include } = parsed.output;
+  const {
+    cursor,
+    decision_ids: decisionIds,
+    max_chars: maxChars,
+    include,
+  } = parsed.output;
 
   // A window cursor belongs to ONE decision's text and citation lists, so it
   // cannot say which entry of a batch it continues.
@@ -2528,6 +2585,17 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
         },
       ],
       hint: "Pass one decision id with a cursor to continue its text.",
+    });
+  }
+
+  if (maxChars !== undefined && decisionIds.length > 1) {
+    return structuredErrorResult({
+      code: "validation_error",
+      message: "max_chars sizes one decision's text window",
+      hint: "Pass one decision id with max_chars, or omit max_chars for a batch read.",
+      issues: [
+        { path: "max_chars", message: "Accepted only with one decision id." },
+      ],
     });
   }
 
@@ -2638,7 +2706,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
   // whole window, which is what a caller reading one decision asked for.
   const maxTextChars = Math.max(
     1,
-    Math.floor(MCP_CONTENT_MAX_CHARS / decisionIds.length),
+    Math.floor((maxChars ?? MCP_CONTENT_MAX_CHARS) / decisionIds.length),
   );
 
   return toolDataResult({
@@ -2646,6 +2714,7 @@ const handleReadCaseLawDecisionTool: TypedMcpToolHandler<
       decisionItemResult({
         decisionId,
         maxTextChars,
+        outline: decisionIds.length === 1 ? "include" : "omit",
         read: readOf(decisionId),
         readsSharedCorpus,
         textOffset: offsets.text,
