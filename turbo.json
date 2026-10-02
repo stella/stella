@@ -413,7 +413,7 @@
       ]
     },
     "@stll/api#lint": {
-      "dependsOn": ["typecheck"],
+      "dependsOn": ["generate:capability-runtime"],
       "inputs": [
         "$TURBO_DEFAULT$",
         "$TURBO_ROOT$/.npmrc",

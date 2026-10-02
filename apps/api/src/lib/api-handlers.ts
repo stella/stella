@@ -856,6 +856,8 @@ const runAdmittedFiniteHandler = async function* <
           getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
+        // Preserve an already disconnected request's typed reason before composing signals.
+        ctx.request.signal.throwIfAborted();
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
         ctx.actionSignal.throwIfAborted();
         const outcome = await Result.gen(() => handler(ctx));
