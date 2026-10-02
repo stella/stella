@@ -14,7 +14,12 @@ import {
 } from "@/api/lib/billing/number-series";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { openGatedTestDatabase } from "@/api/tests/gated-test-database";
+import { isPgConstraintError, PG_ERROR } from "@/api/lib/pg-error";
+import {
+  openGatedTestDatabase,
+  withGatedTestClients,
+} from "@/api/tests/gated-test-database";
+import type { GatedTestDb } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
   mintAuthProviderIdValue,
@@ -83,8 +88,8 @@ if (!databaseUrl || !runPostgresTests) {
           archivedAt: new Date(),
         },
       ]);
-      const context = {
-        safeDb: createSafeDb(rlsDb, [], orgId, userId),
+      const contextFor = (database: GatedTestDb) => ({
+        safeDb: createSafeDb(markRlsDatabase(database), [], orgId, userId),
         session: { activeOrganizationId: orgId },
         user: { id: userId, email: `${userId}@example.test` },
         memberRole: { role: "owner" },
@@ -93,7 +98,8 @@ if (!databaseUrl || !runPostgresTests) {
         }),
         route: "/v1/number-series",
         recordAuditEvent: async () => {},
-      };
+      });
+      const context = contextFor(db);
       const insert = async ({
         sellerProfileId = null,
         isDefault = false,
@@ -119,10 +125,13 @@ if (!databaseUrl || !runPostgresTests) {
         });
         return id;
       };
-      const create = (sellerProfileId?: SafeId<"sellerProfile">) =>
+      const create = (
+        sellerProfileId?: SafeId<"sellerProfile">,
+        database: GatedTestDb = db,
+      ) =>
         createSeries.handler(
           asTestRaw<Parameters<typeof createSeries.handler>[0]>({
-            ...context,
+            ...contextFor(database),
             body: {
               documentType: "invoice",
               name: "Series",
@@ -160,6 +169,15 @@ if (!databaseUrl || !runPostgresTests) {
           columns: { id: true, sellerProfileId: true },
           limit: 20,
         });
+      const stored = () =>
+        db
+          .select({
+            id: numberSeries.id,
+            isDefault: numberSeries.isDefault,
+            sellerProfileId: numberSeries.sellerProfileId,
+          })
+          .from(numberSeries)
+          .where(eq(numberSeries.organizationId, orgId));
       return {
         orgId,
         sellerA,
@@ -171,6 +189,7 @@ if (!databaseUrl || !runPostgresTests) {
         makeDefault,
         update,
         defaults,
+        stored,
         scopedDb: createScopedDb(rlsDb, [], orgId, userId),
       };
     };
@@ -211,8 +230,7 @@ if (!databaseUrl || !runPostgresTests) {
       expect(result.seller).toBeUndefined();
       expect(result.organization).toBeUndefined();
       expect(result.documentType).toBeUndefined();
-      expect(Result.isError(result.archived)).toBe(true);
-      if (!Result.isError(result.archived)) {
+      if (!result.archived.isErr()) {
         panic("Expected archived allocation to fail");
       }
       expect(result.archived.error).toMatchObject({
@@ -243,23 +261,26 @@ if (!databaseUrl || !runPostgresTests) {
       for (const sellerProfileId of [null, f.sellerA]) {
         await f.insert({ sellerProfileId, isDefault: true });
         const alternate = await f.insert({ sellerProfileId });
-        const duplicateError = await db
-          .update(numberSeries)
-          .set({ isDefault: true })
-          .where(eq(numberSeries.id, alternate))
-          .then(
-            () => null,
-            (error: unknown) => error,
-          );
-        expect(duplicateError).toMatchObject({
-          cause: {
-            code: "23505",
-            constraint:
-              sellerProfileId === null
-                ? "number_series_org_type_default_uidx"
-                : "number_series_org_type_seller_default_uidx",
-          },
+        const duplicate = await Result.tryPromise({
+          try: async () =>
+            await db
+              .update(numberSeries)
+              .set({ isDefault: true })
+              .where(eq(numberSeries.id, alternate)),
+          catch: (cause) => cause,
         });
+        if (!duplicate.isErr()) {
+          panic("Expected the second default to be refused");
+        }
+        expect(
+          isPgConstraintError(
+            duplicate.error,
+            PG_ERROR.UNIQUE_VIOLATION,
+            sellerProfileId === null
+              ? "number_series_org_type_default_uidx"
+              : "number_series_org_type_seller_default_uidx",
+          ),
+        ).toBe(true);
       }
     });
 
@@ -300,16 +321,29 @@ if (!databaseUrl || !runPostgresTests) {
     test("creation chooses the first default independently per scope even under concurrency", async () => {
       const f = await fixture();
       for (const seller of [undefined, f.sellerA, f.sellerB]) {
-        const results = await Promise.all([f.create(seller), f.create(seller)]);
+        // Each caller holds its own session so the two requests overlap.
+        const results = await withGatedTestClients(
+          databaseUrl,
+          async ({ openClient }) =>
+            await Promise.all(
+              [openClient().db, openClient().db].map((connection) =>
+                f.create(seller, connection),
+              ),
+            ),
+        );
         for (const result of results) {
           expect(result).toMatchObject({
             id: expect.any(String),
             isDefault: expect.any(Boolean),
           });
         }
-        expect(
-          results.filter((result) => "isDefault" in result && result.isDefault),
-        ).toHaveLength(1);
+        const scope = seller ?? null;
+        const rows = (await f.stored())
+          .filter((row) => row.sellerProfileId === scope)
+          .map(({ id, isDefault }) => ({ id, isDefault }));
+        expect(rows).toHaveLength(2);
+        expect(rows).toEqual(expect.arrayContaining(results));
+        expect(rows.filter((row) => row.isDefault)).toHaveLength(1);
       }
       const defaults = await f.defaults();
       expect(defaults).toHaveLength(3);
