@@ -638,9 +638,13 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   // Stored quantities are decimal strings with up to four decimals. One that
   // a double cannot hold exactly is printed as stored, never rounded.
   const quantity = (value: string) => {
-    const canonical = value.includes(".")
-      ? value.replace(/\.?0+$/u, "")
-      : value;
+    const [whole = "", decimals = ""] = value.split(".");
+    let kept = decimals.length;
+    while (kept > 0 && decimals[kept - 1] === "0") {
+      kept -= 1;
+    }
+    const canonical =
+      kept === 0 ? whole : `${whole}.${decimals.slice(0, kept)}`;
     const parsed = Number(canonical);
     return String(parsed) === canonical
       ? quantityFormat.format(parsed)

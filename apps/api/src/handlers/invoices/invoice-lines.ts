@@ -663,7 +663,7 @@ export const readInvoiceAmounts = (invoice: InvoiceForReadTotals) =>
     invoice.documentType,
   );
 
-type InvoiceForDocumentLines = InvoiceForReadTotals & {
+type InvoiceForDocumentLines = Omit<InvoiceForReadTotals, "lines"> & {
   lines: readonly (InvoiceForReadTotals["lines"][number] & LineQuantity)[];
 };
 
