@@ -79,8 +79,8 @@ fn json_response(
   body: serde_json::Value,
   origin: Option<&str>,
   allowed: bool,
-) -> impl IntoResponse {
-  (cors_headers(origin, allowed), (status, Json(body)))
+) -> axum::response::Response {
+  (cors_headers(origin, allowed), (status, Json(body))).into_response()
 }
 
 async fn health(
