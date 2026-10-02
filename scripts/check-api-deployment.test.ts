@@ -1,8 +1,43 @@
 import { describe, expect, test } from "bun:test";
-import * as v from "valibot";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
+
+// CI runs this file in "Test release policy scripts" without the dependency
+// install (workflow-only pull requests skip it), so it reads workflow shapes
+// by hand instead of through a schema library.
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === "object" && value !== null && !Array.isArray(value);
+
+type WorkflowStep = { run: string; env: Record<string, unknown> };
+
+const workflowSteps = (workflow: unknown, file: string): WorkflowStep[] => {
+  const jobs = isRecord(workflow) ? workflow["jobs"] : undefined;
+  expect(isRecord(jobs), `${file}: jobs`).toBe(true);
+  if (!isRecord(jobs)) {
+    return [];
+  }
+  return Object.entries(jobs).flatMap(([id, job]) => {
+    expect(isRecord(job), `${file}: ${id}`).toBe(true);
+    const steps = isRecord(job) ? job["steps"] : undefined;
+    if (steps === undefined) {
+      return [];
+    }
+    expect(Array.isArray(steps), `${file}: ${id} steps`).toBe(true);
+    return (Array.isArray(steps) ? steps : []).map((step: unknown) => {
+      const run = isRecord(step) ? step["run"] : undefined;
+      const env = isRecord(step) ? step["env"] : undefined;
+      expect(run === undefined || typeof run === "string", `${file}: run`).toBe(
+        true,
+      );
+      expect(env === undefined || isRecord(env), `${file}: env`).toBe(true);
+      return {
+        run: typeof run === "string" ? run : "",
+        env: isRecord(env) ? env : {},
+      };
+    });
+  });
+};
 
 describe("API deployment health receipt", () => {
   test("supports either scheduled-alert authentication mechanism", async () => {
@@ -57,21 +92,6 @@ describe("API deployment health receipt", () => {
   });
 
   test("staging checks share their access configuration", async () => {
-    const workflowSchema = v.object({
-      jobs: v.record(
-        v.string(),
-        v.object({
-          steps: v.optional(
-            v.array(
-              v.object({
-                run: v.optional(v.string()),
-                env: v.optional(v.record(v.string(), v.unknown())),
-              }),
-            ),
-          ),
-        }),
-      ),
-    });
     // Steps that reach staging through the viewer lock, found by what they
     // run, so a step that drops its access entries is still checked.
     const stagingTargets = [
@@ -85,18 +105,16 @@ describe("API deployment health receipt", () => {
     for await (const file of new Bun.Glob("*.yml").scan(
       workflowsDir.pathname,
     )) {
-      const parsed = v.parse(
-        workflowSchema,
+      const steps = workflowSteps(
         Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
+        file,
       );
-      for (const { steps } of Object.values(parsed.jobs)) {
-        for (const { run = "", env = {} } of steps ?? []) {
-          if (
-            stagingTargets.some((target) => run.includes(target)) ||
-            Object.keys(env).some((key) => key.endsWith("EDGE_HEADER_VALUE"))
-          ) {
-            consumers.push({ run, env });
-          }
+      for (const { run, env } of steps) {
+        if (
+          stagingTargets.some((target) => run.includes(target)) ||
+          Object.keys(env).some((key) => key.endsWith("EDGE_HEADER_VALUE"))
+        ) {
+          consumers.push({ run, env });
         }
       }
     }
@@ -596,5 +614,50 @@ describe("API deployment health receipt", () => {
     });
 
     expect(result).toEqual({ status: "stable", consecutiveMatches: 3 });
+  });
+
+  test("release policy tests run without the dependency install", async () => {
+    const workflow = await Bun.file(
+      new URL("../.github/workflows/ci.yml", import.meta.url),
+    ).text();
+    const step = workflowSteps(Bun.YAML.parse(workflow), "ci.yml").find(
+      ({ run }) =>
+        run.includes("bun test scripts/check-api-deployment.test.ts"),
+    );
+    expect(step).toBeDefined();
+    const entries = [
+      ...(step?.run ?? "").matchAll(/^\s*bun test (\S+)$/gmu),
+    ].map((match) => match[1] ?? "");
+    expect(entries).toContain("scripts/check-api-deployment.test.ts");
+    const root = new URL("../", import.meta.url).pathname;
+    const transpiler = new Bun.Transpiler({ loader: "ts" });
+    const pending = [...entries];
+    const seen = new Set<string>();
+    const packages: string[] = [];
+    for (let file = pending.pop(); file !== undefined; file = pending.pop()) {
+      if (seen.has(file)) {
+        continue;
+      }
+      seen.add(file);
+      // Executable scripts start with a shebang, which is not TypeScript.
+      const source = (await Bun.file(`${root}${file}`).text()).replace(
+        /^#![^\n]*/u,
+        "",
+      );
+      for (const { path: specifier } of transpiler.scanImports(source)) {
+        if (specifier.startsWith(".")) {
+          const target = new URL(specifier, `file://${root}${file}`).pathname;
+          const relative = target.slice(root.length);
+          pending.push(relative.endsWith(".ts") ? relative : `${relative}.ts`);
+        } else if (
+          specifier !== "bun" &&
+          !specifier.startsWith("bun:") &&
+          !specifier.startsWith("node:")
+        ) {
+          packages.push(`${file} imports ${specifier}`);
+        }
+      }
+    }
+    expect(packages).toEqual([]);
   });
 });
