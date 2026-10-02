@@ -2612,7 +2612,9 @@ test.each(["default-deny", "granted", "colleague"] as const)(
         if (kind === "granted") {
           expect(result.isError).not.toBe(true);
           if (validate_only) {
-            expect(parseToolPayload(result)).toEqual({
+            expect(
+              parseToolPayload<{ valid: boolean; capability: string }>(result),
+            ).toEqual({
               valid: true,
               capability: "time-entries.csv.export",
             });

@@ -1,4 +1,4 @@
-import { QueryClient, type QueryKey } from "@tanstack/react-query";
+import { QueryClient, skipToken, type QueryKey } from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -37,10 +37,7 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
-import {
-  organizationSettingsKeys,
-  organizationSettingsOptions,
-} from "@/queries/organization-settings";
+import { organizationSettingsOptions } from "@/queries/organization-settings";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 
@@ -919,30 +916,38 @@ test("organization settings isolate caller capabilities by user and organization
   const colleague = { organizationId: ORG, userId: "colleague-probe" };
   const otherOrganization = { organizationId: "other-org-probe", userId: USER };
   const queryClient = new QueryClient();
+  const callerKey = Array.from(organizationSettingsOptions(caller).queryKey);
+  const colleagueKey = Array.from(
+    organizationSettingsOptions(colleague).queryKey,
+  );
+  const otherOrganizationKey = Array.from(
+    organizationSettingsOptions(otherOrganization).queryKey,
+  );
   const enabled = { capabilities: { fixture: { status: "enabled" } } };
   const hidden = { capabilities: { fixture: { status: "hidden" } } };
-  queryClient.setQueryData(organizationSettingsKeys.byCaller(caller), enabled);
-  expect(
-    queryClient.getQueryData(organizationSettingsOptions(caller).queryKey),
-  ).toEqual(enabled);
-  expect(
-    queryClient.getQueryData(organizationSettingsOptions(colleague).queryKey),
-  ).toBeUndefined();
-  expect(
-    queryClient.getQueryData(
-      organizationSettingsOptions(otherOrganization).queryKey,
-    ),
-  ).toBeUndefined();
-  queryClient.setQueryData(
-    organizationSettingsKeys.byCaller(colleague),
-    hidden,
-  );
-  expect(
-    queryClient.getQueryData(organizationSettingsOptions(colleague).queryKey),
-  ).toEqual(hidden);
-  expect(
-    queryClient.getQueryData(organizationSettingsOptions(caller).queryKey),
-  ).toEqual(enabled);
+  queryClient.setQueryData(callerKey, enabled);
+  expect(queryClient.getQueryData(callerKey)).toEqual(enabled);
+  expect(queryClient.getQueryData(colleagueKey)).toBeUndefined();
+  expect(queryClient.getQueryData(otherOrganizationKey)).toBeUndefined();
+  queryClient.setQueryData(colleagueKey, hidden);
+  expect(queryClient.getQueryData(colleagueKey)).toEqual(hidden);
+  expect(queryClient.getQueryData(callerKey)).toEqual(enabled);
+});
+
+test("organization settings skip authenticated reads until an organization is selected", () => {
+  const unselected = organizationSettingsOptions({
+    organizationId: null,
+    userId: USER,
+  });
+  expect(unselected.queryFn).toBe(skipToken);
+  expect(unselected.queryKey).toContain(USER);
+  expect(unselected.queryKey).toContain(null);
+  const selected = organizationSettingsOptions({
+    organizationId: ORG,
+    userId: USER,
+  });
+  expect(typeof selected.queryFn).toBe("function");
+  expect(selected.queryKey).not.toEqual(unselected.queryKey);
 });
 
 describe("the per-user read scan", () => {

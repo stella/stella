@@ -40,6 +40,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { UrlFetcher, WebSearchProvider } from "@/api/lib/web-search/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -441,8 +442,18 @@ test("pending feature-bound write approvals use current caller access for valida
     if (Result.isOk(result)) {
       expect(result.value.message.parts).toEqual([resumedCall]);
     } else {
+      expect(result.error).toBeInstanceOf(HandlerError);
+      if (!HandlerError.is(result.error)) {
+        throw new Error("Expected chat validation boundary error");
+      }
       expect(result.error.status).toBe(400);
-      expect(result.error.message).toBe(`Unknown chat tool: ${toolName}`);
+      expect(result.error.message).toBe("Invalid chat message");
+      expect(result.error.cause).toBeInstanceOf(HandlerError);
+      if (!HandlerError.is(result.error.cause)) {
+        throw new Error("Expected tool availability validation error");
+      }
+      expect(result.error.cause.status).toBe(400);
+      expect(result.error.cause.message).toBe(`Unknown chat tool: ${toolName}`);
     }
   }
 });

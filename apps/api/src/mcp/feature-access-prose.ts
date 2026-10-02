@@ -1,5 +1,6 @@
 import capabilityCatalog from "@stll/cli/capability-catalog.json";
 
+import { isRecord } from "@/api/lib/type-guards";
 import {
   isMcpDescriptorFeatureEnabled,
   type McpFeatureAccessContext,
@@ -60,7 +61,7 @@ const containsHiddenMcpDescriptorId = (
   if (Array.isArray(value)) {
     return value.some((item) => containsHiddenMcpDescriptorId(item, hiddenIds));
   }
-  if (value !== null && typeof value === "object") {
+  if (isRecord(value)) {
     return Object.values(value).some((item) =>
       containsHiddenMcpDescriptorId(item, hiddenIds),
     );
@@ -103,7 +104,7 @@ const scopeSchemaValue = (
   if (Array.isArray(value)) {
     return value.map((item) => scopeSchemaValue(item, hiddenIds));
   }
-  if (value !== null && typeof value === "object") {
+  if (isRecord(value)) {
     return scopeSchemaAnnotations(value, hiddenIds);
   }
   return value;
