@@ -34,13 +34,14 @@ export const encryptAgentClientCredential = async (
   credential: string,
 ): Promise<Result<EncryptedAgentClientCredential, HandlerError>> => {
   const content = await encryptAppContent(credential);
-  if (Result.isError(content))
-    {return Result.err(
+  if (Result.isError(content)) {
+    return Result.err(
       new HandlerError({
         status: 503,
         message: "Could not secure agent credentials",
       }),
-    );}
+    );
+  }
   const { ciphertext, iv } = content.value;
   return Result.ok(
     v.parse(
@@ -53,8 +54,9 @@ export const encryptAgentClientCredential = async (
 export const prepareAgentClientCredential = async (
   credential: string,
 ): Promise<Result<StoredAgentClientCredential, HandlerError>> => {
-  if (env.AGENT_CLIENT_STORAGE_V1_ENABLED)
-    {return await encryptAgentClientCredential(credential);}
+  if (env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
+    return await encryptAgentClientCredential(credential);
+  }
   const parsed = v.safeParse(previousCredentialSchema, credential);
   return parsed.success
     ? Result.ok(parsed.output)
@@ -81,9 +83,13 @@ export const readAgentClientCredential = async ({
     logger.info("agent.credentials.legacy_read", { "migration.read_count": 1 });
     if (env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
       const envelope = await encryptAgentClientCredential(storedCredential);
-      if (Result.isError(envelope)) {return Result.err(envelope.error);}
+      if (Result.isError(envelope)) {
+        return Result.err(envelope.error);
+      }
       const updated = await upgrade(envelope.value);
-      if (Result.isError(updated)) {return Result.err(updated.error);}
+      if (Result.isError(updated)) {
+        return Result.err(updated.error);
+      }
     }
     return Result.ok(storedCredential);
   }

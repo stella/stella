@@ -194,9 +194,7 @@ describe("stored agent credential reads", () => {
     expect(
       await readAgentClientCredential({
         storedCredential: credential,
-        upgrade: async () => 
-          Result.err(failure)
-        ,
+        upgrade: async () => Result.err(failure),
       }),
     ).toEqual(Result.err(failure));
   });

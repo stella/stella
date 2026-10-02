@@ -817,15 +817,16 @@ const exchangeClaimedCode = async (
   if (Result.isError(clientSecret)) {
     return Result.err(new AgentTokenError("token_mint_failed"));
   }
-  const result = await Result.tryPromise(async () => 
-    await callOauth2Token({
-      grant_type: "authorization_code",
-      client_id: registration.clientId,
-      client_secret: clientSecret.value,
-      code,
-      redirect_uri: AGENT_REDIRECT_URI,
-      resource,
-    })
+  const result = await Result.tryPromise(
+    async () =>
+      await callOauth2Token({
+        grant_type: "authorization_code",
+        client_id: registration.clientId,
+        client_secret: clientSecret.value,
+        code,
+        redirect_uri: AGENT_REDIRECT_URI,
+        resource,
+      }),
   );
 
   if (Result.isError(result) || !isTokenResponse(result.value)) {

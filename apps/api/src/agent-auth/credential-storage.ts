@@ -71,8 +71,12 @@ export const readStoredAgentClientCredential = async (
         registration,
         envelope,
       });
-      if (Result.isError(updated)) {return Result.err(updated.error);}
-      if (updated.value) {return Result.ok(undefined);}
+      if (Result.isError(updated)) {
+        return Result.err(updated.error);
+      }
+      if (updated.value) {
+        return Result.ok(undefined);
+      }
       const loaded = await Result.tryPromise({
         try: async () =>
           (
@@ -93,18 +97,24 @@ export const readStoredAgentClientCredential = async (
             message: "Could not read agent credentials",
           }),
       });
-      if (Result.isError(loaded)) {return Result.err(loaded.error);}
+      if (Result.isError(loaded)) {
+        return Result.err(loaded.error);
+      }
       const changed = () =>
         new HandlerError({
           status: 409,
           message: "Agent credential changed during exchange",
         });
-      if (!loaded.value) {return Result.err(changed());}
+      if (!loaded.value) {
+        return Result.err(changed());
+      }
       const current = await readAgentClientCredential({
         storedCredential: loaded.value.clientSecretSink,
         upgrade: async () => Result.err(changed()),
       });
-      if (Result.isError(current)) {return Result.err(current.error);}
+      if (Result.isError(current)) {
+        return Result.err(current.error);
+      }
       return current.value === registration.clientSecretSink
         ? Result.ok(undefined)
         : Result.err(changed());
@@ -156,10 +166,13 @@ export const runAgentClientCredentialBatch = async ({
   const run = await Result.tryPromise({
     try: async () =>
       await Result.gen(async function* () {
-        if (!env.AGENT_CLIENT_STORAGE_V1_ENABLED) {return Result.ok(0);}
+        if (!env.AGENT_CLIENT_STORAGE_V1_ENABLED) {
+          return Result.ok(0);
+        }
         signal.throwIfAborted();
-        if (Temporal.Now.instant().epochMilliseconds >= deadline)
-          {return Result.ok(0);}
+        if (Temporal.Now.instant().epochMilliseconds >= deadline) {
+          return Result.ok(0);
+        }
         const rows = await withBatchBudget(
           db,
           async (tx) =>
@@ -177,7 +190,9 @@ export const runAgentClientCredentialBatch = async ({
         let updatedCount = 0;
         for (const registration of rows) {
           signal.throwIfAborted();
-          if (Temporal.Now.instant().epochMilliseconds >= deadline) {break;}
+          if (Temporal.Now.instant().epochMilliseconds >= deadline) {
+            break;
+          }
           const envelope = yield* await encryptAgentClientCredential(
             registration.clientSecretSink,
           );
@@ -187,7 +202,9 @@ export const runAgentClientCredentialBatch = async ({
             async (tx) =>
               await compareAndSetCredential({ db: tx, registration, envelope }),
           );
-          if (updated) {updatedCount += 1;}
+          if (updated) {
+            updatedCount += 1;
+          }
         }
         return Result.ok(updatedCount);
       }),

@@ -182,7 +182,9 @@ export const encryptAppContent = async (
   plaintext: string,
 ): Promise<Result<EncryptedContent, ConfigurationError>> => {
   const configured = requireAppContentKey();
-  if (Result.isError(configured)) {return Result.err(configured.error);}
+  if (Result.isError(configured)) {
+    return Result.err(configured.error);
+  }
   return await Result.tryPromise({
     try: async () => await encryptScopedContent(APP_CONTENT_SCOPE, plaintext),
     catch: () =>
@@ -197,7 +199,9 @@ export const decryptAppContent = async (
   iv: Buffer,
 ): Promise<Result<string, ConfigurationError>> => {
   const configured = requireAppContentKey();
-  if (Result.isError(configured)) {return Result.err(configured.error);}
+  if (Result.isError(configured)) {
+    return Result.err(configured.error);
+  }
   if (iv.length !== IV_BYTES || iv.every((byte) => byte === 0)) {
     return Result.err(
       new ConfigurationError({
