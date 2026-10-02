@@ -2043,7 +2043,7 @@
       "package.json": 31,
       "packages/agent-engine/package.json": 7,
       "packages/agent-input/package.json": 4,
-      "packages/ai-catalog/package.json": 8,
+      "packages/ai-catalog/package.json": 9,
       "packages/analytics-config/package.json": 1,
       "packages/anonymize-chat/package.json": 6,
       "packages/api-client/package.json": 3,
