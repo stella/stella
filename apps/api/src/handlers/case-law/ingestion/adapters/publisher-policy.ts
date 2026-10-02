@@ -226,7 +226,7 @@ export const PUBLISHER_GATES = {
   /** publications.europa.eu, both the SPARQL endpoint and Cellar. */
   "cellar-eu": {
     publisher: "EU Publications Office",
-    intervalMs: POLITE_INTERVAL_MS,
+    intervalMs: 1000,
     hosts: ["publications.europa.eu"],
   },
 } as const satisfies Record<string, PublisherGate>;
