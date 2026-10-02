@@ -480,9 +480,13 @@ test("crawl and completion share one EU request per second", async () => {
   const dependencies = {
     redis: () => ({
       send: (_command: string, args: string[]) => {
-        if (args.length === 3) {return 0;}
+        if (args.length === 3) {
+          return 0;
+        }
         const key = args.at(2);
-        if (key === undefined) {return expect.unreachable();}
+        if (key === undefined) {
+          return expect.unreachable();
+        }
         keys.push(key);
         const slot = Math.max(now, nextByKey.get(key) ?? 0);
         nextByKey.set(key, slot + Number(args.at(-1)));
@@ -502,8 +506,9 @@ test("crawl and completion share one EU request per second", async () => {
   }
   expect(starts).toEqual([0, 1000, 2000, 3000]);
   expect(new Set(keys).size).toBe(1);
-  for (const start of starts)
-    {expect(
+  for (const start of starts) {
+    expect(
       starts.filter((time) => time >= start && time < start + 1000),
-    ).toHaveLength(1);}
+    ).toHaveLength(1);
+  }
 });
