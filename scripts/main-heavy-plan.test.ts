@@ -131,6 +131,23 @@ test("main heavy scheduling equals the gated jobs minus thin checks", () => {
   expect(planner?.env?.["WORKFLOW_SHA"]).toBe(`\${{ github.workflow_sha }}`);
 });
 
+test("main heavy runs execute the release compiler exactly when VERSION is planned", () => {
+  for (const event of ["push", "schedule", "workflow_dispatch"]) {
+    for (const required of ["true", "false"]) {
+      expect(
+        selected(
+          workflow.jobs["release-typecheck"]?.if ?? "true",
+          context(event, true, {
+            ...heavyPlan,
+            release_typecheck_required: required,
+          }),
+        ),
+        `${event}/${required}`,
+      ).toBe(required === "true");
+    }
+  }
+});
+
 test("dropping a heavy job cannot pass the scheduling invariant", () => {
   const removed = heavy.at(0);
   expect(removed).toBeDefined();
@@ -200,12 +217,14 @@ test("original PR and merge-group job predicates keep their behavior", () => {
 });
 
 type EvaluateOptions = {
+  jobName?: string;
   result: string;
   isPlanned?: boolean;
   planResult?: string;
   thinResult?: string;
 };
 const evaluate = ({
+  jobName = "mobile-build",
   result,
   isPlanned = true,
   planResult = "success",
@@ -234,9 +253,10 @@ const evaluate = ({
       ];
     }),
   );
-  const job = needs["mobile-build"];
-  if (!job) {
-    panic("Missing mobile job");
+  const job = needs[jobName];
+  const scope = scopes[jobName];
+  if (!job || typeof scope !== "string") {
+    panic(`Missing scoped job: ${jobName}`);
   }
   job.result = result;
   const run = Bun.spawnSync(["bash", "-e", "-c", outcome.run ?? "exit 2"], {
@@ -250,7 +270,7 @@ const evaluate = ({
       NEEDS: JSON.stringify(needs),
       PLAN: JSON.stringify({
         ...heavyPlan,
-        mobile_build_required: String(isPlanned),
+        [scope]: String(isPlanned),
       }),
       PLAN_RESULT: planResult,
       TRUSTED: "true",
@@ -327,4 +347,25 @@ test("heavy scope selection plans full suites even on an empty main diff", () =>
   } finally {
     rmSync(directory, { force: true, recursive: true });
   }
+});
+
+test("a release push requires the planned compiler to succeed in the main heavy result", () => {
+  for (const result of [
+    "success",
+    "failure",
+    "skipped",
+    "cancelled",
+    "timed_out",
+  ]) {
+    expect(evaluate({ jobName: "release-typecheck", result }), result).toBe(
+      result === "success" ? 0 : 1,
+    );
+  }
+  expect(
+    evaluate({
+      jobName: "release-typecheck",
+      result: "skipped",
+      isPlanned: false,
+    }),
+  ).toBe(0);
 });
