@@ -1,10 +1,13 @@
+import { Value } from "@sinclair/typebox/value";
 import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, getTableName, sql } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 import { createHash } from "node:crypto";
+import { Worker } from "node:worker_threads";
+import type { TransferListItem } from "node:worker_threads";
 
-import { SANCTIONS_SOURCES } from "@stll/sanctions";
+import { buildScreeningIndex, SANCTIONS_SOURCES } from "@stll/sanctions";
 import type { SanctionsEntry, SanctionsSource } from "@stll/sanctions";
 
 import type { Transaction } from "@/api/db/root";
@@ -16,13 +19,25 @@ import {
   sanctionsSources,
 } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
-import { createPublicSanctionsRoute } from "@/api/handlers/sanctions/public-routes";
+import {
+  createPublicSanctionsRoute,
+  publicSanctionsResponseSchema,
+} from "@/api/handlers/sanctions/public-routes";
 import { toSafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import type { CounterpartyCheckSubject } from "@/api/lib/business-registries/entity-checks";
+import { createSanctionsMatcherPool } from "@/api/lib/lists/sanctions/matcher-pool";
+import type {
+  SanctionsMatcherMessage,
+  SanctionsMatcherReply,
+} from "@/api/lib/lists/sanctions/matcher-protocol";
+import { createPublicSanctionsScreening } from "@/api/lib/lists/sanctions/public-screening";
 import { createSanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import { createSanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
+import {
+  createSanctionsIndexCache,
+  loadEditionEntries,
+} from "@/api/lib/lists/sanctions/screening-index";
 import {
   SANCTIONS_MATCH_LIMIT,
   screenSanctionsSubject,
@@ -35,6 +50,10 @@ import {
   InMemoryRateLimitContext,
   scopedGenerator,
 } from "@/api/lib/rate-limit/rate-limit";
+import {
+  installRecordingAnalytics,
+  installRecordingLogger,
+} from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -45,6 +64,13 @@ const STALE_NOW = new Date("2026-09-23T08:00:00Z");
 const MANY_MATCHES = SANCTIONS_MATCH_LIMIT + 5;
 const BENCHMARK_ENTRY_COUNT = 20_000;
 const INSERT_BATCH_SIZE = 500;
+
+const pools = new Set<ReturnType<typeof createSanctionsMatcherPool>>();
+const benchmarkPool = () => {
+  const pool = createSanctionsMatcherPool({ deadlineMs: 10_000 });
+  pools.add(pool);
+  return pool;
+};
 
 let client: Awaited<ReturnType<typeof createTestPglite>>;
 let db: ReturnType<typeof drizzle>;
@@ -93,6 +119,14 @@ const entriesFor = (source: SanctionsSource): SanctionsEntry[] => {
   if (source === "eu") {
     return [
       base,
+      entry({
+        source,
+        sourceId: "czech-person",
+        overrides: {
+          entityType: "person",
+          names: [{ name: "Čeněk Říha", quality: "strong" }],
+        },
+      }),
       entry({
         source,
         sourceId: "person",
@@ -202,7 +236,10 @@ beforeAll(async () => {
   }
 }, DB_TEST_TIMEOUT_MS);
 
-afterAll(async () => await client.close());
+afterAll(async () => {
+  await Promise.all([...pools].map(async (pool) => await pool.close()));
+  await client.close();
+});
 
 type NameSubject = Extract<
   CounterpartyCheckSubject,
@@ -213,7 +250,7 @@ type ParityOptions = {
   now?: Date;
   caches?: {
     product: ReturnType<typeof createSanctionsIndexCache>;
-    public: ReturnType<typeof createSanctionsIndexCache>;
+    public: ReturnType<typeof createSanctionsMatcherPool>;
   };
 };
 
@@ -224,7 +261,7 @@ const assertParity = async ({
 }: ParityOptions) => {
   // Separate caches ensure both access boundaries load the corpus themselves.
   const productCache = caches?.product ?? createSanctionsIndexCache();
-  const publicCache = caches?.public ?? createSanctionsIndexCache();
+  const publicPool = caches?.public ?? benchmarkPool();
   const inProduct = (
     await runEntityCheckShared({
       observer: "unobserved",
@@ -251,11 +288,13 @@ const assertParity = async ({
   const { kind, subject: checkedSubject, ...screening } = inProduct;
   expect(kind).toBe("sanctions");
   expect(checkedSubject.type).toBe(subject.type);
+  const analytics = installRecordingAnalytics();
+  const logger = installRecordingLogger();
   const context = new InMemoryRateLimitContext();
   const route = createPublicSanctionsRoute({
     db: publicDb,
     now,
-    indexCache: publicCache,
+    screen: createPublicSanctionsScreening({ pool: publicPool }),
     rateLimitOptions: {
       context,
       generator: scopedGenerator("parity-test"),
@@ -288,7 +327,18 @@ const assertParity = async ({
       }),
     );
     expect(response.status).toBe(200);
-    expect(await response.json()).toEqual({
+    const body = await response.json();
+    expect([...Value.Errors(publicSanctionsResponseSchema, body)]).toEqual([]);
+    expect(JSON.stringify(body)).not.toContain("UnmatchedPrivateIdentityQxzv");
+    expect(JSON.stringify(analytics.events)).not.toContain(
+      "UnmatchedPrivateIdentityQxzv",
+    );
+    expect(JSON.stringify(logger.records)).not.toContain(
+      "UnmatchedPrivateIdentityQxzv",
+    );
+    expect(JSON.stringify(analytics.events)).not.toContain("Ivan Sidorov");
+    expect(JSON.stringify(logger.records)).not.toContain("Ivan Sidorov");
+    expect(body).toEqual({
       ...screening,
       lists: inProduct.lists.map((list) => ({
         ...list,
@@ -304,16 +354,205 @@ const assertParity = async ({
     return inProduct;
   } finally {
     context.kill();
+    analytics.restore();
+    logger.restore();
+    if (caches === undefined) {
+      await publicPool.close();
+      pools.delete(publicPool);
+    }
   }
 };
 
 const clearSubject = {
   type: "organization",
-  name: "Blue Meadow Bakery",
+  name: "UnmatchedPrivateIdentityQxzv",
   companyId: null,
 } as const satisfies NameSubject;
 
+const exerciseColdWarmup = async (size: 1 | 2) => {
+  const firstEntered = Promise.withResolvers<undefined>();
+  const releaseFirst = Promise.withResolvers<undefined>();
+  const warmEntered = Promise.withResolvers<undefined>();
+  const releaseWarm = Promise.withResolvers<undefined>();
+  const warmCacheAccessed = Promise.withResolvers<undefined>();
+  const warmFinished = Promise.withResolvers<undefined>();
+  const messages: SanctionsMatcherMessage[] = [];
+  const screenedSources = new Set<SanctionsSource>();
+  let reads = 0;
+  class RecordingWorker extends Worker {
+    constructor() {
+      super(
+        new URL(
+          "../../lib/lists/sanctions/sanctions-matcher-worker.ts",
+          import.meta.url,
+        ),
+      );
+      this.on("message", (reply: SanctionsMatcherReply) => {
+        const message = messages.at(-1);
+        if (reply.status !== "screened" || message?.type !== "screen") {
+          return;
+        }
+        screenedSources.add(message.source);
+        if (message.source === sanctionsSourceIds().at(-1)) {
+          warmFinished.resolve(undefined);
+        }
+      });
+    }
+    override postMessage(
+      value: unknown,
+      transfers: readonly TransferListItem[] = [],
+    ) {
+      messages.push(asTestRaw<SanctionsMatcherMessage>(value));
+      super.postMessage(value, transfers);
+    }
+  }
+  const pool = createSanctionsMatcherPool({
+    size,
+    deadlineMs: 250,
+    createWorker: () => new RecordingWorker(),
+  });
+  const publicScreen = createPublicSanctionsScreening({
+    pool: {
+      close: pool.close,
+      run: async (operation, options) =>
+        await pool.run(
+          async (session) =>
+            await operation({
+              signal: session.signal,
+              match: session.match,
+              hasEdition: (source, editionId) => {
+                const cached = session.hasEdition(source, editionId);
+                if (options?.onSettled !== undefined && source === "eu") {
+                  warmCacheAccessed.resolve(undefined);
+                }
+                return cached;
+              },
+            }),
+          options,
+        ),
+    },
+    loadEntries: async (options) => {
+      reads += 1;
+      if (reads === 1) {
+        firstEntered.resolve(undefined);
+        await releaseFirst.promise;
+        return [];
+      }
+      warmEntered.resolve(undefined);
+      await releaseWarm.promise;
+      return await loadEditionEntries(options);
+    },
+  });
+  const props = {
+    db: publicDb,
+    now: FRESH_NOW,
+    practiceJurisdictions: [],
+    subject: {
+      type: "person",
+      name: "Ivan Sidorov",
+      birthDate: { year: 1960, month: 5, day: 12 },
+      nationalityCodes: ["RU"],
+    },
+  } as const;
+  const missingProgress = Promise.withResolvers<never>();
+  const progressTimeout = setTimeout(
+    () =>
+      missingProgress.reject(
+        new TypeError("Background warming did not complete"),
+      ),
+    5000,
+  );
+  const first = publicScreen(props);
+  try {
+    await Promise.race([firstEntered.promise, missingProgress.promise]);
+    const unavailable = (await first).unwrap();
+    expect(unavailable.status).toBe("unavailable");
+    expect(
+      unavailable.lists.every(({ status }) => status === "unavailable"),
+    ).toBe(true);
+    if (size === 2) {
+      await Promise.race([warmCacheAccessed.promise, missingProgress.promise]);
+    }
+    releaseFirst.resolve(undefined);
+    await Promise.race([warmEntered.promise, missingProgress.promise]);
+    releaseWarm.resolve(undefined);
+    await Promise.race([warmFinished.promise, missingProgress.promise]);
+    expect([...screenedSources].toSorted()).toEqual(
+      sanctionsSourceIds().toSorted(),
+    );
+    await new Promise<void>((resolve) => {
+      setImmediate(resolve);
+    });
+    const warmedReads = reads;
+    const backgroundMessages = [...messages];
+    const matched = (await publicScreen(props)).unwrap();
+    expect(matched.status).toBe("possible-match");
+    expect(
+      matched.lists.find(({ source }) => source === "eu")?.possibleMatches.at(0)
+        ?.sourceEntryId,
+    ).toBe("person");
+    expect(matched.lists.find(({ source }) => source === "eu")?.editionId).toBe(
+      activeEdition("eu"),
+    );
+    expect(reads).toBe(warmedReads);
+    return { messages: backgroundMessages, matched };
+  } finally {
+    clearTimeout(progressTimeout);
+    releaseFirst.resolve(undefined);
+    releaseWarm.resolve(undefined);
+    await first;
+    await pool.close();
+  }
+};
+
 describe("public sanctions search parity", () => {
+  test(
+    "public success outcomes contain only the public response contract",
+    async () => {
+      expect((await assertParity({ subject: clearSubject })).status).toBe(
+        "clear",
+      );
+      const matched = await assertParity({
+        subject: {
+          type: "person",
+          firstName: "Ivan",
+          lastName: "Sidorov",
+          dateOfBirth: null,
+          nationalityCodes: [],
+        },
+      });
+      expect(matched.status).toBe("possible-match");
+      expect(
+        matched.lists
+          .find(({ source }) => source === "eu")
+          ?.possibleMatches.at(0)?.name,
+      ).toBe("Ivan Petrovich Sidorov");
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test(
+    "public worker never reports a listed diacritic person clear",
+    async () => {
+      const result = await assertParity({
+        subject: {
+          type: "person",
+          firstName: "Čeněk",
+          lastName: "Říha",
+          dateOfBirth: null,
+          nationalityCodes: [],
+        },
+      });
+      expect(result.status).toBe("possible-match");
+      expect(
+        result.lists
+          .find(({ source }) => source === "eu")
+          ?.possibleMatches.at(0)?.sourceEntryId,
+      ).toBe("czech-person");
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
   test(
     "runs under a read-only role with no privileges outside the sanctions corpus",
     async () => {
@@ -562,6 +801,193 @@ describe("public sanctions search parity", () => {
     DB_TEST_TIMEOUT_MS,
   );
 
+  test.each([
+    { engine: "index", entryCount: entriesFor("eu").length },
+    { engine: "index", entryCount: entriesFor("eu").length + 1 },
+    { engine: "worker", entryCount: entriesFor("eu").length },
+    { engine: "worker", entryCount: entriesFor("eu").length + 1 },
+  ] as const)(
+    "public search reloads a newly activated edition without a refresh notification ($engine, $entryCount entries)",
+    async ({ engine, entryCount }) => {
+      let loads = 0;
+      const cache = createSanctionsIndexCache({
+        build: (lists) => {
+          loads += 1;
+          return buildScreeningIndex(lists);
+        },
+      });
+      const pool = benchmarkPool();
+      const screen =
+        engine === "index"
+          ? async (props: Parameters<typeof screenSanctionsSubject>[0]) =>
+              await screenSanctionsSubject({ ...props, indexCache: cache })
+          : createPublicSanctionsScreening({
+              pool,
+              loadEntries: async (props) => {
+                loads += 1;
+                return await loadEditionEntries(props);
+              },
+            });
+      const context = new InMemoryRateLimitContext();
+      const route = createPublicSanctionsRoute({
+        db: publicDb,
+        now: FRESH_NOW,
+        screen,
+        rateLimitOptions: { context, max: 1000, duration: 60_000 },
+      });
+      const search = async (firstName: string, lastName: string) => {
+        const response = await route.handle(
+          new Request("http://localhost/sanctions/search", {
+            method: "POST",
+            headers: { "content-type": "application/json" },
+            body: JSON.stringify({
+              subject: { type: "person", firstName, lastName },
+            }),
+          }),
+        );
+        expect(response.status).toBe(200);
+        const body = await response.json();
+        expect([...Value.Errors(publicSanctionsResponseSchema, body)]).toEqual(
+          [],
+        );
+        return body;
+      };
+      const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+      const entries = Array.from({ length: entryCount }, (_, index) =>
+        entry({
+          source: "eu",
+          sourceId: `rollover-${id}-${index}`,
+          overrides:
+            index === 0
+              ? {
+                  entityType: "person",
+                  names: [{ name: "Zbigniew Wroblewski", quality: "strong" }],
+                }
+              : {},
+        }),
+      );
+      try {
+        const initial = await search("Ivan", "Sidorov");
+        expect(initial.status).toBe("possible-match");
+        expect(
+          initial.lists.find((list: { source: string }) => list.source === "eu")
+            .editionId,
+        ).toBe(activeEdition("eu"));
+        const warmed = loads;
+        expect(warmed).toBe(sanctionsSourceIds().length);
+        await search("Ivan", "Sidorov");
+        expect(loads).toBe(warmed);
+        await db.insert(sanctionsEditions).values({
+          id,
+          sourceId: "eu",
+          markerKey: hash(id),
+          publishedAt: "2026-09-20",
+          contentHash: hash(`${id}:content`),
+          entryCount,
+          state: "ready",
+          activatedAt: VERIFIED_AT,
+        });
+        await db.insert(sanctionsEntryPayloads).values(
+          entries.map((payload) => ({
+            contentHash: hash(JSON.stringify(payload)),
+            payload,
+          })),
+        );
+        await db.insert(sanctionsEditionEntries).values(
+          entries.map((payload) => ({
+            editionId: id,
+            sourceEntryId: payload.sourceId,
+            contentHash: hash(JSON.stringify(payload)),
+          })),
+        );
+        await db
+          .update(sanctionsSources)
+          .set({ activeEditionId: id })
+          .where(eq(sanctionsSources.id, "eu"));
+        // The same mounted route and cache receive no refresh call or notification.
+        const oldPerson = await search("Ivan", "Sidorov");
+        expect(oldPerson.status).toBe("clear");
+        expect(
+          oldPerson.lists.find(
+            (list: { source: string }) => list.source === "eu",
+          ).editionId,
+        ).toBe(id);
+        expect(loads).toBe(warmed + 1);
+        const newPerson = await search("Zbigniew", "Wroblewski");
+        expect(newPerson.status).toBe("possible-match");
+        const eu = newPerson.lists.find(
+          (list: { source: string }) => list.source === "eu",
+        );
+        expect(eu.editionId).toBe(id);
+        expect(eu.possibleMatches.at(0).sourceEntryId).toBe(
+          entries.at(0)?.sourceId,
+        );
+        await search("Ivan", "Sidorov");
+        await search("Zbigniew", "Wroblewski");
+        expect(loads).toBe(warmed + 1);
+      } finally {
+        await db
+          .update(sanctionsSources)
+          .set({ activeEditionId: activeEdition("eu") })
+          .where(eq(sanctionsSources.id, "eu"));
+        await db
+          .delete(sanctionsEditionEntries)
+          .where(eq(sanctionsEditionEntries.editionId, id));
+        for (const payload of entries) {
+          await db
+            .delete(sanctionsEntryPayloads)
+            .where(
+              eq(
+                sanctionsEntryPayloads.contentHash,
+                hash(JSON.stringify(payload)),
+              ),
+            );
+        }
+        await db.delete(sanctionsEditions).where(eq(sanctionsEditions.id, id));
+        context.kill();
+        await pool.close();
+        pools.delete(pool);
+      }
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test.each([1, 2] as const)(
+    "cold deadline warms real indexes and the next public request matches (size %s)",
+    async (size) => {
+      await exerciseColdWarmup(size);
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test.each([1, 2] as const)(
+    "deadline warmup never reuses the identity query (size %s)",
+    async (size) => {
+      const { messages, matched } = await exerciseColdWarmup(size);
+      const screens = messages.filter((message) => message.type === "screen");
+      expect(screens.map(({ source }) => source).toSorted()).toEqual(
+        sanctionsSourceIds().toSorted(),
+      );
+      for (const message of screens) {
+        expect(message.query).toEqual({
+          name: "Sanctions Cache Warmup",
+          nameSource: "free-text",
+          entityType: "organisation",
+          identifiers: [],
+        });
+        expect(JSON.stringify(message.query)).not.toContain("Ivan");
+        expect(JSON.stringify(message.query)).not.toContain("1960");
+        expect(JSON.stringify(message.query)).not.toContain("RU");
+      }
+      expect(
+        matched.lists
+          .find(({ source }) => source === "eu")
+          ?.possibleMatches.at(0)?.evidence,
+      ).toMatchObject({ birthDate: "match", nationality: "match" });
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
   test(
     "measures cold and warm public searches over 20000 stored entries",
     async () => {
@@ -586,12 +1012,12 @@ describe("public sanctions search parity", () => {
         .update(sanctionsEditions)
         .set({ entryCount: entriesFor("eu").length + entries.length })
         .where(eq(sanctionsEditions.id, activeEdition("eu")));
-      const cache = createSanctionsIndexCache();
+      const pool = benchmarkPool();
       const context = new InMemoryRateLimitContext();
       const route = createPublicSanctionsRoute({
         db: publicDb,
         now: FRESH_NOW,
-        indexCache: cache,
+        screen: createPublicSanctionsScreening({ pool }),
         rateLimitOptions: {
           context,
           generator: scopedGenerator("timing-test"),
@@ -661,6 +1087,7 @@ describe("public sanctions search parity", () => {
               maximumTurnMs,
               performance.now() - lastTick,
             );
+            expect(maximumTurnMs).toBeLessThan(50);
             console.info(
               JSON.stringify({
                 adversarialService: name,
@@ -672,9 +1099,11 @@ describe("public sanctions search parity", () => {
             clearInterval(heartbeat);
           }
         }
+        await pool.close();
+        pools.delete(pool);
         const parityCaches = {
           product: createSanctionsIndexCache(),
-          public: createSanctionsIndexCache(),
+          public: benchmarkPool(),
         };
         for (const name of [
           "Registered Entity 42 Holdings",
@@ -732,9 +1161,11 @@ describe("public sanctions search parity", () => {
               partialAliases.length,
           })
           .where(eq(sanctionsEditions.id, activeEdition("eu")));
+        await parityCaches.public.close();
+        pools.delete(parityCaches.public);
         const incompleteCaches = {
           product: createSanctionsIndexCache(),
-          public: createSanctionsIndexCache(),
+          public: benchmarkPool(),
         };
         const incomplete = await assertParity({
           caches: incompleteCaches,

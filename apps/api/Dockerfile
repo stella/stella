@@ -222,14 +222,22 @@ RUN bun build \
     --target bun \
     --outfile /app/apps/api/src/db/migrate.js \
     apps/api/src/db/migrate.ts
-# The extraction worker builds with `--outdir`, not `--outfile`: it pulls in a
-# native addon, which the bundler emits as a sidecar `.node` asset next to the
-# entry point and references relatively. `--outfile` refuses to write more than
-# one output. The whole directory is copied into the runtime image below, so the
-# sidecar travels with the bundle. The same-stage `cp` calls below copy regular
-# files whose path may traverse a package symlink under an isolated install;
-# cp follows it and materializes each asset before the cross-stage COPY.
+# The sanctions matcher and extraction workers build with `--outdir`, not
+# `--outfile`: each pulls in a native addon, which the bundler emits as a
+# sidecar `.node` asset next to the entry point and references relatively.
+# `--outfile` refuses to write more than one output; `--entry-naming` pins the
+# entry file name the runtime loads. The whole directory is copied into the
+# runtime image below, so the sidecar travels with the bundle. The same-stage
+# `cp` calls below copy regular files whose path may traverse a package symlink
+# under an isolated install; cp follows it and materializes each asset before
+# the cross-stage COPY.
 RUN mkdir -p /app/runtime-workers && \
+    bun build \
+      --define __STELLA_RELEASE__=true \
+      --target bun \
+      --outdir /app/runtime-workers \
+      --entry-naming sanctions-matcher-worker.js \
+      apps/api/src/lib/lists/sanctions/sanctions-matcher-worker.ts && \
     bun build \
       --define __STELLA_RELEASE__=true \
       --target bun \

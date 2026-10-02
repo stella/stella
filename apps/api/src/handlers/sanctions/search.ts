@@ -13,13 +13,11 @@ import { nationalityCodesSchema } from "@/api/lib/business-registries/nationalit
 import { resolveSanctionsNameSubject } from "@/api/lib/business-registries/sanctions-check";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { API_RATE_LIMITS } from "@/api/lib/limits";
+import { screenPublicSanctionsSubject } from "@/api/lib/lists/sanctions/public-screening";
 import type { SanctionsPublicReadDb } from "@/api/lib/lists/sanctions/read-db";
-import type { SanctionsIndexCache } from "@/api/lib/lists/sanctions/screening-index";
-import {
-  screenSanctionsSubject,
-  SANCTIONS_SUBJECT_ERROR_MESSAGES,
-} from "@/api/lib/lists/sanctions/screening-service";
+import { SANCTIONS_SUBJECT_ERROR_MESSAGES } from "@/api/lib/lists/sanctions/screening-service";
 import type {
+  screenSanctionsSubject,
   SanctionsScreening,
   SanctionsScreeningSubject,
 } from "@/api/lib/lists/sanctions/screening-service";
@@ -109,7 +107,6 @@ export type PublicSanctionsSearchOptions = {
   db?: SanctionsPublicReadDb;
   screen?: typeof screenSanctionsSubject;
   now?: Date;
-  indexCache?: SanctionsIndexCache;
 };
 
 const screeningUnavailable = () =>
@@ -139,9 +136,8 @@ let activePublicScreenings = 0;
 /** Anonymous name screening: no practice jurisdictions, so every list is informational. */
 export const createPublicSanctionsSearchHandler = ({
   db = sanctionsPublicReadDb,
-  screen = screenSanctionsSubject,
+  screen = screenPublicSanctionsSubject,
   now,
-  indexCache,
 }: PublicSanctionsSearchOptions = {}) =>
   createSafePublicHandler(
     {
@@ -191,7 +187,6 @@ export const createPublicSanctionsSearchHandler = ({
                 subject,
                 practiceJurisdictions: [],
                 now,
-                indexCache,
               }),
             catch: screeningUnavailable,
           }),
