@@ -114,6 +114,15 @@ export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   },
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_docket_family_key_idx" ON public."case_law_decisions" USING btree ("docket_family_key") WHERE "docket_family_key" IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (docket_family_key) WHERE (docket_family_key IS NOT NULL)",
+    isUnique: false,
+    name: "case_law_decisions_docket_family_key_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    createSql:
       'CREATE UNIQUE INDEX CONCURRENTLY "account_provider_account_id_uidx" ON public."account" USING btree ("provider_id", "account_id")',
     definitionBody: "ON public.account USING btree (provider_id, account_id)",
     isUnique: true,

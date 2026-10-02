@@ -89,3 +89,34 @@ describe.serial("no-unscoped-user-query historical correspondence", () => {
     ).not.toEqual([]);
   });
 });
+
+const PROFILE_SELECTION = `
+import { user, member } from "@/api/db/auth-schema";
+const profileColumns = { name: user.name, email: user.email } as const;
+type ProfileProjection = typeof profileColumns;
+export const scoped = db.select(profileColumns).from(user)
+  .innerJoin(member, and(
+    eq(member.userId, user.id),
+    eq(member.organizationId, session.activeOrganizationId)
+  ));
+`;
+
+const lintProfileSelection = async (source: string) =>
+  await lintSingleRule("no-unscoped-user-query", source, {
+    plugin: "security-guards",
+    sourcePath: "apps/api/src/handlers/workspaces/member-previews/list.ts",
+  });
+
+describe.serial("no-unscoped-user-query hoisted projections", () => {
+  test("ignores type-only references when every runtime consumer is scoped", async () => {
+    expect(await lintProfileSelection(PROFILE_SELECTION)).toEqual([]);
+  });
+
+  test("rejects an unscoped runtime consumer alongside scoped and type-only consumers", async () => {
+    expect(
+      await lintProfileSelection(
+        `${PROFILE_SELECTION}\nexport const unscoped = db.select(profileColumns).from(user);`,
+      ),
+    ).not.toEqual([]);
+  });
+});
