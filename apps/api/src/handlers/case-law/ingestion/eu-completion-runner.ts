@@ -477,7 +477,7 @@ const recoverCompletionCandidate = async ({
     catch: (error) => error,
   });
   if (parsed.isErr()) {
-    return parsed;
+    return Result.err(parsed.error);
   }
   if (parsed.value.type !== "parsed") {
     return Result.err(

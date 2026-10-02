@@ -58,6 +58,13 @@ import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
+// Background maintenance can legitimately hold the real gate. Tests of other
+// boundaries own their healthy verdict; the load fixture retains the real reader.
+const healthyCompletionFixture = {
+  healthConfig: { busyWindows: [] },
+  readHealthVerdict: async () => ({ kind: "normal", signals: [] }),
+} satisfies NonNullable<Parameters<typeof runEuCompletionTickFixture>[1]>;
+
 if (!databaseUrl || !enabled) {
   describe.skip("EU completion real scheduled wiring", () => {
     test("requires explicit PostgreSQL fixture opt-in", () =>
@@ -527,7 +534,7 @@ if (!databaseUrl || !enabled) {
               gate.dependencies,
               async () =>
                 await runEuCompletionTickFixture(AbortSignal.timeout(20_000), {
-                  healthConfig: { busyWindows: [] },
+                  ...healthyCompletionFixture,
                 }),
             );
             expect(report).toMatchObject({
@@ -581,7 +588,7 @@ if (!databaseUrl || !enabled) {
                 async () =>
                   await runEuCompletionTickFixture(
                     AbortSignal.timeout(20_000),
-                    { healthConfig: { busyWindows: [] } },
+                    healthyCompletionFixture,
                   ),
               );
               expect(report).toMatchObject({
@@ -699,7 +706,7 @@ if (!databaseUrl || !enabled) {
                 async () =>
                   await runEuCompletionTickFixture(
                     AbortSignal.timeout(20_000),
-                    { healthConfig: { busyWindows: [] } },
+                    healthyCompletionFixture,
                   ),
               );
               expect(report).toMatchObject({
@@ -770,7 +777,7 @@ if (!databaseUrl || !enabled) {
               },
               async () =>
                 await runEuCompletionTickFixture(AbortSignal.timeout(20_000), {
-                  healthConfig: { busyWindows: [] },
+                  ...healthyCompletionFixture,
                 }),
             );
             expect(report.status).toBe("failed");
@@ -794,7 +801,7 @@ if (!databaseUrl || !enabled) {
           run: async (sent) => {
             const report = await runEuCompletionTickFixture(
               AbortSignal.timeout(20_000),
-              { healthConfig: { busyWindows: [] } },
+              healthyCompletionFixture,
             );
             expect(report.applied).toBe(0);
             expect(sent).toHaveLength(0);
@@ -822,7 +829,7 @@ if (!databaseUrl || !enabled) {
             run: async (sent) => {
               const report = await runEuCompletionTickFixture(
                 AbortSignal.timeout(20_000),
-                { healthConfig: { busyWindows: [] } },
+                healthyCompletionFixture,
               );
               expect(report.status).toBe("held");
               expect(sent).toHaveLength(0);
@@ -855,7 +862,7 @@ if (!databaseUrl || !enabled) {
           run: async (sent) => {
             const report = await runEuCompletionTickFixture(
               AbortSignal.timeout(20_000),
-              { healthConfig: { busyWindows: [] } },
+              healthyCompletionFixture,
             );
             expect(report).toMatchObject({
               status: "approval-required",
@@ -907,7 +914,7 @@ if (!databaseUrl || !enabled) {
                 async () =>
                   await runEuCompletionTickFixture(
                     AbortSignal.timeout(20_000),
-                    { healthConfig: { busyWindows: [] } },
+                    healthyCompletionFixture,
                   ),
               );
               expect(report).toMatchObject({
@@ -986,7 +993,7 @@ if (!databaseUrl || !enabled) {
               run: async (sent) => {
                 const report = await runEuCompletionTickFixture(
                   AbortSignal.timeout(20_000),
-                  { healthConfig: { busyWindows: [] } },
+                  healthyCompletionFixture,
                 );
                 expect(report.status).toBe("held");
                 expect(sent).toHaveLength(0);
@@ -1031,7 +1038,7 @@ if (!databaseUrl || !enabled) {
               );
               const report = await runEuCompletionTickFixture(
                 AbortSignal.timeout(20_000),
-                { healthConfig: { busyWindows: [] } },
+                healthyCompletionFixture,
               );
               expect(report.requests).toBe(sent.length - 1);
             });
@@ -1069,7 +1076,7 @@ if (!databaseUrl || !enabled) {
             await fetchedApprovedFixture(sourceId);
           const report = await runEuCompletionTickFixture(
             AbortSignal.timeout(20_000),
-            { healthConfig: { busyWindows: [] } },
+            healthyCompletionFixture,
           );
           expect(report).toMatchObject({
             status: "completed",
@@ -1086,6 +1093,9 @@ if (!databaseUrl || !enabled) {
           ).at(0);
           if (written === undefined) {
             panic("Canonical completion lost its decision");
+          }
+          if (candidate.fulltext === undefined) {
+            panic("Canonical completion fixture requires fulltext");
           }
           expect(written.fulltext).toBe(candidate.fulltext);
           expect(written.parserVersion).toBe(
@@ -1148,7 +1158,7 @@ if (!databaseUrl || !enabled) {
             const objectsBefore = [...storage.objects.entries()];
             const report = await runEuCompletionTickFixture(
               AbortSignal.timeout(20_000),
-              { healthConfig: { busyWindows: [] } },
+              healthyCompletionFixture,
             );
             expect(report).toMatchObject({
               status: "completed",
@@ -1260,7 +1270,7 @@ if (!databaseUrl || !enabled) {
                   await runEuCompletionTickFixture(
                     AbortSignal.timeout(20_000),
                     {
-                      healthConfig: { busyWindows: [] },
+                      ...healthyCompletionFixture,
                       afterDocument: async () => {
                         completedDocuments++;
                         if (completedDocuments !== 1) {
@@ -1329,7 +1339,7 @@ if (!databaseUrl || !enabled) {
             const running = runEuCompletionTickFixture(
               AbortSignal.timeout(20_000),
               {
-                healthConfig: { busyWindows: [] },
+                ...healthyCompletionFixture,
                 beforeWriteFence: async () => {
                   if (injected) {
                     return;
@@ -1424,7 +1434,7 @@ if (!databaseUrl || !enabled) {
             const report = await runEuCompletionTickFixture(
               AbortSignal.timeout(20_000),
               {
-                healthConfig: { busyWindows: [] },
+                ...healthyCompletionFixture,
                 beforeWriteFence: async () => {
                   if (mutations.length > 0) {
                     return;
@@ -1595,7 +1605,7 @@ if (!databaseUrl || !enabled) {
           expect(
             (
               await runEuCompletionTickFixture(AbortSignal.timeout(20_000), {
-                healthConfig: { busyWindows: [] },
+                ...healthyCompletionFixture,
               })
             ).status,
           ).toBe("off");
@@ -1605,7 +1615,7 @@ if (!databaseUrl || !enabled) {
             run: async (sent) => {
               const report = await runEuCompletionTickFixture(
                 AbortSignal.timeout(20_000),
-                { healthConfig: { busyWindows: [] } },
+                healthyCompletionFixture,
               );
               expect(report).toMatchObject({
                 status: "completed",
@@ -1718,7 +1728,7 @@ if (!databaseUrl || !enabled) {
         });
         const result = await runEuCompletionTickFixture(
           AbortSignal.timeout(10_000),
-          { healthConfig: { busyWindows: [] } },
+          healthyCompletionFixture,
         );
         expect(result).toMatchObject({
           status: "off",
@@ -1778,7 +1788,7 @@ if (!databaseUrl || !enabled) {
         ).at(0);
         const result = await runEuCompletionTickFixture(
           AbortSignal.timeout(10_000),
-          { healthConfig: { busyWindows: [] } },
+          healthyCompletionFixture,
         );
         expect(result).toMatchObject({
           status: "approval-required",

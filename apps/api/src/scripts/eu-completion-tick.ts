@@ -2,7 +2,7 @@ import { panic, Result } from "better-result";
 import type { ReservedSQL } from "bun";
 import { eq } from "drizzle-orm";
 
-import type { HealthConfig } from "@stll/db-load-gate/health";
+import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
 
 import { readEuCompletionTickEnvironment } from "@/api/env-eu-completion";
@@ -215,6 +215,7 @@ const loadRuntime = async () => {
 type CompletionRuntime = Awaited<ReturnType<typeof loadRuntime>>;
 type CompletionFixtureOptions = {
   healthConfig?: Pick<HealthConfig, "busyWindows">;
+  readHealthVerdict?: () => Promise<Verdict>;
   afterDocument?: () => Promise<void>;
   beforeWriteFence?: () => Promise<void>;
 };
@@ -343,7 +344,10 @@ const runCompletionSession = async (
     config: { ...REPLAY_HEALTH_CONFIG, ...fixture.healthConfig },
   });
   const preflight = createReplayPreflightGate({
-    readVerdict: async () => await readReplayGate(health),
+    readVerdict: async () =>
+      fixture.readHealthVerdict
+        ? await fixture.readHealthVerdict()
+        : await readReplayGate(health),
     loadState: store.loadPreflightGateState,
     saveState: store.savePreflightGateState,
     clock: now,
