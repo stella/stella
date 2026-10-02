@@ -389,10 +389,13 @@ const exerciseColdWarmup = async (size: 1 | 2) => {
       );
       this.on("message", (reply: SanctionsMatcherReply) => {
         const message = messages.at(-1);
-        if (reply.status !== "screened" || message?.type !== "screen") {return;}
+        if (reply.status !== "screened" || message?.type !== "screen") {
+          return;
+        }
         screenedSources.add(message.source);
-        if (message.source === sanctionsSourceIds().at(-1))
-          {warmFinished.resolve(undefined);}
+        if (message.source === sanctionsSourceIds().at(-1)) {
+          warmFinished.resolve(undefined);
+        }
       });
     }
     override postMessage(
@@ -953,6 +956,34 @@ describe("public sanctions search parity", () => {
     "cold deadline warms real indexes and the next public request matches (size %s)",
     async (size) => {
       await exerciseColdWarmup(size);
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test.each([1, 2] as const)(
+    "deadline warmup never reuses the identity query (size %s)",
+    async (size) => {
+      const { messages, matched } = await exerciseColdWarmup(size);
+      const screens = messages.filter((message) => message.type === "screen");
+      expect(screens.map(({ source }) => source).toSorted()).toEqual(
+        sanctionsSourceIds().toSorted(),
+      );
+      for (const message of screens) {
+        expect(message.query).toEqual({
+          name: "Sanctions Cache Warmup",
+          nameSource: "free-text",
+          entityType: "organisation",
+          identifiers: [],
+        });
+        expect(JSON.stringify(message.query)).not.toContain("Ivan");
+        expect(JSON.stringify(message.query)).not.toContain("1960");
+        expect(JSON.stringify(message.query)).not.toContain("RU");
+      }
+      expect(
+        matched.lists
+          .find(({ source }) => source === "eu")
+          ?.possibleMatches.at(0)?.evidence,
+      ).toMatchObject({ birthDate: "match", nationality: "match" });
     },
     DB_TEST_TIMEOUT_MS,
   );
