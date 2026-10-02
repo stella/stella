@@ -539,6 +539,7 @@ type AdapterFetchErrorOptions = {
   adapterKey: string;
   cursor: string | null;
   httpStatus?: number;
+  retryAfter?: string;
   cause?: unknown;
   stopKind?: IngestionStopKind;
 };
@@ -595,7 +596,10 @@ const ingestionFailureOf = (
     if (current instanceof TimeoutError) {
       return { type: "internal" };
     }
-    if (current.name === "AbortError" || current.name === "TimeoutError") {
+    if (current.name === "TimeoutError") {
+      return { type: "connection" };
+    }
+    if (current.name === "AbortError") {
       return { type: "deadline" };
     }
     if (fallback === "adapter") {

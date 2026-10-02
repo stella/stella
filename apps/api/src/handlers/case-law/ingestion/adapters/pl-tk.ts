@@ -47,7 +47,7 @@ import type { AnyNode } from "domhandler";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
 import { readCappedBytes } from "@stll/skills/streaming";
-import { DAY_IN_MS } from "@stll/time";
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
@@ -85,11 +85,14 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
 import {
   ADAPTER_PUBLISHER_GATES,
-  deferPublisherGate,
+  createPublisherGateSlot,
   publisherRequestIntervalMs,
-  readPublisherCooldown,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
-import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
+import {
+  fetchWithRetry,
+  parsePublisherRetryAfter,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
   hashContent,
@@ -283,6 +286,10 @@ const requestTk = async ({
         cursor,
         cause: requested.error,
         ...(requested.error instanceof AdapterFetchError &&
+        requested.error.retryAfter !== undefined
+          ? { retryAfter: requested.error.retryAfter }
+          : {}),
+        ...(requested.error instanceof AdapterFetchError &&
         requested.error.httpStatus !== undefined
           ? { httpStatus: requested.error.httpStatus }
           : {}),
@@ -339,7 +346,22 @@ type Session = { sessionId: string };
 
 type PlTkSessionCooldownOperations = {
   read: () => Promise<number | null>;
-  defer: () => Promise<number>;
+  defer: (durationMs: number) => Promise<number>;
+};
+
+const sessionRefusalDelay = (retryAfter: string | undefined): number => {
+  const requested = parsePublisherRetryAfter(
+    retryAfter ?? null,
+    Temporal.Now.instant().epochMilliseconds,
+  );
+  if (
+    requested === null ||
+    !Number.isFinite(requested) ||
+    requested >= PL_TK_SESSION_REFUSAL_COOLDOWN_MS
+  ) {
+    return PL_TK_SESSION_REFUSAL_COOLDOWN_MS;
+  }
+  return Math.max(MIN_REQUEST_INTERVAL_MS, requested);
 };
 
 /** Gate I/O is internal infrastructure, distinct from the publisher connection. */
@@ -358,9 +380,9 @@ export const createPlTkSessionCooldown = (
           stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
         }),
     }),
-  park: async (cursor: string) =>
+  park: async (cursor: string, retryAfter?: string) =>
     await Result.tryPromise({
-      try: operations.defer,
+      try: async () => await operations.defer(sessionRefusalDelay(retryAfter)),
       catch: (cause) =>
         new AdapterFetchError({
           message: "Publisher session cooldown could not be persisted",
@@ -372,15 +394,19 @@ export const createPlTkSessionCooldown = (
     }),
 });
 
-const sessionCooldown = createPlTkSessionCooldown({
-  read: async () => await readPublisherCooldown(PL_TK_PUBLISHER_GATE),
-  // Once refused, persist the bounded cooldown even if the page was cancelled.
-  defer: async () =>
-    await deferPublisherGate(
-      PL_TK_PUBLISHER_GATE,
-      PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
-    ),
-});
+/** Use the production gate command path with an injectable Redis client. */
+export const createPlTkPublisherSessionCooldown = (
+  dependencies?: PublisherRequestGateDependencies,
+) => {
+  const gate = createPublisherGateSlot(PL_TK_PUBLISHER_GATE, dependencies);
+  return createPlTkSessionCooldown({
+    read: gate.readCooldown,
+    // Publish the bounded cooldown even if the page was cancelled.
+    defer: async (durationMs) => await gate.defer(durationMs),
+  });
+};
+
+export const plTkSessionCooldown = createPlTkPublisherSessionCooldown();
 
 /** A fresh portal session; everything else the portal serves needs one. */
 const openSession = async (
@@ -388,7 +414,7 @@ const openSession = async (
   signal: AbortSignal | undefined,
 ): Promise<Result<Session, AdapterFetchError>> => {
   signal?.throwIfAborted();
-  const cooldownUntil = await sessionCooldown.read(cursor);
+  const cooldownUntil = await plTkSessionCooldown.read(cursor);
   signal?.throwIfAborted();
   if (Result.isError(cooldownUntil)) {
     return cooldownUntil;
@@ -411,7 +437,10 @@ const openSession = async (
   });
   if (Result.isError(landed)) {
     if (landed.error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL) {
-      const parked = await sessionCooldown.park(cursor);
+      const parked = await plTkSessionCooldown.park(
+        cursor,
+        landed.error.retryAfter,
+      );
       if (Result.isError(parked)) {
         return parked;
       }

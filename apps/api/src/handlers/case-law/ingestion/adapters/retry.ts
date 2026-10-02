@@ -62,12 +62,14 @@ export const fetchPublisher = async (
       response.status === 403 ||
       response.status === 429)
   ) {
+    const retryAfter = response.headers.get("Retry-After");
     await response.body?.cancel();
     throw new AdapterFetchError({
       message: `Publisher request refused: ${response.status}`,
       adapterKey: init.adapterKey,
       cursor: null,
       httpStatus: response.status,
+      ...(retryAfter === null ? {} : { retryAfter }),
     });
   }
   return response;
@@ -285,18 +287,13 @@ type PublisherRetryDelayOptions = {
   random: number;
 };
 
-/** Full jitter, with the publisher's bounded Retry-After as a minimum. */
-export const publisherRetryDelay = ({
-  attempt,
-  retryAfter,
-  now,
-  random,
-}: PublisherRetryDelayOptions): number => {
-  const jitter =
-    random *
-    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+/** Parse the protocol value before a publisher policy applies its own bounds. */
+export const parsePublisherRetryAfter = (
+  retryAfter: string | null,
+  now: number,
+): number | null => {
   if (retryAfter === null) {
-    return jitter;
+    return null;
   }
   const value = retryAfter.trim();
   // The platform date parser accepts bare numbers and non-HTTP dates; reject those rather
@@ -312,7 +309,21 @@ export const publisherRetryDelay = ({
     // HTTP-date is a legacy protocol grammar rather than Temporal's ISO grammar.
     parsed = new Date(value).getTime() - now;
   }
-  if (Number.isNaN(parsed)) {
+  return Number.isNaN(parsed) ? null : parsed;
+};
+
+/** Full jitter, with the publisher's bounded Retry-After as a minimum. */
+export const publisherRetryDelay = ({
+  attempt,
+  retryAfter,
+  now,
+  random,
+}: PublisherRetryDelayOptions): number => {
+  const jitter =
+    random *
+    Math.min(PUBLISHER_BASE_DELAY_MS * 2 ** attempt, PUBLISHER_MAX_DELAY_MS);
+  const parsed = parsePublisherRetryAfter(retryAfter, now);
+  if (parsed === null) {
     return jitter;
   }
   return Math.max(jitter, Math.min(Math.max(0, parsed), RETRY_AFTER_MAX_MS));
@@ -373,12 +384,14 @@ export const retryPublisherRequest = async (
       init.refusalMode === "stop-refusal" &&
       (fetched.value.status === 401 || fetched.value.status === 403)
     ) {
+      const retryAfter = fetched.value.headers.get("Retry-After");
       await fetched.value.body?.cancel();
       throw new AdapterFetchError({
         message: `Publisher request refused: ${fetched.value.status}`,
         adapterKey: init.adapterKey,
         cursor: null,
         httpStatus: fetched.value.status,
+        ...(retryAfter === null ? {} : { retryAfter }),
       });
     }
     if (Result.isError(fetched) && !isPublisherTimeout(fetched.error.cause)) {

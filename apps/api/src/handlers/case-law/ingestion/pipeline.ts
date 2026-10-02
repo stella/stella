@@ -304,7 +304,7 @@ export const runIngestionPipeline = async ({
               }),
           });
           if (Result.isError(fetched)) {
-            throw fetched.error;
+            return { error: fetched.error, type: "fetch-error" } as const;
           }
           const pageResult = fetched.value;
           if (Result.isError(pageResult)) {

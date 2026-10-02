@@ -1131,6 +1131,41 @@ describe("runIngestionPipeline — cycle deadline", () => {
     expect(result.nextCursor).toBe(source.syncCursor);
   });
 
+  test.each([
+    { ending: "request", expected: INGESTION_STOP_KIND.SOURCE_UNREACHABLE },
+    { ending: "cycle", expected: INGESTION_STOP_KIND.DEADLINE },
+  ] as const)(
+    "classifies a rejected fetch when the $ending budget expires",
+    async ({ ending, expected }) => {
+      const source = caseLawSourceRow({ name: "Rejected-fetch source" });
+      const drain = new AbortController();
+      let fetches = 0;
+      czNsAdapter.fetchPage = async (_cursor, _config, signal) => {
+        fetches++;
+        expect(signal?.aborted).toBe(false);
+        if (ending === "cycle") {
+          drain.abort();
+        }
+        expect(signal?.aborted).toBe(ending === "cycle");
+        throw new DOMException("The request timed out", "TimeoutError");
+      };
+      let persistedCursor: string | null | undefined;
+      const result = await runIngestionPipeline({
+        source,
+        sourceLease: testSourceLease(source),
+        scopedDb: cursorOnlyDb((cursor) => {
+          persistedCursor = cursor;
+        }),
+        cycle: { budgetMs: 60_000, abortEarlyOn: [drain.signal] },
+      });
+      expect(fetches).toBe(1);
+      expect(result.stopKind).toBe(expected);
+      expect(result.pagesProcessed).toBe(0);
+      expect(result.nextCursor).toBe(source.syncCursor);
+      expect(persistedCursor).toBe(source.syncCursor);
+    },
+  );
+
   test("a failed source-raw write holds the cursor as an internal error", async () => {
     const source = caseLawSourceRow({ name: "Write-failure source" });
     const fake = startFakeS3();

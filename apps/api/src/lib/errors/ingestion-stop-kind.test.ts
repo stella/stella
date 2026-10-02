@@ -58,12 +58,16 @@ describe("ingestion failure kinds", () => {
     expect(ingestionStopKindOf(cause)).toBe("internal_error");
   });
 
-  test("request deadlines and caller aborts are distinct from connect timeouts", () => {
-    for (const name of ["TimeoutError", "AbortError"]) {
-      const cause = new DOMException("Unable to connect", name);
-      expect(adapterError(cause).stopKind).toBe("deadline");
-      expect(ingestionStopKindOf(cause)).toBe("deadline");
-    }
+  test("request timeouts are outages while caller aborts remain deadlines", () => {
+    const requestTimeout = new DOMException(
+      "The operation timed out",
+      "TimeoutError",
+    );
+    expect(adapterError(requestTimeout).stopKind).toBe("source_unreachable");
+    expect(ingestionStopKindOf(requestTimeout)).toBe("source_unreachable");
+    const callerAbort = new DOMException("Unable to connect", "AbortError");
+    expect(adapterError(callerAbort).stopKind).toBe("deadline");
+    expect(ingestionStopKindOf(callerAbort)).toBe("deadline");
     const connectTimeout = Object.assign(new TypeError("message omitted"), {
       code: "ETIMEDOUT",
     });

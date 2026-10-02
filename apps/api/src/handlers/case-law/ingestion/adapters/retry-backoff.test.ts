@@ -354,8 +354,7 @@ describe("publisher throttling and transient failures", () => {
       expect(cause).toBeInstanceOf(AdapterFetchError);
       expect(cause).toMatchObject({
         cause: timeout,
-        stopKind:
-          timeout instanceof DOMException ? "deadline" : "source_unreachable",
+        stopKind: "source_unreachable",
       });
       expect(requests).toBe(6);
       expect(waits).toEqual([1000, 2000, 4000, 8000, 16_000]);
