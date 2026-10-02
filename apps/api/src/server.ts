@@ -66,6 +66,10 @@ import { invoicesRoute } from "@/api/handlers/invoices/routes";
 import { legalReaderRoute } from "@/api/handlers/legal-reader/routes";
 import { legislationCorpusRoute } from "@/api/handlers/legislation/corpus-routes";
 import { publicLegislationRoute } from "@/api/handlers/legislation/public-routes";
+import {
+  createPublicStatuteSearchRateLimitOptions,
+  isPublicStatuteSearchRateLimitedRequest,
+} from "@/api/handlers/legislation/public-search-rate-limit";
 import { legislationRoute } from "@/api/handlers/legislation/routes";
 import { listsRoute } from "@/api/handlers/lists/routes";
 import { handleMcpAppSandboxRequest } from "@/api/handlers/mcp-app-sandbox/routes";
@@ -462,6 +466,7 @@ const api = new Elysia()
             return (
               isUploadRateLimitedPath(pathname) ||
               isFolioCollabRateLimitedPath(pathname) ||
+              isPublicStatuteSearchRateLimitedRequest(req) ||
               isSkillSourceRateLimitedRequest(req) ||
               isStyleSetUploadRateLimitedRequest(req)
             );
@@ -539,7 +544,11 @@ const api = new Elysia()
       .use(contactsRoute)
       .use(legislationRoute)
       .use(legislationCorpusRoute)
-      .use(publicLegislationRoute)
+      .use(
+        new Elysia()
+          .use(rateLimit(createPublicStatuteSearchRateLimitOptions()))
+          .use(publicLegislationRoute),
+      )
       .use(publicKnowledgeRoute)
       .use(searchRoute)
       .use(savedSearchesRoute)

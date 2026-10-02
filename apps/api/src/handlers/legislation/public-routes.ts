@@ -26,6 +26,7 @@ import {
   readProvisionHistoryHandler,
 } from "@/api/handlers/legislation/provision-history";
 import readProvisionPreview from "@/api/handlers/legislation/provision-preview";
+import { createPublicStatuteSearch } from "@/api/handlers/legislation/public-search";
 import {
   resolveStatutesBodySchema,
   resolveStatutesHandler,
@@ -65,6 +66,8 @@ const listStatutes = createSafePublicHandler(
     return Result.ok(response);
   },
 );
+
+const searchPublicStatutes = createPublicStatuteSearch();
 
 const readLegislationShelf = createSafePublicHandler(
   {
@@ -285,6 +288,10 @@ export const publicLegislationRoute = new Elysia({
   })
   .get("/statutes", listStatutes.handler, {
     query: listStatutes.config.query,
+  })
+  .get("/statutes/search", searchPublicStatutes.handler, {
+    query: searchPublicStatutes.config.query,
+    response: searchPublicStatutes.config.response,
   })
   // Ahead of `/statutes/:documentId` for the same reason as `by-eli` below.
   .get("/statutes/shelf", readLegislationShelf.handler, {

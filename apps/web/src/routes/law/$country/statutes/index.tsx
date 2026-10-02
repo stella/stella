@@ -24,8 +24,13 @@ import {
   createStatutePath,
   createStatuteRouteParams,
 } from "@stll/api-contract/statute-route";
+import { ScrollArea } from "@stll/ui/scroll-area";
 
 import type { FacetSourceBucket } from "@/components/public-law-table/public-law-facets.logic";
+import {
+  FacetSection,
+  PublicLawFilterPopover,
+} from "@/components/public-law-table/public-law-filter-popover";
 import { PublicLawPager } from "@/components/public-law-table/public-law-pager";
 import {
   publicLawPageIndex,
@@ -53,6 +58,7 @@ import type { PublicLawFilterChip } from "@/components/public-law-table/public-l
 import { TableFindBar } from "@/components/workspaces/table/table-find-bar";
 import { StatuteFilterPopover } from "@/features/statutes/components/statute-filter-popover";
 import { StatuteSearch } from "@/features/statutes/components/statute-search";
+import { StatuteSearchResults } from "@/features/statutes/components/statute-search-results";
 import {
   StatuteTable,
   useStatuteColumnGroups,
@@ -63,6 +69,7 @@ import {
 } from "@/features/statutes/open-statute-match";
 import {
   statuteFacetsOptions,
+  statuteSearchInfiniteOptions,
   statutesInfiniteOptions,
 } from "@/features/statutes/queries/statutes";
 import type {
@@ -206,6 +213,9 @@ export const Route = createFileRoute("/law/$country/statutes/")({
       notFound({ throw: true });
       return;
     }
+    if (readStatuteIntent(params.country, search.q).type === "text") {
+      return;
+    }
     const options = statutesInfiniteOptions(
       createStatuteListFilters(params.country, search),
       publicLawPageSize(search.pageSize),
@@ -237,6 +247,32 @@ export const Route = createFileRoute("/law/$country/statutes/")({
     }
   },
   loader: async ({ cause, context: { queryClient }, deps, params }) => {
+    const intent = readStatuteIntent(params.country, deps.q);
+    if (intent.type === "text") {
+      detached(
+        prefetchRouteQuery(
+          queryClient,
+          statuteFacetsOptions(params.country.toUpperCase()),
+          (error: unknown) => getAnalytics().captureError(error),
+        ),
+        "statutes.full-text-facets-prefetch",
+      );
+      const options = statuteSearchInfiniteOptions({
+        country: params.country.toUpperCase(),
+        query: intent.text,
+        ...(deps.type === undefined ? {} : { documentType: deps.type }),
+      });
+      if (cause === "stay") {
+        detached(
+          ensureRouteInfiniteQueryData(queryClient, options),
+          "statutes.full-text-prefetch",
+        );
+      } else {
+        await ensureRouteInfiniteQueryData(queryClient, options);
+      }
+      return { statutes: [] };
+    }
+
     // The type filter's choices: warmed, never awaited, so a slow facet read
     // cannot hold the list back.
     detached(
@@ -320,6 +356,154 @@ export const Route = createFileRoute("/law/$country/statutes/")({
 });
 
 function PublicStatutesIndex({
+  routeState,
+}: {
+  routeState: PublicLawRouteState;
+}) {
+  const country = Route.useParams({
+    select: ({ country: routeCountry }) => routeCountry,
+  });
+  const q = Route.useSearch({ select: ({ q: routeQuery }) => routeQuery });
+  const intent = readStatuteIntent(country, q);
+  return intent.type === "text" ? (
+    <PublicStatuteFullText key={country} query={intent.text} />
+  ) : (
+    <PublicStatuteList routeState={routeState} />
+  );
+}
+
+function PublicStatuteFullText({ query }: { query: string }) {
+  const t = useTranslations();
+  const country = Route.useParams({
+    select: ({ country: routeCountry }) => routeCountry,
+  });
+  const search = Route.useSearch({ select: ({ type }) => ({ type }) });
+  const navigate = Route.useNavigate();
+  const [input, setInput] = useState(query);
+  const [requestedQuery, setRequestedQuery] = useState(query);
+  const [syncedQuery, setSyncedQuery] = useState(query);
+  if (syncedQuery !== query) {
+    setSyncedQuery(query);
+    if (query !== requestedQuery) {
+      setInput(query);
+    }
+  }
+  const writeQuery = useDebouncedCallback((value: string) => {
+    detached(
+      navigate({
+        replace: true,
+        search: (previous) => ({
+          ...previous,
+          q: value.trim() || undefined,
+          page: undefined,
+        }),
+      }),
+      "statutes.full-text-navigate",
+    );
+  }, 300);
+  const { data, fetchNextPage, hasNextPage, isFetchingNextPage, isLoading } =
+    useInfiniteQuery({
+      ...statuteSearchInfiniteOptions({
+        country: country.toUpperCase(),
+        query,
+        ...(search.type === undefined ? {} : { documentType: search.type }),
+      }),
+      throwOnError: true,
+    });
+  const { data: facets } = useQuery(
+    statuteFacetsOptions(country.toUpperCase()),
+  );
+  const selectType = (documentType: string | undefined) => {
+    const pending = writeQuery.isPending() ? input.trim() : query;
+    writeQuery.cancel();
+    detached(
+      navigate({
+        replace: true,
+        search: (previous) => ({
+          ...previous,
+          q: pending || undefined,
+          type: documentType,
+          page: undefined,
+        }),
+      }),
+      "statutes.full-text-filter",
+    );
+  };
+  const hits =
+    data === undefined ? [] : data.pages.flatMap((page) => page.items);
+  return (
+    <main className="flex min-h-0 flex-1 flex-col gap-4 p-4">
+      <h1 className="sr-only">{t("statutes.title")}</h1>
+      <StatuteSearch
+        country={country}
+        maxLength={MAX_QUERY_LENGTH}
+        query={input}
+        onQueryChange={(value) => {
+          setInput(value);
+          setRequestedQuery(value.trim());
+          writeQuery(value);
+        }}
+        onSubmit={() => writeQuery.flush()}
+      />
+      <PublicLawFilterPopover
+        activeFilterCount={search.type === undefined ? 0 : 1}
+      >
+        <FacetSection
+          buckets={facets?.documentType ?? NO_TYPES}
+          heading={t("common.type")}
+          name="type"
+          onSelect={selectType}
+          selectedValue={search.type}
+        />
+      </PublicLawFilterPopover>
+      <PublicLawFilterChips
+        chips={
+          search.type === undefined
+            ? []
+            : [
+                {
+                  id: "filter:type",
+                  kind: t("common.type"),
+                  value: search.type,
+                  onRemove: () => selectType(undefined),
+                },
+              ]
+        }
+        onClearAll={() => selectType(undefined)}
+      />
+      <ScrollArea className="min-h-0 flex-1">
+        <StatuteSearchResults
+          hits={hits}
+          isLoading={isLoading}
+          isFetchingNextPage={isFetchingNextPage}
+          hasNextPage={hasNextPage}
+          onLoadMore={() =>
+            detached(fetchNextPage(), "statutes.full-text-next-page")
+          }
+          titleLink={(hit) => {
+            const params = createStatuteRouteParams({
+              country: hit.country,
+              documentId: hit.documentId,
+              eli: hit.eli,
+              slug: hit.slug,
+              version: null,
+            });
+            return (
+              <Link
+                to="/law/$country/statutes/$slug"
+                params={{ country: params.country, slug: params.slug }}
+              >
+                {hit.title}
+              </Link>
+            );
+          }}
+        />
+      </ScrollArea>
+    </main>
+  );
+}
+
+function PublicStatuteList({
   routeState,
 }: {
   routeState: PublicLawRouteState;

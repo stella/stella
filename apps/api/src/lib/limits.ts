@@ -12,6 +12,7 @@ import {
   VIEW_SORTS_MAX,
   WORKSPACES_PER_ORGANIZATION_MAX,
 } from "@stll/api-contract";
+import { PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX } from "@stll/api-contract/search";
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
 import {
   CHAT_CONTEXT_FILE_MAX_BYTES,
@@ -559,6 +560,7 @@ export const LIMITS = {
   caseLawLatestPerCourt: 5,
   legislationListPageSizeDefault: 20,
   legislationListPageSizeMax: 100,
+  publicStatuteSearchPageSizeMax: PUBLIC_STATUTE_SEARCH_PAGE_SIZE_MAX,
   /** Rows per list on the law home's legislation shelf. */
   legislationShelfPerList: 5,
   /** Days either side of today the legislation shelf looks at. */
@@ -816,6 +818,9 @@ export const API_RATE_LIMITS = {
   /** REST API: 1000 req/min per IP. Covers normal navigation
    *  (5-10 requests per page load × frequent workspace switching). */
   api: { duration: 60_000, max: 1000 },
+  /** Public statute full-text search: 30 req/min per IP, separate from
+   *  navigation so an unauthenticated search loop has a bounded budget. */
+  publicStatuteSearch: { duration: 60_000, max: 30 },
   /** Skill URL discovery/import: 10 req/min per IP. Each request performs
    *  bounded outbound source fetches, so this separate cap prevents the
    *  general API budget from amplifying third-party traffic. */

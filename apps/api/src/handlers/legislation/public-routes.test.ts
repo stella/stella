@@ -86,11 +86,15 @@ describe("public statute routes", () => {
     env.FEATURE_PUBLIC_LAW = false;
 
     try {
-      const response = await publicLegislationRoute.handle(
-        new Request("http://localhost/law/statutes?country=CZE"),
-      );
-
-      expect(response.status).toBe(404);
+      for (const path of [
+        "/law/statutes?country=CZE",
+        "/law/statutes/search?country=CZE&query=text",
+      ]) {
+        const response = await publicLegislationRoute.handle(
+          new Request(`http://localhost${path}`),
+        );
+        expect(response.status).toBe(404);
+      }
     } finally {
       restoreRuntimeMode();
       env.FEATURE_PUBLIC_LAW = previousFeature;
@@ -256,5 +260,20 @@ describe("public statute routes", () => {
     expect(searchWrapper).toContain("searchLegislationHandler(");
     expect(searchWrapper).toContain("legislationPublicReadDb");
     expect(searchWrapper).not.toContain("scopedDb");
+  });
+
+  test("public full-text search retains the shared redistribution boundary", async () => {
+    const source = await readHandlerSource("public-search.ts");
+    expect(source).toContain("searchLegislationHandler");
+    expect(source).toContain("legislationPublicReadDb");
+    expect(source).not.toContain("scopedDb");
+    expect(source).not.toContain("loadSearchConfigs:");
+    const response = await publicLegislationRoute.handle(
+      new Request(
+        "http://localhost/law/statutes/search?country=CZE&query=text&cursor=invalid-cursor",
+      ),
+    );
+    expect(response.status).toBe(400);
+    expect(await response.json()).toEqual({ message: "Invalid cursor" });
   });
 });
