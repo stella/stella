@@ -8,6 +8,9 @@ import type { RenderInvoicePdfOptions } from "./render";
 
 const sampleLine = {
   description: "Příprava právního stanoviska",
+  quantity: "2.5000",
+  unit: "h",
+  unitPrice: 22_222,
   netAmount: 55_555,
   vatAmount: 0,
   grossAmount: 55_555,
@@ -93,6 +96,56 @@ describe("invoice PDF", () => {
         locale: "cs-CZ",
       }).replace(/[\u00a0\u202f]/gu, " "),
     );
+  });
+
+  test("prints each line's quantity, unit and unit price in the reader's number format", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: {
+        ...options.invoice,
+        lines: [
+          sampleLine,
+          { ...sampleLine, quantity: "1234.5", unit: null, unitPrice: 100 },
+          { ...sampleLine, quantity: "3", unit: "ks", unitPrice: 300 },
+        ],
+      },
+    });
+    const spaced = (value: string) => value.replace(/[  ]/gu, " ");
+    const price = (amountCents: number) =>
+      spaced(
+        formatMoneyCents({ amountCents, currency: "CZK", locale: "cs-CZ" }),
+      );
+    const flat = spaced(text);
+    expect(flat).toContain("Množství: 2,5 h");
+    expect(flat).toContain(`Jednotková cena: ${price(22_222)}`);
+    expect(flat).toContain("Množství: 1 234,5");
+    expect(flat).toContain(`Jednotková cena: ${price(100)}`);
+    expect(flat).toContain("Množství: 3 ks");
+    expect(flat).toContain(`Jednotková cena: ${price(300)}`);
+  });
+
+  test("prints a quantity a double cannot hold exactly as it is stored", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: {
+        ...options.invoice,
+        lines: [{ ...sampleLine, quantity: "12345678901234.5678" }],
+      },
+    });
+    expect(text).toContain("12345678901234.5678");
+  });
+
+  test("leaves quantity and unit price off a line that was never billed by quantity", async () => {
+    const { text } = await textOf({
+      ...options,
+      invoice: {
+        ...options.invoice,
+        lines: [{ ...sampleLine, quantity: null, unit: null, unitPrice: null }],
+      },
+    });
+    expect(text).toContain(sampleLine.description);
+    expect(text).not.toContain("Množství");
+    expect(text).not.toContain("Jednotková cena");
   });
 
   test("wraps and paginates long descriptions and notes without losing their ending", async () => {

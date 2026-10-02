@@ -55,6 +55,10 @@ export type RenderInvoicePdfOptions = {
     buyerCountry: string | null;
     lines: {
       description: string;
+      /** Null only on a line that was never billed by quantity. */
+      quantity: string | null;
+      unit: string | null;
+      unitPrice: number | null;
       netAmount: number;
       vatAmount: number;
       grossAmount: number;
@@ -100,6 +104,8 @@ const EN_LABELS = {
   registration: "Registration ID",
   vatId: "VAT ID",
   description: "Description",
+  quantity: "Quantity",
+  unitPrice: "Unit price",
   payment: "Payment",
   notes: "Notes",
   reverse: "Reverse charge",
@@ -126,6 +132,8 @@ const LABELS = {
     registration: "IČO",
     vatId: "DIČ",
     description: "Popis",
+    quantity: "Množství",
+    unitPrice: "Jednotková cena",
     payment: "Platba",
     notes: "Poznámky",
     reverse: "Přenesení daňové povinnosti",
@@ -150,6 +158,8 @@ const LABELS = {
     registration: "IČO",
     vatId: "IČ DPH",
     description: "Popis",
+    quantity: "Množstvo",
+    unitPrice: "Jednotková cena",
     payment: "Platba",
     notes: "Poznámky",
     reverse: "Prenesenie daňovej povinnosti",
@@ -174,6 +184,8 @@ const LABELS = {
     registration: "Registrierungsnummer",
     vatId: "USt-IdNr.",
     description: "Beschreibung",
+    quantity: "Menge",
+    unitPrice: "Einzelpreis",
     payment: "Zahlung",
     notes: "Anmerkungen",
     reverse: "Steuerschuldnerschaft des Leistungsempfängers",
@@ -198,6 +210,8 @@ const LABELS = {
     registration: "Numéro d’immatriculation",
     vatId: "Numéro de TVA",
     description: "Description",
+    quantity: "Quantité",
+    unitPrice: "Prix unitaire",
     payment: "Paiement",
     notes: "Notes",
     reverse: "Autoliquidation",
@@ -222,6 +236,8 @@ const LABELS = {
     registration: "Número de registro",
     vatId: "Número de IVA",
     description: "Descripción",
+    quantity: "Cantidad",
+    unitPrice: "Precio unitario",
     payment: "Pago",
     notes: "Notas",
     reverse: "Inversión del sujeto pasivo",
@@ -246,6 +262,8 @@ const LABELS = {
     registration: "Número de registro",
     vatId: "Número de IVA",
     description: "Descrição",
+    quantity: "Quantidade",
+    unitPrice: "Preço unitário",
     payment: "Pagamento",
     notes: "Observações",
     reverse: "Inversão do sujeito passivo",
@@ -270,6 +288,8 @@ const LABELS = {
     registration: "Numer rejestracyjny",
     vatId: "Numer VAT",
     description: "Opis",
+    quantity: "Ilość",
+    unitPrice: "Cena jednostkowa",
     payment: "Płatność",
     notes: "Uwagi",
     reverse: "Odwrotne obciążenie",
@@ -294,6 +314,8 @@ const LABELS = {
     registration: "Nyilvántartási szám",
     vatId: "ÁFA-szám",
     description: "Leírás",
+    quantity: "Mennyiség",
+    unitPrice: "Egységár",
     payment: "Fizetés",
     notes: "Megjegyzések",
     reverse: "Fordított adózás",
@@ -318,6 +340,8 @@ const LABELS = {
     registration: "Registrikood",
     vatId: "KMKR number",
     description: "Kirjeldus",
+    quantity: "Kogus",
+    unitPrice: "Ühikuhind",
     payment: "Makse",
     notes: "Märkused",
     reverse: "Pöördmaksustamine",
@@ -342,6 +366,8 @@ const LABELS = {
     registration: "Reģistrācijas numurs",
     vatId: "PVN numurs",
     description: "Apraksts",
+    quantity: "Daudzums",
+    unitPrice: "Vienības cena",
     payment: "Maksājums",
     notes: "Piezīmes",
     reverse: "Apgrieztā maksāšana",
@@ -366,6 +392,8 @@ const LABELS = {
     registration: "Registracijos numeris",
     vatId: "PVM numeris",
     description: "Aprašymas",
+    quantity: "Kiekis",
+    unitPrice: "Vieneto kaina",
     payment: "Mokėjimas",
     notes: "Pastabos",
     reverse: "Atvirkštinis apmokestinimas",
@@ -390,6 +418,8 @@ const LABELS = {
     registration: "رقم التسجيل",
     vatId: "الرقم الضريبي",
     description: "الوصف",
+    quantity: "الكمية",
+    unitPrice: "سعر الوحدة",
     payment: "الدفع",
     notes: "ملاحظات",
     reverse: "الاحتساب العكسي",
@@ -602,6 +632,20 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
       style: "percent",
       maximumFractionDigits: 2,
     }).format(value / 10_000);
+  const quantityFormat = new Intl.NumberFormat(locale, {
+    maximumFractionDigits: 4,
+  });
+  // Stored quantities are decimal strings with up to four decimals. One that
+  // a double cannot hold exactly is printed as stored, never rounded.
+  const quantity = (value: string) => {
+    const canonical = value.includes(".")
+      ? value.replace(/\.?0+$/u, "")
+      : value;
+    const parsed = Number(canonical);
+    return String(parsed) === canonical
+      ? quantityFormat.format(parsed)
+      : canonical;
+  };
   const treatments = {
     domestic_vat: l.vat,
     reverse_charge: l.reverse,
@@ -661,6 +705,15 @@ export const renderInvoicePdf = async (options: RenderInvoicePdfOptions) => {
   write("");
   for (const line of invoice.lines) {
     field(l.description, line.description);
+    if (line.quantity !== null && line.unitPrice !== null) {
+      const billed =
+        line.unit === null
+          ? quantity(line.quantity)
+          : `${quantity(line.quantity)} ${line.unit}`;
+      write(
+        `${l.quantity}: ${isolate(billed)}   ${l.unitPrice}: ${isolate(money(line.unitPrice))}`,
+      );
+    }
     write(
       `${l.net}: ${isolate(money(line.netAmount))}   ${treatments[line.vatTreatment]} ${isolate(vatRate(line.vatRateBps))}: ${isolate(money(line.vatAmount))}   ${l.total}: ${isolate(money(line.grossAmount))}`,
     );

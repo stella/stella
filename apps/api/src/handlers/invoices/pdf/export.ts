@@ -4,7 +4,7 @@ import { Temporal } from "@stll/time";
 
 import { INVOICE_STATUS } from "@/api/db/schema";
 import { INVOICE_DETAIL_RELATIONS } from "@/api/handlers/invoices/invoice-detail";
-import { readInvoiceAmounts } from "@/api/handlers/invoices/invoice-lines";
+import { readInvoiceDocumentLines } from "@/api/handlers/invoices/invoice-lines";
 import { renderInvoicePdf } from "@/api/handlers/invoices/pdf/render";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
@@ -111,7 +111,7 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
           }),
         );
       }
-      const amounts = yield* readInvoiceAmounts(loaded.invoice);
+      const amounts = yield* readInvoiceDocumentLines(loaded.invoice);
       const rendered = yield* Result.await(
         Result.tryPromise(
           async () =>
@@ -121,6 +121,9 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
                 ...loaded.invoice,
                 lines: amounts.lines.map((line) => ({
                   description: line.description,
+                  quantity: line.quantity,
+                  unit: line.unit,
+                  unitPrice: line.unitPrice,
                   netAmount: line.netAmountMinor,
                   vatAmount: line.vatAmountMinor,
                   grossAmount: line.grossAmountMinor,

@@ -1,7 +1,10 @@
+import { PDF } from "@libpdf/core";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq } from "drizzle-orm";
 
-import { invoices, INVOICE_STATUS } from "@/api/db/schema";
+import { INVOICE_LINE_SOURCE } from "@stll/api-contract";
+
+import { invoiceLines, invoices, INVOICE_STATUS } from "@/api/db/schema";
 import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type exportInvoicePdf from "@/api/handlers/invoices/pdf/export";
 import { createInvoicePdfExport } from "@/api/handlers/invoices/pdf/export";
@@ -28,10 +31,31 @@ beforeAll(async () => {
     invoiceDate: "2026-09-30",
     status: INVOICE_STATUS.DRAFT,
     currency: "CZK",
-    totalAmount: cents(0),
+    netAmount: cents(500_000),
+    vatAmount: cents(105_000),
+    totalAmount: cents(605_000),
+  });
+  await fixture.testDb.insert(invoiceLines).values({
+    organizationId: fixture.ids.orgA,
+    workspaceId: fixture.ids.wsA1,
+    invoiceId,
+    position: 0,
+    description: "Contract review",
+    quantity: "2.5",
+    unit: "h",
+    unitPrice: cents(200_000),
+    vatRateBps: 2100,
+    vatTreatment: "domestic_vat",
+    netAmount: cents(500_000),
+    vatAmount: cents(105_000),
+    grossAmount: cents(605_000),
+    source: INVOICE_LINE_SOURCE.MANUAL,
   });
 });
 afterAll(async () => {
+  await fixture.testDb
+    .delete(invoiceLines)
+    .where(eq(invoiceLines.invoiceId, invoiceId));
   await fixture.testDb.delete(invoices).where(eq(invoices.id, invoiceId));
   await releaseRlsFixture();
 });
@@ -128,9 +152,17 @@ describe("invoice document export", () => {
     expect(written?.key).toContain(
       `exports/${fixture.ids.orgA}/${fixture.ids.wsA1}/`,
     );
-    if (written?.data instanceof Uint8Array) {
-      expect(new TextDecoder().decode(written.data)).toStartWith("%PDF-");
+    if (!(written?.data instanceof Uint8Array)) {
+      throw new Error("the export stored no PDF bytes");
     }
+    expect(new TextDecoder().decode(written.data)).toStartWith("%PDF-");
+    const text = (await PDF.load(written.data))
+      .extractText()
+      .map((page) => page.text)
+      .join("\n");
+    expect(text).toContain("Contract review");
+    expect(text).toContain("Quantity: 2.5 h");
+    expect(text).toContain("Unit price:");
     expect(events).toHaveLength(1);
     expect(events.at(0)).toMatchObject({
       action: "download",
