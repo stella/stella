@@ -25,6 +25,8 @@
     "capability-catalog.json",
     "dist",
     "src",
+    "src/generated/route-map.ts",
+    "src/generated/tool-annotations.ts",
     "skills",
     "README.md"
   ],
