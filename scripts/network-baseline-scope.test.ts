@@ -286,6 +286,10 @@ describe("network baseline workflows", () => {
       "head_repository.full_name == github.repository",
     );
     expect(deliver.if).toContain("conclusion == 'success'");
+    // The display name alone does not identify the recorder workflow.
+    expect(deliver.if).toContain(
+      "github.event.workflow_run.path == '.github/workflows/network-baseline-record.yml'",
+    );
     expect(deliver.permissions).toEqual({ actions: "read", contents: "read" });
     const validation = deliver.steps.findIndex((step) =>
       step.run?.includes(" validate "),
