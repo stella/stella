@@ -88,6 +88,7 @@ export type FlagSpec = {
   enum?: readonly string[];
   min?: number;
   max?: number;
+  range?: "clamp";
   repeatable: boolean;
   default?: unknown;
   /**

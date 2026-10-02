@@ -26,6 +26,7 @@
     "./case-law-text-field": "./src/case-law-text-field.ts",
     "./decision-ruling-identity": "./src/decision-ruling-identity.ts",
     "./decision-docket-grammar": "./src/decision-docket-grammar.ts",
+    "./decision-docket-reference": "./src/decision-docket-reference.ts",
     "./decision-query-intent": "./src/decision-query-intent.ts",
     "./desktop-registry": "./src/desktop-registry.ts",
     "./desktop-rpc": "./src/desktop-rpc.gen.ts",

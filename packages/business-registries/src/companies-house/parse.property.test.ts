@@ -247,7 +247,7 @@ test.each(["profile", "search", "officers"] as const)(
     const supplemental =
       kind === "officers" ? { items: [supplementalOfficer] } : undefined;
     const operation = async () => {
-      const config = { apiKey: "fixture" };
+      const config = { observer: "unobserved", apiKey: "fixture" } as const;
       switch (kind) {
         case "profile":
           return await lookupByCompanyNumber("00445790", config);

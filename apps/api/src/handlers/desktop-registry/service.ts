@@ -32,6 +32,10 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { arrayOrEmpty } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveLookupFormatDefault } from "@/api/lib/templates/lookup-formats/resolve-default";
 import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 import { getDefaultDesktopRegistry } from "./default-registry";
 
@@ -154,6 +158,10 @@ export const searchDesktopRegistry = async (
   context: DesktopRegistryContext,
   { registry, query: rawQuery }: DesktopRegistrySearch,
 ): Promise<Result<DesktopRegistrySearchResponse, HandlerError>> => {
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const query = rawQuery.trim();
   if (query.length === 0 || query.length > 256) {
     return Result.err(invalidRegistry());
@@ -184,6 +192,7 @@ export const searchDesktopRegistry = async (
     );
   }
   const lookup = await executeRegistryLookup({
+    observer,
     handler: configured.value,
     query,
     limit: SEARCH_LIMIT,
@@ -219,6 +228,7 @@ export const searchDesktopRegistry = async (
           return Result.ok(hit);
         }
         const detail = await executeRegistryLookup({
+          observer,
           handler: configured.value,
           query: hit.id,
         });
@@ -315,6 +325,10 @@ export const formatDesktopRegistry = async (
   context: DesktopRegistryContext,
   { registry, id: rawId, formatId }: DesktopRegistryFormat,
 ): Promise<Result<{ text: string; rendered: string }, HandlerError>> => {
+  const observer = actionRequestObserver(
+    context.organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const id = rawId.trim();
   if (
     id.length === 0 ||
@@ -375,6 +389,7 @@ export const formatDesktopRegistry = async (
     );
   }
   const lookup = await executeRegistryLookup({
+    observer,
     handler: configured.value,
     query: id,
   });
