@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import {
   LEGAL_AST_CAPABILITIES,
   getRunnerDefinition,
@@ -27,8 +29,28 @@ type RunCliOptions = {
 };
 
 const refetchEuDecisions = async (argv: readonly string[]): Promise<number> => {
-  const { runEuEcjRefetch } = await import("@/api/scripts/eu-ecj-refetch");
-  return await runEuEcjRefetch(argv);
+  const entrypoint = new URL(
+    import.meta.path.endsWith(".ts")
+      ? "../../api/src/scripts/eu-ecj-refetch.ts"
+      : "./eu-ecj-refetch.js",
+    import.meta.url,
+  );
+  const child = Bun.spawn(
+    [process.execPath, fileURLToPath(entrypoint), ...argv],
+    {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  );
+  const interrupt = () => child.kill("SIGINT");
+  const terminate = () => child.kill("SIGTERM");
+  process.once("SIGINT", interrupt);
+  process.once("SIGTERM", terminate);
+  return await child.exited.finally(() => {
+    process.removeListener("SIGINT", interrupt);
+    process.removeListener("SIGTERM", terminate);
+  });
 };
 
 type ImplementedRunnerOptions = {

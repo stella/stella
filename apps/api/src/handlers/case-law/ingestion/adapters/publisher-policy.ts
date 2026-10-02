@@ -1,4 +1,4 @@
-// parser-output-unchanged: publisher scheduling only; response parsing is unchanged.
+// parser-output-unchanged: run pacing and shared cooldown coordination only; parsing and stored output are unchanged.
 /**
  * What each publisher costs, declared once, and the only fetch that spends it.
  *
@@ -16,7 +16,7 @@
  * requests rather than a total.
  */
 
-import { TaggedError } from "better-result";
+import { panic } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { DAY_IN_MS } from "@stll/time";
@@ -236,10 +236,6 @@ export type PublisherGateId = keyof typeof PUBLISHER_GATES;
 const MILLISECONDS_PER_SECOND = 1000;
 const MAX_PUBLISHER_REQUESTS_PER_SECOND = 2;
 
-class InvalidPublisherRequestRateError extends TaggedError(
-  "InvalidPublisherRequestRateError",
-)<{ message: string }> {}
-
 /**
  * Which publisher each adapter spends against.
  *
@@ -314,7 +310,7 @@ export const createPublisherGateSlot = (
   createPublisherGateSlotAtInterval({
     gateId,
     intervalMs: PUBLISHER_GATES[gateId].intervalMs,
-    dependencies,
+    ...(dependencies === undefined ? {} : { dependencies }),
   });
 
 type CreatePublisherGateSlotWithIntervalOptions = {
@@ -387,9 +383,9 @@ export const withPublisherRequestRateLimit = async <T>({
     requestsPerSecond <= 0 ||
     requestsPerSecond > MAX_PUBLISHER_REQUESTS_PER_SECOND
   ) {
-    throw new InvalidPublisherRequestRateError({
-      message: `requestsPerSecond must be greater than 0 and at most ${MAX_PUBLISHER_REQUESTS_PER_SECOND}`,
-    });
+    return panic(
+      `requestsPerSecond must be greater than 0 and at most ${MAX_PUBLISHER_REQUESTS_PER_SECOND}`,
+    );
   }
 
   const requestedIntervalMs = Math.ceil(
@@ -401,7 +397,7 @@ export const withPublisherRequestRateLimit = async <T>({
       gateSlot: createPublisherGateSlotAtInterval({
         gateId,
         intervalMs: requestedIntervalMs,
-        dependencies,
+        ...(dependencies === undefined ? {} : { dependencies }),
       }),
     },
     operation,

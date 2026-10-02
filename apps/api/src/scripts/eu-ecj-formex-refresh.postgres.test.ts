@@ -177,20 +177,22 @@ if (!databaseUrl || !runPostgresTests) {
           readStoredRaw: async (key) =>
             Result.ok(new TextEncoder().encode(key)),
           refreshStoredFormex: async ({ stored }) => {
-            const index = ids.indexOf(
-              (
-                await db
-                  .select({ id: caseLawDecisions.id })
-                  .from(caseLawDecisions)
-                  .where(
-                    eq(
-                      caseLawDecisions.sourceDocumentId,
-                      stored.sourceDocumentId ?? "",
-                    ),
-                  )
-                  .limit(1)
-              ).at(0)?.id ?? "",
-            );
+            const row = (
+              await db
+                .select({ id: caseLawDecisions.id })
+                .from(caseLawDecisions)
+                .where(
+                  eq(
+                    caseLawDecisions.sourceDocumentId,
+                    stored.sourceDocumentId ?? "",
+                  ),
+                )
+                .limit(1)
+            ).at(0);
+            if (row === undefined) {
+              throw new TypeError("Fixture decision missing");
+            }
+            const index = ids.indexOf(row.id);
             const outcome = outcomes.at(index);
             if (outcome === undefined) {
               throw new TypeError("Fixture outcome missing");

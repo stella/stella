@@ -273,7 +273,7 @@ describe("stored Formex refresh", () => {
     );
     const after = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
     expect(after).not.toBeNull();
-    expect(after?.formex).toBe("<new-formex />");
+    expect(after?.["formex"]).toBe("<new-formex />");
     expect(after?.["future-part"]).toBe(before["future-part"]);
     for (const [key, value] of Object.entries(before)) {
       if (key !== "formex") {
@@ -308,7 +308,7 @@ describe("stored Formex refresh", () => {
     expect(outcome.formexShape).toBe("archive");
     expect(outcome.bytes).toBeGreaterThan(0);
     const after = decodeSourceRawEnvelope(outcome.decision.sourceRaw ?? "");
-    expect(after?.formex?.startsWith("formex-archive:")).toBe(true);
+    expect(after?.["formex"]?.startsWith("formex-archive:")).toBe(true);
   });
 
   test("rejects a refreshed decision whose source identity differs from the stored row", async () => {

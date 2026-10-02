@@ -1561,7 +1561,7 @@ const nonEmptyString = (value: unknown): string | undefined =>
  */
 const reparseStoredRaw = (
   stored: StoredRawReparseInput,
-): StoredRawReparseOutcome => {
+): Exclude<StoredRawReparseOutcome, { type: "supplement" }> => {
   if (
     stored.contentType !== null &&
     !ECJ_REPARSABLE_CONTENT_TYPES.has(stored.contentType)

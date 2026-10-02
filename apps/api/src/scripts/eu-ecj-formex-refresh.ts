@@ -19,6 +19,7 @@ import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/typ
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawIngestionHandle } from "@/api/lib/case-law/maintenance-lane";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
+import { iterateCursorPages } from "@/api/lib/pagination";
 
 export class EcjFormexRefreshInputError extends TaggedError(
   "EcjFormexRefreshInputError",
@@ -160,7 +161,6 @@ const resolveRows = async ({
     const documents = chunk.flatMap((identity) =>
       identity.type === "document" ? [identity.value] : [],
     );
-    // db-await-in-loop: bounded identity-resolution batches, before remote or write work
     rows.push(
       ...(await ingestionDb(
         async (tx) =>
@@ -496,7 +496,6 @@ const refreshStoredRow = async ({
     return { type: "terminal", outcome: "would-refreshed", ...extra };
   }
   await batch.sourceLease.beforeDatabaseMark();
-  // db-await-in-loop: each pipeline write needs a fresh lease-guarded source observation
   const observationOrder = await allocateSourceObservationOrder({
     leaseToken: batch.sourceLease.leaseToken,
     scopedDb: batch.ingestionDb,
@@ -515,7 +514,6 @@ const refreshStoredRow = async ({
     rawDigest: rawDigest(decisionRaw),
     ...extra,
   });
-  // db-await-in-loop: source-order-guarded pipeline writes acknowledge each row independently
   const written = await writeDecision({
     input: outcome.decision,
     sourceId,
@@ -667,6 +665,7 @@ const visitRefreshBatch = async ({
       await append(identity, apply ? "write-rejected" : "would-write-rejected");
       continue;
     }
+    // db-await-in-loop: exactly-once crash recovery requires each write intent and fsynced acknowledgment before the next row
     const refreshed = await refreshStoredRow({
       row,
       sourceId,
@@ -811,52 +810,83 @@ export const runEcjFormexRefresh = async ({
     journal.prior.set(row.id, result);
     journal.offset += Buffer.byteLength(line);
   };
-  try {
-    for (let offset = 0; offset < plan.length; offset += batchSize) {
-      signal.throwIfAborted();
-      const batch = await acquireRefreshBatch({
-        apply,
-        acquireBatch,
-        signal,
-        leaseWaitMs,
-        now,
-        waitForLease,
+  const readRefreshPage = async (cursor: string | null) => {
+    const offset = cursor === null ? 0 : Number(cursor);
+    signal.throwIfAborted();
+    if (offset >= plan.length) {
+      return { items: [], nextCursor: null, limit: batchSize };
+    }
+    const batch = await acquireRefreshBatch({
+      apply,
+      acquireBatch,
+      signal,
+      leaseWaitMs,
+      now,
+      waitForLease,
+    });
+    let prepared = false;
+    try {
+      journal = await readPriorResults({
+        path: resultsOut,
+        journal,
+        repair: true,
       });
+      intentState.pending = await readIntent(intentPath);
+      const identities = filterPendingRows({
+        rows: plan.slice(offset, offset + batchSize),
+        prior: journal.prior,
+        apply,
+      });
+      const currentRows =
+        identities.length === 0
+          ? []
+          : await (batch?.ingestionDb ?? ingestionDb)(
+              async (tx) =>
+                await tx
+                  .select(REPLAY_COLUMNS)
+                  .from(caseLawDecisions)
+                  .where(
+                    and(
+                      eq(caseLawDecisions.sourceId, sourceId),
+                      inArray(
+                        caseLawDecisions.id,
+                        identities.map(({ id }) => id),
+                      ),
+                      isNull(caseLawDecisions.redactedAt),
+                    ),
+                  )
+                  .limit(identities.length),
+            );
+      const page = {
+        items: [
+          {
+            batch,
+            identities,
+            currentById: new Map(currentRows.map((row) => [row.id, row])),
+          },
+        ],
+        nextCursor:
+          offset + batchSize < plan.length ? String(offset + batchSize) : null,
+        limit: batchSize,
+      };
+      prepared = true;
+      return page;
+    } finally {
+      if (!prepared) {
+        await batch?.release();
+      }
+    }
+  };
+  try {
+    for await (const pages of iterateCursorPages(readRefreshPage)) {
+      const page = pages.at(0);
+      if (page === undefined) {
+        continue;
+      }
+      const { batch, identities, currentById } = page;
       let refusal: Awaited<ReturnType<typeof visitRefreshBatch>> = null;
       try {
-        journal = await readPriorResults({
-          path: resultsOut,
-          journal,
-          repair: true,
-        });
-        intentState.pending = await readIntent(intentPath);
-        const identities = filterPendingRows({
-          rows: plan.slice(offset, offset + batchSize),
-          prior: journal.prior,
-          apply,
-        });
-        if (identities.length === 0) {
-          continue;
-        }
-        // db-await-in-loop: read only the current bounded batch while its source lease is held
-        const currentRows = await (batch?.ingestionDb ?? ingestionDb)(
-          async (tx) =>
-            await tx
-              .select(REPLAY_COLUMNS)
-              .from(caseLawDecisions)
-              .where(
-                and(
-                  eq(caseLawDecisions.sourceId, sourceId),
-                  inArray(
-                    caseLawDecisions.id,
-                    identities.map(({ id }) => id),
-                  ),
-                  isNull(caseLawDecisions.redactedAt),
-                ),
-              )
-              .limit(identities.length),
-        );
-        const currentById = new Map(currentRows.map((row) => [row.id, row]));
+        // db-await-in-loop: exactly-once crash recovery requires ordered pipeline writes and fsynced row acknowledgments within this lease batch
         refusal = await visitRefreshBatch({
           identities,
           currentById,
