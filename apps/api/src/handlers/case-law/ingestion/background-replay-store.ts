@@ -31,6 +31,7 @@ import {
   caseLawReplayDailyRows,
   caseLawReplaySourceProgress,
   caseLawReplayAuditEvents,
+  type ReplayMaintenanceAuditDetails,
   databaseBackfillStates,
 } from "@/api/db/schema";
 import {
@@ -227,6 +228,20 @@ const chooseSource = async (
     ...keys.slice(previousIndex + 1),
     ...keys.slice(0, previousIndex + 1),
   ];
+  const availableSources = await withReplayTransaction(
+    db,
+    async (tx) =>
+      await tx
+        .select({
+          id: caseLawSources.id,
+          adapterKey: caseLawSources.adapterKey,
+        })
+        .from(caseLawSources)
+        .where(inArray(caseLawSources.adapterKey, ordered)),
+  );
+  const sourceByAdapter = new Map(
+    availableSources.map((source) => [source.adapterKey, source]),
+  );
   for (const adapterKey of ordered) {
     const policy = enrolment[adapterKey];
     if (policy.mode === "off" || sourceEnabled?.(adapterKey) === false) {
@@ -240,17 +255,7 @@ const chooseSource = async (
     // Each source is an independent failure boundary. Timeout or contention in
     // one source must not prevent the next source's bounded probe.
     const result = await Result.tryPromise(async () => {
-      const source = (
-        await withReplayTransaction(
-          db,
-          async (tx) =>
-            await tx
-              .select({ id: caseLawSources.id })
-              .from(caseLawSources)
-              .where(eq(caseLawSources.adapterKey, adapterKey))
-              .limit(1),
-        )
-      ).at(0);
+      const source = sourceByAdapter.get(adapterKey);
       if (!source) {
         return null;
       }
@@ -263,11 +268,13 @@ const chooseSource = async (
         // A bounded existence probe supplies a lower bound, not a corpus census.
         rowsBehind: 1,
       };
+      // db-await-in-loop: Read each gate during the ordered first-eligible-source walk; held sources must be skipped before probing their corpus.
       const state = await loadGateState(context, candidate);
       if (state.holdUntil !== null && state.holdUntil > now()) {
         context.onHeld?.(candidate, state);
         return null;
       }
+      // db-await-in-loop: Probe sources in persisted round-robin order, stopping at the first eligible source; each probe needs its own timeout boundary.
       const pending = await withReplayTransaction(
         db,
         async (tx) =>
@@ -293,7 +300,8 @@ const chooseSource = async (
       );
       const probe = pending
         ? true
-        : await withReplayTransaction(
+        : // db-await-in-loop: Only probe lag after this source has no pending receipt, before advancing to the next source in round-robin order.
+          await withReplayTransaction(
             db,
             async (tx) =>
               (
@@ -309,6 +317,7 @@ const chooseSource = async (
       }
       onLag?.(candidate);
       if (
+        // db-await-in-loop: Check allowance only for a lagging candidate, stopping the ordered source walk immediately when one is eligible.
         !(await hasDailyAllowance({
           db,
           source: candidate,
@@ -1509,7 +1518,7 @@ const completeBatch = async (
 type AdvancePreviewCursorOptions = {
   batch: BackgroundReplayBatch;
   completedAt: Date;
-  kind: "reviewed" | "retry-exhausted";
+  kind: NonNullable<ReplayMaintenanceAuditDetails["kind"]>;
 };
 
 const advancePreviewCursor = async (
