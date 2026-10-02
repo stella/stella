@@ -158,9 +158,8 @@ for (const reason of ["hold", "retry"] as const) {
                 holdUntil: 5100,
                 heldSince: 100,
               })
-            : new BackfillFailedError({
+            : new BackfillHeldError({
                 message: "deferred",
-                cause: { code: "57014" },
                 holdUntil: null,
                 heldSince: null,
               });

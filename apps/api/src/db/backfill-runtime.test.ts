@@ -1,11 +1,24 @@
+import { Result } from "better-result";
+import { SQL } from "bun";
 import { expect, test } from "bun:test";
+import { PgDialect } from "drizzle-orm/pg-core";
 
-import { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
+import {
+  BackfillFailedError,
+  BackfillHeldError,
+} from "@stll/db-load-gate/backfill-pass";
 import type { Verdict } from "@stll/db-load-gate/health";
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 
-import { createBackfillRuntime, decodeCheckpoint } from "./backfill-runtime";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+
+import {
+  createBackfillRuntime,
+  createScriptBackfillRuntime,
+  decodeCheckpoint,
+} from "./backfill-runtime";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
+import type { Transaction } from "./root";
 
 test.each([undefined, null, "unknown", {}, 4])(
   "an unrecognized checkpoint cause %p uses the legacy hold policy",
@@ -378,3 +391,104 @@ test("a quiet multi-unit run retains its first resume transition in the final st
     await runtime.close();
   }
 });
+
+for (const mode of ["database", "script"] as const) {
+  test.each([undefined, "fail"] as const)(
+    `${mode} timeout policy %p preserves its consumer contract`,
+    async (statementTimeoutPolicy) => {
+      const config = {
+        ...defaultConfig,
+        minSize: 1,
+        maxSize: 1,
+        busyWindows: [],
+      };
+      let checkpoint: unknown;
+      const query = async (
+        statement: string,
+        parameters: readonly unknown[] = [],
+      ) => {
+        if (
+          statement.startsWith("INSERT") ||
+          statement.startsWith("UPDATE database_backfill_states")
+        ) {
+          const serialized = parameters.at(2);
+          if (typeof serialized === "string") {
+            const batch: unknown = JSON.parse(serialized);
+            checkpoint = { cursor: parameters.at(1), batch };
+          }
+        }
+        if (statement.startsWith("SELECT cursor, batch")) {return [checkpoint];}
+        return [{ acquired: true }];
+      };
+      const options = {
+        name: `timeout-contract-${mode}`,
+        tableName: "rows",
+        initialSize: 1,
+        initialCursor: "saved",
+        config,
+        clock: () => 0,
+        readVerdict: async () => ({ kind: "normal" as const, signals: [] }),
+        log: () => undefined,
+        ...(statementTimeoutPolicy === undefined
+          ? {}
+          : { statementTimeoutPolicy }),
+      };
+      const dialect = new PgDialect();
+      const transaction = asTestRaw<Transaction>({
+        execute: async (
+          statement: Parameters<typeof dialect.sqlToQuery>[0],
+        ) => {
+          const rendered = dialect.sqlToQuery(statement);
+          return await query(rendered.sql, rendered.params);
+        },
+      });
+      const runtime =
+        mode === "database"
+          ? createBackfillRuntime({
+              ...options,
+              connection: { query, execute: async () => {} },
+            })
+          : createScriptBackfillRuntime({
+              ...options,
+              db: {
+                transaction: async (work) => await work(transaction),
+                execute: transaction.execute,
+              },
+              slot: { tryAcquire: async () => true, release: () => undefined },
+            });
+      const cause = new SQL.PostgresError("batch statement timeout", {
+        code: "ERR_POSTGRES_SERVER_ERROR",
+        errno: "57014",
+        detail: "",
+        hint: "",
+        severity: "ERROR",
+      });
+      try {
+        const outcome = await Result.tryPromise({
+          try: async () =>
+            await runtime.step(async () => {
+              throw cause;
+            }),
+          catch: (error: unknown) => error,
+        });
+        expect(outcome.isErr()).toBe(true);
+        if (outcome.isErr()) {
+          expect(outcome.error).toBeInstanceOf(
+            statementTimeoutPolicy === "fail"
+              ? BackfillFailedError
+              : BackfillHeldError,
+          );
+          expect(outcome.error).toMatchObject({
+            holdUntil: null,
+            heldSince: null,
+          });
+          if (outcome.error instanceof BackfillFailedError)
+            {expect(outcome.error.cause).toBe(cause);}
+        }
+        expect(checkpoint).toMatchObject({ cursor: "saved" });
+      } finally {
+        await runtime.close();
+      }
+    },
+  );
+}

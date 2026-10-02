@@ -168,6 +168,44 @@ test("scheduler failure logs preserve Bun driver codes and SQLSTATEs", async () 
   }
 });
 
+test.each([
+  "completed",
+  42,
+  null,
+  {},
+  { status: "err", isErr: () => true, error: { cause: "unexpected result" } },
+])(
+  "an incidental task return is successful unless it is an actual Result (%j)",
+  async (returned) => {
+    const taskName = "test.incidental-return";
+    const id = await seedJob({ task: taskName });
+    const recording = installRecordingLogger();
+    try {
+      // A void callback may return an incidental value, including an object
+      // whose method happens to have the same name as a Result method.
+      const result = await runSchedulerOnce({
+        db,
+        leaseMs: LEASE_MS,
+        registry: registryOf(taskName, () => returned),
+        runnerId: "runner-incidental-return",
+      });
+      expect(result).toMatchObject({ acquired: 1, failed: 0, succeeded: 1 });
+      const job = await readJob(id);
+      expect(job.lastSuccessAt).not.toBeNull();
+      expect(job.lastError).toBeNull();
+      expect(job.lockedBy).toBeNull();
+      expect((await readLatestRun(id)).status).toBe("success");
+      expect(
+        recording.records.filter(
+          (record) => record.message === "scheduler.job_failed",
+        ),
+      ).toHaveLength(0);
+    } finally {
+      recording.restore();
+    }
+  },
+);
+
 test.each(["expression", "provision"] as const)(
   "%s task timeouts persist failure even when the following decision is held",
   async (taskKind) => {
@@ -225,6 +263,13 @@ test.each(["expression", "provision"] as const)(
         (record) => record.message === "scheduler.job_failed",
       );
       expect(failures).toHaveLength(1);
+      expect(
+        recording.records.filter(
+          (record) =>
+            record.message ===
+            "scheduler.case_law_provision_state_backfill_failed",
+        ),
+      ).toHaveLength(0);
       expect(failures.at(0)?.attributes?.["error.cause.pg_code"]).toBe("57014");
       expect(
         recording.records.some((record) => record.message.endsWith("_held")),

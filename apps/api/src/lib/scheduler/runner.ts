@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { Err, panic } from "better-result";
 import {
   and,
   asc,
@@ -655,7 +655,7 @@ export const runJob = async ({
       ),
       timeout,
     ]);
-    if (outcome !== undefined && outcome.isErr()) {
+    if (outcome instanceof Err) {
       raceError = outcome.error.cause;
       raceRejected = true;
     }

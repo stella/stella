@@ -1,6 +1,6 @@
-import { panic } from "better-result";
+import { Err, panic } from "better-result";
 import type { SQL } from "bun";
-import { describe, expect, test } from "bun:test";
+import { describe, expect, spyOn, test } from "bun:test";
 import { eq } from "drizzle-orm";
 import { drizzle } from "drizzle-orm/pglite";
 
@@ -16,7 +16,6 @@ import {
 } from "@/api/db/long-running-connection";
 import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { logger } from "@/api/lib/observability/logger";
-import type { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
@@ -47,7 +46,7 @@ const withFixture = async (
       task: SchedulerTask;
       run: () => Promise<Awaited<ReturnType<SchedulerTask>>>;
       events: string[];
-      failures: Parameters<typeof observeFailure>[];
+      failures: unknown[];
     };
     operator: SQL;
     schema: string;
@@ -113,7 +112,7 @@ const withFixture = async (
         beforeQuery = async () => {},
       }: FixtureOptions = {}) => {
         const events: string[] = [];
-        const failures: Parameters<typeof observeFailure>[] = [];
+        const failures: unknown[] = [];
         const controller = new AbortController();
         const withConnection: typeof withLongRunningConnection = async (
           { signal },
@@ -166,16 +165,20 @@ const withFixture = async (
               ),
           });
         let now = Date.parse("2026-10-02T12:00:00Z");
-        const task = createCaseLawProvisionStateBackfillTask({
+        const actualTask = createCaseLawProvisionStateBackfillTask({
           withConnection,
           clock: () => now++,
           readVerdict: async () => ({ kind: "normal", signals: [] }),
           observeStatus: () => {},
           sleep: async () => {},
-          reportFailure: (...args) => {
-            failures.push(args);
-          },
         });
+        const task: SchedulerTask = async (context) => {
+          const outcome = await actualTask(context);
+          if (outcome instanceof Err) {
+            failures.push(outcome.error.cause);
+          }
+          return outcome;
+        };
         return {
           task,
           events,
@@ -213,6 +216,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         },
       });
       const schedulerClient = await createTestPglite();
+      const failureLog = spyOn(logger, "error");
       try {
         const schedulerDb = drizzle({ client: schedulerClient });
         const jobId = "test.provision.postgres-timeout";
@@ -232,6 +236,11 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
           maxRuntimeMs: 30_000,
         });
         expect(result).toMatchObject({ failed: 1, succeeded: 0 });
+        expect(failureLog).toHaveBeenCalledTimes(1);
+        expect(failureLog).toHaveBeenCalledWith(
+          "scheduler.job_failed",
+          expect.objectContaining({ "error.cause.pg_code": "57014" }),
+        );
         const run = (
           await schedulerDb
             .select()
@@ -249,14 +258,12 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         expect(job?.lastError).not.toBeNull();
         expect(job?.lockedBy).toBeNull();
       } finally {
+        failureLog.mockRestore();
         await schedulerClient.close();
       }
       expect(task.events).toEqual([]);
       expect(task.failures).toHaveLength(1);
-      expect(task.failures.at(0)?.at(1)).toMatchObject({
-        sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
-      });
-      const failure = task.failures.at(0)?.[0];
+      const failure = task.failures.at(0);
       expect(failure).toMatchObject({ cause: expect.any(BackfillFailedError) });
       expect(isPgError(failure, PG_ERROR.QUERY_CANCELED)).toBe(true);
       expect(

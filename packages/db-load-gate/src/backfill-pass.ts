@@ -4,7 +4,7 @@ import { Temporal } from "@stll/time";
 
 export class BackfillHeldError extends TaggedError("BackfillHeldError")<{
   message: string;
-  holdUntil: number;
+  holdUntil: number | null;
   heldSince: number | null;
 }> {}
 
@@ -83,7 +83,10 @@ export const runBackfillPass = async <Value>({
       const sleepMs =
         holdUntil === null ? RETRY_BACKOFF_MS : Math.max(0, holdUntil - now);
       const record = {
-        reason: outcome.error instanceof BackfillFailedError ? "retry" : "hold",
+        reason:
+          outcome.error instanceof BackfillFailedError || holdUntil === null
+            ? "retry"
+            : "hold",
         now,
         holdUntil,
         heldSince,

@@ -15,8 +15,6 @@ import {
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
-import { failureSink } from "@/api/lib/observability/failure";
-import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
@@ -37,11 +35,6 @@ export const BACKFILL_CASE_LAW_PROVISION_STATE_TASK =
 const RUN_BUDGET_MS = 5 * 60_000;
 const VALIDATE_STATEMENT_TIMEOUT_MS = 25 * 60_000;
 const CONNECTION_LOCK_TIMEOUT_MS = 30_000;
-
-const backfillUnitFailed = failureSink({
-  event: "scheduler.case_law_provision_state_backfill_failed",
-  expected: [],
-});
 
 /** The part of a reserved Bun SQL connection the backfill uses. */
 type ReservedConnection = {
@@ -111,14 +104,12 @@ export const createCaseLawProvisionStateBackfillTask =
     sleep = async (milliseconds, signal) => {
       await sleepWithSignal(milliseconds, undefined, { signal });
     },
-    reportFailure = observeFailure,
   }: {
     withConnection?: typeof withLongRunningConnection;
     readVerdict?: () => Promise<Verdict>;
     clock?: () => number;
     observeStatus?: typeof logSchedulerBackfillStatus;
     sleep?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
-    reportFailure?: typeof observeFailure;
   } = {}): SchedulerTask =>
   async ({ logger, signal }) => {
     // The connection helper rejects once the signal aborts, even after the work
@@ -157,6 +148,7 @@ export const createCaseLawProvisionStateBackfillTask =
               readVerdict,
               observeStatus,
               reporting: "changes",
+              statementTimeoutPolicy: "fail",
             });
             try {
               const run = await runProvisionStateBackfill({
@@ -227,7 +219,6 @@ export const createCaseLawProvisionStateBackfillTask =
         logger.info("scheduler.case_law_provision_state_backfill_aborted", {});
         return;
       }
-      reportFailure(settled.error, { sink: backfillUnitFailed });
       return Result.err(
         new SchedulerTaskFailure({
           message: "Provision state backfill failed",
@@ -252,7 +243,6 @@ export const createCaseLawProvisionStateBackfillTask =
         });
         return;
       }
-      reportFailure(run.error, { sink: backfillUnitFailed });
       return Result.err(
         new SchedulerTaskFailure({
           message: "Provision state backfill failed",

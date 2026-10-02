@@ -19,7 +19,6 @@ import { BackfillFailedError } from "@/api/db/backfill-runtime";
 import type { withLongRunningConnection } from "@/api/db/long-running-connection";
 import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import { logger } from "@/api/lib/observability/logger";
-import type { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
@@ -77,7 +76,6 @@ const fixture = ({
   sleep = async () => {},
 }: FixtureOptions = {}) => {
   const events: string[] = [];
-  const failures: Parameters<typeof observeFailure>[] = [];
   const sleeps: number[] = [];
   const controller = new AbortController();
   let now = Date.parse("2026-10-02T12:00:00Z");
@@ -112,13 +110,9 @@ const fixture = ({
       sleeps.push(milliseconds);
       await sleep(milliseconds, signal);
     },
-    reportFailure: (...args) => {
-      failures.push(args);
-    },
   });
   return {
     events,
-    failures,
     sleeps,
     controller,
     advance: (milliseconds: number) => {
@@ -164,14 +158,13 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     expect(task.events).toEqual([
       "scheduler.case_law_provision_state_backfill_held",
     ]);
-    expect(task.failures).toEqual([]);
     expect(task.sleeps).toEqual([]);
     expect(await cursorRows()).toEqual([]);
     expect((await checkpoint()).batch.heldSince).not.toBeNull();
     expect((await checkpoint()).batch.holdUntil).not.toBeNull();
   });
 
-  test("a statement timeout rolls back the real page and emits the existing failure event", async () => {
+  test("a statement timeout rolls back the real page and returns its original failure cause", async () => {
     const timeout = Object.assign(
       new Error("canceling statement due to statement timeout"),
       { code: "57014" },
@@ -191,11 +184,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
     expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
     expect(task.events).toEqual([]);
-    expect(task.failures).toHaveLength(1);
-    expect(task.failures.at(0)?.at(1)).toMatchObject({
-      sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
-    });
-    const failure = task.failures.at(0)?.[0];
+    const failure = outcome.error.cause;
     expect(failure).toBeInstanceOf(ProvisionBackfillUnitError);
     if (
       !(failure instanceof ProvisionBackfillUnitError) ||
@@ -235,7 +224,6 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     }
     expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
     expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
-    expect(task.failures).toHaveLength(1);
     expect(task.events).not.toContain(
       "scheduler.case_law_provision_state_backfill_held",
     );
@@ -269,11 +257,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
       expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
       expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
       expect(task.events).toEqual([]);
-      expect(task.failures).toHaveLength(1);
-      expect(task.failures.at(0)?.at(1)).toMatchObject({
-        sink: { event: "scheduler.case_law_provision_state_backfill_failed" },
-      });
-      const failure = task.failures.at(0)?.[0];
+      const failure = outcome.error.cause;
       expect(failure).toBeInstanceOf(ProvisionBackfillUnitError);
       if (
         !(failure instanceof ProvisionBackfillUnitError) ||
@@ -306,7 +290,6 @@ describe("provision scheduler wiring through the real backfill steps", () => {
   test("a completed task commits both real cursors, paces each unit and settles completion", async () => {
     const task = fixture();
     await task.run();
-    expect(task.failures).toEqual([]);
     expect(await cursorRows()).toEqual([
       { name: "scope-bootstrap", complete: true },
       { name: "state-seed", complete: true },
@@ -341,7 +324,6 @@ describe("provision scheduler wiring through the real backfill steps", () => {
       { name: "scope-bootstrap", complete: true },
       { name: "state-seed", complete: true },
     ]);
-    expect(task.failures).toEqual([]);
   });
 
   test("abort interrupts a thirty-second pacing delay after the page commits", async () => {
@@ -383,7 +365,6 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     expect(task.events).toEqual([
       "scheduler.case_law_provision_state_backfill_aborted",
     ]);
-    expect(task.failures).toEqual([]);
     expect(await cursorRows()).toEqual([
       { name: "scope-bootstrap", complete: true },
     ]);

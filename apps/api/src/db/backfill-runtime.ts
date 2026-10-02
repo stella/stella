@@ -65,6 +65,7 @@ type RuntimeOptions = {
   readVerdict?: (() => Promise<Verdict>) | undefined;
   log?: ((record: unknown) => void) | undefined;
   reporting?: "detailed" | "changes";
+  statementTimeoutPolicy?: "defer" | "fail";
   observeStatus?: ((record: BackfillRunStatus) => void) | undefined;
 };
 type BatchWork<BatchTransaction, Value> = (options: {
@@ -268,8 +269,17 @@ const createRuntimeReporter = ({
 
 type BackfillBatchResult = Awaited<ReturnType<typeof runAdaptiveBackfillBatch>>;
 
-const throwIfBackfillDeferred = (name: string, result: BackfillBatchResult) => {
-  if (result.status === "retry") {
+type BackfillDeferralOptions = {
+  name: string;
+  result: BackfillBatchResult;
+  statementTimeoutPolicy: NonNullable<RuntimeOptions["statementTimeoutPolicy"]>;
+};
+const throwIfBackfillDeferred = ({
+  name,
+  result,
+  statementTimeoutPolicy,
+}: BackfillDeferralOptions) => {
+  if (result.status === "retry" && statementTimeoutPolicy === "fail") {
     throw new BackfillFailedError({
       message: `Backfill ${name} batch failed (statement timeout)`,
       cause: result.error,
@@ -277,12 +287,10 @@ const throwIfBackfillDeferred = (name: string, result: BackfillBatchResult) => {
       heldSince: result.checkpoint.batch.heldSince,
     });
   }
-  if (result.status === "held") {
+  if (result.status === "held" || result.status === "retry") {
     throw new BackfillHeldError({
       message: `Backfill ${name} deferred (${result.status})`,
-      holdUntil:
-        result.checkpoint.batch.holdUntil ??
-        panic("Held backfill requires a hold deadline"),
+      holdUntil: result.checkpoint.batch.holdUntil,
       heldSince: result.checkpoint.batch.heldSince,
     });
   }
@@ -302,6 +310,7 @@ const createRuntime = <BatchTransaction>({
   readVerdict,
   observeStatus,
   reporting = "detailed",
+  statementTimeoutPolicy = "defer",
   log = (record) =>
     process.stderr.write(
       `${JSON.stringify({ event: "database_backfill_decision", name, record })}\n`,
@@ -434,7 +443,7 @@ const createRuntime = <BatchTransaction>({
         config,
       }),
     );
-    throwIfBackfillDeferred(name, result);
+    throwIfBackfillDeferred({ name, result, statementTimeoutPolicy });
     const completedBatch =
       completion.result ?? panic("Backfill batch completed without a result");
     return {

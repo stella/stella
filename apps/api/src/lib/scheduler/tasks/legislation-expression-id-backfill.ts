@@ -326,6 +326,7 @@ export const createLegislationExpressionIdBackfill =
       readVerdict,
       observeStatus,
       reporting: "changes",
+      statementTimeoutPolicy: "fail",
     });
     const settled = await Result.tryPromise({
       try: async () => {
