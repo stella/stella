@@ -237,7 +237,7 @@ export default eslintCompatPlugin({
                 reason.length >= MIN_REASON_LENGTH &&
                 !isPlaceholderReason(reason) &&
                 /\p{L}/u.test(reason) &&
-                !/^(.)\1+$/u.test(reason)
+                new Set(reason).size > 1
               ) {
                 const { line, column } = context.sourceCode.getLocFromIndex(
                   comment.range[0],
