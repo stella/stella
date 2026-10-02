@@ -399,6 +399,7 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("s3-object-boundary.fixture.ts", [
     "s3-object-boundary/no-native-s3-object-read",
+    "s3-object-boundary/no-etag-content-identity",
     "s3-object-boundary/no-native-s3-object-write",
   ]),
   fixtureRuleOverride("result-boundary.fixture.ts", [
@@ -1340,6 +1341,10 @@ export default defineConfig({
   ],
 
   overrides: [
+    {
+      files: ["**/*.{ts,tsx,mts,cts,js,mjs}"],
+      rules: { "s3-object-boundary/no-etag-content-identity": "error" },
+    },
     ...SHADCN_LINT_POLICY_OVERRIDES,
     ...SIZE_LINT_POLICY_OVERRIDES,
     ...(core.overrides ?? []),
