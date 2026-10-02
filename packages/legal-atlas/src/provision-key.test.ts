@@ -97,9 +97,15 @@ describe("provision identity construction", () => {
       }
       expect(grammar.anchor(ref)).toBe(url.value.split("#").at(1));
       let level = "section";
-      if (ref.subsection !== null) {level = "subsection";}
-      if (ref.letter !== null) {level = "letter";}
-      if (ref.point !== null) {level = "point";}
+      if (ref.subsection !== null) {
+        level = "subsection";
+      }
+      if (ref.letter !== null) {
+        level = "letter";
+      }
+      if (ref.point !== null) {
+        level = "point";
+      }
       levels.add(level);
     }
     expect(levels).toEqual(
