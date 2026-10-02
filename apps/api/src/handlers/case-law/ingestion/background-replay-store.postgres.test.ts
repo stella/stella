@@ -138,9 +138,18 @@ if (!databaseUrl || !enabled) {
         adapterKey: `store-${source.id}`,
         name: "replay store fixture",
       });
-      const ids = Array.from({ length: 3 }, () =>
+      const sortedIds = Array.from({ length: 3 }, () =>
         createSafeId<"caseLawDecision">(),
       ).toSorted();
+      const [firstId, secondId, thirdId] = sortedIds;
+      if (
+        firstId === undefined ||
+        secondId === undefined ||
+        thirdId === undefined
+      ) {
+        panic("Expected three replay fixture decision ids");
+      }
+      const ids = [firstId, secondId, thirdId] as const;
       await db.insert(caseLawDecisions).values(
         ids.map((id, index) => ({
           id,
@@ -732,7 +741,7 @@ if (!databaseUrl || !enabled) {
                     apply: true,
                   });
                   expect(reads).toBe(2);
-                  expect(killed).toBe(true);
+                  expect(cleanupState.killed).toBe(true);
                   expect(fenceChecks).toBeGreaterThan(0);
                   expect(replayed.outcomes.applied).toBe(0);
                   expect(replayed.haltReason).not.toBeNull();
@@ -1163,10 +1172,7 @@ if (!databaseUrl || !enabled) {
         "no-write-settled",
       ]);
       // A new low-ID insert forces the cursor to wrap; dropping wrap-around loses it.
-      const lowId = ids.at(0);
-      if (!lowId) {
-        throw new TypeError("Expected sorted fixture IDs");
-      }
+      const lowId = ids[0];
       const lower = toSafeId<"caseLawDecision">(
         "00000000-0000-4000-8000-000000000001",
       );
@@ -1212,9 +1218,7 @@ if (!databaseUrl || !enabled) {
       if (second.type !== "reserved") {
         throw new TypeError("Expected later fixture while first backs off");
       }
-      expect(second.batch.decisionId).toBe(
-        ids.at(1) ?? panic("Expected second replay decision id"),
-      );
+      expect(second.batch.decisionId).toBe(ids[1]);
       await db
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
@@ -1259,9 +1263,7 @@ if (!databaseUrl || !enabled) {
       if (next.type !== "reserved") {
         throw new TypeError("Expected remaining row");
       }
-      expect(next.batch.decisionId).toBe(
-        ids.at(2) ?? panic("Expected third replay decision id"),
-      );
+      expect(next.batch.decisionId).toBe(ids[2]);
     });
 
     test("crashed pickups exhaust the row budget and automatically re-admit after seven days", async () => {
@@ -1580,7 +1582,7 @@ if (!databaseUrl || !enabled) {
       if (second.type !== "reserved") {
         throw new TypeError("Expected second preview after restart");
       }
-      expect(second.batch.decisionId).toBe(ids.at(1));
+      expect(second.batch.decisionId).toBe(ids[1]);
       await restarted.advancePreview(second.batch);
       await restarted.resetDryRunCursor(source);
       expect(await restarted.previewBatch(source, null)).toEqual({
@@ -1652,7 +1654,7 @@ if (!databaseUrl || !enabled) {
       if (next.type !== "reserved") {
         throw new TypeError("Expected next UTC day's preview");
       }
-      expect(next.batch.decisionId).toBe(ids.at(1));
+      expect(next.batch.decisionId).toBe(ids[1]);
       const charges = await db
         .select()
         .from(caseLawReplayDailyRows)
@@ -1717,7 +1719,7 @@ if (!databaseUrl || !enabled) {
           throw new TypeError("Expected due failed preview");
         }
         receiptId = preview.batch.id;
-        expect(preview.batch.decisionId).toBe(ids.at(0));
+        expect(preview.batch.decisionId).toBe(ids[0]);
         const exhausted = attempt === BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
         expect(await store.recordFailure(preview.batch, failure)).toBe(
           exhausted ? "failed" : "retryable",
@@ -1733,7 +1735,7 @@ if (!databaseUrl || !enabled) {
               ),
             )
         ).at(0);
-        expect(checkpoint?.cursor ?? null).toBe(exhausted ? ids.at(0) : null);
+        expect(checkpoint?.cursor ?? null).toBe(exhausted ? ids[0] : null);
         if (!exhausted) {
           expect(await restart().previewBatch(source, null)).toEqual({
             type: "waiting",
@@ -1766,7 +1768,7 @@ if (!databaseUrl || !enabled) {
       if (next.type !== "reserved") {
         throw new TypeError("Expected later preview after poison row");
       }
-      expect(next.batch.decisionId).toBe(ids.at(1));
+      expect(next.batch.decisionId).toBe(ids[1]);
       await restart().advancePreview(next.batch);
       if (!terminal) {
         throw new TypeError("Expected exhausted preview receipt");
@@ -1802,7 +1804,7 @@ if (!databaseUrl || !enabled) {
           "Expected exhausted preview re-admission after reset",
         );
       }
-      expect(reset.batch.decisionId).toBe(ids.at(0));
+      expect(reset.batch.decisionId).toBe(ids[0]);
       expect(
         (
           await db
@@ -1825,7 +1827,7 @@ if (!databaseUrl || !enabled) {
           "Expected apply admission unaffected by preview failure",
         );
       }
-      expect(apply.batch.decisionId).toBe(ids.at(0));
+      expect(apply.batch.decisionId).toBe(ids[0]);
     });
 
     test("systemic preview failures never exhaust the cursor row beyond the retry bound", async () => {
@@ -1867,7 +1869,7 @@ if (!databaseUrl || !enabled) {
           if (preview.type !== "reserved") {
             throw new TypeError("Expected due preview during systemic outage");
           }
-          expect(preview.batch.decisionId).toBe(ids.at(0));
+          expect(preview.batch.decisionId).toBe(ids[0]);
           expect(
             await restart().recordFailure(preview.batch, {
               ...replayFailure(code),
@@ -1895,13 +1897,13 @@ if (!databaseUrl || !enabled) {
         if (recovered.type !== "reserved") {
           throw new TypeError("Expected preview after systemic recovery");
         }
-        expect(recovered.batch.decisionId).toBe(ids.at(0));
+        expect(recovered.batch.decisionId).toBe(ids[0]);
         await restart().advancePreview(recovered.batch);
         const next = await restart().previewBatch(source, null);
         if (next.type !== "reserved") {
           throw new TypeError("Expected later preview after systemic recovery");
         }
-        expect(next.batch.decisionId).toBe(ids.at(1));
+        expect(next.batch.decisionId).toBe(ids[1]);
       }
     });
 
@@ -1921,7 +1923,7 @@ if (!databaseUrl || !enabled) {
           if (preview.type !== "reserved") {
             throw new TypeError("Expected due transient preview");
           }
-          expect(preview.batch.decisionId).toBe(ids.at(0));
+          expect(preview.batch.decisionId).toBe(ids[0]);
           if (attempt === succeedsAt) {
             await restart().advancePreview(preview.batch);
             continue;
@@ -1943,13 +1945,13 @@ if (!databaseUrl || !enabled) {
         if (next.type !== "reserved") {
           throw new TypeError("Expected preview after transient recovery");
         }
-        expect(next.batch.decisionId).toBe(ids.at(1));
+        expect(next.batch.decisionId).toBe(ids[1]);
         const receipts = await db
           .select()
           .from(caseLawReplayBatches)
           .where(eq(caseLawReplayBatches.sourceId, source.id));
         expect(
-          receipts.find((row) => row.firstDecisionId === ids.at(0)),
+          receipts.find((row) => row.firstDecisionId === ids[0]),
         ).toMatchObject({ failed: 0, attempts: succeedsAt, retryAt: null });
       }
     });

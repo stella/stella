@@ -1,5 +1,6 @@
 import type { Verdict } from "@stll/db-load-gate/health";
 
+import type { BackgroundReplaySource } from "@/api/handlers/case-law/ingestion/background-replay";
 import type { ReplayRowOutcome } from "@/api/handlers/case-law/ingestion/replay";
 import {
   REPLAY_FAILURE_CODES,
@@ -251,6 +252,8 @@ export const REPLAY_MAINTENANCE_AUDIT_ACTIONS = [
 ] as const;
 export const REPLAY_MAINTENANCE_AUDIT_SERVICE = "case-law-background-replay";
 export type ReplayMaintenanceAuditDetails = {
+  mode?: BackgroundReplaySource["mode"];
+  kind?: "reviewed" | "retry-exhausted";
   attempts?: number;
   failureCode?: ReplayFailure["code"];
   status?: (typeof REPLAY_BATCH_STATUSES)[number];
