@@ -607,15 +607,7 @@ export const sellerProfiles = p.pgTable(
     p
       .uniqueIndex("seller_profiles_org_default_uidx")
       .on(table.organizationId)
-      .where(
-        sql`${table.isDefault} AND ${table.archivedAt} IS NULL AND ${table.sellerProfileId} IS NULL`,
-      ),
-    p
-      .uniqueIndex("number_series_org_type_seller_default_uidx")
-      .on(table.organizationId, table.documentType, table.sellerProfileId)
-      .where(
-        sql`${table.isDefault} AND ${table.archivedAt} IS NULL AND ${table.sellerProfileId} IS NOT NULL`,
-      ),
+      .where(sql`${table.isDefault} AND ${table.archivedAt} IS NULL`),
     p.check(
       "seller_profiles_currency_check",
       sql`${table.defaultCurrency} ~ '^[A-Z]{3}$'`,
@@ -670,7 +662,15 @@ export const numberSeries = p.pgTable(
     p
       .uniqueIndex("number_series_org_type_default_uidx")
       .on(table.organizationId, table.documentType)
-      .where(sql`${table.isDefault} AND ${table.archivedAt} IS NULL`),
+      .where(
+        sql`${table.isDefault} AND ${table.archivedAt} IS NULL AND ${table.sellerProfileId} IS NULL`,
+      ),
+    p
+      .uniqueIndex("number_series_org_type_seller_default_uidx")
+      .on(table.organizationId, table.documentType, table.sellerProfileId)
+      .where(
+        sql`${table.isDefault} AND ${table.archivedAt} IS NULL AND ${table.sellerProfileId} IS NOT NULL`,
+      ),
     p.check(
       "number_series_document_type_check",
       sql`${table.documentType} IN (${sql.join(NUMBER_SERIES_DOCUMENT_TYPE_SQL_VALUES, sql`, `)})`,
