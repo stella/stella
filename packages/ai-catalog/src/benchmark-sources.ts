@@ -43,7 +43,7 @@ type ProviderDefaultEffort<TModelId extends OfferedBYOKModelId> =
     ? null
     : never;
 
-export type ModelBenchmarkSource<TModelId extends OfferedBYOKModelId> = {
+type ModelBenchmarkSource<TModelId extends OfferedBYOKModelId> = {
   sourceModelId: string;
   reasoningEffort: ModelEfforts<TModelId> | ProviderDefaultEffort<TModelId>;
 };

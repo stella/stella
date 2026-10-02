@@ -64,7 +64,7 @@ describe("Pareto model frontier", () => {
 
   test("partitions every point into frontier, near frontier, or dominated", () => {
     assertProperty(
-      "benchmark-frontier.partitions-every-point",
+      "partitions every point into frontier, near frontier, or dominated",
       fc.property(
         fc.uniqueArray(
           fc.record({
