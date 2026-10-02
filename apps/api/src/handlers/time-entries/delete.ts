@@ -9,6 +9,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import {
   canApproveTimeEntries,
   canManageTimeEntry,
@@ -177,6 +178,7 @@ export const deleteTimeEntryHandler = async function* ({
             },
           },
         });
+        await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
         return true;
       }),
     );
@@ -236,6 +238,7 @@ export const deleteTimeEntryHandler = async function* ({
           },
         },
       });
+      await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
       return true;
     }),
   );

@@ -7,6 +7,7 @@ import { createSafeHandler } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { getTimePolicyViolation, readTimePolicy } from "@/api/lib/billing-time";
+import { recordBillingCapCrossings } from "@/api/lib/billing/arrangements";
 import { guardRunningTimeEntries } from "@/api/lib/billing/time-entry-running";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
@@ -162,6 +163,7 @@ const batchDelete = createSafeHandler(
           tx,
           buildBatchDeleteEvents({ deleted, writtenOff }),
         );
+        await recordBillingCapCrossings(tx, { workspaceId, recordAuditEvent });
 
         return {
           type: "updated" as const,

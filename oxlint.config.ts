@@ -336,6 +336,9 @@ const fixtureRuleOverrides = [
     "public-law-read-boundary/require-language-alternate-counts",
     "public-law-read-boundary/require-configured-read-transaction",
   ]),
+  fixtureRuleOverride("require-billing-cap-crossings.fixture.ts", [
+    "require-billing-cap-crossings/require-billing-cap-crossings",
+  ]),
   fixtureRuleOverride("require-running-entry-guard.fixture.ts", [
     "require-running-entry-guard/require-running-entry-guard",
   ]),
@@ -1277,6 +1280,7 @@ export default defineConfig({
     "./.oxlint-plugins/require-complete-compaction-generation.ts",
     "./.oxlint-plugins/require-audit-on-mutation.ts",
     "./.oxlint-plugins/require-running-entry-guard.ts",
+    "./.oxlint-plugins/require-billing-cap-crossings.ts",
     "./.oxlint-plugins/require-transaction-abort.ts",
     "./.oxlint-plugins/no-direct-audit-log-insert.ts",
     "./.oxlint-plugins/no-ad-hoc-chat-request.ts",
@@ -3665,6 +3669,17 @@ export default defineConfig({
       ],
       rules: {
         "require-running-entry-guard/require-running-entry-guard": "error",
+      },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/time-entries/**/*.ts",
+        "apps/api/src/lib/billing/time-entry-approval.ts",
+        "apps/api/src/lib/time-entry-offboarding.ts",
+      ],
+      excludeFiles: ["**/*.test.ts", "apps/api/src/tests/**/*.ts"],
+      rules: {
+        "require-billing-cap-crossings/require-billing-cap-crossings": "error",
       },
     },
     {
