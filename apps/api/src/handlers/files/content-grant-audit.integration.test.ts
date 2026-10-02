@@ -149,6 +149,17 @@ const recorderA = (): AuditRecorder =>
 const failingRecorder: AuditRecorder = async () =>
   await Promise.reject(new Error("audit store unavailable"));
 
+// bun-types declares `.rejects.toThrow` as void; capture the rejection so
+// type-aware lint and the runtime observe the same promise.
+const rejectionMessage = async (
+  promise: Promise<unknown>,
+): Promise<string | null> =>
+  await promise.then(
+    () => null,
+    (error: unknown) =>
+      error instanceof Error ? error.message : String(error),
+  );
+
 const auditRowsFor = async (entityId: SafeId<"entity">) =>
   await testDb
     .select({
@@ -299,9 +310,11 @@ describe("file URL grants", () => {
     async ({ purpose, stored }) => {
       const seeded = await seedFile(stored);
 
-      await expect(
-        readUrl(seeded.fieldId, purpose, failingRecorder),
-      ).rejects.toThrow("audit store unavailable");
+      expect(
+        await rejectionMessage(
+          readUrl(seeded.fieldId, purpose, failingRecorder),
+        ),
+      ).toBe("audit store unavailable");
       expect(await auditRowsFor(seeded.entityId)).toEqual([]);
     },
   );
@@ -422,9 +435,9 @@ describe("email preview", () => {
   test("returns no preview when the audit row cannot be written", async () => {
     const seeded = await seedEmail();
 
-    await expect(previewEmail(seeded.fieldId, failingRecorder)).rejects.toThrow(
-      "audit store unavailable",
-    );
+    expect(
+      await rejectionMessage(previewEmail(seeded.fieldId, failingRecorder)),
+    ).toBe("audit store unavailable");
     expect(await auditRowsFor(seeded.entityId)).toEqual([]);
   });
 
