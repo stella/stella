@@ -1627,9 +1627,10 @@ export const buildPlDecision = ({
                           ),
                         },
                 },
-          chambers: effectiveChambers?.map((chamber) =>
-            ({ ...chamber, href: toMetadataUrl(chamber.href, "transport-json"),}),
-          ),
+          chambers: effectiveChambers?.map((chamber) => ({
+            ...chamber,
+            href: toMetadataUrl(chamber.href, "transport-json"),
+          })),
           personnelType: detailOrListing(
             item.personnelType,
             dumpItem.personnelType,
