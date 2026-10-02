@@ -526,7 +526,7 @@ describe.skipIf(!runEngineTests)(
         page.nextCursor ?? panic("fixture has no phase cursor"),
       );
       if (cursor?.phase?.type !== "relaxed") {
-        return panic("fixture did not reach the relaxed phase");
+        panic("fixture did not reach the relaxed phase");
       }
       const { phase } = cursor;
       const invalid = [
