@@ -223,25 +223,21 @@ const isStaleProviderEvent = ({
 const equalVersionIsStale = ({
   existing,
   payload,
-}: Pick<StaleProviderEventParams, "existing" | "payload">): boolean => 
+}: Pick<StaleProviderEventParams, "existing" | "payload">): boolean =>
   // At equal versions, terminal/cancellation facts dominate an active replay.
-  (
-    (env.FEATURE_CONFIGURED_ACCESS &&
-      existing.status === "past_due" &&
-      payload.status === "active" &&
-      payload.cancel_at_period_end !== true) ||
-    (existing.status === "paused" &&
-      payload.status !== "paused" &&
-      !TERMINAL_PROVIDER_STATUSES.has(payload.status)) ||
-    (existing.status === "cancelled" &&
-      (payload.status !== "canceled" ||
-        payload.cancel_at_period_end === true)) ||
-    (existing.cancelAtPeriodEnd &&
-      payload.cancel_at_period_end !== true &&
-      payload.status !== "canceled" &&
-      !(env.FEATURE_CONFIGURED_ACCESS && payload.status === "past_due"))
-  )
-;
+  (env.FEATURE_CONFIGURED_ACCESS &&
+    existing.status === "past_due" &&
+    payload.status === "active" &&
+    payload.cancel_at_period_end !== true) ||
+  (existing.status === "paused" &&
+    payload.status !== "paused" &&
+    !TERMINAL_PROVIDER_STATUSES.has(payload.status)) ||
+  (existing.status === "cancelled" &&
+    (payload.status !== "canceled" || payload.cancel_at_period_end === true)) ||
+  (existing.cancelAtPeriodEnd &&
+    payload.cancel_at_period_end !== true &&
+    payload.status !== "canceled" &&
+    !(env.FEATURE_CONFIGURED_ACCESS && payload.status === "past_due"));
 
 const cancellationFlagAtVersion = ({
   existing,
