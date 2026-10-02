@@ -74,7 +74,7 @@ included and whether alone or in a sweep, follows these rules:
    native binding; the `anonymize-chat` property suite uses a stand-in runtime.
 
 3. **The WASM build is exercised for real.** When `@stll/anonymize-wasm` moves,
-   run `bun run test:e2e:landing` from `apps/web`: it drives the shipped WASM
+   run `bun --filter @stll/web test:e2e:landing`: it drives the shipped WASM
    bundle in a browser and fails when the engine does not boot or detect. No
    automated test yet runs the chat worker's deny-list matching on the real
    WASM build, so also check it by hand on a local stack (`bun run agent:up`):
