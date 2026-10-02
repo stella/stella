@@ -30,21 +30,9 @@ export const CORPUS_PROJECTION_DELETE_MAX_REVISIONS = 128;
 export const CORPUS_PROJECTION_UNKNOWN_APPEND_MARGIN_MS = 5000;
 
 /**
- * What an accepted append is allowed to mean for the store row behind it.
- *
- * `published` waits for the split, so a revision the store marks applied is
- * searchable the instant it is applied. `queued` returns on acceptance, so a
- * catch-up generation can keep more than one request in flight per commit
- * period instead of paying a wall-clock commit for each one, and its
- * documents stay invisible to search and to delete-by-query until the
- * engine's own commit timer fires.
- *
- * Nothing persists which mode wrote a revision, and nothing should: the mode
- * is a per-cycle choice, several cycles can append into one generation, and a
- * reader that guessed wrong would delete documents that are not there yet or
- * read absence as drift. Every observer of an accepted revision instead
- * fences on `corpusIndexAppendPublishDelayMs`, which holds for both modes:
- * a published append has already spent that delay inside the ingest call.
+ * Coordinator requests retained during rollout. The projection executor uses
+ * wait_for and confirms presence for both modes before recording applied.
+ * Queued WAL acceptance alone cannot prove a revision is searchable.
  */
 export const CORPUS_PROJECTION_APPEND_COMMIT_MODE = {
   published: "published",
@@ -231,7 +219,11 @@ export const appendCorpusProjectionBatch = async ({
     if (request === undefined) {
       return Result.ok(undefined);
     }
-    const ingested = await client.ingestCommittedBatch(indexId, request.ndjson);
+    const ingested = await client.ingestCommittedBatch(
+      indexId,
+      request.ndjson,
+      "unobserved",
+    );
     if (ingested.isErr()) {
       const unknownOutcomeObservedAt = clock();
       const unknownRevisions = [
@@ -356,6 +348,7 @@ export const censusCorpusProjectionRevisions = async ({
 > => {
   const query = corpusProjectionRevisionsQuery(revisions);
   const aggregated = await client.aggregate({
+    observer: "unobserved",
     indexId,
     query,
     aggs: {
@@ -442,6 +435,7 @@ export const deleteCorpusProjectionRevisions = async ({
   await client.deleteByQuery(
     indexId,
     corpusProjectionRevisionsQuery(revisions),
+    "unobserved",
   );
 
 type CountCorpusProjectionRevisionsOptions = {
@@ -458,6 +452,7 @@ export const countCorpusProjectionRevisions = async ({
   Result<number, CorpusIndexError>
 > => {
   const searched = await client.search({
+    observer: "unobserved",
     indexId,
     query: corpusProjectionRevisionsQuery(revisions),
     maxHits: 0,

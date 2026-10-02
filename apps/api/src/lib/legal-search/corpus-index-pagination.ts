@@ -1,5 +1,7 @@
 import { panic } from "better-result";
 
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
+
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { QuickwitCluster } from "@/api/lib/legal-search/corpus-generation-contract";
 import type {
@@ -110,6 +112,7 @@ const CORPUS_INDEX_SCAN_PASSAGE_FIELDS = [
 ] as const;
 
 type CorpusIndexSearchPageInput<TContext> = {
+  observer: RegistryRequestObservation;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -292,6 +295,7 @@ const passageClause = (hit: CorpusIndexHit): string | null => {
 };
 
 type ReadPageSnippetsOptions = {
+  observer: RegistryRequestObservation;
   clauses: readonly string[];
   cluster: QuickwitCluster;
   extractId: (hit: CorpusIndexHit) => string | null;
@@ -320,6 +324,7 @@ type PageSnippets = {
  * snippet, matching how the scan chose the document's passage.
  */
 const readPageSnippets = async ({
+  observer,
   clauses,
   cluster,
   extractId,
@@ -335,6 +340,7 @@ const readPageSnippets = async ({
 
   const startedAt = performance.now();
   const result = await getCorpusIndexClient(cluster).search({
+    observer,
     indexId,
     query: `(${query}) AND (${clauses.join(" OR ")})`,
     maxHits: clauses.length * HIGHLIGHT_COPIES_PER_PASSAGE,
@@ -410,6 +416,7 @@ type ScanRound = {
 };
 
 type ReadScanRoundOptions = {
+  observer: RegistryRequestObservation;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -425,6 +432,7 @@ type ReadScanRoundOptions = {
  * rank-based position score would be meaningless.
  */
 const readScanRound = async ({
+  observer,
   cluster,
   indexId,
   query,
@@ -436,6 +444,7 @@ const readScanRound = async ({
   switch (transport.type) {
     case "native": {
       const result = await getCorpusIndexClient(cluster).search({
+        observer,
         indexId,
         query,
         maxHits,
@@ -456,6 +465,7 @@ const readScanRound = async ({
         panic("A scored scan reads relevance order only");
       }
       const result = await readScoredScanRound({
+        observer,
         cluster,
         indexId,
         query,
@@ -515,6 +525,7 @@ const scanScoreRecorder = () => {
 };
 
 type ReadScoredScanRoundOptions = {
+  observer: RegistryRequestObservation;
   cluster: QuickwitCluster;
   indexId: string;
   query: string;
@@ -529,6 +540,7 @@ type ReadScoredScanRoundOptions = {
  * fields plus the passage fields the scan reads.
  */
 const readScoredScanRound = async ({
+  observer,
   cluster,
   indexId,
   query,
@@ -537,6 +549,7 @@ const readScoredScanRound = async ({
   size,
 }: ReadScoredScanRoundOptions): Promise<CorpusIndexScoredSearchResponse> => {
   const result = await getCorpusIndexClient(cluster).scoredSearch({
+    observer,
     indexId,
     query,
     from,
@@ -584,7 +597,102 @@ const groupsPastWindow = (
     : [...groups];
 };
 
+type ResolveCorpusSearchCursorOptions = {
+  parsedCursor: SearchCursor | null;
+  sort: SearchSort;
+  pageRanked: readonly RankedHit[];
+  hasMoreInWindow: boolean;
+  windowCanContinue: boolean;
+  roundCapHit: boolean;
+  startOffset: number;
+  totalHits: number;
+  lastScannedId: string | null;
+  ranking: Pick<CorpusIndexRanking<unknown>, "groups">;
+  unseenScoreUpperBound: (nextLexicalScore: number) => number;
+};
+
+// The window itself moves only when the round cap ended the scan. The cap
+// is what makes a page bounded-latency, and it is also why such a page
+// cannot prove the blend bound the early stop proves: an unemitted hit in
+// the next window may out-blend one this page emitted. Progress is worth
+// more than that proof — a decision whose passages fill the whole capped
+// window would otherwise leave the reader on a one-hit page with nowhere to
+// go, and there is no ceiling on passages per document that the cap could
+// be sized above (the chunker's is a hostile-input bound, orders of
+// magnitude higher).
+const resolveCorpusSearchCursor = ({
+  parsedCursor,
+  sort,
+  pageRanked,
+  hasMoreInWindow,
+  windowCanContinue,
+  roundCapHit,
+  startOffset,
+  totalHits,
+  lastScannedId,
+  ranking,
+  unseenScoreUpperBound,
+}: ResolveCorpusSearchCursorOptions): SearchCursor | null => {
+  const lastEmitted = pageRanked.at(-1);
+  const carriedGroups = new Set(parsedCursor?.excludedGroups);
+  const windowStart = parsedCursor?.windowStart ?? 0;
+  if (hasMoreInWindow || (!roundCapHit && windowCanContinue)) {
+    if (lastEmitted === undefined) {
+      return null;
+    }
+    // Still inside this window: the groups earlier windows showed stay
+    // excluded, and this window's own are behind the cursor.
+    return withGroups(
+      {
+        score: lastEmitted.score,
+        id: lastEmitted.id,
+        sort,
+        windowStart,
+      },
+      [...carriedGroups],
+    );
+  }
+  if (!roundCapHit || startOffset >= totalHits) {
+    return null;
+  }
+  // Hydration can reject every candidate in a capped window. Its scanned
+  // boundary still advances the next request, without an emitted hit.
+  const boundaryId = lastScannedId ?? lastEmitted?.id;
+  if (boundaryId === undefined) {
+    return null;
+  }
+  const excludedGroups = groupsPastWindow(carriedGroups, ranking);
+  if (excludedGroups === null) {
+    return null;
+  }
+  const unseenScoreBound = unseenScoreUpperBound(
+    corpusIndexLexicalScore(startOffset),
+  );
+  return withGroups(
+    {
+      // Above every blended score the next window can hold, by the bound's
+      // own contract. Strictly above: equality would subject the first
+      // unread hit to the cursor's id tie-break and could discard it.
+      score:
+        unseenScoreBound +
+        Math.max(1, Math.abs(unseenScoreBound)) * Number.EPSILON,
+      // The document the scan stopped inside: the one whose passages can
+      // run across the window edge, and the only one the next window must
+      // drop by name. A document that matched here and again further down
+      // can still repeat on a later page unless its ranker folds it into a
+      // group it reports — the price of moving the window at all, and the
+      // reason the blend bound is proven within a window rather than across
+      // the cap.
+      id: boundaryId,
+      sort,
+      windowStart: startOffset,
+    },
+    excludedGroups,
+  );
+};
+
 export const readCorpusIndexSearchPage = async <TContext>({
+  observer,
   cluster,
   indexId,
   query,
@@ -668,6 +776,7 @@ export const readCorpusIndexSearchPage = async <TContext>({
     // these hits.
     const roundStartedAt = performance.now();
     const round = await readScanRound({
+      observer,
       cluster,
       indexId,
       query,
@@ -748,72 +857,28 @@ export const readCorpusIndexSearchPage = async <TContext>({
     ranking = await rankCandidates(candidates);
     windowed = windowAfterCursor(ranking.ranked, parsedCursor);
   }
-  const finalRanking = ranking;
-  const carriedGroups = new Set(parsedCursor?.excludedGroups);
-
   const hasMoreInWindow = windowed.length > limit;
   const pageRanked = hasMoreInWindow ? windowed.slice(0, limit) : windowed;
-  const lastEmitted = pageRanked.at(-1);
   // A follow-up request replays this window and can only reach deeper
   // candidates while the window's own budget is not exhausted; past it a
   // cursor could never be satisfied and must not be advertised.
   const windowCanContinue = startOffset < totalHits && scanned < scanBudget();
-  // The window itself moves only when the round cap ended the scan. The cap
-  // is what makes a page bounded-latency, and it is also why such a page
-  // cannot prove the blend bound the early stop proves: an unemitted hit in
-  // the next window may out-blend one this page emitted. Progress is worth
-  // more than that proof — a decision whose passages fill the whole capped
-  // window would otherwise leave the reader on a one-hit page with nowhere to
-  // go, and there is no ceiling on passages per document that the cap could
-  // be sized above (the chunker's is a hostile-input bound, orders of
-  // magnitude higher).
-  const resolveNextCursor = (): SearchCursor | null => {
-    if (lastEmitted === undefined) {
-      return null;
-    }
-    if (hasMoreInWindow || (!roundCapHit && windowCanContinue)) {
-      // Still inside this window: the groups earlier windows showed stay
-      // excluded, and this window's own are behind the cursor.
-      return withGroups(
-        {
-          score: lastEmitted.score,
-          id: lastEmitted.id,
-          sort: order.type,
-          windowStart,
-        },
-        [...carriedGroups],
-      );
-    }
-    if (!roundCapHit || startOffset >= totalHits) {
-      return null;
-    }
-    const excludedGroups = groupsPastWindow(carriedGroups, finalRanking);
-    if (excludedGroups === null) {
-      return null;
-    }
-    return withGroups(
-      {
-        // Above every blended score the next window can hold, by the bound's
-        // own contract, so none of that window is filtered out as already
-        // seen.
-        score: unseenScoreUpperBound(corpusIndexLexicalScore(startOffset)),
-        // The document the scan stopped inside: the one whose passages can
-        // run across the window edge, and the only one the next window must
-        // drop by name. A document that matched here and again further down
-        // can still repeat on a later page unless its ranker folds it into a
-        // group it reports — the price of moving the window at all, and the
-        // reason the blend bound is proven within a window rather than across
-        // the cap.
-        id: lastScannedId ?? lastEmitted.id,
-        sort: order.type,
-        windowStart: startOffset,
-      },
-      excludedGroups,
-    );
-  };
-  const nextCursor = resolveNextCursor();
+  const nextCursor = resolveCorpusSearchCursor({
+    parsedCursor,
+    sort: order.type,
+    pageRanked,
+    hasMoreInWindow,
+    windowCanContinue,
+    roundCapHit,
+    startOffset,
+    totalHits,
+    lastScannedId,
+    ranking,
+    unseenScoreUpperBound,
+  });
 
   const snippets = await readPageSnippets({
+    observer,
     clauses: pageRanked.flatMap((hit) => passageClauseById.get(hit.id) ?? []),
     cluster,
     extractId,

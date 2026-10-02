@@ -1,7 +1,13 @@
+import type { Logger } from "drizzle-orm";
+
 import { oauthResource } from "@/api/db/auth-schema";
 import { rlsDb, rootDb } from "@/api/db/root";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
-import { getTestDb, releaseTestDb } from "@/api/tests/security/test-utils";
+import {
+  getTestDb,
+  releaseTestDb,
+  withQueryLogger,
+} from "@/api/tests/security/test-utils";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 // The agent-auth handler suite drives the real better-auth flow (email-OTP
@@ -73,8 +79,13 @@ const restoreDatabaseBoundary = () => {
  * Create (once) and return the PGlite-backed database the agent-auth tests run
  * against. Call this in a top-level `beforeAll` before any handler request or
  * `rootDb` access, so the proxy below resolves to a ready instance.
+ *
+ * `logger` sees every statement the boundary runs, as the server's query
+ * logger does (pass `queryCountLogger` to measure a request's count).
  */
-export const initAgentAuthTestDb = async (): Promise<TestDatabase> => {
+export const initAgentAuthTestDb = async ({
+  logger,
+}: { logger?: Logger } = {}): Promise<TestDatabase> => {
   if (testDb !== undefined) {
     return testDb;
   }
@@ -88,7 +99,9 @@ export const initAgentAuthTestDb = async (): Promise<TestDatabase> => {
     })),
   );
   testDb = db;
-  installDatabaseBoundary(db);
+  installDatabaseBoundary(
+    logger === undefined ? db : withQueryLogger(db, logger),
+  );
   return testDb;
 };
 

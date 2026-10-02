@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 
 import type { BusinessRegistryLookupDetail } from "@stll/api-contract";
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -13,6 +14,7 @@ import type {
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 type LookupBusinessRegistryProps = {
+  observer: RegistryRequestObservation;
   scopedDb: ScopedDb;
   organizationId: SafeId<"organization">;
   registry: BusinessRegistrySlug;
@@ -23,6 +25,7 @@ type LookupBusinessRegistryProps = {
 
 // Native-tool preferences control discovery, not access to public records.
 export const lookupBusinessRegistryShared = async ({
+  observer,
   scopedDb,
   organizationId,
   registry,
@@ -60,7 +63,7 @@ export const lookupBusinessRegistryShared = async ({
     );
   }
 
-  const result = await executeLookup({ handler, query: q, detail });
+  const result = await executeLookup({ handler, query: q, detail, observer });
   if (result instanceof HandlerError) {
     return Result.err(result);
   }

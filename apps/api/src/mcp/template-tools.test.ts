@@ -254,6 +254,7 @@ const createContext = ({
     configureTemplateFields: configureTemplateFieldsMock,
     templateDecideConditionsLogic: templateDecideConditionsLogicMock,
     loadOrgAIConfig: loadOrgAIConfigMock,
+    loadManagedAIResidency: async () => "eu",
     anonymizeTextFields: anonymizeTextFieldsMock,
     loadAnonymizationAllowlistCanonicalsByWorkspace: emptyCatalogsByWorkspace,
     loadAnonymizationGazetteerEntriesByWorkspace: emptyCatalogsByWorkspace,
@@ -629,10 +630,12 @@ describe("MCP template tools", () => {
         whenNotToUse: null,
       },
     ];
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 3,
-      fields: ["[MATTER_1] NDA", "Use for [MATTER_1]", "[MATTER_1]"],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 3,
+        fields: ["[MATTER_1] NDA", "Use for [MATTER_1]", "[MATTER_1]"],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: {},
@@ -804,18 +807,20 @@ describe("MCP template tools", () => {
         },
       ],
     });
-    anonymizeTextFieldsMock.mockResolvedValue({
-      entityCount: 7,
-      fields: [
-        "[PERSON_1] POA",
-        "[PERSON_1] role",
-        "[PERSON_1] director",
-        "[company name], [PERSON_1] registry",
-        "{{[PERSON_1].name}}",
-        "{{[PERSON_1].name}} is split across runs.",
-        "Retype {{[PERSON_1].name}} in one run.",
-      ],
-    });
+    anonymizeTextFieldsMock.mockResolvedValue(
+      Result.ok({
+        entityCount: 7,
+        fields: [
+          "[PERSON_1] POA",
+          "[PERSON_1] role",
+          "[PERSON_1] director",
+          "[company name], [PERSON_1] registry",
+          "{{[PERSON_1].name}}",
+          "{{[PERSON_1].name}} is split across runs.",
+          "Retype {{[PERSON_1].name}} in one run.",
+        ],
+      }),
+    );
 
     const result = await handleMcpToolCall({
       args: { template_id: TEMPLATE_ID },

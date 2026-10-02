@@ -35,7 +35,11 @@ const config = {
     "rather than a merge, and an empty list clears every organization-wide " +
     "term. Matter-scoped terms in the same table are left untouched.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   body: updateAnonymizationBlacklistBodySchema,
 } satisfies HandlerConfig;
 

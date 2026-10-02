@@ -287,6 +287,7 @@ export const LIMITS = {
   rateEntriesPageSizeDefault: 200,
   rateEntriesPageSizeMax: 500,
   timeEntriesPerWorkspace: 50_000,
+  internalTimeEntriesPerUser: 50_000,
   timeEntriesPageSizeDefault: 100,
   timeEntriesPageSizeMax: 200,
   timeEntriesApprovalBatchMax: 200,
@@ -338,9 +339,6 @@ export const LIMITS = {
   matterActivityPageSizeMax: 50,
   matterActivityActorPageSizeDefault: 50,
   matterActivityActorPageSizeMax: 100,
-  /** Page sizes for the operator recent-registrations listing. */
-  operatorRegistrationsPageSizeDefault: 50,
-  operatorRegistrationsPageSizeMax: 200,
   contactsCount: 10_000,
   contactsPageSizeDefault: 50,
   contactsPageSizeMax: 100,

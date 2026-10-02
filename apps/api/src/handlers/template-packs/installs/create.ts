@@ -52,7 +52,11 @@ const config = {
     "request that failed part way through can simply be repeated. Owners " +
     "and admins only.",
   permissions: { template: ["create"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   params: templatePackParamsSchema,
   body: installTemplatePackBodySchema,
 } satisfies HandlerConfig;

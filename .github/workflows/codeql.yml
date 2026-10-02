@@ -6,31 +6,62 @@ on:
   pull_request:
     branches: [main]
     types: [opened, synchronize, reopened, ready_for_review]
-  # Weekly scan to catch new vulnerability patterns
+  # Nightly full scan on the default branch catches new vulnerability patterns
   schedule:
-    - cron: "30 14 * * 4"
+    - cron: "37 2 * * *"
   workflow_dispatch:
 
 # A newer push to the same pull request supersedes its scan. Pushes to main,
 # scheduled scans and manual runs each get a group of their own, so they
 # always finish.
 concurrency:
-  group: >-
-    ${{ github.workflow }}-${{
-      (github.event_name == 'pull_request'
-        && format('pr-{0}', github.event.pull_request.number))
-      || format('run-{0}', github.run_id)
-    }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 permissions:
   contents: read
 
 jobs:
+  scope:
+    if: github.event_name != 'pull_request' || github.event.pull_request.draft != true
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+    outputs:
+      required: ${{ steps.changes.outputs.required }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          fetch-depth: 0
+          filter: blob:none
+          persist-credentials: false
+
+      - name: Detect relevant changes
+        id: changes
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+        run: |
+          required=true
+          if detected=$(bash scripts/detect-security-workflow-changes.sh codeql); then
+            if [[ "$detected" == "false" ]]; then required=false; fi
+          else
+            echo "::warning::Change detector failed; running checks"
+          fi
+          echo "required=$required" >> "$GITHUB_OUTPUT"
+          if [[ "$required" == "false" ]]; then
+            echo "skipped: no code change" >> "$GITHUB_STEP_SUMMARY"
+          fi
+
   analyze:
+    needs: scope
     if: >-
-      github.event_name != 'pull_request'
-      || github.event.pull_request.draft != true
+      always()
+      && (github.event_name != 'pull_request' || github.event.pull_request.draft != true)
+      && (needs.scope.result != 'success' || needs.scope.outputs.required != 'false')
     runs-on: ubuntu-latest
     permissions:
       actions: read

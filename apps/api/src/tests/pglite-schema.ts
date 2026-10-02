@@ -25,6 +25,11 @@ const CHAT_TURN_RUN_OWNERSHIP_MIGRATION_PATH = nodePath.join(
   "20261003121500_chat_turn_run_ownership",
   "migration.sql",
 );
+const SCHEDULER_OPERATOR_PAUSES_MIGRATION_PATH = nodePath.join(
+  DRIZZLE_DIR,
+  "20261003123100_scheduler_operator_pauses",
+  "migration.sql",
+);
 const DOCX_SUGGESTION_SOURCE_MATTERS_MIGRATION_PATH = nodePath.join(
   DRIZZLE_DIR,
   "20260827120000_docx_suggestion_source_matters",
@@ -293,6 +298,24 @@ export const installPgliteAgentSkillRevisionTrigger = async (
     db,
     migrationPath: AGENT_SKILL_ANCHOR_LOCK_MIGRATION_PATH,
   });
+};
+
+/** Install the scheduler pause audit trigger omitted by declarative schema push. */
+export const installPgliteSchedulerJobPauseLog = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    SCHEDULER_OPERATOR_PAUSES_MIGRATION_PATH,
+  ).filter((statement) => {
+    const executable = executableSql(statement);
+    return (
+      executable.startsWith("CREATE FUNCTION public.scheduler_job_pause_log") ||
+      executable.startsWith("CREATE TRIGGER scheduler_job_pause_log")
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
 };
 
 const PDF_SIGNING_SESSIONS_MIGRATION_PATH = nodePath.join(
@@ -634,4 +657,27 @@ export const readPglitePublicSanctionsGrants = (): string[] => {
   return readMigrationStatements(migration)
     .map(executableSql)
     .filter((statement) => statement.startsWith("GRANT "));
+};
+
+/** Install alias graph invariants which declarative schema push cannot express. */
+export const installPgliteDecisionAliases = async (
+  db: PgliteSchemaDb,
+): Promise<void> => {
+  const statements = readMigrationStatements(
+    nodePath.join(
+      DRIZZLE_DIR,
+      "20261003123000_case_law_decision_aliases",
+      "migration.sql",
+    ),
+  ).filter((statement) => {
+    const source = executableSql(statement);
+    return (
+      source.startsWith("CREATE FUNCTION") ||
+      source.startsWith("CREATE TRIGGER") ||
+      source.startsWith('ALTER TABLE "case_law_decision_aliases" FORCE')
+    );
+  });
+  for (const statement of statements) {
+    await db.execute(sql.raw(statement));
+  }
 };

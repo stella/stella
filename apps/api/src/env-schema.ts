@@ -24,6 +24,9 @@ type EmailProviderInput = {
   SMTP_USERNAME?: string | undefined;
 };
 
+// Keep retention cutoffs in positive ISO years supported by timestamptz.
+const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
+
 export const resolveEmailProvider = ({
   EMAIL_PROVIDER,
   SMTP_HOST,
@@ -146,14 +149,6 @@ export const envApiServerSchema = {
    * deployments only (see handlers/smoke/routes.ts).
    */
   SMOKE_SESSION_SECRET: v.optional(v.pipe(v.string(), v.minLength(32))),
-  /**
-   * Bearer token for the operator registrations endpoint
-   * (handlers/operator): lets an instance operator list recent
-   * account registrations over HTTP instead of opening a database
-   * shell. Unset disables the endpoint entirely (requests return
-   * 404), mirroring how other optional operational surfaces behave.
-   */
-  OPERATOR_METRICS_TOKEN: v.optional(v.pipe(v.string(), v.minLength(32))),
   /**
    * Deployment-owned bearer credential for collaboration snapshot transport.
    * Unset disables the service-only load/store routes.
@@ -339,12 +334,56 @@ export const envApiServerSchema = {
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  ACTION_LIMIT_CONTACT_URL: v.optional(
+    v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
+  ),
+  FEATURE_ACTION_COST_RECORDS: featureFlagSchema,
+  ACTION_COST_ESTIMATES: v.optional(v.string()),
+  ACTION_COST_CALL_RATES: v.optional(v.string()),
+  ACTION_COST_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_ACTION_COST_RETENTION_DAYS),
+    ),
+  ),
+  ACTION_REQUEST_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_RESPONSE_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_PAGE_SIZE_MAX: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
   ACTION_ADMISSION_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+  // Operators must set the lease above the admission store's failover window.
+  // Renewal errors retry inside that window; losing admission is not a user stop.
   ACTION_ADMISSION_LEASE_MS: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),

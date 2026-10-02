@@ -1,5 +1,7 @@
 import { afterEach, describe, expect, test } from "bun:test";
 
+import { getSkCourtSuccessionEdges } from "@stll/api-contract/sk-court-succession";
+
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -39,6 +41,84 @@ const item = {
 };
 
 describe("court registry enrichment", () => {
+  test("statute references survive absent or refused registry enrichment and preserve stated names", async () => {
+    for (const name of [item.sud.nazov, "Najvyšší súd Slovenskej republiky"]) {
+      const listedItem = { ...item, sud: { ...item.sud, nazov: name } };
+      for (const observation of [
+        undefined,
+        { status: "available", record: { ...registry, nazov: name } },
+        { status: "unavailable", httpStatus: 404, reason: "http-refusal" },
+        { status: "unavailable", httpStatus: 200, reason: "invalid-shape" },
+      ] as const) {
+        const decision = assembleSkCourtsDecision({
+          item: listedItem,
+          detail: null,
+          ...(observation === undefined ? {} : { courtRegistry: observation }),
+        });
+        const edgeIds = getSkCourtSuccessionEdges()
+          .filter(({ from, to }) =>
+            [from.registryMatchName, to.registryMatchName].includes(name),
+          )
+          .map(({ id }) => id);
+        expect(edgeIds.length > 0).toBe(name === item.sud.nazov);
+        expect(decision?.court).toBe(name);
+        expect(decision?.metadata["courtSuccession"]).toEqual({
+          eli: "eli/sk/zz/2004/371",
+          version: "2023-06-01",
+          edgeIds,
+        });
+        expect(decision).not.toBeNull();
+        if (decision === null) {
+          continue;
+        }
+        const replay = await skCourtsAdapter.reparseStoredRaw?.({
+          raw: new TextEncoder().encode(decision.sourceRaw),
+          contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+          caseNumber: listedItem.spisovaZnacka,
+          sourceDocumentId: null,
+          language: "sk",
+          court: name,
+          ecli: null,
+          decisionDate: null,
+          decisionType: null,
+          sourceUrl: null,
+          documentUrl: null,
+          metadata: {},
+        });
+        expect(replay?.type).toBe("parsed");
+        if (replay?.type !== "parsed") {
+          continue;
+        }
+        expect(replay.result.parserVersion).toBe(5);
+        expect(replay.result.court).toBe(name);
+        expect(replay.result.metadata).toEqual(decision.metadata);
+        expect(replay.result.rawHash).toBe(decision.rawHash);
+      }
+    }
+  });
+
+  test("a different registry name adds only its statute-backed references", () => {
+    const record = { ...registry, nazov: "Okresný súd Košice I" };
+    const decision = assembleSkCourtsDecision({
+      item,
+      detail: null,
+      courtRegistry: { status: "available", record },
+    });
+    const idsFor = (name: string) =>
+      getSkCourtSuccessionEdges()
+        .filter(({ from, to }) =>
+          [from.registryMatchName, to.registryMatchName].includes(name),
+        )
+        .map(({ id }) => id);
+    expect(idsFor(record.nazov).length).toBeGreaterThan(0);
+    expect(decision?.court).toBe(item.sud.nazov);
+    expect(decision?.metadata["courtSuccession"]).toMatchObject({
+      edgeIds: [
+        ...new Set([...idsFor(item.sud.nazov), ...idsFor(record.nazov)]),
+      ],
+    });
+  });
+
   test("keeps every stated name and derives only identity-backed aliases", () => {
     for (const name of [
       item.sud.nazov,
@@ -164,18 +244,45 @@ describe("court registry enrichment", () => {
     expect(requested).toHaveLength(2);
   });
 
-  test("a registry failure fails the backfill page before item skips can advance it", async () => {
-    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
-      const url = new URL(input instanceof Request ? input.url : String(input));
-      if (url.pathname.includes("/v1/sud/")) {
-        return new Response("unavailable", { status: 503 });
+  test("transient registry failures hold the page and retries recover the right references", async () => {
+    for (const name of [item.sud.nazov, "Najvyšší súd Slovenskej republiky"]) {
+      const listedItem = { ...item, sud: { ...item.sud, nazov: name } };
+      let unavailable = true;
+      globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+        const url = new URL(
+          input instanceof Request ? input.url : String(input),
+        );
+        if (url.pathname.includes("/v1/sud/")) {
+          return unavailable
+            ? new Response("unavailable", { status: 503 })
+            : new Response(JSON.stringify({ ...registry, nazov: name }));
+        }
+        if (url.searchParams.has("page")) {
+          return new Response(
+            JSON.stringify({ numFound: 1, rozhodnutieList: [listedItem] }),
+          );
+        }
+        return new Response(JSON.stringify(listedItem));
+      });
+      const failed = await skCourtsAdapter.fetchPage(null, {});
+      expect(failed.isErr()).toBe(true);
+      if (failed.isErr()) {
+        expect(failed.error).toBeInstanceOf(AdapterFetchError);
       }
-      return new Response(
-        JSON.stringify({ numFound: 1, rozhodnutieList: [item] }),
+      unavailable = false;
+      const retried = await skCourtsAdapter.fetchPage(null, {});
+      expect(retried.isOk()).toBe(true);
+      if (retried.isErr()) {
+        continue;
+      }
+      const decision = retried.value.decisions.at(0);
+      expect(decision?.court).toBe(name);
+      expect(decision?.metadata["courtSuccession"]).toEqual(
+        assembleSkCourtsDecision({ item: listedItem, detail: null })?.metadata[
+          "courtSuccession"
+        ],
       );
-    });
-    const page = await skCourtsAdapter.fetchPage(null, {});
-    expect(page.isErr()).toBe(true);
+    }
   });
 
   test("court metadata changes affect the content hash while registry presentation does not", () => {
@@ -273,6 +380,11 @@ describe("court registry enrichment", () => {
         httpStatus: status,
         reason,
       });
+      expect(decision?.metadata["courtSuccession"]).toEqual(
+        assembleSkCourtsDecision({ item, detail: null })?.metadata[
+          "courtSuccession"
+        ],
+      );
       expect(page.value.nextCursor).not.toBeNull();
     }
   });
@@ -380,6 +492,11 @@ describe("court registry enrichment", () => {
       return;
     }
     expect(outcome.result.metadata["courtRegistry"]).toEqual(observation);
+    expect(outcome.result.metadata["courtSuccession"]).toMatchObject({
+      eli: "eli/sk/zz/2004/371",
+      edgeIds: expect.arrayContaining([expect.any(String)]),
+    });
+    expect(outcome.result.parserVersion).toBe(5);
     expect(outcome.result.rawHash).toBe(decision.rawHash);
   });
 
@@ -418,7 +535,12 @@ describe("court registry enrichment", () => {
     if (outcome?.type !== "parsed") {
       return;
     }
+    expect(outcome.result.metadata["courtSuccession"]).toMatchObject({
+      eli: "eli/sk/zz/2004/371",
+      version: "2023-06-01",
+    });
     expect(outcome.result.metadata).toEqual(decision.metadata);
+    expect(outcome.result.parserVersion).toBe(5);
     expect(outcome.result.rawHash).toBe(decision.rawHash);
   });
 });

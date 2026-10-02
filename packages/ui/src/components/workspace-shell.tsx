@@ -4,7 +4,7 @@ import { useEffect } from "react";
 import type { ReactElement, ReactNode } from "react";
 
 import { useIsMobile } from "../hooks/use-mobile";
-import { MessageSquarePlusIcon } from "../icons";
+import { NewChatIcon } from "../icons";
 import {
   InspectorRail,
   InspectorRailCell,
@@ -122,8 +122,11 @@ export const WorkspaceShell = ({
         >
           {topBar({ compactNavigationTrigger })}
         </div>
+        {/* The top bar draws the one divider between the chrome and the
+            page. A route root that adds its own top border doubles it into a
+            2px line, so the slot takes the top border off its first child. */}
         <div
-          className="flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain"
+          className="flex min-h-0 flex-1 flex-col overflow-auto overscroll-contain [&>*:first-child]:border-t-0"
           data-slot="workspace-shell-content"
         >
           {children}
@@ -215,7 +218,7 @@ export const WorkspaceEndRail = ({
           onClick={chatAction.onActivate}
           title={chatAction.label}
         >
-          <MessageSquarePlusIcon aria-hidden="true" className="size-4" />
+          <NewChatIcon aria-hidden="true" className="size-4" />
         </InspectorRailIconButton>
       ) : (
         <InspectorRailIconButton
@@ -223,7 +226,7 @@ export const WorkspaceEndRail = ({
           disabled
           title={chatAction.reason}
         >
-          <MessageSquarePlusIcon aria-hidden="true" className="size-4" />
+          <NewChatIcon aria-hidden="true" className="size-4" />
         </InspectorRailIconButton>
       )}
     </InspectorRailFooter>

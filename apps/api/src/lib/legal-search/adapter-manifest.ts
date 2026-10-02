@@ -1,3 +1,4 @@
+// parser-output-unchanged: NSS dash declarations already match the generic filler policy; parsed text is unchanged for every adapter.
 import {
   type CaseLawJurisdiction,
   isCaseLawJurisdiction,
@@ -177,7 +178,12 @@ export const ADAPTER_MANIFESTS = {
     publicHomeUrl: "https://vyhledavac.nssoud.cz",
     ...ADAPTER_JURISDICTIONS.CZE,
     ecliCourtCodes: CZ_ECLI_COURTS,
-    placeholderPatterns: NO_PLACEHOLDER_PATTERNS,
+    placeholderPatterns: [
+      { type: "exact", text: "-" },
+      { type: "exact", text: "–" },
+      { type: "exact", text: "—" },
+      { type: "exact", text: "−" },
+    ],
     dateRange: {
       type: "decision-date",
       fromInclusive: "2003-02-04",

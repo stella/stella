@@ -20,6 +20,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedRateEntryId } from "@/api/lib/safe-id-boundaries";
 
 const readRateEntriesQuerySchema = t.Object({
@@ -62,12 +63,19 @@ const readRateEntries = createSafeHandler(
       "for the table's fallback rate). A rate table that does not exist in " +
       "this matter returns an empty page rather than an error.",
     permissions: { rate: ["read"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     access: "read",
     params: rateEntryParamsSchema,
     query: readRateEntriesQuerySchema,
   },
   async function* ({ safeDb, workspaceId, session, params, query }) {
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.rateEntriesPageSizeDefault,
+    );
     const table = yield* Result.await(
       safeDb((tx) =>
         tx.query.rateTables.findFirst({
@@ -83,12 +91,11 @@ const readRateEntries = createSafeHandler(
     if (!table) {
       return Result.ok({
         items: [],
-        limit: query.limit ?? LIMITS.rateEntriesPageSizeDefault,
+        limit,
         nextCursor: null,
       });
     }
 
-    const limit = query.limit ?? LIMITS.rateEntriesPageSizeDefault;
     const conditions = [eq(rateEntries.rateTableId, params.rateTableId)];
 
     if (query.cursor) {

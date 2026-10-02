@@ -7,7 +7,11 @@ const config = {
   description:
     "Read one flow run, including its current status, inputs, outputs, steps, and review state.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   params: flowRunParamsSchema,
 } satisfies WorkspaceHandlerConfig;

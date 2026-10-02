@@ -7,6 +7,7 @@ import { documentReviewRuns, playbookDefinitions } from "@/api/db/schema";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const RECENT_PLAYBOOKS_DEFAULT_LIMIT = 4;
 const RECENT_PLAYBOOKS_MAX_LIMIT = 10;
@@ -32,8 +33,9 @@ export const listRecentPlaybooksHandler = async function* ({
   safeDb,
   organizationId,
   userId,
-  limit = RECENT_PLAYBOOKS_DEFAULT_LIMIT,
+  limit: requestedLimit = RECENT_PLAYBOOKS_DEFAULT_LIMIT,
 }: ListRecentPlaybooksProps) {
+  const limit = normalizeTenantPageLimit(requestedLimit);
   const lastUsedAt = sql<Date>`max(${documentReviewRuns.createdAt})`
     .mapWith(documentReviewRuns.createdAt)
     .as("last_used_at");
@@ -98,7 +100,11 @@ const config = {
   description:
     "List the current user's recently used playbooks in the active organization.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "knowledge_library_admin" },
+  mcp: {
+    type: "capability",
+    reason: "knowledge_library_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: recentPlaybooksQuerySchema,
 } satisfies HandlerConfig;

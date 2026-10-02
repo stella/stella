@@ -26,7 +26,11 @@ const config = {
     "Start a manual flow run in a matter using a flow definition and optional input documents. Returns the run ID and initial status.",
   permissions: { flow: ["run"] },
   access: "write",
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    reason: "workflow_orchestration",
+    consumesServices: true,
+  },
   params: flowRunsWorkspaceParamsSchema,
   body: startFlowRunBodySchema,
 } satisfies WorkspaceHandlerConfig;
@@ -87,7 +91,7 @@ const startFlowRunHandler = createSafeHandler(
           const stepModel = getTanStackTextModelInfoForRole(
             "chat",
             orgAIConfig,
-            { organizationId },
+            { dataClass: "customer", organizationId },
           );
           return await assertRunSizeConfirmedForHandler({
             metering: { actionType: "background", modelRole: "chat" },

@@ -1,4 +1,5 @@
 import { describe, expect, test } from "bun:test";
+import * as v from "valibot";
 
 import { getApiHealthUrl, parseHealthCommit } from "./api-health";
 import { advanceDeploymentStability } from "./check-api-deployment";
@@ -55,6 +56,65 @@ describe("API deployment health receipt", () => {
     expect(releasePin).toBe(setupPin);
   });
 
+  test("staging checks share their access configuration", async () => {
+    const workflowSchema = v.object({
+      jobs: v.record(
+        v.string(),
+        v.object({
+          steps: v.optional(
+            v.array(
+              v.object({
+                run: v.optional(v.string()),
+                env: v.optional(v.record(v.string(), v.unknown())),
+              }),
+            ),
+          ),
+        }),
+      ),
+    });
+    // Steps that reach staging through the viewer lock, found by what they
+    // run, so a step that drops its access entries is still checked.
+    const stagingTargets = [
+      "$STAGING_HEALTH_URL",
+      "test:e2e:staging",
+      "apps/api/src/scripts/post-deploy-smoke.ts",
+      "apps/api/src/scripts/post-deploy-response-policy.ts",
+    ];
+    const workflowsDir = new URL("../.github/workflows/", import.meta.url);
+    const consumers: { run: string; env: Record<string, unknown> }[] = [];
+    for await (const file of new Bun.Glob("*.yml").scan(
+      workflowsDir.pathname,
+    )) {
+      const parsed = v.parse(
+        workflowSchema,
+        Bun.YAML.parse(await Bun.file(new URL(file, workflowsDir)).text()),
+      );
+      for (const { steps } of Object.values(parsed.jobs)) {
+        for (const { run = "", env = {} } of steps ?? []) {
+          if (
+            stagingTargets.some((target) => run.includes(target)) ||
+            Object.keys(env).some((key) => key.endsWith("EDGE_HEADER_VALUE"))
+          ) {
+            consumers.push({ run, env });
+          }
+        }
+      }
+    }
+
+    // Every target is still found, so a renamed script cannot drop out.
+    for (const target of stagingTargets) {
+      expect(consumers.some(({ run }) => run.includes(target))).toBe(true);
+    }
+    // One source for the staging access value, so rotating it is one change.
+    for (const { run, env } of consumers) {
+      const prefix = run.includes("$STAGING_HEALTH_URL") ? "" : "E2E_";
+      expect(env[`${prefix}EDGE_HEADER_NAME`]).toBe("x-stella-edge-token");
+      expect(env[`${prefix}EDGE_HEADER_VALUE`]).toBe(
+        `\${{ secrets.STAGING_VIEWER_ACCESS_TOKEN }}`,
+      );
+    }
+  });
+
   test("ties staging promotion to the current health gate", async () => {
     const workflow = await Bun.file(
       new URL("../.github/workflows/deploy-staging.yml", import.meta.url),
@@ -72,11 +132,26 @@ describe("API deployment health receipt", () => {
     expect(apiBuildStart).toBeGreaterThan(healthJobStart);
     expect(webBuildStart).toBeGreaterThan(apiBuildStart);
     expect(promoteStart).toBeGreaterThan(webBuildStart);
-    expect(promoteJob).toContain("/etc/apt/sources.list.d/google-chrome.list");
-    expect(promoteJob).toContain("Disable runner Chrome apt source");
-    expect(promoteJob.indexOf("Disable runner Chrome apt source")).toBeLessThan(
-      promoteJob.indexOf("Install Playwright browser"),
+    const imageSetupStart = promoteJob.indexOf(
+      "      - name: Verify image-provided Chromium",
     );
+    const browserSmokeStart = promoteJob.indexOf(
+      "      - name: Run staging web smoke",
+    );
+    expect(imageSetupStart).toBeGreaterThanOrEqual(0);
+    expect(browserSmokeStart).toBeGreaterThan(imageSetupStart);
+    const imageSetup = promoteJob.slice(imageSetupStart, browserSmokeStart);
+    expect(imageSetup).toContain(
+      "if: steps.current.outputs.promoted == 'true'",
+    );
+    expect(imageSetup).toContain("uses: ./.github/actions/setup-playwright");
+    expect(promoteJob).toContain(
+      'run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:staging',
+    );
+    expect(promoteJob).not.toContain(
+      "/etc/apt/sources.list.d/google-chrome.list",
+    );
+    expect(promoteJob).not.toContain("playwright install");
     // The gate only reads: it decides whether to promote, never promotes.
     // Both delimiters are asserted so a missing block cannot slice to "" and
     // satisfy the write check by being empty.

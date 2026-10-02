@@ -38,7 +38,11 @@ const config = {
     "created when your role may create columns, and references to deleted " +
     "columns are dropped.",
   permissions: { view: ["update"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
   body: tUpdateViewBodySchema,
 } satisfies WorkspaceHandlerConfig;

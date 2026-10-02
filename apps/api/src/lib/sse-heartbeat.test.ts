@@ -147,7 +147,7 @@ describe("SSE heartbeat", () => {
 
     expect(response.headers.get("content-type")).toBe("text/event-stream");
     expect(response.headers.get("cache-control")).toBe(
-      "no-cache, no-store, no-transform",
+      "private, no-cache, no-store, no-transform",
     );
     expect(response.headers.get("x-accel-buffering")).toBe("no");
   });

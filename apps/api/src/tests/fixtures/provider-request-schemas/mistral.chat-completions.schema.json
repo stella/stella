@@ -1,0 +1,1370 @@
+{
+  "$defs": {
+    "APIKeyAuth": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": ["api-key"],
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": ["value"],
+      "type": "object"
+    },
+    "AssistantMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/ContentChunk"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "prefix": {
+          "type": "boolean"
+        },
+        "role": {
+          "const": "assistant",
+          "type": "string"
+        },
+        "tool_calls": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/ToolCall"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "AudioChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "input_audio": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "format": "binary",
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "input_audio",
+          "type": "string"
+        }
+      },
+      "required": ["input_audio"],
+      "type": "object"
+    },
+    "BuiltInConnectors": {
+      "enum": [
+        "web_search",
+        "web_search_premium",
+        "code_interpreter",
+        "image_generation",
+        "document_library"
+      ],
+      "type": "string"
+    },
+    "ChatCompletionRequest": {
+      "additionalProperties": false,
+      "properties": {
+        "frequency_penalty": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": -2,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "guardrails": {
+          "anyOf": [
+            {
+              "items": {
+                "$ref": "#/$defs/GuardrailConfig"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "max_tokens": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "messages": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/SystemMessage"
+              },
+              {
+                "$ref": "#/$defs/UserMessage"
+              },
+              {
+                "$ref": "#/$defs/AssistantMessage"
+              },
+              {
+                "$ref": "#/$defs/ToolMessage"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "metadata": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "model": {
+          "type": "string"
+        },
+        "n": {
+          "anyOf": [
+            {
+              "minimum": 1,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "parallel_tool_calls": {
+          "type": "boolean"
+        },
+        "prediction": {
+          "$ref": "#/$defs/Prediction"
+        },
+        "presence_penalty": {
+          "anyOf": [
+            {
+              "maximum": 2,
+              "minimum": -2,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_cache_key": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "prompt_mode": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/MistralPromptMode"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "random_seed": {
+          "anyOf": [
+            {
+              "minimum": 0,
+              "type": "integer"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "reasoning_effort": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ReasoningEffort"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "response_format": {
+          "$ref": "#/$defs/ResponseFormat"
+        },
+        "safe_prompt": {
+          "type": "boolean"
+        },
+        "service_tier": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/RequestedServiceTier"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stop": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "stream": {
+          "type": "boolean"
+        },
+        "temperature": {
+          "anyOf": [
+            {
+              "maximum": 1.5,
+              "minimum": 0,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "tool_choice": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolChoice"
+            },
+            {
+              "$ref": "#/$defs/ToolChoiceEnum"
+            }
+          ]
+        },
+        "tools": {
+          "anyOf": [
+            {
+              "items": {
+                "anyOf": [
+                  {
+                    "$ref": "#/$defs/Tool"
+                  },
+                  {
+                    "$ref": "#/$defs/WebSearchTool"
+                  },
+                  {
+                    "$ref": "#/$defs/WebSearchPremiumTool"
+                  },
+                  {
+                    "$ref": "#/$defs/CodeInterpreterTool"
+                  },
+                  {
+                    "$ref": "#/$defs/ImageGenerationTool"
+                  },
+                  {
+                    "$ref": "#/$defs/DocumentLibraryTool"
+                  },
+                  {
+                    "$ref": "#/$defs/CustomConnector"
+                  }
+                ]
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "top_p": {
+          "anyOf": [
+            {
+              "exclusiveMinimum": 0,
+              "maximum": 1,
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["messages", "model"],
+      "type": "object"
+    },
+    "CodeInterpreterTool": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["code_interpreter"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ContentChunk": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextChunk"
+        },
+        {
+          "$ref": "#/$defs/ImageURLChunk"
+        },
+        {
+          "$ref": "#/$defs/DocumentURLChunk"
+        },
+        {
+          "$ref": "#/$defs/ReferenceChunk"
+        },
+        {
+          "$ref": "#/$defs/FileChunk"
+        },
+        {
+          "$ref": "#/$defs/ThinkChunk"
+        },
+        {
+          "$ref": "#/$defs/AudioChunk"
+        }
+      ]
+    },
+    "CustomConnector": {
+      "additionalProperties": false,
+      "properties": {
+        "authorization": {
+          "anyOf": [
+            {
+              "anyOf": [
+                {
+                  "$ref": "#/$defs/OAuth2TokenAuth"
+                },
+                {
+                  "$ref": "#/$defs/APIKeyAuth"
+                }
+              ]
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "connector_id": {
+          "type": "string"
+        },
+        "tool_configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["connector"],
+          "type": "string"
+        }
+      },
+      "required": ["connector_id"],
+      "type": "object"
+    },
+    "DocumentLibraryTool": {
+      "additionalProperties": false,
+      "properties": {
+        "library_ids": {
+          "items": {
+            "type": "string"
+          },
+          "minItems": 1,
+          "type": "array"
+        },
+        "tool_configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["document_library"],
+          "type": "string"
+        }
+      },
+      "required": ["library_ids"],
+      "type": "object"
+    },
+    "DocumentURLChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "document_name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "document_url": {
+          "type": "string"
+        },
+        "type": {
+          "const": "document_url",
+          "type": "string"
+        }
+      },
+      "required": ["document_url"],
+      "type": "object"
+    },
+    "FileChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "file_id": {
+          "format": "uuid",
+          "type": "string"
+        },
+        "type": {
+          "const": "file",
+          "type": "string"
+        }
+      },
+      "required": ["file_id"],
+      "type": "object"
+    },
+    "Function": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "type": "string"
+        },
+        "name": {
+          "type": "string"
+        },
+        "parameters": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "strict": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name", "parameters"],
+      "type": "object"
+    },
+    "FunctionCall": {
+      "additionalProperties": false,
+      "properties": {
+        "arguments": {
+          "anyOf": [
+            {
+              "additionalProperties": true,
+              "type": "object"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["name", "arguments"],
+      "type": "object"
+    },
+    "FunctionName": {
+      "additionalProperties": false,
+      "properties": {
+        "name": {
+          "type": "string"
+        }
+      },
+      "required": ["name"],
+      "type": "object"
+    },
+    "GuardrailConfig": {
+      "properties": {
+        "block_on_error": {
+          "type": "boolean"
+        },
+        "moderation_llm_v1": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModerationLLMV1Config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "moderation_llm_v2": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModerationLLMV2Config"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ImageDetail": {
+      "enum": ["low", "auto", "high"],
+      "type": "string"
+    },
+    "ImageGenerationTool": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["image_generation"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ImageURL": {
+      "additionalProperties": false,
+      "properties": {
+        "detail": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageDetail"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "url": {
+          "type": "string"
+        }
+      },
+      "required": ["url"],
+      "type": "object"
+    },
+    "ImageURLChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "image_url": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ImageURL"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "image_url",
+          "type": "string"
+        }
+      },
+      "required": ["image_url"],
+      "type": "object"
+    },
+    "JsonSchema": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "name": {
+          "type": "string"
+        },
+        "schema": {
+          "additionalProperties": true,
+          "type": "object"
+        },
+        "strict": {
+          "type": "boolean"
+        }
+      },
+      "required": ["name", "schema"],
+      "type": "object"
+    },
+    "MistralPromptMode": {
+      "enum": ["reasoning"],
+      "type": "string"
+    },
+    "ModerationLLMAction": {
+      "enum": ["none", "block"],
+      "type": "string"
+    },
+    "ModerationLLMV1CategoryThresholds": {
+      "properties": {
+        "dangerous_and_criminal_content": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "financial": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hate_and_discrimination": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "health": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "law": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pii": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selfharm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sexual": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "violence_and_threats": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ModerationLLMV1Config": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ModerationLLMAction"
+        },
+        "custom_category_thresholds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModerationLLMV1CategoryThresholds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore_other_categories": {
+          "type": "boolean"
+        },
+        "model_name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ModerationLLMV2CategoryThresholds": {
+      "properties": {
+        "criminal": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "dangerous": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "financial": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "hate_and_discrimination": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "health": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "jailbreaking": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "law": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "pii": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "selfharm": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "sexual": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "violence_and_threats": {
+          "anyOf": [
+            {
+              "type": "number"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ModerationLLMV2Config": {
+      "properties": {
+        "action": {
+          "$ref": "#/$defs/ModerationLLMAction"
+        },
+        "custom_category_thresholds": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ModerationLLMV2CategoryThresholds"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "ignore_other_categories": {
+          "type": "boolean"
+        },
+        "model_name": {
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "OAuth2TokenAuth": {
+      "additionalProperties": false,
+      "properties": {
+        "type": {
+          "enum": ["oauth2-token"],
+          "type": "string"
+        },
+        "value": {
+          "type": "string"
+        }
+      },
+      "required": ["value"],
+      "type": "object"
+    },
+    "Prediction": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "type": "string"
+        },
+        "type": {
+          "const": "content",
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "ReasoningEffort": {
+      "enum": ["none", "minimal", "low", "medium", "high", "xhigh"],
+      "type": "string"
+    },
+    "ReferenceChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "reference_ids": {
+          "items": {
+            "anyOf": [
+              {
+                "type": "integer"
+              },
+              {
+                "type": "string"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "reference",
+          "type": "string"
+        }
+      },
+      "required": ["reference_ids"],
+      "type": "object"
+    },
+    "RequestedServiceTier": {
+      "enum": ["auto", "standard_only"],
+      "type": "string"
+    },
+    "ResponseFormat": {
+      "additionalProperties": false,
+      "properties": {
+        "json_schema": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/JsonSchema"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "$ref": "#/$defs/ResponseFormats"
+        }
+      },
+      "type": "object"
+    },
+    "ResponseFormats": {
+      "enum": ["text", "json_object", "json_schema"],
+      "type": "string"
+    },
+    "SystemMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/SystemMessageContentChunks"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "role": {
+          "const": "system",
+          "type": "string"
+        }
+      },
+      "required": ["content"],
+      "type": "object"
+    },
+    "SystemMessageContentChunks": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/TextChunk"
+        },
+        {
+          "$ref": "#/$defs/ThinkChunk"
+        }
+      ]
+    },
+    "TextChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "text": {
+          "type": "string"
+        },
+        "type": {
+          "const": "text",
+          "type": "string"
+        }
+      },
+      "required": ["text"],
+      "type": "object"
+    },
+    "ThinkChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "closed": {
+          "type": "boolean"
+        },
+        "signature": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "thinking": {
+          "items": {
+            "anyOf": [
+              {
+                "$ref": "#/$defs/TextChunk"
+              },
+              {
+                "$ref": "#/$defs/ToolReferenceChunk"
+              },
+              {
+                "$ref": "#/$defs/ReferenceChunk"
+              }
+            ]
+          },
+          "type": "array"
+        },
+        "type": {
+          "const": "thinking",
+          "type": "string"
+        }
+      },
+      "required": ["thinking"],
+      "type": "object"
+    },
+    "Tool": {
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "$ref": "#/$defs/Function"
+        },
+        "type": {
+          "$ref": "#/$defs/ToolTypes"
+        }
+      },
+      "required": ["function"],
+      "type": "object"
+    },
+    "ToolCall": {
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "$ref": "#/$defs/FunctionCall"
+        },
+        "id": {
+          "type": "string"
+        },
+        "index": {
+          "type": "integer"
+        },
+        "type": {
+          "$ref": "#/$defs/ToolTypes"
+        }
+      },
+      "required": ["function"],
+      "type": "object"
+    },
+    "ToolChoice": {
+      "additionalProperties": false,
+      "properties": {
+        "function": {
+          "$ref": "#/$defs/FunctionName"
+        },
+        "type": {
+          "$ref": "#/$defs/ToolTypes"
+        }
+      },
+      "required": ["function"],
+      "type": "object"
+    },
+    "ToolChoiceEnum": {
+      "enum": ["auto", "none", "any", "required"],
+      "type": "string"
+    },
+    "ToolConfiguration": {
+      "additionalProperties": false,
+      "properties": {
+        "exclude": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "include": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "requires_confirmation": {
+          "anyOf": [
+            {
+              "items": {
+                "type": "string"
+              },
+              "type": "array"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "type": "object"
+    },
+    "ToolMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/ContentChunk"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "name": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "role": {
+          "const": "tool",
+          "type": "string"
+        },
+        "tool_call_id": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["content"],
+      "type": "object"
+    },
+    "ToolReferenceChunk": {
+      "additionalProperties": false,
+      "properties": {
+        "description": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "favicon": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "title": {
+          "type": "string"
+        },
+        "tool": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/BuiltInConnectors"
+            },
+            {
+              "type": "string"
+            }
+          ]
+        },
+        "type": {
+          "const": "tool_reference",
+          "type": "string"
+        },
+        "url": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "required": ["tool", "title"],
+      "type": "object"
+    },
+    "ToolTypes": {
+      "enum": ["function"],
+      "type": "string"
+    },
+    "UserMessage": {
+      "additionalProperties": false,
+      "properties": {
+        "content": {
+          "anyOf": [
+            {
+              "type": "string"
+            },
+            {
+              "type": "null"
+            },
+            {
+              "items": {
+                "$ref": "#/$defs/ContentChunk"
+              },
+              "type": "array"
+            }
+          ]
+        },
+        "role": {
+          "const": "user",
+          "type": "string"
+        }
+      },
+      "required": ["content"],
+      "type": "object"
+    },
+    "WebSearchPremiumTool": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["web_search_premium"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    },
+    "WebSearchTool": {
+      "additionalProperties": false,
+      "properties": {
+        "tool_configuration": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/ToolConfiguration"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "type": {
+          "enum": ["web_search"],
+          "type": "string"
+        }
+      },
+      "type": "object"
+    }
+  },
+  "$ref": "#/$defs/ChatCompletionRequest",
+  "$schema": "https://json-schema.org/draft/2020-12/schema"
+}

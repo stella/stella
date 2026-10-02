@@ -19,6 +19,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
 
 const ADMIN_TIMER_COLUMNS = {
@@ -78,7 +79,11 @@ const listRunningMemberTimers = createSafeRootHandler(
       "List running timers in the active organization as an organization owner or admin. Use the timer ID with time-timers.admin.stop to end it into its owner's draft entry. Follow nextCursor to read the next page.",
     permissions: { timeEntry: ["approve"] },
     access: "read",
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     query: t.Object({
       limit: t.Optional(tPaginationLimit(LIMITS.timeEntriesPageSizeMax)),
       cursor: t.Optional(tPaginationCursor()),
@@ -108,7 +113,9 @@ const listRunningMemberTimers = createSafeRootHandler(
         }),
       );
     }
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx

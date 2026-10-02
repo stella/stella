@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import type {
   GazetteerEntry,
@@ -12,9 +12,11 @@ import type { ChatAnonRuntime } from "@stll/anonymize-chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import type { AnonymizationGazetteerScope } from "@/api/lib/anonymization-blacklist";
+import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import { brandPersistedWorkspaceId } from "@/api/lib/safe-id-boundaries";
-import { buildFieldMarkers } from "@/api/mcp/field-markers";
+import { joinFieldsForAnonymization } from "@/api/mcp/field-markers";
+import type { AnonymizedFieldBoundaryError } from "@/api/mcp/field-markers";
 
 /**
  * Where one call's deny-list and allowlist come from.
@@ -94,45 +96,6 @@ export type AnonymizeTextFieldsDependencies = ChatAnonRuntime<
   >;
 };
 
-const splitRedactedFields = ({
-  markers,
-  redactedText,
-}: {
-  markers: string[];
-  redactedText: string;
-}): string[] => {
-  const fields: string[] = [];
-  let searchStart = 0;
-
-  for (let index = 0; index < markers.length; index += 1) {
-    const marker = markers[index];
-    if (marker === undefined) {
-      panic(`Missing anonymized field marker at index ${index}`);
-    }
-
-    const markerStart = redactedText.indexOf(marker, searchStart);
-    if (markerStart === -1) {
-      panic(`Missing anonymized field marker at index ${index}`);
-    }
-
-    const nextMarker = markers[index + 1];
-    const contentStart = markerStart + marker.length;
-    const contentEnd =
-      nextMarker === undefined
-        ? redactedText.length
-        : redactedText.indexOf(nextMarker, contentStart);
-
-    if (contentEnd === -1) {
-      panic(`Missing anonymized field boundary at index ${index}`);
-    }
-
-    fields.push(redactedText.slice(contentStart, contentEnd));
-    searchStart = contentEnd;
-  }
-
-  return fields;
-};
-
 type ResolvedAnonymizationCatalogs = {
   excludedCanonicals: readonly string[];
   gazetteerEntries: GazetteerEntry[];
@@ -186,6 +149,19 @@ const resolveAnonymizationCatalogs = async ({
   }
 };
 
+export type AnonymizedTextFields = {
+  entityCount: number;
+  /** One entry per input field, in input order. */
+  fields: string[];
+  /** Placeholder → original. Empty for fully-redacted (non-reversible) operators. */
+  redactionMap: Map<string, string>;
+};
+
+/**
+ * Anonymize `fields` in one pipeline call. Output whose field structure did
+ * not survive the pipeline is an `AnonymizedFieldBoundaryError`; callers must
+ * refuse it and forward none of the fields.
+ */
 export const anonymizeTextFieldsWithDependencies = async ({
   catalogs,
   dependencies,
@@ -196,27 +172,16 @@ export const anonymizeTextFieldsWithDependencies = async ({
   context: providedContext,
 }: AnonymizeTextFieldsInput & {
   dependencies: AnonymizeTextFieldsDependencies;
-}) => {
+}): Promise<Result<AnonymizedTextFields, AnonymizedFieldBoundaryError>> => {
   if (fields.every((field) => field.length === 0)) {
-    return {
+    return Result.ok({
       entityCount: 0,
       fields,
       redactionMap: new Map<string, string>(),
-    };
+    });
   }
 
   const context = providedContext ?? dependencies.createPipelineContext();
-  const markers = buildFieldMarkers({
-    fieldCount: fields.length,
-    fields,
-  });
-  const combinedText = fields
-    .map(
-      (field, index) =>
-        `${markers[index] ?? panic(`Missing anonymized field marker at index ${index}`)}${field}`,
-    )
-    .join("");
-
   const { excludedCanonicals, gazetteerEntries } =
     await resolveAnonymizationCatalogs({
       catalogs,
@@ -224,12 +189,25 @@ export const anonymizeTextFieldsWithDependencies = async ({
       organizationId,
       workspaceId,
     });
+  const joined = joinFieldsForAnonymization({
+    fields,
+    reservedValues: [
+      ...arrayOrEmpty(forcedSensitiveValues),
+      ...gazetteerEntries.flatMap((entry) => [
+        entry.canonical,
+        ...entry.variants,
+      ]),
+    ],
+  });
+  if (Result.isError(joined)) {
+    return Result.err(joined.error);
+  }
   const dictionaries = await dependencies.loadNameDictionaries();
 
   const result = await runChatAnonPipeline({
     runtime: dependencies,
     dictionaries,
-    text: combinedText,
+    text: joined.value.text,
     workspaceId,
     forcedSensitiveValues,
     gazetteerEntries,
@@ -237,13 +215,16 @@ export const anonymizeTextFieldsWithDependencies = async ({
     context,
   });
 
-  return {
+  // Fail closed: when the field boundaries did not come back intact, no field
+  // is returned, so callers forward nothing.
+  const redactedFields = joined.value.split(result.redactedText);
+  if (Result.isError(redactedFields)) {
+    return Result.err(redactedFields.error);
+  }
+
+  return Result.ok({
     entityCount: result.entityCount,
-    fields: splitRedactedFields({
-      markers,
-      redactedText: result.redactedText,
-    }),
-    /** Placeholder → original. Empty for fully-redacted (non-reversible) operators. */
+    fields: redactedFields.value,
     redactionMap: result.redactionMap,
-  };
+  });
 };

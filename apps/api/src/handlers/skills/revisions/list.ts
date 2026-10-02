@@ -21,7 +21,11 @@ const config = {
     "accepting a proposal makes.",
   permissions: { chat: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: listSkillRevisionsParamsSchema,
 } satisfies HandlerConfig;
 

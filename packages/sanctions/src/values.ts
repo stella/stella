@@ -1,5 +1,6 @@
 import { Result } from "better-result";
-import { Temporal } from "temporal-polyfill/full";
+
+import { Temporal } from "@stll/time";
 
 import { SanctionsListParseError } from "./entry";
 import type { BirthDate, SanctionsSource } from "./entry";

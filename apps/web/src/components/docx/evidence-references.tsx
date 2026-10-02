@@ -1,9 +1,9 @@
 import { useRef, useState } from "react";
 
 import { useInfiniteQuery, useMutation } from "@tanstack/react-query";
+import type { Node as ProseMirrorNode } from "@tiptap/pm/model";
+import type { EditorView } from "@tiptap/pm/view";
 import { Result, TaggedError } from "better-result";
-import type { Node as ProseMirrorNode } from "prosemirror-model";
-import type { EditorView } from "prosemirror-view";
 import { useDebouncedCallback } from "use-debounce";
 import { useTranslations } from "use-intl";
 

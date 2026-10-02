@@ -56,6 +56,7 @@ runtime validation, or integration tests.
 - [`no-object-url-leak`](./no-object-url-leak.ts) (`no-object-url-leak`): follows locally owned `URL.createObjectURL` values and requires matching revocation.
 - [`no-path-prefix-containment`](./no-path-prefix-containment.ts) (`no-path-prefix-containment`): rejects filesystem containment checks based on a bare string prefix, which also accepts sibling paths.
 - [`no-raw-api-url`](./no-raw-api-url.ts) (`no-direct-api-env`, `no-raw-api-url`): confines the browser and external API bases to one resolver and rejects hand-written API request paths, preventing same-origin routing from drifting back to direct cross-origin calls.
+- [`no-raw-cache-control`](./no-raw-cache-control.ts) (`no-raw-cache-control`): confines API `Cache-Control` names and caching directive literals to `lib/security-headers.ts`; isolated `public` and `private` domain literals are left alone.
 - [`failure-sink-handle`](./failure-sink-handle.ts) (`failure-sink-handle`): requires `observeFailure`'s `sink` to be a handle passed by name, created once by `failureSink(...)` at module scope, so every site's failure policy is a reviewed declaration.
 - [`no-raw-error-logging`](./no-raw-error-logging.ts) (`no-raw-error-logging`): keeps raw messages, stacks, causes, and stringified errors out of production logs and process streams (including `Bun.write` to `Bun.stderr`/`Bun.stdout`), and the raw `error.msg` key out of production code outside the legacy field helpers.
 - [`no-redacted-log-attribute-key`](./no-redacted-log-attribute-key.ts) (`no-redacted-log-attribute-key`): rejects a static attribute key in a `logger.*` call that matches the logger's sensitive-key denylist, because the sanitizer would drop it and the record would ship without it, and an `observeFailure` context key outside the reviewed `FAILURE_CONTEXT_KEYS`. Computed keys and spreads are out of scope; the denylist and context-key copies are held equal to their owners by a guardrails test.
@@ -117,6 +118,7 @@ runtime validation, or integration tests.
 - [`require-query-limit`](./require-query-limit.ts) (`require-query-limit`): rejects potentially unbounded list queries without an explicit limit.
 - [`require-search-scope`](./require-search-scope.ts) (`require-search-scope`): requires search queries to carry their workspace or public-data scope.
 - [`require-timestamp-id-cursor-codec`](./require-timestamp-id-cursor-codec.ts) (`require-timestamp-id-cursor-codec`): requires the shared lossless codec for timestamp-and-ID cursors.
+- [`require-tenant-page-limit`](./require-tenant-page-limit.ts) (`require-tenant-page-limit`): requires resolved tenant `limit`, `pageSize`, and `windowSize` locals reading request pagination fields or canonical page defaults to wrap the complete expression with `normalizeTenantPageLimit`. Import aliases are supported, shadowed helpers are rejected, and schema maxima, mutation bounds, sentinel lookahead, anonymous public handlers, and public corpus readers stay out of scope.
 - [`require-timestamptz-column`](./require-timestamptz-column.ts) (`require-timestamptz-column`): requires timezone-aware PostgreSQL timestamp columns for instants.
 - [`require-transaction-abort`](./require-transaction-abort.ts) (`require-transaction-abort`): requires expected transaction failures to abort the transaction rather than return a partially committed result.
 
@@ -229,6 +231,7 @@ runtime validation, or integration tests.
 - [`no-eager-singleton`](./no-eager-singleton.ts) (`no-eager-singleton`): prevents side-effecting clients from being constructed at module evaluation time; use lazy getters.
 - [`no-facade-imports`](./no-facade-imports.ts) (`no-facade-imports`): requires imports from the owning leaf module instead of broad facades that hide boundaries and side effects.
 - [`no-nanoid`](./no-nanoid.ts) (`no-nanoid`): prevents the removed Nano ID dependency from returning; use UUIDv7 or Web Crypto for custom alphabets.
+- [`confine-server-reads`](./confine-server-reads.ts) (`confine-server-reads`): keeps Start request metadata access behind the approved server helper.
 - [`no-partial-record-satisfies`](./no-partial-record-satisfies.ts) (`no-partial-record-satisfies`): rejects `satisfies Partial<Record<Union, T>>`, which defeats exhaustive companion-map checking.
 - [`bun-test-hygiene`](./bun-test-hygiene.ts) (`no-focused-tests`, `no-disabled-tests`, `no-identical-title`, `no-unmanaged-database-client`): the `bun:test` counterparts of the jest/vitest hygiene rules, which do not recognise `bun:test` imports. Test functions resolve through their import (aliased or namespace member); `.only` is rejected, `.skip`/`.todo`/`xtest`/`xit`/`xdescribe` need a reason comment on the same line or directly above (the conditional `.skipIf`/`.todoIf`/`.if` forms and a disabled registration inside an `if`/ternary branch are allowed), and two tests or blocks in the same block may not share a static title; each conditional branch counts as its own block. A test may not construct a database client (`SQL` from `bun`, `drizzle` from a network driver without a `client`, `postgres`, `pg`): the gated suites share one process, so tests open clients through `apps/api/src/tests/gated-test-database.ts`, the one exempt module, which closes each client it opens.
 - [`no-vacuous-throw-assertion`](./no-vacuous-throw-assertion.ts) (`no-vacuous-throw-assertion`): requires `toThrow` and `toThrowError` in tests to name the expected error; an unargumented throw assertion is satisfied by every error, so it keeps passing once the code fails for an unrelated reason. `.not.toThrow()` stays valid.
@@ -278,6 +281,8 @@ implies a hazard that is gone.
   budget in one change, so no baseline outlives the thing it measured.
 - Record the retirement in the ownership row that replaced it, naming the rule:
   the row is then the only place a reader has to look.
+
+- [`drizzle`](./drizzle.ts) (`enforce-delete-with-where`, `enforce-update-with-where`): requires `.where(...)` on each configured Drizzle mutation chain; unrelated preceding or enclosing chains cannot supply its filter. Receiver aliases and separately stored builders are outside this check.
 
 ## Adding or changing a rule
 

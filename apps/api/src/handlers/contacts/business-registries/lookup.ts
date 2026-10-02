@@ -12,6 +12,10 @@ import {
   LOOKUP_DETAIL_DESCRIPTION,
 } from "@/api/lib/business-registries/dispatch";
 import { lookupBusinessRegistryShared } from "@/api/lib/business-registries/registry-lookup";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 // A tuple of literals keeps each option in the route types, where a mapped
 // array widens to `never`; `satisfies` fails when the contract list changes.
@@ -50,7 +54,12 @@ const businessRegistriesLookup = createSafeRootHandler(
     query: querySchema,
   },
   async function* ({ query, scopedDb, session }) {
+    const observer = actionRequestObserver(
+      session.activeOrganizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const result = await lookupBusinessRegistryShared({
+      observer,
       scopedDb,
       organizationId: session.activeOrganizationId,
       registry: query.registry,

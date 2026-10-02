@@ -25,10 +25,7 @@ import { createBoeTools } from "@/api/handlers/chat/tools/boe-tools";
 import { createBrowserControlTool } from "@/api/handlers/chat/tools/browser-control-tool";
 import { createBusinessRegistryTools } from "@/api/handlers/chat/tools/business-registry-tools";
 import { createChatHistoryTools } from "@/api/handlers/chat/tools/chat-history-tools";
-import {
-  COUNTERPARTY_CHECK_TOOL_NAME,
-  createCounterpartyCheckTools,
-} from "@/api/handlers/chat/tools/counterparty-check-tools";
+import { createCounterpartyCheckTools } from "@/api/handlers/chat/tools/counterparty-check-tools";
 import {
   CREATE_DOCUMENT_TOOL_NAME,
   createCreateDocumentTool,
@@ -40,10 +37,7 @@ import {
   type ChatCodeModeToolMap,
   type ChatScriptCallTools,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
-import {
-  createFolderConsistencyReviewTools,
-  REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
-} from "@/api/handlers/chat/tools/folder-consistency-review-tool";
+import { createFolderConsistencyReviewTools } from "@/api/handlers/chat/tools/folder-consistency-review-tool";
 import {
   createFolioAgentDocTools,
   createSuggestChangesTools,
@@ -58,6 +52,7 @@ import {
   SEARCH_PAST_CHATS_TOOL_NAME,
 } from "@/api/handlers/chat/tools/past-chat-tools";
 import type { PastChatScope } from "@/api/handlers/chat/tools/past-chat-tools";
+import { RAW_MODE_ONLY_CHAT_TOOL_NAMES } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import {
   buildChatWriteTools,
   type ChatRegistryWriteToolMap,
@@ -96,6 +91,7 @@ import type {
   BusinessRegistrySlug,
   RegistryHandler,
 } from "@/api/lib/business-registries/dispatch";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { CHAT_TOOL_SET_PURPOSE } from "@/api/lib/chat/chat-tool-types";
 import type {
   ChatToolMap,
@@ -335,6 +331,7 @@ export type GetChatToolsProps = {
   // platform provider. A missing value silently falls back and fails there, so
   // every caller must thread it through explicitly.
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   /**
    * The request's scope workspace (or `null` for global chat), for
    * subagent usage metering. Distinct from `toolWorkspaceIds`, which
@@ -650,6 +647,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     organizationId,
     memberRole,
     orgAIConfig,
+    managedAIResidency,
     requestWorkspaceId,
     threadId,
     workspaceId,
@@ -702,6 +700,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           createAbortSignal: createAIAbortSignal,
           organizationId,
           orgAIConfig,
+          managedAIResidency,
           promptCachingEnabled,
           refRegistry,
           safeDb,
@@ -762,6 +761,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     dispatch: registryDispatch,
   });
   const businessRegistryTools = createBusinessRegistryTools({
+    organizationId,
     enabledHandlers: businessRegistryHandlers,
   });
   // Findings name natural persons with birth dates and identifiers, which the
@@ -976,7 +976,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         organizationId,
         userId,
         orgAIConfig,
+        managedAIResidency,
         recordAuditEvent,
+        thirdPartyBoundary,
       })
     : {};
 
@@ -990,6 +992,8 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
         organizationId,
         userId,
         orgAIConfig,
+        managedAIResidency,
+        thirdPartyBoundary,
       })
     : {};
 
@@ -1088,6 +1092,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
           }),
         organizationId,
         orgAIConfig,
+        managedAIResidency,
         safeDb,
         thirdPartyBoundary,
         userId,
@@ -1131,10 +1136,9 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     unavailableReasons: new Map([
       ...(thirdPartyBoundary.type === "raw"
         ? []
-        : [
-            COUNTERPARTY_CHECK_TOOL_NAME,
-            REVIEW_FOLDER_CONSISTENCY_TOOL_NAME,
-          ].map((name) => [name, "anonymized mode is on"] as const)),
+        : RAW_MODE_ONLY_CHAT_TOOL_NAMES.map(
+            (name) => [name, "anonymized mode is on"] as const,
+          )),
       ...(webResearchAvailable
         ? []
         : [WEB_SEARCH_TOOL_NAME, FETCH_URL_TOOL_NAME].map(

@@ -31,6 +31,7 @@ import { FOLIO_COLLAB_REDIS_SCOPE } from "@stll/api-contract/folio-collab";
  */
 export const COORDINATION_KEY_EXPIRY = {
   "api-ratelimit": "ttl",
+  "case-law-publisher-gate": "ttl",
   "auth-ratelimit": "ttl",
   "mcp-gateway-ratelimit": "ttl",
   "action-admission": "ttl",

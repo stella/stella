@@ -12,6 +12,10 @@ import {
   DESKTOP_REGISTRY_PERMISSION,
 } from "@/api/lib/business-registries/desktop/config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import {
+  CACHE_CONTROL_HEADER,
+  PRIVATE_CACHE_CONTROL,
+} from "@/api/lib/security-headers";
 
 export default createSafeRootHandler(
   {
@@ -20,7 +24,7 @@ export default createSafeRootHandler(
     body: t.Object({}, { additionalProperties: false }),
   },
   async function* ({ user, session, safeDb, recordAuditEvent, set }) {
-    set.headers["cache-control"] = "no-store";
+    set.headers[CACHE_CONTROL_HEADER] = PRIVATE_CACHE_CONTROL;
     const account = yield* Result.await(
       safeDb((tx) =>
         tx.query.user.findFirst({

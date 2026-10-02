@@ -22,7 +22,11 @@ const config = {
     "Pass hidden true to stop offering packs in the template library; " +
     "templates already installed are unaffected. Owners and admins only.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   body: updateTemplatePackVisibilityBodySchema,
 } satisfies HandlerConfig;
 

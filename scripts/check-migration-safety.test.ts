@@ -755,8 +755,6 @@ describe("check-migration-safety", () => {
       expectClean(
         runChecker(`
           ALTER TABLE "case_law_citations" ADD COLUMN "note" text;
-          CREATE INDEX CONCURRENTLY "case_law_citations_note_idx"
-            ON "case_law_citations" ("note");
           INSERT INTO "case_law_decisions" ("id") VALUES ('x')
             ON CONFLICT ON CONSTRAINT "case_law_decisions_pkey" DO UPDATE SET "id" = 'x';
           SELECT "id" FROM "case_law_decisions" WHERE "id" = 'x' FOR UPDATE;

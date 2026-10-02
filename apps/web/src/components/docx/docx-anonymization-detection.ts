@@ -1,4 +1,4 @@
-import type { EditorView } from "prosemirror-view";
+import type { EditorView } from "@tiptap/pm/view";
 
 import type { AnonymizationTerm } from "@stll/folio-react";
 

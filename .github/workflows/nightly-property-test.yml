@@ -10,6 +10,10 @@ on:
         description: "numRuns multiplier (overrides the default nightly factor)"
         required: false
         default: "10"
+      round:
+        description: "Provider request combinations round to run (default: today's)"
+        required: false
+        default: ""
 
 permissions: {}
 
@@ -59,6 +63,145 @@ jobs:
         env:
           TURBO_FORCE: "true"
           PROPERTY_TEST_NUM_RUNS_FACTOR: ${{ github.event.inputs.factor || '10' }}
+
+  # The chat-turn combinations' all-triples cover: every combination of the
+  # values of any three dimensions, every night, split into SHARDS jobs.
+  provider-request-three-wise:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+
+      - name: Provider request all-triples cover
+        working-directory: apps/api
+        run: bun run test src/handlers/chat/provider-request-schemas.integration.test.ts
+        env:
+          PROVIDER_REQUEST_COMBINATIONS: three-wise
+          PROVIDER_REQUEST_SHARD: ${{ matrix.shard }}/2
+
+  # Every chat-turn combination the provider request test enumerates, not
+  # only its all-pairs cover: too many for one night (each is a two-turn
+  # conversation), so the product is split into ROUNDS x SLOTS shards and
+  # each night runs one round's SLOTS in parallel. The rounds rotate by day,
+  # so every combination runs once every ROUNDS nights; a dispatch can pick
+  # a round.
+  provider-request-combinations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        slot: [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]
+    env:
+      ROUNDS: "40"
+      SLOTS: "10"
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+
+      - name: Provider request combinations
+        working-directory: apps/api
+        run: |
+          day=$((10#$(date -u +%j)))
+          round="${ROUND_INPUT:-$(( day % ROUNDS ))}"
+          shard=$(( round * SLOTS + SLOT ))
+          echo "Round ${round}, shard ${shard} of $(( ROUNDS * SLOTS ))"
+          PROVIDER_REQUEST_SHARD="${shard}/$(( ROUNDS * SLOTS ))" \
+            bun run test src/handlers/chat/provider-request-schemas.integration.test.ts
+        env:
+          PROVIDER_REQUEST_COMBINATIONS: all
+          ROUND_INPUT: ${{ github.event.inputs.round }}
+          SLOT: ${{ matrix.slot }}
+
+  # Every settled chat turn against what it showed, for every response
+  # shape, turn position and provider combination, split into SHARDS jobs.
+  # The matrices have three dimensions, so their all-triples cover is every
+  # combination: each night runs all of them, a few seconds each.
+  turn-outcome-combinations:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [0, 1, 2, 3]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          submodules: true
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
+        with:
+          bun-version-file: "package.json"
+
+      - name: Install dependencies
+        run: bash scripts/retry.sh bun ci --ignore-scripts
+        env:
+          NPM_TOKEN: ""
+
+      - name: Prepare environment
+        run: |
+          cd ./apps/api
+          cp .env.example .env
+
+      - name: Turn outcome combinations
+        working-directory: apps/api
+        run: bun run test src/handlers/chat/turn-outcome.integration.test.ts
+        env:
+          TURN_OUTCOME_COMBINATIONS: all
+          TURN_OUTCOME_SHARD: ${{ matrix.shard }}/4
 
   chat-mutation-matrix:
     runs-on: ubuntu-latest

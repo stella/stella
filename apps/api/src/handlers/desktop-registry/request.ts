@@ -30,6 +30,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 const registry = t.UnionEnum(BUSINESS_REGISTRY_SLUGS);
 const config = {
   mcp: { type: "internal", reason: "auth_plumbing" },
+  cache: { kind: "none" },
   body: t.Union([
     t.Object({ type: t.Literal("config") }, { additionalProperties: false }),
     t.Object({ type: t.Literal("revoke") }, { additionalProperties: false }),
@@ -75,12 +76,7 @@ type RegistryReply =
 
 export default createSafePublicHandler(
   config,
-  async function* ({
-    request,
-    body,
-    set,
-  }): SafeHandlerGenerator<RegistryReply> {
-    set.headers["cache-control"] = "no-store";
+  async function* ({ request, body }): SafeHandlerGenerator<RegistryReply> {
     const context = yield* Result.await(authorizeDesktopRegistry(request));
     switch (body.type) {
       case "revoke": {
