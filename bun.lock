@@ -496,7 +496,7 @@
     },
     "packages/agent-input": {
       "name": "@stll/agent-input",
-      "version": "0.1.1",
+      "version": "0.1.2",
       "dependencies": {
         "@stll/country-codes": "workspace:^",
         "@stll/template-conditions": "workspace:^",
@@ -514,7 +514,7 @@
     },
     "packages/ai-catalog": {
       "name": "@stll/ai-catalog",
-      "version": "0.3.2",
+      "version": "0.4.0",
       "dependencies": {
         "valibot": "catalog:",
       },
@@ -654,7 +654,7 @@
     },
     "packages/chat": {
       "name": "@stll/chat",
-      "version": "0.1.33",
+      "version": "0.1.34",
       "dependencies": {
         "@stll/ai-catalog": "workspace:^",
         "@stll/ui": "workspace:^",
@@ -682,7 +682,7 @@
     },
     "packages/cli": {
       "name": "@stll/cli",
-      "version": "3.3.3",
+      "version": "3.3.4",
       "bin": {
         "stella": "./dist/cli.js",
       },
@@ -873,7 +873,7 @@
     },
     "packages/mcp-kit": {
       "name": "@stll/mcp-kit",
-      "version": "0.0.0",
+      "version": "0.1.0",
       "dependencies": {
         "@stll/agent-input": "workspace:^",
         "better-result": "catalog:",
