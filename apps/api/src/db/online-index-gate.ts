@@ -284,13 +284,16 @@ const runObservedIndexWork = async ({
     if (cancellationOutcome.isErr()) {
       onTerminated();
       await connection.terminate();
-      await build;
+      // Settles once the closed session rejects the statement; how it ended
+      // belongs in the report beside the two failures that forced it.
+      const terminatedBuild = await build;
       throw new OnlineIndexMonitoringError({
         message:
           "Online index monitoring and independent cancellation failed; build session terminated",
         cause: {
           monitoring: monitoring.error,
           cancellation: cancellationOutcome.error,
+          build: terminatedBuild.isErr() ? terminatedBuild.error : "completed",
         },
       });
     }
