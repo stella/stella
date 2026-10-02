@@ -1,0 +1,94 @@
+// When an accepted dependency advisory must stop being accepted.
+//
+// A baseline entry may carry two expiry terms:
+// - `expiresOn` (YYYY-MM-DD): the acceptance lapses after that date, so a
+//   temporary exception cannot outlive its review.
+// - `untilPatched`: the acceptance lapses once the package's latest published
+//   release is outside the advisory's vulnerable range, i.e. a fix exists and
+//   the dependency should be bumped instead.
+// An entry with either term also lapses once `bun audit` stops reporting its
+// advisory (the dependency was bumped or dropped), so a temporary acceptance
+// is removed in the change that resolves it instead of lingering.
+// Anything that cannot be evaluated fails closed: a malformed date, an
+// advisory without a vulnerable range, or a registry lookup that failed.
+
+export type AcceptanceTerms = {
+  id: string;
+  package: string;
+  expiresOn?: string;
+  untilPatched?: boolean;
+};
+
+export type CurrentAdvisory = {
+  id: string;
+  vulnerableVersions: string;
+};
+
+export type LapsedAcceptance = {
+  id: string;
+  package: string;
+  reason: string;
+};
+
+type LapsedAcceptancesOptions = {
+  accepted: readonly AcceptanceTerms[];
+  current: readonly CurrentAdvisory[];
+  /** Today's date as YYYY-MM-DD. */
+  today: string;
+  /** The package's latest published version, or undefined when the lookup failed. */
+  latestVersion: (pkg: string) => string | undefined;
+};
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/u;
+
+export const lapsedAcceptances = ({
+  accepted,
+  current,
+  today,
+  latestVersion,
+}: LapsedAcceptancesOptions): LapsedAcceptance[] => {
+  const currentById = new Map(
+    current.map((advisory) => [advisory.id, advisory]),
+  );
+  const lapsed: LapsedAcceptance[] = [];
+  for (const entry of accepted) {
+    const lapse = (reason: string) =>
+      lapsed.push({ id: entry.id, package: entry.package, reason });
+    if (entry.expiresOn === undefined && entry.untilPatched !== true) {
+      continue;
+    }
+    if (entry.expiresOn !== undefined) {
+      if (!ISO_DATE.test(entry.expiresOn)) {
+        lapse(`expiresOn "${entry.expiresOn}" is not a YYYY-MM-DD date`);
+        continue;
+      }
+      if (today > entry.expiresOn) {
+        lapse(`the acceptance expired on ${entry.expiresOn}`);
+        continue;
+      }
+    }
+    const advisory = currentById.get(entry.id);
+    if (advisory === undefined) {
+      lapse("the advisory is no longer reported; remove the acceptance");
+      continue;
+    }
+    if (entry.untilPatched !== true) {
+      continue;
+    }
+    if (advisory.vulnerableVersions === "") {
+      lapse("the advisory reports no vulnerable range to compare against");
+      continue;
+    }
+    const latest = latestVersion(entry.package);
+    if (latest === undefined) {
+      lapse(`the latest ${entry.package} release could not be looked up`);
+      continue;
+    }
+    if (!Bun.semver.satisfies(latest, advisory.vulnerableVersions)) {
+      lapse(
+        `${entry.package}@${latest} is outside the vulnerable range ${advisory.vulnerableVersions}; a patched release exists`,
+      );
+    }
+  }
+  return lapsed;
+};

@@ -20,10 +20,16 @@
 //   bun scripts/dependency-audit.ts --check         CI gate: exit 1 on a new high/critical advisory
 //   bun scripts/dependency-audit.ts --write-baseline regenerate the baseline from the current audit
 //   bun scripts/dependency-audit.ts --self-test     prove the comparison logic fires
+//
+// A baseline entry may be temporary: `expiresOn` and `untilPatched` make the
+// acceptance lapse (and --check fail) after a date or once a patched release
+// is published; see scripts/dependency-audit-acceptance.ts.
 
+import { Result } from "better-result";
 import path from "node:path";
 
 import { BASELINE_PATHS } from "./baseline-paths";
+import { lapsedAcceptances } from "./dependency-audit-acceptance";
 
 const SCRIPTS_DIR = import.meta.dir;
 const REPO_ROOT = path.resolve(SCRIPTS_DIR, "..");
@@ -35,9 +41,15 @@ type Advisory = {
   severity: string;
   package: string;
   title: string;
+  /** The advisory's semver range, e.g. "<=1.4.0"; "" when not reported. */
+  vulnerableVersions: string;
 };
 
-type BaselineEntry = Advisory & { reason: string };
+type BaselineEntry = Omit<Advisory, "vulnerableVersions"> & {
+  reason: string;
+  expiresOn?: string;
+  untilPatched?: boolean;
+};
 
 type Baseline = {
   note: string;
@@ -71,12 +83,18 @@ const toBaselineEntry = (value: unknown): BaselineEntry | null => {
   if (id === "") {
     return null;
   }
+  const expiresOn = value["expiresOn"];
+  const untilPatched = value["untilPatched"];
   return {
     id,
     severity: asText(value["severity"]),
     package: asText(value["package"]),
     title: asText(value["title"]),
     reason: asText(value["reason"]),
+    // A present but non-string date stays a (malformed) string, so the entry
+    // lapses instead of silently becoming permanent.
+    ...(expiresOn === undefined ? {} : { expiresOn: asText(expiresOn) }),
+    ...(untilPatched === true ? { untilPatched } : {}),
   };
 };
 
@@ -198,6 +216,7 @@ const gatedAdvisoriesFromAuditResult = ({
           severity,
           package: pkg,
           title: asText(advisory["title"]),
+          vulnerableVersions: asText(advisory["vulnerable_versions"]),
         });
       }
     }
@@ -238,14 +257,22 @@ const report = (advisories: Advisory[]): void => {
 
 const writeBaseline = async (advisories: Advisory[]): Promise<void> => {
   const existing = await readBaseline();
-  const reasonById = new Map(existing.accepted.map((e) => [e.id, e.reason]));
+  const existingById = new Map(existing.accepted.map((e) => [e.id, e]));
   const baseline: Baseline = {
     note: existing.note,
     auditLevel: "high",
-    accepted: advisories.map((a) => ({
-      ...a,
-      reason: reasonById.get(a.id) ?? "TODO: document why this is accepted.",
-    })),
+    accepted: advisories.map(({ id, severity, package: pkg, title }) => {
+      const kept = existingById.get(id);
+      return {
+        id,
+        severity,
+        package: pkg,
+        title,
+        reason: kept?.reason ?? "TODO: document why this is accepted.",
+        ...(kept?.expiresOn === undefined ? {} : { expiresOn: kept.expiresOn }),
+        ...(kept?.untilPatched === true ? { untilPatched: true } : {}),
+      };
+    }),
   };
   await Bun.write(BASELINE_PATH, `${JSON.stringify(baseline, null, 2)}\n`);
   console.info(
@@ -267,12 +294,69 @@ const diffAgainstBaseline = (
   };
 };
 
+// The npm registry's `latest` dist-tag for a package, or undefined when the
+// lookup fails; an `untilPatched` acceptance then lapses (fail closed).
+const fetchLatestVersion = async (pkg: string): Promise<string | undefined> => {
+  const response = await Result.tryPromise(async () =>
+    fetch(`https://registry.npmjs.org/${pkg.replace("/", "%2f")}/latest`, {
+      signal: AbortSignal.timeout(15_000),
+    }),
+  );
+  if (Result.isError(response) || !response.value.ok) {
+    return undefined;
+  }
+  const body = await Result.tryPromise(async (): Promise<unknown> =>
+    response.value.json(),
+  );
+  if (Result.isError(body) || !isRecord(body.value)) {
+    return undefined;
+  }
+  const version = asText(body.value["version"]);
+  return version === "" ? undefined : version;
+};
+
+const checkLapsedAcceptances = async (
+  advisories: Advisory[],
+  baseline: Baseline,
+): Promise<number> => {
+  const packages = new Set(
+    baseline.accepted
+      .filter(({ untilPatched }) => untilPatched === true)
+      .map((entry) => entry.package),
+  );
+  const latest = new Map(
+    await Promise.all(
+      [...packages].map(
+        async (pkg) => [pkg, await fetchLatestVersion(pkg)] as const,
+      ),
+    ),
+  );
+  const lapsed = lapsedAcceptances({
+    accepted: baseline.accepted,
+    current: advisories,
+    // UTC calendar date; an acceptance holds through its expiresOn day.
+    today: new Date().toISOString().slice(0, 10),
+    latestVersion: (pkg) => latest.get(pkg),
+  });
+  if (lapsed.length === 0) {
+    return 0;
+  }
+  console.error(
+    `${lapsed.length} temporary advisory acceptance(s) lapsed; bump the dependency or re-review the entry in scripts/dependency-audit-baseline.json:`,
+  );
+  for (const entry of lapsed) {
+    console.error(`  ${entry.id}  ${entry.package}: ${entry.reason}`);
+  }
+  return 1;
+};
+
 const check = async (advisories: Advisory[]): Promise<number> => {
   const baseline = await readBaseline();
   const { newlyIntroduced, resolved } = diffAgainstBaseline(
     advisories,
     baseline,
   );
+  const lapsedStatus = await checkLapsedAcceptances(advisories, baseline);
 
   if (resolved.length > 0) {
     console.warn(
@@ -287,7 +371,7 @@ const check = async (advisories: Advisory[]): Promise<number> => {
     console.info(
       `No new high/critical advisories (${baseline.accepted.length} known and accepted).`,
     );
-    return 0;
+    return lapsedStatus;
   }
 
   console.error(
@@ -312,6 +396,7 @@ const selfTest = async (): Promise<number> => {
     severity: "critical",
     package: "self-test-package",
     title: "synthetic advisory",
+    vulnerableVersions: "<=1.0.0",
   };
   const { newlyIntroduced } = diffAgainstBaseline([synthetic], baseline);
   if (!newlyIntroduced.some((a) => a.id === synthetic.id)) {

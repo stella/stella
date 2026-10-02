@@ -21,7 +21,9 @@
       "severity": "high",
       "package": "node-forge",
       "title": "node-forge RSA PKCS#1 v1.5 signature verification accepts extra nested DigestAlgorithm elements",
-      "reason": "No patched node-forge release exists. It is reached only through @expo/code-signing-certificates, which the Expo CLI and the expo-updates CLI (code-signing key generation and configuration) run on developer machines; the expo-updates runtime does not import it, so it is not in the shipped mobile bundle, and it is not present in the API runtime. Remove once Expo moves to a patched node-forge release."
+      "reason": "No patched node-forge release exists (advisory range <=1.4.0; accepted 2026-10-02). It is reached only through @stll/mobile's Expo tooling (expo -> @expo/cli and expo-updates -> @expo/code-signing-certificates), which runs on developer machines for code-signing key generation and configuration; the expo-updates runtime does not import it, so it is not in the shipped mobile bundle, the API or web runtime images, the desktop app, or any published package's runtime dependencies. The acceptance is temporary: it lapses on 2026-11-01, once a node-forge release outside the vulnerable range is published, or once the advisory is no longer reported, whichever comes first.",
+      "expiresOn": "2026-11-01",
+      "untilPatched": true
     }
   ]
 }
