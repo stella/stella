@@ -9,6 +9,7 @@ import { ASK_USER_TOOL_NAME } from "@/api/handlers/chat/tools/native-chat-tool-n
 import type { PersistedChatMessageContent } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { isRecord } from "@/api/lib/type-guards";
 import {
   APPROVAL_TOOL_NAME,
@@ -118,7 +119,7 @@ describe("forking a thread at a pending approval", () => {
       asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
         body: { newThreadId: forkThreadId, upToMessageId: pending.id },
         getWorkspaceAccess: async () => null,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         params: { threadId },
         query: {},
         recordAuditEvent: async () => undefined,
@@ -245,7 +246,7 @@ describe("forking a thread whose approved call lost its result", () => {
       asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
         body: { newThreadId: forkThreadId, upToMessageId: pending.id },
         getWorkspaceAccess: async () => null,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         params: { threadId },
         query: {},
         recordAuditEvent: async () => undefined,
@@ -332,7 +333,7 @@ describe("forking a thread at a pending ask-user card", () => {
       asTestRaw<Parameters<ReturnType<typeof createForkThread>["handler"]>[0]>({
         body: { newThreadId: forkThreadId, upToMessageId: pending.id },
         getWorkspaceAccess: async () => null,
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         params: { threadId },
         query: {},
         recordAuditEvent: async () => undefined,

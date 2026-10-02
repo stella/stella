@@ -27,7 +27,10 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError } from "@/api/lib/errors/tagged-errors";
 import type { MemberRole } from "@/api/lib/member-roles";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -43,7 +46,6 @@ const GRANTED_ROLES = ["owner", "admin", "member", "intern"] as const;
 
 const MUTATIONS = {
   "agent-auth/confirm.ts": confirmAgentClaim,
-  "desktop-registry/grant.ts": grantDesktopRegistryKey,
   "legal-reader/annotations/create.ts": createReaderAnnotation,
   "legal-reader/annotations/delete.ts": deleteReaderAnnotation,
   "legal-reader/annotations/update.ts": updateReaderAnnotation,
@@ -87,7 +89,7 @@ const contextForRole = (role: MemberRole): unknown => ({
       "019e7000-0000-7000-8000-000000000002",
     ),
   },
-  memberRole: { role },
+  memberRole: sessionMemberRole(role),
   safeDb: refusingDb,
   scopedDb: async () => {
     throw new DatabaseError({ message: "scopedDb must not be called" });
@@ -114,7 +116,6 @@ describe("own-work permissions", () => {
 
     expect(declared).toEqual({
       "agent-auth/confirm.ts": { integration: ["create"] },
-      "desktop-registry/grant.ts": { integration: ["create"] },
       "legal-reader/annotations/create.ts": {
         legalReaderAnnotation: ["create"],
       },
@@ -136,6 +137,38 @@ describe("own-work permissions", () => {
       "sharepoint/disconnect.ts": { integration: ["delete"] },
       "sharepoint/oauth-callback.ts": { integration: ["create"] },
     });
+  });
+
+  test("desktop account linking follows the baseline member grant", () => {
+    expect(grantDesktopRegistryKey.config.permissions).toEqual({
+      workspace: ["read"],
+    });
+    for (const role of [...GRANTED_ROLES, "external"] as const) {
+      expect(
+        hasMemberPermission(
+          sessionMemberRole(role),
+          grantDesktopRegistryKey.config.permissions,
+        ),
+      ).toBe(true);
+    }
+  });
+
+  test("desktop account linking requires a member grant before connection work", async () => {
+    for (const memberRole of [undefined, null, {}, { role: "unrecognized" }]) {
+      const context = {
+        memberRole,
+        get body() {
+          throw new DatabaseError({
+            message: "Connection work must not start",
+          });
+        },
+      };
+      const result = await grantDesktopRegistryKey.handler(asTestRaw(context));
+      expect(result).toMatchObject({
+        code: 403,
+        response: { code: "forbidden", message: "Forbidden" },
+      });
+    }
   });
 
   test("the sibling reads stay on the baseline grant and affirm themselves reads", () => {
@@ -181,7 +214,10 @@ describe("own-work permissions", () => {
         expect({
           file,
           role,
-          granted: hasMemberPermission({ role }, endpoint.config.permissions),
+          granted: hasMemberPermission(
+            sessionMemberRole(role),
+            endpoint.config.permissions,
+          ),
         }).toEqual({ file, role, granted: true });
       }
     }

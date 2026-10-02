@@ -459,6 +459,12 @@ type ClaimedChatTurnOwnership =
       execution: ChatTurnExecution;
       owningAssistantMessage?: PersistableChatMessage | undefined;
     }
+  | {
+      status: "failure-pending";
+      execution: ChatTurnExecution;
+      failure: { code: ChatTurnFailureCode; retryable: boolean };
+      owningAssistantMessage?: PersistableChatMessage | undefined;
+    }
   | { status: "handed-over" };
 
 type ChatSendLifecycleOptions = {
@@ -713,7 +719,8 @@ export class ChatSendLifecycle {
 
   private async restorePreExecutionCheckpoint(): Promise<boolean> {
     if (
-      this.claimedTurn.status !== "preflight" ||
+      (this.claimedTurn.status !== "preflight" &&
+        this.claimedTurn.status !== "failure-pending") ||
       !this.admission?.signal.aborted ||
       this.checkpoint === undefined
     ) {
@@ -807,6 +814,16 @@ export class ChatSendLifecycle {
     });
     this.countPreflightSettlement("failed", code, failureResult);
     if (Result.isError(failureResult)) {
+      this.claimedTurn = {
+        status: "failure-pending",
+        execution: this.claimedTurn.execution,
+        failure: { code, retryable },
+        ...(this.claimedTurn.owningAssistantMessage === undefined
+          ? {}
+          : {
+              owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+            }),
+      };
       captureError(failureResult.error, { threadId: this.options.threadId });
       return;
     }
@@ -909,23 +926,53 @@ export class ChatSendLifecycle {
 
   async cleanup(): Promise<void> {
     try {
-      if (
-        this.claimedTurn.status === "preflight" &&
-        !(await this.restorePreExecutionCheckpoint())
-      ) {
+      const failureToPersist = await (async () => {
+        // Admission can be lost while a failed settlement write is in flight.
+        // Its original pending interaction still owns the turn in that case.
+        if (await this.restorePreExecutionCheckpoint()) {
+          return undefined;
+        }
+        switch (this.claimedTurn.status) {
+          case "failure-pending":
+            return this.claimedTurn;
+          case "preflight":
+            return {
+              status: "failure-pending" as const,
+              execution: this.claimedTurn.execution,
+              failure: { code: "internal" as const, retryable: true },
+              ...(this.claimedTurn.owningAssistantMessage === undefined
+                ? {}
+                : {
+                    owningAssistantMessage:
+                      this.claimedTurn.owningAssistantMessage,
+                  }),
+            };
+          case "unclaimed":
+          case "handed-over":
+            return undefined;
+          default:
+            this.claimedTurn satisfies never;
+            return panic(`Unhandled claimed turn: ${String(this.claimedTurn)}`);
+        }
+      })();
+      if (failureToPersist !== undefined) {
         const failureResult = await persistFailedChatTurn({
-          code: "internal",
-          execution: this.claimedTurn.execution,
+          code: failureToPersist.failure.code,
+          execution: failureToPersist.execution,
           indexThread: this.options.indexThread,
-          owningAssistantMessage: this.claimedTurn.owningAssistantMessage,
+          owningAssistantMessage: failureToPersist.owningAssistantMessage,
           recordAuditEvent: this.options.recordAuditEvent,
-          retryable: true,
+          retryable: failureToPersist.failure.retryable,
           safeDb: this.options.safeDb,
           threadId: this.options.threadId,
           userId: this.options.userId,
           workspaceId: this.options.workspaceId,
         });
-        this.countPreflightSettlement("failed", "internal", failureResult);
+        this.countPreflightSettlement(
+          "failed",
+          failureToPersist.failure.code,
+          failureResult,
+        );
         if (Result.isError(failureResult)) {
           captureError(failureResult.error, {
             source: "send-message-claimed-turn-preflight-cleanup",
@@ -3029,7 +3076,7 @@ export const createSendMessage = (
                   });
                 };
 
-                const chatResponse = await dependencies.streamResponse({
+                const outcome = await dependencies.streamResponse({
                   runId: body.runId,
                   ...(parentRunId === undefined ? {} : { parentRunId }),
                   ...(resume === undefined ? {} : { resume }),
@@ -3093,11 +3140,22 @@ export const createSendMessage = (
                 // refusal). No terminal middleware hook runs in that branch,
                 // so settle the claimed turn here instead of leaving it
                 // indefinitely running.
-                if (!isChatStreamResponse(chatResponse)) {
-                  await run.fail("internal", chatResponse.status >= 500);
+                switch (outcome.type) {
+                  case "refused":
+                    await run.fail(
+                      outcome.response.failureCode,
+                      outcome.response.retryable,
+                    );
+                    return outcome.response;
+                  case "streaming":
+                    return outcome.response;
+                  default: {
+                    outcome satisfies never;
+                    return panic(
+                      `Unhandled chat stream outcome: ${String(outcome)}`,
+                    );
+                  }
                 }
-
-                return chatResponse;
               } catch (error) {
                 await run.fail("internal", true);
                 throw error;
@@ -3157,11 +3215,6 @@ const applyAssistantPersistencePlan = ({
       return panic(`Unhandled persistence plan: ${String(persistencePlan)}`);
     }
   }
-};
-
-const isChatStreamResponse = (response: Response): boolean => {
-  const contentType = response.headers.get("content-type");
-  return contentType?.includes("text/event-stream") === true;
 };
 
 const messageNeedsExternalMcpValidation = (

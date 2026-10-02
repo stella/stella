@@ -25,7 +25,10 @@ import type {
   CaseLawPublicReadDb,
   CaseLawPublicReadTransaction,
 } from "@/api/lib/case-law-public-read-db";
-import { CITATION_TREATMENTS } from "@/api/lib/case-law/citation-vocabulary";
+import {
+  CITATION_DIRECTIONS,
+  CITATION_TREATMENTS,
+} from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationDirection } from "@/api/lib/case-law/citation-vocabulary";
 import { withRedistributableSubject } from "@/api/lib/case-law/public-subject";
 import type { RedistributableDecisionSubject } from "@/api/lib/case-law/public-subject";
@@ -41,6 +44,39 @@ const subjectId = createSafeId<"caseLawDecision">();
 const openRelatedId = createSafeId<"caseLawDecision">();
 const closedRelatedId = createSafeId<"caseLawDecision">();
 const unavailableRelatedId = createSafeId<"caseLawDecision">();
+
+/**
+ * A second subject whose related decisions share the open source, the
+ * country and one treatment, so publication alone separates them. The
+ * listing-only row outranks every eligible leader: any read that lets it
+ * through shows it first and pushes an eligible leader out.
+ */
+const rankedSubjectId = createSafeId<"caseLawDecision">();
+const topLeaderId = createSafeId<"caseLawDecision">();
+const middleLeaderId = createSafeId<"caseLawDecision">();
+const thirdLeaderId = createSafeId<"caseLawDecision">();
+const thirdLeaderSiblingId = createSafeId<"caseLawDecision">();
+const listingOnlyRelatedId = createSafeId<"caseLawDecision">();
+const RANKED_LEADERS = [
+  { id: topLeaderId, authority: 3 },
+  { id: middleLeaderId, authority: 2 },
+  { id: thirdLeaderId, authority: 1 },
+] as const;
+const LISTING_ONLY_AUTHORITY = 9;
+const RANKED_LANGUAGE_GROUP_KEY = "ECLI:CZ:US:2021:RANKED.1";
+const LISTING_ONLY_METADATA = {
+  _stellaPartialObservation: {
+    caseNumberIsPlaceholder: false,
+    isListingOnly: true,
+  },
+};
+/** Citation order puts the listing-only row first and the leaders reversed. */
+const RANKED_CITATION_ORDER = [
+  listingOnlyRelatedId,
+  thirdLeaderId,
+  middleLeaderId,
+  topLeaderId,
+] as const;
 
 /** The summary of a visible decision; a 404 here is a test failure. */
 const summaryOf = async (
@@ -145,6 +181,48 @@ beforeAll(
         language: "xx",
         sourceId: openSourceId,
       },
+      {
+        caseNumber: "ranked-subject",
+        country: "CZE",
+        court: "Court",
+        id: rankedSubjectId,
+        language: "cs",
+        sourceId: openSourceId,
+      },
+      ...RANKED_LEADERS.map(({ authority, id }) => ({
+        caseNumber: `leader-${String(authority)}`,
+        citationAuthority: authority,
+        country: "CZE",
+        court: "Court",
+        id,
+        language: "cs",
+        languageGroupKey:
+          id === thirdLeaderId ? RANKED_LANGUAGE_GROUP_KEY : null,
+        slug: `leader-${String(authority)}`,
+        sourceId: openSourceId,
+      })),
+      {
+        caseNumber: "third-leader-sibling",
+        country: "CZE",
+        court: "Court",
+        id: thirdLeaderSiblingId,
+        language: "en",
+        languageGroupKey: RANKED_LANGUAGE_GROUP_KEY,
+        slug: "third-leader-sibling",
+        sourceId: openSourceId,
+      },
+      {
+        caseNumber: "listing-only-related",
+        citationAuthority: LISTING_ONLY_AUTHORITY,
+        country: "CZE",
+        court: "Court",
+        id: listingOnlyRelatedId,
+        language: "sk",
+        languageGroupKey: RANKED_LANGUAGE_GROUP_KEY,
+        metadata: LISTING_ONLY_METADATA,
+        slug: "listing-only-related",
+        sourceId: openSourceId,
+      },
     ]);
 
     let nextId = 0;
@@ -220,6 +298,24 @@ beforeAll(
         id: citationId(nextId + 7),
       },
     );
+    for (const [index, relatedId] of RANKED_CITATION_ORDER.entries()) {
+      rows.push(
+        {
+          citedDecisionId: rankedSubjectId,
+          citingDecisionId: relatedId,
+          citationText: `ranked-incoming-${String(index)}`,
+          id: citationId(600 + index),
+          polarity: POLARITY.POSITIVE,
+        },
+        {
+          citedDecisionId: relatedId,
+          citingDecisionId: rankedSubjectId,
+          citationText: `ranked-outgoing-${String(index)}`,
+          id: citationId(700 + index),
+          polarity: POLARITY.POSITIVE,
+        },
+      );
+    }
     await db.insert(caseLawCitations).values(rows);
   },
   { timeout: 120_000 },
@@ -477,6 +573,75 @@ test("a restricted subject decision cannot be resolved as a subject", async () =
       async () => true,
     ),
   ).toBe(true);
+});
+
+type RelatedDecisionWithAlternates = {
+  id: string;
+  languageAlternates: readonly { id: string }[];
+} | null;
+
+const thirdLeaderAlternateIds = (
+  decisions: readonly RelatedDecisionWithAlternates[],
+) =>
+  decisions
+    .find((decision) => decision?.id === thirdLeaderId)
+    ?.languageAlternates.map(({ id }) => id);
+
+test("a listing-only related decision is absent from every citation read even with the highest authority", async () => {
+  // The fixture reaches the gate: the listing-only row is otherwise eligible
+  // (open source, public country, top authority), and only publication
+  // refuses it as a subject of its own.
+  expect(
+    await withRedistributableSubject(
+      caseLawDb,
+      { kind: "id", id: listingOnlyRelatedId },
+      async () => true,
+    ),
+  ).toBeNull();
+
+  const listedOrder = RANKED_CITATION_ORDER.filter(
+    (id) => id !== listingOnlyRelatedId,
+  );
+  const leaderOrder = RANKED_LEADERS.map(({ id }) => id);
+
+  for (const direction of CITATION_DIRECTIONS) {
+    const page = await withSubject(
+      rankedSubjectId,
+      async (subject) =>
+        await listDecisionCitationsHandler({ subject, query: { direction } }),
+    );
+    if (!("items" in page)) {
+      throw new Error("expected a citation page");
+    }
+    expect(page.items.map((item) => item.decision?.id)).toEqual(listedOrder);
+
+    const leading = await withSubject(
+      rankedSubjectId,
+      async (subject) =>
+        await listLeadingCitationsHandler({ subject, query: { direction } }),
+    );
+    expect(leading.items.map((item) => item.decision.id)).toEqual(leaderOrder);
+    expect(leading.items.map((item) => item.treatment)).toEqual(
+      leaderOrder.map(() => POLARITY.POSITIVE),
+    );
+
+    // The third leader shares a language group with a published sibling and
+    // the listing-only row: only the sibling is offered as a version.
+    for (const alternateIds of [
+      thirdLeaderAlternateIds(page.items.map((item) => item.decision)),
+      thirdLeaderAlternateIds(leading.items.map((item) => item.decision)),
+    ]) {
+      expect(alternateIds).toContain(thirdLeaderSiblingId);
+      expect(alternateIds).not.toContain(listingOnlyRelatedId);
+    }
+  }
+
+  const summary = await withSubject(
+    rankedSubjectId,
+    async (subject) => await summaryOf({ currentYear: 2026, subject }),
+  );
+  expect(summary.incoming.positive).toBe(RANKED_LEADERS.length);
+  expect(summary.outgoing.positive).toBe(RANKED_LEADERS.length);
 });
 
 // Last on purpose: it adds a citing decision the page tests above do not

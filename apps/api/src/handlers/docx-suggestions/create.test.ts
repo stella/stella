@@ -4,6 +4,7 @@ import { chatThreads, docxSuggestions, entities } from "@/api/db/schema";
 import createDocxSuggestions from "@/api/handlers/docx-suggestions/create";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -101,7 +102,7 @@ describe("DOCX suggestion creation", () => {
           },
         ],
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, entityId: ENTITY_ID },
       safeDb,
       workspaceId: WORKSPACE_ID,
@@ -148,7 +149,7 @@ describe("DOCX suggestion creation", () => {
           },
         ],
       },
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: { workspaceId: WORKSPACE_ID, entityId: ENTITY_ID },
       safeDb,
       workspaceId: WORKSPACE_ID,

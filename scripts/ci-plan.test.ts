@@ -2051,7 +2051,7 @@ test("direct web compiler package scripts generate before inspecting types", () 
       expect(
         command.slice(0, consumer.index),
         `${manifest} ${name} materializes the API contract`,
-      ).toMatch(/bun(?: --cwd \.\.\/\.\.)? run generate/u);
+      ).toMatch(/bun run(?: --cwd \.\.\/\.\.)? generate/u);
       if (command.includes("$TURBO_HASH")) {
         const task = `${manifest === "../package.json" ? "//" : owner}#${name}`;
         expect(

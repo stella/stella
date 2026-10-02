@@ -38,6 +38,7 @@ import { toSafeId } from "@/api/lib/branded-types";
 import { BUSINESS_REGISTRY_DISPATCH } from "@/api/lib/business-registries/dispatch";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { createChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
@@ -116,7 +117,7 @@ const resolveBuiltInSkill = async (
 ): Promise<ActiveChatSkillContext> => {
   const resolved = await resolveActiveChatSkillContext({
     activeSkill: { skillName },
-    memberRole: { role: "member" },
+    memberRole: sessionMemberRole("member"),
     organizationId,
     safeDb: noInstalledSkillsSafeDb,
     userId,
@@ -133,7 +134,7 @@ const resolveDeclaredBuiltInSkill = async (
 ): Promise<ActiveSkillContext> => {
   const resolved = await resolveActiveSkillContext({
     activeSkill: { skillName },
-    memberRole: { role: "member" },
+    memberRole: sessionMemberRole("member"),
     organizationId,
     safeDb: noInstalledSkillsSafeDb,
     userId,

@@ -1,0 +1,14 @@
+[
+  {
+    "id": ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.legacy.ts::71f4253e77c1febebfa830f8b4b2bc75301d6c5341da86f6ae7ed72b6899c253",
+    "reason": "Fixture proves an existing entry is accepted and a second hit is rejected."
+  },
+  {
+    "id": ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.stale.ts::b625b5d1dce29b01f0f9b28ac4007ad55bc60365375e21f0950066d6cd120436",
+    "reason": "Fixture proves removing a swallowed error requires removing its ledger entry."
+  },
+  {
+    "id": "apps/api/src/handlers/case-law/ingestion/adapters/cz-us.ts::8bf5c9b20e185098e58d28cdc1d41f0587bf35bece1238a78742fd39793d149a",
+    "reason": "Optional listing text-link URL decoding preserves the stable record identity on malformed URLs; replace the empty catch with an explicit parse result."
+  }
+]

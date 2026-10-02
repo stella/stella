@@ -4,6 +4,11 @@ export type RunnerStatus = "reserved" | "implemented";
 
 const RUNNER_DEFINITIONS = [
   {
+    name: "eu-ecj-refetch",
+    status: "implemented",
+    description: "refresh stored EU decisions or their Formex part",
+  },
+  {
     name: "case-law-ingest",
     status: "implemented",
     description: "case-law source ingestion daemon",

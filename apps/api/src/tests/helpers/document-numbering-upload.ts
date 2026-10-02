@@ -7,6 +7,7 @@ import finalizeUpload from "@/api/handlers/uploads/update";
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import { createAuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
@@ -62,7 +63,7 @@ export const runNumberingUpload = async ({
       candidate === workspaceId,
     createAuditRecorder: () => createAuditRecorder(auditBindings),
     recordAuditEvent: createAuditRecorder(auditBindings),
-    memberRole: { role: "owner" as const },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     managedAIResidency: "eu",
