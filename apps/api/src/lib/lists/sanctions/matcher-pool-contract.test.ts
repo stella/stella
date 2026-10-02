@@ -139,3 +139,82 @@ test.each(multilingualCases)(
     }
   },
 );
+
+test.each([1, 2])(
+  "pool refuses excess simultaneous waiters and serves admitted callers (size %s)",
+  async (size) => {
+    const pool = createSanctionsMatcherPool({ size, deadlineMs: 8000 });
+    const activeEntered = Promise.withResolvers<undefined>();
+    const releaseActive = Promise.withResolvers<undefined>();
+    const queued = Array.from({ length: 2 }, () => ({
+      entered: Promise.withResolvers<undefined>(),
+      release: Promise.withResolvers<undefined>(),
+    }));
+    const signals: AbortSignal[] = [];
+    let running = 0;
+    let peak = 0;
+    const executed: number[] = [];
+    const active = Array.from({ length: size }, (_, index) =>
+      pool.run(async (session) => {
+        signals.push(session.signal);
+        executed.push(index);
+        running += 1;
+        peak = Math.max(peak, running);
+        if (running === size) {
+          activeEntered.resolve(undefined);
+        }
+        await releaseActive.promise;
+        running -= 1;
+        return index;
+      }),
+    );
+    const pending: Promise<number | null>[] = [];
+    try {
+      await activeEntered.promise;
+      pending.push(
+        ...queued.map((gate, index) =>
+          pool.run(async (session) => {
+            signals.push(session.signal);
+            executed.push(size + index);
+            running += 1;
+            peak = Math.max(peak, running);
+            gate.entered.resolve(undefined);
+            await gate.release.promise;
+            running -= 1;
+            return size + index;
+          }),
+        ),
+      );
+      const refused = pool.run(async () => {
+        executed.push(-1);
+        return -1;
+      });
+      expect(await refused).toBeNull();
+      expect(signals).toHaveLength(size);
+      expect(signals.every((signal) => !signal.aborted)).toBe(true);
+      expect(executed).toEqual(
+        Array.from({ length: size }, (_, index) => index),
+      );
+      releaseActive.resolve(undefined);
+      for (const gate of queued) {
+        await gate.entered.promise;
+        gate.release.resolve(undefined);
+      }
+      expect(await Promise.all([...active, ...pending])).toEqual(
+        Array.from({ length: size + 2 }, (_, index) => index),
+      );
+      expect(executed.toSorted((a, b) => a - b)).toEqual(
+        Array.from({ length: size + 2 }, (_, index) => index),
+      );
+      expect(peak).toBe(size);
+    } finally {
+      releaseActive.resolve(undefined);
+      for (const gate of queued) {
+        gate.release.resolve(undefined);
+      }
+      await Promise.all([...active, ...pending]);
+      await pool.close();
+    }
+  },
+  15_000,
+);
