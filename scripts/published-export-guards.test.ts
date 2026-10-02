@@ -52,20 +52,20 @@ describe("published export resolution guard", () => {
   });
 
   test("requires copied assets to resolve to their declared path", () => {
-    const entry = "./capability-catalog.json";
+    const entry = "./contract.json";
 
     expect(
       isExpectedPublishedExportResolution({
         entry,
         packageDir,
-        resolved: "/repo/packages/example/capability-catalog.json",
+        resolved: "/repo/packages/example/contract.json",
       }),
     ).toBe(true);
     expect(
       isExpectedPublishedExportResolution({
         entry,
         packageDir,
-        resolved: "/repo/packages/example/dist/capability-catalog.json",
+        resolved: "/repo/packages/example/dist/contract.json",
       }),
     ).toBe(false);
   });
