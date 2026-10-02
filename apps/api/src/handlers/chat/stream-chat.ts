@@ -160,7 +160,10 @@ import type {
   GuardedSystemPrompt,
   GuardedToolSchemas,
 } from "@/api/lib/chat/model-ingress-guard";
-import { imageInputUnsupportedError } from "@/api/lib/chat/provider-image-input";
+import {
+  IMAGE_INPUT_UNSUPPORTED_CODE,
+  imageInputUnsupportedError,
+} from "@/api/lib/chat/provider-image-input";
 import {
   withProviderStreamContract,
   withRunToolCallIds,
@@ -512,11 +515,14 @@ export const streamChat = async ({
     chatTurnRejectsStreamingTools({ model, toolCount: modelTools.length });
 
   if (modelRejectsImages(primaryModel)) {
-    const error = imageInputUnsupportedError();
-    return new Response(
-      JSON.stringify({ code: error.code, message: error.message }),
-      { status: error.status, headers: { "Content-Type": "application/json" } },
-    );
+    return new ChatTurnFailureResponse({
+      failureCode: "unsupported-input",
+      payload: {
+        code: IMAGE_INPUT_UNSUPPORTED_CODE,
+        message: imageInputUnsupportedError().message,
+      },
+      status: 422,
+    });
   }
 
   if (modelRejectsAnyDocument(primaryModel)) {
