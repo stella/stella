@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 import {
   mkdtemp,
@@ -34,14 +35,14 @@ test("concurrent replacements leave the live module complete during partial writ
     await writeFile(temporary, content);
   };
   await writeFile(target, original);
-  const writes = contents.map(
-    async (content) =>
-      await writeGeneratedFile({
-        output: pathToFileURL(target),
-        content,
-        write,
-      }),
-  );
+  const writes = contents.map(async (content) => {
+    const result = await writeGeneratedFile({
+      output: pathToFileURL(target),
+      content,
+      write,
+    });
+    expect(Result.isOk(result)).toBe(true);
+  });
   try {
     await partials.promise;
     expect(await readFile(target, "utf-8")).toBe(original);
@@ -65,7 +66,7 @@ test("unchanged generated content preserves the file without writing", async () 
     await writeFile(target, content);
     const before = await stat(target);
     let writes = 0;
-    await writeGeneratedFile({
+    const result = await writeGeneratedFile({
       output: pathToFileURL(target),
       content,
       write: async (temporary, bytes) => {
@@ -73,11 +74,40 @@ test("unchanged generated content preserves the file without writing", async () 
         await writeFile(temporary, bytes);
       },
     });
+    expect(Result.isOk(result)).toBe(true);
     expect(writes).toBe(0);
     const after = await stat(target);
     expect(after.ino).toBe(before.ino);
     expect(after.mtimeMs).toBe(before.mtimeMs);
     expect(await readFile(target, "utf-8")).toBe(content);
+  } finally {
+    await rm(directory, { recursive: true });
+  }
+});
+
+test("a failed replacement returns a tagged error and preserves the live module", async () => {
+  const directory = await mkdtemp(
+    path.join(tmpdir(), "cli-generated-failure-"),
+  );
+  const target = path.join(directory, "module.ts");
+  const original = "export const value = 1;\n";
+  try {
+    await writeFile(target, original);
+    const result = await writeGeneratedFile({
+      output: pathToFileURL(target),
+      content: "export const value = 2;\n",
+      write: async (temporary, content) => {
+        await writeFile(temporary, content.slice(0, 8));
+        throw new TypeError("injected disk write failure");
+      },
+    });
+    expect(Result.isError(result)).toBe(true);
+    if (Result.isError(result)) {
+      expect(result.error._tag).toBe("GeneratedFileWriteError");
+      expect(result.error.message).toContain("injected disk write failure");
+    }
+    expect(await readFile(target, "utf-8")).toBe(original);
+    expect(await readdir(directory)).toEqual(["module.ts"]);
   } finally {
     await rm(directory, { recursive: true });
   }

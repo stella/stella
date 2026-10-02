@@ -1,4 +1,4 @@
-import { Result } from "better-result";
+import { Result, TaggedError } from "better-result";
 import { randomUUID } from "node:crypto";
 import { readFile, rename, rm, writeFile } from "node:fs/promises";
 import { fileURLToPath } from "node:url";
@@ -9,17 +9,25 @@ type WriteGeneratedFileOptions = {
   write?: (path: string, content: string) => Promise<void>;
 };
 
+class GeneratedFileWriteError extends TaggedError("GeneratedFileWriteError")<{
+  message: string;
+  output: string;
+  cause: unknown;
+}> {}
+
 export const writeGeneratedFile = async ({
   output,
   content,
   write = writeFile,
-}: WriteGeneratedFileOptions): Promise<void> => {
+}: WriteGeneratedFileOptions): Promise<
+  Result<undefined, GeneratedFileWriteError>
+> => {
   const previous = await Result.tryPromise({
     try: async () => await readFile(output, "utf-8"),
     catch: (cause) => cause,
   });
   if (Result.isOk(previous) && previous.value === content) {
-    return;
+    return Result.ok(undefined);
   }
   if (
     Result.isError(previous) &&
@@ -29,17 +37,44 @@ export const writeGeneratedFile = async ({
       previous.error.code === "ENOENT"
     )
   ) {
-    throw previous.error;
+    return Result.err(
+      new GeneratedFileWriteError({
+        message: `Cannot read generated file ${output.pathname}: ${String(previous.error)}`,
+        output: output.href,
+        cause: previous.error,
+      }),
+    );
   }
 
   // Sibling files keep rename atomic; unique names isolate concurrent writers.
   const temporary = `${fileURLToPath(output)}.${randomUUID()}.tmp`;
-  const replaced = await Result.tryPromise(async () => {
-    await write(temporary, content);
-    await rename(temporary, output);
+  const replaced = await Result.tryPromise({
+    try: async () => {
+      await write(temporary, content);
+      await rename(temporary, output);
+      return undefined;
+    },
+    catch: (cause) =>
+      new GeneratedFileWriteError({
+        message: `Cannot replace generated file ${output.pathname}: ${String(cause)}`,
+        output: output.href,
+        cause,
+      }),
   });
-  await rm(temporary, { force: true });
+  const cleaned = await Result.tryPromise({
+    try: async () => {
+      await rm(temporary, { force: true });
+      return undefined;
+    },
+    catch: (cause) =>
+      new GeneratedFileWriteError({
+        message: `Cannot clean generated file ${output.pathname}: ${String(cause)}`,
+        output: output.href,
+        cause,
+      }),
+  });
   if (Result.isError(replaced)) {
-    throw replaced.error;
+    return replaced;
   }
+  return cleaned;
 };

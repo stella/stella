@@ -8,7 +8,7 @@
 //
 // Full codegen refreshes snapshots; --runtime-only derives just runtime modules.
 
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import * as v from "valibot";
 
@@ -255,10 +255,14 @@ import type { ToolAnnotation } from "../route-types.js";
 
 export const generatedToolAnnotations: Readonly<Record<string, ToolAnnotation>> = `;
 
-await writeGeneratedFile({
+const annotationsWritten = await writeGeneratedFile({
   output: annotationOutputUrl,
   content: `${annotationHeader}${JSON.stringify(toolAnnotations, null, 2)};\n`,
 });
+if (Result.isError(annotationsWritten)) {
+  process.stderr.write(`${annotationsWritten.error.message}\n`);
+  process.exit(1);
+}
 
 process.stderr.write(`Wrote ${annotationOutputUrl.pathname}\n`);
 
@@ -272,10 +276,14 @@ import type { RouteNode } from "../route-types.js";
 
 export const generatedRouteMap: RouteNode = `;
 
-await writeGeneratedFile({
+const routesWritten = await writeGeneratedFile({
   output: outputUrl,
   content: `${header}${JSON.stringify(routeMap, null, 2)};\n`,
 });
+if (Result.isError(routesWritten)) {
+  process.stderr.write(`${routesWritten.error.message}\n`);
+  process.exit(1);
+}
 
 process.stderr.write(`Wrote ${outputUrl.pathname}\n`);
 

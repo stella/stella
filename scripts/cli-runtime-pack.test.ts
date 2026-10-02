@@ -6,6 +6,7 @@ import {
   readFileSync,
   rmSync,
   symlinkSync,
+  writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
@@ -110,19 +111,63 @@ const packedFiles = (root: string): string[] => {
     .toSorted();
 };
 
-const publishedSkillFiles = (root: string): string[] => {
+const expectedPackedFiles = (root: string): string[] => {
+  const directory = path.join(root, CLI_DIRECTORY);
   const manifest = v.parse(
     v.object({ files: v.array(v.string()) }),
-    JSON.parse(
-      readFileSync(path.join(root, CLI_DIRECTORY, "package.json"), "utf-8"),
-    ),
+    JSON.parse(readFileSync(path.join(directory, "package.json"), "utf-8")),
   );
   expect(manifest.files).toContain("skills");
-  return run(["git", "ls-files", "-z", "--", `${CLI_DIRECTORY}/skills/`], root)
+  const sources = run(["git", "ls-files", "-z", "--", CLI_DIRECTORY], root)
     .split("\0")
     .filter(Boolean)
-    .map((file) => file.slice(CLI_DIRECTORY.length + 1))
-    .toSorted();
+    .map((file) => file.slice(CLI_DIRECTORY.length + 1));
+  const ownedSources = new Set([...sources, ...RUNTIME_SOURCES]);
+  // Ask the actual compiler which files this build emits; module additions
+  // need no mirrored source/dist list in the packaging acceptance test.
+  const emitted = run(
+    [
+      process.execPath,
+      "../../packages/scripts/src/tsc-native.ts",
+      "-p",
+      "tsconfig.build.json",
+      "--listEmittedFiles",
+    ],
+    directory,
+  )
+    .split("\n")
+    .filter((line) => line.startsWith("TSFILE: "))
+    .map((line) =>
+      path.relative(directory, line.slice("TSFILE: ".length).trim()),
+    );
+  for (const file of emitted) {
+    const source = file
+      .replace(/^dist\//u, "src/")
+      .replace(/\.(?:d\.ts|js(?:\.map)?)$/u, ".ts");
+    expect(ownedSources.has(source), `Unowned compiler output: ${file}`).toBe(
+      true,
+    );
+  }
+  // Build-copied data must also have a tracked source counterpart.
+  const assets = [
+    ...new Bun.Glob("dist/**/*.json").scanSync({ cwd: directory }),
+  ];
+  for (const file of assets) {
+    expect(
+      ownedSources.has(file.replace(/^dist\//u, "src/")),
+      `Unowned build asset: ${file}`,
+    ).toBe(true);
+  }
+  const candidates = new Set([...ownedSources, ...emitted, ...assets]);
+  const selected = [...candidates].filter((file) =>
+    manifest.files.some(
+      (entry) =>
+        file === entry ||
+        file.startsWith(`${entry}/`) ||
+        new Bun.Glob(entry).match(file),
+    ),
+  );
+  return [...new Set(["package.json", ...selected])].toSorted();
 };
 
 type ReadSurfaceOptions = {
@@ -216,10 +261,8 @@ test.skipIf(!process.env["CI"] || !runtimeSourcesAtBase())(
 
       const baseFiles = packedFiles(base);
       const headFiles = packedFiles(head);
-      const expectedFiles = [
-        ...new Set([...baseFiles, ...publishedSkillFiles(head)]),
-      ].toSorted();
-      expect(headFiles).toEqual(expectedFiles);
+      expect(baseFiles).toEqual(expectedPackedFiles(base));
+      expect(headFiles).toEqual(expectedPackedFiles(head));
       for (const file of RUNTIME_SOURCES) {
         expect(headFiles).toContain(file);
       }
@@ -236,6 +279,32 @@ test.skipIf(!process.env["CI"] || !runtimeSourcesAtBase())(
       ).toEqual([]);
       const baseRuntime = canonicalJson(readBuiltRuntime(base));
       expect(canonicalJson(readBuiltRuntime(head))).toBe(baseRuntime);
+
+      // A tracked source addition derives its source and compiler outputs.
+      const probe = "src/pack-probe.ts";
+      writeFileSync(
+        path.join(head, CLI_DIRECTORY, probe),
+        "export const packProbe = 1;\n",
+      );
+      run(["git", "add", `${CLI_DIRECTORY}/${probe}`], head);
+      const addedFiles = packedFiles(head);
+      const expectedAdded = expectedPackedFiles(head);
+      expect(addedFiles).toEqual(expectedAdded);
+      expect(addedFiles).toContain(probe);
+      expect(addedFiles).toContain("dist/pack-probe.js");
+
+      // An untracked fixture can enter npm's broad src allowlist, but never
+      // the expected inventory derived from tracked inputs and build outputs.
+      const scratch = "src/pack-scratch.txt";
+      writeFileSync(
+        path.join(head, CLI_DIRECTORY, scratch),
+        "unexpected fixture\n",
+      );
+      const contaminated = packedFiles(head);
+      expect(contaminated).toEqual([...expectedAdded, scratch].toSorted());
+      expect(() =>
+        expect(contaminated).toEqual(expectedPackedFiles(head)),
+      ).toThrow("toEqual");
 
       // Publishing must also work after every ignored output has been removed.
       for (const file of RUNTIME_SOURCES) {
