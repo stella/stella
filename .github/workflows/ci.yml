@@ -1156,6 +1156,10 @@ jobs:
           bash scripts/check-ai-skill-sync.test.sh
           bash scripts/verify-step.test.sh
 
+      - name: Check local base selection
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/canonical-base.test.sh
+
       - name: Setup Bun
         uses: oven-sh/setup-bun@0c5077e51419868618aeaa5fe8019c62421857d6 # v2
         with:

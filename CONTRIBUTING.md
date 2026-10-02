@@ -9,10 +9,18 @@ and coordinate development.
 
 ## Getting Started
 
-1. Fork the repository and clone your fork.
-2. Install dependencies: `bun install`
-3. (Optional) Set up the documentation MCP server: `bun run setup:mcp`
-4. Start the dev environment: `bun run dev`
+1. Install [Bun](https://bun.sh) 1.4.2 (the version pinned in
+   `package.json`) and Docker (the local stack runs its services in
+   containers).
+2. Fork the repository and clone your fork with its submodules:
+   `git clone --recurse-submodules <your fork URL>` (in an existing clone,
+   run `git submodule update --init`).
+3. Add the canonical repository as a remote, so local checks compare your
+   branch against its `main` rather than your fork's:
+   `git remote add upstream https://github.com/stella/stella.git && git fetch upstream`
+4. Install dependencies: `bun install`
+5. (Optional) Set up the documentation MCP server: `bun run setup:mcp`
+6. Start the dev environment: `bun run dev`
 
 `bun run dev` now prepares the local stack for the current checkout,
 including worktree-aware `.env` linking and automatic port offsets when
@@ -75,11 +83,18 @@ to explore the codebase.
 2. Make your changes, following the conventions below.
 3. Run checks before pushing:
    ```bash
+   bun run autofix
    bun run verify
    ```
-   This mirrors the required CI checks (lint, format, typecheck,
-   tests, i18n, dependency hygiene): green here means green on the
-   `ci-result` status. Use `bun run verify --all` to check every
+   `autofix` regenerates the derived files your change affects, applies
+   safe lint fixes and formats the changed files. CI does this on
+   same-repository pull requests but not on pull requests from forks, so
+   from a fork run it and commit the result.
+   `verify` mirrors CI's package checks (lint, format, typecheck, tests,
+   i18n, dependency hygiene) against the canonical repository's `main`.
+   A pass covers the package checks, not all of `ci-result`: the web and
+   landing builds run in CI, and browser, e2e and service-backed suites
+   run in the merge queue. Use `bun run verify --all` to check every
    package instead of only those affected by your branch.
 4. Open a pull request against `main`.
 5. Fill in the PR template and link a related issue.
