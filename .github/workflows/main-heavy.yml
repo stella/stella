@@ -66,6 +66,7 @@ jobs:
           echo "sha=$SHA" >> "$GITHUB_OUTPUT"
 
   suites:
+    if: needs.validate.result == 'success'
     needs: validate
     uses: ./.github/workflows/ci.yml
     permissions:

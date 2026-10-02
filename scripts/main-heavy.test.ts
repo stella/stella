@@ -110,14 +110,19 @@ const assertTriggerBehavior = (validationCondition: string) => {
       `Boolean(${validationCondition})`,
     ).runInNewContext(context);
     expect(validates, `${event}: ${message}`).toBe(runs);
-    // A reusable job without an override runs only after successful dependencies.
     expect(mainWorkflow.jobs.suites.needs).toBe("validate");
-    expect(mainWorkflow.jobs.suites.if).toBeUndefined();
+    const needs = { validate: { result: validates ? "success" : "skipped" } };
+    expect(
+      new Script(`Boolean(${mainWorkflow.jobs.suites.if})`).runInNewContext({
+        ...context,
+        needs,
+      }),
+    ).toBe(runs);
     const publishes = new Script(
       `Boolean(${mainWorkflow.jobs.status.if})`,
     ).runInNewContext({
       ...context,
-      needs: { validate: { result: validates ? "success" : "skipped" } },
+      needs,
     });
     expect(publishes, `${event} status`).toBe(runs);
   }
@@ -138,6 +143,28 @@ test("nightly, release pushes and dispatches run suites; ordinary pushes skip su
 
 test("dropping the release filter breaks the trigger contract", () => {
   expect(() => assertTriggerBehavior("true")).toThrow("expect(received)");
+});
+
+test("every main-heavy job has a job-level condition that skips ordinary pushes", () => {
+  for (const [name, job] of Object.entries(mainWorkflow.jobs)) {
+    expect(typeof job.if, name).toBe("string");
+    expect(
+      new Script(`Boolean(${job.if})`).runInNewContext({
+        github: {
+          event_name: "push",
+          event: { head_commit: { message: "fix: ordinary change" } },
+        },
+        startsWith: (value: string, prefix: string) =>
+          value.toLowerCase().startsWith(prefix.toLowerCase()),
+        always: () => true,
+        needs: {
+          validate: { result: "skipped" },
+          suites: { result: "skipped" },
+        },
+      }),
+      name,
+    ).toBe(false);
+  }
 });
 
 test("main heavy workflow dispatches exactly the validated commit through ci.yml's planner", () => {
