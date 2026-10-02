@@ -12,6 +12,7 @@ import type {
   Tool as McpTool,
   ReadResourceResult,
   Resource,
+  RequestId,
 } from "@modelcontextprotocol/server";
 import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
@@ -34,6 +35,7 @@ import {
   recordActionResponseOversize,
   withTenantActionSizePolicy,
 } from "@/api/lib/rate-limit/action-size-limits";
+import { chargeMcpReadBytes } from "@/api/lib/rate-limit/mcp-read-fence";
 import { isEventStreamResponse, withSseHeartbeat } from "@/api/lib/sse";
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 import {
@@ -76,7 +78,9 @@ import {
 } from "@/api/mcp/metadata";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { scopeHintToSurface } from "@/api/mcp/surface-tool-mentions";
+import { resolveMcpReadClass } from "@/api/mcp/tool-types";
 import type {
+  McpReadClass,
   McpToolDefinition,
   McpToolFeatureFlag,
   ToolScope,
@@ -157,6 +161,7 @@ const requiredScopesForTool = (
 
 type McpServerDependencies = {
   admitAction?: typeof withActionAdmission;
+  chargeReadBytes?: typeof chargeMcpReadBytes;
   actionSizePolicy?: typeof getActionSizePolicy;
   authenticateMcpRequest: (
     token: string,
@@ -638,8 +643,110 @@ const retryableToolErrorResult = (mode: McpMode): CallToolResult =>
     hint: scopeHintToSurface(MCP_INTERNAL_ERROR_HINT, mode),
   });
 
+type BoundMcpToolResultOptions = {
+  result: CallToolResult;
+  requestId: RequestId;
+  definition: McpToolDefinition;
+  readClass: McpReadClass | undefined;
+  resultDisposition: ReturnType<typeof toolResultDisposition>;
+  context: McpRequestContext;
+  toolName: string;
+  chargeReadBytes: typeof chargeMcpReadBytes;
+  captureError: McpServerDependencies["captureError"];
+};
+
+const boundMcpToolResult = async ({
+  result,
+  requestId,
+  definition,
+  readClass,
+  resultDisposition,
+  context,
+  toolName,
+  chargeReadBytes,
+  captureError,
+}: BoundMcpToolResultOptions): Promise<CallToolResult> => {
+  const policy = getTenantActionSizePolicy();
+  const hasOutput =
+    result.content.some(
+      (block) => block.type !== "text" || block.text.length > 0,
+    ) ||
+    (result.structuredContent !== undefined &&
+      result.structuredContent !== null &&
+      (typeof result.structuredContent !== "object" ||
+        Object.keys(result.structuredContent).length > 0));
+  const fenced =
+    env.FEATURE_MCP_READ_FENCE &&
+    (readClass !== undefined || definition.access === "read") &&
+    result.isError !== true &&
+    hasOutput;
+  if (policy === undefined && !fenced) {
+    return result;
+  }
+  const bytes = Buffer.byteLength(
+    JSON.stringify({ jsonrpc: "2.0", id: requestId, result }),
+    "utf-8",
+  );
+  if (policy === undefined || bytes <= policy.responseBytes) {
+    if (!fenced) {
+      return result;
+    }
+    if (readClass === undefined) {
+      panic("Successful MCP read has no canonical source classification");
+    }
+    const charged = await chargeReadBytes({
+      organizationId: context.organizationId,
+      userId: context.userId,
+      readClass,
+      bytes,
+    });
+    if (Result.isOk(charged)) {
+      return result;
+    }
+    if (charged.error.reason === "unavailable") {
+      captureError(charged.error, { phase: "read-fence", source: "mcp" });
+    }
+    const refusal = actionAdmissionRefusal(charged.error);
+    return mcpStructuredErrorResult({
+      code: refusal.code,
+      message: refusal.message,
+      hint: refusal.hint,
+      contactUrl: refusal.contactUrl,
+      retryable: ACTION_ADMISSION_REFUSALS[refusal.code].retryable,
+    });
+  }
+  recordActionResponseOversize({
+    transport: "mcp",
+    operation: toolName,
+    bytes,
+    maximum: policy.responseBytes,
+  });
+  if (resultDisposition === "read" || result.isError === true) {
+    return mcpStructuredErrorResult({
+      code: "result_too_large",
+      message: "Tool result exceeds the configured byte limit",
+      hint: "Request a smaller selection using this tool's filters or page limit.",
+    });
+  }
+  return {
+    isError: false,
+    content: [
+      {
+        type: "text",
+        text: "Action applied. The result was too large and was omitted. Do not repeat the action; use a read tool to inspect its outcome.",
+      },
+    ],
+    structuredContent: {
+      applied: true,
+      resultOmitted: true,
+      reason: "result_too_large",
+    },
+  } satisfies CallToolResult;
+};
+
 export const createMcpHttpRequestHandler = ({
   admitAction = withActionAdmission,
+  chargeReadBytes = chargeMcpReadBytes,
   actionSizePolicy = getActionSizePolicy,
   authenticateMcpRequest,
   captureError,
@@ -769,6 +876,12 @@ export const createMcpHttpRequestHandler = ({
       }
 
       const resultDisposition = toolResultDisposition(definition.annotations);
+      const readClass = env.FEATURE_MCP_READ_FENCE
+        ? await resolveMcpReadClass(
+            definition,
+            toolRequest.params.arguments ?? {},
+          )
+        : undefined;
       const run = async (signal?: AbortSignal) => {
         signal?.throwIfAborted();
         const result = await handleMcpToolCall({
@@ -777,45 +890,17 @@ export const createMcpHttpRequestHandler = ({
           mode,
           toolName,
         });
-        signal?.throwIfAborted();
-        const policy = getTenantActionSizePolicy();
-        if (policy === undefined) {
-          return result;
-        }
-        const bytes = Buffer.byteLength(
-          JSON.stringify({ jsonrpc: "2.0", id: mcpReq.id, result }),
-          "utf-8",
-        );
-        if (bytes <= policy.responseBytes) {
-          return result;
-        }
-        recordActionResponseOversize({
-          transport: "mcp",
-          operation: toolName,
-          bytes,
-          maximum: policy.responseBytes,
+        return await boundMcpToolResult({
+          result,
+          requestId: mcpReq.id,
+          definition,
+          readClass,
+          resultDisposition,
+          context,
+          toolName,
+          chargeReadBytes,
+          captureError,
         });
-        if (resultDisposition === "read" || result.isError === true) {
-          return mcpStructuredErrorResult({
-            code: "result_too_large",
-            message: "Tool result exceeds the configured byte limit",
-            hint: "Request a smaller selection using this tool's filters or page limit.",
-          });
-        }
-        return {
-          isError: false,
-          content: [
-            {
-              type: "text",
-              text: "Action applied. The result was too large and was omitted. Do not repeat the action; use a read tool to inspect its outcome.",
-            },
-          ],
-          structuredContent: {
-            applied: true,
-            resultOmitted: true,
-            reason: "result_too_large",
-          },
-        } satisfies CallToolResult;
       };
       if (!env.FEATURE_ACTION_ADMISSION && !env.FEATURE_ACTION_COST_RECORDS) {
         return await run();
@@ -838,6 +923,7 @@ export const createMcpHttpRequestHandler = ({
       const admitted = await admitAction({
         organizationId: context.organizationId,
         userId: context.userId,
+        organizationStateDb: context.scopedDb,
         periodIdentity: mcpActionPeriodIdentity(consumesServices),
         run,
       });

@@ -161,6 +161,7 @@ it:
 - `@stll/conditions`
 - `@stll/country-codes`
 - `@stll/docx-utils`
+- `@stll/mcp-kit`
 - `@stll/money`
 - `@stll/ssr-kit`
 - `@stll/ssr-testkit`

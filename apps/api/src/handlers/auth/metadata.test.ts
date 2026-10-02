@@ -17,7 +17,7 @@ import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
-} from "@/api/lib/auth-paths";
+} from "@/api/lib/auth/auth-paths";
 
 describe("OAuth authorization server metadata", () => {
   const assertMetadataResponse = async (path: string) => {

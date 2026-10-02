@@ -636,6 +636,27 @@
     "timerActive": "Időmérő fut",
     "timesheets": "Munkaidő-nyilvántartás",
     "total": "Összesen",
+    "vatRates": {
+      "add": "Áfakulcs hozzáadása",
+      "archiveConfirm": "Archiválja ezt az áfakulcsot? Új bizonylatokhoz többé nem lesz elérhető.",
+      "code": "Áfakulcs kódja",
+      "current": "Jelenlegi áfakulcs",
+      "description": "Kezelje az áfakulcsokat és érvényességi időszakaikat.",
+      "edit": "Áfakulcs szerkesztése",
+      "empty": "Nincsenek áfakulcsok.",
+      "future": "Jövőbeli áfakulcs",
+      "invalidPeriod": "Válasszon érvényes dátumokat, ahol a záró dátum későbbi a kezdő dátumnál.",
+      "invalidRate": "Adjon meg nem negatív százalékot legfeljebb két tizedesjeggyel.",
+      "name": "Áfakulcs megnevezése",
+      "openEnded": "Nincs záró dátum",
+      "overlap": "Az azonos áfakulcskódhoz tartozó érvényességi időszakok nem fedhetik egymást.",
+      "past": "Korábbi áfakulcs",
+      "periodHelp": "A kezdő dátum az időszak része; a záró dátum már nem. Nyitott időszakhoz hagyja üresen a záró dátumot.",
+      "rate": "Áfa százalékban",
+      "title": "Áfakulcsok",
+      "validFrom": "Érvényes ettől",
+      "validTo": "Érvényes eddig"
+    },
     "writeOff": "Leírás"
   },
   "caseLaw": {
@@ -869,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Kivonat",
+      "caseFileMayHoldOthers": "Az ügy iratai további határozatokat is tartalmazhatnak.",
       "citedBy": "Hivatkozik rá",
       "cites": "Hivatkozásai",
       "dissentByline": "Különvélemény: <bdi>{names}</bdi>",
@@ -2175,6 +2197,7 @@
       "forbidden": "Nincs jogosultsága ehhez a művelethez.",
       "notFound": "A kért elem nem található.",
       "payloadTooLarge": "A kérés túl nagy.",
+      "publicCountryUnavailable": "Az ország jogszabályai és ítélkezési gyakorlata nem érhetők el. Válasszon másik országot.",
       "rateLimited": "Túl sok kérés. Próbálja újra később.",
       "server": "Hiba történt. Próbálja újra.",
       "serviceUnavailable": "A szolgáltatás átmenetileg nem érhető el. Próbálja újra.",

@@ -76,7 +76,14 @@ const givenKey = (overrides: KeyOverrides = {}): void => {
 
 const givenMemberRole = (role: string | null): void => {
   resolveMemberAuthorization.mockResolvedValue(
-    role === null ? null : { role, workspace: null },
+    role === null
+      ? null
+      : {
+          memberId: "member_one",
+          email: "standard@example.test",
+          role,
+          workspace: null,
+        },
   );
 };
 

@@ -102,6 +102,17 @@ export const resolveStatutesHandler = async (
 
   return {
     items: body.works.map((work, index) => {
+      const countryRead = readPublicLawCountry(work.country, {
+        admitted: PUBLIC_LEGISLATION_COUNTRIES,
+      });
+      if (countryRead.kind === "unavailable") {
+        return {
+          ...work,
+          statute: null,
+          unresolvedReason: countryRead.response.reason,
+          availability: countryRead.response,
+        };
+      }
       const key = String(index);
       const id = idByKey.get(key);
       const statute = id === undefined ? null : (statuteById.get(id) ?? null);

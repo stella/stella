@@ -48,6 +48,7 @@ export type ChatSkillAvailabilityContext = {
   safeDb: SafeDb;
   scopedDb: ScopedDb;
   userId: SafeId<"user">;
+  userEmail: string;
 };
 
 /**
@@ -230,6 +231,7 @@ const chatContextToolNames = (
       pinnedIds: chatContext.contextMatterIds,
     }),
     userId: context.userId,
+    userEmail: context.userEmail,
     webSearchEnabled: chatContext.webSearch,
     webSearchProviders: inputs.webSearchProviders,
     workspaceId: chatContext.workspaceId,

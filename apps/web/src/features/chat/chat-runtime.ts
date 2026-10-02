@@ -43,6 +43,7 @@ import type {
 } from "@/lib/chat-edit-mode";
 import { getChatThreadKey } from "@/lib/chat-thread-ref";
 import { detached } from "@/lib/detached";
+import { actionAdmissionOutcome } from "@/lib/errors/action-admission";
 import { APIError, toAPIError } from "@/lib/errors/api";
 import { ClientOperationError } from "@/lib/errors/client";
 import { toSafeId } from "@/lib/safe-id";
@@ -501,6 +502,15 @@ export const createChatRuntime = ({
       setSnapshot({ error });
     },
     onErrorChange: (error) => {
+      // The SDK can replay a transport failure as a generic RUN_ERROR after
+      // reporting its typed cause. A new request clears the error first.
+      if (
+        error !== undefined &&
+        actionAdmissionOutcome(snapshot.error) &&
+        !actionAdmissionOutcome(error)
+      ) {
+        return;
+      }
       if (error === undefined || !isStoppedTurn()) {
         setSnapshot({ error });
       }
@@ -963,7 +973,24 @@ export const createChatRuntime = ({
 
 const toPersistedChatMessages = (
   messages: readonly UIMessage<ChatClientTools>[],
-): PersistedChatMessage[] => [...messages];
+): PersistedChatMessage[] =>
+  messages.map((message) => {
+    if (
+      message.role !== "assistant" ||
+      !message.parts.some(
+        (part) => part.type === "text" && part.content.trim().length === 0,
+      )
+    ) {
+      return message;
+    }
+    // RUN_ERROR can leave whitespace parts that server finalization drops.
+    return {
+      ...message,
+      parts: message.parts.filter(
+        (part) => part.type !== "text" || part.content.trim().length > 0,
+      ),
+    };
+  });
 
 const isChatUiMessage = (
   message: ModelMessage | UIMessage,

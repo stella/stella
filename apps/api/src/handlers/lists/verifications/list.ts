@@ -60,6 +60,7 @@ const config = {
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "document_processing",
     consumesServices: false,
   },

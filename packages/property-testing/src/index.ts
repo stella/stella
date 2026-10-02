@@ -1,4 +1,22 @@
-import type fc from "fast-check";
+import fc from "fast-check";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+import { failureFingerprint } from "./failure-fingerprint";
+import {
+  PROPERTY_SEEDS_FILE,
+  REPLAY_PATH_PATTERN,
+  REPO_ROOT,
+  readPinnedSeeds,
+} from "./pinned-seeds";
+import type { PinnedSeed } from "./pinned-seeds";
+import { PropertyTestConfigError } from "./property-test-config-error";
+import { readNumRunsFactor } from "./run-factor";
+
+export { PropertyTestConfigError } from "./property-test-config-error";
+
+export { failureFingerprint } from "./failure-fingerprint";
+export type { PropertyFailureRecord } from "./failure-fingerprint";
 
 /**
  * Shared fast-check configuration for the repo's property tests.
@@ -29,15 +47,13 @@ export const PROPERTY_TEST_TIMEOUT_BASE_MS_ENV =
 const FAST_CHECK_DEFAULT_NUM_RUNS = 100;
 const DEFAULT_PROPERTY_TEST_TIMEOUT_MS = 5000;
 
-const readNumRunsFactor = (raw: string | undefined): number => {
-  if (raw === undefined) {
-    return 1;
-  }
-  const parsed = Number(raw);
-  // A factor below 1 (or non-numeric) would silently weaken nightly coverage;
-  // fall back to the neutral factor instead.
-  return Number.isFinite(parsed) && parsed >= 1 ? parsed : 1;
-};
+// fast-check types its time-limit plugin as `Plugin<unknown>`, and its run
+// details are invariant in the value type, so it is not assignable to
+// `Plugin<Ts>`. The plugin never reads generated values: it times each run
+// and clears its timer when the runs complete.
+const timeLimitPlugin = <Ts>(timeLimit: number): fc.Plugin<Ts> =>
+  // oxlint-disable-next-line typescript/no-unsafe-type-assertion -- the plugin never reads generated values
+  fc.interruptAfterTimeLimit(timeLimit) as fc.Plugin<Ts>;
 
 // Treat the common CI values as enabled, but honor an explicit opt-out
 // (`CI=false`/`0`) so verbose reporting can be silenced locally.
@@ -66,6 +82,32 @@ export const propertyConfig = <Ts>(
   const seed = "seed" in options ? requestedSeed : propertySeed();
   const factor = readNumRunsFactor(process.env[NUM_RUNS_FACTOR_ENV]);
   const baseNumRuns = params.numRuns ?? FAST_CHECK_DEFAULT_NUM_RUNS;
+  const envPath = process.env["PROPERTY_TEST_PATH"];
+  const envSeed = process.env[PROPERTY_TEST_SEED_ENV];
+  const envReplayPath =
+    envSeed !== undefined &&
+    envSeed !== "" &&
+    seed === Number(envSeed) &&
+    envPath !== undefined &&
+    envPath !== ""
+      ? envPath
+      : undefined;
+  if (envReplayPath !== undefined && !REPLAY_PATH_PATTERN.test(envReplayPath)) {
+    throw new PropertyTestConfigError(
+      "PROPERTY_TEST_PATH must be colon-separated non-negative integers",
+    );
+  }
+  const replayPath = envReplayPath ?? params.path;
+  const rawLimit = process.env["PROPERTY_TEST_TIME_LIMIT_MS"];
+  const timeLimit = rawLimit === undefined ? undefined : Number(rawLimit);
+  if (
+    timeLimit !== undefined &&
+    (!Number.isSafeInteger(timeLimit) || timeLimit <= 0)
+  ) {
+    throw new PropertyTestConfigError(
+      "PROPERTY_TEST_TIME_LIMIT_MS must be a positive integer",
+    );
+  }
   return {
     verbose: isCi(),
     ...params,
@@ -73,6 +115,12 @@ export const propertyConfig = <Ts>(
     // treats an explicit undefined seed as an unset one, but the exact
     // optional-property check does not, so the key is omitted instead.
     ...(seed === undefined ? {} : { seed }),
+    ...(replayPath === undefined ? {} : { path: replayPath }),
+    ...(factor > 1 && timeLimit !== undefined
+      ? {
+          plugins: [...(params.plugins ?? []), timeLimitPlugin<Ts>(timeLimit)],
+        }
+      : {}),
     numRuns: Math.ceil(baseNumRuns * factor),
   };
 };
@@ -83,17 +131,6 @@ export const PROPERTY_TEST_SEED_ENV = "PROPERTY_TEST_SEED";
  * The repo's fixed seed. Arbitrary: it only has to be stable.
  */
 const DEFAULT_PROPERTY_SEED = 20_260_901;
-
-// A malformed property-test environment variable. A local class keeps this
-// package free of runtime dependencies beyond fast-check.
-export class PropertyTestConfigError extends Error {
-  readonly _tag = "PropertyTestConfigError";
-
-  constructor(message: string) {
-    super(message);
-    this.name = "PropertyTestConfigError";
-  }
-}
 
 /**
  * The seed a property should run with: fixed in PR CI, absent (so
@@ -111,9 +148,9 @@ export class PropertyTestConfigError extends Error {
  * a new one and explores.
  *
  * Nightly is detected from `PROPERTY_TEST_NUM_RUNS_FACTOR`, the variable
- * `.github/workflows/nightly-property-test.yml` already exports to widen
- * the run budget — one signal for "this is the sweep", rather than a
- * second flag that could be set inconsistently with the first.
+ * the nightly sweep already exports to widen the run budget — one signal
+ * for "this is the sweep", rather than a second flag that could be set
+ * inconsistently with the first.
  *
  * Set `PROPERTY_TEST_SEED` to pin a specific seed in any environment.
  * That is how a nightly failure is replayed: the run log prints the seed
@@ -162,3 +199,195 @@ export const propertyTestDefaultTimeout = (): number => {
   }
   return propertyTestTimeout(baseMs);
 };
+
+const SELF = import.meta.filename;
+// One stack frame, "at fn (/abs/x.test.ts:1:2)" or "at /abs/x.test.ts:1:2".
+// Anchored at both ends so matching stays linear in the line length.
+const FRAME =
+  /^\s*at (?:[^()]* \()?((?:file:\/\/)?(?:\/|[A-Za-z]:[\\/])[^()]*):\d+:\d+\)?\s*$/u;
+
+const callerFile = (): string => {
+  const stack = new PropertyTestConfigError("property call site").stack ?? "";
+  for (const line of stack.split("\n").slice(1)) {
+    const raw = FRAME.exec(line)?.[1];
+    if (raw === undefined) {
+      continue;
+    }
+    const absolute = raw.startsWith("file://") ? fileURLToPath(raw) : raw;
+    if (absolute === SELF || !/\.test\.tsx?$/u.test(absolute)) {
+      continue;
+    }
+    const file = path.relative(REPO_ROOT, absolute).replaceAll("\\", "/");
+    if (file.startsWith("../")) {
+      break;
+    }
+    return file;
+  }
+  throw new PropertyTestConfigError(
+    "assertProperty must be called from a repository test file",
+  );
+};
+
+const shellQuote = (value: string): string =>
+  `'${value.replaceAll("'", "'\\''")}'`;
+const regexEscape = (value: string): string =>
+  value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+
+export class PropertyAssertionError extends Error {
+  readonly _tag = "PropertyAssertionError";
+
+  constructor(message: string, options: ErrorOptions) {
+    super(message, options);
+    this.name = "PropertyAssertionError";
+  }
+}
+
+const isSyncProperty = <Ts>(
+  property: fc.IRawProperty<Ts>,
+): property is fc.IProperty<Ts> => !property.isAsync();
+
+type PropertyRunOptions<Ts> = {
+  file: string;
+  id: string;
+  property: fc.IRawProperty<Ts>;
+  params: fc.Parameters<Ts>;
+  pinned: readonly PinnedSeed[];
+};
+
+/** Internal seam: identity and pins are supplied by the public boundary. */
+export function runProperty<Ts>(
+  options: PropertyRunOptions<Ts> & { property: fc.IAsyncProperty<Ts> },
+): Promise<void>;
+export function runProperty<Ts>(
+  options: PropertyRunOptions<Ts> & { property: fc.IProperty<Ts> },
+): void;
+export function runProperty<Ts>(
+  options: PropertyRunOptions<Ts>,
+): void | Promise<void>;
+export function runProperty<Ts>({
+  file,
+  id,
+  property,
+  params,
+  pinned,
+}: PropertyRunOptions<Ts>): void | Promise<void> {
+  if ("reporter" in params || "asyncReporter" in params) {
+    throw new PropertyTestConfigError(
+      "assertProperty owns failure reporting; custom reporters are unsupported",
+    );
+  }
+  const report = (details: fc.RunDetails<Ts>): void => {
+    if (!details.failed) {
+      return;
+    }
+    const factor = readNumRunsFactor(
+      process.env["PROPERTY_TEST_NUM_RUNS_FACTOR"],
+    );
+    const factorEnv =
+      factor === 1 ? "" : ` PROPERTY_TEST_NUM_RUNS_FACTOR=${factor}`;
+    const workspace = file.split("/").slice(0, 2).join("/");
+    const testFile = `./${path.posix.relative(workspace, file)}`;
+    const replay = `PROPERTY_TEST_SEED=${details.seed} PROPERTY_TEST_PATH=${shellQuote(details.counterexamplePath ?? "")}${factorEnv} bun run --cwd ${shellQuote(workspace)} test --preload @stll/property-testing/preload ${shellQuote(testFile)} -t ${shellQuote(regexEscape(id))}`;
+    const error =
+      details.errorInstance instanceof Error
+        ? details.errorInstance.message
+        : fc.stringify(details.errorInstance);
+    const ci = process.env["CI"];
+    if (ci !== undefined && ci !== "" && ci !== "false" && ci !== "0") {
+      console.error(
+        `STELLA_PROPERTY_FAILURE ${JSON.stringify({
+          file,
+          id,
+          seed: details.seed,
+          path: details.counterexamplePath,
+          factor,
+          fingerprint: failureFingerprint({ id, error }),
+          replay,
+          ...(process.env["PROPERTY_TEST_REDACT"] === undefined
+            ? { counterexample: fc.stringify(details.counterexample) }
+            : {}),
+        })}`,
+      );
+    }
+    const hint = {
+      [`${file}::${id}`]: [
+        {
+          seed: details.seed,
+          ...(details.counterexamplePath === null ||
+          details.counterexamplePath === ""
+            ? {}
+            : { path: details.counterexamplePath }),
+          note: "Regression coverage",
+          date: "YYYY-MM-DD",
+        },
+      ],
+    };
+    const message = fc.defaultReportMessage(details) ?? "Property failed";
+    throw new PropertyAssertionError(
+      `${message}\n\nReplay: ${replay}\nPin: ${JSON.stringify(hint)} in ${PROPERTY_SEEDS_FILE}`,
+      { cause: details.errorInstance },
+    );
+  };
+  // fast-check runs completion hooks inside the check and rethrows the first
+  // error, so the report replaces fast-check's own failure.
+  const reportPlugin: fc.Plugin<Ts> = () => ({ onAllRunsComplete: report });
+  const plugins = [...(params.plugins ?? []), reportPlugin];
+  const generated = propertyConfig({ ...params, plugins });
+  // Pinned runs preserve their recorded path and cannot be truncated by a nightly time box.
+  const replays = pinned.map(({ seed, path: replayPath }) => {
+    const { path: _path, plugins: _plugins, ...base } = generated;
+    return {
+      ...base,
+      plugins,
+      seed,
+      ...(replayPath === undefined ? {} : { path: replayPath }),
+      examples: [],
+    };
+  });
+  if (isSyncProperty(property)) {
+    for (const replay of replays) {
+      fc.assert(property, replay);
+    }
+    fc.assert(property, generated);
+    return;
+  }
+  return (async () => {
+    for (const replay of replays) {
+      await fc.assert(property, replay);
+    }
+    await fc.assert(property, generated);
+  })();
+}
+
+export function assertProperty<Ts>(
+  id: string,
+  property: fc.IAsyncProperty<Ts>,
+  params?: fc.Parameters<Ts>,
+): Promise<void>;
+export function assertProperty<Ts>(
+  id: string,
+  property: fc.IProperty<Ts>,
+  params?: fc.Parameters<Ts>,
+): void;
+export function assertProperty<Ts>(
+  id: string,
+  property: fc.IRawProperty<Ts>,
+  params: fc.Parameters<Ts> = {},
+): void | Promise<void> {
+  if (id.trim() === "") {
+    throw new PropertyTestConfigError(
+      "assertProperty requires a non-empty explicit id",
+    );
+  }
+  const file = callerFile();
+  return runProperty({
+    file,
+    id,
+    property,
+    params,
+    pinned:
+      readPinnedSeeds().unwrap("Pinned property seed registry must be valid")[
+        `${file}::${id}`
+      ] ?? [],
+  });
+}

@@ -75,6 +75,7 @@ const config = {
   access: "read",
   mcp: {
     type: "capability",
+    readClass: "tenant",
     reason: "anonymization_admin",
     consumesServices: false,
   },
