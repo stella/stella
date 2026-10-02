@@ -3,7 +3,8 @@
 // Flagged: a leading LIKE wildcard, any LIKE on an S3-key column, a
 // function or cast in GROUP BY over a corpus relation, OR with a subquery
 // operand, and an optional keyset bound (`$1 IS NULL OR id > $1`), which no
-// generic plan can use as an index condition. Prefix LIKE on other columns,
+// generic plan can use as an index condition; per-source full corpus counts
+// also fail even when the aggregate has a LIMIT. Prefix LIKE on other columns,
 // SELECT-only expressions, schema constraints, and plain strings pass; the
 // optional bound is also read from plain strings, where `$n` is a parameter.
 // Analysis follows same-file const bindings; imported or runtime-built SQL is
@@ -19,7 +20,8 @@ export type SqlPerfHit = {
     | "s3-key-like"
     | "group-by-expression"
     | "or-subquery"
-    | "optional-keyset";
+    | "optional-keyset"
+    | "per-source-full-count";
   line: number;
   column: number;
   /**
@@ -38,7 +40,9 @@ export type SqlPerfCommentError = { line: number; message: string };
  * is reported whatever the file's baseline count.
  */
 export const isBaselinedSqlPerfKind = (kind: SqlPerfHit["kind"]): boolean =>
-  kind !== "or-subquery" && kind !== "optional-keyset";
+  kind !== "or-subquery" &&
+  kind !== "optional-keyset" &&
+  kind !== "per-source-full-count";
 
 const LIKE = /\b(?:NOT\s+)?I?LIKE\b/giu;
 const CORPUS =
@@ -531,6 +535,155 @@ const isCorpusColumn = (column: string, bindings: ConstBindings): boolean => {
   );
 };
 
+const FULL_COUNT = /\bcount\s*\([^)]*\)/iu;
+const SOURCE_COLUMN = /\bsource_id\b|\bsourceId\b/iu;
+
+const CORPUS_COUNT_TABLE = new RegExp(
+  `\\b(?:${[...REPORT_CORPUS_TABLES].join("|")})\\b`,
+  "iu",
+);
+
+const sourceFilteredSql = (statement: string): boolean => {
+  const clauses =
+    /\b(?:WHERE|GROUP\s+BY)\b([\s\S]*?)(?=\b(?:FROM|JOIN|ON|WHERE|GROUP\s+BY|HAVING|ORDER\s+BY|LIMIT|UNION|RETURNING)\b|$)/giu;
+  if (
+    [...statement.matchAll(clauses)].some((match) =>
+      SOURCE_COLUMN.test(match[1] ?? ""),
+    )
+  ) {
+    return true;
+  }
+  // A source restriction may live in JOIN ... ON; a column-to-column join
+  // alone does not restrict the aggregation to one source.
+  return (
+    /\bON\b[\s\S]*?\bsource_id\b\s*=\s*(?:\$\d+|__SQL_EXPR_\d+__)/iu.test(
+      statement,
+    ) ||
+    /\bON\b[\s\S]*?(?:\$\d+|__SQL_EXPR_\d+__)\s*=\s*(?:[a-z_]\w*\.)?source_id\b/iu.test(
+      statement,
+    )
+  );
+};
+
+const fullSourceCount = (text: string): boolean =>
+  sqlWithoutLiterals(text)
+    .split(";")
+    .some(
+      (statement) =>
+        FULL_COUNT.test(statement) &&
+        sourceFilteredSql(sqlTableName(statement.replaceAll('"', ""))) &&
+        CORPUS_COUNT_TABLE.test(sqlTableName(statement.replaceAll('"', ""))),
+    );
+
+const drizzleSourceCount = (
+  node: ts.CallExpression,
+  context: SubqueryOperandContext,
+): boolean => {
+  const { imports, bindings, file } = context;
+  if (
+    !ts.isPropertyAccessExpression(node.expression) ||
+    ![
+      "where",
+      "groupBy",
+      "innerJoin",
+      "leftJoin",
+      "rightJoin",
+      "fullJoin",
+    ].includes(node.expression.name.text)
+  ) {
+    return false;
+  }
+  const joining = node.expression.name.text.endsWith("Join");
+  let corpus = false;
+  let count = false;
+  let source = false;
+  const inspect = (child: ts.Node) => {
+    if (ts.isExpression(child)) {
+      const value = resolve(child, bindings);
+      if (ts.isCallExpression(value)) {
+        const name = drizzleCallName(value, imports);
+        if (name === "count") {
+          count = true;
+        }
+        if (
+          ts.isPropertyAccessExpression(value.expression) &&
+          value.expression.name.text === "from"
+        ) {
+          const table = value.arguments.at(0);
+          if (table !== undefined) {
+            corpus ||=
+              isCorpusColumn(`${table.getText(file)}.sourceId`, bindings) ||
+              isCorpusColumn(
+                `${resolve(table, bindings).getText(file)}.sourceId`,
+                bindings,
+              );
+          }
+        }
+      }
+      if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
+        count ||= FULL_COUNT.test(
+          sqlWithoutLiterals(sqlParts(file, value.template).sql),
+        );
+      }
+      if (value !== child) {
+        ts.forEachChild(value, inspect);
+        return;
+      }
+    }
+    ts.forEachChild(child, inspect);
+  };
+  const inspectSource = (child: ts.Node) => {
+    if (ts.isExpression(child)) {
+      const value = resolve(child, bindings);
+      if (
+        joining &&
+        ts.isCallExpression(value) &&
+        COMPARISONS.has(drizzleCallName(value, imports) ?? "")
+      ) {
+        for (const [index, argument] of value.arguments.entries()) {
+          const column = resolve(argument, bindings);
+          const other = value.arguments.at(index === 0 ? 1 : 0);
+          if (
+            ts.isPropertyAccessExpression(column) &&
+            column.name.text === "sourceId" &&
+            other !== undefined &&
+            !ts.isPropertyAccessExpression(resolve(other, bindings))
+          ) {
+            source ||=
+              isCorpusColumn(column.getText(file), bindings) ||
+              isCorpusColumn(
+                `${resolve(column.expression, bindings).getText(file)}.sourceId`,
+                bindings,
+              );
+          }
+        }
+      }
+      if (
+        !joining &&
+        ts.isPropertyAccessExpression(value) &&
+        value.name.text === "sourceId"
+      ) {
+        source ||=
+          isCorpusColumn(value.getText(file), bindings) ||
+          isCorpusColumn(
+            `${resolve(value.expression, bindings).getText(file)}.sourceId`,
+            bindings,
+          );
+      }
+      if (value !== child) {
+        ts.forEachChild(value, inspectSource);
+        return;
+      }
+    }
+    ts.forEachChild(child, inspectSource);
+  };
+  for (const argument of node.arguments) {
+    inspectSource(argument);
+  }
+  inspect(node);
+  return corpus && count && source;
+};
+
 const comparisonColumn = (
   expression: ts.Expression,
   imports: DrizzleImports,
@@ -1009,21 +1162,53 @@ export const analyzeMigrationSqlPerf = (source: string) => {
 const plainSqlText = (node: ts.Node, file: ts.SourceFile) => {
   if (ts.isStringLiteral(node)) {
     const start = node.getStart(file) + 1;
-    return { sql: node.text, offsetAt: (index: number) => start + index };
+    return {
+      sql: node.text,
+      expressions: [],
+      offsetAt: (index: number) => start + index,
+    };
   }
   if (
     (ts.isNoSubstitutionTemplateLiteral(node) ||
       ts.isTemplateExpression(node)) &&
     !ts.isTaggedTemplateExpression(node.parent)
   ) {
-    const { sql, offsets } = sqlParts(file, node);
+    const { sql, offsets, expressions } = sqlParts(file, node);
     return {
       sql,
+      expressions,
       offsetAt: (index: number) => offsets[index] ?? node.getStart(file),
     };
   }
   return undefined;
 };
+
+type ExpandedSqlOptions = {
+  sql: string;
+  expressions: ts.Expression[];
+  bindings: ConstBindings;
+  file: ts.SourceFile;
+};
+
+const expandedSql = ({
+  sql,
+  expressions,
+  bindings,
+  file,
+}: ExpandedSqlOptions) =>
+  sql.replace(/__SQL_EXPR_(\d+)__/gu, (marker, index: string) => {
+    const expression = expressions.at(Number(index));
+    if (expression === undefined) {
+      return marker;
+    }
+    const value = resolve(expression, bindings);
+    const text = value.getText(file);
+    return ts.isTaggedTemplateExpression(value) ||
+      (ts.isPropertyAccessExpression(value) && SOURCE_COLUMN.test(text)) ||
+      CORPUS_COUNT_TABLE.test(sqlTableName(text))
+      ? text
+      : marker;
+  });
 
 export const analyzeSqlPerf = (source: string, filename: string) => {
   const file = ts.createSourceFile(
@@ -1061,6 +1246,9 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
       return;
     }
     const { sql, offsets, expressions } = sqlParts(file, node.template);
+    if (fullSourceCount(expandedSql({ sql, expressions, bindings, file }))) {
+      add("per-source-full-count", node.getStart(file), node);
+    }
     for (const index of optionalKeysetOffsets(sql, expressions, file)) {
       add("optional-keyset", offsets[index] ?? node.getStart(file), node);
     }
@@ -1141,11 +1329,18 @@ export const analyzeSqlPerf = (source: string, filename: string) => {
     }
     const plain = plainSqlText(node, file);
     if (plain !== undefined) {
+      const { sql, expressions } = plain;
+      if (fullSourceCount(expandedSql({ sql, expressions, bindings, file }))) {
+        add("per-source-full-count", node.getStart(file), node);
+      }
       for (const index of optionalKeysetOffsets(plain.sql, [], file)) {
         add("optional-keyset", plain.offsetAt(index), node);
       }
     }
     if (ts.isCallExpression(node)) {
+      if (drizzleSourceCount(node, subqueryOperandContext)) {
+        add("per-source-full-count", node.getStart(file), node);
+      }
       if (
         drizzleCallName(node, imports) === "or" &&
         node.arguments.some((argument) =>

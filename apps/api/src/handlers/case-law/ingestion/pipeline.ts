@@ -666,11 +666,8 @@ export const runIngestionPipeline = async ({
   }
   cursor = checkpoint.cursor;
 
-  // After the checkpoint and outside its transaction: the count walks the
-  // source's whole index range, and holding the leased source row's
-  // transaction open for it would block the next cycle on bookkeeping. It
-  // rate-limits itself to one count per source per interval and reports its
-  // own failures, so its outcome never reaches this run's result.
+  // Outside the checkpoint transaction: a durable refresh claim bounds
+  // planning attempts, including failures, without counting corpus rows.
   await refreshSourceStoredTotal({
     scopedDb,
     sourceId: source.id,

@@ -20,7 +20,7 @@ import {
  * corpus: `case_law_decisions_source_generation_cursor_idx` leads with
  * `source_id` and then `created_at`, so the window is an index range the
  * planner enters at its lower bound. How much a source holds in total is not
- * asked here at all — that figure is counted on the ingestion connection and
+ * asked here at all — that figure is estimated on the ingestion connection and
  * read back as an integer (`ingestion/source-totals.ts`), because counting it
  * per request would put a walk of the whole range on a two-connection pool.
  *
@@ -76,6 +76,7 @@ export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
       tx,
       ARRIVALS_STATEMENT_TIMEOUT_MS,
       async () =>
+        // sql-perf-allow: index case_law_decisions_source_generation_cursor_idx, bounded by seven days and a 3s statement timeout
         await tx.execute(sql`
       SELECT
         named.source_id AS source_id,

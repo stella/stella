@@ -1,6 +1,8 @@
-import { panic, Result, TaggedError } from "better-result";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { Result, TaggedError } from "better-result";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
+import * as v from "valibot";
 
+import type { Transaction } from "@/api/db/root";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
@@ -11,7 +13,6 @@ import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
 import { pgErrorFields } from "@/api/lib/pg-error";
-import { isRecord } from "@/api/lib/type-guards";
 
 /**
  * Both halves of a source's coverage figure, and the only writer of either.
@@ -24,14 +25,10 @@ import { isRecord } from "@/api/lib/type-guards";
  * columns are nullable so a source that has never been measured reads as
  * unknown rather than as zero.
  *
- * The numerator is what the corpus actually holds, and it is counted here for
- * the same reason the denominator is stored: a public request must never pay
- * for it. Counting one source is a walk of its whole range of
- * `case_law_decisions_source_generation_cursor_idx`, which on this corpus is
- * seconds, and the public reader that would otherwise run it holds a
- * two-connection pool shared with every other public page. A dedicated
- * ingestion-role connection pays it instead, at most once per
- * `SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS`.
+ * The numerator is a persisted planner estimate. Refreshing explains a
+ * source-filtered SELECT without executing it, so the ingestion cycle never
+ * walks the source's corpus range. Public readers still read only the stored
+ * pair. A durable attempt timestamp bounds both successful and failed refreshes.
  */
 
 /**
@@ -121,49 +118,54 @@ export const setSourceReportedTotal = async ({
   });
 };
 
-/**
- * How long a stored count stands before the next sync cycle recounts.
- *
- * A busy adapter completes a cycle every few minutes; counting on each one
- * would spend more of the ingestion connection on bookkeeping than on
- * ingesting. Six hours keeps the published figure within a quarter-day of the
- * corpus while costing each source four counts a day.
- */
+/** Minimum interval between attempts, including failures and worker restarts. */
 export const SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
 
-/**
- * How long the count itself may run before it is abandoned.
- *
- * Generous, because this is the ingestion connection and the count is the
- * point, and sized so the largest source's count fits with headroom; bounded,
- * because a source whose index has gone cold must not hold the connection
- * open behind the next cycle. Exceeding it leaves the previous figure
- * standing.
- */
-const STORED_TOTAL_STATEMENT_TIMEOUT_MS = 120_000;
-const STORED_TOTAL_LOCK_TIMEOUT_MS = 10_000;
-const STORED_TOTAL_ABORT_TIMEOUT_MS = 130_000;
+const STORED_TOTAL_STATEMENT_TIMEOUT_MS = 5000;
+const STORED_TOTAL_LOCK_TIMEOUT_MS = 1000;
+const STORED_TOTAL_ABORT_TIMEOUT_MS = 10_000;
 
-/** What one refresh attempt did. */
 export type StoredTotalRefresh =
-  /** Counted and written. */
   | "refreshed"
-  /** Within the interval, so nothing was counted. */
+  /** A recent measurement or attempt prevents another refresh. */
   | "fresh"
-  /** The count did not finish; the previous figure stands. */
+  /** The previous figure stands; a claimed attempt still backs off. */
   | "unavailable";
 
 type RefreshSourceStoredTotalOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
-  /** The instant the interval is measured from, and the as-of that is written. */
   now: Date;
-  /** Test seam for the single-statement count on an ingestion-role handle. */
-  countSource?: (sourceId: SafeId<"caseLawSource">) => Promise<number>;
+  estimateSource?: (sourceId: SafeId<"caseLawSource">) => Promise<number>;
 };
 
-/** Count in one PostgreSQL statement after the ingestion role is installed. */
-export const countSourceThroughIngestionRole = async (
+// EXPLAIN never executes this SELECT; ANALYZE would reintroduce the corpus scan.
+export const explainSourceStoredTotalQuery = (
+  sourceId: SafeId<"caseLawSource">,
+) =>
+  sql`EXPLAIN (FORMAT JSON) SELECT id FROM case_law_decisions WHERE source_id = ${sourceId}`;
+
+const storedTotalEstimateSchema = v.pipe(
+  v.number(),
+  v.integer(),
+  v.minValue(0),
+  v.maxValue(POSTGRES_INTEGER_MAX),
+);
+
+const sourceStoredTotalPlanSchema = v.tuple([
+  v.object({
+    "QUERY PLAN": v.tuple([
+      v.object({
+        Plan: v.object({
+          "Plan Rows": storedTotalEstimateSchema,
+        }),
+      }),
+    ]),
+  }),
+]);
+
+/** Estimate under the ingestion role; no corpus rows are read or counted. */
+export const estimateSourceThroughIngestionRole = async (
   database: RlsDatabase,
   sourceId: SafeId<"caseLawSource">,
 ): Promise<number> => {
@@ -171,20 +173,15 @@ export const countSourceThroughIngestionRole = async (
     laneWaitMs: STORED_TOTAL_STATEMENT_TIMEOUT_MS,
   });
   return await ingestionDb(async (tx) => {
-    const row = executedRows(
-      await tx.execute(sql`
-        SELECT count(*)::int AS total
-        FROM case_law_decisions
-        WHERE source_id = ${sourceId}
-      `),
-    ).at(0);
-    return isRecord(row) && typeof row["total"] === "number"
-      ? row["total"]
-      : panic("Source total count returned no row");
+    const plans = v.parse(
+      sourceStoredTotalPlanSchema,
+      executedRows(await tx.execute(explainSourceStoredTotalQuery(sourceId))),
+    );
+    return plans[0]["QUERY PLAN"][0].Plan["Plan Rows"];
   });
 };
 
-const countSourceOnDedicatedConnection = async (
+const estimateSourceOnDedicatedConnection = async (
   sourceId: SafeId<"caseLawSource">,
 ): Promise<number> => {
   const { withLongRunningConnection } =
@@ -196,7 +193,7 @@ const countSourceOnDedicatedConnection = async (
       signal: AbortSignal.timeout(STORED_TOTAL_ABORT_TIMEOUT_MS),
     },
     async ({ db }) =>
-      await countSourceThroughIngestionRole(
+      await estimateSourceThroughIngestionRole(
         markRlsDatabase({
           transaction: async <T>(
             fn: (tx: TransactionOf<typeof db>) => Promise<T>,
@@ -207,61 +204,73 @@ const countSourceOnDedicatedConnection = async (
   );
 };
 
+type SourceStoredTotalRefreshClaimOptions = {
+  tx: Transaction;
+  sourceId: SafeId<"caseLawSource">;
+  now: Date;
+};
+
+/** The primary-key claim commits before planning and survives a failed refresh. */
+export const sourceStoredTotalRefreshClaim = ({
+  tx,
+  sourceId,
+  now,
+}: SourceStoredTotalRefreshClaimOptions) => {
+  const dueBefore = new Date(
+    now.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  );
+  // audit: skip — public case-law corpus bookkeeping, no workspace data
+  return tx
+    .update(caseLawSources)
+    .set({ storedTotalAttemptedAt: now })
+    .where(
+      and(
+        eq(caseLawSources.id, sourceId),
+        or(
+          sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) IS NULL`,
+          sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) <= ${dueBefore.toISOString()}::timestamptz`,
+        ),
+      ),
+    )
+    .returning({ id: caseLawSources.id });
+};
+
 /**
- * Recount one source's stored decisions, unless it was counted recently.
- *
- * Never throws and never changes its caller's outcome. It runs at the end of a
- * sync cycle, where the work that matters has already been committed: a count
- * that times out is bookkeeping that can wait for the next cycle, not a reason
- * to fail an ingestion run or to discard what it wrote.
- *
- * The write is a compare-and-set against the as-of this call observed, so two
- * workers finishing cycles at once converge instead of racing: the second
- * one's `UPDATE` matches no row and it returns having changed nothing. That is
- * also what makes a replay a fixed point — re-running against an already
- * stamped row is the `fresh` branch, and re-running against a row another
- * worker stamped is a no-op write.
+ * One durable claim per source and interval, including failures. The estimate
+ * reflects PostgreSQL's current statistics, which may lag ingestion. A stale
+ * worker cannot replace a later claim or a later measurement. Public readers
+ * never trigger this work, and no exact count is reachable from a sync cycle.
  */
 export const refreshSourceStoredTotal = async ({
   now,
   scopedDb,
   sourceId,
-  countSource = countSourceOnDedicatedConnection,
+  estimateSource = estimateSourceOnDedicatedConnection,
 }: RefreshSourceStoredTotalOptions): Promise<StoredTotalRefresh> => {
   const attempt = await Result.tryPromise(async () => {
-    const observed = await scopedDb(async (tx) =>
-      (
-        await tx
-          .select({ asOf: caseLawSources.storedTotalAsOf })
-          .from(caseLawSources)
-          .where(eq(caseLawSources.id, sourceId))
-          .limit(1)
-      ).at(0),
+    const claimed = await scopedDb(
+      async (tx) => await sourceStoredTotalRefreshClaim({ tx, sourceId, now }),
     );
-    if (observed === undefined) {
-      return "unavailable" as const;
-    }
-    const observedAsOf = observed.asOf;
-    if (
-      observedAsOf !== null &&
-      now.getTime() - observedAsOf.getTime() <
-        SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS
-    ) {
+    if (claimed.length === 0) {
       return "fresh" as const;
     }
-
-    const counted = await countSource(sourceId);
+    const estimated = v.parse(
+      storedTotalEstimateSchema,
+      await estimateSource(sourceId),
+    );
     return await scopedDb(async (tx) => {
       // audit: skip — public case-law corpus bookkeeping, no workspace data
       const written = await tx
         .update(caseLawSources)
-        .set({ storedTotal: counted, storedTotalAsOf: now })
+        .set({ storedTotal: estimated, storedTotalAsOf: now })
         .where(
           and(
             eq(caseLawSources.id, sourceId),
-            observedAsOf === null
-              ? isNull(caseLawSources.storedTotalAsOf)
-              : eq(caseLawSources.storedTotalAsOf, observedAsOf),
+            sql`${caseLawSources.storedTotalAttemptedAt} = ${now.toISOString()}::timestamptz`,
+            or(
+              isNull(caseLawSources.storedTotalAsOf),
+              sql`${caseLawSources.storedTotalAsOf} <= ${now.toISOString()}::timestamptz`,
+            ),
           ),
         )
         .returning({ id: caseLawSources.id });
@@ -270,9 +279,6 @@ export const refreshSourceStoredTotal = async ({
   });
 
   if (Result.isError(attempt)) {
-    // Deliberately not rethrown: see the doc comment. The previous figure and
-    // its as-of stay exactly as they were, which is what lets the page say
-    // how old the number is rather than showing a wrong one.
     logger.warn("case_law.source_stored_total.unavailable", {
       sourceId,
       ...errorSystemFields(attempt.error),
@@ -280,7 +286,6 @@ export const refreshSourceStoredTotal = async ({
     });
     return "unavailable";
   }
-
   return attempt.value;
 };
 

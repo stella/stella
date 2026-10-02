@@ -1,5 +1,6 @@
 import { expect, test } from "bun:test";
 
+import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
 import {
   analyzeMigrationSqlPerf,
   analyzeSqlPerf,
@@ -585,4 +586,174 @@ test("reads every migration but the exempt ones, whatever its date", async () =>
       ).text(),
     ),
   ).toEqual([]);
+});
+
+test.each([
+  [
+    "parameterized string",
+    'query("SELECT count(*) FROM case_law_decisions WHERE source_id = $1", [source])',
+  ],
+  [
+    "tagged template",
+    "sql`SELECT COUNT ( * ) FROM ${caseLawDecisions} WHERE ${caseLawDecisions.sourceId} = ${source}`",
+  ],
+  [
+    "untagged template",
+    "query(`SELECT count(*) FROM ${caseLawDecisions} WHERE source_id = $1`)",
+  ],
+  [
+    "quoted schema relation",
+    'sql`SELECT count(*) FROM "public"."case_law_decisions" AS d WHERE d."source_id" = ${source}`',
+  ],
+  [
+    "ineffective aggregate limit",
+    "sql`SELECT count(*) FROM case_law_decisions WHERE source_id = ${source} LIMIT 1`",
+  ],
+  [
+    "grouped totals",
+    "sql`SELECT source_id, count(*) FROM legislation_documents GROUP BY source_id`",
+  ],
+  [
+    "Drizzle count",
+    'import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, source));',
+  ],
+  [
+    "Drizzle SQL projection",
+    'import { sql, eq } from "drizzle-orm"; db.select({ total: sql<number>`count(*)` }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, source));',
+  ],
+  [
+    "import alias",
+    'import { count as total, eq as equals } from "drizzle-orm"; const projection = { total: total() }; const predicate = equals(caseLawDecisions.sourceId, source); db.select(projection).from(caseLawDecisions).where(predicate);',
+  ],
+  [
+    "namespace import",
+    'import * as d from "drizzle-orm"; db.select({ total: d.count() }).from(caseLawDecisions).where(d.eq(caseLawDecisions.sourceId, source));',
+  ],
+  [
+    "table const binding",
+    'import { count, eq } from "drizzle-orm"; const table = caseLawDecisions; db.select({ total: count() }).from(table).where(eq(table.sourceId, source));',
+  ],
+  [
+    "table alias",
+    'import { count, eq, alias } from "drizzle-orm"; const decisions = alias(caseLawDecisions, "d"); db.select({ total: count() }).from(decisions).where(eq(decisions.sourceId, source));',
+  ],
+])("rejects per-source full counts: %s", (_, source) => {
+  expect(kinds(source)).toContain("per-source-full-count");
+});
+
+test("every high-volume relation receives the per-source count guard", () => {
+  for (const table of HIGH_VOLUME_TABLES) {
+    expect(
+      kinds(`sql\`SELECT count(*) FROM ${table} WHERE source_id = $1\``),
+    ).toEqual(["per-source-full-count"]);
+  }
+});
+
+test.each([
+  "sql`SELECT stored_total FROM case_law_sources WHERE id = ${source}`",
+  "sql`SELECT count(*) FROM small_settings WHERE source_id = ${source}`",
+  "sql`SELECT count(*) FROM case_law_decisions WHERE id = ${id}`",
+  "sql`SELECT reltuples FROM pg_class WHERE relname = 'case_law_decisions'`",
+  "sql`SELECT 'count(*) source_id case_law_decisions'`",
+  "sql`SELECT id FROM case_law_decisions WHERE source_id = ${source} /* count(*) */`",
+  'query("SELECT count(*) FROM small_settings; SELECT id FROM case_law_decisions WHERE source_id = $1")',
+  'import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(smallSettings).where(eq(smallSettings.sourceId, source));',
+  'import { eq } from "drizzle-orm"; db.select({ id: caseLawDecisions.id }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, source));',
+])("passes queries without a full per-source corpus count: %s", (source) => {
+  expect(kinds(source)).toEqual([]);
+});
+
+test("per-source count findings cannot use a legacy baseline and need a visible concrete exemption", () => {
+  expect(isBaselinedSqlPerfKind("per-source-full-count")).toBe(false);
+  const query =
+    "const total = sql`SELECT count(*) FROM case_law_decisions WHERE source_id = ${source}`;";
+  expect(kinds(query)).toEqual(["per-source-full-count"]);
+  const allowed = analyzeSqlPerf(
+    `// sql-perf-allow: bounded by an offline scheduled maintenance budget\n${query}`,
+    "apps/api/src/handlers/example.ts",
+  );
+  expect(allowed.hits).toEqual([]);
+  expect(allowed.commentErrors).toEqual([]);
+  expect(
+    kinds(`const note = "// sql-perf-allow: bounded by a budget";\n${query}`),
+  ).toEqual(["per-source-full-count"]);
+});
+
+test.each([
+  [
+    "source restriction inside join",
+    "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON s.id = d.source_id AND d.source_id = ${sourceId}`",
+  ],
+  [
+    "reverse join restriction",
+    "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON ${sourceId} = d.source_id AND s.id = d.source_id`",
+  ],
+  [
+    "raw join restriction",
+    'query("SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON d.source_id = $1 AND s.id = d.source_id")',
+  ],
+  [
+    "filtered replay counts",
+    'import { sql, and, eq, isNull } from "drizzle-orm"; db.select({ stored: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`, refetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)` }).from(caseLawDecisions).where(and(eq(caseLawDecisions.sourceId, sourceId), isNull(caseLawDecisions.redactedAt)));',
+  ],
+])("source aggregation remains guarded with %s", (_, source) => {
+  expect(kinds(source)).toContain("per-source-full-count");
+});
+
+test.each([
+  [
+    "citation authority for one decision",
+    "sql`SELECT count(*) AS cnt FROM case_law_citations c JOIN case_law_decisions citing_d ON citing_d.id = c.citing_decision_id JOIN case_law_sources citing_src ON citing_src.id = citing_d.source_id WHERE c.cited_decision_id = ${decisionId}`",
+  ],
+  [
+    "bounded authority batch",
+    "sql`WITH batch AS (SELECT d.id FROM case_law_decisions d ORDER BY d.id LIMIT ${limit}), agg AS (SELECT b.id, count(c.id) FROM batch b LEFT JOIN case_law_citations c ON c.cited_decision_id = b.id JOIN case_law_decisions citing_d ON citing_d.id = c.citing_decision_id JOIN case_law_sources s ON s.id = citing_d.source_id GROUP BY b.id) SELECT (SELECT count(*) FROM batch) AS scanned, (SELECT count(*) FROM agg) AS written`",
+  ],
+  [
+    "legislation country facets",
+    "import { sql, eq, and } from \"drizzle-orm\"; db.select({ value: legislationDocuments.documentType, count: sql<number>`count(*)::integer` }).from(legislationDocuments).innerJoin(legislationSources, eq(legislationSources.id, legislationDocuments.sourceId)).where(and(eq(legislationDocuments.country, country), sql`${legislationDocuments.documentType} <> ''`)).groupBy(legislationDocuments.documentType);",
+  ],
+  [
+    "source projection alone",
+    'import { count, eq } from "drizzle-orm"; db.select({ source: caseLawDecisions.sourceId, count: count() }).from(caseLawDecisions).where(eq(caseLawDecisions.country, country));',
+  ],
+  [
+    "raw source projection alone",
+    "sql`SELECT min(source_id), count(*) FROM case_law_decisions WHERE country = ${country}`",
+  ],
+])(
+  "source columns outside filtering and grouping do not trigger the guard: %s",
+  (_, source) => {
+    expect(kinds(source)).not.toContain("per-source-full-count");
+  },
+);
+
+test.each([
+  "sql`SELECT count(1) FROM case_law_decisions WHERE source_id = ${source}`",
+  "sql`SELECT count(d.id) FROM case_law_decisions d WHERE d.source_id = $1`",
+  "sql`SELECT count(d.fulltext) FROM case_law_decisions d WHERE d.source_id = $1`",
+  "sql`SELECT count(DISTINCT d.id) FROM case_law_decisions d WHERE d.source_id = $1`",
+  'import { count, eq } from "drizzle-orm"; db.select({ total: count(caseLawDecisions.id) }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, source));',
+  'import { sql, eq } from "drizzle-orm"; db.select({ total: sql<number>`count(${caseLawDecisions.fulltext})` }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, source));',
+  "sql`SELECT count(*) FROM ${caseLawDecisions} d JOIN case_law_sources s ON ${caseLawDecisions.sourceId} = ${sourceId}`",
+])(
+  "changing the count operand preserves the source scan guard: %s",
+  (source) => {
+    expect(kinds(source)).toContain("per-source-full-count");
+  },
+);
+
+test("a Drizzle join source restriction is guarded while a source correlation is not", () => {
+  const prefix =
+    'import { count, eq, and } from "drizzle-orm"; db.select({ total: count(caseLawDecisions.id) }).from(caseLawDecisions)';
+  expect(
+    kinds(
+      `${prefix}.innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId));`,
+    ),
+  ).not.toContain("per-source-full-count");
+  expect(
+    kinds(
+      `${prefix}.innerJoin(caseLawSources, and(eq(caseLawSources.id, caseLawDecisions.sourceId), eq(caseLawDecisions.sourceId, sourceId)));`,
+    ),
+  ).toContain("per-source-full-count");
 });

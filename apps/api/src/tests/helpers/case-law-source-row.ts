@@ -36,6 +36,7 @@ const defaultCaseLawSourceRow = () =>
     reportedTotalOrigin: null,
     storedTotal: null,
     storedTotalAsOf: null,
+    storedTotalAttemptedAt: null,
     createdAt: FIXED_TIMESTAMP,
     updatedAt: FIXED_TIMESTAMP,
   }) satisfies CaseLawSourceRow;
