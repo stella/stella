@@ -279,8 +279,10 @@ type WorkflowJob = {
   steps: readonly {
     id?: string;
     name?: string;
+    if?: string;
     uses?: string;
     run?: string;
+    env?: Record<string, string>;
     with?: Record<string, unknown>;
   }[];
 };
@@ -361,5 +363,65 @@ describe("network baseline workflows", () => {
     expect(post?.run).toContain("path=apps/web/e2e/network-baseline.json");
     expect(post?.run).toContain("subject_type=file");
     expect(post?.run).not.toContain("${{");
+  });
+
+  test("a recording that never reaches the branch fails on the pull request", () => {
+    const jobs = readWorkflowJobs("network-baseline-deliver.yml");
+    const deliver = jobs["deliver"] ?? expect.unreachable("deliver job");
+    expect(deliver.outputs?.["pr"]).toContain("steps.pr.outputs.pr");
+    expect(deliver.outputs?.["head"]).toContain("steps.artifact.outputs.head");
+    expect(deliver.outputs?.["push-allowed"]).toContain(
+      "steps.pr.outputs.push-allowed",
+    );
+    const deliverLevels = isRecord(deliver.permissions)
+      ? Object.values(deliver.permissions)
+      : [];
+    expect(deliverLevels.length).toBeGreaterThan(0);
+    expect(deliverLevels.every((level) => level === "read")).toBe(true);
+
+    const report = jobs["report-delivery"] ?? expect.unreachable("report job");
+    expect(report.needs).toBe("deliver");
+    // always(): the report exists for the case where deliver failed.
+    expect(report.if).toContain("always()");
+    expect(report.if).toContain("needs.deliver.outputs.pr != ''");
+    expect(report.permissions).toEqual({
+      issues: "write",
+      "pull-requests": "write",
+      statuses: "write",
+    });
+
+    const step = report.steps.find((candidate) =>
+      candidate.run?.includes('"repos/$REPOSITORY/statuses/$HEAD_SHA"'),
+    );
+    // always(): a failed label removal must not hide the report.
+    expect(step?.if).toBe(
+      "always() && needs.deliver.outputs.push-allowed == 'true'",
+    );
+    expect(step?.env?.["HEAD_SHA"]).toContain("needs.deliver.outputs.head");
+    expect(step?.env?.["DELIVERED"]).toContain(
+      "needs.deliver.outputs.committed == 'true'",
+    );
+    expect(step?.run).toContain("state=failure");
+    expect(step?.run).toContain(
+      '"repos/$REPOSITORY/issues/$PR_NUMBER/comments"',
+    );
+    expect(step?.run).not.toContain("${{");
+  });
+
+  test("every job that removes the recording label may write to pull requests", () => {
+    const jobs = readWorkflowJobs("network-baseline-deliver.yml");
+    const labelJobs = Object.entries(jobs).filter(([, job]) =>
+      job.steps.some((step) => step.run?.includes("labels/baseline%3Arecord")),
+    );
+    expect(labelJobs.map(([name]) => name).toSorted()).toEqual([
+      "remove-label-after-failure",
+      "report-delivery",
+    ]);
+    for (const [name, job] of labelJobs) {
+      expect(job.permissions, name).toMatchObject({
+        issues: "write",
+        "pull-requests": "write",
+      });
+    }
   });
 });
