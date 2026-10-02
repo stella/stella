@@ -122,7 +122,7 @@ test("resume requires a real fresh reading, including the exact fifteen minute b
 
 test("hysteresis follows full band crossings for every flapping sequence", async () => {
   const signals = await Promise.all(
-    Array.from({ length: 13 }, (_, offset) => read(64 + offset)),
+    Array.from({ length: 13 }, async (_, offset) => await read(64 + offset)),
   );
   assertProperty(
     "hysteresis follows full band crossings for every flapping sequence",
@@ -245,7 +245,7 @@ test("repeated holds preserve the original timestamp as time advances", async ()
 });
 
 for (const observedAt of [null, "invalid", new Date(now + 1).toISOString()]) {
-  test(`held work rejects a purported healthy reading with timestamp ${observedAt}`, async () => {
+  test(`held work rejects a purported healthy reading with timestamp ${String(observedAt)}`, async () => {
     const held = step(initialBatchState(config), await read(64)).state;
     expect(
       step(
