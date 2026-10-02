@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 
 import type { DocumentAst } from "@stll/legal-ast/document-ast";
@@ -23,6 +24,10 @@ import { buildCaseLawProjectionDocuments } from "@/api/lib/legal-search/corpus-i
 import type { CaseLawProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
 import { caseLawCorpusQueryFields } from "@/api/lib/legal-search/corpus-index-read-contract";
 import { caseLawCorpusQuery } from "@/api/lib/legal-search/corpus-query";
+import {
+  CORPUS_BM25_PASSAGE_LIMIT,
+  type CorpusIndexRankingMode,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
 import { RELEVANCE_ORDER } from "@/api/lib/legal-search/corpus-search-order";
 import {
   blendStableCitationAuthority,
@@ -226,11 +231,19 @@ const readScored = async (query: string, from: number, size: number) => {
   return result.value;
 };
 
-const readScanPage = async (
-  query: string,
-  parsedCursor: SearchCursor | null,
-  scanTransport: CorpusIndexScanTransport,
-) =>
+type ReadScanPageOptions = {
+  query: string;
+  parsedCursor: SearchCursor | null;
+  scanTransport: CorpusIndexScanTransport;
+  rankingMode?: CorpusIndexRankingMode;
+};
+
+const readScanPage = async ({
+  query,
+  parsedCursor,
+  scanTransport,
+  rankingMode = "off",
+}: ReadScanPageOptions) =>
   await readCorpusIndexSearchPage({
     observer: "unobserved",
     cluster: "q09",
@@ -240,6 +253,7 @@ const readScanPage = async (
     order: RELEVANCE_ORDER,
     parsedCursor,
     scanTransport,
+    rankingMode,
     snippetFields: ["text"],
     extractId: (hit) =>
       typeof hit["document_id"] === "string" ? hit["document_id"] : null,
@@ -346,6 +360,60 @@ describe.skipIf(!runEngineTests)(
     );
 
     test.each(ENTRIES)(
+      "a %s entry replays BM25 pages from the real scored universe",
+      async (_kind, entry) => {
+        const query = handlerQuery(entry);
+        const universe = await readScored(query, 0, CORPUS_BM25_PASSAGE_LIMIT);
+        expect(universe.hits.length).toBeGreaterThan(20);
+        const top = universe.hits.at(0)?.score;
+        if (top === undefined || top <= 0) {
+          panic("Expected a positive scored universe");
+        }
+        const best = new Map<string, number>();
+        for (const { fields, score } of universe.hits) {
+          const id = fields["document_id"];
+          if (typeof id !== "string" || best.has(id)) {
+            continue;
+          }
+          best.set(id, score);
+        }
+        const expected = blendStableCitationAuthority({
+          candidates: [...best].map(([id, score]) => ({
+            id,
+            score: (score / top) ** 0.25,
+          })),
+          authorityById: new Map(),
+        });
+        const seen: string[] = [];
+        let cursor: SearchCursor | null = null;
+        for (let page = 0; page < Math.ceil(expected.length / 20); page += 1) {
+          const read = await readScanPage({
+            query,
+            parsedCursor: cursor,
+            scanTransport: { type: "scored", fields: ["document_id"] },
+            rankingMode: "bm25-ratio",
+          });
+          expect(read.pageRanked).toEqual(
+            expected.slice(page * 20, (page + 1) * 20),
+          );
+          expect(read.lexicalScores?.bestScoreById).toEqual(best);
+          expect(read.scan.rounds).toBe(1);
+          expect(read.scan.highlightRounds).toBe(1);
+          expect(read.snippetById.size).toBeGreaterThan(0);
+          seen.push(...read.pageRanked.map(({ id }) => id));
+          cursor = read.nextCursor;
+          if (cursor !== null) {
+            expect(cursor.windowStart).toBe(0);
+          }
+        }
+        expect(cursor).toBeNull();
+        expect(seen).toEqual(expected.map(({ id }) => id));
+        expect(new Set(seen).size).toBe(seen.length);
+      },
+      ENGINE_TIMEOUT_MS,
+    );
+
+    test.each(ENTRIES)(
       "a %s entry scans to the same pages through both transports",
       async (_kind, entry) => {
         const query = handlerQuery(entry);
@@ -353,7 +421,11 @@ describe.skipIf(!runEngineTests)(
           const out: unknown[] = [];
           let cursor: SearchCursor | null = null;
           for (let page = 0; page < 3; page += 1) {
-            const read = await readScanPage(query, cursor, transport);
+            const read = await readScanPage({
+              query,
+              parsedCursor: cursor,
+              scanTransport: transport,
+            });
             const { indexMs: _indexMs, ...scan } = read.scan;
             out.push({
               pageRanked: read.pageRanked,

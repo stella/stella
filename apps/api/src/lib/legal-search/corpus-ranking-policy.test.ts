@@ -1,5 +1,8 @@
 import { afterEach, expect, test } from "bun:test";
+import fc from "fast-check";
 import * as v from "valibot";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";
 import {
@@ -22,6 +25,213 @@ const originalFetch = globalThis.fetch;
 afterEach(() => {
   globalThis.fetch = originalFetch;
 });
+
+const rankingTestOptions = {
+  observer: "unobserved",
+  cluster: "q09",
+  indexId: "case_law_v7_cs_sk",
+  query: "text:fiction",
+  order: RELEVANCE_ORDER,
+  scanTransport: { type: "scored", fields: ["document_id"] },
+  limit: 40,
+  parsedCursor: null,
+  snippetFields: [],
+  extractId: (hit) =>
+    typeof hit["document_id"] === "string" ? hit["document_id"] : null,
+  extractSnippet: () => null,
+  unseenScoreUpperBound: stableBlendUpperBound,
+  rankCandidates: async (candidates) => ({
+    context: null,
+    ranked: blendStableCitationAuthority({
+      candidates,
+      authorityById: new Map(),
+    }),
+  }),
+} satisfies Parameters<typeof readCorpusIndexSearchPage>[0];
+
+const stubRankingScores = (scores: readonly number[]) => {
+  globalThis.fetch = Object.assign(
+    async (
+      _input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1],
+    ) => {
+      const body = JSON.parse(String(init?.body));
+      const hits = scores.map((score, rank) => ({
+        _source: {
+          document_id: `doc-${rank}`,
+          chunk_id: `passage-${rank}`,
+          anchor_id: `anchor-${rank}`,
+        },
+        _score: score,
+      }));
+      return new Response(
+        JSON.stringify({
+          hits: {
+            total: { value: hits.length },
+            hits: hits.slice(body.from, body.from + body.size),
+          },
+        }),
+      );
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+};
+
+const orderedPositiveScores = fc
+  .array(fc.integer({ min: 1, max: 1_000_000 }), {
+    minLength: 2,
+    maxLength: 40,
+  })
+  .map((scores) => scores.toSorted((left, right) => right - left));
+
+test("BM25 normalization preserves ordering and pages under positive score scaling", async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      orderedPositiveScores,
+      fc.constantFrom(-8, -4, -1, 1, 4, 8),
+      fc.integer({ min: 1, max: 6 }),
+      async (scores, exponent, limit) => {
+        stubRankingScores(scores);
+        const first = await readCorpusIndexSearchPage({
+          ...rankingTestOptions,
+          rankingMode: "bm25-ratio",
+          limit,
+        });
+        const whole = await readCorpusIndexSearchPage({
+          ...rankingTestOptions,
+          rankingMode: "bm25-ratio",
+        });
+        const lexicalScores = whole.pageRanked.map((hit) => hit.lexicalScore);
+        expect(lexicalScores.at(0)).toBe(1);
+        expect(lexicalScores.every((score) => score > 0 && score <= 1)).toBe(
+          true,
+        );
+        expect(lexicalScores).toEqual(
+          lexicalScores.toSorted((left, right) => right - left),
+        );
+        expect(new Set(whole.pageRanked.map((hit) => hit.id)).size).toBe(
+          scores.length,
+        );
+
+        stubRankingScores(scores.map((score) => score * 2 ** exponent));
+        const scaled = await readCorpusIndexSearchPage({
+          ...rankingTestOptions,
+          rankingMode: "bm25-ratio",
+          limit,
+        });
+        expect(scaled.pageRanked).toEqual(first.pageRanked);
+        expect(scaled.nextCursor).toEqual(first.nextCursor);
+        if (first.nextCursor !== null) {
+          const continuation = await readCorpusIndexSearchPage({
+            ...rankingTestOptions,
+            rankingMode: "bm25-ratio",
+            limit,
+            parsedCursor: first.nextCursor,
+          });
+          expect(continuation.pageRanked).toEqual(
+            whole.pageRanked.slice(limit, limit * 2),
+          );
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
+test("omitting the ranking flag preserves explicit OFF pages and cursors", async () => {
+  await fc.assert(
+    fc.asyncProperty(
+      orderedPositiveScores,
+      fc.integer({ min: 1, max: 6 }),
+      async (scores, limit) => {
+        stubRankingScores(scores);
+        const options = { ...rankingTestOptions, limit };
+        const defaultPage = await readCorpusIndexSearchPage(options);
+        const offPage = await readCorpusIndexSearchPage({
+          ...options,
+          rankingMode: "off",
+        });
+        expect({
+          ...defaultPage,
+          scan: { ...defaultPage.scan, indexMs: 0 },
+        }).toEqual({
+          ...offPage,
+          scan: { ...offPage.scan, indexMs: 0 },
+        });
+        if (defaultPage.nextCursor !== null) {
+          const continuationOptions = {
+            ...options,
+            parsedCursor: defaultPage.nextCursor,
+          };
+          const defaultContinuation =
+            await readCorpusIndexSearchPage(continuationOptions);
+          const offContinuation = await readCorpusIndexSearchPage({
+            ...continuationOptions,
+            rankingMode: "off",
+          });
+          expect({
+            ...defaultContinuation,
+            scan: { ...defaultContinuation.scan, indexMs: 0 },
+          }).toEqual({
+            ...offContinuation,
+            scan: { ...offContinuation.scan, indexMs: 0 },
+          });
+        }
+      },
+    ),
+    propertyConfig(),
+  );
+});
+
+test("an empty BM25 universe returns no page, cursor or passage metadata", async () => {
+  stubRankingScores([]);
+  const page = await readCorpusIndexSearchPage({
+    ...rankingTestOptions,
+    rankingMode: "bm25-ratio",
+  });
+  expect(page.pageRanked).toEqual([]);
+  expect(page.nextCursor).toBeNull();
+  expect(page.anchorIdById.size).toBe(0);
+  expect(page.passageCountById.size).toBe(0);
+  expect(page.snippetById.size).toBe(0);
+  expect(page.lexicalScores?.topScore).toBeNull();
+  expect(page.lexicalScores?.bestScoreById.size).toBe(0);
+  expect(page.scan.passagesScanned).toBe(0);
+});
+
+test("BM25 ranking drops rejected identities before passage metadata and hydration", async () => {
+  stubRankingScores([100, 80]);
+  const page = await readCorpusIndexSearchPage({
+    ...rankingTestOptions,
+    rankingMode: "bm25-ratio",
+    extractId: (hit) => (hit["document_id"] === "doc-0" ? null : "doc-1"),
+  });
+  expect(page.pageRanked.map((hit) => hit.id)).toEqual(["doc-1"]);
+  expect(page.nextCursor).toBeNull();
+  expect([...page.anchorIdById.keys()]).toEqual(["doc-1"]);
+  expect([...page.passageCountById]).toEqual([["doc-1", 1]]);
+  expect(page.lexicalScores?.bestScoreById).toEqual(new Map([["doc-1", 80]]));
+});
+
+test.each([
+  {
+    scores: [-1],
+    message: "BM25 ratio ranking requires a nonnegative top score",
+  },
+  { scores: [1, -1], message: "BM25 ratio ranking received an invalid score" },
+  { scores: [1, 2], message: "BM25 ratio ranking received an invalid score" },
+])(
+  "BM25 ranking rejects invalid engine scores $scores",
+  async ({ scores, message }) => {
+    stubRankingScores(scores);
+    await expect(
+      readCorpusIndexSearchPage({
+        ...rankingTestOptions,
+        rankingMode: "bm25-ratio",
+      }),
+    ).rejects.toThrow(message);
+  },
+);
 
 test("the experimental ranking defaults off and rejects unknown modes", () => {
   const schema = envBaseServerSchema.CORPUS_INDEX_RANKING_MODE;
@@ -172,6 +382,13 @@ test("BM25 ranking refuses a moving window or a transport without scores", async
         windowStart: 900,
         sort: "relevance",
       },
+    }),
+  ).rejects.toThrow("BM25 ranking requires");
+  await expect(
+    readCorpusIndexSearchPage({
+      ...base,
+      scanTransport: { type: "scored", fields: ["document_id"] },
+      order: { type: "newest", timestampField: "decision_date_ts" },
     }),
   ).rejects.toThrow("BM25 ranking requires");
 });
