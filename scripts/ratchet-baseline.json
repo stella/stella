@@ -990,6 +990,7 @@
       "apps/api/src/scripts/cz-regional-repair.ts": 3,
       "apps/api/src/scripts/decision-analysis-candidates.ts": 1,
       "apps/api/src/scripts/eu-ecj-census.ts": 1,
+      "apps/api/src/scripts/eu-ecj-formex-refresh.ts": 2,
       "apps/api/src/scripts/eu-ecj-refetch.ts": 2,
       "apps/api/src/scripts/normalize-case-numbers.ts": 1,
       "apps/api/src/scripts/repair-case-law-jsonb.ts": 1,
