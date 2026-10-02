@@ -255,6 +255,25 @@ test("stale, duplicate and incomplete artifact unions cannot replace the census"
   }
 });
 
+test("shards from different measurement runs cannot form a census", () => {
+  const f = fixture();
+  try {
+    f.receipt("a.json", artifact([measurement()], 50));
+    f.receipt(
+      "b.json",
+      artifact([measurement(SECOND, 99.5)], 30, {
+        runId: "456",
+        job: "measure-2",
+      }),
+    );
+    expect(() => f.refresh()).toThrow(
+      "Measurement receipts come from different runs: 123 and 456",
+    );
+  } finally {
+    f.clean();
+  }
+});
+
 test("missing receipts, malformed JSON and overflowed peaks fail closed", () => {
   const f = fixture();
   try {

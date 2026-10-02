@@ -186,6 +186,7 @@ export const refreshTestPeakRss = ({
   const current = new Set(files);
   const measured = new Map<string, TestRssFile>();
   let environment: TestRssEnvironment | undefined;
+  let runId: string | undefined;
   let baselineMb = 0;
   const receipts = [
     ...new Bun.Glob("**/*.json").scanSync({
@@ -203,6 +204,13 @@ export const refreshTestPeakRss = ({
       expectedEnvironment: environment,
     });
     environment = shard.environment;
+    // Disjoint shards from different runs could still form a complete census.
+    runId ??= shard.source.runId;
+    if (shard.source.runId !== runId) {
+      reject(
+        `Measurement receipts come from different runs: ${runId} and ${shard.source.runId}`,
+      );
+    }
     baselineMb = Math.max(baselineMb, shard.baselineMb);
     for (const value of shard.measurements) {
       const { file, row } = parseMeasurement({
