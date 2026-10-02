@@ -12,6 +12,7 @@ import {
 import type { createRedisRateLimit } from "@/api/lib/rate-limit/redis-context";
 
 import {
+  createPublicStatuteSearchRateLimitOptions,
   isPublicStatuteSearchRateLimitedRequest,
   PUBLIC_STATUTE_SEARCH_PATH,
   publicStatuteSearchRateLimitKey,
@@ -75,6 +76,20 @@ describe("public statute search request budget", () => {
     expect(firstKey).toBe("public-statute-search:192.0.2.1");
   });
 
+  test("configures an independent 30-request, 60,000 ms search budget", () => {
+    const context = new InMemoryRateLimitContext();
+    try {
+      const options = createPublicStatuteSearchRateLimitOptions(() => ({
+        context,
+        generator: publicStatuteSearchRateLimitKey,
+      }));
+      expect(options.max).toBe(30);
+      expect(options.duration).toBe(60_000);
+    } finally {
+      context.kill();
+    }
+  });
+
   test("the server installs both halves of the exercised production composition", async () => {
     const source = await Bun.file(
       new URL("../../server.ts", import.meta.url),
@@ -113,11 +128,7 @@ describe("public statute search request budget", () => {
           { scope: "api", failurePolicy: "fail_open_local" },
           { scope: "public-statute-search", failurePolicy: "fail_open_local" },
         ]);
-        for (
-          let index = 0;
-          index < API_RATE_LIMITS.publicStatuteSearch.max;
-          index += 1
-        ) {
+        for (let index = 0; index < 30; index += 1) {
           expect((await app.handle(request(searchPath, method))).status).toBe(
             200,
           );
@@ -128,12 +139,8 @@ describe("public statute search request budget", () => {
           expect(await limited.text()).toBe("rate-limit reached");
         }
         expect(limited.headers.get("retry-after")).toMatch(/^\d+$/u);
-        expect(limited.headers.get("ratelimit-limit")).toBe(
-          String(API_RATE_LIMITS.publicStatuteSearch.max),
-        );
-        expect(searchKeys).toHaveLength(
-          API_RATE_LIMITS.publicStatuteSearch.max + 1,
-        );
+        expect(limited.headers.get("ratelimit-limit")).toBe("30");
+        expect(searchKeys).toHaveLength(31);
         expect(new Set(searchKeys)).toEqual(new Set(["public-statute-search"]));
         expect(sharedKeys).toEqual([]);
         expect((await app.handle(request("/v1/law/statutes"))).status).toBe(
@@ -141,9 +148,7 @@ describe("public statute search request budget", () => {
         );
         expect((await app.handle(request("/v1/other"))).status).toBe(429);
         expect(sharedKeys).toEqual(["api", "api"]);
-        expect(searchKeys).toHaveLength(
-          API_RATE_LIMITS.publicStatuteSearch.max + 1,
-        );
+        expect(searchKeys).toHaveLength(31);
       } finally {
         kill();
       }
