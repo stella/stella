@@ -21,6 +21,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
 import { ensureLegacyWorkObligation } from "@/api/lib/work-obligations/legacy-work-obligation";
 import { lockWorkObligation } from "@/api/lib/work-obligations/lock-work-obligation";
 
@@ -86,6 +87,7 @@ const selfAssignsOverAnotherOwner = (
   existing.ownerUserId !== currentUserId;
 
 type WorkObligationTransitionViolation =
+  | "flow_source_change"
   | "target_after_deadline"
   | "delegation_reason_required"
   | "deadline_reason_required";
@@ -100,6 +102,12 @@ const workObligationTransitionViolation = ({
   existing: LockedWorkObligation;
   reason: string | undefined;
 }): WorkObligationTransitionViolation | null => {
+  if (
+    body.sourceType !== undefined &&
+    existing.sourceType === WORK_OBLIGATION_SOURCE.FLOW
+  ) {
+    return "flow_source_change";
+  }
   const nextWorkingTargetDate =
     body.workingTargetDate === undefined
       ? existing.workingTargetDate
@@ -172,6 +180,28 @@ const updateWorkObligation = createSafeHandler(
         new HandlerError({
           status: 400,
           message: "No workflow change provided",
+        }),
+      );
+    }
+
+    // Gate tasks are created together with their immutable step link, so
+    // this ownership preflight cannot turn an existing task into a gate.
+    const reviewGate =
+      body.sourceType === undefined
+        ? undefined
+        : yield* Result.await(
+            safeDb((tx) =>
+              reviewGateForTask(tx, {
+                workspaceId,
+                taskEntityId: params.entityId,
+              }),
+            ),
+          );
+    if (reviewGate) {
+      return Result.err(
+        new HandlerError({
+          status: 409,
+          message: "A workflow review task's source cannot be changed",
         }),
       );
     }
@@ -515,6 +545,13 @@ const updateWorkObligation = createSafeHandler(
           new HandlerError({
             status: 400,
             message: "Source must belong to this workspace",
+          }),
+        );
+      case "flow_source_change":
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "A workflow review task's source cannot be changed",
           }),
         );
       case "closed_owner_change":

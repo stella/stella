@@ -7,6 +7,7 @@ import { Temporal } from "@stll/time";
 
 import type { rootDb, Transaction } from "@/api/db/root";
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
+import { abortableTx } from "@/api/db/safe-db";
 import {
   entities,
   flowRuns,
@@ -213,6 +214,19 @@ export const executeFlowStep = async (
 
   // Mark the step (and run) running. Broadcast so the UI shows progress.
   const startedPayload = await scopedDb(async (tx) => {
+    const current = await lockRunAndCurrentStep(tx, {
+      workspaceId: run.workspaceId,
+      runId,
+    });
+    if (
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex ||
+      current.step?.status === "completed" ||
+      current.step?.status === "skipped" ||
+      current.step?.status === "awaiting_review"
+    ) {
+      return null;
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "running", startedAt: new Date() })
@@ -225,6 +239,9 @@ export const executeFlowStep = async (
       .where(eq(flowRuns.id, runId));
     return await readRunProgress(tx, runId);
   });
+  if (startedPayload === null) {
+    return;
+  }
   broadcastUpdate(run.workspaceId, startedPayload);
 
   switch (stepDef.kind) {
@@ -835,7 +852,15 @@ const completeStepAndAdvance = async ({
   const advance = advanceAfterStep({ stepIndex, stepCount });
   const now = new Date();
 
-  const { payload, pings } = await scopedDb(async (tx) => {
+  const completed = await scopedDb(async (tx) => {
+    const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+    if (
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex ||
+      current.step?.status !== "running"
+    ) {
+      return null;
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "completed", output, finishedAt: now })
@@ -873,6 +898,10 @@ const completeStepAndAdvance = async ({
     return { payload: await readRunProgress(tx, runId), pings: runPings };
   });
 
+  if (completed === null) {
+    return;
+  }
+  const { payload, pings } = completed;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
 
@@ -986,7 +1015,15 @@ const pauseAtReviewGate = async ({
     actorUserId,
   });
   const features = taskFeatures;
-  const { payload, pings, taskEntityId } = await scopedDb(async (tx) => {
+  const paused = await scopedDb(async (tx) => {
+    const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+    if (
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex ||
+      current.step?.status !== "running"
+    ) {
+      return null;
+    }
     // A redelivered job must not raise a second task: the step keeps the one
     // it already raised and only the status writes below are repeated.
     const stepRows = await tx
@@ -1037,6 +1074,10 @@ const pauseAtReviewGate = async ({
       taskEntityId: reviewTaskEntityId,
     };
   });
+  if (paused === null) {
+    return;
+  }
+  const { payload, pings, taskEntityId } = paused;
   broadcastUpdate(workspaceId, payload);
   pingNotificationRecipients(pings);
   flushEntitySearchRepairs([taskEntityId]).catch(captureError);
@@ -1109,6 +1150,16 @@ export const failFlowRunFromWorker = async (
   const writeFailure = async (
     tx: Transaction,
   ): Promise<{ payload: FlowRunUpdatePayload; pings: NotificationPing[] }> => {
+    const current = await lockRunAndCurrentStep(tx, {
+      workspaceId: run.workspaceId,
+      runId,
+    });
+    if (
+      isTerminalFlowRunStatus(current.run.status) ||
+      current.run.currentStepIndex !== stepIndex
+    ) {
+      return { payload: await readRunProgress(tx, runId), pings: [] };
+    }
     await tx
       .update(flowRunSteps)
       .set({ status: "failed", error: message, finishedAt: now })
@@ -1181,11 +1232,47 @@ export type ResolveFlowReviewGateOptions = {
   workspaceId: SafeId<"workspace">;
   organizationId: SafeId<"organization">;
   runId: SafeId<"flowRun">;
+  reviewTaskEntityId?: SafeId<"entity">;
   userId: SafeId<"user">;
   decision: FlowReviewDecision;
   note: string | null;
   /** Records the review task's settlement as the reviewer's own act. */
   recordAuditEvent: AuditRecorder;
+};
+
+type LockRunAndCurrentStepOptions = {
+  workspaceId: SafeId<"workspace">;
+  runId: SafeId<"flowRun">;
+};
+
+/** All review and cancellation writers lock the run before its current step. */
+const lockRunAndCurrentStep = async (
+  tx: Transaction,
+  { workspaceId, runId }: LockRunAndCurrentStepOptions,
+) => {
+  const runs = await tx
+    .select()
+    .from(flowRuns)
+    .where(and(eq(flowRuns.id, runId), eq(flowRuns.workspaceId, workspaceId)))
+    .limit(1)
+    .for("update");
+  const run = runs.at(0);
+  if (!run) {
+    throw new HandlerError({ status: 404, message: "Flow run not found" });
+  }
+  const steps = await tx
+    .select()
+    .from(flowRunSteps)
+    .where(
+      and(
+        eq(flowRunSteps.runId, runId),
+        eq(flowRunSteps.workspaceId, workspaceId),
+        eq(flowRunSteps.index, run.currentStepIndex),
+      ),
+    )
+    .limit(1)
+    .for("update");
+  return { run, step: steps.at(0) };
 };
 
 /**
@@ -1199,6 +1286,7 @@ export const resolveFlowReviewGate = async (
     workspaceId,
     organizationId,
     runId,
+    reviewTaskEntityId,
     userId,
     decision,
     note,
@@ -1219,72 +1307,43 @@ export const resolveFlowReviewGate = async (
   } = {},
 ): Promise<Result<FlowRunActionResult, HandlerError | SafeDbError>> =>
   await Result.gen(async function* () {
-    const run = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.flowRuns.findFirst({
-          where: { id: { eq: runId }, workspaceId: { eq: workspaceId } },
-          columns: {
-            id: true,
-            status: true,
-            currentStepIndex: true,
-            definitionId: true,
-            triggerSource: true,
-            definitionSnapshot: true,
-          },
-        }),
-      ),
-    );
-    if (!run) {
-      return Result.err(
-        new HandlerError({ status: 404, message: "Flow run not found" }),
-      );
-    }
-    if (!canReviewFlowRun(run.status)) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "This run is not awaiting review.",
-        }),
-      );
-    }
-
-    const stepIndex = run.currentStepIndex;
-    const step = yield* Result.await(
-      safeDb((tx) =>
-        tx.query.flowRunSteps.findFirst({
-          where: { runId: { eq: runId }, index: { eq: stepIndex } },
-          columns: { kind: true, status: true, reviewTaskEntityId: true },
-        }),
-      ),
-    );
-    if (
-      !step ||
-      step.kind !== "review-gate" ||
-      step.status !== "awaiting_review"
-    ) {
-      return Result.err(
-        new HandlerError({
-          status: 409,
-          message: "This run has no open review gate.",
-        }),
-      );
-    }
-
-    const resolution = resolveReviewGateTransition({
-      decision,
-      stepIndex,
-      stepCount: run.definitionSnapshot.steps.length,
-    });
-    const output: FlowStepOutput = {
-      kind: "review-gate",
-      decision,
-      userId,
-      note,
-    };
-    const now = new Date();
-
     const result = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        const { run, step } = await lockRunAndCurrentStep(tx, {
+          workspaceId,
+          runId,
+        });
+        if (!canReviewFlowRun(run.status)) {
+          throw new HandlerError({
+            status: 409,
+            message: "This run is not awaiting review.",
+          });
+        }
+        if (
+          !step ||
+          step.kind !== "review-gate" ||
+          step.status !== "awaiting_review" ||
+          (reviewTaskEntityId !== undefined &&
+            step.reviewTaskEntityId !== reviewTaskEntityId)
+        ) {
+          throw new HandlerError({
+            status: 409,
+            message: "This run has no open review gate.",
+          });
+        }
+        const stepIndex = run.currentStepIndex;
+        const resolution = resolveReviewGateTransition({
+          decision,
+          stepIndex,
+          stepCount: run.definitionSnapshot.steps.length,
+        });
+        const output: FlowStepOutput = {
+          kind: "review-gate",
+          decision,
+          userId,
+          note,
+        };
+        const now = new Date();
         await tx
           .update(flowRunSteps)
           .set({ status: "completed", output, finishedAt: now })
@@ -1321,11 +1380,8 @@ export const resolveFlowReviewGate = async (
           })
           .where(eq(flowRuns.id, runId));
 
-        // A rejected gate makes the run terminal without advancing, so any
-        // later step rows stay `pending` and no worker ever enqueues them.
-        // Mirror `cancelFlowRun`: mark the abandoned non-terminal steps
-        // `skipped` so the run history reflects what actually happened. The
-        // just-resolved gate is already `completed` above, so it is excluded.
+        // Mark abandoned steps skipped when the decision is terminal. The
+        // just-resolved gate is completed above and therefore excluded.
         if (resolution.kind !== "advance") {
           await tx
             .update(flowRunSteps)
@@ -1350,12 +1406,15 @@ export const resolveFlowReviewGate = async (
         });
 
         return {
+          run,
+          resolution,
           nextStatus,
           payload: await readRunProgress(tx, runId),
         };
       }),
     );
 
+    const { run, resolution } = result;
     broadcastUpdate(workspaceId, result.payload);
 
     // Approving the last gate is the run's other terminal path: the worker
@@ -1443,7 +1502,7 @@ export const cancelFlowRun = async ({
       safeDb((tx) =>
         tx.query.flowRuns.findFirst({
           where: { id: { eq: runId }, workspaceId: { eq: workspaceId } },
-          columns: { id: true, status: true },
+          columns: { id: true, status: true, currentStepIndex: true },
         }),
       ),
     );
@@ -1463,7 +1522,21 @@ export const cancelFlowRun = async ({
 
     const now = new Date();
     const payload = yield* Result.await(
-      safeDb(async (tx) => {
+      abortableTx(safeDb, async (tx) => {
+        const current = await lockRunAndCurrentStep(tx, { workspaceId, runId });
+        // A cancellation applies to the state its caller observed. A later
+        // request may cancel an advanced run; an overlapping request cannot
+        // replace the gate decision that committed while it waited.
+        if (
+          isTerminalFlowRunStatus(current.run.status) ||
+          current.run.status !== run.status ||
+          current.run.currentStepIndex !== run.currentStepIndex
+        ) {
+          throw new HandlerError({
+            status: 409,
+            message: "This run changed before it could be cancelled.",
+          });
+        }
         await tx
           .update(flowRuns)
           .set({ status: "cancelled", finishedAt: now })

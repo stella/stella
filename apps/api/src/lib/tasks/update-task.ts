@@ -11,7 +11,6 @@ import {
   entities,
   LIST_ITEM_TYPES,
   WORK_OBLIGATION_EVENT_TYPE,
-  WORK_OBLIGATION_SOURCE,
   WORK_OBLIGATION_STATUS,
   WORK_OBLIGATION_TYPE,
   workObligationEvents,
@@ -38,7 +37,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { FlowReviewDecision } from "@/api/lib/flows/flow-types";
 import {
   decideGateForTask,
-  gateDecisionForTransition,
+  gateDecisionForTaskStatus,
 } from "@/api/lib/flows/review-gate-task";
 import {
   agendaFieldsBodySchema,
@@ -593,25 +592,13 @@ const applyTaskUpdate = async function* ({
       // gate's decision, whichever surface asks for it. Nothing is written
       // here: the decision is taken once this transaction has released the
       // row, and the run then settles the task itself.
-      if (
-        workflow?.sourceType === WORK_OBLIGATION_SOURCE.FLOW &&
-        body.status !== undefined
-      ) {
-        const intent = workObligationIntentForTaskStatus({
-          currentStatus: workflow.status,
-          requestedTaskStatus: body.status,
-        });
-        if (intent.type === "transition") {
-          const decision = gateDecisionForTransition(intent.action);
-          if (decision === null) {
-            throw new HandlerError({
-              status: 409,
-              message:
-                "A workflow review cannot be reopened; start the workflow again instead",
-            });
-          }
-          return { type: "gate" as const, decision };
-        }
+      const decision = await gateDecisionForTaskStatus(tx, {
+        workspaceId,
+        taskEntityId: body.taskId,
+        requestedStatus: body.status,
+      });
+      if (decision !== null) {
+        return { type: "gate" as const, decision };
       }
 
       const eligibility = await listItemTypeTransition({

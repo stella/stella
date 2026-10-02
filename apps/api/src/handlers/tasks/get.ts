@@ -1,10 +1,9 @@
 import { Result } from "better-result";
-import { and, eq } from "drizzle-orm";
 
-import { flowRunSteps, WORK_OBLIGATION_SOURCE } from "@/api/db/schema";
 import { createSafeHandler } from "@/api/lib/api-handlers";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { reviewGateForTask } from "@/api/lib/flows/review-gate-task";
 
 const readTaskByIdParamsSchema = workspaceParams({ taskId: tSafeId("entity") });
 
@@ -167,24 +166,12 @@ const readTaskById = createSafeHandler(
 
     // The task a workflow review gate raised opens onto its run: the gate's
     // instructions and the AI output under review live there, not here.
-    const gateRuns =
-      task.workObligation?.sourceType === WORK_OBLIGATION_SOURCE.FLOW
-        ? yield* Result.await(
-            safeDb((tx) =>
-              tx
-                .select({ runId: flowRunSteps.runId })
-                .from(flowRunSteps)
-                .where(
-                  and(
-                    eq(flowRunSteps.workspaceId, workspaceId),
-                    eq(flowRunSteps.reviewTaskEntityId, params.taskId),
-                  ),
-                )
-                .limit(1),
-            ),
-          )
-        : [];
-    const gateRunId = gateRuns.at(0)?.runId ?? null;
+    const gate = yield* Result.await(
+      safeDb((tx) =>
+        reviewGateForTask(tx, { workspaceId, taskEntityId: params.taskId }),
+      ),
+    );
+    const gateRunId = gate?.runId ?? null;
 
     return Result.ok({
       ...task,
