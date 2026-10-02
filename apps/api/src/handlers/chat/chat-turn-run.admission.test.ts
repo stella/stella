@@ -33,6 +33,7 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             releases += 1;
             await Promise.resolve();
@@ -154,6 +155,7 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission: {
         signal: admission.signal,
+        reservePeriod: async () => Result.ok(undefined),
         release: async () => {
           releases += 1;
           await Promise.resolve();
@@ -234,6 +236,7 @@ describe("chat run admission follows owned settlement", () => {
     const run = new ChatTurnRun({
       admission: {
         signal: new AbortController().signal,
+        reservePeriod: async () => Result.ok(undefined),
         release: async () => {
           releaseStarted.resolve(undefined);
           await releaseMayFinish.promise;
@@ -359,6 +362,7 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             await Promise.resolve();
           },
@@ -471,6 +475,7 @@ describe("chat run admission follows owned settlement", () => {
       const run = new ChatTurnRun({
         admission: {
           signal: admission.signal,
+          reservePeriod: async () => Result.ok(undefined),
           release: async () => {
             releases += 1;
             await Promise.resolve();
@@ -608,6 +613,11 @@ describe("chat run admission follows owned settlement", () => {
       },
     };
     const acquired = await startChatExecutionAdmission({
+      mode: "action",
+      periodIdentity: {
+        actionKind: "chat.send",
+        logicalPhaseId: "thread:hanging",
+      },
       enabled: true,
       organizationId: toSafeId<"organization">("organization_hanging"),
       userId: toSafeId<"user">("user_hanging"),

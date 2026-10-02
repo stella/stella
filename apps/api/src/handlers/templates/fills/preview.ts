@@ -28,7 +28,7 @@ const config = {
   // usage), so a read-only role must not reach it.
   permissions: { template: ["use"] },
   access: "read",
-  mcp: { type: "covered", by: "fill_template" },
+  mcp: { type: "covered", by: "fill_template", readClass: "tenant" },
   params: fillPreviewParamsSchema,
   body: fillPreviewBodySchema,
 } satisfies HandlerConfig;

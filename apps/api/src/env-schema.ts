@@ -11,6 +11,7 @@ import {
 import { featureFlagSchema } from "@/api/env-base-schema";
 import { SIGNUP_RATE_LIMIT_IP_SOURCE } from "@/api/lib/client-ip-config";
 import { isTimestampAuthorityUrlList } from "@/api/lib/files/pdf-signing/timestamp-authority-urls";
+import { MCP_READ_MAX_ENTRIES } from "@/api/lib/rate-limit/mcp-read-fence-policy";
 import {
   isSecureGotenbergUrl,
   isTlsOrLoopbackUrl,
@@ -334,6 +335,61 @@ export const envApiServerSchema = {
   FEATURE_TODOS: featureFlagSchema,
   FEATURE_MCP: featureFlagSchema,
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
+  FEATURE_MCP_READ_FENCE: featureFlagSchema,
+  MCP_READ_WINDOW_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_TENANT_ORG_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_TENANT_USER_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_PUBLIC_ORG_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_PUBLIC_USER_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  MCP_READ_WINDOW_MAX_ENTRIES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MCP_READ_MAX_ENTRIES),
+    ),
+  ),
   ACTION_LIMIT_CONTACT_URL: v.optional(
     v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
   ),
@@ -368,6 +424,25 @@ export const envApiServerSchema = {
     ),
   ),
   ACTION_PAGE_SIZE_MAX: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  FEATURE_ORG_SERVICE_BUDGETS: featureFlagSchema,
+  SERVICE_ACTIONS_EVALUATION_PERIOD_ACTIONS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  SERVICE_ACTIONS_SELF_MANAGED_ACTIONS: v.optional(
     v.pipe(
       v.string(),
       v.toNumber(),
@@ -639,7 +714,9 @@ type EnvApiInvariantInput = {
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
   EMAIL_PROVIDER?: "ses" | "smtp" | undefined;
+  FEATURE_ACTION_ADMISSION?: boolean | undefined;
   FEATURE_ORG_ACCESS_STATE?: boolean | undefined;
+  FEATURE_ORG_SERVICE_BUDGETS?: boolean | undefined;
   FRONTEND_URL: string;
   GOTENBERG_URL: string;
   MICROSOFT_AUTH_CLIENT_ID?: string | undefined;
@@ -663,7 +740,9 @@ export const envApiInvariantViolation = ({
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
   EMAIL_PROVIDER,
+  FEATURE_ACTION_ADMISSION,
   FEATURE_ORG_ACCESS_STATE,
+  FEATURE_ORG_SERVICE_BUDGETS,
   FRONTEND_URL,
   GOTENBERG_URL,
   MICROSOFT_AUTH_CLIENT_ID,
@@ -722,6 +801,9 @@ export const envApiInvariantViolation = ({
   }
   if (FEATURE_ORG_ACCESS_STATE && ORG_EVALUATION_PERIOD_DAYS === undefined) {
     return "ORG_EVALUATION_PERIOD_DAYS is required when FEATURE_ORG_ACCESS_STATE is true.";
+  }
+  if (FEATURE_ORG_SERVICE_BUDGETS && !FEATURE_ACTION_ADMISSION) {
+    return "FEATURE_ORG_SERVICE_BUDGETS requires FEATURE_ACTION_ADMISSION.";
   }
   if (
     (MICROSOFT_AUTH_CLIENT_ID || MICROSOFT_AUTH_CLIENT_SECRET) &&

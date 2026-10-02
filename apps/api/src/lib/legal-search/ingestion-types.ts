@@ -7,6 +7,7 @@ import type {
   DecisionTextFieldKey,
   ReadDecisionTextFields,
 } from "@stll/api-contract/case-law-text-field";
+import type { DecisionDocumentRole } from "@stll/api-contract/decision-document-role";
 import type {
   DecisionIdentifiers,
   DecisionPrimaryReferenceType,
@@ -169,6 +170,8 @@ export type IngestionResult = {
   language: string;
   decisionDate?: string | undefined;
   decisionType?: string | undefined;
+  /** Declared publisher enum only; omission means unknown, never ruling. */
+  documentRole?: DecisionDocumentRole | undefined;
   fulltext?: string | undefined;
   sourceUrl?: string | undefined;
   documentUrl?: string | undefined;

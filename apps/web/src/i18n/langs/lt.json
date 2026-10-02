@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Santrauka",
+      "caseFileMayHoldOthers": "Šioje byloje gali būti ir kitų sprendimų.",
       "citedBy": "Cituojama",
       "cites": "Cituoja",
       "dissentByline": "Atskiroji nuomonė: <bdi>{names}</bdi>",

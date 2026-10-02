@@ -3,6 +3,10 @@ import { SQL } from "bun";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { TEXT_ABSENCE_REASONS } from "@stll/api-contract/case-law-text-field";
+import {
+  DECISION_DOCUMENT_ROLE,
+  DECISION_DOCUMENT_ROLE_METADATA_KEY,
+} from "@stll/api-contract/decision-document-role";
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
 import type { DecisionIdentifiers } from "@stll/legal-ast/decision-identifier";
 
@@ -107,6 +111,52 @@ const testSourceLease = (
 
 afterEach(() => {
   czNsAdapter.fetchPage = originalCzNsFetchPage;
+});
+
+describe("publisher document role persistence", () => {
+  test.each(Object.values(DECISION_DOCUMENT_ROLE))(
+    "projects the typed %s role and converges without changing stated types",
+    (documentRole) => {
+      const input = {
+        ...baseResult(EMPTY_AST),
+        documentRole,
+        decisionType: "uzasadnienie bez sentencji",
+        metadata: {
+          [DECISION_DOCUMENT_ROLE_METADATA_KEY]: "untrusted",
+          decisionType: "uzasadnienie bez sentencji",
+          publisherField: "REASONS",
+        },
+      };
+      const stored = sanitizeResult(input);
+      expect(stored.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
+        documentRole,
+      );
+      expect(stored.documentRole).toBe(documentRole);
+      expect(stored.decisionType).toBe(input.decisionType);
+      expect(stored.metadata["decisionType"]).toBe(input.metadata.decisionType);
+      expect(input.metadata[DECISION_DOCUMENT_ROLE_METADATA_KEY]).toBe(
+        "untrusted",
+      );
+      expect(sanitizeResult(stored)).toEqual(stored);
+    },
+  );
+
+  test("omission is unknown even when raw metadata or localized type claims a role", () => {
+    const input = {
+      ...baseResult(EMPTY_AST),
+      decisionType: "uzasadnienie",
+      metadata: {
+        [DECISION_DOCUMENT_ROLE_METADATA_KEY]: DECISION_DOCUMENT_ROLE.RULING,
+      },
+    };
+    const stored = sanitizeResult(input);
+    expect(stored.documentRole).toBeUndefined();
+    expect(
+      Object.hasOwn(stored.metadata, DECISION_DOCUMENT_ROLE_METADATA_KEY),
+    ).toBe(false);
+    expect(stored.decisionType).toBe(input.decisionType);
+    expect(sanitizeResult(stored)).toEqual(stored);
+  });
 });
 
 describe("sanitizeResult — decision text fields", () => {

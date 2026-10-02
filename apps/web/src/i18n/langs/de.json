@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Zusammenfassung",
+      "caseFileMayHoldOthers": "Diese Verfahrensakte kann auch weitere Entscheidungen enthalten.",
       "citedBy": "Zitiert von",
       "cites": "Zitiert",
       "dissentByline": "Sondervotum: <bdi>{names}</bdi>",

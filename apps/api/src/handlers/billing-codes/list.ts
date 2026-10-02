@@ -33,7 +33,12 @@ const config = {
     "then code, with cursor pagination. Filter by type (task or activity) " +
     "and by whether the code is still active.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "billing_admin", consumesServices: false },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: readBillingCodesQuerySchema,
 } satisfies WorkspaceHandlerConfig;
