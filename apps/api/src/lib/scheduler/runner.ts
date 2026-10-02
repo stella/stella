@@ -639,7 +639,7 @@ export const runJob = async ({
       }, maxRuntimeMs);
     });
 
-    await Promise.race([
+    const outcome = await Promise.race([
       Promise.resolve(
         task({
           db,
@@ -655,6 +655,10 @@ export const runJob = async ({
       ),
       timeout,
     ]);
+    if (outcome !== undefined && outcome.isErr()) {
+      raceError = outcome.error.cause;
+      raceRejected = true;
+    }
   } catch (error: unknown) {
     raceError = error;
     raceRejected = true;

@@ -19,7 +19,10 @@ import {
   SCHEDULER_BACKFILL_IDS,
   logSchedulerBackfillStatus,
 } from "@/api/lib/scheduler/backfill-config";
-import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import {
+  SchedulerTaskFailure,
+  type SchedulerTask,
+} from "@/api/lib/scheduler/types";
 
 export const BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK =
   "legislation.backfillExpressionIds" as const;
@@ -350,11 +353,18 @@ export const createLegislationExpressionIdBackfill =
       if (settled.error instanceof BackfillHeldError) {
         logger.info("scheduler.legislation_expression_ids_held", {
           holdUntil: settled.error.holdUntil,
-          heldSince: settled.error.heldSince,
+          ...(settled.error.heldSince === null
+            ? {}
+            : { heldSince: settled.error.heldSince }),
         });
         return;
       }
-      throw settled.error;
+      return Result.err(
+        new SchedulerTaskFailure({
+          message: "Legislation expression ID backfill failed",
+          cause: settled.error,
+        }),
+      );
     }
     const page = settled.value.value;
 

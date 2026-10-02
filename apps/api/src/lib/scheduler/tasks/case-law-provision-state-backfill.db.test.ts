@@ -7,6 +7,7 @@ import {
   expect,
   test,
 } from "bun:test";
+import { setTimeout as sleepWithSignal } from "node:timers/promises";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import {
@@ -16,13 +17,13 @@ import {
 
 import { BackfillFailedError } from "@/api/db/backfill-runtime";
 import type { withLongRunningConnection } from "@/api/db/long-running-connection";
-import { abortableSleep } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import { logger } from "@/api/lib/observability/logger";
 import type { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -51,23 +52,15 @@ beforeEach(async () => {
   await client.query("DELETE FROM database_backfill_states");
   await client.query("DELETE FROM case_law_provision_repair_cursors");
   await client.query("DELETE FROM case_law_provision_scope_transitions");
-  await client.query("DELETE FROM case_law_provision_admission");
   await client.query(
-    "ALTER TABLE case_law_provision_extraction_scopes DISABLE TRIGGER case_law_provision_extraction_scope_guard",
-  );
-  await client.query("DELETE FROM case_law_provision_extraction_scopes");
-  await client.query(
-    "ALTER TABLE case_law_provision_extraction_scopes ENABLE TRIGGER case_law_provision_extraction_scope_guard",
-  );
-  await client.query(
-    "INSERT INTO case_law_provision_admission (key, revision) VALUES ('global', $1)",
+    "INSERT INTO case_law_provision_admission AS admission (key, revision) VALUES ('global', $1) ON CONFLICT (key) DO UPDATE SET revision = greatest(admission.revision, EXCLUDED.revision)",
     [PROVISION_EXTRACTION_ADMISSION_REVISION],
   );
   for (const { jurisdiction, language } of Object.values(
     PROVISION_EXTRACTION_ADMISSION,
   )) {
     await client.query(
-      "INSERT INTO case_law_provision_extraction_scopes (country, language, status, generation) VALUES ($1, $2, 'active', 1)",
+      "INSERT INTO case_law_provision_extraction_scopes AS scope (country, language, status, generation) VALUES ($1, $2, 'active', 1) ON CONFLICT (country, language) DO UPDATE SET status = 'active', generation = scope.generation + 1 WHERE scope.status <> 'active'",
       [jurisdiction, language],
     );
   }
@@ -76,7 +69,7 @@ beforeEach(async () => {
 type FixtureOptions = {
   verdict?: Verdict;
   onQuery?: (statement: string) => void;
-  sleep?: typeof abortableSleep;
+  sleep?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
 };
 const fixture = ({
   verdict = { kind: "normal", signals: [] },
@@ -190,7 +183,13 @@ describe("provision scheduler wiring through the real backfill steps", () => {
         }
       },
     });
-    await task.run();
+    const outcome = await task.run();
+    expect(outcome).toBeDefined();
+    if (outcome === undefined || outcome.isOk()) {
+      return panic("Expected a scheduler task failure result");
+    }
+    expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
+    expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
     expect(task.events).toEqual([]);
     expect(task.failures).toHaveLength(1);
     expect(task.failures.at(0)?.at(1)).toMatchObject({
@@ -212,6 +211,35 @@ describe("provision scheduler wiring through the real backfill steps", () => {
       heldSince: null,
       holdUntil: null,
     });
+  });
+
+  test("a timeout after a durable load hold still returns failure with its SQLSTATE", async () => {
+    await fixture({ verdict: { kind: "stop", signals: [] } }).run();
+    const held = (await checkpoint()).batch;
+    expect(held.heldSince).not.toBeNull();
+    expect(held.holdUntil).not.toBeNull();
+    const timeout = Object.assign(new Error("statement timeout after hold"), {
+      code: "57014",
+    });
+    const task = fixture({
+      onQuery: (statement) => {
+        if (statement.includes("ORDER BY case_law_decisions.id LIMIT")) {
+          throw timeout;
+        }
+      },
+    });
+    task.advance(120_000);
+    const outcome = await task.run();
+    if (outcome === undefined || outcome.isOk()) {
+      return panic("Expected failure after the hold expired");
+    }
+    expect(outcome.error).toBeInstanceOf(SchedulerTaskFailure);
+    expect(isPgError(outcome.error, PG_ERROR.QUERY_CANCELED)).toBe(true);
+    expect(task.failures).toHaveLength(1);
+    expect(task.events).not.toContain(
+      "scheduler.case_law_provision_state_backfill_held",
+    );
+    expect(await cursorRows()).toEqual([]);
   });
 
   test("a timed-out CHECK scan remains pending and emits a failure", async () => {
@@ -306,7 +334,7 @@ describe("provision scheduler wiring through the real backfill steps", () => {
     const task = fixture({
       verdict: { kind: "degraded", signals: [] },
       sleep: async (milliseconds, signal) => {
-        const pending = abortableSleep(milliseconds, signal);
+        const pending = sleepWithSignal(milliseconds, undefined, { signal });
         sleeping.resolve(undefined);
         await pending;
       },

@@ -14,6 +14,7 @@ import {
   legislationDocuments,
   legislationSources,
   schedulerJobs,
+  schedulerJobRuns,
 } from "@/api/db/schema";
 import { processLegislationDocument } from "@/api/handlers/legislation/ingestion";
 import type { LegislationCorpusDependencies } from "@/api/handlers/legislation/ingestion";
@@ -26,12 +27,14 @@ import {
   SCHEDULER_BACKFILL_CONFIG,
   SCHEDULER_BACKFILL_IDS,
 } from "@/api/lib/scheduler/backfill-config";
+import { runJob } from "@/api/lib/scheduler/runner";
 import {
   BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
   createLegislationExpressionIdBackfill,
 } from "@/api/lib/scheduler/tasks/legislation-expression-id-backfill";
 import type { SchedulerDb, SchedulerTask } from "@/api/lib/scheduler/types";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const SOURCE_ID = toSafeId<"legislationSource">(
@@ -70,7 +73,7 @@ export const registerExpressionBackfillCases = ({
   const run = async (
     task: SchedulerTask,
     taskLogger: typeof logger = logger,
-  ): Promise<boolean> => {
+  ) => {
     const job = (
       await db.select().from(schedulerJobs).where(eq(schedulerJobs.id, JOB_ID))
     ).at(0);
@@ -79,7 +82,7 @@ export const registerExpressionBackfillCases = ({
     }
     let continued = false;
     continuationAt = undefined;
-    await task({
+    const outcome = await task({
       db: asTestRaw<SchedulerDb>(db),
       job,
       payload: job.payload,
@@ -91,7 +94,7 @@ export const registerExpressionBackfillCases = ({
       signal: new AbortController().signal,
       logger: taskLogger,
     });
-    return continued;
+    return outcome !== undefined && outcome.isErr() ? outcome : continued;
   };
 
   /**
@@ -103,7 +106,11 @@ export const registerExpressionBackfillCases = ({
     taskLogger: typeof logger = logger,
   ): Promise<number> => {
     for (let runs = 1; runs <= 100; runs += 1) {
-      if (!(await run(task, taskLogger))) {
+      const outcome = await run(task, taskLogger);
+      if (typeof outcome !== "boolean") {
+        return panic("expression backfill pass failed");
+      }
+      if (!outcome) {
         return runs;
       }
     }
@@ -500,10 +507,11 @@ export const registerExpressionBackfillCases = ({
             },
           }),
         });
-        const rejected = await run(task, recording).then(
-          () => panic("Expected expression scheduler failure"),
-          (error: unknown) => error,
-        );
+        const outcome = await run(task, recording);
+        if (typeof outcome === "boolean") {
+          return panic("Expected expression scheduler failure");
+        }
+        const rejected = outcome.error.cause;
         expect(rejected).toBe(failure);
         expect(isPgError(rejected, PG_ERROR.QUERY_CANCELED)).toBe(true);
         expect(continuationAt).toBeUndefined();
@@ -538,7 +546,7 @@ export const registerExpressionBackfillCases = ({
         );
         const { lines, logger: recording } = recordingLogger();
         try {
-          const rejected = await run(
+          const outcome = await run(
             createTask({
               pageRows: 1,
               createRuntime: (options) =>
@@ -552,10 +560,11 @@ export const registerExpressionBackfillCases = ({
                 }),
             }),
             recording,
-          ).then(
-            () => panic("Expected real expression statement timeout"),
-            (error: unknown) => error,
           );
+          if (typeof outcome === "boolean") {
+            return panic("Expected real expression statement timeout");
+          }
+          const rejected = outcome.error.cause;
           expect(rejected).toBeInstanceOf(BackfillFailedError);
           expect(isPgError(rejected, PG_ERROR.QUERY_CANCELED)).toBe(true);
           expect(await cursor()).toBe(documentId(17));
@@ -585,6 +594,60 @@ export const registerExpressionBackfillCases = ({
               )
           ).at(0);
           expect(checkpoint?.batch.holdUntil).toBeNull();
+          const job =
+            (
+              await db
+                .select()
+                .from(schedulerJobs)
+                .where(eq(schedulerJobs.id, JOB_ID))
+                .limit(1)
+            ).at(0) ?? panic("Expected expression scheduler job");
+          const telemetry = installRecordingLogger();
+          try {
+            expect(
+              await runJob({
+                db: asTestRaw<SchedulerDb>(db),
+                job,
+                heartbeatIntervalMs: 60_000,
+                leaseMs: 180_000,
+                maxRuntimeMs: 10_000,
+                runnerId: "expression-timeout-runner",
+                registry: new Map([
+                  [
+                    BACKFILL_LEGISLATION_EXPRESSION_IDS_TASK,
+                    createTask({
+                      pageRows: 1,
+                      createRuntime: (options) =>
+                        createRuntime({
+                          ...options,
+                          config: {
+                            ...SCHEDULER_BACKFILL_CONFIG,
+                            ...options.config,
+                            batchStatementTimeoutMs: 100,
+                          },
+                        }),
+                    }),
+                  ],
+                ]),
+                signal: undefined,
+              }),
+            ).toBe("failed");
+            const runRow = (
+              await db
+                .select()
+                .from(schedulerJobRuns)
+                .where(eq(schedulerJobRuns.jobId, JOB_ID))
+                .limit(1)
+            ).at(0);
+            expect(runRow?.status).toBe("failed");
+            expect(runRow?.error).toBe("BackfillFailedError");
+            const failure = telemetry.records.find(
+              (record) => record.message === "scheduler.job_failed",
+            );
+            expect(failure?.attributes?.["error.cause.pg_code"]).toBe("57014");
+          } finally {
+            telemetry.restore();
+          }
         } finally {
           await db.execute(
             sql`DROP TRIGGER expression_page_delay ON legislation_documents`,

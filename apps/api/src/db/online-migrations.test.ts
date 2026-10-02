@@ -703,13 +703,16 @@ const createHarness = ({
           }
           if (query.includes("database_backfill_states")) {
             if (query.startsWith("INSERT")) {
-              const serialized = params.at(1);
+              const serialized = params.at(2);
               if (typeof serialized !== "string") {
                 throw new TypeError("Expected checkpoint JSON");
               }
               const batch: unknown = JSON.parse(serialized);
               if (!backfillStates.has(params.at(0))) {
-                backfillStates.set(params.at(0), { cursor: null, batch });
+                backfillStates.set(params.at(0), {
+                  cursor: params.at(1),
+                  batch,
+                });
               }
               return [];
             }

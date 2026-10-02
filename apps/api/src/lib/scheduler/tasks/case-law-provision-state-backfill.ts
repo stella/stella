@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { setTimeout as sleepWithSignal } from "node:timers/promises";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import { Temporal } from "@stll/time";
@@ -11,7 +12,6 @@ import {
   withDedicatedReservedSession,
   withLongRunningConnection,
 } from "@/api/db/long-running-connection";
-import { abortableSleep } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { runProvisionStateBackfill } from "@/api/lib/case-law/provision-state-backfill/backfill";
 import { ProvisionBackfillUnitError } from "@/api/lib/case-law/provision-state-backfill/step";
 import type { ProvisionBackfillSession } from "@/api/lib/case-law/provision-state-backfill/step";
@@ -23,6 +23,7 @@ import {
   logSchedulerBackfillStatus,
 } from "@/api/lib/scheduler/backfill-config";
 import type { SchedulerTask } from "@/api/lib/scheduler/types";
+import { SchedulerTaskFailure } from "@/api/lib/scheduler/types";
 
 export const BACKFILL_CASE_LAW_PROVISION_STATE_TASK =
   "caseLaw.backfillProvisionState" as const;
@@ -107,18 +108,19 @@ export const createCaseLawProvisionStateBackfillTask =
     readVerdict,
     clock = () => Temporal.Now.instant().epochMilliseconds,
     observeStatus = logSchedulerBackfillStatus,
-    sleep = abortableSleep,
+    sleep = async (milliseconds, signal) => {
+      await sleepWithSignal(milliseconds, undefined, { signal });
+    },
     reportFailure = observeFailure,
   }: {
     withConnection?: typeof withLongRunningConnection;
     readVerdict?: () => Promise<Verdict>;
     clock?: () => number;
     observeStatus?: typeof logSchedulerBackfillStatus;
-    sleep?: typeof abortableSleep;
+    sleep?: (milliseconds: number, signal: AbortSignal) => Promise<void>;
     reportFailure?: typeof observeFailure;
   } = {}): SchedulerTask =>
   async ({ logger, signal }) => {
-    signal.throwIfAborted();
     // The connection helper rejects once the signal aborts, even after the work
     // has returned, so an abort is settled here rather than left to reject.
     const settled = await Result.tryPromise({
@@ -190,6 +192,7 @@ export const createCaseLawProvisionStateBackfillTask =
                 signal,
               });
               if (run.isOk() && run.value.type === "complete") {
+                let completionFailure: ProvisionBackfillUnitError | undefined;
                 // Confirm the actual units under the shared checkpoint lock
                 // before clearing a hold left by a concurrent worker.
                 await runtime.recordCompletion(async () => {
@@ -202,10 +205,14 @@ export const createCaseLawProvisionStateBackfillTask =
                     signal,
                   });
                   if (confirmed.isErr()) {
-                    throw confirmed.error;
+                    completionFailure = confirmed.error;
+                    return false;
                   }
                   return confirmed.value.type === "complete";
                 });
+                if (completionFailure !== undefined) {
+                  return Result.err(completionFailure);
+                }
               }
               return run;
             } finally {
@@ -221,7 +228,12 @@ export const createCaseLawProvisionStateBackfillTask =
         return;
       }
       reportFailure(settled.error, { sink: backfillUnitFailed });
-      return;
+      return Result.err(
+        new SchedulerTaskFailure({
+          message: "Provision state backfill failed",
+          cause: settled.error,
+        }),
+      );
     }
     const run = settled.value;
     if (run.isErr()) {
@@ -234,12 +246,19 @@ export const createCaseLawProvisionStateBackfillTask =
       if (run.error.cause instanceof BackfillHeldError) {
         logger.info("scheduler.case_law_provision_state_backfill_held", {
           holdUntil: run.error.cause.holdUntil,
-          heldSince: run.error.cause.heldSince,
+          ...(run.error.cause.heldSince === null
+            ? {}
+            : { heldSince: run.error.cause.heldSince }),
         });
         return;
       }
       reportFailure(run.error, { sink: backfillUnitFailed });
-      return;
+      return Result.err(
+        new SchedulerTaskFailure({
+          message: "Provision state backfill failed",
+          cause: run.error,
+        }),
+      );
     }
     logger.info("scheduler.case_law_provision_state_backfill", {
       // The step still owed, "complete", "aborted", or "superseded" when a

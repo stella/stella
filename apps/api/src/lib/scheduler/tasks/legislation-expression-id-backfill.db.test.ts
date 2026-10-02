@@ -31,6 +31,7 @@ describe.skipIf(!enabled)("expression backfill on PostgreSQL 18", () => {
         "legislation_documents",
         "legislation_work_names",
         "scheduler_jobs",
+        "scheduler_job_runs",
         "database_backfill_states",
         "corpus_index_generations",
         "corpus_index_projection_states",

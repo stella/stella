@@ -1,6 +1,8 @@
 import { panic } from "better-result";
 import type { SQL } from "bun";
 import { describe, expect, test } from "bun:test";
+import { eq } from "drizzle-orm";
+import { drizzle } from "drizzle-orm/pglite";
 
 import {
   PROVISION_EXTRACTION_ADMISSION,
@@ -12,13 +14,20 @@ import {
   withDedicatedReservedSession,
   type withLongRunningConnection,
 } from "@/api/db/long-running-connection";
+import { schedulerJobRuns, schedulerJobs } from "@/api/db/schema";
 import { logger } from "@/api/lib/observability/logger";
 import type { observeFailure } from "@/api/lib/observability/observe-failure";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import { SCHEDULER_BACKFILL_IDS } from "@/api/lib/scheduler/backfill-config";
-import type { SchedulerTaskContext } from "@/api/lib/scheduler/types";
+import { runSchedulerOnce } from "@/api/lib/scheduler/runner";
+import type {
+  SchedulerDb,
+  SchedulerTask,
+  SchedulerTaskContext,
+} from "@/api/lib/scheduler/types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
+import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 import { createCaseLawProvisionStateBackfillTask } from "./case-law-provision-state-backfill";
 
@@ -35,7 +44,8 @@ type FixtureOptions = {
 const withFixture = async (
   work: (fixture: {
     createTask: (options?: FixtureOptions) => {
-      run: () => Promise<void>;
+      task: SchedulerTask;
+      run: () => Promise<Awaited<ReturnType<SchedulerTask>>>;
       events: string[];
       failures: Parameters<typeof observeFailure>[];
     };
@@ -167,6 +177,7 @@ const withFixture = async (
           },
         });
         return {
+          task,
           events,
           failures,
           run: async () =>
@@ -201,7 +212,45 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
           }
         },
       });
-      await task.run();
+      const schedulerClient = await createTestPglite();
+      try {
+        const schedulerDb = drizzle({ client: schedulerClient });
+        const jobId = "test.provision.postgres-timeout";
+        await schedulerDb.insert(schedulerJobs).values({
+          id: jobId,
+          task: "caseLaw.backfillProvisionState",
+          description: "Real PostgreSQL provision timeout regression",
+          enabled: true,
+          nextRunAt: new Date(0),
+          schedule: { type: "interval", everyMs: 60_000 },
+        });
+        const result = await runSchedulerOnce({
+          db: asTestRaw<SchedulerDb>(schedulerDb),
+          registry: new Map([["caseLaw.backfillProvisionState", task.task]]),
+          runnerId: "provision-postgres-fixture",
+          leaseMs: 180_000,
+          maxRuntimeMs: 30_000,
+        });
+        expect(result).toMatchObject({ failed: 1, succeeded: 0 });
+        const run = (
+          await schedulerDb
+            .select()
+            .from(schedulerJobRuns)
+            .where(eq(schedulerJobRuns.jobId, jobId))
+        ).at(0);
+        expect(run?.status).toBe("failed");
+        const job = (
+          await schedulerDb
+            .select()
+            .from(schedulerJobs)
+            .where(eq(schedulerJobs.id, jobId))
+        ).at(0);
+        expect(job?.lastSuccessAt).toBeNull();
+        expect(job?.lastError).not.toBeNull();
+        expect(job?.lockedBy).toBeNull();
+      } finally {
+        await schedulerClient.close();
+      }
       expect(task.events).toEqual([]);
       expect(task.failures).toHaveLength(1);
       expect(task.failures.at(0)?.at(1)).toMatchObject({
@@ -224,7 +273,7 @@ describe.skipIf(!enabled)("provision task on PostgreSQL", () => {
         ),
       ).toHaveLength(2);
     });
-  });
+  }, 120_000);
 
   test("two workers finishing the real provision steps converge on completion", async () => {
     await withFixture(async ({ createTask, operator, schema, checkpoint }) => {
