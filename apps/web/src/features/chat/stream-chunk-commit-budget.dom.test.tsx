@@ -317,6 +317,7 @@ const createStreamingServer = (
   const threadPage = () =>
     Response.json({
       activeTurnId: null,
+      attachedFiles: { fileCount: 0, files: [] },
       context: null,
       contextMatterIds: [],
       forkProvenance: { type: "none" },

@@ -268,7 +268,11 @@ const ReferenceChipView = ({
   );
 };
 
-const useReferenceActivation = (reference: ChatReference) => {
+/**
+ * What clicking a reference does, for a control that lists references in its
+ * own shell (the open chat's file list) and must open them as a chip does.
+ */
+export const useReferenceActivation = (reference: ChatReference) => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const pathname = useRouterState({
