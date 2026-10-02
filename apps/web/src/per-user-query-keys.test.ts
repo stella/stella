@@ -37,7 +37,10 @@ import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
 import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
-import { organizationSettingsOptions } from "@/queries/organization-settings";
+import {
+  organizationSettingsOptions,
+  optionalOrganizationSettingsOptions,
+} from "@/queries/organization-settings";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
 
@@ -101,6 +104,12 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     keys: () => [
       organizationSettingsOptions({ organizationId: ORG, userId: USER })
         .queryKey,
+      optionalOrganizationSettingsOptions({ organizationId: ORG, userId: USER })
+        .queryKey,
+      optionalOrganizationSettingsOptions({
+        organizationId: null,
+        userId: USER,
+      }).queryKey,
     ],
   },
   "audit-logs/export.ts": { kind: "not-per-user", reason: DOWNLOAD },
@@ -946,7 +955,7 @@ test("organization settings isolate caller capabilities by user and organization
 });
 
 test("organization settings skip authenticated reads until an organization is selected", () => {
-  const unselected = organizationSettingsOptions({
+  const unselected = optionalOrganizationSettingsOptions({
     organizationId: null,
     userId: USER,
   });
@@ -959,6 +968,12 @@ test("organization settings skip authenticated reads until an organization is se
   });
   expect(typeof selected.queryFn).toBe("function");
   expect(selected.queryKey).not.toEqual(unselected.queryKey);
+  const selectedOptional = optionalOrganizationSettingsOptions({
+    organizationId: ORG,
+    userId: USER,
+  });
+  expect(selectedOptional.queryKey).toEqual(selected.queryKey);
+  expect(selectedOptional.queryFn).toBe(selected.queryFn);
 });
 
 describe("the per-user read scan", () => {

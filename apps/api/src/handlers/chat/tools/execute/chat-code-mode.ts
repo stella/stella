@@ -9,12 +9,13 @@ import {
   type CodeModeTool,
   type CreateCodeModeResult,
 } from "@tanstack/ai-code-mode";
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 
 import { BUILT_IN_CHAT_TOOL_POLICY_KINDS } from "@stll/api-contract";
 import { listSkillMetadata, readDocumentedChatReads } from "@stll/skills";
 
 import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
+import { runChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-script-read-boundary";
 import {
   EAGER_CHAT_READ_TOOLS,
   toDocumentedChatReads,
@@ -39,8 +40,6 @@ import { toToolInputSchema } from "@/api/handlers/chat/tools/registry-adapter/to
 import { renderProjectionShape } from "@/api/lib/chat/projection-schema";
 import type { ChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import type { ChatToolDefectMemo } from "@/api/lib/chat/tool-defect-memo";
-import { knownDefectRefusalMessage } from "@/api/lib/chat/tool-defect-memo";
-import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import {
   hasToolSchemaInputs,
   type WithToolSchemaInputs,
@@ -328,30 +327,19 @@ export const buildChatCodeMode = (
     featureAccessContext: context,
     concurrencyKey: contextDeps.userId,
     documentedReads,
-    runReadTool: async (toolName, toolArgs) => {
-      // Mechanical retry policy: an identical call that already failed with a
-      // server defect this turn is refused before dispatch. "Do not retry this
-      // call" is enforced here, not left to the model's reading of error prose.
-      if (toolDefectMemo.isKnownDefect(toolName, toolArgs)) {
-        throw new ChatToolError({
-          kind: "server-defect",
-          message: knownDefectRefusalMessage(toolName),
-        });
-      }
-      const result = await runRegistryReadTool({
+    runReadTool: async (toolName, toolArgs) =>
+      await runChatScriptRead({
         toolName,
         args: toolArgs,
-        context,
-        refRegistry,
-      });
-      if (Result.isError(result)) {
-        if (result.error.kind === "server-defect") {
-          toolDefectMemo.recordDefect(toolName, toolArgs);
-        }
-        throw result.error;
-      }
-      return result.value;
-    },
+        toolDefectMemo,
+        read: async () =>
+          await runRegistryReadTool({
+            toolName,
+            args: toolArgs,
+            context,
+            refRegistry,
+          }),
+      }),
     // A script that calls a direct tool, an unprefixed read or a tool this
     // chat does not offer is told the call to make instead.
     nameGuide: (bindingNames) =>

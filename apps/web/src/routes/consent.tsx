@@ -38,7 +38,7 @@ import {
 } from "@/lib/oauth-scopes";
 import { managementRoles } from "@/lib/organization/consts";
 import { organizationListOptions } from "@/lib/organization/queries";
-import { organizationSettingsOptions } from "@/lib/organization/settings-queries";
+import { optionalOrganizationSettingsOptions } from "@/lib/organization/settings-queries";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
 
@@ -116,7 +116,7 @@ function ConsentPage() {
   });
 
   const jurisdictionsQuery = useQuery({
-    ...organizationSettingsOptions({
+    ...optionalOrganizationSettingsOptions({
       organizationId: activeOrganizationId,
       userId,
     }),
