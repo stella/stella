@@ -31,8 +31,7 @@ application requires source, configuration, or schema changes beyond dependency
 manifests and lockfiles.
 
 "Separate" means its own batch and commit, not its own pull request and not
-omitted. The anonymizer packages are the exception: they always get their own
-pull request (see Anonymizer Packages below). An applied sweep covers every applicable update within the requested
+omitted. An applied sweep covers every applicable update within the requested
 scope and each dependency's intended registry channel. Keep stable dependencies
 on stable releases. Include prerelease updates only within an explicitly selected
 prerelease channel. The only reason to leave a version behind is a mechanical
@@ -49,15 +48,20 @@ capabilities adopted or identified with the version moves.
 
 `@stll/anonymize`, `@stll/anonymize-wasm`, and `@stll/anonymize-data` decide
 what leaves the workspace in anonymized chat, so any version move of them, patch
-included, follows these rules:
+included and whether alone or in a sweep, follows these rules:
 
-1. **Its own pull request.** Move them together, in one pull request that
-   changes nothing else: no other dependency, lockfile entry beyond theirs, or
-   source change except what their migration needs. A sweep that finds one of
-   them outdated leaves it out and reports it as a separate pull request to
-   open; that is not a block.
-2. **The name-matching gates run before merge.** From `apps/api`, run the
-   corpus gate and the real-anonymizer suites against the new version:
+1. **Measure before and after.** Before changing the version, with the current
+   version installed, record the per-class corpus tallies:
+
+   ```bash
+   bun apps/api/scripts/name-matching-corpus.ts --failures > /tmp/corpus-before.txt
+   ```
+
+   Run it again after the update and put both tallies, or their difference, in
+   the pull request.
+
+2. **The name-matching gates pass.** From `apps/api`, run the corpus gate and
+   the real-anonymizer suites against the new version:
 
    ```bash
    bun run test src/mcp/name-matching-corpus.test.ts \
@@ -68,9 +72,18 @@ included, follows these rules:
    bun run test:property src/mcp/anonymization.property.test.ts
    ```
 
-   and, from `packages/anonymize-chat`, `bun run test:property`. Report the
-   per-class corpus tallies of the old and the new version in the pull request.
-3. **Bounds only tighten.** Never lower a recall floor or raise a
+   and, from `packages/anonymize-chat`, `bun run test:property`. These run the
+   native binding; the `anonymize-chat` property suite uses a stand-in runtime.
+
+3. **The WASM build is exercised for real.** When `@stll/anonymize-wasm` moves,
+   run `bun run test:e2e:landing` from `apps/web`: it drives the shipped WASM
+   bundle in a browser and fails when the engine does not boot or detect. No
+   automated test yet runs the chat worker's deny-list matching on the real
+   WASM build, so also check it by hand on a local stack (`bun run agent:up`):
+   add short, inflected, and diacritic names to a workspace deny list, send an
+   anonymized chat that uses them, confirm each is replaced in the request the
+   provider receives, and state the result in the pull request.
+4. **Bounds only tighten.** Never lower a recall floor or raise a
    false-positive ceiling in `name-matching-corpus.test.ts` (or relax a property
    test) to make the update pass, unless the pull request states the reason,
    the classes and cases affected, and the before and after tallies, and that
