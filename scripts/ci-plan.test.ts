@@ -799,6 +799,8 @@ const evaluateResult = ({
     cmd: ["bash", "-eu", "-c", resultStep.run],
     env: {
       EVENT: event,
+      QUEUE_DEPTH: "full",
+      THIN_JOBS: "[]",
       GITHUB_RUN_ID: "123",
       FAKE_API_FAILURE: apiFailure ?? "",
       FAKE_CURRENT_RUN: JSON.stringify(currentRun),

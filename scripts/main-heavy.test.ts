@@ -102,6 +102,7 @@ const assertTriggerBehavior = (validationCondition: string) => {
   for (const { event, message, runs } of cases) {
     const context = {
       github: { event_name: event, event: { head_commit: { message } } },
+      vars: { MERGE_QUEUE_DEPTH: "" },
       startsWith: (value: string, prefix: string) =>
         value.toLowerCase().startsWith(prefix.toLowerCase()),
       always: () => true,
@@ -150,6 +151,7 @@ test("every main-heavy job has a job-level condition that skips ordinary pushes"
     expect(typeof job.if, name).toBe("string");
     expect(
       new Script(`Boolean(${job.if})`).runInNewContext({
+        vars: { MERGE_QUEUE_DEPTH: "" },
         github: {
           event_name: "push",
           event: { head_commit: { message: "fix: ordinary change" } },
