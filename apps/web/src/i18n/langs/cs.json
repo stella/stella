@@ -545,7 +545,6 @@
     "numberSeries": {
       "add": "Přidat číselnou řadu",
       "advance": "Záloha",
-      "allSellers": "Všechny profily dodavatelů",
       "archiveConfirm": "Archivovat tuto číselnou řadu? Nebude již dostupná pro nové doklady.",
       "creditNote": "Dobropis",
       "default": "Výchozí řada",
@@ -563,7 +562,6 @@
       "preview": "Další číslo",
       "previewAllocated": "Toto číslo již bylo přiděleno.",
       "previewHelp": "Náhled používá uložený vzor a nerezervuje číslo.",
-      "sellerProfile": "Profil dodavatele",
       "setDefault": "Nastavit jako výchozí řadu",
       "title": "Číselné řady"
     },

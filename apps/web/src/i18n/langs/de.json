@@ -545,7 +545,6 @@
     "numberSeries": {
       "add": "Nummernkreis hinzufügen",
       "advance": "Anzahlung",
-      "allSellers": "Alle Verkäuferprofile",
       "archiveConfirm": "Diesen Nummernkreis archivieren? Er steht dann für neue Belege nicht mehr zur Verfügung.",
       "creditNote": "Gutschrift",
       "default": "Standardnummernkreis",
@@ -563,7 +562,6 @@
       "preview": "Nächste Nummer",
       "previewAllocated": "Diese Nummer ist bereits vergeben.",
       "previewHelp": "Die Vorschau verwendet die gespeicherte Vorlage und reserviert keine Nummer.",
-      "sellerProfile": "Verkäuferprofil",
       "setDefault": "Als Standardnummernkreis festlegen",
       "title": "Nummernkreise"
     },

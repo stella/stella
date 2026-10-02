@@ -545,7 +545,6 @@
     "numberSeries": {
       "add": "Számsorozat hozzáadása",
       "advance": "Előleg",
-      "allSellers": "Összes eladói profil",
       "archiveConfirm": "Archiválja ezt a számsorozatot? Új bizonylatokhoz többé nem lesz elérhető.",
       "creditNote": "Jóváírás",
       "default": "Alapértelmezett sorozat",
@@ -563,7 +562,6 @@
       "preview": "Következő szám",
       "previewAllocated": "Ez a szám már ki van osztva.",
       "previewHelp": "Az előnézet a mentett sablont használja, és nem foglal le számot.",
-      "sellerProfile": "Eladói profil",
       "setDefault": "Beállítás alapértelmezett sorozatként",
       "title": "Számsorozatok"
     },

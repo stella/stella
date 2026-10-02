@@ -545,7 +545,6 @@
     "numberSeries": {
       "add": "Añadir serie de numeración",
       "advance": "Anticipo",
-      "allSellers": "Todos los perfiles de vendedor",
       "archiveConfirm": "¿Archivar esta serie de numeración? Ya no estará disponible para nuevos documentos.",
       "creditNote": "Nota de crédito",
       "default": "Serie predeterminada",
@@ -563,7 +562,6 @@
       "preview": "Siguiente número",
       "previewAllocated": "Este número ya está asignado.",
       "previewHelp": "La vista previa utiliza la plantilla guardada y no reserva ningún número.",
-      "sellerProfile": "Perfil de vendedor",
       "setDefault": "Establecer como serie predeterminada",
       "title": "Series de numeración"
     },

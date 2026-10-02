@@ -545,7 +545,6 @@
     "numberSeries": {
       "add": "Pievienot numuru sēriju",
       "advance": "Avanss",
-      "allSellers": "Visi pārdevēja profili",
       "archiveConfirm": "Arhivēt šo numuru sēriju? Tā vairs nebūs pieejama jauniem dokumentiem.",
       "creditNote": "Kredītrēķins",
       "default": "Noklusējuma sērija",
@@ -563,7 +562,6 @@
       "preview": "Nākamais numurs",
       "previewAllocated": "Šis numurs jau ir piešķirts.",
       "previewHelp": "Priekšskatījums izmanto saglabāto veidni un nerezervē numuru.",
-      "sellerProfile": "Pārdevēja profils",
       "setDefault": "Iestatīt kā noklusējuma sēriju",
       "title": "Numuru sērijas"
     },

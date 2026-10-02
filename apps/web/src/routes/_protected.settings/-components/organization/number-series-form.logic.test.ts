@@ -19,7 +19,6 @@ const raw = {
   documentType: "invoice",
   pattern: DEFAULT_NUMBER_SERIES_PATTERN,
   padding: 4,
-  sellerProfileId: null,
 } satisfies v.InferInput<typeof schema>;
 const original = {
   id: toSafeId<"numberSeries">("series-main"),
@@ -34,10 +33,9 @@ const original = {
 } satisfies NumberSeries;
 
 describe("number series form", () => {
-  test("normalizes names and seller selection without interpreting numbering tokens", () => {
+  test("normalizes names without interpreting numbering tokens", () => {
     const values = v.parse(schema, {
       ...raw,
-      sellerProfileId: " seller-main ",
       pattern: " PREFIX-{CUSTOM}-{SEQ} ",
     });
     expect(values).toEqual({
@@ -45,21 +43,12 @@ describe("number series form", () => {
       documentType: "invoice",
       pattern: "PREFIX-{CUSTOM}-{SEQ}",
       padding: 4,
-      sellerProfileId: toSafeId<"sellerProfile">("seller-main"),
     });
   });
 
-  test("omits an unselected seller from create requests", () => {
-    for (const sellerProfileId of [null, "", "  "]) {
-      const values = v.parse(schema, { ...raw, sellerProfileId });
-      expect(Object.hasOwn(values, "sellerProfileId")).toBe(false);
-      expect(values).toEqual({
-        name: "Main invoices",
-        documentType: "invoice",
-        pattern: DEFAULT_NUMBER_SERIES_PATTERN,
-        padding: 4,
-      });
-    }
+  test("never sends a seller assignment in create requests", () => {
+    const values = v.parse(schema, { ...raw, sellerProfileId: "seller-main" });
+    expect(Object.hasOwn(values, "sellerProfileId")).toBe(false);
   });
 
   test("enforces only API field bounds and document types", () => {
@@ -96,7 +85,6 @@ describe("number series edits", () => {
     const next = v.parse(schema, {
       ...raw,
       name: "Renamed invoices",
-      sellerProfileId: original.sellerProfileId,
     });
     expect(numberSeriesPatch({ original, next })).toEqual({
       name: "Renamed invoices",
@@ -106,10 +94,9 @@ describe("number series edits", () => {
     ).toEqual({});
   });
 
-  test("sends seller clearing as null and preserves changed padding and pattern", () => {
+  test("keeps an existing seller assignment and sends changed padding and pattern", () => {
     const next = v.parse(schema, { ...raw, padding: 1, pattern: "{YY}-{SEQ}" });
     expect(numberSeriesPatch({ original, next })).toEqual({
-      sellerProfileId: null,
       padding: 1,
       pattern: "{YY}-{SEQ}",
     });
