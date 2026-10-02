@@ -308,11 +308,16 @@ const pickUpReplayBatch = async ({
   verdict,
 }: ReplayPickupOptions) => {
   const pickedUp = await dependencies.pickUpBatch(batch);
-  if (pickedUp === "waiting")
-    {return { type: "stopped", status: "retryable" } as const;}
-  if (pickedUp === "failed") {return { type: "failed" } as const;}
+  if (pickedUp === "waiting") {
+    return { type: "stopped", status: "retryable" } as const;
+  }
+  if (pickedUp === "failed") {
+    return { type: "failed" } as const;
+  }
   const afterPickup = await stopRequested();
-  if (afterPickup === null) {return { type: "ready" } as const;}
+  if (afterPickup === null) {
+    return { type: "ready" } as const;
+  }
   const cancelled = await Result.tryPromise(
     async () =>
       await dependencies.recordFailure(batch, {
@@ -436,7 +441,9 @@ const runReplayLoop = async ({
           signal,
           verdict,
         });
-        if (pickedUp.type === "stopped") {return finish(pickedUp.status);}
+        if (pickedUp.type === "stopped") {
+          return finish(pickedUp.status);
+        }
         if (pickedUp.type === "failed") {
           report.attempted += 1;
           report.failed += 1;
