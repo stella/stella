@@ -4454,7 +4454,7 @@ jobs:
           FAST_JOB_SCOPES: >-
             {"service-suites": "service_suites_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "service-suites", "web-image-smoke", "e2e-production-shard", "route-smoke", "desktop-clippy", "windows-scripts"]
+            ["api-image-smoke", "ci-checks-generated", "ci-checks-policy", "ci-checks-rest", "ci-tests", "code-quality-api", "code-quality-rest", "code-quality-web", "dependency-malware", "desktop-clippy", "e2e-production-shard", "fix-tests-on-base", "landing-build", "marketing-screenshots", "parser-version-guard", "release-typecheck", "route-smoke", "service-suites", "typecheck-baseline", "web-build", "web-image-smoke", "windows-scripts"]
         run: |
           if [[ "${HEAVY_ONLY:-false}" == true ]]; then
             # No main run may turn a cancellation into successful supersession.
