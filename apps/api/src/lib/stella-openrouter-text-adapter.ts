@@ -200,9 +200,28 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
     // Normalize after the SDK promise settles; rejecting its internal result
     // promise leaves a second APIPromise branch unhandled.
     const sendRequest = this.orClient.chat.send.bind(this.orClient.chat);
-    this.orClient.chat.send = async (...args) => {
+    type SendRequest = Parameters<typeof sendRequest>[0];
+    type SendOptions = Parameters<typeof sendRequest>[1];
+    type SendResponse = Awaited<ReturnType<typeof sendRequest>>;
+    type SendStreamResponse = Extract<SendResponse, AsyncIterable<unknown>>;
+    function sendManagedRequest(
+      request: SendRequest & { chatRequest: { stream?: false | undefined } },
+      options?: SendOptions,
+    ): Promise<Exclude<SendResponse, SendStreamResponse>>;
+    function sendManagedRequest(
+      request: SendRequest & { chatRequest: { stream: true } },
+      options?: SendOptions,
+    ): Promise<SendStreamResponse>;
+    function sendManagedRequest(
+      request: SendRequest,
+      options?: SendOptions,
+    ): Promise<SendResponse>;
+    async function sendManagedRequest(
+      request: SendRequest,
+      options?: SendOptions,
+    ) {
       const result = await Result.tryPromise({
-        try: async () => await sendRequest(...args),
+        try: async () => await sendRequest(request, options),
         catch: (error) =>
           readEvidence(error).nodes.some(
             ({ code }) => code === MANAGED_PROVIDER_UNAVAILABLE_CODE,
@@ -214,7 +233,8 @@ class InstanceOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
         throw result.error;
       }
       return result.value;
-    };
+    }
+    this.orClient.chat.send = sendManagedRequest;
   }
 
   override chatStream(options: OpenRouterTextOptions) {
