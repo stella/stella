@@ -19,8 +19,8 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   HistoryIcon,
-  MessageSquarePlusIcon,
   Minimize2Icon,
+  NewChatIcon,
   PinIcon,
   PlusIcon,
   SkillIcon,
@@ -803,7 +803,7 @@ function ChatIndex() {
                 size="sm"
                 variant="outline"
               >
-                <MessageSquarePlusIcon className="size-4" />
+                <NewChatIcon className="size-4" />
                 {t("chat.newChat")}
               </Button>
             </div>
