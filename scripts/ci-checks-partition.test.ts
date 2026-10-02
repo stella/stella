@@ -174,23 +174,33 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
   expect(
     v.parse(v.looseObject({ if: v.string() }), jobs["dependency-malware"]).if,
   ).toContain("needs.ci-plan.outputs.dependency_malware_required == 'true'");
-  for (const base of baseline) {
-    const { steps: originalSteps, ...originalScope } = base;
+  for (const [index, partition] of partitions.entries()) {
+    const base = baseJobs["ci-checks"] ? baseline.at(0) : baseline.at(index);
+    if (!base) {
+      panic("CI check leg has no merge-base setup");
+    }
+    const {
+      steps: originalSteps,
+      "timeout-minutes": originalTimeout,
+      ...originalScope
+    } = base;
+    const { steps, "timeout-minutes": timeout, ...scope } = partition;
     const originalSetup = setupSteps(originalSteps);
     expect(originalSetup).toHaveLength(prerequisites.size);
-    for (const { steps, ...scope } of partitions) {
-      expect(scope).toEqual(originalScope);
-      expect(setupSteps(steps)).toEqual(originalSetup);
-      const installIndex = steps.findIndex(
-        ({ name }) => name === "Install dependencies",
-      );
-      expect(steps.findIndex(({ name }) => name === "Setup Bun")).toBeLessThan(
-        installIndex,
-      );
-      expect(steps.at(installIndex)?.["run"]).toBe(
-        "bash scripts/retry.sh bun ci --ignore-scripts",
-      );
-    }
+    expect(scope).toEqual(originalScope);
+    expect(timeout).toBe(
+      partitionIds.at(index) === "ci-checks-generated" ? 60 : originalTimeout,
+    );
+    expect(setupSteps(steps)).toEqual(originalSetup);
+    const installIndex = steps.findIndex(
+      ({ name }) => name === "Install dependencies",
+    );
+    expect(steps.findIndex(({ name }) => name === "Setup Bun")).toBeLessThan(
+      installIndex,
+    );
+    expect(steps.at(installIndex)?.["run"]).toBe(
+      "bash scripts/retry.sh bun ci --ignore-scripts",
+    );
   }
 });
 
