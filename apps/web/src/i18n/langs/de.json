@@ -1877,6 +1877,7 @@
       "addBankAccount": "Bankkonto hinzufügen",
       "noBillingData": "Keine Rechnungsdaten hinterlegt.",
       "removeBankAccount": "Bankkonto entfernen",
+      "selectCurrencyForRate": "Wählen Sie eine Währung, um einen Stundensatz festzulegen.",
       "title": "Rechnungsdaten"
     },
     "columns": {

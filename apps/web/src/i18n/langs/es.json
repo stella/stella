@@ -1877,6 +1877,7 @@
       "addBankAccount": "Añadir cuenta bancaria",
       "noBillingData": "Sin datos de facturación.",
       "removeBankAccount": "Eliminar cuenta bancaria",
+      "selectCurrencyForRate": "Seleccione una moneda para establecer la tarifa por hora.",
       "title": "Datos de facturación"
     },
     "columns": {

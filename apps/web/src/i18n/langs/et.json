@@ -1877,6 +1877,7 @@
       "addBankAccount": "Lisa pangakonto",
       "noBillingData": "Arveldusandmed puuduvad.",
       "removeBankAccount": "Eemalda pangakonto",
+      "selectCurrencyForRate": "Tunnihinna määramiseks valige valuuta.",
       "title": "Arveldusandmed"
     },
     "columns": {

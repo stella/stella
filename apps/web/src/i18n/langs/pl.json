@@ -1877,6 +1877,7 @@
       "addBankAccount": "Dodaj konto bankowe",
       "noBillingData": "Brak danych rozliczeniowych.",
       "removeBankAccount": "Usuń konto bankowe",
+      "selectCurrencyForRate": "Wybierz walutę, aby ustawić stawkę godzinową.",
       "title": "Dane rozliczeniowe"
     },
     "columns": {

@@ -1877,6 +1877,7 @@
       "addBankAccount": "إضافة حساب مصرفي",
       "noBillingData": "لم تُحدَّد أي تفاصيل فوترة.",
       "removeBankAccount": "إزالة الحساب المصرفي",
+      "selectCurrencyForRate": "اختر عملة لتحديد الأجر بالساعة.",
       "title": "تفاصيل الفوترة"
     },
     "columns": {

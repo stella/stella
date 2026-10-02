@@ -6,12 +6,15 @@ import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { useLocale } from "@/i18n/formatting-context";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
 import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
+  buildContactRatePayload,
   buildNumericContactPayload,
+  contactRateInput,
   buildTextContactPayload,
   EDITABLE_FIELD_POLICY,
   getEditableFieldInputAttributes,
@@ -26,10 +29,14 @@ const protectedRouteApi = getRouteApi("/_protected");
 
 type EditableRowProps = {
   label: string;
-  value: string | null | undefined;
-  field: EditableField;
   contact: ContactData;
-};
+} & (
+  | { field: "defaultHourlyRate"; value?: never }
+  | {
+      field: Exclude<EditableField, "defaultHourlyRate">;
+      value: string | null | undefined;
+    }
+);
 
 export const EditableRow = ({
   label,
@@ -38,6 +45,7 @@ export const EditableRow = ({
   contact,
 }: EditableRowProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -47,8 +55,13 @@ export const EditableRow = ({
   const policy = EDITABLE_FIELD_POLICY[field];
   const inputAttributes = getEditableFieldInputAttributes(field);
 
+  const rateNeedsCurrency = field === "defaultHourlyRate" && !contact.currency;
+  const displayValue =
+    field === "defaultHourlyRate"
+      ? contactRateInput(contact.defaultHourlyRate, contact.currency)
+      : value;
   const rename = useInlineRename({
-    initial: value ?? "",
+    initial: displayValue ?? "",
     // Every contact field handles the empty case explicitly in
     // `onCommit`: `displayName` toasts (it's required), the
     // numeric fields parse to `null`, and the remaining optional
@@ -72,7 +85,20 @@ export const EditableRow = ({
       }
 
       let payload: ContactUpdate;
-      if (isNumericEditableField(field)) {
+      if (field === "defaultHourlyRate") {
+        const result = buildContactRatePayload({
+          trimmedInput: trimmed,
+          currency: contact.currency,
+          locale,
+        });
+        if (result.status === "invalid") {
+          const message = t("errors.actionFailed");
+          stellaToast.add({ title: message, type: "error" });
+          setError(message);
+          return;
+        }
+        payload = result.payload;
+      } else if (isNumericEditableField(field)) {
         const result = buildNumericContactPayload(field, trimmed);
         if (result.status === "invalid") {
           const message = t("errors.actionFailed");
@@ -126,7 +152,7 @@ export const EditableRow = ({
           {...inputAttributes}
           autoFocus
           className="h-auto min-w-0 flex-1 border-0 bg-transparent p-0 text-sm shadow-none outline-none focus-visible:ring-0"
-          dir={policy.valueKind === "nonNegativeInteger" ? undefined : "auto"}
+          dir={policy.valueKind === "text" ? "auto" : undefined}
           maxLength={
             policy.valueKind === "text"
               ? (policy.maxLength ?? undefined)
@@ -158,10 +184,17 @@ export const EditableRow = ({
       )}
       <button
         className="hover:text-foreground cursor-text text-start text-sm"
+        disabled={rateNeedsCurrency}
         onClick={() => rename.startEditing()}
         type="button"
       >
-        {value || <span className="text-foreground-subtle">—</span>}
+        {rateNeedsCurrency ? (
+          <span className="text-foreground-subtle">
+            {t("contacts.billing.selectCurrencyForRate")}
+          </span>
+        ) : (
+          displayValue || <span className="text-foreground-subtle">—</span>
+        )}
       </button>
     </div>
   );

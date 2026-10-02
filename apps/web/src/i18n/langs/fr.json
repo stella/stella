@@ -1877,6 +1877,7 @@
       "addBankAccount": "Ajouter un compte bancaire",
       "noBillingData": "Aucune donnée de facturation.",
       "removeBankAccount": "Supprimer le compte bancaire",
+      "selectCurrencyForRate": "Sélectionnez une devise pour définir un taux horaire.",
       "title": "Données de facturation"
     },
     "columns": {
