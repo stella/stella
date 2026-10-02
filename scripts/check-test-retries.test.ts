@@ -100,6 +100,22 @@ test("rejects positive describe configuration retries", () => {
   ]);
 });
 
+test("parses JSX in .jsx test files before finding describe retries", () => {
+  const findings = findTestRetryViolations(
+    new Map([
+      [
+        "apps/example/tests/example.spec.jsx",
+        // A backtick in JSX text opens a template literal under the TS
+        // grammar, which would swallow the call that follows.
+        "const view = <div>\n  `\n</div>;\ndescribe.configure({ retries: 1 });",
+      ],
+    ]),
+  );
+  expect(findings.map(({ message }) => message)).toEqual([
+    "test.describe.configure has dynamic or nonzero retry settings",
+  ]);
+});
+
 test("resolves named describe options and rejects dynamic override spreads", () => {
   const findings = findTestRetryViolations(
     new Map([

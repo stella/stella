@@ -43,7 +43,8 @@ const hasRetryRelevantSyntax = (source: string): boolean =>
     source,
   );
 
-const isTsxOrJsx = (file: string): boolean => file.endsWith(".tsx");
+const isTsxOrJsx = (file: string): boolean =>
+  file.endsWith(".tsx") || file.endsWith(".jsx");
 
 const parseSource = (file: string, source: string): ts.SourceFile =>
   ts.createSourceFile(

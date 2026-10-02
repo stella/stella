@@ -474,6 +474,7 @@ jobs:
     needs: migration-exact-base-upgrade
     if: >-
       always() && (needs.migration-exact-base-upgrade.result == 'failure'
+      || (github.event_name == 'schedule' && needs.migration-exact-base-upgrade.result == 'cancelled')
       || (github.event_name == 'workflow_dispatch' && inputs.dry-run-issue))
     runs-on: ubuntu-latest
     timeout-minutes: 5

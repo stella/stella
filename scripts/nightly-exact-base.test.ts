@@ -134,6 +134,10 @@ test("nightly rehearsal checks main and reports failures with isolated write per
   expect(report.if).toContain(
     "needs.migration-exact-base-upgrade.result == 'failure'",
   );
+  // A scheduled rehearsal that hits its timeout is cancelled, not failed.
+  expect(report.if).toContain(
+    "github.event_name == 'schedule' && needs.migration-exact-base-upgrade.result == 'cancelled'",
+  );
   expect(report.if).toContain("always()");
   expect(report.permissions).toEqual({ contents: "read", issues: "write" });
   expect(report.concurrency.group).toBe("nightly-exact-base-failure-issue");
