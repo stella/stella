@@ -30,6 +30,7 @@ import { unionAll } from "drizzle-orm/pg-core";
 
 import {
   decisionDocketTailSpellings,
+  docketFamilyKeyOf,
   type DecisionDocketSelector,
 } from "@stll/api-contract/decision-docket-reference";
 import type { DecisionIdentifierIntent } from "@stll/api-contract/decision-query-intent";
@@ -273,9 +274,9 @@ const ownColumnCondition = (locator: DecisionIdentityLocator) => {
  * one, so the outer read is a membership test that the primary key answers;
  * each side of the union has its own index. Shared by the lookup and the
  * search handler's identity branch, so the two cannot disagree about which
- * decisions a reference names. The country only normalizes the reference;
- * both callers scope the outer read to it, so the own-column side stays on
- * its identity index alone.
+ * decisions a reference names. The country only normalizes the reference and
+ * keys a docket's case file; both callers scope the outer read to it, so the
+ * own-column sides stay on their identity indexes alone.
  */
 export const decisionIdsNamedBy = ({
   country,
@@ -301,7 +302,21 @@ export const decisionIdsNamedBy = ({
     .select({ id: caseLawDecisions.id })
     .from(caseLawDecisions)
     .where(ownCondition);
-  return unionAll(own, published);
+  // A docket's case file by its stored key: the members stored with a sheet
+  // or part after their docket, which no spelling above reaches. The
+  // spellings stay for rows not keyed yet.
+  const familyKey =
+    locator.kind === "docket" && country !== undefined
+      ? docketFamilyKeyOf(locator.family, country)
+      : null;
+  if (familyKey === null) {
+    return unionAll(own, published);
+  }
+  const family = tx
+    .select({ id: caseLawDecisions.id })
+    .from(caseLawDecisions)
+    .where(eq(caseLawDecisions.docketFamilyKey, familyKey));
+  return unionAll(own, published, family);
 };
 
 /**

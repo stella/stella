@@ -108,7 +108,8 @@ export const QUERY_PLAN_REGISTRY = [
   {
     // A docket reads its whole case file: every stored spelling a member can
     // carry, as one membership test on the citation key and the identifier
-    // rows, never a pattern.
+    // rows, and the members stored with a sheet by their case-file key; never
+    // a pattern.
     id: "case-law.docket-family-identity",
     class: "point",
     role: "public-law-reader",
