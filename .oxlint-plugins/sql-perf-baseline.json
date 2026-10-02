@@ -1,6 +1,5 @@
 {
   "apps/api/src/handlers/case-law/citation-authority.ts": 1,
-  "apps/api/src/handlers/chat/threads/list.ts": 2,
   "apps/api/src/handlers/clauses/read.ts": 1,
   "apps/api/src/handlers/contacts/list-query.ts": 1,
   "apps/api/src/handlers/contacts/search.ts": 4,

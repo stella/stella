@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import {
   ViesAPIError,
@@ -64,7 +65,7 @@ export const validateVat = async (input: string): Promise<ViesValidation> => {
       `Invalid VAT format for ${parsed.country}: ${parsed.vat}.`,
     );
   }
-  const url = `${BASE}/ms/${parsed.country}/vat/${encodeURIComponent(parsed.vat)}`;
+  const url = `${BASE}/ms/${encodeRegistryComponent(parsed.country)}/vat/${encodeRegistryComponent(parsed.vat)}`;
 
   const response = await performRegistryRequest({
     url,
