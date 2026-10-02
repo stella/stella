@@ -30,6 +30,8 @@ env:
   # Queue-ref cache entries cannot be reused by other refs.
   TURBO_CACHE: ${{ github.event_name == 'merge_group' && 'local:rw,remote:r' || 'local:rw,remote:rw' }}
 
+# Gated jobs cancel only failed merge groups. Inline final steps also work
+# before checkout succeeds; ci-result's always() still reports the outcome.
 jobs:
   ci-plan:
     # Decide trust before checkout, then compute every changed-file scope in
@@ -45,7 +47,7 @@ jobs:
       # The merge-group trust check reads the queued pull request's head
       # and the pull_request runs recorded for it.
       pull-requests: read
-      actions: read
+      actions: write
     outputs:
       trusted: ${{ steps.check.outputs.trusted }}
       playwright_image: ${{ steps.browser-image.outputs.image }}
@@ -573,9 +575,16 @@ jobs:
             echo "::notice::Only provenance files changed; skipping package CI checks."
           fi
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # The agent sandbox must be exercised before the standalone protected
   # canary can exist on the default branch. This job is safe for draft PRs: it
-  # receives no secrets, keeps the token read-only, and runs on an ephemeral
+  # receives no secrets and runs on an ephemeral
   # hosted runner. Same-repository branches run immediately; forks wait for
   # the repository's Actions approval gate.
   docker-checks:
@@ -589,6 +598,7 @@ jobs:
     runs-on: ubuntu-24.04
     timeout-minutes: 35
     permissions:
+      actions: write
       contents: read
     env:
       AGENT_ENGINE_DOCKER_IMAGE: stella/agent-sandbox:ci
@@ -759,6 +769,13 @@ jobs:
           )
           echo ::endgroup::
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Parser versions must advance whenever an adapter's parser inputs change.
   # This guard reads Git history and needs no dependency installation.
   parser-version-guard:
@@ -769,6 +786,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 5
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -794,6 +812,13 @@ jobs:
           bun test scripts/check-parser-versions.test.ts
           bun scripts/check-parser-versions.ts
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # The repository guards. The suites this job used to run serially after them
   # are ci-tests and ci-browser, which run as separate jobs so they overlap
   # instead of queueing behind one another. The three share nothing but the
@@ -807,6 +832,7 @@ jobs:
     # 25m, matching code-quality.
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
       # Release PR state for the release CLI changeset hold.
       pull-requests: read
@@ -931,6 +957,13 @@ jobs:
           bun scripts/check-published-exports.ts packages/text-normalize
           bun scripts/check-published-exports.ts packages/agent-input
 
+      - name: Cancel failed merge group (ci-checks-generated)
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   ci-checks-policy:
     needs: ci-plan
     if: >-
@@ -940,6 +973,7 @@ jobs:
     # 25m, matching code-quality.
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
       # Release PR state for the release CLI changeset hold.
       pull-requests: read
@@ -1098,6 +1132,13 @@ jobs:
           bun test scripts/knip-exports-ratchet.test.ts
           bun run check:knip-exports
 
+      - name: Cancel failed merge group (ci-checks-policy)
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   ci-checks-rest:
     needs: ci-plan
     if: >-
@@ -1107,6 +1148,7 @@ jobs:
     # 25m, matching code-quality.
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
       # Release PR state for the release CLI changeset hold.
       pull-requests: read
@@ -1879,6 +1921,13 @@ jobs:
         if: github.event_name == 'pull_request'
         run: bash scripts/check-bridge-version.sh
 
+      - name: Cancel failed merge group (ci-checks-rest)
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # The `test` task, split into shards that run in parallel. Each shard filters
   # the same scope the serial run computed (scripts/test-scope.ts) down to the
   # packages it owns; scripts/test-shards.ts owns the mapping.
@@ -1896,6 +1945,7 @@ jobs:
     # work up; the headroom stays until the shards prove they need less.
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
     strategy:
       # Every shard's verdict, not just the first failure's: a cancelled shard
@@ -2033,6 +2083,13 @@ jobs:
           bun run test -- --concurrency=2 --output-logs=full "${args[@]}" "${shard_args[@]}" | tee "$output"
           bun scripts/test-shards.ts --verify-output "$SHARD" "$plan" "$output"
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # The browser-backed suites. They share one Playwright install, so they stay
   # in a single job rather than one per suite.
   ci-browser:
@@ -2054,6 +2111,7 @@ jobs:
       run:
         shell: bash
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2198,6 +2256,13 @@ jobs:
         if: matrix.suite == 'ui' && steps.extension-browser-tests.outputs.required == 'true'
         run: bun --filter @stll/extension test:e2e
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   code-quality-api:
     needs: ci-plan
     if: >-
@@ -2207,6 +2272,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2265,6 +2331,13 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg api
           fi
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   code-quality-web:
     needs: ci-plan
     if: >-
@@ -2274,6 +2347,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2332,6 +2406,13 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg web
           fi
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   code-quality-rest:
     needs: ci-plan
     if: >-
@@ -2341,6 +2422,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2446,6 +2528,13 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
           fi
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # API suites that need real services, at full depth only. The Postgres
   # suites use behavior PGlite cannot reproduce (partial indexes, advisory
   # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
@@ -2463,6 +2552,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      actions: write
       contents: read
 
     services:
@@ -2573,6 +2663,13 @@ jobs:
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
         run: bun --filter @stll/collab test src/server.test.ts
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # A VERSION change is the last review boundary before tag creation. Pay the
   # cost of the compiler's complete, uncached project graph there while keeping
   # ordinary pull requests on the fast Oxc diagnostics path.
@@ -2591,6 +2688,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
+      actions: write
       contents: read
       packages: read # pull the promoted release's API image
 
@@ -2663,6 +2761,13 @@ jobs:
           REHEARSAL_BASE_REF: ${{ steps.base.outputs.ref }}
         run: bash scripts/rehearse-migration-upgrade.sh
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   release-typecheck:
     needs: ci-plan
     if: >-
@@ -2673,6 +2778,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 25
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2696,6 +2802,13 @@ jobs:
         env:
           TURBO_FORCE: "true"
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # A fix's tests must fail without the fix. On a fix pull request that
   # changes an apps/api test, this puts the base source back under the pull
   # request's tests and requires a changed test to fail there
@@ -2711,6 +2824,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      actions: write
       contents: read
       # Reads the pull request body for the skip line at run time, so an
       # edited body applies on a re-run.
@@ -2753,6 +2867,13 @@ jobs:
           # The checkout is the test merge: its first parent is the base.
           bun scripts/fix-tests-on-base.ts --base HEAD^1 --title "$PR_TITLE" --body-file "$body_file"
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Typecheck-cost baseline guard. What silently rots is the compiler's
   # workload: an annotation-heavy or inference-exploding pattern in a hot
   # generic path (Eden surface, route trees, query options) lands as
@@ -2773,6 +2894,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2823,6 +2945,13 @@ jobs:
           bun test scripts/typecheck-baseline.test.ts
           bun scripts/typecheck-baseline.ts --check-delta "$RUNNER_TEMP/typecheck-base.json"
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Vite web build. Same rationale as landing-build below: the
   # required code-quality and test checks don't exercise the
   # bundler, so worker bundling / wasm-loader / plugin issues
@@ -2838,6 +2967,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2923,6 +3053,13 @@ jobs:
             exit 1
           fi
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # The prod-deps boot smoke above runs inside a full checkout, where
   # workspace sources exist and can mask the runner image's filesystem
   # boundary. Build the real runner
@@ -2940,6 +3077,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 8
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -2983,6 +3121,13 @@ jobs:
         if: always()
         run: docker rm --force web-runner 2>/dev/null || true
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Expo/Metro bundle smoke. TypeScript and lint do not exercise Babel,
   # autolinking, or platform-specific module resolution, so keep one path-
   # scoped export covering Android, iOS, and web in the required CI result.
@@ -2996,6 +3141,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -3020,6 +3166,13 @@ jobs:
       - name: Bundle Android, iOS, and web
         run: bun --filter @stll/mobile build
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Astro landing build. The required checks run code quality and tests,
   # but no `astro build`, so plugin/runtime
   # incompatibilities surface only at deploy time. Catch those
@@ -3035,6 +3188,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -3058,6 +3212,13 @@ jobs:
       - name: Build landing
         run: bun --filter @stll/landing build
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Browser checks use isolated parallel runners: broad production shards,
   # a small Vite dependency canary, and the built landing-page suite. The
   # production shards start only after their production build is published.
@@ -3066,6 +3227,7 @@ jobs:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_core_required == 'true'
@@ -3074,6 +3236,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     permissions:
+      actions: write
       contents: read
     strategy:
       fail-fast: false
@@ -3190,6 +3353,13 @@ jobs:
             /tmp/web-production.log
           retention-days: 7
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   stack-redaction-browsers:
     needs: ci-plan
     if: >-
@@ -3200,6 +3370,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
+      actions: write
       contents: read
     steps:
       - name: Checkout
@@ -3225,6 +3396,13 @@ jobs:
       - name: Test browser stack redaction
         run: bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e:stack-redaction
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   e2e-vite-canary:
     needs: ci-plan
     if: >-
@@ -3235,6 +3413,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
+      actions: write
       contents: read
     steps:
       - name: Checkout
@@ -3392,6 +3571,13 @@ jobs:
             /tmp/web.log
           retention-days: 7
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   e2e-landing:
     needs: ci-plan
     if: >-
@@ -3402,6 +3588,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 35
     permissions:
+      actions: write
       contents: read
     steps:
       - name: Checkout
@@ -3468,6 +3655,13 @@ jobs:
           if-no-files-found: ignore
           retention-days: 7
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Release candidates compare the captured PNGs before shipping, on the
   # release pull request itself (fast depth) as well as its merge group. These
   # images ship as landing-page assets, so a silent baseline
@@ -3482,6 +3676,7 @@ jobs:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
@@ -3489,7 +3684,7 @@ jobs:
           || needs.web-build.result == 'success')
     uses: ./.github/workflows/marketing-screenshots.yml
     permissions:
-      actions: read
+      actions: write
       contents: read
     with:
       mode: check
@@ -3567,6 +3762,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 8
     permissions:
+      actions: write
       contents: read
     steps:
       - name: Checkout
@@ -3642,6 +3838,13 @@ jobs:
             done <<< "${lines:-docker build failed}"
           fi
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   legal-atlas-image:
     needs: ci-plan
     if: >-
@@ -3652,6 +3855,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -3676,6 +3880,13 @@ jobs:
           cache-from: type=gha,scope=legal-atlas-runner
           cache-to: type=gha,mode=max,scope=legal-atlas-runner
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   # Narrow Windows smoke for the dev runner. Full app CI stays on Linux,
   # but this catches path and shell assumptions in the scripts package
   # before Windows contributors hit them locally.
@@ -3689,6 +3900,7 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
+      actions: write
       contents: read
 
     steps:
@@ -3712,6 +3924,13 @@ jobs:
 
       - name: Test dev runner
         run: bun test packages/scripts/src/dev-runner.test.ts
+
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
 
   # Rust checks for the Tauri desktop crate. ci-checks only runs
   # `cargo fmt --check` (a parse-only pass that needs no compile);
@@ -3750,6 +3969,7 @@ jobs:
     runs-on: ${{ matrix.runner }}
     timeout-minutes: 35
     permissions:
+      actions: write
       contents: read
     env:
       # Names the signer test certificates, unique per run so a rerun on a
@@ -3854,12 +4074,20 @@ jobs:
         env:
           RUSTDOCFLAGS: -D warnings
 
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
+
   dependency-malware:
     needs: ci-plan
     if: needs.ci-plan.outputs.trusted == 'true' && needs.ci-plan.outputs.dependency_malware_required == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
+      actions: write
       contents: read
     steps:
       - name: Checkout
@@ -3885,6 +4113,13 @@ jobs:
         run: bash scripts/scan-dependency-malware.sh
         env:
           NPM_TOKEN: ""
+
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be

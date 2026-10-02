@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 20
     permissions:
       # Polling the calling run's artifacts for the handed-over web build.
-      actions: read
+      actions: write
       contents: read
 
     steps:
@@ -89,6 +89,13 @@ jobs:
             apps/web/test-results/
           if-no-files-found: ignore
           retention-days: 7
+
+      - name: Cancel failed merge group
+        if: failure() && github.event_name == 'merge_group'
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"
 
   update:
     if: inputs.mode == 'update'

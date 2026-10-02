@@ -358,6 +358,78 @@ const resultJob = v.parse(
   ciJobs["ci-result"],
 );
 
+const cancelStep = {
+  name: "Cancel failed merge group",
+  if: "failure() && github.event_name == 'merge_group'",
+  shell: "bash",
+  env: { GH_TOKEN: `\${{ github.token }}` },
+  run: 'gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY"',
+};
+
+test("only gated jobs cancel failed merge groups, after every other step", () => {
+  const gatedJobs = new Set(resultJob.needs);
+  const jobSchema = v.object({
+    uses: v.optional(v.string()),
+    steps: v.optional(v.array(v.unknown())),
+    permissions: v.record(v.string(), v.string()),
+    if: v.optional(v.string()),
+  });
+  for (const [id, value] of Object.entries(ciJobs)) {
+    const job = v.parse(jobSchema, value);
+    const gated = gatedJobs.has(id);
+    if (job.uses !== undefined) {
+      // Reusable jobs cannot declare steps. Bind their gated implementation
+      // to the called workflow instead of exempting it from cancellation.
+      expect(id).toBe("marketing-screenshots");
+      expect(job.uses).toBe("./.github/workflows/marketing-screenshots.yml");
+      expect(gated).toBe(true);
+    } else {
+      const steps = job.steps ?? [];
+      const cancellationSteps = steps.filter((step) =>
+        v.is(v.object({ run: v.literal(cancelStep.run) }), step),
+      );
+      // The partition guard requires unique check names across its legs.
+      const expectedStep = {
+        ...cancelStep,
+        name: id.startsWith("ci-checks-")
+          ? `${cancelStep.name} (${id})`
+          : cancelStep.name,
+      };
+      expect(cancellationSteps, id).toEqual(gated ? [expectedStep] : []);
+      if (gated) {
+        expect(steps.at(-1), id).toEqual(expectedStep);
+      }
+    }
+    expect(job.permissions["actions"] === "write", id).toBe(gated);
+    if (gated && job.if?.includes("always()")) {
+      expect(job.if, id).toContain(
+        "(github.event_name != 'merge_group' || !cancelled())",
+      );
+    }
+  }
+  const marketingJobs = workflowJobs(
+    readFileSync(
+      new URL(
+        "../.github/workflows/marketing-screenshots.yml",
+        import.meta.url,
+      ),
+      "utf-8",
+    ),
+  );
+  for (const [id, value] of Object.entries(marketingJobs)) {
+    const job = v.parse(jobSchema, value);
+    const steps = job.steps ?? [];
+    const cancellationSteps = steps.filter((step) =>
+      v.is(v.object({ run: v.literal(cancelStep.run) }), step),
+    );
+    expect(cancellationSteps, id).toEqual(id === "check" ? [cancelStep] : []);
+    expect(job.permissions["actions"] === "write", id).toBe(id === "check");
+    if (id === "check") {
+      expect(steps.at(-1)).toEqual(cancelStep);
+    }
+  }
+});
+
 const evaluationSteps = resultJob.steps.filter((step) =>
   v.is(v.object({ name: v.literal("Evaluate CI outcome") }), step),
 );
@@ -744,6 +816,42 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 // A pull request always plans `fast`; a manual run plans the depth it was
 // dispatched with. Both can be superseded by a newer run.
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
+
+test("a failed dependency cannot pass with cancelled siblings or supersession evidence", () => {
+  for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
+    for (const failedJob of resultJob.needs) {
+      for (const cancellationEvidence of ["missing", "superseded"] as const) {
+        const results = Object.fromEntries(
+          resultJob.needs.map((job) => [job, "cancelled"]),
+        );
+        results["ci-plan"] = "success";
+        results[failedJob] = "failure";
+        expect(
+          evaluateResult({ event, results, cancellationEvidence }),
+          `${event} ${failedJob} ${cancellationEvidence}`,
+        ).toBe(1);
+      }
+    }
+  }
+});
+
+test("a self-cancelled merge group fails even when GitHub marks the failing job cancelled", () => {
+  for (const cancellationEvidence of ["missing", "superseded"] as const) {
+    const results = Object.fromEntries(
+      resultJob.needs.map((job) => [
+        job,
+        job === "ci-plan" ? "success" : "cancelled",
+      ]),
+    );
+    expect(
+      evaluateResult({
+        event: EVENT.mergeGroup,
+        results,
+        cancellationEvidence,
+      }),
+    ).toBe(1);
+  }
+});
 
 test.each(resultJob.needs)(
   "cancelled %s passes only with a newer run in the same group and no timeout",
