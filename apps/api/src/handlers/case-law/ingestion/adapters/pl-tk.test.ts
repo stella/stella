@@ -8,7 +8,17 @@
  */
 
 import { panic, Result } from "better-result";
-import { afterEach, beforeEach, describe, expect, test } from "bun:test";
+import {
+  afterAll,
+  afterEach,
+  beforeEach,
+  describe,
+  expect,
+  setSystemTime,
+  test,
+} from "bun:test";
+
+import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import {
   decodeSourceRawEnvelope,
@@ -17,11 +27,13 @@ import {
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   assemblePlTkDecision,
+  createPlTkSessionCooldown,
   encodePlTkCursor,
   parsePlTkCursor,
   parsePlTkListingPage,
   PL_TK_PAGE_SIZE,
   PL_TK_QUARANTINE_PREFIX,
+  PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
   plTkAdapter,
   plTkBatchWindow,
   plTkRawPartsOf,
@@ -184,11 +196,19 @@ const installPortal = (options: PortalOptions): SeenRequest[] => {
 
 const originalFetch = globalThis.fetch;
 const originalSleep = Bun.sleep;
+let fixtureClock = Temporal.Now.instant().epochMilliseconds;
 
 beforeEach(() => {
+  // Each fixture starts after the preceding session-refusal cooldown expired.
+  fixtureClock += DAY_IN_MS + 1;
+  setSystemTime(fixtureClock);
   Bun.sleep = async () => {
     // Nothing here is live.
   };
+});
+
+afterAll(() => {
+  setSystemTime();
 });
 
 afterEach(() => {
@@ -197,6 +217,79 @@ afterEach(() => {
 });
 
 describe("portal session outcomes", () => {
+  test("cooldown infrastructure failures retain their internal kind", async () => {
+    const cursor = "merits:1645,0,0";
+    const cause = Object.assign(new TypeError("Redis command failed"), {
+      code: "ECONNRESET",
+    });
+    const gate = createPlTkSessionCooldown({
+      read: async () => {
+        throw cause;
+      },
+      defer: async () => {
+        throw cause;
+      },
+    });
+    for (const outcome of [await gate.read(cursor), await gate.park(cursor)]) {
+      if (Result.isOk(outcome)) {
+        return panic("Expected the gate operation to fail");
+      }
+      expect(outcome.error).toMatchObject({
+        stopKind: "internal_error",
+        cursor,
+        cause,
+      });
+    }
+  });
+
+  test("an entry refusal parks repeated cycles until the 24-hour expiry", async () => {
+    const cursor = "merits:1645,0,0";
+    const startedAt = Temporal.Now.instant().epochMilliseconds;
+    let requests = 0;
+    globalThis.fetch = asFetchMock(async () => {
+      requests++;
+      return new Response("entry refused", { status: 403 });
+    });
+    const first = await plTkAdapter.fetchPage(cursor, {});
+    if (Result.isOk(first)) {
+      return panic("Expected an entry refusal");
+    }
+    expect(first.error).toMatchObject({
+      httpStatus: 403,
+      stopKind: "publisher_refusal",
+      cursor,
+    });
+    expect(requests).toBe(1);
+    expect(PL_TK_SESSION_REFUSAL_COOLDOWN_MS).toBe(24 * 60 * 60 * 1000);
+
+    for (let cycle = 1; cycle < 48; cycle++) {
+      setSystemTime(startedAt + cycle * 30 * 60 * 1000);
+      const parked = await plTkAdapter.fetchPage(cursor, {});
+      if (Result.isOk(parked)) {
+        return panic("Expected the session entry to stay paused");
+      }
+      expect(parked.error).toMatchObject({
+        stopKind: "publisher_refusal",
+        cursor,
+      });
+      expect(parked.error.httpStatus).toBeUndefined();
+      expect(requests).toBe(1);
+    }
+    setSystemTime(startedAt + PL_TK_SESSION_REFUSAL_COOLDOWN_MS - 1);
+    const beforeExpiry = await plTkAdapter.fetchPage(cursor, {});
+    expect(Result.isError(beforeExpiry)).toBe(true);
+    expect(requests).toBe(1);
+
+    setSystemTime(startedAt + PL_TK_SESSION_REFUSAL_COOLDOWN_MS);
+    const retried = await plTkAdapter.fetchPage(cursor, {});
+    if (Result.isOk(retried)) {
+      return panic("Expected the fresh entry attempt to be refused");
+    }
+    expect(retried.error.httpStatus).toBe(403);
+    expect(requests).toBe(2);
+    fixtureClock = Temporal.Now.instant().epochMilliseconds;
+  });
+
   test("an entry refusal stops before search or listing", async () => {
     const body = await Bun.file(
       new URL("pl-tk-entry-refused.html", ADAPTER_FIXTURES),

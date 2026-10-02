@@ -47,6 +47,7 @@ import type { AnyNode } from "domhandler";
 
 import { isPolishConstitutionalDocket } from "@stll/api-contract/decision-docket-grammar";
 import { readCappedBytes } from "@stll/skills/streaming";
+import { DAY_IN_MS } from "@stll/time";
 
 import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import type { DocumentAst } from "@/api/handlers/case-law/document-ast";
@@ -82,7 +83,12 @@ import {
   PL_TK_RULING_FAMILY,
   plConstitutionalTribunalRulingKeys,
 } from "@/api/handlers/case-law/ingestion/adapters/pl-tk-ruling-keys";
-import { publisherRequestIntervalMs } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
+import {
+  ADAPTER_PUBLISHER_GATES,
+  deferPublisherGate,
+  publisherRequestIntervalMs,
+  readPublisherCooldown,
+} from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import { fetchWithRetry } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   adapterCatch,
@@ -109,6 +115,7 @@ import {
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { INGESTION_STOP_KIND } from "@/api/lib/legal-search/ingestion-stop-kind";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { isRecord } from "@/api/lib/type-guards";
@@ -140,6 +147,10 @@ const CRAWL_BATCH = 10;
 
 /** Case pages run to 300 KB and render slowly; listings are quicker. */
 const REQUEST_TIMEOUT_MS = 60_000;
+
+/** An entry refusal pauses new sessions; expiry permits one new attempt. */
+export const PL_TK_SESSION_REFUSAL_COOLDOWN_MS = DAY_IN_MS;
+const PL_TK_PUBLISHER_GATE = ADAPTER_PUBLISHER_GATES[ADAPTER_KEYS.PL_TK];
 
 /**
  * The largest page read. The longest case page seen, K 47/15 with its five
@@ -326,11 +337,72 @@ const cookieValue = (
 /** Mutable: a walk that loses its session opens another in place. */
 type Session = { sessionId: string };
 
+type PlTkSessionCooldownOperations = {
+  read: () => Promise<number | null>;
+  defer: () => Promise<number>;
+};
+
+/** Gate I/O is internal infrastructure, distinct from the publisher connection. */
+export const createPlTkSessionCooldown = (
+  operations: PlTkSessionCooldownOperations,
+) => ({
+  read: async (cursor: string) =>
+    await Result.tryPromise({
+      try: operations.read,
+      catch: (cause) =>
+        new AdapterFetchError({
+          message: "Publisher session cooldown could not be read",
+          adapterKey: ADAPTER_KEYS.PL_TK,
+          cursor,
+          cause,
+          stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
+        }),
+    }),
+  park: async (cursor: string) =>
+    await Result.tryPromise({
+      try: operations.defer,
+      catch: (cause) =>
+        new AdapterFetchError({
+          message: "Publisher session cooldown could not be persisted",
+          adapterKey: ADAPTER_KEYS.PL_TK,
+          cursor,
+          cause,
+          stopKind: INGESTION_STOP_KIND.INTERNAL_ERROR,
+        }),
+    }),
+});
+
+const sessionCooldown = createPlTkSessionCooldown({
+  read: async () => await readPublisherCooldown(PL_TK_PUBLISHER_GATE),
+  // Once refused, persist the bounded cooldown even if the page was cancelled.
+  defer: async () =>
+    await deferPublisherGate(
+      PL_TK_PUBLISHER_GATE,
+      PL_TK_SESSION_REFUSAL_COOLDOWN_MS,
+    ),
+});
+
 /** A fresh portal session; everything else the portal serves needs one. */
 const openSession = async (
   cursor: string,
   signal: AbortSignal | undefined,
 ): Promise<Result<Session, AdapterFetchError>> => {
+  signal?.throwIfAborted();
+  const cooldownUntil = await sessionCooldown.read(cursor);
+  signal?.throwIfAborted();
+  if (Result.isError(cooldownUntil)) {
+    return cooldownUntil;
+  }
+  if (cooldownUntil.value !== null) {
+    return Result.err(
+      new AdapterFetchError({
+        message: "Publisher session entry remains paused after a refusal",
+        adapterKey: ADAPTER_KEYS.PL_TK,
+        cursor,
+        stopKind: INGESTION_STOP_KIND.PUBLISHER_REFUSAL,
+      }),
+    );
+  }
   const landed = await requestTk({
     cursor,
     cookie: undefined,
@@ -338,6 +410,12 @@ const openSession = async (
     signal,
   });
   if (Result.isError(landed)) {
+    if (landed.error.stopKind === INGESTION_STOP_KIND.PUBLISHER_REFUSAL) {
+      const parked = await sessionCooldown.park(cursor);
+      if (Result.isError(parked)) {
+        return parked;
+      }
+    }
     return landed;
   }
   const landing = landed.value;
