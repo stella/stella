@@ -14,9 +14,8 @@ import {
   CORPUS_INDEX_MANIFESTS,
   corpusIndexManifestDigest,
 } from "@/api/lib/legal-search/corpus-index-manifest";
-import type {
-  CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION} from "@/api/lib/legal-search/corpus-index-projection-contract";
 import {
+  type CORPUS_INDEX_INTENT_LAUNCH_DISPOSITION,
   CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES,
   type CorpusIndexIntentStatus,
 } from "@/api/lib/legal-search/corpus-index-projection-contract";
