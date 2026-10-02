@@ -89,6 +89,24 @@ const positiveTtl = async (client: PublisherStore["first"], key: string) => {
   return ttl;
 };
 
+/**
+ * The key is gone, or about to expire within one interval: a gate can return
+ * at the cooldown deadline while Valkey still reports the key for a moment.
+ */
+const expectExpires = async (client: PublisherStore["first"], key: string) => {
+  const ttl = await client.send("PTTL", [key]);
+  if (typeof ttl !== "number") {
+    throw new TypeError("Redis PTTL did not return a number");
+  }
+  if (ttl === -2) {
+    return;
+  }
+  expect(ttl).toBeGreaterThanOrEqual(0);
+  expect(ttl).toBeLessThanOrEqual(INTERVAL_MS);
+  await abortableSleep(ttl + 25);
+  expect(await client.send("EXISTS", [key])).toBe(0);
+};
+
 if (!runValkeyTests || !process.env["REDIS_URL"]) {
   describe.skip("publisher backoff (valkey)", () => {
     test("requires STELLA_RUN_VALKEY_TESTS=true and REDIS_URL", () => {});
@@ -320,7 +338,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
           expect(admitted).toBe(false);
           await positiveTtl(first, key);
           expect(await reservation).toBeGreaterThanOrEqual(deadline);
-          expect(await second.send("EXISTS", [cooldownKey])).toBe(0);
+          await expectExpires(second, cooldownKey);
         } finally {
           await reservation;
         }
@@ -474,7 +492,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         await firstGate();
         expect(checkedKeys).toEqual(new Set([key, cooldownKey]));
         await positiveTtl(first, key);
-        expect(await first.send("EXISTS", [cooldownKey])).toBe(0);
+        await expectExpires(first, cooldownKey);
       });
     });
   });
