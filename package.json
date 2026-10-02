@@ -204,7 +204,7 @@
     "@stll/folio-agents": "0.15.1",
     "@stll/folio-core": "0.54.0",
     "@stll/folio-react": "0.24.1",
-    "@stll/fuzzy-search": "1.1.4",
+    "@stll/fuzzy-search": "1.1.5",
     "@t3-oss/env-core": "0.13.11",
     "@tailwindcss/postcss": "4.3.3",
     "@tailwindcss/vite": "4.3.3",

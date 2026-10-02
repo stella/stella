@@ -587,6 +587,8 @@ const STATUTE_ELI = "/eli/cz/sb/2012/89";
 const CZECH_DAMAGES_QUERY = "náhrada škody";
 const STATUTE_ANCHOR = "par_1729";
 const STATUTE_SECOND_ANCHOR = "par_2079";
+/** A Czech IČO, the way a counterparty's record carries it. */
+const SANCTIONS_COMPANY_ID = "26863154";
 
 const TASKS: readonly Task[] = [
   {
@@ -1089,6 +1091,118 @@ const TASKS: readonly Task[] = [
       path: ["contact", "delete"],
       flags: { "contact-id": CONTACT_ID },
       destructive: true,
+    },
+  },
+  // Sanctions screening through check_counterparty: the check picks every
+  // list at once, a company ID alone is resolved to its name by the server,
+  // and a birth date known only to the year must not gain an invented day.
+  {
+    id: "sanctions-company-id",
+    request: `Is the Czech company with IČO ${SANCTIONS_COMPANY_ID} on any sanctions list? Screen it.`,
+    mcp: {
+      toolName: "check_counterparty",
+      exampleArgs: {
+        check: "sanctions",
+        subject: { type: "company-id", company_id: SANCTIONS_COMPANY_ID },
+      },
+      checkArgs: (args) => [
+        ...field(args, "check", "sanctions"),
+        ...nestedField(args, ["subject", "type"], "company-id"),
+        ...nestedField(args, ["subject", "company_id"], SANCTIONS_COMPANY_ID),
+        // CZ is the default, so naming it is as correct as leaving it out.
+        ...(nested(args, ["subject", "country"]) === undefined
+          ? []
+          : nestedField(args, ["subject", "country"], "CZ")),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["contact", "check-counterparty"],
+      flags: {
+        check: "sanctions",
+        input: JSON.stringify({
+          subject: { type: "company-id", company_id: SANCTIONS_COMPANY_ID },
+        }),
+      },
+    },
+  },
+  {
+    id: "sanctions-person-year-of-birth",
+    request:
+      "Screen Olga Ivanova against the sanctions lists. She is a Russian " +
+      "national born in 1971; we do not know the exact date.",
+    mcp: {
+      toolName: "check_counterparty",
+      exampleArgs: {
+        check: "sanctions",
+        subject: {
+          type: "person",
+          first_name: "Olga",
+          last_name: "Ivanova",
+          date_of_birth: { precision: "year", year: 1971 },
+          nationality_codes: ["RU"],
+        },
+      },
+      checkArgs: (args) => [
+        ...field(args, "check", "sanctions"),
+        ...nestedField(args, ["subject", "type"], "person"),
+        ...nestedField(args, ["subject", "first_name"], "Olga"),
+        ...nestedField(args, ["subject", "last_name"], "Ivanova"),
+        // A full date here would be an invented month and day.
+        ...nestedField(args, ["subject", "birth_date"], undefined),
+        ...nestedField(args, ["subject", "date_of_birth", "precision"], "year"),
+        ...nestedField(args, ["subject", "date_of_birth", "year"], 1971),
+        ...(JSON.stringify(nested(args, ["subject", "nationality_codes"])) ===
+        JSON.stringify(["RU"])
+          ? []
+          : [
+              `subject.nationality_codes: expected ["RU"], got ${JSON.stringify(nested(args, ["subject", "nationality_codes"]))}`,
+            ]),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["contact", "check-counterparty"],
+      flags: {
+        check: "sanctions",
+        input: JSON.stringify({
+          subject: {
+            type: "person",
+            first_name: "Olga",
+            last_name: "Ivanova",
+            date_of_birth: { precision: "year", year: 1971 },
+            nationality_codes: ["RU"],
+          },
+        }),
+      },
+    },
+  },
+  {
+    id: "sanctions-organization-name",
+    request:
+      'Check whether the company "Northwind Shipping Ltd" appears on any ' +
+      "sanctions list. We only have its name.",
+    mcp: {
+      toolName: "check_counterparty",
+      exampleArgs: {
+        check: "sanctions",
+        subject: { type: "organization", name: "Northwind Shipping Ltd" },
+      },
+      checkArgs: (args) => [
+        ...field(args, "check", "sanctions"),
+        ...nestedField(args, ["subject", "type"], "organization"),
+        ...nestedField(args, ["subject", "name"], "Northwind Shipping Ltd"),
+      ],
+    },
+    cli: {
+      kind: "command",
+      path: ["contact", "check-counterparty"],
+      flags: {
+        check: "sanctions",
+        input: JSON.stringify({
+          subject: { type: "organization", name: "Northwind Shipping Ltd" },
+        }),
+      },
     },
   },
   // The capability tasks name the capability id: without it, every model

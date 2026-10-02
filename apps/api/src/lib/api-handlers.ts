@@ -60,10 +60,13 @@ import {
 } from "@/api/lib/observability/failure-shadow";
 import { logger } from "@/api/lib/observability/logger";
 import { getRequestContext } from "@/api/lib/observability/request-context";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  readAuthorizedMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { AnyPermissiveRouteSchema } from "@/api/lib/permissive-route-schema";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import type { PeriodActionKind } from "@/api/lib/rate-limit/action-kinds";
 import type { ServiceClassification } from "@/api/lib/rate-limit/service-classification";
 import {
   applyResponseCachePolicy,
@@ -372,7 +375,7 @@ export type HandlerConfig = InputSchema &
     requestTimeoutMs?: number;
     requiresUsage?: UsageMeteringConfig;
     /** Finite synchronous work; streaming and queued execution need their own lifetimes. */
-    actionAdmission?: { type: "handler"; actionKind: ActionKind };
+    actionAdmission?: { type: "handler"; actionKind: PeriodActionKind };
     mcp: McpExposure;
   };
 
@@ -833,7 +836,7 @@ type FiniteHandlerGuard<TResult> = [Extract<TResult, Response>] extends [never]
   : never;
 
 type ConfiguredFiniteHandlerGuard<TConfig, TResult> = TConfig extends {
-  actionAdmission: { type: "handler"; actionKind: ActionKind };
+  actionAdmission: { type: "handler"; actionKind: PeriodActionKind };
 }
   ? NoInfer<FiniteHandlerGuard<TResult>>
   : unknown;
@@ -846,7 +849,7 @@ type FiniteActionContext = SafeHandlerLogContext & {
 };
 
 type FiniteActionOptions<TContext, TResult extends SafeHandlerPayload> = {
-  actionKind: ActionKind;
+  actionKind: PeriodActionKind;
   ctx: TContext;
   handler: SafeHandlerFn<TContext, TResult>;
   admit?: typeof withActionAdmission;
@@ -873,8 +876,20 @@ const runAdmittedFiniteHandler = async function* <
           getRequestContext(ctx.request)?.requestId ?? Bun.randomUUIDv7(),
       },
       run: async (signal) => {
-        // Preserve an already disconnected request's typed reason before composing signals.
-        ctx.request.signal.throwIfAborted();
+        // Check before composing signals: composition can drop the request's
+        // reason. Keep a typed refusal's status; any other disconnect is a 400.
+        if (ctx.request.signal.aborted) {
+          const { reason } = ctx.request.signal;
+          return Result.err(
+            reason instanceof HandlerError
+              ? reason
+              : new HandlerError({
+                  status: 400,
+                  message: "Request aborted",
+                  cause: reason,
+                }),
+          );
+        }
         ctx.actionSignal = AbortSignal.any([ctx.request.signal, signal]);
         ctx.actionSignal.throwIfAborted();
         const outcome = await Result.gen(() => handler(ctx));
@@ -958,7 +973,8 @@ const createSafeScopedHandler = <
 ): SafeHandlerDefinition<TConfig, TContext, TResult> => ({
   config,
   handler: async (ctx): Promise<SafeHandlerResult<TResult>> => {
-    if (!hasMemberPermission(ctx.memberRole, config.permissions)) {
+    const memberRole = readAuthorizedMemberRole(ctx);
+    if (!memberRole || !hasMemberPermission(memberRole, config.permissions)) {
       return toSafeStatusResponse(403, {
         code: API_ERROR_CODE.forbidden,
         message: "Forbidden",

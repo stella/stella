@@ -1,13 +1,11 @@
 use std::sync::Arc;
 use std::time::Duration;
 
-use tauri::AppHandle;
+use tauri::{AppHandle, Manager};
 use tokio::sync::Mutex;
 
 use crate::config;
-use crate::session_manager::{
-  LinkedAccountOriginUpdate, SessionManager, download_file_standalone,
-};
+use crate::session_manager::{SessionManager, download_file_standalone};
 use crate::types::{ErrorResponse, OpenFileRequest, is_safe_session_id};
 use crate::updater;
 
@@ -22,6 +20,15 @@ static SELF_HOST_CONNECT_SENDER: std::sync::Mutex<
 
 #[derive(Debug, PartialEq, Eq)]
 enum DeepLinkAction {
+  ConnectAccount {
+    api_base_url: String,
+    web_origin: String,
+  },
+  CompleteAccount {
+    correlation_id: String,
+    user_id: String,
+    organization_id: String,
+  },
   ConnectSelfHost {
     api_base_url: String,
     web_origin: String,
@@ -82,6 +89,45 @@ fn parse_deep_link(raw_url: &str) -> Option<DeepLinkAction> {
   let url = reqwest::Url::parse(raw_url).ok()?;
   if url.scheme() != "stella" {
     return None;
+  }
+
+  if url.host_str() == Some("account") {
+    let params: std::collections::HashMap<_, _> =
+      url.query_pairs().into_owned().collect();
+    match url.path() {
+      "/connect" => {
+        return Some(DeepLinkAction::ConnectAccount {
+          api_base_url: config::normalize_self_host_api_base_url(
+            params.get("apiBaseUrl")?,
+          )
+          .ok()?,
+          web_origin: config::normalize_self_host_web_origin(params.get("webOrigin")?)
+            .ok()?,
+        });
+      }
+      "/complete" => {
+        let correlation_id = params.get("correlationId")?;
+        let user_id = params.get("userId")?;
+        let organization_id = params.get("organizationId")?;
+        uuid::Uuid::parse_str(correlation_id).ok()?;
+        for value in [user_id, organization_id] {
+          if value.is_empty()
+            || value.len() > 128
+            || !value
+              .bytes()
+              .all(|byte| byte.is_ascii_alphanumeric() || byte == b'_' || byte == b'-')
+          {
+            return None;
+          }
+        }
+        return Some(DeepLinkAction::CompleteAccount {
+          correlation_id: correlation_id.clone(),
+          user_id: user_id.clone(),
+          organization_id: organization_id.clone(),
+        });
+      }
+      _ => return None,
+    }
   }
 
   if url.host_str() == Some("ping") {
@@ -167,6 +213,55 @@ pub fn handle_url(
   app_handle: AppHandle,
 ) {
   match parse_deep_link(raw_url) {
+    Some(DeepLinkAction::ConnectAccount {
+      api_base_url,
+      web_origin,
+    }) => {
+      tauri::async_runtime::spawn(async move {
+        let static_pair = config::resolve_trusted_api_base_urls()
+          .contains(&api_base_url)
+          && config::resolve_allowed_origins().contains(&web_origin);
+        if !static_pair
+          && let Err(error) = confirm_and_trust_self_host(
+            manager,
+            app_handle.clone(),
+            web_origin.clone(),
+            api_base_url.clone(),
+          )
+          .await
+        {
+          tracing::warn!(error = %error, "desktop account connection was not accepted");
+          return;
+        }
+        if let Err(error) = crate::account::open_browser_connection(
+          &app_handle,
+          &api_base_url,
+          &web_origin,
+        ) {
+          tracing::warn!(error = %error, "desktop account connection could not start");
+        }
+      });
+    }
+    Some(DeepLinkAction::CompleteAccount {
+      correlation_id,
+      user_id,
+      organization_id,
+    }) => {
+      tauri::async_runtime::spawn(async move {
+        if let Err(error) = crate::account::complete_browser_connection(
+          &app_handle,
+          &correlation_id,
+          crate::types::DesktopAccountIdentity {
+            user_id,
+            organization_id,
+          },
+        )
+        .await
+        {
+          tracing::warn!(error = %error, "desktop account connection could not complete");
+        }
+      });
+    }
     Some(DeepLinkAction::ConnectSelfHost {
       api_base_url,
       web_origin,
@@ -228,7 +323,8 @@ pub fn handle_url(
         }
 
         if let Err(error) =
-          redeem_and_open_desktop_edit(manager, api_base_url, handoff_token).await
+          redeem_and_open_desktop_edit(manager, app_handle, api_base_url, handoff_token)
+            .await
         {
           tracing::error!(error = %error, "desktop edit handoff failed");
         }
@@ -272,17 +368,22 @@ async fn confirm_and_trust_self_host(
   web_origin: String,
   api_base_url: String,
 ) -> Result<(), String> {
-  {
+  let trusted = {
     let mgr = manager.lock().await;
-    if mgr.is_trusted_self_host_connection(&web_origin, &api_base_url) {
-      return Ok(());
+    mgr.is_trusted_self_host_connection(&web_origin, &api_base_url)
+  };
+  if !trusted {
+    let approved = show_connection_confirmation(
+      &app_handle,
+      ConnectionConfirmation::SelfHost {
+        web_origin: &web_origin,
+        api_base_url: &api_base_url,
+      },
+    )
+    .await?;
+    if !approved {
+      return Err("Self-host desktop connection was not approved.".to_string());
     }
-  }
-
-  let approved =
-    show_self_host_connect_dialog(&app_handle, &web_origin, &api_base_url).await?;
-  if !approved {
-    return Err("Self-host desktop connection was not approved.".to_string());
   }
 
   let mut mgr = manager.lock().await;
@@ -292,10 +393,20 @@ async fn confirm_and_trust_self_host(
   Ok(())
 }
 
-async fn show_self_host_connect_dialog(
+pub(crate) enum ConnectionConfirmation<'a> {
+  SelfHost {
+    web_origin: &'a str,
+    api_base_url: &'a str,
+  },
+  Account {
+    email: &'a str,
+    organization_name: &'a str,
+  },
+}
+
+pub(crate) async fn show_connection_confirmation(
   app_handle: &AppHandle,
-  web_origin: &str,
-  api_base_url: &str,
+  confirmation: ConnectionConfirmation<'_>,
 ) -> Result<bool, String> {
   use tauri::Manager;
 
@@ -318,10 +429,32 @@ async fn show_self_host_connect_dialog(
   // The dialog holds no strings of its own; its wording travels in the hash
   // with the origins, so it renders in the language the rest of the app runs
   // in.
+  let (details, title_key) = match confirmation {
+    ConnectionConfirmation::SelfHost {
+      web_origin,
+      api_base_url,
+    } => (
+      format!(
+        "webOrigin={}&apiBaseUrl={}",
+        percent_encode(web_origin),
+        percent_encode(api_base_url)
+      ),
+      "dialog.selfHostWindowTitle",
+    ),
+    ConnectionConfirmation::Account {
+      email,
+      organization_name,
+    } => (
+      format!(
+        "mode=account&accountEmail={}&organizationName={}",
+        percent_encode(email),
+        percent_encode(organization_name)
+      ),
+      "dialog.accountWindowTitle",
+    ),
+  };
   let hash = format!(
-    "webOrigin={}&apiBaseUrl={}&strings={}&lang={}&dir={}",
-    percent_encode(web_origin),
-    percent_encode(api_base_url),
+    "{details}&strings={}&lang={}&dir={}",
     percent_encode(&crate::i18n::namespace_json("dialog")),
     percent_encode(crate::i18n::active_locale()),
     percent_encode(crate::i18n::text_direction()),
@@ -332,7 +465,7 @@ async fn show_self_host_connect_dialog(
     "selfhost-connect-dialog",
     tauri::WebviewUrl::App(format!("selfhost-connect-dialog.html#{hash}").into()),
   )
-  .title(crate::i18n::t("dialog.selfHostWindowTitle"))
+  .title(crate::i18n::t(title_key))
   .inner_size(420.0, 320.0)
   .resizable(false);
   let builder = crate::window_placement::centered_on_target_screen(
@@ -408,14 +541,37 @@ struct RedeemDesktopEditHandoffRequest<'a> {
   handoff_token: &'a str,
 }
 
+#[derive(serde::Deserialize)]
+struct RedeemedDesktopEditHandoff {
+  identity: crate::types::DesktopAccountIdentity,
+  #[serde(flatten)]
+  request: OpenFileRequest,
+}
+
+pub(crate) fn ensure_handoff_identity(
+  identity: &crate::types::DesktopAccountIdentity,
+  expected: &crate::types::DesktopAccountIdentity,
+) -> Result<(), String> {
+  if identity.user_id != expected.user_id
+    || identity.organization_id != expected.organization_id
+  {
+    return Err(
+      "The document link belongs to a different desktop account.".to_string(),
+    );
+  }
+  Ok(())
+}
+
 async fn redeem_desktop_edit_handoff(
   client: &crate::http_client::DesktopHttpClient,
   api_base_url: &str,
   handoff_token: &str,
-) -> Result<OpenFileRequest, String> {
+  credential_key: &str,
+) -> Result<RedeemedDesktopEditHandoff, String> {
   let url = format!("{api_base_url}/v1/desktop-edit-handoffs/redeem");
   let response = client
     .post(url)
+    .bearer_auth(credential_key)
     .json(&RedeemDesktopEditHandoffRequest { handoff_token })
     .timeout(REDEEM_TIMEOUT)
     .send()
@@ -434,7 +590,7 @@ async fn redeem_desktop_edit_handoff(
   }
 
   response
-    .json::<OpenFileRequest>()
+    .json::<RedeemedDesktopEditHandoff>()
     .await
     .map_err(|e| format!("stella desktop could not read the edit handoff: {e}"))
 }
@@ -452,6 +608,7 @@ async fn acknowledge_desktop_edit_handoff_opened(
   handoff_id: &str,
   handoff_token: &str,
   session_id: &str,
+  credential_key: &str,
 ) -> Result<(), String> {
   if !is_safe_session_id(handoff_id) {
     return Err("Invalid desktop edit handoff payload.".to_string());
@@ -460,6 +617,7 @@ async fn acknowledge_desktop_edit_handoff_opened(
   let url = format!("{api_base_url}/v1/desktop-edit-handoffs/{handoff_id}/opened");
   let response = client
     .post(url)
+    .bearer_auth(credential_key)
     .json(&AcknowledgeDesktopEditHandoffOpenedRequest {
       handoff_token,
       session_id,
@@ -488,11 +646,43 @@ async fn acknowledge_desktop_edit_handoff_opened(
   Err(message)
 }
 
+pub(crate) async fn linked_handoff_account(
+  app_handle: &AppHandle,
+  api_base_url: &str,
+) -> Result<crate::account::LinkedAccount, String> {
+  let state = app_handle.state::<crate::account::AccountState>();
+  let account = crate::account::current(&state).await?.ok_or_else(|| {
+    "Connect the desktop to your account before opening a document.".to_string()
+  })?;
+  if account.api_base_url != api_base_url {
+    return Err(
+      "The document link belongs to a different desktop account server.".to_string(),
+    );
+  }
+  Ok(account)
+}
+
+pub(crate) async fn recheck_handoff_account(
+  app_handle: &AppHandle,
+  expected: &crate::account::LinkedAccount,
+) -> Result<(), String> {
+  let current = linked_handoff_account(app_handle, &expected.api_base_url).await?;
+  ensure_handoff_identity(&current.identity, &expected.identity)?;
+  if current.credential.key != expected.credential.key {
+    return Err(
+      "The desktop account connection changed while opening the document.".to_string(),
+    );
+  }
+  Ok(())
+}
+
 async fn redeem_and_open_desktop_edit(
   manager: Arc<Mutex<SessionManager>>,
+  app_handle: AppHandle,
   api_base_url: String,
   handoff_token: String,
 ) -> Result<(), String> {
+  let account = linked_handoff_account(&app_handle, &api_base_url).await?;
   let http_client = {
     let mgr = manager.lock().await;
     mgr.http_client().clone()
@@ -506,14 +696,25 @@ async fn redeem_and_open_desktop_edit(
     })
     .map_err(|e| format!("stella desktop could not start the handoff client: {e}"))?;
 
-  let request =
-    redeem_desktop_edit_handoff(&handoff_client, &api_base_url, &handoff_token).await?;
+  let redeemed = redeem_desktop_edit_handoff(
+    &handoff_client,
+    &api_base_url,
+    &handoff_token,
+    &account.credential.key,
+  )
+  .await?;
+  ensure_handoff_identity(&redeemed.identity, &account.identity)?;
+  let request = redeemed.request;
+  if request.api_base_url != api_base_url {
+    return Err("Desktop edit session names a different account server.".to_string());
+  }
   let handoff_id = request.handoff_id.clone();
 
   if !is_safe_session_id(&request.remote_session.session_id) {
     return Err("Invalid desktop edit session payload.".to_string());
   }
 
+  recheck_handoff_account(&app_handle, &account).await?;
   let download_url = request.remote_session.download_url.clone();
   let prefetched_buffer = download_file_standalone(
     request.remote_session.file_type,
@@ -524,13 +725,8 @@ async fn redeem_and_open_desktop_edit(
 
   let result = {
     let mut mgr = manager.lock().await;
-    mgr
-      .open_file(
-        request,
-        Some(prefetched_buffer),
-        LinkedAccountOriginUpdate::Preserve,
-      )
-      .await
+    recheck_handoff_account(&app_handle, &account).await?;
+    mgr.open_file(request, Some(prefetched_buffer)).await
   }?;
 
   SessionManager::attach_watcher(&manager, &result.session_id).await;
@@ -542,6 +738,7 @@ async fn redeem_and_open_desktop_edit(
       &handoff_id,
       &handoff_token,
       &result.session_id,
+      &account.credential.key,
     )
     .await
   {
@@ -566,6 +763,72 @@ mod tests {
 
   const TOKEN: &str =
     "0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef";
+
+  #[test]
+  fn account_links_accept_provider_ids_and_require_a_uuid_correlation() {
+    let correlation = "11111111-1111-4111-8111-111111111111";
+    for identity in [
+      "a",
+      "provider_user-1",
+      "0123456789abcdefghijklmnopqrstuvwxyz",
+      correlation,
+    ] {
+      let action = parse_deep_link(&format!(
+        "stella://account/complete?correlationId={correlation}&userId={identity}&organizationId={identity}"
+      ));
+      assert_eq!(
+        action,
+        Some(DeepLinkAction::CompleteAccount {
+          correlation_id: correlation.into(),
+          user_id: identity.into(),
+          organization_id: identity.into(),
+        })
+      );
+    }
+    for identity in [
+      "".to_string(),
+      "a".repeat(129),
+      "invalid%2Fid".into(),
+      "invalid%20id".into(),
+      "ž".into(),
+    ] {
+      assert_eq!(
+        parse_deep_link(&format!(
+          "stella://account/complete?correlationId={correlation}&userId={identity}&organizationId={correlation}"
+        )),
+        None
+      );
+    }
+    assert_eq!(
+      parse_deep_link(&format!(
+        "stella://account/complete?correlationId=provider_id&userId={correlation}&organizationId={correlation}"
+      )),
+      None
+    );
+  }
+
+  #[test]
+  fn a_document_handoff_requires_the_connected_account_identity() {
+    let expected = crate::types::DesktopAccountIdentity {
+      user_id: "user".into(),
+      organization_id: "organization".into(),
+    };
+    assert!(ensure_handoff_identity(&expected, &expected).is_ok());
+    for (user_id, organization_id) in [
+      ("other-user", "organization"),
+      ("user", "other-organization"),
+      ("other-user", "other-organization"),
+    ] {
+      let identity = crate::types::DesktopAccountIdentity {
+        user_id: user_id.into(),
+        organization_id: organization_id.into(),
+      };
+      assert_eq!(
+        ensure_handoff_identity(&identity, &expected),
+        Err("The document link belongs to a different desktop account.".into())
+      );
+    }
+  }
 
   #[test]
   fn parses_desktop_edit_handoff_link() {

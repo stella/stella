@@ -60,6 +60,12 @@ const discriminatorSubcommandSchema = v.object({
   required: v.optional(stringArraySchema),
 });
 
+const compositeSectionSchema = v.object({
+  title: v.string(),
+  rows: v.pipe(v.string(), v.minLength(1)),
+  columns: stringArraySchema,
+});
+
 const cliAnnotationSchema = v.object({
   command: stringArraySchema,
   additionalScopes: v.optional(v.array(v.picklist(MCP_CLI_TOOL_SCOPES))),
@@ -91,6 +97,15 @@ const cliAnnotationSchema = v.object({
   flagRename: v.optional(v.record(v.string(), v.string())),
   localFileBase64Prop: v.optional(v.pipe(v.string(), v.minLength(1))),
   confirmPassthrough: v.optional(v.literal(true)),
+  composite: v.optional(
+    v.object({
+      summary: stringArraySchema,
+      sections: v.tupleWithRest(
+        [compositeSectionSchema],
+        compositeSectionSchema,
+      ),
+    }),
+  ),
 });
 
 type ParsedDiscriminatorSubcommand = v.InferOutput<
@@ -169,6 +184,9 @@ const projectToolAnnotation = (cli: ParsedCliAnnotation): ToolAnnotation => {
   }
   if (cli.confirmPassthrough !== undefined) {
     annotation.confirmPassthrough = cli.confirmPassthrough;
+  }
+  if (cli.composite !== undefined) {
+    annotation.composite = cli.composite;
   }
   return annotation;
 };

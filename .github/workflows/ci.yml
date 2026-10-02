@@ -51,8 +51,8 @@ jobs:
       playwright_image: ${{ steps.browser-image.outputs.image }}
       # `fast` runs guards, lint, typecheck, unit tests, builds, and the
       # path-scoped image smokes. `full` adds the heavy suites (browsers,
-      # services, other platforms). Production E2E also runs on PRs
-      # that change its spec tree.
+      # services, other platforms). Production E2E also runs on PRs that
+      # change its spec tree, and service suites when their dependencies change.
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
@@ -75,6 +75,11 @@ jobs:
       mobile_build_required: ${{ steps.changed-files.outputs.mobile_build_required }}
       model_catalog_drift_required: ${{ steps.changed-files.outputs.model_catalog_drift_required }}
       package_checks_required: ${{ steps.changed-files.outputs.package_checks_required }}
+      postgres_suites_required: ${{ steps.changed-files.outputs.postgres_suites_required }}
+      corpus_suites_required: ${{ steps.changed-files.outputs.corpus_suites_required }}
+      valkey_suites_required: ${{ steps.changed-files.outputs.valkey_suites_required }}
+      collaboration_suite_required: ${{ steps.changed-files.outputs.collaboration_suite_required }}
+      service_suites_pr_required: ${{ steps.changed-files.outputs.service_suites_pr_required }}
       service_suites_required: ${{ steps.changed-files.outputs.package_checks_required == 'true' || steps.changed-files.outputs.collab_redis_required == 'true' }}
       published_exports_required: ${{ steps.changed-files.outputs.published_exports_required }}
       release_typecheck_required: ${{ steps.changed-files.outputs.release_typecheck_required }}
@@ -276,6 +281,11 @@ jobs:
               echo "docker_checks_required=true"
               echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
+              echo "postgres_suites_required=true"
+              echo "corpus_suites_required=true"
+              echo "valkey_suites_required=true"
+              echo "collaboration_suite_required=true"
+              echo "service_suites_pr_required=true"
               echo "collab_redis_required=true"
               echo "desktop_rust_checks_required=true"
               echo "e2e_core_required=true"
@@ -303,12 +313,21 @@ jobs:
           fi
 
           if (( ${#changed_files[@]} == 0 )); then
+            empty_api_suites=false
+            if [[ "$SUITE_DEPTH" == full ]]; then
+              empty_api_suites=true
+            fi
             {
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
               echo "docker_checks_required=false"
               echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
+              echo "postgres_suites_required=$empty_api_suites"
+              echo "corpus_suites_required=$empty_api_suites"
+              echo "valkey_suites_required=$empty_api_suites"
+              echo "collaboration_suite_required=false"
+              echo "service_suites_pr_required=false"
               echo "collab_redis_required=false"
               echo "desktop_rust_checks_required=false"
               echo "e2e_core_required=false"
@@ -356,6 +375,22 @@ jobs:
           # Path scopes for the build/smoke jobs, computed here so a job whose
           # scope did not change is skipped entirely instead of scheduling a
           # runner just to decide it has nothing to do.
+          # A crashed detector cannot certify a plan. Reject its exit status
+          # or malformed output before any empty scope can skip a suite.
+          if ! service_suite_scopes=$(bun scripts/detect-service-suite-changes.ts --scopes "${changed_files[@]}"); then
+            echo "::error::Service-suite scope detector failed."
+            exit 1
+          fi
+          service_scope_pattern='^(true|false) (true|false) (true|false) (true|false)$'
+          if [[ ! "$service_suite_scopes" =~ $service_scope_pattern ]]; then
+            echo "::error::Service-suite scope detector returned invalid output."
+            exit 1
+          fi
+          read -r postgres_suites_required corpus_suites_required valkey_suites_required collaboration_suite_required <<< "$service_suite_scopes"
+          service_suites_pr_required=false
+          if [[ "$postgres_suites_required" == true || "$corpus_suites_required" == true || "$valkey_suites_required" == true || "$collaboration_suite_required" == true ]]; then
+            service_suites_pr_required=true
+          fi
           dependency_malware_required=$(bun scripts/check-standalone-lockfiles.ts --requires-malware-scan "${changed_files[@]}")
           agent_sandbox_docker_required=false
           api_image_deps_required=false
@@ -553,6 +588,14 @@ jobs:
             docker_checks_required=true
           fi
 
+          # Full depth preserves the original broad folded-suite selection.
+          if [[ "$SUITE_DEPTH" == full ]]; then
+            postgres_suites_required=$package_checks_required
+            corpus_suites_required=$package_checks_required
+            valkey_suites_required=$package_checks_required
+            collaboration_suite_required=$collab_redis_required
+          fi
+
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
           if [[ "$e2e_core_required" == "true" || "$route_smoke_required" == "true" ]]; then
@@ -567,6 +610,11 @@ jobs:
             echo "docker_checks_required=$docker_checks_required"
             echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
+            echo "postgres_suites_required=$postgres_suites_required"
+            echo "corpus_suites_required=$corpus_suites_required"
+            echo "valkey_suites_required=$valkey_suites_required"
+            echo "collaboration_suite_required=$collaboration_suite_required"
+            echo "service_suites_pr_required=$service_suites_pr_required"
             echo "collab_redis_required=$collab_redis_required"
             echo "desktop_rust_checks_required=$desktop_rust_checks_required"
             echo "e2e_core_required=$e2e_core_required"
@@ -1220,7 +1268,7 @@ jobs:
       - name: Changeset present for published package changes
         # The repository owner publishes this versioned shared contract.
         if: github.event_name == 'pull_request'
-        uses: stella/.github/.github/actions/changeset-policy@2ac805220ed86dcaa154e332e0f3dbbc7b0e8024 # v1.7.1
+        uses: stella/.github/.github/actions/changeset-policy@37bfa04a893d1ae2b9d28379cf68e8360781c8bc # v1.8.0
         with:
           release-paths: ${{ steps.policy.outputs.release_paths }}
           generated-paths: ${{ steps.policy.outputs.generated_paths }}
@@ -1788,6 +1836,9 @@ jobs:
       - name: Test release image CI gate
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun test scripts/ci-plan.test.ts
+
+      - name: Test service-suite dependency scope
+        run: bun test scripts/detect-service-suite-changes.test.ts
 
       - name: Test nightly rehearsal and retry guards
         if: needs.ci-plan.outputs.package_checks_required == 'true'
@@ -2512,7 +2563,7 @@ jobs:
             bun run check:result-consumption -- --base "origin/$BASE_REF" --leg rest
           fi
 
-  # API suites that need real services, at full depth only. The Postgres
+  # API suites that need real services, at full depth or on scoped PRs. The Postgres
   # suites use behavior PGlite cannot reproduce (partial indexes, advisory
   # locks, roles, and policies); the Valkey suites drive real BullMQ queues and
   # workers. Each runner derives its file set from the gate the suites declare,
@@ -2525,7 +2576,9 @@ jobs:
       needs.ci-plan.outputs.service_suites_required == 'true'
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.suite_depth == 'full'
+      && (needs.ci-plan.outputs.suite_depth == 'full'
+          || (needs.ci-plan.outputs.suite_depth == 'fast'
+              && needs.ci-plan.outputs.service_suites_pr_required == 'true'))
     runs-on: ubuntu-latest
     timeout-minutes: 15
     permissions:
@@ -2582,21 +2635,21 @@ jobs:
           NPM_TOKEN: ""
 
       - name: Apply migrations to service Postgres
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.postgres_suites_required == 'true' || needs.ci-plan.outputs.corpus_suites_required == 'true'
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run src/db/migrate.ts
 
       - name: Run Postgres-gated API suites
-        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        if: needs.ci-plan.outputs.postgres_suites_required == 'true'
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
         run: bun run test:postgres
 
       - name: Start corpus engine
-        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         run: |
           docker run -d --name corpus-engine \
             -p 127.0.0.1:7290:7280 -p 127.0.0.1:7291:7280 \
@@ -2606,7 +2659,7 @@ jobs:
             http://127.0.0.1:7290/health/readyz
 
       - name: Run corpus engine suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         working-directory: apps/api
         env:
           DATABASE_URL: postgres://stella_owner:stella@127.0.0.1:5432/stella
@@ -2618,7 +2671,7 @@ jobs:
           python3 -c 'import xml.etree.ElementTree as E; r=E.parse("engine-tests.xml").getroot(); n=len(list(r.iter("testcase"))); assert n > 0 and not any(list(r.iter(t)) for t in ("skipped", "failure", "error")) and not any(int(e.get(k, "0")) for e in r.iter() for k in ("skipped", "disabled", "failures", "errors")), "Engine tests must execute without skips or failures"; print(f"Executed {n} engine tests")'
 
       - name: Corpus engine diagnostics and cleanup
-        if: always()
+        if: ${{ always() && needs.ci-plan.outputs.corpus_suites_required == 'true' }}
         run: |
           docker logs corpus-engine || true
           docker rm -f corpus-engine || true
@@ -2626,14 +2679,14 @@ jobs:
       # Independent of the Postgres verdict: a failure there should not hide
       # this runner's result.
       - name: Run Valkey-gated API suites
-        if: ${{ !cancelled() && needs.ci-plan.outputs.package_checks_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.valkey_suites_required == 'true' }}
         working-directory: apps/api
         env:
           REDIS_URL: redis://127.0.0.1:6379
         run: bun run test:valkey
 
       - name: Run cross-replica collaboration suite
-        if: ${{ !cancelled() && needs.ci-plan.outputs.collab_redis_required == 'true' }}
+        if: ${{ !cancelled() && needs.ci-plan.outputs.collaboration_suite_required == 'true' }}
         env:
           STELLA_COLLAB_TEST_REDIS_CONTAINER_ID: ${{ job.services.redis.id }}
           STELLA_COLLAB_TEST_REDIS_URL: redis://127.0.0.1:6380
@@ -3874,7 +3927,6 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.windows_scripts_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: windows-latest
     timeout-minutes: 10
     permissions:
@@ -3925,7 +3977,6 @@ jobs:
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.desktop_rust_checks_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
     strategy:
       fail-fast: false
       matrix:
@@ -4244,8 +4295,10 @@ jobs:
             {"docker-checks": {"agent-sandbox-docker": "agent_sandbox_docker_required", "api-image-deps": "api_image_deps_required"}}
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
+          FAST_JOB_SCOPES: >-
+            {"service-suites": "service_suites_pr_required"}
           FAST_REQUIRED: >-
-            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "route-smoke", "web-image-smoke", "e2e-production-shard"]
+            ["api-image-smoke", "dependency-malware", "marketing-screenshots", "parser-version-guard", "service-suites", "web-image-smoke", "e2e-production-shard", "route-smoke", "desktop-clippy", "windows-scripts"]
         run: |
           # Queued jobs may have no concurrency annotation. A newer run in
           # the same workflow/group proves supersession, unless any cancelled
@@ -4363,7 +4416,7 @@ jobs:
               fi
               # Fast-required jobs must run when their scope is planned;
               # scope-less jobs are always planned.
-              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$JOB_SCOPES" --argjson required "$FAST_REQUIRED" '
+              skipped=$(jq -r --argjson plan "$PLAN" --argjson scopes "$(jq -cn --argjson full "$JOB_SCOPES" --argjson fast "$FAST_JOB_SCOPES" '$full + $fast')" --argjson required "$FAST_REQUIRED" '
                 [to_entries[] | .key as $job | select($required | index($job))
                   | select(($scopes[$job] == null or $plan[$scopes[$job]] == "true") and .value.result == "skipped")
                   | "\($job) (planned, skipped)"]

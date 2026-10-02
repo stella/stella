@@ -890,7 +890,6 @@ export const createMcpHttpRequestHandler = ({
           mode,
           toolName,
         });
-        signal?.throwIfAborted();
         return await boundMcpToolResult({
           result,
           requestId: mcpReq.id,

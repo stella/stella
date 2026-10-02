@@ -163,7 +163,7 @@ describe("generateCliSkill (TanStack Intent)", () => {
   test("describes the real registry unions and skips free-form metadata", () => {
     const skill = generateCliSkill(listings, TOOL_ANNOTATIONS, CAPABILITY);
     expect(skill).toContain(
-      'subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, birth_date:string',
+      'subject: type="company-id": company_id:string; type="tax-id": tax_id:string; type="person": first_name:string, last_name:string, date_of_birth?:{precision="year"|"month"|"day"}, nationality_codes?:string[]; type="organization": name:string',
     );
     expect(skill).toContain(
       'date_of_birth: precision="year": year:integer; precision="month": year:integer, month:integer; precision="day": year:integer, month:integer, day:integer',
