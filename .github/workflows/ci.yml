@@ -1070,6 +1070,12 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      - name: Generate web route tree
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The scriptless install does not create the derived route tree, and
+        # both knip checks resolve the router through it.
+        run: bun --filter @stll/web generate:route-tree
+
       - name: Compute affected flag
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: affected
@@ -2946,6 +2952,9 @@ jobs:
                 bun --filter @stll/api gen:web-api-types
               fi
             fi
+            if [[ ! -f apps/web/src/routeTree.gen.ts ]]; then
+              bun --filter @stll/web generate:route-tree
+            fi
             bun run typegen
           )
           bun scripts/typecheck-baseline.ts --measure "$base_dir" "$RUNNER_TEMP/typecheck-base.json"
@@ -2977,6 +2986,37 @@ jobs:
               printf 'Generated API types are unchanged.\n'
             fi
           } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Generated route tree review diff
+        run: |
+          patch="$RUNNER_TEMP/route-tree.patch"
+          base_tree="$RUNNER_TEMP/typecheck-base/apps/web/src/routeTree.gen.ts"
+          head_tree="apps/web/src/routeTree.gen.ts"
+          test -f "$base_tree"
+          test -f "$head_tree"
+          status=0
+          diff -u --label base/routeTree.gen.ts --label head/routeTree.gen.ts \
+            "$base_tree" "$head_tree" > "$patch" || status=$?
+          if [[ "$status" -gt 1 ]]; then
+            exit "$status"
+          fi
+          {
+            printf '### Generated route tree diff\n\n'
+            if [[ -s "$patch" ]]; then
+              printf '```diff\n'
+              sed -n '1,300p' "$patch" | cut -c 1-1000
+              printf '\n```\n\nShowing at most 300 lines (1000 characters per line); the full patch is attached as an artifact.\n'
+            else
+              printf 'Generated routes are unchanged.\n'
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload generated route tree review diff
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
+        with:
+          name: generated-route-tree-diff
+          path: ${{ runner.temp }}/route-tree.patch
+          retention-days: 14
 
       - name: Upload generated API type review diff
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7.0.1
