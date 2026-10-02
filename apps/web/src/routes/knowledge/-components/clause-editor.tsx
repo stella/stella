@@ -17,6 +17,7 @@ import type { Command as PMCommand } from "@tiptap/pm/state";
 import type { EditorProps } from "@tiptap/pm/view";
 import { EditorContent, useEditor } from "@tiptap/react";
 import type { Editor } from "@tiptap/react";
+import { Result } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -56,7 +57,8 @@ import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
+import { unwrapEden } from "@/lib/errors/api";
+import { userErrorFromThrown } from "@/lib/errors/user-safe";
 
 import {
   bodyKey,
@@ -113,6 +115,13 @@ type AiEditState =
 
 export type { ClauseEditorReviewStatus } from "./clause-ai-tracked-changes";
 
+export type ClauseRewrite = (
+  request: Parameters<(typeof api.clauses)["ai-rewrite"]["post"]>[0],
+) => Promise<ClauseParagraph[]>;
+
+const rewriteClause: ClauseRewrite = async (request) =>
+  unwrapEden(await api.clauses["ai-rewrite"].post(request)).body;
+
 type ClauseEditorProps = {
   content: ClauseParagraph[];
   onChange: (body: ClauseParagraph[]) => void;
@@ -134,6 +143,7 @@ type ClauseEditorProps = {
    * normal autosave path.
    */
   onReviewResolved?: (body: ClauseParagraph[]) => Promise<void>;
+  rewrite?: ClauseRewrite;
 };
 
 export const ClauseEditor = ({
@@ -145,6 +155,7 @@ export const ClauseEditor = ({
   title,
   onReviewStatusChange,
   onReviewResolved,
+  rewrite = rewriteClause,
 }: ClauseEditorProps) => {
   const t = useTranslations();
   const [aiEdit, setAiEdit] = useState<AiEditState>({ status: "idle" });
@@ -266,7 +277,7 @@ export const ClauseEditor = ({
         const resolvedKey = bodyKey(resolvedBody);
         const changed = resolvedKey !== lastEmittedKeyRef.current;
         lastEmittedKeyRef.current = resolvedKey;
-        e.setEditable(true);
+        e.setEditable(true, false);
         setHunkMenu(null);
         setAiEdit({ status: "idle" });
         const persistHandlerPresent = hasReviewResolvedHandler();
@@ -345,7 +356,7 @@ export const ClauseEditor = ({
       if (contentKey !== bodyKey(currentAiState.baseline)) {
         setAiEdit({ status: "idle" });
         emitReviewStatus("resolved");
-        editor.setEditable(true);
+        editor.setEditable(true, false);
         setHunkMenu(null);
         editor
           .chain()
@@ -357,7 +368,9 @@ export const ClauseEditor = ({
       return undefined;
     }
     if (contentKey !== lastEmittedKeyRef.current) {
-      editor.commands.setContent(clauseBodyToTipTap(content));
+      editor.commands.setContent(clauseBodyToTipTap(content), {
+        emitUpdate: false,
+      });
       lastEmittedKeyRef.current = contentKey;
     }
     return undefined;
@@ -393,18 +406,19 @@ export const ClauseEditor = ({
     // A concurrent keystroke while the rewrite streams would desync the
     // live doc from `baseline` and corrupt that alignment.
     if (isUsableEditor(editor)) {
-      editor.setEditable(false);
+      editor.setEditable(false, false);
     }
-    const response = await api.clauses["ai-rewrite"].post({
-      // The request body schema wants a mutable array; `baseline` stays
-      // `readonly` everywhere else in this module (it's never mutated,
-      // just read and compared) — copy only at this serialization boundary.
-      body: [...baseline],
-      instruction: trimmed,
-      usageNotes: usageNotes ?? null,
-      title: title ?? null,
-    });
-    const { data, error } = response;
+    const rewrittenResult = await Result.tryPromise(() =>
+      rewrite({
+        // The request body schema wants a mutable array; `baseline` stays
+        // `readonly` everywhere else in this module (it's never mutated,
+        // just read and compared) — copy only at this serialization boundary.
+        body: [...baseline],
+        instruction: trimmed,
+        usageNotes: usageNotes ?? null,
+        title: title ?? null,
+      }),
+    );
 
     if (requestId !== rewriteRequestIdRef.current) {
       // Superseded by a newer request or a cancel — whichever owns the
@@ -417,19 +431,23 @@ export const ClauseEditor = ({
       // index-aligned to `baseline` and would misapply against it.
       setAiEdit({ status: "idle" });
       if (isUsableEditor(editor)) {
-        editor.setEditable(true);
+        editor.setEditable(true, false);
       }
       return;
     }
-    if (error) {
+    if (rewrittenResult.isErr()) {
+      getAnalytics().captureError(rewrittenResult.error.cause);
       stellaToast.add({
         type: "error",
         title: t("ai.editWithAI"),
-        description: userErrorMessage(error, t("common.unexpectedError")),
+        description: userErrorFromThrown(
+          rewrittenResult.error.cause,
+          t("common.unexpectedError"),
+        ),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });
       if (isUsableEditor(editor)) {
-        editor.setEditable(true);
+        editor.setEditable(true, false);
       }
       return;
     }
@@ -438,7 +456,7 @@ export const ClauseEditor = ({
       return;
     }
 
-    const rewritten = data.body;
+    const rewritten = rewrittenResult.value;
     if (!hasAlignedClauseStructure(baseline, rewritten)) {
       stellaToast.add({
         type: "error",
@@ -446,7 +464,7 @@ export const ClauseEditor = ({
         description: t("clauses.aiStructureChanged"),
       });
       setAiEdit({ status: "prompting", instruction: trimmed });
-      editor.setEditable(true);
+      editor.setEditable(true, false);
       return;
     }
 
@@ -458,7 +476,7 @@ export const ClauseEditor = ({
         description: t("clauses.noChanges"),
       });
       setAiEdit({ status: "idle" });
-      editor.setEditable(true);
+      editor.setEditable(true, false);
       return;
     }
 
@@ -472,7 +490,7 @@ export const ClauseEditor = ({
       .setMeta("addToHistory", false)
       .setContent(doc, { emitUpdate: false })
       .run();
-    editor.setEditable(false);
+    editor.setEditable(false, false);
     setHunkMenu(null);
     setAiEdit(reviewingState);
     emitReviewStatus("pending");
@@ -489,7 +507,7 @@ export const ClauseEditor = ({
         .setMeta("addToHistory", false)
         .setContent(clauseBodyToTipTap(baseline), { emitUpdate: false })
         .run();
-      editor.setEditable(true);
+      editor.setEditable(true, false);
       setHunkMenu(null);
       emitReviewStatus("resolved");
     }
@@ -541,7 +559,7 @@ export const ClauseEditor = ({
     rewriteRequestIdRef.current += 1;
     setAiEdit({ status: "idle" });
     if (isUsableEditor(editor)) {
-      editor.setEditable(true);
+      editor.setEditable(true, false);
     }
   };
 

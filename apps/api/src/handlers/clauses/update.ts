@@ -13,7 +13,11 @@ import type { AuditRecorder, FieldDiffs } from "@/api/lib/audit-log";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { clauseBodySchema } from "@/api/lib/clauses/body-schema";
+import {
+  clauseBodySchema,
+  clauseExpectedBodySchema,
+} from "@/api/lib/clauses/body-schema";
+import { normalizeClauseBody } from "@/api/lib/clauses/types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { tDefaultVarchar, tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -29,7 +33,7 @@ const updateClauseBodySchema = t.Object({
   categoryId: t.Optional(t.Nullable(tSafeId("clauseCategory"))),
   language: t.Optional(t.Nullable(t.String({ maxLength: 10 }))),
   body: t.Optional(clauseBodySchema),
-  expectedBody: t.Optional(clauseBodySchema),
+  expectedBody: t.Optional(clauseExpectedBodySchema),
   // When true, also append a `clause_versions` snapshot + bump
   // `currentVersion`. Autosave omits it (head-only working-copy save);
   // an explicit "Save as new version" / leave-with-changes sends `true`.
@@ -168,7 +172,15 @@ export const updateClauseHandler = async function* ({
       }
       if (
         body.expectedBody !== undefined &&
-        !deepEquals(locked.body, body.expectedBody)
+        !deepEquals(
+          normalizeClauseBody(locked.body),
+          normalizeClauseBody(body.expectedBody),
+        ) &&
+        (body.body === undefined ||
+          !deepEquals(
+            normalizeClauseBody(locked.body),
+            normalizeClauseBody(body.body),
+          ))
       ) {
         return { ok: false as const, reason: "conflict" as const };
       }
@@ -193,7 +205,11 @@ export const updateClauseHandler = async function* ({
           snapshotVersion: body.snapshotVersion,
           hasBody: true,
           bodyEqualsLatestSnapshot:
-            latest !== undefined && deepEquals(latest.body, body.body),
+            latest !== undefined &&
+            deepEquals(
+              normalizeClauseBody(latest.body),
+              normalizeClauseBody(body.body),
+            ),
         });
         if (shouldSnapshot) {
           const versionCount = await tx.$count(

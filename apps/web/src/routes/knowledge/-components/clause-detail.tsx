@@ -72,7 +72,7 @@ import { useI18nStore } from "@/i18n/i18n-store";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { detached } from "@/lib/detached";
-import { APIError, unwrapEden } from "@/lib/errors/api";
+import { unwrapEden } from "@/lib/errors/api";
 import { userErrorFromThrown, userErrorMessage } from "@/lib/errors/user-safe";
 import { clauseDetailOptions, knowledgeKeys } from "@/lib/knowledge/queries";
 import { MEDIUM_DATE_SHORT_TIME_FORMAT } from "@/lib/relative-time";
@@ -82,8 +82,9 @@ import { ClauseBody } from "@/routes/knowledge/-components/clause-body";
 import { diffClauseBodies } from "@/routes/knowledge/-components/clause-diff";
 import type { ParagraphDiff } from "@/routes/knowledge/-components/clause-diff";
 import { ClauseDiffView } from "@/routes/knowledge/-components/clause-diff-view";
+import type { ClauseRewrite } from "@/routes/knowledge/-components/clause-editor";
 import { ClauseEditor } from "@/routes/knowledge/-components/clause-editor";
-import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
+import type { ClauseBodyWrite } from "@/routes/knowledge/-components/use-clause-body-save";
 import { useClauseBodySave } from "@/routes/knowledge/-components/use-clause-body-save";
 import { useClauseFieldSave } from "@/routes/knowledge/-components/use-clause-field-save";
 import { useClauseNavStore } from "@/stores/knowledge/clause-nav-store";
@@ -204,6 +205,7 @@ export const ClauseDetailView = ({
           categories={categories}
           clauseId={clauseId}
           detail={detail}
+          organizationId={organizationId}
           key={clauseId}
           onBack={onBack}
           onDeleted={onDeleted}
@@ -216,8 +218,29 @@ export const ClauseDetailView = ({
 
 // ── Detail Content ───────────────────────────────────
 
-const DetailContent = ({
+export type ClauseHead = {
+  body: ClauseParagraph[];
+  currentVersion: number;
+  updatedAt: string;
+};
+export type ClauseDetailTransport = {
+  save: (write: ClauseBodyWrite) => Promise<ClauseHead>;
+  read: () => Promise<ClauseParagraph[]>;
+  restore: (
+    versionId: string,
+    expectedBody: ClauseParagraph[],
+  ) => Promise<ClauseHead>;
+  promote: (
+    body: ClauseParagraph[],
+    expectedBody: ClauseParagraph[],
+  ) => Promise<ClauseHead>;
+  rewrite?: ClauseRewrite;
+};
+
+export const DetailContent = ({
   detail,
+  organizationId,
+  transport,
   clauseId,
   categories,
   canEdit,
@@ -227,6 +250,8 @@ const DetailContent = ({
   onRefresh,
 }: {
   detail: ClauseDetail;
+  organizationId: string;
+  transport?: ClauseDetailTransport;
   clauseId: string;
   categories: CategoryOption[];
   canEdit: boolean;
@@ -237,36 +262,81 @@ const DetailContent = ({
 }) => {
   const t = useTranslations();
   const format = useFormatter();
-  // Autosave persists the head working copy on every edit; a version snapshot
-  // is created only on explicit "Save as new version" / leave-with-changes.
-  // This tracks whether the head has un-versioned edits. A freshly loaded
-  // clause is clean.
-  const [reviewStatus, setReviewStatus] =
-    useState<ClauseEditorReviewStatus>("resolved");
-  const pendingReviewBody = useRef<ClauseParagraph[] | null>(null);
+  const queryClient = useQueryClient();
+  const options = clauseDetailOptions(organizationId, clauseId);
+  const resolvedTransport =
+    transport ??
+    ({
+      save: async (write: ClauseBodyWrite) => {
+        const saved = unwrapEden(await api.clauses({ clauseId }).post(write));
+        return { ...saved, body: write.body };
+      },
+      read: async () => unwrapEden(await api.clauses({ clauseId }).get()).body,
+      restore: async (versionId: string, expectedBody: ClauseParagraph[]) =>
+        unwrapEden(
+          await api
+            .clauses({ clauseId })
+            .versions({ versionId })
+            .restore.post({ expectedBody }),
+        ),
+      promote: async (
+        body: ClauseParagraph[],
+        expectedBody: ClauseParagraph[],
+      ) => {
+        const saved = unwrapEden(
+          await api
+            .clauses({ clauseId })
+            .post({ body, expectedBody, snapshotVersion: true }),
+        );
+        return { ...saved, body };
+      },
+      rewrite: undefined,
+    } satisfies ClauseDetailTransport);
+  const cacheHead = async (head: ClauseHead) => {
+    await queryClient.cancelQueries({
+      queryKey: options.queryKey,
+      exact: true,
+    });
+    queryClient.setQueryData(options.queryKey, (previous) =>
+      previous ? { ...previous, ...head } : previous,
+    );
+    onRefresh();
+  };
   const reportBodyError = (error: unknown) => {
     getAnalytics().captureError(error);
     stellaToast.add({
       type: "error",
       title: t("clauses.saveFailed"),
-      description: userErrorFromThrown(error, t("common.unexpectedError")),
+      description: t("common.unexpectedError"),
     });
   };
   const bodySave = useClauseBodySave({
     initialBody: detail.body,
     persist: async (write) => {
-      const saved = unwrapEden(await api.clauses({ clauseId }).post(write));
-      onRefresh();
+      const saved = await resolvedTransport.save(write);
+      await cacheHead(saved);
       return saved;
     },
-    onError: reportBodyError,
-    onPersisted: (body) => {
-      if (pendingReviewBody.current === body) {
-        pendingReviewBody.current = null;
-        setReviewStatus("resolved");
-      }
+    readHead: async () => {
+      const body = await resolvedTransport.read();
+      queryClient.setQueryData(options.queryKey, (previous) =>
+        previous ? { ...previous, body } : previous,
+      );
+      return body;
     },
+    onError: reportBodyError,
   });
+  const reviewStatus = bodySave.reviewStatus;
+  const bodyActionAllowed = () => {
+    if (reviewStatus === "resolved") {
+      return true;
+    }
+    stellaToast.add({
+      type: "info",
+      title: t("clauses.reviewBeforeBodyAction"),
+    });
+    return false;
+  };
 
   return (
     <div className="mx-auto w-full max-w-2xl p-6">
@@ -284,6 +354,27 @@ const DetailContent = ({
         onSaveVersion={bodySave.snapshot}
         onFlushBody={bodySave.flush}
       />
+
+      {bodySave.conflict.status === "choice" && (
+        <div className="mt-4 rounded-lg border p-4" role="alert">
+          <p className="font-medium">{t("clauses.saveConflictTitle")}</p>
+          <p className="text-muted-foreground text-sm">
+            {t("clauses.saveConflictDescription")}
+          </p>
+          <div className="mt-3 flex gap-2">
+            <Button
+              onClick={() => {
+                detached(bodySave.keepMine(), "clause-detail.keep-mine");
+              }}
+            >
+              {t("clauses.keepMyText")}
+            </Button>
+            <Button onClick={bodySave.takeTheirs} variant="outline">
+              {t("clauses.takeTheirText")}
+            </Button>
+          </div>
+        </div>
+      )}
 
       <p className="text-muted-foreground mt-2 text-sm">
         {t("common.versionLabel", {
@@ -325,21 +416,7 @@ const DetailContent = ({
             canEdit={canEdit}
             detail={detail}
             bodySave={bodySave}
-            onReviewStatusChange={(status) => {
-              if (status !== "persisting") {
-                pendingReviewBody.current = null;
-              }
-              setReviewStatus(status);
-            }}
-            onReviewBody={(body) => {
-              pendingReviewBody.current = body;
-            }}
-            onBodyChange={(body) => {
-              if (pendingReviewBody.current !== null) {
-                pendingReviewBody.current = body;
-              }
-              bodySave.change(body);
-            }}
+            rewrite={resolvedTransport.rewrite}
           />
           <ClauseUsageNotesField
             canEdit={canEdit}
@@ -353,11 +430,19 @@ const DetailContent = ({
           <VariantsTab
             clauseId={clauseId}
             onRefresh={onRefresh}
-            onPromote={(body) =>
-              reviewStatus !== "resolved"
-                ? Promise.resolve(false)
-                : bodySave.restore(body)
-            }
+            onPromote={(body) => {
+              if (!bodyActionAllowed()) {
+                return Promise.resolve(false);
+              }
+              return bodySave.sequenceHead(async (expectedBody) => {
+                const head = await resolvedTransport.promote(
+                  body,
+                  expectedBody,
+                );
+                await cacheHead(head);
+                return head.body;
+              });
+            }}
             variants={detail.variants}
           />
         </TabsPanel>
@@ -366,25 +451,19 @@ const DetailContent = ({
           <HistoryTab
             clauseId={clauseId}
             currentBody={bodySave.body}
-            onRestore={(versionId) =>
-              reviewStatus !== "resolved"
-                ? Promise.resolve(false)
-                : bodySave.restoreFrom(async () => {
-                    const version = unwrapEden(
-                      await api
-                        .clauses({ clauseId })
-                        .versions({ versionId })
-                        .get(),
-                    );
-                    if (version instanceof Response) {
-                      throw new APIError({
-                        status: 500,
-                        message: t("common.unexpectedError"),
-                      });
-                    }
-                    return version.body;
-                  })
-            }
+            onRestore={(versionId) => {
+              if (!bodyActionAllowed()) {
+                return Promise.resolve(false);
+              }
+              return bodySave.sequenceHead(async (expectedBody) => {
+                const head = await resolvedTransport.restore(
+                  versionId,
+                  expectedBody,
+                );
+                await cacheHead(head);
+                return head.body;
+              });
+            }}
             versions={detail.versions}
           />
         </TabsPanel>
@@ -394,6 +473,86 @@ const DetailContent = ({
 };
 
 // \u2500\u2500 Header (inline title, category, delete) \u2500\u2500\u2500\u2500
+
+type ClauseLeaveState = "closed" | "confirm" | "failed" | "review";
+const ClauseLeaveDialog = ({
+  leaveDialog,
+  savingVersion,
+  reviewStatus,
+  onClose,
+  onBack,
+  leaveWithoutVersion,
+  saveVersionAndLeave,
+}: {
+  leaveDialog: ClauseLeaveState;
+  savingVersion: boolean;
+  reviewStatus: ClauseEditorReviewStatus;
+  onClose: () => void;
+  onBack: () => void;
+  leaveWithoutVersion: () => Promise<void>;
+  saveVersionAndLeave: () => Promise<void>;
+}) => {
+  const t = useTranslations();
+  const descriptions = {
+    closed: t("clauses.unsavedVersionLeaveConfirm"),
+    confirm: t("clauses.unsavedVersionLeaveConfirm"),
+    failed: t("clauses.saveFailedLeaveDescription"),
+    review: t("clauses.reviewBeforeLeaving"),
+  } satisfies Record<ClauseLeaveState, string>;
+  const description = descriptions[leaveDialog];
+  return (
+    <AlertDialog
+      open={leaveDialog !== "closed"}
+      onOpenChange={(open) => {
+        if (!open) {
+          onClose();
+        }
+      }}
+    >
+      <AlertDialogPopup>
+        <AlertDialogHeader>
+          <AlertDialogTitle>{t("common.confirmAction")}</AlertDialogTitle>
+          <AlertDialogDescription>{description}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogClose render={<Button variant="ghost" />}>
+            {t("common.goBackToEditing")}
+          </AlertDialogClose>
+          {(leaveDialog === "failed" || leaveDialog === "review") && (
+            <Button onClick={onBack} variant="destructive">
+              {t("clauses.leaveAndDiscard")}
+            </Button>
+          )}
+          {leaveDialog !== "review" && (
+            <Button
+              onClick={() => {
+                detached(
+                  leaveWithoutVersion(),
+                  "clause-detail.leave-without-version",
+                );
+              }}
+              variant="ghost"
+              disabled={savingVersion}
+            >
+              {t("clauses.leaveWithoutVersion")}
+            </Button>
+          )}
+          <Button
+            disabled={savingVersion || reviewStatus !== "resolved"}
+            onClick={() => {
+              detached(
+                saveVersionAndLeave(),
+                "clause-detail.save-version-and-leave",
+              );
+            }}
+          >
+            {t("clauses.saveVersionAndLeave")}
+          </Button>
+        </AlertDialogFooter>
+      </AlertDialogPopup>
+    </AlertDialog>
+  );
+};
 
 export const ClauseHeader = ({
   detail,
@@ -426,7 +585,7 @@ export const ClauseHeader = ({
   const [editingTitle, setEditingTitle] = useState(false);
   const [titleDraft, setTitleDraft] = useState(detail.title);
   const [deleteOpen, setDeleteOpen] = useState(false);
-  const [confirmLeave, setConfirmLeave] = useState(false);
+  const [leaveDialog, setLeaveDialog] = useState<ClauseLeaveState>("closed");
   const [savingVersion, setSavingVersion] = useState(false);
   const setNavOpen = useClauseNavStore((s) => s.setOpen);
   const setNavName = useClauseNavStore((s) => s.setName);
@@ -446,28 +605,34 @@ export const ClauseHeader = ({
     const ok = await saveVersion();
     if (ok) {
       onBack();
+      return;
     }
+    setLeaveDialog("failed");
   }, [saveVersion, onBack]);
 
   // Offer a version snapshot for edits made since the last publication.
   const handleBack = useCallback(() => {
     if (reviewStatus !== "resolved") {
+      setLeaveDialog("review");
       return;
     }
     if (dirtySinceVersion) {
-      setConfirmLeave(true);
+      setLeaveDialog("confirm");
       return;
     }
     onBack();
   }, [dirtySinceVersion, reviewStatus, onBack]);
 
   const leaveWithoutVersion = useCallback(async () => {
-    if (reviewStatus !== "resolved") {
+    if (reviewStatus === "pending") {
+      setLeaveDialog("review");
       return;
     }
     if (await onFlushBody()) {
       onBack();
+      return;
     }
+    setLeaveDialog("failed");
   }, [reviewStatus, onBack, onFlushBody]);
 
   // Publish the open clause to the breadcrumb (Knowledge › Vzorová ustanovení ›
@@ -654,30 +819,14 @@ export const ClauseHeader = ({
         </AlertDialog>
       )}
 
-      <LeaveConfirmDialog
-        cancelLabel={t("common.goBackToEditing")}
-        description={t("clauses.unsavedVersionLeaveConfirm")}
-        onOpenChange={setConfirmLeave}
-        open={confirmLeave}
-        primary={{
-          label: t("clauses.saveVersionAndLeave"),
-          onClick: () => {
-            detached(
-              saveVersionAndLeave(),
-              "clause-detail.save-version-and-leave",
-            );
-          },
-        }}
-        secondary={{
-          label: t("clauses.leaveWithoutVersion"),
-          variant: "ghost",
-          onClick: () => {
-            detached(
-              leaveWithoutVersion(),
-              "clause-detail.leave-without-version",
-            );
-          },
-        }}
+      <ClauseLeaveDialog
+        leaveDialog={leaveDialog}
+        savingVersion={savingVersion}
+        reviewStatus={reviewStatus}
+        onClose={() => setLeaveDialog("closed")}
+        onBack={onBack}
+        leaveWithoutVersion={leaveWithoutVersion}
+        saveVersionAndLeave={saveVersionAndLeave}
       />
     </div>
   );
@@ -689,16 +838,12 @@ const ClauseBodyEditor = ({
   detail,
   canEdit,
   bodySave,
-  onReviewStatusChange,
-  onReviewBody,
-  onBodyChange,
+  rewrite,
 }: {
   detail: ClauseDetail;
   canEdit: boolean;
   bodySave: ReturnType<typeof useClauseBodySave>;
-  onReviewStatusChange: (status: ClauseEditorReviewStatus) => void;
-  onReviewBody: (body: ClauseParagraph[]) => void;
-  onBodyChange: (body: ClauseParagraph[]) => void;
+  rewrite?: ClauseRewrite;
 }) => {
   if (!canEdit) {
     return (
@@ -715,13 +860,12 @@ const ClauseBodyEditor = ({
         onBlur={() => {
           detached(bodySave.flush(), "clause-detail.save-body");
         }}
-        onChange={onBodyChange}
+        onChange={bodySave.change}
         onReviewResolved={async (body) => {
-          onReviewBody(body);
-          onBodyChange(body);
-          await bodySave.flush();
+          await bodySave.resolveReview(body);
         }}
-        onReviewStatusChange={onReviewStatusChange}
+        onReviewStatusChange={bodySave.onReviewStatusChange}
+        rewrite={rewrite}
         title={detail.title}
         usageNotes={detail.usageNotes ?? undefined}
       />

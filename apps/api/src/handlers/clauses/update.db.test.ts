@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import { eq, inArray } from "drizzle-orm";
+import { Elysia } from "elysia";
 import fc from "fast-check";
 
 import { assertProperty } from "@stll/property-testing";
@@ -8,10 +9,12 @@ import { assertProperty } from "@stll/property-testing";
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import { clauses, clauseVersions } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
+import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ClauseBody } from "@/api/lib/clauses/types";
 import { LIMITS } from "@/api/lib/limits";
+import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { toSafeDbMock } from "@/api/tests/scoped-db-mock";
 import {
@@ -21,7 +24,9 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
-import { updateClauseHandler } from "./update";
+import { getClauseHandler } from "./read";
+import updateClause, { updateClauseHandler } from "./update";
+import restoreClauseVersion from "./versions/restore";
 
 let testDb: TestDatabase;
 let ids: TestIds;
@@ -60,6 +65,188 @@ const seedClause = async (body: ClauseBody = initialBody) => {
 };
 
 describe("clause body preconditions", () => {
+  test("restore honors its precondition and returns the audited server head", async () => {
+    const clauseId = await seedClause();
+    const versionId = createSafeId<"clauseVersion">();
+    await testDb.insert(clauseVersions).values({
+      id: versionId,
+      organizationId: ids.orgA,
+      clauseId,
+      version: 1,
+      body: nextBody,
+    });
+    const audits: AuditEvent[] = [];
+    const restore = async (expectedBody: ClauseBody) =>
+      await restoreClauseVersion.handler(
+        createTestHandlerContext<
+          Parameters<typeof restoreClauseVersion.handler>[0]
+        >({
+          safeDb,
+          session: { activeOrganizationId: ids.orgA },
+          user: { id: ids.userA1 },
+          params: { clauseId, versionId },
+          body: { expectedBody },
+          recordAuditEvent: async (_tx, event) => {
+            audits.push(event);
+          },
+        }),
+      );
+    expect(await restore([{ text: "Older" }])).toMatchObject({ code: 409 });
+    expect(audits).toHaveLength(0);
+    expect(
+      (
+        await testDb.query.clauses.findFirst({
+          where: { id: { eq: clauseId } },
+        })
+      )?.body,
+    ).toEqual(initialBody);
+    expect(
+      await testDb.$count(
+        clauseVersions,
+        eq(clauseVersions.clauseId, clauseId),
+      ),
+    ).toBe(1);
+    expect(await restore(initialBody)).toMatchObject({
+      body: nextBody,
+      currentVersion: 2,
+      updatedAt: expect.any(Date),
+    });
+    expect(audits).toHaveLength(1);
+    expect(audits.at(0)?.changes).toMatchObject({
+      restoredFromVersion: { new: 1 },
+    });
+  });
+
+  test("a committed snapshot can be replayed with the original precondition", async () => {
+    const clauseId = await seedClause();
+    const replay = () =>
+      updateClauseHandler({
+        safeDb,
+        organizationId: ids.orgA,
+        clauseId,
+        body: {
+          body: nextBody,
+          expectedBody: initialBody,
+          snapshotVersion: true,
+        },
+        recordAuditEvent: async () => undefined,
+      });
+    for (let request = 0; request < 2; request += 1) {
+      const result = await Result.gen(replay);
+      expect(Result.isOk(result)).toBe(true);
+    }
+    expect(
+      await testDb.$count(
+        clauseVersions,
+        eq(clauseVersions.clauseId, clauseId),
+      ),
+    ).toBe(1);
+    expect(
+      (
+        await testDb.query.clauses.findFirst({
+          where: { id: { eq: clauseId } },
+        })
+      )?.body,
+    ).toEqual(nextBody);
+  });
+
+  test("HTTP read bodies remain valid preconditions after import", async () => {
+    const importedBody = [
+      {
+        text: "List text",
+        listKind: "bullet",
+        listLevel: 1,
+        style: null,
+        level: "wrong",
+        extra: "extension",
+      },
+      {
+        text: "{% if party %}",
+        isDirective: true,
+        directiveKind: "if",
+        directiveExpression: "party",
+        runs: [{ text: "{% if party %}", bold: null }],
+      },
+    ];
+    const clauseId = await seedClause(asTestRaw<ClauseBody>(importedBody));
+    const app = new Elysia()
+      .get("/clause", async () => {
+        const result = await Result.gen(() =>
+          getClauseHandler({ safeDb, organizationId: ids.orgA, clauseId }),
+        );
+        return result.unwrap();
+      })
+      .post(
+        "/clause",
+        async ({ body, set }) => {
+          const result = await Result.gen(() =>
+            updateClauseHandler({
+              safeDb,
+              organizationId: ids.orgA,
+              clauseId,
+              body,
+              recordAuditEvent: async () => undefined,
+            }),
+          );
+          if (Result.isError(result)) {
+            set.status = result.error.status;
+            return { message: result.error.message };
+          }
+          return result.value;
+        },
+        { body: updateClause.config.body },
+      );
+    const readResponse = await app.handle(
+      new Request("http://localhost/clause"),
+    );
+    expect(readResponse.status).toBe(200);
+    const read = await readResponse.json();
+    expect(read.body).toEqual([
+      { text: "List text", listKind: "bullet", listLevel: 1 },
+      {
+        text: "{% if party %}",
+        isDirective: true,
+        directiveKind: "if",
+        directiveExpression: "party",
+        runs: [{ text: "{% if party %}" }],
+      },
+    ]);
+    const rawPreconditionResponse = await app.handle(
+      new Request("http://localhost/clause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          usageNotes: "Notes",
+          expectedBody: importedBody,
+        }),
+      }),
+    );
+    expect(rawPreconditionResponse.status).toBe(200);
+    const invalidBodyResponse = await app.handle(
+      new Request("http://localhost/clause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: importedBody, expectedBody: read.body }),
+      }),
+    );
+    expect(invalidBodyResponse.status).toBe(422);
+    const savedResponse = await app.handle(
+      new Request("http://localhost/clause", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ body: nextBody, expectedBody: read.body }),
+      }),
+    );
+    expect(savedResponse.status).toBe(200);
+    expect(
+      (
+        await testDb.query.clauses.findFirst({
+          where: { id: { eq: clauseId } },
+        })
+      )?.body,
+    ).toEqual(nextBody);
+  });
+
   test("clause body preconditions preserve paragraph content and order", async () => {
     await assertProperty(
       "clause body preconditions preserve paragraph content and order",
@@ -331,5 +518,55 @@ describe("clause body preconditions", () => {
       ),
     ).toBe(LIMITS.clauseVersionsPerClause);
     expect(audits).toBe(1);
+  });
+
+  test("restore at the version cap keeps the working body and history unchanged", async () => {
+    const clauseId = await seedClause(nextBody);
+    const versionIds = Array.from(
+      { length: LIMITS.clauseVersionsPerClause },
+      () => createSafeId<"clauseVersion">(),
+    );
+    await testDb.insert(clauseVersions).values(
+      versionIds.map((id, index) => ({
+        id,
+        organizationId: ids.orgA,
+        clauseId,
+        version: index + 1,
+        body: initialBody,
+      })),
+    );
+    const versionId = versionIds.at(0);
+    if (!versionId) {
+      throw new Error("Expected a stored version");
+    }
+    const before = await testDb.query.clauses.findFirst({
+      where: { id: { eq: clauseId } },
+    });
+    let audits = 0;
+    const result = await restoreClauseVersion.handler(
+      createTestHandlerContext<
+        Parameters<typeof restoreClauseVersion.handler>[0]
+      >({
+        safeDb,
+        session: { activeOrganizationId: ids.orgA },
+        user: { id: ids.userA1 },
+        params: { clauseId, versionId },
+        body: { expectedBody: nextBody },
+        recordAuditEvent: async () => {
+          audits += 1;
+        },
+      }),
+    );
+    expect(result).toMatchObject({ code: 400 });
+    expect(
+      await testDb.query.clauses.findFirst({ where: { id: { eq: clauseId } } }),
+    ).toEqual(before);
+    expect(
+      await testDb.$count(
+        clauseVersions,
+        eq(clauseVersions.clauseId, clauseId),
+      ),
+    ).toBe(LIMITS.clauseVersionsPerClause);
+    expect(audits).toBe(0);
   });
 });

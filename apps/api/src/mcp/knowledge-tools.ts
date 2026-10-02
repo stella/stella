@@ -44,6 +44,7 @@ import {
   type ClauseParagraph,
   type ClauseRun,
   isClauseBody,
+  normalizeClauseBody,
 } from "@/api/lib/clauses/types";
 import { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import { openPlaybookRun } from "@/api/lib/document-review/open-playbook-run";
@@ -1051,7 +1052,20 @@ const saveClauseArgsSchema = nullAsAbsent(
       body: v.optional(clauseBodyArgSchema),
       expected_body: v.optional(
         v.pipe(
-          clauseBodyArgSchema,
+          v.pipe(
+            v.array(
+              v.objectWithRest(
+                {
+                  text: v.pipe(
+                    v.string(),
+                    v.description("Paragraph text from the read body"),
+                  ),
+                },
+                v.unknown(),
+              ),
+            ),
+            v.minLength(1),
+          ),
           v.description(
             "Body from your last read; update only if the current body still matches. On conflict, read the clause again before saving.",
           ),
@@ -1258,7 +1272,7 @@ const handleSaveClauseTool: TypedMcpToolHandler<
         ...(clauseBody === undefined ? {} : { body: clauseBody }),
         ...(input.expected_body === undefined
           ? {}
-          : { expectedBody: input.expected_body.map(toClauseParagraph) }),
+          : { expectedBody: normalizeClauseBody(input.expected_body) }),
         ...(input.category_id === undefined
           ? {}
           : {

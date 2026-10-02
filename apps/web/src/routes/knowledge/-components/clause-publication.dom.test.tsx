@@ -1,4 +1,5 @@
 import { GlobalRegistrator } from "@happy-dom/global-registrator";
+import { Result } from "better-result";
 import {
   afterAll,
   afterEach,
@@ -6,33 +7,59 @@ import {
   describe,
   expect,
   jest,
+  spyOn,
   test,
 } from "bun:test";
 
+import type { ClauseParagraph } from "@/components/templates/clause-editor-types";
 import englishMessages from "@/i18n/langs/en.json";
 
+import type { ClauseDetailTransport, ClauseHead } from "./clause-detail";
 import type { ClauseBodyWrite } from "./use-clause-body-save";
 
 GlobalRegistrator.register({ url: "http://localhost:3000/knowledge" });
+// Importing the real page also initializes the auth client. Its unauthenticated
+// session probe is the only ambient transport this harness permits.
+const fetchBoundary = spyOn(globalThis, "fetch").mockImplementation(
+  async (input) => {
+    let url;
+    if (typeof input === "string") {
+      url = new URL(input, "http://localhost:3000");
+    } else if (input instanceof URL) {
+      url = input;
+    } else {
+      url = new URL(input.url);
+    }
+    if (url.pathname.startsWith("/api/auth/")) {
+      return Response.json(null);
+    }
+    throw new Error(
+      `unexpected network transport in clause test: ${url.pathname}`,
+    );
+  },
+);
 const { QueryClient, QueryClientProvider } =
   await import("@tanstack/react-query");
 const { act, cleanup, fireEvent, render, within } =
   await import("@testing-library/react");
-const { Input } = await import("@stll/ui/input");
 const { IntlProvider } = await import("use-intl");
+const { Editor } = await import("@tiptap/core");
 const { FormattingProvider } = await import("@/i18n/formatting-context");
 const { useClauseNavStore } =
   await import("@/stores/knowledge/clause-nav-store");
-const { ClauseHeader, HistoryTab } = await import("./clause-detail");
-const { useClauseBodySave } = await import("./use-clause-body-save");
-
+const { stellaToast } = await import("@stll/ui/toast");
+const { APIError } = await import("@/lib/errors/api");
+const { knowledgeKeys, clauseDetailOptions } =
+  await import("@/lib/knowledge/queries");
+const { DetailContent } = await import("./clause-detail");
+const { clauseBodyToTipTap } = await import("./clause-editor-tiptap");
 const A = [{ text: "Initial clause" }];
-const B_TEXT = "Edited clause";
-const C_TEXT = "Later edit";
-const HISTORY_TEXT = "Historical clause";
-const B = [{ text: B_TEXT }];
-const C = [{ text: C_TEXT }];
-const HISTORY = [{ text: HISTORY_TEXT }];
+const B = [{ text: "Edited clause" }];
+const C = [{ text: "Later edit" }];
+const R1 = [{ text: "First reviewed revision" }];
+const R2 = [{ text: "Second reviewed revision" }];
+const HISTORY = [{ text: "Historical clause" }];
+const REMOTE = [{ text: "Another writer" }];
 const VERSION = {
   id: "version_1",
   version: 1,
@@ -49,171 +76,277 @@ const DETAIL = {
   currentVersion: 1,
   createdAt: VERSION.createdAt,
   updatedAt: VERSION.createdAt,
-  variants: [],
+  variants: [
+    {
+      id: "variant_1",
+      label: "Alternative",
+      body: HISTORY,
+      sortOrder: 0,
+      createdAt: VERSION.createdAt,
+    },
+  ],
   versions: [VERSION],
-} satisfies Parameters<typeof ClauseHeader>[0]["detail"];
+} satisfies Parameters<typeof DetailContent>[0]["detail"];
+type Operation =
+  | { type: "save"; write: ClauseBodyWrite }
+  | { type: "restore"; versionId: string; expectedBody: ClauseParagraph[] }
+  | {
+      type: "promote";
+      body: ClauseParagraph[];
+      expectedBody: ClauseParagraph[];
+    };
 
 beforeEach(() => jest.useFakeTimers());
 afterEach(() => {
   cleanup();
   jest.useRealTimers();
 });
-afterAll(async () => GlobalRegistrator.unregister());
+afterAll(async () => {
+  fetchBoundary.mockRestore();
+  jest.restoreAllMocks();
+  await GlobalRegistrator.unregister();
+});
 
-const drain = async () => {
-  for (let index = 0; index < 20; index++) {
-    await Promise.resolve();
-  }
-  jest.advanceTimersByTime(0);
-};
-
-const mountPublication = () => {
-  const requests: {
-    write: ClauseBodyWrite;
-    deferred: ReturnType<typeof Promise.withResolvers<unknown>>;
-  }[] = [];
-  const errors: unknown[] = [];
-  const versions: (typeof A)[] = [];
-  let head = A;
-  let departures = 0;
+const mountDetail = () => {
+  const requests: (Operation & {
+    deferred: ReturnType<typeof Promise.withResolvers<ClauseHead>>;
+  })[] = [];
+  const starts = new Map<
+    number,
+    ReturnType<typeof Promise.withResolvers<undefined>>
+  >();
+  const rewrites: ReturnType<
+    typeof Promise.withResolvers<ClauseParagraph[]>
+  >[] = [];
+  const rewriteStarts = new Map<
+    number,
+    ReturnType<typeof Promise.withResolvers<undefined>>
+  >();
   const queryClient = new QueryClient({
     defaultOptions: { mutations: { retry: false } },
   });
-  const persist = async (write: ClauseBodyWrite) => {
-    const deferred = Promise.withResolvers<unknown>();
-    requests.push({ write, deferred });
-    await deferred.promise;
-    head = write.body;
-    if (write.snapshotVersion) {
-      versions.push(write.body);
-    }
+  const key = knowledgeKeys.clauses.detail("org_1", DETAIL.id);
+  queryClient.setQueryData(key, DETAIL);
+  let head: ClauseHead = {
+    body: A,
+    currentVersion: 1,
+    updatedAt: VERSION.createdAt,
   };
-  const Harness = () => {
-    const save = useClauseBodySave({
-      initialBody: A,
-      persist,
-      onError: (error) => errors.push(error),
-    });
-    return (
-      <>
-        <Input
-          aria-label="Clause text"
-          value={save.body.at(0)?.text ?? ""}
-          onChange={(event) => save.change([{ text: event.target.value }])}
-        />
-        <output aria-label="Version state">
-          {save.dirty ? "dirty" : "clean"}
-        </output>
-        <button
-          type="button"
-          onClick={() => useClauseNavStore.getState().open?.exit()}
-        >
-          {englishMessages.common.back}
-        </button>
-        <ClauseHeader
-          detail={DETAIL}
-          clauseId={DETAIL.id}
-          categories={[]}
-          canEdit
-          canDelete={false}
-          dirtySinceVersion={save.dirty}
-          reviewStatus="resolved"
-          onBack={() => {
-            departures += 1;
-          }}
-          onDeleted={() => {}}
-          onRefresh={() => {}}
-          onSaveVersion={save.snapshot}
-          onFlushBody={save.flush}
-        />
-        <HistoryTab
-          clauseId={DETAIL.id}
-          currentBody={save.body}
-          versions={[VERSION]}
-          onRestore={async (versionId) => {
-            expect(versionId).toBe(VERSION.id);
-            return save.restoreFrom(async () => HISTORY);
-          }}
-        />
-      </>
-    );
+  let departures = 0;
+  const toast = spyOn(stellaToast, "add").mockReturnValue("clause-test-toast");
+  toast.mockClear();
+  const request = async (operation: Operation) => {
+    const deferred = Promise.withResolvers<ClauseHead>();
+    const index = requests.length;
+    requests.push({ ...operation, deferred });
+    starts.get(index)?.resolve(undefined);
+    return deferred.promise;
   };
-  const view = render(
+  const transport = {
+    save: (write) => request({ type: "save", write }),
+    read: async () => head.body,
+    restore: (versionId, expectedBody) =>
+      request({ type: "restore", versionId, expectedBody }),
+    promote: (body, expectedBody) =>
+      request({ type: "promote", body, expectedBody }),
+    rewrite: async () => {
+      const deferred = Promise.withResolvers<ClauseParagraph[]>();
+      const index = rewrites.length;
+      rewrites.push(deferred);
+      rewriteStarts.get(index)?.resolve(undefined);
+      return deferred.promise;
+    },
+  } satisfies ClauseDetailTransport;
+  const content = (detail: typeof DETAIL) => (
     <QueryClientProvider client={queryClient}>
       <IntlProvider locale="en" messages={englishMessages} timeZone="UTC">
         <FormattingProvider locale="en" timeZone="UTC">
-          <Harness />
+          <button
+            type="button"
+            onClick={() => useClauseNavStore.getState().open?.exit()}
+          >
+            {englishMessages.clauses.backToList}
+          </button>
+          <DetailContent
+            organizationId="org_1"
+            detail={detail}
+            clauseId={DETAIL.id}
+            categories={[]}
+            canEdit
+            canDelete={false}
+            onBack={() => {
+              departures += 1;
+            }}
+            onDeleted={() => {}}
+            onRefresh={() => {}}
+            transport={transport}
+          />
         </FormattingProvider>
       </IntlProvider>
-    </QueryClientProvider>,
+    </QueryClientProvider>
   );
-  const change = async (text: string) =>
-    act(async () => {
-      fireEvent.change(view.getByRole("textbox", { name: "Clause text" }), {
-        target: { value: text },
-      });
-      await drain();
-    });
+  let view = render(content(DETAIL));
+  const editor = () => {
+    const element = view.container.querySelector(".tiptap");
+    if (
+      !element ||
+      !("editor" in element) ||
+      !(element.editor instanceof Editor)
+    ) {
+      throw new Error("expected the real mounted clause editor");
+    }
+    return element.editor;
+  };
   const click = async (button: HTMLElement) =>
     act(async () => {
       fireEvent.click(button);
-      await drain();
     });
-  const resolve = async (index: number) => {
-    const request = requests.at(index);
-    expect(request).toBeDefined();
+  const edit = async (body: ClauseParagraph[]) =>
+    act(() => {
+      editor().commands.setContent(clauseBodyToTipTap(body));
+    });
+  const tick = async () =>
+    act(async () => {
+      jest.advanceTimersByTime(1200);
+    });
+  const started = async (index: number) => {
     await act(async () => {
-      request?.deferred.resolve(undefined);
-      await drain();
+      if (requests.at(index)) {
+        return;
+      }
+      const barrier = Promise.withResolvers<undefined>();
+      starts.set(index, barrier);
+      await barrier.promise;
+    });
+    const pending = requests.at(index);
+    if (!pending) {
+      throw new Error("expected detail write transport to start");
+    }
+    return pending;
+  };
+  const settle = async (
+    index: number,
+    body: ClauseParagraph[],
+    failure?: unknown,
+  ) => {
+    const pending = await started(index);
+    await act(async () => {
+      if (failure !== undefined) {
+        pending.deferred.reject(failure);
+        return;
+      }
+      const publication =
+        pending.type !== "save" || pending.write.snapshotVersion === true;
+      head = {
+        body,
+        currentVersion: head.currentVersion + (publication ? 1 : 0),
+        updatedAt: "2026-01-02T00:00:00Z",
+      };
+      pending.deferred.resolve(head);
     });
   };
+  const rewrite = async (index: number, body: ClauseParagraph[]) => {
+    await click(
+      view.getByRole("button", {
+        name: englishMessages.ai.editWithAI,
+        exact: true,
+      }),
+    );
+    await act(async () => {
+      if (!rewrites.at(index)) {
+        const barrier = Promise.withResolvers<undefined>();
+        rewriteStarts.set(index, barrier);
+        await barrier.promise;
+      }
+      const pending = rewrites.at(index);
+      if (!pending) {
+        throw new Error("expected injected rewrite transport");
+      }
+      pending.resolve(body);
+    });
+  };
+  const saveButton = () =>
+    view.getByRole("button", { name: englishMessages.clauses.saveAsVersion });
+  const rerenderBody = async (body: ClauseParagraph[]) =>
+    act(() => view.rerender(content({ ...DETAIL, body })));
+  const setRemote = (body: ClauseParagraph[]) => {
+    head = { ...head, body };
+  };
+  const reopen = () => {
+    const cached = queryClient.getQueryData(
+      clauseDetailOptions("org_1", DETAIL.id).queryKey,
+    );
+    if (!cached) {
+      throw new Error("expected acknowledged head in cache before reopening");
+    }
+    view.unmount();
+    view = render(content({ ...DETAIL, body: cached.body }));
+  };
   return {
-    view,
+    get view() {
+      return view;
+    },
+    queryClient,
+    key,
     requests,
-    errors,
-    versions,
-    change,
+    toast,
+    editor,
     click,
-    resolve,
+    edit,
+    tick,
+    started,
+    settle,
+    rewrite,
+    reopen,
+    saveButton,
+    rerenderBody,
+    setRemote,
     head: () => head,
     departures: () => departures,
   };
 };
 
-describe("clause publication controls", () => {
-  test.each([
-    { action: "save version", laterEdit: false },
-    { action: "save version", laterEdit: true },
-    { action: "save and leave", laterEdit: false },
-    { action: "save and leave", laterEdit: true },
-    { action: "History restore", laterEdit: false },
-    { action: "History restore", laterEdit: true },
-  ])(
-    "$action with laterEdit=$laterEdit publishes through the shared live owner",
-    async ({ action, laterEdit }) => {
-      const save = mountPublication();
-      await save.change(B_TEXT);
-      if (action === "save version") {
+describe("clause detail with the real editor", () => {
+  test.each([false, true])(
+    "immediate version save retains the live body; later edit=%s",
+    async (laterEdit) => {
+      const save = mountDetail();
+      await save.edit(B);
+      await save.click(save.saveButton());
+      const pending = await save.started(0);
+      expect(pending).toMatchObject({
+        type: "save",
+        write: { body: B, expectedBody: A, snapshotVersion: true },
+      });
+      if (laterEdit) {
+        await save.edit(C);
+      }
+      await save.settle(0, B);
+      expect(save.head().body).toEqual(B);
+      if (!laterEdit) {
+        expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+        return;
+      }
+      expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+      await save.tick();
+      expect(await save.started(1)).toMatchObject({
+        type: "save",
+        write: { body: C, expectedBody: B },
+      });
+      await save.settle(1, C);
+      expect(save.editor().getText()).toBe("Later edit");
+    },
+  );
+
+  test.each(["History restore", "variant promotion"])(
+    "%s reseeds the mounted editor, reports success, closes the dialog and stays clean",
+    async (action) => {
+      const save = mountDetail();
+      const originalEditor = save.editor();
+      if (action === "History restore") {
         await save.click(
-          save.view.getByRole("button", {
-            name: englishMessages.clauses.saveAsVersion,
-          }),
+          save.view.getByRole("tab", { name: englishMessages.common.history }),
         );
-      } else if (action === "save and leave") {
-        await save.click(
-          save.view.getByRole("button", { name: englishMessages.common.back }),
-        );
-        await save.click(
-          save.view.getByRole("button", {
-            name: englishMessages.clauses.saveVersionAndLeave,
-          }),
-        );
-      } else {
-        await act(async () => {
-          jest.advanceTimersByTime(1200);
-          await drain();
-        });
-        expect(save.requests).toHaveLength(1);
         await save.click(
           save.view.getByRole("button", {
             name: englishMessages.clauses.restoreVersion,
@@ -224,107 +357,393 @@ describe("clause publication controls", () => {
             name: englishMessages.clauses.restoreVersion,
           }),
         );
-        expect(save.requests).toHaveLength(1);
-        await save.resolve(0);
-        expect(save.view.getByDisplayValue(HISTORY_TEXT)).toBeDefined();
-      }
-      const captured = action === "History restore" ? HISTORY : B;
-      const headIndex = action === "History restore" ? 1 : 0;
-      expect(save.requests.at(headIndex)?.write).toEqual({
-        body: captured,
-        expectedBody: action === "History restore" ? B : A,
-      });
-      expect(save.requests).toHaveLength(headIndex + 1);
-      expect(save.departures()).toBe(0);
-      await save.resolve(headIndex);
-      expect(save.requests.at(headIndex + 1)?.write).toEqual({
-        body: captured,
-        expectedBody: captured,
-        snapshotVersion: true,
-      });
-      if (laterEdit) {
-        if (action === "History restore") {
-          await save.click(
-            within(save.view.getByRole("alertdialog")).getByRole("button", {
-              name: englishMessages.common.cancel,
-            }),
-          );
+        expect(await save.started(0)).toMatchObject({
+          type: "restore",
+          versionId: VERSION.id,
+          expectedBody: A,
+        });
+      } else {
+        await save.click(
+          save.view.getByRole("tab", {
+            name: englishMessages.clauses.variants,
+          }),
+        );
+        const variantRow = save.view.getByText("Alternative").closest("li");
+        if (!variantRow) {
+          throw new Error("expected the variant row");
         }
-        await save.change(C_TEXT);
+        await save.click(
+          within(variantRow).getByRole("button", { name: "", exact: true }),
+        );
+        await save.click(
+          save.view.getByRole("menuitem", {
+            name: englishMessages.clauses.useAsMainBody,
+          }),
+        );
+        await save.click(
+          within(save.view.getByRole("alertdialog")).getByRole("button", {
+            name: englishMessages.clauses.useAsMainBody,
+          }),
+        );
+        expect(await save.started(0)).toMatchObject({
+          type: "promote",
+          body: HISTORY,
+          expectedBody: A,
+        });
       }
-      await save.resolve(headIndex + 1);
-      expect(save.head()).toEqual(captured);
-      expect(save.versions).toEqual([captured]);
-      expect(save.view.getByLabelText("Version state").textContent).toBe(
-        laterEdit ? "dirty" : "clean",
+      await save.settle(0, HISTORY);
+      expect(save.toast).toHaveBeenCalledWith(
+        expect.objectContaining({
+          type: "success",
+          title:
+            action === "History restore"
+              ? englishMessages.clauses.versionRestored
+              : englishMessages.clauses.variantPromoted,
+        }),
       );
-      expect(save.departures()).toBe(
-        action === "save and leave" && !laterEdit ? 1 : 0,
+      expect(save.view.queryByRole("alertdialog")).toBeNull();
+      expect(save.editor()).toBe(originalEditor);
+      expect(save.editor().getText()).toBe("Historical clause");
+      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      await save.tick();
+      expect(save.requests).toHaveLength(1);
+    },
+  );
+
+  test.each(["typing", "blur"])(
+    "review publication remains blocked after failed persist until %s retry succeeds",
+    async (retry) => {
+      const save = mountDetail();
+      await save.rewrite(0, R1);
+      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      await save.click(
+        save.view.getByRole("button", {
+          name: englishMessages.docxReview.acceptAll,
+        }),
+      );
+      expect(await save.started(0)).toMatchObject({
+        type: "save",
+        write: { body: R1, expectedBody: A },
+      });
+      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      await save.settle(0, R1, new Error("review persist refused"));
+      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      if (retry === "typing") {
+        await save.edit(C);
+        await save.tick();
+      } else {
+        await act(() =>
+          save.editor().emit("blur", {
+            editor: save.editor(),
+            event: new FocusEvent("blur"),
+            transaction: save.editor().state.tr,
+          }),
+        );
+      }
+      await save.started(1);
+      expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+      await save.settle(1, retry === "typing" ? C : R1);
+      expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+      await save.click(save.saveButton());
+      expect(await save.started(2)).toMatchObject({
+        type: "save",
+        write: { snapshotVersion: true, body: retry === "typing" ? C : R1 },
+      });
+      await save.settle(2, retry === "typing" ? C : R1);
+    },
+  );
+
+  test("settling an older accepted review cannot open publication during a newer review", async () => {
+    const save = mountDetail();
+    await save.rewrite(0, R1);
+    await save.click(
+      save.view.getByRole("button", {
+        name: englishMessages.docxReview.acceptAll,
+      }),
+    );
+    await save.started(0);
+    await save.rewrite(1, R2);
+    await save.settle(0, R1);
+    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+    expect(
+      save.view.getByRole("button", {
+        name: englishMessages.docxReview.acceptAll,
+      }),
+    ).toBeDefined();
+    await save.click(
+      save.view.getByRole("button", {
+        name: englishMessages.docxReview.acceptAll,
+      }),
+    );
+    await save.started(1);
+    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+    await save.settle(1, R2);
+    expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+  });
+
+  test("fully rejecting another rewrite cannot open publication while an earlier acceptance remains unpersisted", async () => {
+    const save = mountDetail();
+    await save.rewrite(0, R1);
+    await save.click(
+      save.view.getByRole("button", {
+        name: englishMessages.docxReview.acceptAll,
+      }),
+    );
+    await save.settle(0, R1, new Error("first acceptance unpersisted"));
+    await save.rewrite(1, R2);
+    await save.click(
+      save.view.getByRole("button", {
+        name: englishMessages.docxReview.rejectAll,
+      }),
+    );
+    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+    await act(() =>
+      save.editor().emit("blur", {
+        editor: save.editor(),
+        event: new FocusEvent("blur"),
+        transaction: save.editor().state.tr,
+      }),
+    );
+    await save.settle(1, R1);
+    expect(save.saveButton().hasAttribute("disabled")).toBe(false);
+  });
+
+  test("a clean external head delivery reseeds the real editor without a write", async () => {
+    const save = mountDetail();
+    await save.rerenderBody(REMOTE);
+    expect(save.editor().getText()).toBe("Another writer");
+    await save.tick();
+    expect(save.requests).toHaveLength(0);
+    expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+  });
+
+  test.each([false, true])(
+    "save and leave publishes the live editor body; later edit=%s",
+    async (laterEdit) => {
+      const save = mountDetail();
+      await save.edit(B);
+      await save.click(
+        save.view.getByRole("button", {
+          name: englishMessages.clauses.backToList,
+        }),
+      );
+      await save.click(
+        save.view.getByRole("button", {
+          name: englishMessages.clauses.saveVersionAndLeave,
+        }),
+      );
+      expect(await save.started(0)).toMatchObject({
+        type: "save",
+        write: { body: B, expectedBody: A, snapshotVersion: true },
+      });
+      expect(save.departures()).toBe(0);
+      if (laterEdit) {
+        await save.click(
+          save.view.getByRole("button", {
+            name: englishMessages.common.goBackToEditing,
+          }),
+        );
+        await save.edit(C);
+      }
+      await save.settle(0, B);
+      expect(save.departures()).toBe(laterEdit ? 0 : 1);
+      expect(save.editor().getText()).toBe(
+        laterEdit ? "Later edit" : "Edited clause",
       );
       if (!laterEdit) {
         return;
       }
-      await act(async () => {
-        jest.advanceTimersByTime(1200);
-        await drain();
+      await save.tick();
+      expect(await save.started(1)).toMatchObject({
+        type: "save",
+        write: { body: C, expectedBody: B },
       });
-      expect(save.requests.at(headIndex + 2)?.write).toEqual({
-        body: C,
-        expectedBody: captured,
+      await save.settle(1, C);
+    },
+  );
+
+  test.each(["leaveWithoutVersion", "saveVersionAndLeave"])(
+    "failed %s offers an explicit discard escape",
+    async (action) => {
+      const save = mountDetail();
+      await save.edit(B);
+      await save.click(
+        save.view.getByRole("button", {
+          name: englishMessages.clauses.backToList,
+        }),
+      );
+      await save.click(
+        save.view.getByRole("button", {
+          name: englishMessages.clauses[action],
+        }),
+      );
+      await save.settle(0, B, new Error("leave persist refused"));
+      expect(save.departures()).toBe(0);
+      expect(save.editor().getText()).toBe("Edited clause");
+      expect(
+        save.view.getByText(englishMessages.clauses.saveFailedLeaveDescription),
+      ).toBeDefined();
+      await save.click(
+        save.view.getByRole("button", {
+          name: englishMessages.clauses.leaveAndDiscard,
+        }),
+      );
+      expect(save.departures()).toBe(1);
+      expect(save.requests).toHaveLength(1);
+      expect(save.head().body).toEqual(A);
+    },
+  );
+
+  test("a review whose persistence failed still offers an explicit leave escape", async () => {
+    const save = mountDetail();
+    await save.rewrite(0, R1);
+    await save.click(
+      save.view.getByRole("button", {
+        name: englishMessages.docxReview.acceptAll,
+      }),
+    );
+    await save.settle(0, R1, new Error("review unavailable"));
+    await save.click(
+      save.view.getByRole("button", {
+        name: englishMessages.clauses.backToList,
+      }),
+    );
+    expect(
+      save.view.getByText(englishMessages.clauses.reviewBeforeLeaving),
+    ).toBeDefined();
+    await save.click(
+      save.view.getByRole("button", {
+        name: englishMessages.clauses.leaveAndDiscard,
+      }),
+    );
+    expect(save.departures()).toBe(1);
+  });
+
+  test.each(["keepMyText", "takeTheirText"])(
+    "an external delivery preserves local text until %s",
+    async (choice) => {
+      const save = mountDetail();
+      await save.edit(B);
+      save.setRemote(REMOTE);
+      await save.rerenderBody(REMOTE);
+      expect(save.editor().getText()).toBe("Edited clause");
+      expect(
+        save.view.getByText(englishMessages.clauses.saveConflictTitle),
+      ).toBeDefined();
+      await save.click(
+        save.view.getByRole("button", {
+          name: englishMessages.clauses[choice],
+        }),
+      );
+      if (choice === "takeTheirText") {
+        expect(save.editor().getText()).toBe("Another writer");
+        expect(save.saveButton().hasAttribute("disabled")).toBe(true);
+        await save.tick();
+        expect(save.requests).toHaveLength(0);
+        return;
+      }
+      expect(await save.started(0)).toMatchObject({
+        type: "save",
+        write: { body: B, expectedBody: REMOTE },
       });
-      await save.resolve(headIndex + 2);
-      expect(save.head()).toEqual(C);
-      expect(save.view.getByLabelText("Version state").textContent).toBe(
-        "dirty",
+      await save.settle(0, B);
+      expect(save.editor().getText()).toBe("Edited clause");
+      expect(
+        save.view.queryByText(englishMessages.clauses.saveConflictTitle),
+      ).toBeNull();
+    },
+  );
+
+  test.each(["History restore", "variant promotion"])(
+    "%s refusal leaves head and editor unchanged",
+    async (action) => {
+      const save = mountDetail();
+      if (action === "History restore") {
+        await save.click(
+          save.view.getByRole("tab", { name: englishMessages.common.history }),
+        );
+        await save.click(
+          save.view.getByRole("button", {
+            name: englishMessages.clauses.restoreVersion,
+          }),
+        );
+        await save.click(
+          within(save.view.getByRole("alertdialog")).getByRole("button", {
+            name: englishMessages.clauses.restoreVersion,
+          }),
+        );
+      } else {
+        await save.click(
+          save.view.getByRole("tab", {
+            name: englishMessages.clauses.variants,
+          }),
+        );
+        const row = save.view.getByText("Alternative").closest("li");
+        if (!row) {
+          throw new Error("expected the variant row");
+        }
+        await save.click(
+          within(row).getByRole("button", { name: "", exact: true }),
+        );
+        await save.click(
+          save.view.getByRole("menuitem", {
+            name: englishMessages.clauses.useAsMainBody,
+          }),
+        );
+        await save.click(
+          within(save.view.getByRole("alertdialog")).getByRole("button", {
+            name: englishMessages.clauses.useAsMainBody,
+          }),
+        );
+      }
+      await save.settle(
+        0,
+        HISTORY,
+        new APIError({ status: 400, message: "version cap reached" }),
+      );
+      expect(save.head().body).toEqual(A);
+      expect(save.editor().getText()).toBe("Initial clause");
+      expect(save.view.getByRole("alertdialog")).toBeDefined();
+      expect(save.requests).toHaveLength(1);
+      expect(save.toast).not.toHaveBeenCalledWith(
+        expect.objectContaining({ type: "success" }),
       );
     },
   );
 
-  test("save and leave stays mounted when the head write fails", async () => {
-    const save = mountPublication();
-    await save.change(B_TEXT);
-    await save.click(
-      save.view.getByRole("button", { name: englishMessages.common.back }),
-    );
-    await save.click(
-      save.view.getByRole("button", {
-        name: englishMessages.clauses.saveVersionAndLeave,
+  test("an acknowledged head survives cancelled refetch and reopening from cache", async () => {
+    const save = mountDetail();
+    const response = Promise.withResolvers<typeof DETAIL>();
+    const reading = Promise.withResolvers<undefined>();
+    const aborted = Promise.withResolvers<undefined>();
+    const refetch = Result.tryPromise(() =>
+      save.queryClient.fetchQuery({
+        queryKey: save.key,
+        staleTime: 0,
+        queryFn: async ({ signal }) => {
+          signal.addEventListener("abort", () => aborted.resolve(undefined), {
+            once: true,
+          });
+          reading.resolve(undefined);
+          return response.promise;
+        },
       }),
     );
-    const failure = new Error("clause write refused");
-    await act(async () => {
-      save.requests.at(0)?.deferred.reject(failure);
-      await drain();
+    await reading.promise;
+    await save.edit(B);
+    await save.click(save.saveButton());
+    await save.settle(0, B);
+    await aborted.promise;
+    expect((await refetch).isErr()).toBe(true);
+    expect(save.queryClient.getQueryData(save.key)).toMatchObject({ body: B });
+    await act(() => save.reopen());
+    expect(save.editor().getText()).toBe("Edited clause");
+    await save.edit(C);
+    await save.click(save.saveButton());
+    expect(await save.started(1)).toMatchObject({
+      type: "save",
+      write: { body: C, expectedBody: B, snapshotVersion: true },
     });
-    expect(save.errors).toEqual([failure]);
-    expect(save.requests).toHaveLength(1);
-    expect(save.versions).toEqual([]);
-    expect(save.departures()).toBe(0);
-    expect(save.view.getByLabelText("Version state").textContent).toBe("dirty");
-  });
-
-  test("leaving without a version waits for the head and stays mounted when that write fails", async () => {
-    const save = mountPublication();
-    await save.change(B_TEXT);
-    await save.click(
-      save.view.getByRole("button", { name: englishMessages.common.back }),
-    );
-    await save.click(
-      save.view.getByRole("button", {
-        name: englishMessages.clauses.leaveWithoutVersion,
-      }),
-    );
-    expect(save.requests.at(0)?.write).toEqual({ body: B, expectedBody: A });
-    expect(save.departures()).toBe(0);
-    const failure = new Error("head write refused");
-    await act(async () => {
-      save.requests.at(0)?.deferred.reject(failure);
-      await drain();
-    });
-    expect(save.errors).toEqual([failure]);
-    expect(save.departures()).toBe(0);
-    expect(save.head()).toEqual(A);
-    expect(save.versions).toEqual([]);
-    expect(save.view.getByLabelText("Version state").textContent).toBe("dirty");
+    await save.settle(1, C);
   });
 });

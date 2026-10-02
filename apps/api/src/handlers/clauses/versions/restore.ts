@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { deepEquals } from "bun";
 import { and, eq } from "drizzle-orm";
 import { t } from "elysia";
 
@@ -8,6 +9,8 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
+import { clauseExpectedBodySchema } from "@/api/lib/clauses/body-schema";
+import { normalizeClauseBody } from "@/api/lib/clauses/types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
@@ -25,7 +28,8 @@ const config = {
     "a new version. History is append-only: the older versions stay and the " +
     "version number moves forward rather than back. The body is read " +
     "server-side from the version id, never supplied by the caller. Refused " +
-    "when the clause is at its version limit.",
+    "when the clause is at its version limit. Optionally pass expectedBody " +
+    "from your last read to require the head still matches before restoring.",
   permissions: { clause: ["update"] },
   mcp: {
     type: "capability",
@@ -33,6 +37,9 @@ const config = {
     consumesServices: false,
   },
   params: restoreClauseVersionParamsSchema,
+  body: t.Optional(
+    t.Object({ expectedBody: t.Optional(clauseExpectedBodySchema) }),
+  ),
 } satisfies HandlerConfig;
 
 type RestorePlan = { type: "at-limit" } | { type: "ok"; newVersion: number };
@@ -61,7 +68,7 @@ export const planClauseVersionRestore = (args: {
  */
 const restoreClauseVersion = createSafeRootHandler(
   config,
-  async function* ({ safeDb, session, params, recordAuditEvent }) {
+  async function* ({ safeDb, session, params, body, recordAuditEvent }) {
     const organizationId = session.activeOrganizationId;
     const { clauseId, versionId } = params;
 
@@ -107,7 +114,7 @@ const restoreClauseVersion = createSafeRootHandler(
       );
     }
 
-    const restoredBody = version.body;
+    const restoredBody = normalizeClauseBody(version.body);
 
     const updated = yield* Result.await(
       safeDb(async (tx) => {
@@ -117,7 +124,10 @@ const restoreClauseVersion = createSafeRootHandler(
         // second request sees the first's committed insert: it cannot reuse the
         // same (clauseId, version) or push the clause past the cap.
         const [locked] = await tx
-          .select({ currentVersion: clauses.currentVersion })
+          .select({
+            currentVersion: clauses.currentVersion,
+            body: clauses.body,
+          })
           .from(clauses)
           .where(
             and(
@@ -128,6 +138,16 @@ const restoreClauseVersion = createSafeRootHandler(
           .for("update");
         if (!locked) {
           return { ok: false as const, reason: "not-found" as const };
+        }
+
+        if (
+          body?.expectedBody !== undefined &&
+          !deepEquals(
+            normalizeClauseBody(locked.body),
+            normalizeClauseBody(body.expectedBody),
+          )
+        ) {
+          return { ok: false as const, reason: "conflict" as const };
         }
 
         const versionCount = await tx.$count(
@@ -162,6 +182,7 @@ const restoreClauseVersion = createSafeRootHandler(
             id: clauses.id,
             currentVersion: clauses.currentVersion,
             updatedAt: clauses.updatedAt,
+            body: clauses.body,
           });
 
         await tx.insert(clauseVersions).values({
@@ -193,6 +214,14 @@ const restoreClauseVersion = createSafeRootHandler(
     );
 
     if (!updated.ok) {
+      if (updated.reason === "conflict") {
+        return Result.err(
+          new HandlerError({
+            status: 409,
+            message: "Clause body changed. Reload the clause before restoring.",
+          }),
+        );
+      }
       if (updated.reason === "not-found") {
         return Result.err(
           new HandlerError({ status: 404, message: "Clause not found" }),

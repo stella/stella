@@ -57,3 +57,8 @@ const clauseParagraphSchema = t.Object({
 export const clauseBodySchema = t.Array(clauseParagraphSchema, {
   minItems: 1,
 });
+
+export const clauseExpectedBodySchema = t.Array(
+  t.Object({ text: t.String() }, { additionalProperties: true }),
+  { minItems: 1 },
+);

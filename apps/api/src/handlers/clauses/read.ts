@@ -5,6 +5,7 @@ import { t } from "elysia";
 import type { SafeDb } from "@/api/db/safe-db";
 import { clauses } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
+import { isClauseBody, normalizeClauseBody } from "@/api/lib/clauses/types";
 import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -236,7 +237,17 @@ export const getClauseHandler = async function* ({
     );
   }
 
-  return Result.ok(clause);
+  for (const variant of clause.variants) {
+    if (isClauseBody(variant.body))
+      {variant.body = normalizeClauseBody(variant.body);}
+  }
+
+  return Result.ok({
+    ...clause,
+    body: isClauseBody(clause.body)
+      ? normalizeClauseBody(clause.body)
+      : clause.body,
+  });
 };
 
 // ── Get version body ─────────────────────────────────
@@ -297,5 +308,10 @@ export const getClauseVersionHandler = async function* ({
     );
   }
 
-  return Result.ok(version);
+  return Result.ok({
+    ...version,
+    body: isClauseBody(version.body)
+      ? normalizeClauseBody(version.body)
+      : version.body,
+  });
 };
