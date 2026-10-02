@@ -687,6 +687,8 @@ const runRoundTrip = async ({
     scopedDb: buildStubScopedDb(),
     organizationId,
     requiredFields: "allow-partial",
+    // Fixture fills never reach a third-party lookup.
+    thirdPartyOutboundPermit: undefined,
   });
   if ("usageRejection" in filled || "requiredFieldsRejection" in filled) {
     return panic("allow-partial fill returned a rejection");
