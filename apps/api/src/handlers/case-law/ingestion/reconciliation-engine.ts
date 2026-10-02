@@ -113,6 +113,7 @@ import {
   parkReconciliationItem,
   pruneUnlistedTerminalItems,
   resolveReconciliationItem,
+  resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
   refreshTrackedReconciliationItems,
@@ -1240,6 +1241,7 @@ const ingestListedItem = async ({
     }
     await lease.beforeDatabaseMark();
     const parked = await parkReconciliationItem(scopedDb, {
+      revisionOf: reconciliation.revisionOf,
       sourceId,
       leaseToken: lease.leaseToken,
       slice,
@@ -1275,6 +1277,7 @@ const ingestListedItem = async ({
         // away rather than spending the whole schedule proving it.
         await lease.beforeDatabaseMark();
         const retired = await retireReconciliationItem(scopedDb, {
+          revisionOf: reconciliation.revisionOf,
           sourceId,
           leaseToken: lease.leaseToken,
           slice,
@@ -1499,6 +1502,7 @@ const walkSlice = async ({
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   await lease.beforeDatabaseMark();
   const refresh = await refreshTrackedReconciliationItems(scopedDb, {
+    revisionOf: reconciliation.revisionOf,
     sourceId,
     leaseToken: lease.leaseToken,
     items,
@@ -1758,9 +1762,8 @@ type RetryParkedOptions = {
 /**
  * Re-attempt the parked items that have come due.
  *
- * Each retry processes the payload revision recorded by the latest complete
- * listing walk. An identity already held by a crawl may describe an older
- * revision and cannot acknowledge this pending input.
+ * A complete held identity resolves the queue without a publisher fetch;
+ * remaining retries consume the latest recorded listing payload.
  */
 const retryParkedItems = async ({
   adapterKey,
@@ -1781,7 +1784,7 @@ const retryParkedItems = async ({
   });
   summary.keyable = due.length;
 
-  const outstanding: KeyedListingItem[] = due.map(
+  const candidates: KeyedListingItem[] = due.map(
     ({ identityKey, payload, slice }) => ({
       identity: parseListingIdentityKey(identityKey) ?? {
         type: "unidentifiable",
@@ -1792,8 +1795,35 @@ const retryParkedItems = async ({
     }),
   );
 
-  // A crawl may already hold this identity from an older listing revision.
-  // Only processing the queued payload can acknowledge that revision.
+  const held = await selectHeldIdentityKeys(scopedDb, {
+    sourceId,
+    identities: candidates.map(({ identity }) => identity),
+    requireDetail: reconciliation.heldRequiresDetail === true,
+    heldWithoutDetail: reconciliation.heldWithoutDetail,
+    rowRules: {
+      withoutDocument: reconciliation.heldWithoutDocument,
+      recheck: reconciliation.recheckHeld,
+    },
+  });
+  const heldItems = candidates.filter(({ identityKey }) =>
+    held.has(identityKey),
+  );
+  summary.heldBefore = heldItems.length;
+  if (heldItems.length > 0) {
+    await lease.beforeDatabaseMark();
+    const resolved = await resolveReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: lease.leaseToken,
+      items: heldItems,
+    });
+    if (resolved.outcome === "superseded") {
+      summary.deferred = candidates.length;
+      return summary;
+    }
+  }
+  const outstanding = candidates.filter(
+    ({ identityKey }) => !held.has(identityKey),
+  );
   const ingestEndsAtMs = now().getTime() + RECONCILIATION_INGEST_BUDGET_MS;
   const sliceBuilders = new Map<
     string,

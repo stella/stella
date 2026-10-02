@@ -1433,6 +1433,14 @@ const createAdapter = <const TKey extends AtRisAdapterKey>(
     maxSyncPages: 1,
 
     reconciliation: {
+      // Decision metadata and document references describe the item, without search result coordinates.
+      revisionOf: (payload) =>
+        isRecord(payload)
+          ? {
+              metadata: nestedRecord(payload, "Data", "Metadaten"),
+              documents: nestedRecord(payload, "Data", "Dokumentliste"),
+            }
+          : null,
       firstSlice: source.firstSlice,
       sliceOf: (now) => tipSlice(source, now),
       nextSlice: (slice) => {

@@ -1714,6 +1714,13 @@ export const plNsaAdapter = defineSourceAdapter({
   },
 
   reconciliation: {
+    // Only the listed identity is a row signal; dataset revision and shard/row coordinates describe the snapshot.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            identity: payload["identity"],
+          }
+        : null,
     firstSlice: sliceName(0),
     // A snapshot has no present: its newest slice is its last shard.
     sliceOf: () => lastSlice,

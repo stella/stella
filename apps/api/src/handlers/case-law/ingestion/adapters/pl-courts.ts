@@ -2532,6 +2532,37 @@ export const plCourtsAdapter = defineSourceAdapter({
    * against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            id: payload["id"],
+            href: payload["href"],
+            courtType: payload["courtType"],
+            courtCases: payload["courtCases"],
+            judgmentType: payload["judgmentType"],
+            judgmentDate: payload["judgmentDate"],
+            judges: payload["judges"],
+            textContent: payload["textContent"],
+            keywords: payload["keywords"],
+            division: payload["division"],
+            chambers: payload["chambers"],
+            personnelType: payload["personnelType"],
+            judgmentForm: payload["judgmentForm"],
+            source: payload["source"],
+            courtReporters: payload["courtReporters"],
+            decision: payload["decision"],
+            summary: payload["summary"],
+            legalBases: payload["legalBases"],
+            referencedRegulations: payload["referencedRegulations"],
+            referencedCourtCases: payload["referencedCourtCases"],
+            receiptDate: payload["receiptDate"],
+            meansOfAppeal: payload["meansOfAppeal"],
+            judgmentResult: payload["judgmentResult"],
+            lowerCourtJudgments: payload["lowerCourtJudgments"],
+            dissentingOpinions: payload["dissentingOpinions"],
+          }
+        : null,
     firstSlice: PL_COURTS_FIRST_SLICE,
     ...plCourtsDaySlices.walk,
     tipWindowDays: PL_COURTS_TIP_WINDOW_DAYS,

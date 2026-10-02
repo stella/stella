@@ -1479,6 +1479,16 @@ export const plSnAdapter = defineSourceAdapter({
   },
 
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            id: payload["id"],
+            sygnatura_sprawy: payload["sygnatura_sprawy"],
+            data_wydania: payload["data_wydania"],
+            forma_orzeczenia: payload["forma_orzeczenia"],
+          }
+        : null,
     firstSlice: PL_SN_FIRST_SLICE,
     ...plSnDaySlices.walk,
     tipWindowDays: PL_SN_TIP_WINDOW_DAYS,

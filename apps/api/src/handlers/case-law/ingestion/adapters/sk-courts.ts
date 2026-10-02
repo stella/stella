@@ -1745,6 +1745,20 @@ export const skCourtsAdapter = defineSourceAdapter({
    * against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            guid: payload["guid"],
+            spisovaZnacka: payload["spisovaZnacka"],
+            identifikacneCislo: payload["identifikacneCislo"],
+            sud: payload["sud"],
+            sudca: payload["sudca"],
+            datumVydania: payload["datumVydania"],
+            formaRozhodnutia: payload["formaRozhodnutia"],
+            povaha: payload["povaha"],
+          }
+        : null,
     firstSlice: SK_COURTS_FIRST_SLICE,
     ...skCourtsDaySlices.walk,
     tipWindowDays: SK_COURTS_TIP_WINDOW_DAYS,

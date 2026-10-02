@@ -25,6 +25,7 @@ import {
   refreshTrackedReconciliationItems,
   resetTerminalReconciliationItems,
   resolveReconciliationItem,
+  resolveReconciliationItems,
   retireReconciliationItem,
   selectDueReconciliationItems,
 } from "@/api/lib/legal-search/reconciliation-store";
@@ -97,6 +98,7 @@ test("lost source ownership supersedes every reconciliation mutation without cha
   const sourceId = await seedSource();
   const now = new Date("2026-10-02T12:00:00Z");
   await retireReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     sourceId,
     leaseToken: LEASE_TOKEN,
     identityKey: DOCUMENT_KEY,
@@ -115,6 +117,7 @@ test("lost source ownership supersedes every reconciliation mutation without cha
     .where(eq(caseLawSources.id, sourceId));
   expect(
     await parkReconciliationItem(scopedDb, {
+      revisionOf: (payload) => payload,
       sourceId,
       leaseToken: LEASE_TOKEN,
       identityKey: DOCUMENT_KEY,
@@ -126,6 +129,7 @@ test("lost source ownership supersedes every reconciliation mutation without cha
   ).toEqual({ outcome: "superseded" });
   expect(
     await retireReconciliationItem(scopedDb, {
+      revisionOf: (payload) => payload,
       sourceId,
       leaseToken: LEASE_TOKEN,
       identityKey: DOCUMENT_KEY,
@@ -145,6 +149,7 @@ test("lost source ownership supersedes every reconciliation mutation without cha
   ).toEqual({ outcome: "superseded" });
   expect(
     await refreshTrackedReconciliationItems(scopedDb, {
+      revisionOf: (payload) => payload,
       sourceId,
       leaseToken: LEASE_TOKEN,
       items: [
@@ -199,6 +204,7 @@ test("repeated parks advance one row along the widening schedule", async () => {
 
   for (const [index, delayMs] of RECONCILIATION_RETRY_DELAYS_MS.entries()) {
     const parked = await parkReconciliationItem(scopedDb, {
+      revisionOf: (payload) => payload,
       leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
@@ -232,6 +238,7 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
   let attempts = 0;
   while (attempts < RECONCILIATION_TERMINAL_ATTEMPTS) {
     const parked = await parkReconciliationItem(scopedDb, {
+      revisionOf: (payload) => payload,
       leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
@@ -273,6 +280,7 @@ test("the attempt past the schedule retires the item and stops scheduling it", a
 test("an item a retry can never key is retired without serving the schedule", async () => {
   const sourceId = await seedSource();
   await retireReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -292,6 +300,7 @@ test("the due read hands out only what has come due, oldest first", async () => 
   const now = new Date("2026-08-11T09:00:00.000Z");
 
   await parkReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -304,6 +313,7 @@ test("the due read hands out only what has come due, oldest first", async () => 
   for (const attempt of [1, 2]) {
     expect(attempt).toBeGreaterThan(0);
     await parkReconciliationItem(scopedDb, {
+      revisionOf: (payload) => payload,
       leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
@@ -343,6 +353,7 @@ test("the due read hands out only what has come due, oldest first", async () => 
 test("the item is forgotten once its decision is stored", async () => {
   const sourceId = await seedSource();
   await parkReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -370,6 +381,7 @@ test("a reset puts retired items back into the hunt, due immediately", async () 
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
   await retireReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -406,6 +418,7 @@ test("a sliced reset leaves the other slices retired", async () => {
   const now = new Date("2026-08-11T09:00:00.000Z");
   const otherSlice = "2026-08-05";
   await retireReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -415,6 +428,7 @@ test("a sliced reset leaves the other slices retired", async () => {
     now,
   });
   await retireReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: otherSlice,
@@ -447,6 +461,7 @@ test("the listing names what a source carries, in both states", async () => {
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
   await parkReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -456,6 +471,7 @@ test("the listing names what a source carries, in both states", async () => {
     now,
   });
   await retireReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -500,6 +516,7 @@ test("paging the listing reaches every item exactly once", async () => {
   const now = new Date("2026-08-11T09:00:00.000Z");
   for (const identityKey of [DOCKET_KEY, DOCUMENT_KEY]) {
     await parkReconciliationItem(scopedDb, {
+      revisionOf: (payload) => payload,
       leaseToken: LEASE_TOKEN,
       sourceId,
       slice: SLICE,
@@ -545,6 +562,7 @@ test("the listing narrows to one slice", async () => {
   const sourceId = await seedSource();
   const now = new Date("2026-08-11T09:00:00.000Z");
   await parkReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: SLICE,
@@ -554,6 +572,7 @@ test("the listing narrows to one slice", async () => {
     now,
   });
   await parkReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId,
     slice: "2026-08-05",
@@ -577,6 +596,7 @@ test("the listing narrows to one slice", async () => {
 test("one source's items are invisible to another", async () => {
   const [first, second] = await Promise.all([seedSource(), seedSource()]);
   await parkReconciliationItem(scopedDb, {
+    revisionOf: (payload) => payload,
     leaseToken: LEASE_TOKEN,
     sourceId: first,
     slice: SLICE,
@@ -590,4 +610,182 @@ test("one source's items are invisible to another", async () => {
     parked: 0,
     terminal: 0,
   });
+});
+
+const contentRevision = (payload: unknown) => {
+  if (
+    typeof payload !== "object" ||
+    payload === null ||
+    !("content" in payload)
+  ) {
+    throw new TypeError("Expected content in revision fixture");
+  }
+  return payload.content;
+};
+
+test("position-only listing movement keeps retry state and unchanged visits do not rewrite payloads", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-10-02T12:00:00Z");
+  const payload = { content: "decision", position: 1 };
+  const options = {
+    sourceId,
+    leaseToken: LEASE_TOKEN,
+    identityKey: DOCUMENT_KEY,
+    slice: SLICE,
+    payload,
+    revisionOf: contentRevision,
+    now,
+    errorTag: "unavailable",
+  };
+  await retireReconciliationItem(scopedDb, options);
+  const before = await readRow(sourceId, DOCUMENT_KEY);
+  const refresh = await refreshTrackedReconciliationItems(scopedDb, {
+    sourceId,
+    leaseToken: LEASE_TOKEN,
+    revisionOf: contentRevision,
+    now,
+    items: [
+      {
+        identityKey: DOCUMENT_KEY,
+        slice: SLICE,
+        payload: { content: "decision", position: 2 },
+      },
+    ],
+  });
+  expect(refresh.outcome).toBe("refreshed");
+  if (refresh.outcome === "refreshed") {
+    expect(refresh.refreshedIdentityKeys.size).toBe(0);
+  }
+  expect(await readRow(sourceId, DOCUMENT_KEY)).toEqual(before);
+  await refreshTrackedReconciliationItems(scopedDb, {
+    sourceId,
+    leaseToken: LEASE_TOKEN,
+    revisionOf: contentRevision,
+    now,
+    items: [
+      {
+        identityKey: DOCUMENT_KEY,
+        slice: "moved",
+        payload: { content: "decision", position: 2 },
+      },
+    ],
+  });
+  const moved = await readRow(sourceId, DOCUMENT_KEY);
+  expect(moved?.slice).toBe("moved");
+  expect(moved?.payload).toEqual({ content: "decision", position: 2 });
+  expect(moved?.attempts).toBe(before?.attempts);
+  expect(moved?.status).toBe(before?.status);
+});
+
+test("park and retire reject stale projections using the persisted hash, including legacy null hashes", async () => {
+  for (const legacy of [false, true]) {
+    const sourceId = await seedSource();
+    const now = new Date("2026-10-02T12:00:00Z");
+    const options = {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      identityKey: DOCUMENT_KEY,
+      slice: SLICE,
+      payload: { content: "current", position: 1 },
+      revisionOf: contentRevision,
+      now,
+      errorTag: "unavailable",
+    };
+    await parkReconciliationItem(scopedDb, options);
+    await db
+      .update(caseLawReconciliationItems)
+      .set(
+        legacy
+          ? { payloadHash: null }
+          : { payload: { content: "obsolete", position: 1 } },
+      )
+      .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+    const before = await readRow(sourceId, DOCUMENT_KEY);
+    const stale = { ...options, payload: { content: "obsolete", position: 2 } };
+    expect(await parkReconciliationItem(scopedDb, stale)).toEqual({
+      outcome: "superseded",
+    });
+    expect(await retireReconciliationItem(scopedDb, stale)).toEqual({
+      outcome: "superseded",
+    });
+    expect(await readRow(sourceId, DOCUMENT_KEY)).toEqual(before);
+  }
+});
+
+test("terminal corrections preserve attempts and stop reviving after two failed corrections", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-10-02T12:00:00Z");
+  const options = {
+    sourceId,
+    leaseToken: LEASE_TOKEN,
+    identityKey: DOCUMENT_KEY,
+    slice: SLICE,
+    payload: { content: "a" },
+    revisionOf: contentRevision,
+    now,
+    errorTag: "unavailable",
+  };
+  await retireReconciliationItem(scopedDb, options);
+  for (let correction = 1; correction <= 6; correction += 1) {
+    const payload = { content: correction % 2 === 1 ? "b" : "a" };
+    const result = await refreshTrackedReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      revisionOf: contentRevision,
+      now,
+      items: [{ identityKey: DOCUMENT_KEY, slice: SLICE, payload }],
+    });
+    expect(result.outcome).toBe("refreshed");
+    if (result.outcome === "refreshed") {
+      expect(result.refreshedIdentityKeys.has(DOCUMENT_KEY)).toBe(
+        correction <= 2,
+      );
+    }
+    const row = await readRow(sourceId, DOCUMENT_KEY);
+    expect(row?.revivalCount).toBe(Math.min(correction, 2));
+    expect(row?.attempts).toBe(
+      RECONCILIATION_TERMINAL_ATTEMPTS + Math.min(correction - 1, 2),
+    );
+    if (correction <= 2) {
+      const missed = await parkReconciliationItem(scopedDb, {
+        ...options,
+        payload,
+      });
+      expect(missed).toMatchObject({
+        outcome: "recorded",
+        status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      });
+    } else {
+      expect(row?.status).toBe(RECONCILIATION_ITEM_STATUS.TERMINAL);
+    }
+  }
+});
+
+test("held-item batch resolution removes only the revisions it consumed", async () => {
+  const sourceId = await seedSource();
+  const now = new Date("2026-10-02T12:00:00Z");
+  for (const identityKey of [DOCUMENT_KEY, DOCKET_KEY]) {
+    await parkReconciliationItem(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      identityKey,
+      slice: SLICE,
+      payload: PAYLOAD,
+      revisionOf: (payload) => payload,
+      now,
+      errorTag: "unavailable",
+    });
+  }
+  expect(
+    await resolveReconciliationItems(scopedDb, {
+      sourceId,
+      leaseToken: LEASE_TOKEN,
+      items: [
+        { identityKey: DOCUMENT_KEY, payload: PAYLOAD },
+        { identityKey: DOCKET_KEY, payload: { newer: true } },
+      ],
+    }),
+  ).toEqual({ outcome: "recorded" });
+  expect(await readRow(sourceId, DOCUMENT_KEY)).toBeUndefined();
+  expect((await readRow(sourceId, DOCKET_KEY))?.payload).toEqual(PAYLOAD);
 });

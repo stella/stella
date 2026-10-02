@@ -171,6 +171,7 @@ afterEach(() => {
 });
 
 const stubReconciliation: SourceReconciliation = {
+  revisionOf: (payload) => payload,
   firstSlice: OWED_SLICE,
   sliceOf: toUtcDateString,
   nextSlice: (slice) => {
@@ -1509,6 +1510,45 @@ const seedDocumentIdentityRows = async (
     });
   }
 };
+
+test("due held identities resolve without fetching while listing-only identities retry", async () => {
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedDocumentIdentityRows(sourceId);
+  for (const [index, identityKey] of DOCUMENT_KEYS.entries()) {
+    await seedItem(sourceId, identityKey, {
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 5,
+      nextAttemptAt: new Date(NOW.getTime() - 1),
+      payload: LISTING_ITEMS[index],
+    });
+  }
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    heldRequiresDetail: true,
+  });
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries", keyable: 2, heldBefore: 1, terminal: 1 },
+  });
+  expect(builds).toEqual([LISTING_ITEMS[0]]);
+  expect(listed).toEqual([]);
+  const remaining = await db
+    .select({
+      identityKey: caseLawReconciliationItems.identityKey,
+      status: caseLawReconciliationItems.status,
+      attempts: caseLawReconciliationItems.attempts,
+    })
+    .from(caseLawReconciliationItems)
+    .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+  expect(remaining).toEqual([
+    {
+      identityKey: DOCUMENT_KEYS[0] ?? "",
+      status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      attempts: 6,
+    },
+  ]);
+});
 
 test("a listing-only row is not held where the source requires detail", async () => {
   // Such a row exists because a document fetch failed: the identity is stored

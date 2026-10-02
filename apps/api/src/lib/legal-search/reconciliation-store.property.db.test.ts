@@ -13,6 +13,7 @@ import {
   caseLawSources,
   relations,
   RECONCILIATION_ITEM_STATUS,
+  RECONCILIATION_MAX_REVIVALS,
 } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -82,12 +83,16 @@ const assertRevisionSequence = async ({
   actions,
 }: RevisionSequenceOptions) => {
   let currentPayload = payload;
-  let attempts = 1;
   let previous = await readItem(sourceId, identityKey);
+  let attempts = previous.attempts;
+  let revivalCount = previous.revivalCount;
+  let terminal = previous.status === RECONCILIATION_ITEM_STATUS.TERMINAL;
   for (const action of actions) {
+    let revived = false;
     switch (action) {
       case "miss": {
         const result = await parkReconciliationItem(scopedDb, {
+          revisionOf: (value) => value,
           sourceId,
           leaseToken,
           identityKey,
@@ -100,6 +105,7 @@ const assertRevisionSequence = async ({
           panic("The revision property fixture must retain its source lease");
         }
         attempts += 1;
+        terminal = attempts >= RECONCILIATION_TERMINAL_ATTEMPTS;
         expect(result.attempts).toBe(attempts);
         break;
       }
@@ -111,9 +117,16 @@ const assertRevisionSequence = async ({
             language: currentPayload.language,
             revision: currentPayload.revision + 1,
           };
-          attempts = 0;
+          revived = !terminal || revivalCount < RECONCILIATION_MAX_REVIVALS;
+          if (revived) {
+            if (terminal) {
+              revivalCount += 1;
+            }
+            terminal = false;
+          }
         }
         const result = await refreshTrackedReconciliationItems(scopedDb, {
+          revisionOf: (value) => value,
           sourceId,
           leaseToken,
           now,
@@ -123,9 +136,7 @@ const assertRevisionSequence = async ({
           panic("The revision property fixture must retain its source lease");
         }
         expect(result.trackedIdentityKeys.has(identityKey)).toBe(true);
-        expect(result.refreshedIdentityKeys.has(identityKey)).toBe(
-          action === "corrected",
-        );
+        expect(result.refreshedIdentityKeys.has(identityKey)).toBe(revived);
         break;
       }
       default: {
@@ -141,18 +152,19 @@ const assertRevisionSequence = async ({
       fingerprintReconciliationPayload(currentPayload),
     );
     expect(row.attempts).toBe(attempts);
+    expect(row.revivalCount).toBe(revivalCount);
     expect(row.status).toBe(
-      attempts >= RECONCILIATION_TERMINAL_ATTEMPTS
+      terminal
         ? RECONCILIATION_ITEM_STATUS.TERMINAL
         : RECONCILIATION_ITEM_STATUS.PARKED,
     );
     if (action === "unchanged") {
       expect(row).toEqual(previous);
-    } else if (action === "corrected") {
+    } else if (revived) {
       expect(row.lastError).toBeNull();
       expect(row.lastAttemptAt).toBeNull();
       expect(row.nextAttemptAt).toEqual(now);
-    } else {
+    } else if (action === "miss") {
       expect(row.lastError).toBe("detail-unavailable");
       expect(row.lastAttemptAt).toEqual(now);
       if (attempts >= RECONCILIATION_TERMINAL_ATTEMPTS) {
@@ -226,6 +238,7 @@ test(
           });
           try {
             const miss = {
+              revisionOf: (payload: unknown) => payload,
               sourceId,
               leaseToken,
               slice,
@@ -243,6 +256,7 @@ test(
             const unchanged = await refreshTrackedReconciliationItems(
               scopedDb,
               {
+                revisionOf: (value) => value,
                 sourceId,
                 leaseToken,
                 items: [{ slice, identityKey, payload: oldPayload }],
@@ -259,21 +273,10 @@ test(
             );
             expect(await readItem(sourceId, identityKey)).toEqual(missed);
 
-            // An older writer can replace a payload without replacing its revision fingerprint.
-            await db
-              .update(caseLawReconciliationItems)
-              .set({
-                payloadHash: fingerprintReconciliationPayload(correctedPayload),
-              })
-              .where(
-                and(
-                  eq(caseLawReconciliationItems.sourceId, sourceId),
-                  eq(caseLawReconciliationItems.identityKey, identityKey),
-                ),
-              );
             const refreshed = await refreshTrackedReconciliationItems(
               scopedDb,
               {
+                revisionOf: (value) => value,
                 sourceId,
                 leaseToken,
                 items: [{ slice, identityKey, payload: correctedPayload }],
@@ -293,7 +296,8 @@ test(
               fingerprintReconciliationPayload(correctedPayload),
             );
             expect(reopened.status).toBe(RECONCILIATION_ITEM_STATUS.PARKED);
-            expect(reopened.attempts).toBe(0);
+            expect(reopened.attempts).toBe(missed.attempts);
+            expect(reopened.revivalCount).toBe(terminal ? 1 : 0);
             expect(reopened.lastError).toBeNull();
             expect(reopened.lastAttemptAt).toBeNull();
             expect(reopened.nextAttemptAt).toEqual(now);
@@ -303,11 +307,17 @@ test(
               payload: correctedPayload,
             });
             const retried = await readItem(sourceId, identityKey);
-            expect(retried.attempts).toBe(1);
-            expect(retried.nextAttemptAt?.getTime()).toBeGreaterThan(
-              now.getTime(),
-            );
+            expect(retried.attempts).toBe(missed.attempts + 1);
+            if (terminal) {
+              expect(retried.status).toBe(RECONCILIATION_ITEM_STATUS.TERMINAL);
+              expect(retried.nextAttemptAt).toBeNull();
+            } else {
+              expect(retried.nextAttemptAt?.getTime()).toBeGreaterThan(
+                now.getTime(),
+              );
+            }
             const repeated = await refreshTrackedReconciliationItems(scopedDb, {
+              revisionOf: (value) => value,
               sourceId,
               leaseToken,
               items: [{ slice, identityKey, payload: correctedPayload }],

@@ -2655,6 +2655,15 @@ export const plNcourtAdapter = defineSourceAdapter({
   getTotalCount: plNcourtTotalCount,
 
   reconciliation: {
+    // Row XML is the content signal; aliases and quarantine neighbours only locate a result.
+    revisionOf: (payload) => {
+      if (!isSlicePayload(payload)) {
+        return null;
+      }
+      return "listingXml" in payload
+        ? { listingXml: payload.listingXml }
+        : { status: payload.quarantine.status };
+    },
     firstSlice: PL_NCOURT_FIRST_SLICE,
     ...plNcourtDaySlices.walk,
     tipWindowDays: PL_NCOURT_TIP_WINDOW_DAYS,

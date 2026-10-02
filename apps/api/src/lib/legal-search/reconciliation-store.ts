@@ -22,6 +22,7 @@ import {
   caseLawReconciliationItems,
   caseLawSources,
   RECONCILIATION_ITEM_STATUS,
+  RECONCILIATION_MAX_REVIVALS,
 } from "@/api/db/schema";
 import type { ReconciliationItemStatus } from "@/api/db/schema";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -120,14 +121,19 @@ export type ParkedReconciliationItem = {
   attempts: number;
 };
 
-export type ParkReconciliationItemInput = ReconciliationLease & {
-  slice: string;
-  identityKey: string;
-  payload: unknown;
-  /** An `errorTag`, never a raw message. */
-  errorTag: string;
-  now: Date;
+type ReconciliationRevision = {
+  revisionOf: (payload: unknown) => unknown;
 };
+
+export type ParkReconciliationItemInput = ReconciliationLease &
+  ReconciliationRevision & {
+    slice: string;
+    identityKey: string;
+    payload: unknown;
+    /** An `errorTag`, never a raw message. */
+    errorTag: string;
+    now: Date;
+  };
 
 export type ParkReconciliationItemResult =
   | { outcome: "superseded" }
@@ -155,11 +161,12 @@ export const parkReconciliationItem = async (
     slice,
     identityKey,
     payload,
+    revisionOf,
     errorTag,
     now,
   }: ParkReconciliationItemInput,
 ): Promise<ParkReconciliationItemResult> => {
-  const payloadHash = fingerprintReconciliationPayload(payload);
+  const payloadHash = fingerprintReconciliationPayload(revisionOf(payload));
   const result = await scopedDb(async (tx) => {
     if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
       return { outcome: "superseded" as const };
@@ -169,7 +176,8 @@ export const parkReconciliationItem = async (
         .select({
           attempts: caseLawReconciliationItems.attempts,
           status: caseLawReconciliationItems.status,
-          payload: caseLawReconciliationItems.payload,
+          payload: sql<unknown>`CASE WHEN ${caseLawReconciliationItems.payloadHash} IS NULL THEN ${caseLawReconciliationItems.payload} ELSE NULL END`,
+          payloadHash: caseLawReconciliationItems.payloadHash,
         })
         .from(caseLawReconciliationItems)
         .where(
@@ -184,7 +192,9 @@ export const parkReconciliationItem = async (
 
     if (
       existing !== undefined &&
-      fingerprintReconciliationPayload(existing.payload) !== payloadHash
+      (existing.payloadHash ??
+        fingerprintReconciliationPayload(revisionOf(existing.payload))) !==
+        payloadHash
     ) {
       return { outcome: "superseded" as const };
     }
@@ -218,7 +228,7 @@ export const parkReconciliationItem = async (
           caseLawReconciliationItems.sourceId,
           caseLawReconciliationItems.identityKey,
         ],
-        setWhere: sql`${caseLawReconciliationItems.payload} = ${JSON.stringify(payload)}::text::jsonb`,
+        setWhere: sql`${caseLawReconciliationItems.payloadHash} IS NOT DISTINCT FROM ${existing?.payloadHash ?? null}`,
         set: {
           // A later listing may place the same decision in another slice;
           // the row follows the listing rather than pinning the first one.
@@ -270,13 +280,14 @@ export const parkReconciliationItem = async (
   };
 };
 
-export type RetireReconciliationItemInput = ReconciliationLease & {
-  slice: string;
-  identityKey: string;
-  payload: unknown;
-  errorTag: string;
-  now: Date;
-};
+export type RetireReconciliationItemInput = ReconciliationLease &
+  ReconciliationRevision & {
+    slice: string;
+    identityKey: string;
+    payload: unknown;
+    errorTag: string;
+    now: Date;
+  };
 
 /**
  * Retire an item immediately, without serving the retry schedule.
@@ -293,11 +304,12 @@ export const retireReconciliationItem = async (
     slice,
     identityKey,
     payload,
+    revisionOf,
     errorTag,
     now,
   }: RetireReconciliationItemInput,
 ): Promise<ReconciliationMutationOutcome> => {
-  const payloadHash = fingerprintReconciliationPayload(payload);
+  const payloadHash = fingerprintReconciliationPayload(revisionOf(payload));
   const result = await scopedDb(async (tx) => {
     if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
       return { outcome: "superseded" as const };
@@ -306,7 +318,8 @@ export const retireReconciliationItem = async (
       await tx
         .select({
           status: caseLawReconciliationItems.status,
-          payload: caseLawReconciliationItems.payload,
+          payload: sql<unknown>`CASE WHEN ${caseLawReconciliationItems.payloadHash} IS NULL THEN ${caseLawReconciliationItems.payload} ELSE NULL END`,
+          payloadHash: caseLawReconciliationItems.payloadHash,
         })
         .from(caseLawReconciliationItems)
         .where(
@@ -321,7 +334,9 @@ export const retireReconciliationItem = async (
 
     if (
       existing !== undefined &&
-      fingerprintReconciliationPayload(existing.payload) !== payloadHash
+      (existing.payloadHash ??
+        fingerprintReconciliationPayload(revisionOf(existing.payload))) !==
+        payloadHash
     ) {
       return { outcome: "superseded" as const };
     }
@@ -347,7 +362,7 @@ export const retireReconciliationItem = async (
           caseLawReconciliationItems.sourceId,
           caseLawReconciliationItems.identityKey,
         ],
-        setWhere: sql`${caseLawReconciliationItems.payload} = ${JSON.stringify(payload)}::text::jsonb`,
+        setWhere: sql`${caseLawReconciliationItems.payloadHash} IS NOT DISTINCT FROM ${existing?.payloadHash ?? null}`,
         set: {
           slice,
           payload,
@@ -417,6 +432,38 @@ export const resolveReconciliationItem = async (
       .returning({ id: caseLawReconciliationItems.id });
     return { outcome: removed.length === 0 ? "superseded" : "recorded" };
   });
+
+type ResolveReconciliationItemsInput = ReconciliationLease & {
+  items: readonly { identityKey: string; payload: unknown }[];
+};
+
+/** Resolve a bounded batch of held listings without a transaction per identity. */
+export const resolveReconciliationItems = async (
+  scopedDb: ScopedDb,
+  { sourceId, leaseToken, items }: ResolveReconciliationItemsInput,
+): Promise<ReconciliationMutationOutcome> => {
+  for (const page of chunked(items, LISTING_REVISION_BATCH_SIZE)) {
+    const result = await scopedDb(async (tx) => {
+      if (!(await hasReconciliationLease(tx, { sourceId, leaseToken }))) {
+        return { outcome: "superseded" as const };
+      }
+      // audit: skip — ingestion bookkeeping for public source data
+      await tx.execute(sql`
+        DELETE FROM ${caseLawReconciliationItems} AS tracked
+        USING jsonb_to_recordset(${JSON.stringify(page)}::text::jsonb)
+          AS incoming("identityKey" text, payload jsonb)
+        WHERE tracked.source_id = ${sourceId}
+          AND tracked.identity_key = incoming."identityKey"
+          AND tracked.payload = incoming.payload
+      `);
+      return { outcome: "recorded" as const };
+    });
+    if (result.outcome === "superseded") {
+      return result;
+    }
+  }
+  return { outcome: "recorded" };
+};
 
 export type SelectDueReconciliationItemsInput = {
   sourceId: SafeId<"caseLawSource">;
@@ -499,10 +546,11 @@ export const countReconciliationItems = async (
 };
 
 const LISTING_REVISION_BATCH_SIZE = 250;
-type RefreshTrackedReconciliationItemsOptions = ReconciliationLease & {
-  items: readonly { identityKey: string; slice: string; payload: unknown }[];
-  now: Date;
-};
+type RefreshTrackedReconciliationItemsOptions = ReconciliationLease &
+  ReconciliationRevision & {
+    items: readonly { identityKey: string; slice: string; payload: unknown }[];
+    now: Date;
+  };
 
 type RefreshTrackedReconciliationItemsResult =
   | { outcome: "superseded" }
@@ -519,6 +567,7 @@ export const refreshTrackedReconciliationItems = async (
     sourceId,
     leaseToken,
     items,
+    revisionOf,
     now,
   }: RefreshTrackedReconciliationItemsOptions,
 ): Promise<RefreshTrackedReconciliationItemsResult> => {
@@ -531,7 +580,15 @@ export const refreshTrackedReconciliationItems = async (
       }
       const incoming = new Map(page.map((item) => [item.identityKey, item]));
       const rows = await tx
-        .select()
+        .select({
+          id: caseLawReconciliationItems.id,
+          identityKey: caseLawReconciliationItems.identityKey,
+          slice: caseLawReconciliationItems.slice,
+          status: caseLawReconciliationItems.status,
+          revivalCount: caseLawReconciliationItems.revivalCount,
+          payloadHash: caseLawReconciliationItems.payloadHash,
+          payload: sql<unknown>`CASE WHEN ${caseLawReconciliationItems.payloadHash} IS NULL THEN ${caseLawReconciliationItems.payload} ELSE NULL END`,
+        })
         .from(caseLawReconciliationItems)
         .where(
           and(
@@ -551,24 +608,28 @@ export const refreshTrackedReconciliationItems = async (
         if (item === undefined) {
           return panic("Tracked revision was not in its listing batch");
         }
-        const payloadHash = fingerprintReconciliationPayload(item.payload);
+        const payloadHash = fingerprintReconciliationPayload(
+          revisionOf(item.payload),
+        );
         const changed =
-          fingerprintReconciliationPayload(row.payload) !== payloadHash;
-        if (changed) {
+          (row.payloadHash ??
+            fingerprintReconciliationPayload(revisionOf(row.payload))) !==
+          payloadHash;
+        const revived =
+          changed &&
+          (row.status !== RECONCILIATION_ITEM_STATUS.TERMINAL ||
+            row.revivalCount < RECONCILIATION_MAX_REVIVALS);
+        if (revived) {
           refreshed.push(row.identityKey);
         }
-        if (
-          changed ||
-          row.payloadHash !== payloadHash ||
-          row.slice !== item.slice
-        ) {
+        if (changed || row.payloadHash === null || row.slice !== item.slice) {
           updates.push({
             id: row.id,
             slice: item.slice,
             payload: item.payload,
             payload_hash: payloadHash,
-            expected_payload: row.payload,
-            disposition: changed ? "revived" : "retained",
+            expected_hash: row.payloadHash,
+            disposition: revived ? "revived" : "retained",
           });
         }
       }
@@ -578,14 +639,14 @@ export const refreshTrackedReconciliationItems = async (
         UPDATE ${caseLawReconciliationItems} AS tracked
         SET slice = incoming.slice, payload = incoming.payload, payload_hash = incoming.payload_hash,
           status = CASE WHEN incoming.disposition = 'revived' THEN 'parked' ELSE tracked.status END,
-          attempts = CASE WHEN incoming.disposition = 'revived' THEN 0 ELSE tracked.attempts END,
+          revival_count = CASE WHEN incoming.disposition = 'revived' AND tracked.status = 'terminal' THEN tracked.revival_count + 1 ELSE tracked.revival_count END,
           next_attempt_at = CASE WHEN incoming.disposition = 'revived' THEN ${now}::timestamptz ELSE tracked.next_attempt_at END,
           last_error = CASE WHEN incoming.disposition = 'revived' THEN NULL ELSE tracked.last_error END,
           last_attempt_at = CASE WHEN incoming.disposition = 'revived' THEN NULL ELSE tracked.last_attempt_at END
         FROM jsonb_to_recordset(${JSON.stringify(updates)}::text::jsonb)
-          AS incoming(id uuid, slice text, payload jsonb, payload_hash text, expected_payload jsonb, disposition text)
+          AS incoming(id uuid, slice text, payload jsonb, payload_hash text, expected_hash text, disposition text)
         WHERE tracked.id = incoming.id AND tracked.source_id = ${sourceId}
-          AND tracked.payload = incoming.expected_payload
+          AND tracked.payload_hash IS NOT DISTINCT FROM incoming.expected_hash
         RETURNING tracked.id
       `),
         );

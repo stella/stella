@@ -1989,6 +1989,22 @@ export const czRegionalAdapter = defineSourceAdapter({
    * each item the way the ingest would, and compare against what is held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            jednaciCislo: payload["jednaciCislo"],
+            ecli: payload["ecli"],
+            soud: payload["soud"],
+            autor: payload["autor"],
+            predmetRizeni: payload["predmetRizeni"],
+            datumVydani: payload["datumVydani"],
+            datumZverejneni: payload["datumZverejneni"],
+            klicovaSlova: payload["klicovaSlova"],
+            zminenaUstanoveni: payload["zminenaUstanoveni"],
+            odkaz: payload["odkaz"],
+          }
+        : null,
     firstSlice: CZ_REGIONAL_FEED_START,
     ...czRegionalDaySlices.walk,
     tipWindowDays: CZ_REGIONAL_TIP_WINDOW_DAYS,

@@ -1059,6 +1059,8 @@ export type HeldRowRules = {
  * what it holds for a slice, independently of the cursor the crawl advanced.
  */
 export type SourceReconciliation = SourceSliceWalk & {
+  /** Per-record content/identity signal, excluding listing coordinates and corpus-wide revisions. */
+  revisionOf: (payload: unknown) => unknown;
   /**
    * Whether a stored row counts as held only when it carries the document,
    * and not when it carries the listing metadata alone.

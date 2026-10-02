@@ -2867,6 +2867,14 @@ export const euEcjAdapter = defineSourceAdapter({
    * is held.
    */
   reconciliation: {
+    // CELEX and language identify a manifestation; the listing exposes no content change signal.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            celex: payload["celex"],
+            language: payload["language"],
+          }
+        : null,
     firstSlice: COURT_EPOCH_YEAR,
     sliceOf: ecjYearOf,
     nextSlice: ecjNextSlice,

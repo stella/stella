@@ -1629,6 +1629,8 @@ export const RECONCILIATION_ITEM_STATUS = {
 export type ReconciliationItemStatus =
   (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
 
+export const RECONCILIATION_MAX_REVIVALS = 2;
+
 export const caseLawReconciliationItems = p.pgTable(
   "case_law_reconciliation_items",
   {
@@ -1644,6 +1646,8 @@ export const caseLawReconciliationItems = p.pgTable(
     payload: jsonb().$type<unknown>().notNull(),
     /** Lazy listing revision fingerprint; null is a row written before revision tracking. */
     payloadHash: p.varchar("payload_hash", { length: 64 }),
+    /** Lifetime terminal revivals; failed revived attempts preserve the retry budget. */
+    revivalCount: p.integer("revival_count").default(0).notNull(),
     status: p
       .varchar({ length: 16, enum: RECONCILIATION_ITEM_STATUSES })
       .default(RECONCILIATION_ITEM_STATUS.PARKED)
@@ -1679,6 +1683,10 @@ export const caseLawReconciliationItems = p.pgTable(
         Object.values(RECONCILIATION_ITEM_STATUS).map((value) => sql`${value}`),
         sql`, `,
       )})`,
+    ),
+    p.check(
+      "case_law_reconciliation_items_revival_count_bounded",
+      sql`${t.revivalCount} >= 0 AND ${t.revivalCount} <= ${RECONCILIATION_MAX_REVIVALS}`,
     ),
     p.check(
       "case_law_reconciliation_items_attempts_nonnegative",

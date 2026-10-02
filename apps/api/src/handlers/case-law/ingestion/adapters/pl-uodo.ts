@@ -2476,6 +2476,31 @@ export const plUodoAdapter = defineSourceAdapter({
   getTotalCount: countPlUodoRecords,
 
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            type: payload["type"],
+            version: payload["version"],
+            id: payload["id"],
+            time: payload["time"],
+            mtime: payload["mtime"],
+            languages: payload["languages"],
+            name: payload["name"],
+            title: payload["title"],
+            refid: payload["refid"],
+            refname: payload["refname"],
+            kind: payload["kind"],
+            parts: payload["parts"],
+            publication: payload["publication"],
+            publicator: payload["publicator"],
+            dates: payload["dates"],
+            entities: payload["entities"],
+            terms: payload["terms"],
+            refs: payload["refs"],
+            resources: payload["resources"],
+          }
+        : null,
     firstSlice: PL_UODO_FIRST_SLICE,
     sliceOf: yearOf,
     nextSlice,

@@ -86,6 +86,12 @@ test("listing fingerprints retain every persisted JSON object key", () => {
         expect(fingerprintReconciliationPayload(original)).not.toBe(
           fingerprintReconciliationPayload({}),
         );
+        expect(fingerprintReconciliationPayload({ a: original })).not.toBe(
+          fingerprintReconciliationPayload({ a: corrected }),
+        );
+        expect(fingerprintReconciliationPayload({ a: original })).not.toBe(
+          fingerprintReconciliationPayload({ a: {} }),
+        );
       },
     ),
   );

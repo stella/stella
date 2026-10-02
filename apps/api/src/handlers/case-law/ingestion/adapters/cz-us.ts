@@ -2915,6 +2915,19 @@ export const czUsAdapter = defineSourceAdapter({
    * is held. This loop is the only writer of coverage for this source.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            caseNumber: payload["caseNumber"],
+            sourceDocumentId: payload["sourceDocumentId"],
+            nalusRecordId: payload["nalusRecordId"],
+            sourceUrl: payload["sourceUrl"],
+            sz: payload["sz"],
+            ecli: payload["ecli"],
+            listingDocketMissing: payload["listingDocketMissing"],
+          }
+        : null,
     firstSlice: CZ_US_FIRST_SLICE,
     sliceOf: czUsSliceOf,
     nextSlice: czUsNextSlice,

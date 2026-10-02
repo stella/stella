@@ -48,7 +48,7 @@ type Fixture = {
   ) => Promise<typeof caseLawReconciliationItems.$inferSelect | undefined>;
   walk: (
     reconciliation: SourceReconciliation,
-    budget?: number,
+    options?: { budget?: number; scopedDb?: ScopedDb },
   ) => ReturnType<typeof runReconciliationWorkUnit>;
   stale: () => Promise<void>;
 };
@@ -98,6 +98,15 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
             }
           }
         });
+      }
+      const revivalCountColumn =
+        await db.execute(sql`SELECT 1 FROM information_schema.columns
+        WHERE table_schema = ${schema} AND table_name = 'case_law_reconciliation_items'
+          AND column_name = ${caseLawReconciliationItems.revivalCount.name}`);
+      if (revivalCountColumn.length === 0) {
+        await db.execute(sql`ALTER TABLE case_law_reconciliation_items
+          ADD COLUMN revival_count integer NOT NULL DEFAULT 0
+          CHECK (revival_count >= 0 AND revival_count <= 2)`);
       }
       const scopedDb: ScopedDb = async (callback) =>
         await db.transaction(async (tx) => await callback(asTestRaw(tx)));
@@ -161,18 +170,18 @@ const withFixture = async (work: (fixture: Fixture) => Promise<void>) => {
             .set({ checkedAt: new Date(now.getTime() - 2 * DAY_IN_MS) })
             .where(eq(caseLawCoverageSlices.sourceId, sourceId));
         },
-        walk: async (reconciliation, sliceIngestBudget = 1) =>
+        walk: async (reconciliation, options = {}) =>
           await runReconciliationWorkUnit({
             adapterKey,
             sourceId,
             reconciliation,
             reparseStoredRaw: undefined,
-            scopedDb,
+            scopedDb: options.scopedDb ?? scopedDb,
             now: () => now,
             fetchDelayMs: 0,
             sleep: async () => {},
             sliceRetries: new Map(),
-            sliceIngestBudget,
+            sliceIngestBudget: options.budget ?? 1,
           }),
       });
     } finally {
@@ -186,6 +195,7 @@ const publisher = (
   payloads: ReturnType<typeof oldPayload>[],
   attempted: unknown[],
 ): SourceReconciliation => ({
+  revisionOf: (payload) => payload,
   firstSlice: slice,
   sliceOf: toUtcDateString,
   tipWindowDays: 1,
@@ -225,26 +235,26 @@ describe.skipIf(!enabled)(
           const tracked = await fixture.row(id);
           expect(tracked?.payload).toEqual(correctedPayload(id));
           expect(tracked?.status).toBe(RECONCILIATION_ITEM_STATUS.PARKED);
-          expect(tracked?.attempts).toBeLessThan(
-            RECONCILIATION_TERMINAL_ATTEMPTS,
-          );
-          if (
-            !attempted.some(
-              (payload) =>
-                JSON.stringify(payload) ===
-                JSON.stringify(correctedPayload(id)),
-            )
-          ) {
-            expect(tracked).toMatchObject({
-              attempts: 0,
-              lastAttemptAt: null,
-              lastError: null,
-            });
-            expect(tracked?.nextAttemptAt?.getTime()).toBeLessThanOrEqual(
-              fixture.now.getTime(),
-            );
-            await fixture.walk(reconciliation);
-          }
+          expect(tracked).toMatchObject({
+            attempts:
+              status === "terminal" ? RECONCILIATION_TERMINAL_ATTEMPTS : 2,
+            revivalCount: status === "terminal" ? 1 : 0,
+            lastAttemptAt: null,
+            lastError: null,
+          });
+          expect(tracked?.nextAttemptAt?.getTime()).toBe(fixture.now.getTime());
+          expect(attempted).toEqual([]);
+          await fixture.walk(reconciliation);
+          expect(await fixture.row(id)).toMatchObject({
+            status:
+              status === "terminal"
+                ? RECONCILIATION_ITEM_STATUS.TERMINAL
+                : RECONCILIATION_ITEM_STATUS.PARKED,
+            attempts:
+              (status === "terminal" ? RECONCILIATION_TERMINAL_ATTEMPTS : 2) +
+              1,
+            revivalCount: status === "terminal" ? 1 : 0,
+          });
           expect(attempted).toContainEqual(correctedPayload(id));
           expect(attempted).not.toContainEqual(oldPayload(id));
         });
@@ -262,8 +272,16 @@ describe.skipIf(!enabled)(
           );
           await fixture.walk(reconciliation);
           const first = await fixture.row(id);
+          const writesBefore = await fixture.db
+            .execute(sql`SELECT xmin::text AS version
+            FROM case_law_reconciliation_items WHERE source_id = ${fixture.sourceId}`);
           await fixture.stale();
           await fixture.walk(reconciliation);
+          const writesAfter = await fixture.db
+            .execute(sql`SELECT xmin::text AS version
+            FROM case_law_reconciliation_items WHERE source_id = ${fixture.sourceId}`);
+          expect(writesBefore).toHaveLength(1);
+          expect(writesAfter).toEqual(writesBefore);
           const second = await fixture.row(id);
           for (const row of [first, second]) {
             expect(row).toMatchObject({
@@ -291,32 +309,99 @@ describe.skipIf(!enabled)(
           ids.map(correctedPayload),
           attempted,
         );
-        await fixture.walk(reconciliation, 1);
+        await fixture.walk(reconciliation, { budget: 1 });
         for (const id of ids) {
           const tracked = await fixture.row(id);
           expect(tracked?.payload).toEqual(correctedPayload(id));
           expect(tracked?.status).toBe(RECONCILIATION_ITEM_STATUS.PARKED);
-          expect(tracked?.attempts).toBeLessThan(
-            RECONCILIATION_TERMINAL_ATTEMPTS,
-          );
-          if (
-            !attempted.some(
-              (payload) =>
-                JSON.stringify(payload) ===
-                JSON.stringify(correctedPayload(id)),
-            )
-          ) {
-            expect(tracked).toMatchObject({
-              attempts: 0,
-              lastAttemptAt: null,
-              lastError: null,
-            });
-            expect(tracked?.nextAttemptAt?.getTime()).toBeLessThanOrEqual(
-              fixture.now.getTime(),
-            );
-          }
+          expect(tracked).toMatchObject({
+            attempts: RECONCILIATION_TERMINAL_ATTEMPTS,
+            revivalCount: 1,
+            lastAttemptAt: null,
+            lastError: null,
+          });
+          expect(tracked?.nextAttemptAt?.getTime()).toBe(fixture.now.getTime());
         }
-        expect(attempted.length).toBeLessThanOrEqual(1);
+        expect(attempted).toEqual([]);
+        await fixture.walk(reconciliation, { budget: 1 });
+        const rows = await Promise.all(ids.map(fixture.row));
+        for (const row of rows) {
+          expect(row).toMatchObject({
+            status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+            attempts: RECONCILIATION_TERMINAL_ATTEMPTS + 1,
+          });
+        }
+        expect(attempted).toHaveLength(2);
+      });
+    }, 60_000);
+    test("oscillating publisher corrections exhaust two revivals without replenishing attempts", async () => {
+      await withFixture(async (fixture) => {
+        const id = "JFT_20260901_26R00006";
+        await fixture.seed(id, "terminal");
+        const attempted: unknown[] = [];
+        for (const [index, payload] of [
+          correctedPayload(id),
+          oldPayload(id),
+          correctedPayload(id),
+          oldPayload(id),
+        ].entries()) {
+          await fixture.stale();
+          const reconciliation = publisher(fixture.slice, [payload], attempted);
+          await fixture.walk(reconciliation);
+          await fixture.walk(reconciliation);
+          expect(await fixture.row(id)).toMatchObject({
+            status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+            attempts: RECONCILIATION_TERMINAL_ATTEMPTS + Math.min(index + 1, 2),
+            revivalCount: Math.min(index + 1, 2),
+          });
+        }
+        expect(attempted).toEqual([correctedPayload(id), oldPayload(id)]);
+      });
+    }, 60_000);
+    test("a lease lost between the engine renewal and store transaction prevents a retry write", async () => {
+      await withFixture(async (fixture) => {
+        const id = "JFT_20260901_26R00007";
+        await fixture.seed(id, "parked");
+        const attempted: unknown[] = [];
+        const reconciliation = publisher(
+          fixture.slice,
+          [correctedPayload(id)],
+          attempted,
+        );
+        await fixture.walk(reconciliation);
+        const before = await fixture.row(id);
+        let expireAfterRenewal = false;
+        let expiredBeforeStore = false;
+        const scopedDb: ScopedDb = async (callback) => {
+          const result = await fixture.scopedDb(callback);
+          if (expireAfterRenewal) {
+            expireAfterRenewal = false;
+            await fixture.db
+              .update(caseLawSources)
+              .set({ ingestionLeaseExpiresAt: new Date(0) })
+              .where(eq(caseLawSources.id, fixture.sourceId));
+            expiredBeforeStore = true;
+          }
+          return result;
+        };
+        const stale = await fixture.walk(
+          {
+            ...reconciliation,
+            buildDecision: async (payload) => {
+              expect(payload).toEqual(correctedPayload(id));
+              // The next transaction is beforeDatabaseMark; expire only once it has succeeded.
+              expireAfterRenewal = true;
+              return { type: "detail-unavailable" };
+            },
+          },
+          { scopedDb },
+        );
+        expect(expiredBeforeStore).toBe(true);
+        expect(await fixture.row(id)).toEqual(before);
+        expect(stale).toMatchObject({
+          type: "worked",
+          summary: { deferred: 1 },
+        });
       });
     }, 60_000);
     test("a stale corrected-revision worker cannot repark an identity materialized by the next crawl owner", async () => {

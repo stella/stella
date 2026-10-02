@@ -1687,6 +1687,20 @@ export const plTkAdapter = defineSourceAdapter({
   },
 
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            stage: payload["stage"],
+            documentId: payload["documentId"],
+            caseId: payload["caseId"],
+            caseNumber: payload["caseNumber"],
+            decisionForm: payload["decisionForm"],
+            decisionDate: payload["decisionDate"],
+            subject: payload["subject"],
+            defect: payload["defect"],
+          }
+        : null,
     firstSlice: PL_TK_FIRST_YEAR,
     sliceOf: plTkYearOf,
     nextSlice: plTkNextSlice,
