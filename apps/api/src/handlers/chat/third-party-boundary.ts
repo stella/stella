@@ -8,6 +8,7 @@ import type { ChatSendMode } from "@stll/anonymize-chat";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import { refuseAnonymizedCrossing } from "@/api/handlers/chat/anonymization-refusal";
+import type { AnonymizationRefusal } from "@/api/handlers/chat/anonymization-refusal";
 import {
   CHAT_MAX_FILE_BYTES,
   TEXT_PLAIN_MIME_TYPE,
@@ -38,7 +39,6 @@ import { arrayOrEmpty } from "@/api/lib/array";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { ChatToolMap } from "@/api/lib/chat/chat-tool-types";
 import { parseDataUrl, toDataUrl } from "@/api/lib/data-url";
-import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { anonymizeTextFields } from "@/api/mcp/anonymization";
 import { protectValuesForAnonymization } from "@/api/mcp/field-markers";
 
@@ -686,7 +686,7 @@ const walkLenient = (value: unknown, replacer: LenientReplacer): unknown => {
   return Object.fromEntries(entries);
 };
 
-type BoundaryRefusal = HandlerError<422 | 500>;
+type BoundaryRefusal = AnonymizationRefusal;
 
 /**
  * Nothing reaches the provider when anonymization did not complete: the

@@ -321,9 +321,7 @@ export type CorpusIndexDeleteTask = {
   createdAt: Temporal.Instant;
 };
 
-type CorpusIndexDeleteSettlementInput = {
-  observer: RegistryRequestObservation;
-  indexId: string;
+type CorpusIndexDeleteSettlementTask = {
   requiredOpstamp: number;
   /**
    * The delete task's metastore creation instant, for a caller that retained
@@ -331,6 +329,13 @@ type CorpusIndexDeleteSettlementInput = {
    * proof; `null` keeps every observed split in it.
    */
   deleteCreatedAt: Temporal.Instant | null;
+};
+
+type CorpusIndexDeleteSettlementsInput = {
+  observer: RegistryRequestObservation;
+  indexId: string;
+  /** Delete tasks of this one index, all judged against one split read. */
+  tasks: readonly CorpusIndexDeleteSettlementTask[];
 };
 
 export type CorpusIndexDeleteSettlement = {
@@ -349,6 +354,11 @@ export type CorpusIndexDeleteSettlement = {
   minAppliedOpstamp: number | null;
   settled: boolean;
 };
+
+export type CorpusIndexDeleteSettlementRead = Result<
+  CorpusIndexDeleteSettlement,
+  CorpusIndexError
+>;
 
 /** Result of checking one immutable manifest against its physical index. */
 export type CorpusIndexConfigAttestation =
@@ -419,9 +429,14 @@ export type CorpusIndexClient = {
     query: string,
     observer: RegistryRequestObservation,
   ) => Promise<Result<CorpusIndexDeleteTask, CorpusIndexError>>;
-  readDeleteSettlement: (
-    input: CorpusIndexDeleteSettlementInput,
-  ) => Promise<Result<CorpusIndexDeleteSettlement, CorpusIndexError>>;
+  /**
+   * One settlement per task, in task order, from one shared read of the
+   * index's split list. A failed read fails the call; a task whose own proof
+   * cannot settle fails alone.
+   */
+  readDeleteSettlements: (
+    input: CorpusIndexDeleteSettlementsInput,
+  ) => Promise<Result<CorpusIndexDeleteSettlementRead[], CorpusIndexError>>;
 };
 
 type CorpusIndexEndpointEnv =
@@ -614,8 +629,12 @@ type SettlementSplit = {
   publishedAtSeconds: number | null;
 };
 
-type SettlementPass = {
-  /** Lowest applied opstamp this pass read for each split inside the proof. */
+/** One complete offset scan of an index's split list, as read. */
+type SplitPass = readonly SettlementSplit[];
+
+/** One pass read through one delete task's exclusion instant. */
+type ProvingView = {
+  /** Lowest applied opstamp the pass read for each split inside the proof. */
   provingSplits: Map<string, number>;
   excludedSplits: number;
 };
@@ -657,6 +676,123 @@ const parseSettlementSplit = (
     return invalidSplitList();
   }
   return { splitId, appliedOpstamp, publishedAtSeconds };
+};
+
+/**
+ * The metastore stamps split and delete-task instants in whole seconds, so a
+ * delete task's own instant is compared at that precision: a split published
+ * inside the task's second stays in the proof.
+ */
+const toMetastoreSeconds = (instant: Temporal.Instant | null): number | null =>
+  instant === null
+    ? null
+    : Math.floor(instant.epochMilliseconds / METASTORE_TIMESTAMP_UNIT_MS);
+
+const provingView = (
+  pass: SplitPass,
+  deleteCreatedAtSeconds: number | null,
+): ProvingView => {
+  let excludedSplits = 0;
+  // A split shifting between offset pages can be read twice in one pass, so
+  // the lowest opstamp the pass saw for it counts.
+  const provingSplits = new Map<string, number>();
+  for (const split of pass) {
+    // A split published after the delete task was created is outside the
+    // proof; see the settlement call site in the projection cleanup store for
+    // why that is exact. A split with no publish timestamp has not been
+    // published yet and stays in the proof.
+    if (
+      deleteCreatedAtSeconds !== null &&
+      split.publishedAtSeconds !== null &&
+      split.publishedAtSeconds > deleteCreatedAtSeconds
+    ) {
+      excludedSplits += 1;
+      continue;
+    }
+    const previousOpstamp = provingSplits.get(split.splitId);
+    provingSplits.set(
+      split.splitId,
+      previousOpstamp === undefined
+        ? split.appliedOpstamp
+        : Math.min(previousOpstamp, split.appliedOpstamp),
+    );
+  }
+  return { provingSplits, excludedSplits };
+};
+
+/**
+ * The first pass whose proving-split identities equal the pass before it (the
+ * first pass is compared with an empty set), or null while none has.
+ *
+ * Quickwit lists by numeric offset, not a snapshot cursor. A split published
+ * or retired while an earlier page is read can shift a later page, so one pass
+ * can miss a split. Only a complete pass with exactly the identity set of the
+ * pass before it may clear durable delete state; ongoing churn fails closed.
+ * Only the proving set has to settle: an index taking continuous appends never
+ * stops adding splits the proof already excludes. Since that set depends on
+ * the task's instant, stability is judged per task over passes all tasks of
+ * the index share.
+ *
+ * Opstamps come from the stabilizing pass alone. A split read before its
+ * delete task landed is caught up by the time the pass that settles the
+ * identity set reads it again, and carrying the earlier value forward would
+ * report it as lagging for as long as the index keeps churning.
+ */
+const stableProvingView = (
+  passes: readonly SplitPass[],
+  deleteCreatedAtSeconds: number | null,
+): ProvingView | null => {
+  let previousSplitIds: ReadonlySet<string> = new Set();
+  for (const pass of passes) {
+    const view = provingView(pass, deleteCreatedAtSeconds);
+    const splitIds = new Set(view.provingSplits.keys());
+    if (
+      splitIds.size === previousSplitIds.size &&
+      splitIds.isSubsetOf(previousSplitIds)
+    ) {
+      return view;
+    }
+    previousSplitIds = splitIds;
+  }
+  return null;
+};
+
+const isValidRequiredOpstamp = (requiredOpstamp: number): boolean =>
+  Number.isSafeInteger(requiredOpstamp) && requiredOpstamp >= 0;
+
+const judgeDeleteSettlement = (
+  passes: readonly SplitPass[],
+  { requiredOpstamp, deleteCreatedAt }: CorpusIndexDeleteSettlementTask,
+): CorpusIndexDeleteSettlementRead => {
+  if (!isValidRequiredOpstamp(requiredOpstamp)) {
+    return Result.err(
+      new CorpusIndexError({
+        message: "corpus index delete settlement received an invalid opstamp",
+      }),
+    );
+  }
+  const view = stableProvingView(passes, toMetastoreSeconds(deleteCreatedAt));
+  if (view === null) {
+    return Result.err(
+      new CorpusIndexError({
+        message:
+          "corpus index split list did not reach a stable proving-split set",
+      }),
+    );
+  }
+  const appliedOpstamps = [...view.provingSplits.values()];
+  const laggingSplits = appliedOpstamps.filter(
+    (opstamp) => opstamp < requiredOpstamp,
+  ).length;
+  return Result.ok({
+    requiredOpstamp,
+    provingSplits: view.provingSplits.size,
+    excludedSplits: view.excludedSplits,
+    laggingSplits,
+    minAppliedOpstamp:
+      appliedOpstamps.length === 0 ? null : Math.min(...appliedOpstamps),
+    settled: laggingSplits === 0,
+  });
 };
 
 const parseRecordArray = (value: unknown): Record<string, unknown>[] | null => {
@@ -1209,29 +1345,9 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
       catch: toCorpusIndexError,
     }),
 
-  readDeleteSettlement: async ({
-    indexId,
-    requiredOpstamp,
-    deleteCreatedAt,
-    observer,
-  }) =>
+  readDeleteSettlements: async ({ indexId, tasks, observer }) =>
     await Result.tryPromise({
       try: async () => {
-        if (!Number.isSafeInteger(requiredOpstamp) || requiredOpstamp < 0) {
-          throw new CorpusIndexError({
-            message:
-              "corpus index delete settlement received an invalid opstamp",
-          });
-        }
-        // The metastore stamps both instants in whole seconds, so the delete
-        // task's own instant is compared at that precision. A split published
-        // inside the task's second stays in the proof.
-        const deleteCreatedAtSeconds =
-          deleteCreatedAt === null
-            ? null
-            : Math.floor(
-                deleteCreatedAt.epochMilliseconds / METASTORE_TIMESTAMP_UNIT_MS,
-              );
         const deadline =
           Temporal.Now.instant().epochMilliseconds + SETTLEMENT_SCAN_TIMEOUT_MS;
         const remainingBudget = (): number => {
@@ -1243,22 +1359,9 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
           }
           return Math.min(remaining, ADMIN_TIMEOUT_MS);
         };
-        let scanPasses = 0;
-        const readSplitPass = async (): Promise<SettlementPass> => {
-          scanPasses += 1;
-          if (scanPasses > MAX_SETTLEMENT_SCAN_PASSES) {
-            throw new CorpusIndexError({
-              message:
-                "corpus index split list did not reach a stable proving-split set",
-            });
-          }
+        const readSplitPass = async (): Promise<SplitPass> => {
           let offset = 0;
-          let scannedSplits = 0;
-          let excludedSplits = 0;
-          // Keyed by split id; the value is the lowest opstamp this pass saw
-          // for it, since a split shifting between offset pages can be read
-          // twice.
-          const provingSplits = new Map<string, number>();
+          const pass: SettlementSplit[] = [];
           const readSplitPage = async (): Promise<void> => {
             const response = await requestJson({
               observer,
@@ -1273,33 +1376,13 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             if (splits === null) {
               return invalidSplitList();
             }
-            scannedSplits += splits.length;
-            if (scannedSplits > MAX_SETTLEMENT_SPLITS) {
+            if (pass.length + splits.length > MAX_SETTLEMENT_SPLITS) {
               throw new CorpusIndexError({
                 message: `corpus index split list exceeds ${MAX_SETTLEMENT_SPLITS} splits`,
               });
             }
             for (const split of splits) {
-              const parsed = parseSettlementSplit(split);
-              // A split published after the delete task was created is outside
-              // the proof; see the settlement call site in the projection
-              // cleanup store for why that is exact. A split with no publish
-              // timestamp has not been published yet and stays in the proof.
-              if (
-                deleteCreatedAtSeconds !== null &&
-                parsed.publishedAtSeconds !== null &&
-                parsed.publishedAtSeconds > deleteCreatedAtSeconds
-              ) {
-                excludedSplits += 1;
-                continue;
-              }
-              const previousOpstamp = provingSplits.get(parsed.splitId);
-              provingSplits.set(
-                parsed.splitId,
-                previousOpstamp === undefined
-                  ? parsed.appliedOpstamp
-                  : Math.min(previousOpstamp, parsed.appliedOpstamp),
-              );
+              pass.push(parseSettlementSplit(split));
             }
             if (splits.length < SPLIT_PAGE_SIZE) {
               return;
@@ -1308,47 +1391,37 @@ const buildClient = (cluster: QuickwitCluster): CorpusIndexClient => ({
             await readSplitPage();
           };
           await readSplitPage();
-          return { provingSplits, excludedSplits };
+          return pass;
         };
-        const readStableSplitPass = async (
-          previousPassSplitIds: ReadonlySet<string>,
-        ): Promise<SettlementPass> => {
-          const currentPass = await readSplitPass();
-          const currentSplitIds = new Set(currentPass.provingSplits.keys());
-          // Quickwit lists by numeric offset, not a snapshot cursor. A split
-          // published or retired while an earlier page is read can shift a
-          // later page. Only clear durable delete state after one complete
-          // pass has exactly the same identity set; ongoing churn fails closed.
-          // Only the proving set has to settle: an index taking continuous
-          // appends never stops adding splits the proof already excludes.
-          const stable =
-            currentSplitIds.size === previousPassSplitIds.size &&
-            currentSplitIds.isSubsetOf(previousPassSplitIds);
-          if (stable) {
-            return currentPass;
+        // Every task of the index judges the same passes, so the list is read
+        // only until each distinct exclusion instant has a stable proving set,
+        // or the pass ceiling is reached, however many tasks share the read.
+        const exclusionInstants = [
+          ...new Set(
+            tasks
+              .filter(({ requiredOpstamp }) =>
+                isValidRequiredOpstamp(requiredOpstamp),
+              )
+              .map(({ deleteCreatedAt }) =>
+                toMetastoreSeconds(deleteCreatedAt),
+              ),
+          ),
+        ];
+        const passes: SplitPass[] = [];
+        const readUntilStable = async (): Promise<void> => {
+          if (
+            passes.length === MAX_SETTLEMENT_SCAN_PASSES ||
+            exclusionInstants.every(
+              (seconds) => stableProvingView(passes, seconds) !== null,
+            )
+          ) {
+            return;
           }
-          return await readStableSplitPass(currentSplitIds);
+          passes.push(await readSplitPass());
+          await readUntilStable();
         };
-        // Opstamps come from the stabilizing pass alone. A split read before
-        // its delete task landed is caught up by the time the pass that
-        // settles the identity set reads it again, and carrying the earlier
-        // value forward would report it as lagging for as long as the index
-        // keeps churning.
-        const finalPass = await readStableSplitPass(new Set());
-        const appliedOpstamps = [...finalPass.provingSplits.values()];
-        const laggingSplits = appliedOpstamps.filter(
-          (opstamp) => opstamp < requiredOpstamp,
-        ).length;
-        const minAppliedOpstamp =
-          appliedOpstamps.length === 0 ? null : Math.min(...appliedOpstamps);
-        return {
-          requiredOpstamp,
-          provingSplits: finalPass.provingSplits.size,
-          excludedSplits: finalPass.excludedSplits,
-          laggingSplits,
-          minAppliedOpstamp,
-          settled: laggingSplits === 0,
-        };
+        await readUntilStable();
+        return tasks.map((task) => judgeDeleteSettlement(passes, task));
       },
       catch: toCorpusIndexError,
     }),

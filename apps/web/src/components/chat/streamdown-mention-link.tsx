@@ -41,6 +41,7 @@ import {
 } from "@/components/references/reference-chip";
 import {
   isReferenceHref,
+  referenceFromDecisionId,
   referenceFromDecisionRoute,
 } from "@/components/references/reference.logic";
 import { env } from "@/env";
@@ -670,24 +671,24 @@ const FaviconCitationChip = ({
   const source = useExternalSourceStore((state) =>
     state.getSource(url.toString()),
   );
+  const showInlineLabel =
+    inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname);
   // A publisher's URL for a decision stella holds opens that decision here.
   if (source?.caseLawDecision) {
+    const { caseNumber, decisionId } = source.caseLawDecision;
     return (
-      <DecisionChip
+      <ReferenceChip
         interactive
-        label={
-          inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname)
-            ? children
-            : source.caseLawDecision.caseNumber
-        }
-        locator={{ type: "ref", ref: source.caseLawDecision.decisionId }}
+        labelContent={showInlineLabel ? children : undefined}
+        reference={referenceFromDecisionId(
+          decisionId,
+          showInlineLabel ? inlineLabel : caseNumber,
+        )}
       />
     );
   }
 
   const hoverTitle = source?.title || inlineLabel || hostname;
-  const showInlineLabel =
-    inlineLabel.length > 0 && !isFootnoteLabel(inlineLabel, hostname);
   const handleClick = () => {
     useInspectorTabsStore.getState().openExternal({
       url: url.toString(),

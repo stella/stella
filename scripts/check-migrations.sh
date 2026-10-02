@@ -108,35 +108,46 @@ schema_file_has_migration_relevant_diff() {
     const changedFile = process.argv.at(2);
 
     const normalizeSchemaSource = (source) => {
-      const keptLines = [];
-      let inTypeImport = false;
-
-      for (const line of source.split("\n")) {
-        const startsTypeImport = line.trimStart().startsWith("import type ");
-        if (!inTypeImport && startsTypeImport) {
-          inTypeImport = !line.includes(";");
-          continue;
-        }
-
-        if (inTypeImport) {
-          inTypeImport = !line.includes(";");
-          continue;
-        }
-
-        keptLines.push(line);
-      }
-
-      // `$type<...>` and type-only imports cannot change generated DDL.
-      // Printing without comments also ignores allowance-only edits to a
-      // schema input while preserving SQL template text and code tokens.
-      const code = keptLines.join("\n").replace(/\.\$type<.*>/gu, ".$type<>");
+      // Type-only imports and zero-argument `$type<T>()` calls do not alter DDL.
+      // AST erasure preserves runtime calls and SQL text around nested types.
       const parsed = ts.createSourceFile(
         changedFile,
-        code,
+        source,
         ts.ScriptTarget.Latest,
         true,
       );
-      return ts.createPrinter({ removeComments: true }).printFile(parsed);
+      const transformed = ts.transform(parsed, [(context) => {
+        const visit = (node) => {
+          if (ts.isImportDeclaration(node) && node.importClause?.isTypeOnly) {
+            return undefined;
+          }
+          if (ts.isImportSpecifier(node) && node.isTypeOnly) {
+            return undefined;
+          }
+          if (
+            ts.isCallExpression(node) &&
+            node.arguments.length === 0 &&
+            node.typeArguments?.length > 0 &&
+            !node.questionDotToken &&
+            ts.isPropertyAccessExpression(node.expression) &&
+            !node.expression.questionDotToken &&
+            node.expression.name.text === "$type"
+          ) {
+            return ts.visitNode(node.expression.expression, visit);
+          }
+          // Ignore source line breaks after removing a type-only chain link.
+          return ts.setTextRange(ts.visitEachChild(node, visit, context), {
+            pos: -1,
+            end: -1,
+          });
+        };
+        return (root) => ts.visitNode(root, visit);
+      }]);
+      const normalized = ts.createPrinter({ removeComments: true }).printFile(
+        transformed.transformed[0],
+      );
+      transformed.dispose();
+      return normalized;
     };
 
     const currentSource = fs.readFileSync(changedFile, "utf8");

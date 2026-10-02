@@ -25,20 +25,21 @@ export const referenceHintOptions = (entityId: string | null) =>
     gcTime: Number.POSITIVE_INFINITY,
   });
 
-type JsonNode = { type?: unknown; attrs?: unknown; content?: unknown };
+type JsonRecord = Record<string, unknown>;
 
-const isJsonNode = (value: unknown): value is JsonNode =>
+const isJsonRecord = (value: unknown): value is JsonRecord =>
   typeof value === "object" && value !== null;
 
-const collectMentionAttrs = (node: unknown, out: unknown[]): void => {
-  if (!isJsonNode(node)) {
+const collectMentionAttrs = (node: unknown, out: JsonRecord[]): void => {
+  if (!isJsonRecord(node)) {
     return;
   }
-  if (node.type === "mention") {
-    out.push(node.attrs);
+  const { attrs, content, type } = node;
+  if (type === "mention" && isJsonRecord(attrs)) {
+    out.push(attrs);
   }
-  if (Array.isArray(node.content)) {
-    for (const child of node.content) {
+  if (Array.isArray(content)) {
+    for (const child of content) {
       collectMentionAttrs(child, out);
     }
   }
@@ -50,16 +51,9 @@ export const seedReferenceHints = (
   queryClient: QueryClient,
   doc: unknown,
 ): void => {
-  const mentions: unknown[] = [];
+  const mentions: JsonRecord[] = [];
   collectMentionAttrs(doc, mentions);
-  for (const attrs of mentions) {
-    if (typeof attrs !== "object" || attrs === null) {
-      continue;
-    }
-    const id = Reflect.get(attrs, "id");
-    const category = Reflect.get(attrs, "category");
-    const kind = Reflect.get(attrs, "kind");
-    const mimeType = Reflect.get(attrs, "mimeType");
+  for (const { category, id, kind, mimeType } of mentions) {
     if (
       category !== "entity" ||
       typeof id !== "string" ||

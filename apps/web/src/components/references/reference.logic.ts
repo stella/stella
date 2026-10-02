@@ -214,6 +214,17 @@ export const referenceFromDecisionRoute = (
   label,
 });
 
+/** A decision stella holds, by its id (a publisher's URL for it, say). */
+export const referenceFromDecisionId = (
+  decisionId: string,
+  label: string,
+): ChatReference => ({
+  type: "decision",
+  locator: { type: "ref", ref: decisionId },
+  anchorId: null,
+  label,
+});
+
 /** The durable href of an entity in a matter, as persisted text carries it. */
 export const entityReferenceHref = ({
   entityId,
@@ -300,9 +311,7 @@ export const referenceFromMentionAttrs = (
 };
 
 /** The attrs an `<entity-mention data-…>` tag spells, keyed like node attrs. */
-export const mentionTagAttrs = (
-  readAttr: (name: string) => string | null,
-): Record<string, string | null> => ({
+export const mentionTagAttrs = (readAttr: (name: string) => string | null) => ({
   id: readAttr("data-id"),
   label: readAttr("data-label"),
   category: readAttr("data-category"),
@@ -323,7 +332,7 @@ export const mentionAttrsToHref = (attrs: unknown): string | null => {
   }
   const id = readString(attrs, "id");
   const category = readString(attrs, "category");
-  if (id === null) {
+  if (id === null || category === null) {
     return null;
   }
   switch (category) {
