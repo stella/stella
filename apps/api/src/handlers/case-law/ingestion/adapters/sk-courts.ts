@@ -1,4 +1,5 @@
 import { panic, Result } from "better-result";
+import { decodeHTMLStrict } from "entities";
 
 import { skCourtSuccessionReferences } from "@stll/api-contract/sk-court-succession";
 import { mapWithConcurrency } from "@stll/concurrency";
@@ -415,6 +416,19 @@ const skCourtsSourceDocumentId = (
 /** The two fields this adapter refuses to store a decision without. */
 type SkCourtsIdentityFields = { caseNumber: string; court: string };
 
+// Decode publisher display text once; raw payloads, URLs and source IDs stay verbatim.
+const decodeSkCourtText = (value: string | null | undefined) => {
+  const text = toOptionalValue(value);
+  return text === undefined ? undefined : decodeHTMLStrict(text);
+};
+
+const decodeSkCourtTextList = (values: string[] | null | undefined) => {
+  if (values === null || values === undefined) {
+    return values;
+  }
+  return values.map((value) => decodeHTMLStrict(value));
+};
+
 /**
  * The docket and the court an item must state for this adapter to keep it.
  *
@@ -426,8 +440,8 @@ type SkCourtsIdentityFields = { caseNumber: string; court: string };
 const skCourtsIdentityFields = (
   item: SkApiItem,
 ): SkCourtsIdentityFields | null => {
-  const caseNumber = item.spisovaZnacka;
-  const court = item.sud?.nazov;
+  const caseNumber = decodeSkCourtText(item.spisovaZnacka);
+  const court = decodeSkCourtText(item.sud?.nazov);
   if (!caseNumber || !court) {
     return null;
   }
@@ -566,14 +580,24 @@ export const assembleSkCourtsDecision = ({
   // still do not change the listing observation.
   const directoryMetadata =
     courtRegistry?.status === "available"
-      ? skCourtDirectoryMetadata(courtRegistry.record, court)
+      ? skCourtDirectoryMetadata(
+          {
+            ...courtRegistry.record,
+            nazov: decodeHTMLStrict(courtRegistry.record.nazov),
+            typSudu: decodeSkCourtText(courtRegistry.record.typSudu),
+            skratka_string: decodeSkCourtText(
+              courtRegistry.record.skratka_string,
+            ),
+          },
+          court,
+        )
       : undefined;
   const registryUnavailable =
     courtRegistry?.status === "unavailable" ? courtRegistry : undefined;
   const courtSuccession = skCourtSuccessionReferences(
     court,
     courtRegistry?.status === "available"
-      ? courtRegistry.record.nazov
+      ? decodeHTMLStrict(courtRegistry.record.nazov)
       : undefined,
   );
   const rawJson = JSON.stringify({
@@ -596,7 +620,7 @@ export const assembleSkCourtsDecision = ({
   // no readable text, so the two must ship together.
 
   const decisionDate = parseSkDate(item.datumVydania);
-  const decisionType = toOptionalValue(item.formaRozhodnutia);
+  const decisionType = decodeSkCourtText(item.formaRozhodnutia);
   const ecli = toOptionalValue(detail?.ecli);
 
   const updateDate = toOptionalValue(detail?.updateDate);
@@ -648,14 +672,18 @@ export const assembleSkCourtsDecision = ({
       // senior court officer's, and the record carries no discriminator, so
       // it stays a stated name rather than becoming a bench role. See the
       // `judge-registry` surface for what would tell the two apart.
-      judge: toOptionalValue(item.sudca?.meno),
+      judge: decodeSkCourtText(item.sudca?.meno),
       judgeRegistreGuid: toOptionalValue(item.sudca?.registreGuid),
       courtRegistreGuid: toOptionalValue(item.sud?.registreGuid),
-      decisionNature: item.povaha,
-      area: detail?.oblast,
-      subArea: detail?.podOblast,
-      referencedLegislation: detail?.odkazovanePredpisy,
-      documentName: toOptionalValue(detail?.dokument?.name),
+      decisionNature: decodeSkCourtTextList(item.povaha),
+      area: decodeSkCourtTextList(detail?.oblast),
+      subArea: decodeSkCourtTextList(detail?.podOblast),
+      referencedLegislation:
+        detail?.odkazovanePredpisy?.map((reference) => ({
+          ...reference,
+          nazov: decodeSkCourtText(reference.nazov),
+        })) ?? detail?.odkazovanePredpisy,
+      documentName: decodeSkCourtText(detail?.dokument?.name),
       documentExtension: toOptionalValue(detail?.dokument?.fileExtension),
       documentSize: detail?.dokument?.size,
       documentFileId: detail?.dokument?.id,
@@ -667,11 +695,11 @@ export const assembleSkCourtsDecision = ({
           : undefined,
       statedSourceUrl,
       sourceUrlStatus,
-      originCourt: toOptionalValue(detail?.povodnySud?.nazov),
+      originCourt: decodeSkCourtText(detail?.povodnySud?.nazov),
       originCourtRegistreGuid: toOptionalValue(
         detail?.povodnySud?.registreGuid,
       ),
-      originCaseNumber: toOptionalValue(detail?.povodnaSpisovaZnacka),
+      originCaseNumber: decodeSkCourtText(detail?.povodnaSpisovaZnacka),
     } satisfies SkCourtsMetadata),
     rawHash,
     parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],

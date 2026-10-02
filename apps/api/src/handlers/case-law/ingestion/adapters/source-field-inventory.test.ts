@@ -40,7 +40,9 @@ import {
   type SourceRegistrationKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
+import { entityResiduesInStoredText } from "@/api/lib/legal-search/parsers/entity-residue";
 import { readSourceRawField } from "@/api/lib/legal-search/source-raw-field";
+import { isRecord } from "@/api/lib/type-guards";
 import {
   atFindokFixture,
   atRisFixture,
@@ -202,6 +204,68 @@ const storedPartsOf = (
   return parts;
 };
 
+/** Metadata values rendered as wording, excluding identifiers and transport data. */
+const DISPLAY_TEXT_METADATA_KEYS = [
+  "abstract",
+  "area",
+  "decisionNature",
+  "documentName",
+  "documentTitle",
+  "headnote",
+  "judge",
+  "keywords",
+  "legalArea",
+  "legalAreas",
+  "legalSentence",
+  "originCaseNumber",
+  "originCourt",
+  "subArea",
+  "subject",
+  "subjectIndex",
+  "subjectOfProceeding",
+  "summary",
+  "title",
+] as const;
+
+const displayTextValuesOf = (
+  field: string,
+  value: unknown,
+): { field: string; value: string }[] => {
+  if (typeof value === "string") {
+    return [{ field, value }];
+  }
+  if (!Array.isArray(value)) {
+    return [];
+  }
+  return value.flatMap((item, index) =>
+    typeof item === "string"
+      ? [{ field: `${field}.${index}`, value: item }]
+      : [],
+  );
+};
+
+type DisplayTextPropertiesOptions = {
+  field: string;
+  value: unknown;
+  properties: readonly string[];
+};
+
+const displayTextPropertiesOf = ({
+  field,
+  value,
+  properties,
+}: DisplayTextPropertiesOptions): { field: string; value: string }[] => {
+  if (!isRecord(value)) {
+    return [];
+  }
+  return properties.flatMap((property) => {
+    const text = value[property];
+    return typeof text === "string"
+      ? [{ field: `${field}.${property}`, value: text }]
+      : [];
+  });
+};
+
 // ── Invariants ───────────────────────────────────────────
 
 describe("every adapter accounts for the fields its source states", () => {
@@ -213,6 +277,83 @@ describe("every adapter accounts for the fields its source states", () => {
       const evidence = fixture();
       const decision = await evidence.buildDecision();
       const parts = storedPartsOf(key, decision);
+
+      const textOutputs = [
+        { field: "caseNumber", value: decision.caseNumber },
+        { field: "court", value: decision.court },
+        ...(decision.decisionType === undefined
+          ? []
+          : [{ field: "decisionType", value: decision.decisionType }]),
+        ...(decision.judges ?? []).map(({ nameAsPrinted }, index) => ({
+          field: `judges.${index}.nameAsPrinted`,
+          value: nameAsPrinted,
+        })),
+        ...(decision.fulltext === undefined
+          ? []
+          : [{ field: "fulltext", value: decision.fulltext }]),
+        ...Object.entries(decision.textFields).flatMap(([field, value]) =>
+          value.type === "present"
+            ? [{ field: `textFields.${field}`, value: value.text }]
+            : [],
+        ),
+        ...("blocks" in decision.documentAst
+          ? decision.documentAst.blocks.map((block) => ({
+              field: `documentAst.${block.type}.${block.id}`,
+              value: block.plainText,
+            }))
+          : []),
+        ...(decision.sections ?? []).flatMap((section) => [
+          {
+            field: `sections.${section.index}.title`,
+            value: section.title ?? "",
+          },
+          { field: `sections.${section.index}.text`, value: section.text },
+        ]),
+        ...DISPLAY_TEXT_METADATA_KEYS.flatMap((field) =>
+          displayTextValuesOf(`metadata.${field}`, decision.metadata[field]),
+        ),
+        ...(Array.isArray(decision.metadata["judges"])
+          ? decision.metadata["judges"].flatMap((judge, index) =>
+              displayTextPropertiesOf({
+                field: `metadata.judges.${index}`,
+                value: judge,
+                properties: ["name"],
+              }),
+            )
+          : []),
+        ...(Array.isArray(decision.metadata["referencedLegislation"])
+          ? decision.metadata["referencedLegislation"].flatMap(
+              (reference, index) =>
+                displayTextPropertiesOf({
+                  field: `metadata.referencedLegislation.${index}`,
+                  value: reference,
+                  properties: ["nazov"],
+                }),
+            )
+          : []),
+        ...displayTextPropertiesOf({
+          field: "metadata.courtRegistry",
+          value: decision.metadata["courtRegistry"],
+          properties: ["nazov", "typSudu", "skratka_string"],
+        }),
+        ...("blocks" in decision.documentAst
+          ? [
+              ...decision.documentAst.metadata.keywords.map((value, index) => ({
+                field: `documentAst.metadata.keywords.${index}`,
+                value,
+              })),
+              ...decision.documentAst.metadata.statutes.map((value, index) => ({
+                field: `documentAst.metadata.statutes.${index}`,
+                value,
+              })),
+            ]
+          : []),
+      ];
+      const entityResidues = entityResiduesInStoredText(textOutputs);
+      expect(
+        entityResidues,
+        `${key}: normalized case-law text retains character references`,
+      ).toEqual([]);
 
       const stated = await sourceFields.listSourceFields(parts);
       expect(
