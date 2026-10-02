@@ -1,3 +1,4 @@
+// parser-output-unchanged: Whole raw-text targets remain in source evidence and do not enter the keyed RIS projection.
 /**
  * One field inventory for the eleven tribunals this publisher serves.
  *
@@ -724,6 +725,9 @@ export const atRisStoredValues = (
       case "identity":
       case "result":
       case "raw": {
+        return;
+      }
+      case "rawText": {
         return;
       }
       default: {
