@@ -198,7 +198,7 @@ const useClauseBodyTransport = ({
     reconcile(head);
   });
   const write = useLatestCallback(
-    async (next: ClauseParagraph[], snapshotVersion = false) => {
+    async (next: ClauseParagraph[], snapshotVersion?: boolean) => {
       if (hasConflict()) {
         return false;
       }

@@ -764,7 +764,8 @@ describe("clause detail with the real editor", () => {
     await act(async () => {
       await response.promise;
     });
-    expect(save.queryClient.getQueryData(save.key)).toMatchObject({ body: B });
+    const cachedHead = save.queryClient.getQueryData(save.key);
+    expect(cachedHead).toMatchObject({ body: B });
     act(() => {
       save.reopen();
     });
