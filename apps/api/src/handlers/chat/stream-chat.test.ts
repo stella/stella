@@ -83,6 +83,7 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+import { buildGlobalPromptParts } from "./chat-prompt";
 import type { GuardedChatSurfaces } from "./stream-chat";
 import {
   chatMessageUsageFromTokenUsage,
@@ -3791,6 +3792,7 @@ describe("guarded model-ingress seam", () => {
     const surfaces: GuardedChatSurfaces = {
       messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
+      systemLayers: buildGlobalPromptParts({ userContext: null }).safeLayers,
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
     };
