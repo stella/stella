@@ -1742,9 +1742,12 @@ describe("assistant turn settlement", () => {
     const turnUpdates: unknown[] = [];
     const streamResponse = mock(async (props: StreamChatProps) => {
       onFinish = props.onFinish;
-      return new Response("", {
-        headers: { "content-type": "text/event-stream" },
-      });
+      return {
+        type: "streaming",
+        response: new Response("", {
+          headers: { "content-type": "text/event-stream" },
+        }),
+      } as const;
     });
     const send = createSendMessage({
       compactMessagesForContext: compactMessagesForContextMock,

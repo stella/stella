@@ -87,9 +87,12 @@ const streamChatMock = mock<StreamResponse>(async ({ onFinish }) => {
         .then(resolve);
     }, 0);
   });
-  return new Response("stream started", {
-    headers: { "Content-Type": "text/event-stream" },
-  });
+  return {
+    type: "streaming",
+    response: new Response("stream started", {
+      headers: { "Content-Type": "text/event-stream" },
+    }),
+  };
 });
 const loadExternalMcpToolsForTest = async () => {
   const close = async () => undefined;
@@ -274,7 +277,10 @@ describe("settling a refusal before streaming", () => {
         payload: { message: "Cannot start this turn" },
         status,
       });
-      streamChatMock.mockImplementationOnce(async () => rejection);
+      streamChatMock.mockImplementationOnce(async () => ({
+        type: "refused",
+        response: rejection,
+      }));
       const result = await sendMessage.handler(
         createContext({
           message: {
