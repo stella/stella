@@ -36,6 +36,20 @@ const healthyIndexGate = {
   },
   log: () => undefined,
 } satisfies OnlineIndexGateOptions;
+const heldIndexGate = {
+  ...healthyIndexGate,
+  ebs: {
+    type: "reader",
+    read: async () => ({
+      indicator: "ebs_balance",
+      kind: "unknown",
+      value: null,
+      threshold: 70,
+      observedAt: null,
+      reason: "Injected unavailable metric",
+    }),
+  },
+} satisfies OnlineIndexGateOptions;
 const runOnlineMigrations = async (
   pool: Parameters<typeof runOnlineMigrationsWithGate>[0],
   options: Partial<OnlineRepairOptions> = {},
@@ -210,6 +224,54 @@ describe("online migrations", () => {
     ).toBeGreaterThan(-1);
     expect(indexOfStatement(resumed, "pg_constraint")).toBeGreaterThan(-1);
   });
+
+  for (const { final, staged } of ONLINE_MIGRATION_INDEX_CUTOVERS) {
+    for (const stage of ["missing", "invalid"] as const) {
+      test(`a held ${stage} stage preserves ${final.name} and defers every later phase`, async () => {
+        const harness = createHarness({
+          indexStates: {
+            [final.name]: [
+              {
+                definitionBody:
+                  "ON public.case_law_decisions USING btree (updated_at, id)",
+                isValid: true,
+              },
+            ],
+            [staged.name]: [stage === "missing" ? undefined : false],
+          },
+        });
+        const waits: number[] = [];
+        expect(
+          await runOnlineMigrations(harness.pool, {
+            indexGate: {
+              ...heldIndexGate,
+              wait: async (milliseconds) => {
+                waits.push(milliseconds);
+              },
+            },
+          }),
+        ).toEqual({
+          type: "deferred",
+          index: staged.name,
+          retryAfterMs: heldIndexGate.config.retryMs,
+        });
+        expect(waits).toEqual([]);
+        for (const fragment of [
+          CREATE_INDEX_FRAGMENT,
+          REINDEX_FRAGMENT,
+          DROP_INDEX_FRAGMENT,
+          "ALTER INDEX",
+          "pg_constraint",
+          "database_backfill_states",
+        ]) {
+          expect(indexOfStatement(harness.statements, fragment), fragment).toBe(
+            -1,
+          );
+        }
+        expect(harness.released()).toBe(true);
+      });
+    }
+  }
 
   test("concurrently repairs an interrupted invalid build", async () => {
     const harness = createHarness({
