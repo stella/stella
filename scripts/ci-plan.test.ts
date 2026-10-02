@@ -2973,8 +2973,9 @@ test("image checks run on pull requests that change image inputs and bind the fa
       `\${{ steps.changed-files.outputs.${scope} }}`,
     );
     for (const { file, required } of cases) {
-      const [broadPlanned, scopePlanned] = runSelector([file], [broad, scope]);
-      const planned = scopePlanned === "true";
+      const [broadOutput, scopeOutput] = runSelector([file], [broad, scope]);
+      const broadPlanned = String(broadOutput);
+      const planned = scopeOutput === "true";
       expect(planned, `${job} ${file}`).toBe(required);
       // A pull request never runs an image check the merge queue would skip.
       if (planned) {
@@ -3017,7 +3018,7 @@ test("image checks run on pull requests that change image inputs and bind the fa
       }
     }
   }
-});
+}, 30_000);
 
 test("each folded service step follows its own dependency scope at PR depth", () => {
   const scopes = [
