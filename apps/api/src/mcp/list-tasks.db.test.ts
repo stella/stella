@@ -136,6 +136,7 @@ const createContext = async ({
     safeDb,
     scopedDb,
     userId,
+    userEmail: "standard@example.test",
   });
 };
 

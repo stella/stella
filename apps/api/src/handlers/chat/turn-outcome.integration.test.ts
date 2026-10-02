@@ -156,39 +156,13 @@ type KnownRule = {
   oracles: readonly OracleViolation["oracle"][];
 };
 
-/** What the page shows of a whitespace-only answer on a new message is what
- *  a reload shows. Gemini's adapter hands the page no whitespace-only
- *  delta. */
-const WHITESPACE_RULE: KnownRule = {
-  name: "a whitespace-only answer reloads as the page showed it",
-  oracles: [CHAT_ORACLE.liveEqualsReload],
-};
-
 /**
  * The rules a combination's turn does not keep yet. Each such combination
  * runs as a known finding under the rules' names: it must still break them,
  * and only them, so a broken setup fails it like any other test, and it
- * fails loudly once the turn keeps the rules and the entry goes.
+ * fails loudly once the turn keeps the rules and the entry goes. None today.
  */
-const knownTurnRulesOf = ({
-  position,
-  provider,
-  shape,
-}: TurnCombination): KnownRule[] => {
-  const rules: KnownRule[] = [];
-  if (
-    shape === "whitespace" &&
-    provider !== "google" &&
-    (position === "fresh" ||
-      position === "after-compaction" ||
-      position === "resume-after-restart" ||
-      position === "skill-run" ||
-      position === "fallback")
-  ) {
-    rules.push(WHITESPACE_RULE);
-  }
-  return rules;
-};
+const knownTurnRulesOf = (_combination: TurnCombination): KnownRule[] => [];
 
 let testDb: TestDatabase;
 let ids: TestIds;
