@@ -1182,7 +1182,7 @@ const parseFeatureRequirement = (value: unknown) => {
   if (type !== "required" && type !== "conditional") {
     return undefined;
   }
-  return { featureId: value["featureId"], type };
+  return { featureId: value["featureId"], type } as const;
 };
 
 const readFeatureDeclarationSources = async () => {

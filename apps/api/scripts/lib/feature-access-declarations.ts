@@ -440,7 +440,7 @@ const parseDeclaration = (
   registry: FeatureRegistry,
 ) => {
   const violations: FeatureAccessDeclarationViolation[] = [];
-  const declaration = config.featureAccess;
+  const declaration = config["featureAccess"];
   if (declaration === undefined) {
     return { violations, id: undefined, type: undefined };
   }
@@ -471,7 +471,11 @@ const parseDeclaration = (
       message: "conditional featureAccess requires usesFeature",
     });
   }
-  return { violations, id: declaration.featureId, type: declaration.type };
+  return {
+    violations,
+    id: declaration.featureId,
+    type: declaration.type,
+  } as const;
 };
 const moduleRequirements = (registry: FeatureRegistry, module: string) => {
   const required = new Map<string, Requirement>();

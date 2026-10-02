@@ -225,7 +225,7 @@ describe("stella CLI: offline registry projection", () => {
   });
 
   test("legacy caller omissions do not disable baked commands offline", () => {
-    const result = spawnDrifted(["task", "save", "--title", "x"]);
+    const result = spawnDrifted(["task", "save", "--name", "x"]);
     expect(result.exitCode).toBe(3);
     const stderr = result.stderr.toString();
     expect(stderr).toContain("Not signed in");

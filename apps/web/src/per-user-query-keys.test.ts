@@ -926,12 +926,23 @@ test("organization settings isolate caller capabilities by user and organization
   const enabled = { capabilities: { fixture: { status: "enabled" } } };
   const hidden = { capabilities: { fixture: { status: "hidden" } } };
   queryClient.setQueryData(callerKey, enabled);
-  expect(queryClient.getQueryData(callerKey)).toEqual(enabled);
-  expect(queryClient.getQueryData(colleagueKey)).toBeUndefined();
-  expect(queryClient.getQueryData(otherOrganizationKey)).toBeUndefined();
+  expect(
+    queryClient.getQueryCache().find({ queryKey: callerKey })?.state.data,
+  ).toEqual(enabled);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: colleagueKey })?.state.data,
+  ).toBeUndefined();
+  expect(
+    queryClient.getQueryCache().find({ queryKey: otherOrganizationKey })?.state
+      .data,
+  ).toBeUndefined();
   queryClient.setQueryData(colleagueKey, hidden);
-  expect(queryClient.getQueryData(colleagueKey)).toEqual(hidden);
-  expect(queryClient.getQueryData(callerKey)).toEqual(enabled);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: colleagueKey })?.state.data,
+  ).toEqual(hidden);
+  expect(
+    queryClient.getQueryCache().find({ queryKey: callerKey })?.state.data,
+  ).toEqual(enabled);
 });
 
 test("organization settings skip authenticated reads until an organization is selected", () => {

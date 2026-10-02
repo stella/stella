@@ -70,6 +70,12 @@ const deriveCliAnnotation = (
     return { ...annotation, confirmPassthrough: true };
   }
 
+  if (behavior.type === "upstream") {
+    return panic(
+      `${tool.name} static CLI metadata cannot use upstream behavior`,
+    );
+  }
+
   const discriminator = annotation.discriminator;
   if (discriminator === undefined || discriminator.prop !== behavior.property) {
     return panic(
