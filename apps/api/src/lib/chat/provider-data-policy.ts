@@ -122,7 +122,7 @@ export const fetchManagedOpenRouterCompletion = async (request: Request) => {
         timeoutMs: MANAGED_PROVIDER_REQUEST_TIMEOUT_MS,
         redirect: "manual",
       }),
-    catch: () => managedProviderUnavailable("openrouter"),
+    catch: (error) => error,
   });
   if (Result.isError(fetched)) {
     return fetched;

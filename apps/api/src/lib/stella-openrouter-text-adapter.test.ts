@@ -5,7 +5,10 @@ import { Result, panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { env } from "@/api/env";
-import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
+import {
+  fetchManagedOpenRouterCompletion,
+  MANAGED_PROVIDER_UNAVAILABLE_CODE,
+} from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   createInstanceOpenRouterText,
@@ -27,6 +30,33 @@ class InspectableOpenRouterAdapter extends StellaOpenRouterTextAdapter {
 }
 
 describe("instance provider redirect policy", () => {
+  test("preserves the caller cancellation error at the transport boundary", async () => {
+    const originalFetch = globalThis.fetch;
+    const cancellation = new DOMException("Fixture cancellation", "AbortError");
+    const controller = new AbortController();
+    controller.abort(cancellation);
+    globalThis.fetch = Object.assign(
+      async (_input: Parameters<typeof fetch>[0], init?: RequestInit) => {
+        init?.signal?.throwIfAborted();
+        return new Response(null);
+      },
+      { preconnect: originalFetch.preconnect },
+    );
+    try {
+      const result = await fetchManagedOpenRouterCompletion(
+        new Request("https://eu.openrouter.ai/api/v1/chat/completions", {
+          signal: controller.signal,
+        }),
+      );
+      expect(Result.isError(result)).toBe(true);
+      if (Result.isError(result)) {
+        expect(result.error).toBe(cancellation);
+      }
+    } finally {
+      globalThis.fetch = originalFetch;
+    }
+  });
+
   const model = "google/gemini-2.5-flash";
   for (const scope of ["eu", "us", "public_corpus", "byok"] as const) {
     for (const path of ["chat", "structured", "structured-stream"] as const) {
