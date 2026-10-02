@@ -135,10 +135,49 @@ describe("online migrations", () => {
     expect(
       indexOfStatement(
         harness.statements,
-        `${DROP_INDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
+        `${REINDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
       ),
     ).toBeGreaterThan(-1);
     expect(harness.released()).toBe(true);
+  });
+
+  /**
+   * A concurrent build interrupted after PostgreSQL marked the index ready
+   * leaves it INVALID but maintained, and a unique one keeps rejecting
+   * duplicates. Dropping it before its replacement is valid would let a
+   * duplicate commit, after which the rebuild fails for good.
+   */
+  test("never drops a ready invalid index it repairs, so uniqueness stays enforced", async () => {
+    const readyInvalid = { isReady: true, isValid: false } as const;
+    expect(ONLINE_MIGRATION_INDEXES.some(({ isUnique }) => isUnique)).toBe(
+      true,
+    );
+    for (const { name } of ONLINE_MIGRATION_INDEXES) {
+      const harness = createHarness({
+        indexStates: { [name]: [readyInvalid, readyInvalid, true] },
+      });
+
+      await runOnlineMigrations(harness.pool);
+
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `${DROP_INDEX_FRAGMENT} public."${name}"`,
+        ),
+        name,
+      ).toBe(-1);
+      expect(
+        indexOfStatement(
+          harness.statements,
+          `${REINDEX_FRAGMENT} public."${name}"`,
+        ),
+        name,
+      ).toBeGreaterThan(-1);
+      expect(
+        indexOfStatement(harness.statements, `INDEX CONCURRENTLY "${name}"`),
+        name,
+      ).toBe(-1);
+    }
   });
 
   test("drops an interrupted reindex artifact before retrying", async () => {
@@ -152,18 +191,17 @@ describe("online migrations", () => {
 
     await runOnlineMigrations(harness.pool);
 
+    const drop = indexOfStatement(
+      harness.statements,
+      `${DROP_INDEX_FRAGMENT} public."${artifactName}"`,
+    );
+    expect(drop).toBeGreaterThan(-1);
     expect(
       indexOfStatement(
         harness.statements,
-        `${DROP_INDEX_FRAGMENT} public."${artifactName}"`,
+        `${REINDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
       ),
-    ).toBeGreaterThan(-1);
-    expect(
-      indexOfStatement(
-        harness.statements,
-        `${DROP_INDEX_FRAGMENT} public."${CREDENTIAL_INDEX}"`,
-      ),
-    ).toBeGreaterThan(-1);
+    ).toBeGreaterThan(drop);
   });
 
   test("repairs an invalid chat run index after an interrupted build", async () => {
@@ -186,7 +224,7 @@ describe("online migrations", () => {
     );
     const repair = indexOfStatement(
       harness.statements,
-      `${DROP_INDEX_FRAGMENT} public."${CHAT_RUN_INDEX}"`,
+      `${REINDEX_FRAGMENT} public."${CHAT_RUN_INDEX}"`,
     );
     expect(drop).toBeGreaterThan(-1);
     expect(repair).toBeGreaterThan(drop);
@@ -420,7 +458,7 @@ describe("online migrations", () => {
 
     const reindexOffset = indexOfStatement(
       harness.statements,
-      `${DROP_INDEX_FRAGMENT} public."${FILTER_INDEX_REPLACEMENT}"`,
+      `${REINDEX_FRAGMENT} public."${FILTER_INDEX_REPLACEMENT}"`,
     );
     const dropOffset = indexOfStatement(
       harness.statements,
@@ -669,7 +707,8 @@ describe("online migrations", () => {
 type IndexState =
   | boolean
   | undefined
-  | { definitionBody: string; isValid: boolean };
+  | { definitionBody: string; isValid: boolean }
+  | { isReady: boolean; isValid: boolean };
 type IndexStates = Readonly<Record<string, IndexState[]>>;
 type Artifact = { isValid: boolean; name: string };
 type Artifacts = Readonly<Record<string, Artifact[]>>;
@@ -848,6 +887,11 @@ const createHarness = ({
           }
           if (typeof state === "boolean") {
             return [indexRow(index, state)];
+          }
+          if ("isReady" in state) {
+            return [
+              { ...indexRow(index, state.isValid), isReady: state.isReady },
+            ];
           }
           return [
             indexRow(index, state.isValid, index.name, state.definitionBody),

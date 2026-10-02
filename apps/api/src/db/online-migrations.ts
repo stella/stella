@@ -808,9 +808,15 @@ export const ensureOnlineIndexValid = async ({
             if (state.isValid && state.isReady) {
               return;
             }
+            // An interrupted concurrent build can leave the index ready but
+            // invalid: PostgreSQL still maintains it, and a unique one still
+            // rejects duplicates. REINDEX builds the copy beside it and swaps
+            // only once the copy is valid, so enforcement never lapses; a
+            // DROP before CREATE would let a duplicate commit in between.
             await guardedConnection.execute(
-              `DROP INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
+              `REINDEX INDEX CONCURRENTLY public.${quoteIdentifier(index.name)}`,
             );
+            return;
           }
           await guardedConnection.execute(
             index.createSql ??

@@ -445,6 +445,83 @@ describe.skipIf(!enabled)("online index runner PostgreSQL 18 faults", () => {
     });
   });
 
+  test("repairs a ready INVALID unique index while it keeps rejecting duplicates", async () => {
+    await withFixture(async (fixture) => {
+      fixture.index.isUnique = true;
+      fixture.index.createSql = `CREATE UNIQUE INDEX CONCURRENTLY ${fixture.name} ON public.${fixture.table} USING btree (id)`;
+      // An older snapshot holds the build after PostgreSQL marks the index
+      // ready and before it is valid; cancelling there leaves it maintained.
+      await fixture.blocker`BEGIN ISOLATION LEVEL REPEATABLE READ`;
+      await fixture.blocker`SELECT 1 FROM pg_class LIMIT 1`;
+      const build = Result.tryPromise({
+        try: async () => await fixture.builder.unsafe(fixture.index.createSql),
+        catch: (cause: unknown) => cause,
+      });
+      await waitForPhase(
+        fixture.observer,
+        fixture.pid,
+        "waiting for old snapshots",
+      );
+      await fixture.owner`SELECT pg_cancel_backend(${fixture.pid})`;
+      const cancelled = await build;
+      expect(cancelled.isErr()).toBe(true);
+      if (cancelled.isErr()) {
+        expect(getPgErrorCode(cancelled.error)).toBe(PG_ERROR.QUERY_CANCELED);
+      }
+      await fixture.blocker`ROLLBACK`;
+      expect(await indexState(fixture)).toMatchObject({
+        valid: false,
+        ready: true,
+      });
+      const assertDuplicateRejected = async () => {
+        const insert = await Result.tryPromise({
+          try: async () =>
+            await fixture.owner.unsafe(
+              `INSERT INTO public.${fixture.table} VALUES (1, 3)`,
+            ),
+          catch: (cause: unknown) => cause,
+        });
+        expect(insert.isErr()).toBe(true);
+        if (insert.isErr()) {
+          expect(getPgErrorCode(insert.error)).toBe(PG_ERROR.UNIQUE_VIOLATION);
+        }
+      };
+      // The INVALID index is what enforces uniqueness before the repair.
+      await assertDuplicateRejected();
+
+      const statements: string[] = [];
+      const connection: OnlineMigrationConnection = {
+        ...fixture.connection,
+        execute: async (statement, parameters) => {
+          await fixture.connection.execute(statement, parameters);
+          statements.push(statement);
+          await assertDuplicateRejected();
+        },
+      };
+      fixture.gate.wait = async (milliseconds, signal) => {
+        await assertDuplicateRejected();
+        await waitForAbort(milliseconds, signal);
+      };
+      await repair(fixture, connection);
+
+      expect(statements).toContain(
+        `REINDEX INDEX CONCURRENTLY public."${fixture.name}"`,
+      );
+      expect(
+        statements.filter((statement) =>
+          statement.startsWith(
+            `DROP INDEX CONCURRENTLY public."${fixture.name}"`,
+          ),
+        ),
+      ).toEqual([]);
+      await assertDuplicateRejected();
+      const rows = await fixture.observer.unsafe<{ count: number }[]>(
+        `SELECT count(*)::integer AS count FROM public.${fixture.table} WHERE id = 1`,
+      );
+      expect(rows.at(0)?.count).toBe(1);
+    });
+  });
+
   test("a second runner yields the database-wide slot while the first CIC is blocked", async () => {
     await withFixture(async (fixture) => {
       await blockBuild(fixture);
