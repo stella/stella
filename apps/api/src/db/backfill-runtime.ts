@@ -63,15 +63,17 @@ type DatabaseRuntimeOptions<BatchTransaction> = RuntimeOptions & {
   close: () => Promise<void>;
 };
 
-const decodeCheckpoint = (row: unknown) => {
+export const decodeCheckpoint = (row: unknown) => {
   if (!isRecord(row) || !isRecord(row["batch"])) {
     return panic("Invalid backfill checkpoint");
   }
   const b = row["batch"];
   const cursor = row["cursor"];
   const holdCause = b["holdCause"];
+  if (cursor !== null && typeof cursor !== "string") {
+    return panic("Invalid backfill checkpoint cursor");
+  }
   if (
-    !(cursor === null || typeof cursor === "string") ||
     typeof b["size"] !== "number" ||
     typeof b["sleepMs"] !== "number" ||
     typeof b["stableBatches"] !== "number" ||
@@ -81,16 +83,14 @@ const decodeCheckpoint = (row: unknown) => {
       typeof b["smoothedDurationMs"] === "number"
     ) ||
     !(b["heldSince"] === null || typeof b["heldSince"] === "number") ||
-    !(b["holdUntil"] === null || typeof b["holdUntil"] === "number") ||
-    !(
-      holdCause === undefined ||
-      holdCause === null ||
-      holdCause === "load" ||
-      holdCause === "other"
-    )
+    !(b["holdUntil"] === null || typeof b["holdUntil"] === "number")
   ) {
     return panic("Invalid backfill batch state");
   }
+  // Older checkpoints recorded no cause; unknown causes use that same policy.
+  const legacyCause = b["heldSince"] === null ? null : "other";
+  const decodedCause =
+    holdCause === "load" || holdCause === "other" ? holdCause : legacyCause;
   return {
     cursor,
     batch: {
@@ -100,11 +100,10 @@ const decodeCheckpoint = (row: unknown) => {
       holdCount: b["holdCount"],
       smoothedDurationMs: b["smoothedDurationMs"],
       heldSince: b["heldSince"],
-      // Existing checkpoints predate causal hysteresis; no EBS cause was recorded.
-      holdCause: holdCause ?? (b["heldSince"] === null ? null : "other"),
+      holdCause: decodedCause,
       holdUntil: b["holdUntil"],
     },
-  };
+  } satisfies BackfillCheckpoint;
 };
 
 const createVerdictReader = ({

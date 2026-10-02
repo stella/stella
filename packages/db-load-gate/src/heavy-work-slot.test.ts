@@ -89,7 +89,7 @@ test("backfill keeps the deployed intent key while operator intent includes an o
     });
     expect((await slot.tryAcquire()).unwrap()).toBe(true);
     expect((await slot.tryAcquire()).unwrap()).toBe(true);
-    expect(registrations).toEqual(expectedKeys);
+    expect(registrations).toEqual([...expectedKeys]);
     await slot.close();
     await slot.close();
     expect(releases).toEqual(expectedKeys.toReversed());
