@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
 import {
+  createS3ObjectIfAbsent,
   getS3,
   isMissingCorpusObjectError,
   isMissingS3ObjectError,
@@ -90,6 +91,80 @@ const createTrackedEcsCredentialsFetch =
   };
 
 describe("resolveS3Credentials", () => {
+  test("deadline-bound refresh rejects absent or incomplete credentials before constructing a client", async () => {
+    const script = `
+      const originalFetch = globalThis.fetch;
+      globalThis.fetch = Object.assign(async () => new Response(JSON.stringify({
+        AccessKeyId: "", SecretAccessKey: "fixture-secret", Token: "fixture-token"
+      }), {status: 200}), {preconnect: originalFetch.preconnect});
+      const { refreshS3, refreshCorpusS3, S3DeadlineCredentialsError } = await import("./src/lib/s3.ts");
+      const results = [];
+      for (const refresh of [refreshS3, refreshCorpusS3]) {
+        try {
+          await refresh(new AbortController().signal);
+          results.push(false);
+        } catch (error) {
+          results.push(error instanceof S3DeadlineCredentialsError);
+        }
+      }
+      console.log(JSON.stringify(results));
+    `;
+    for (const provider of ["none", "aws-runtime"]) {
+      const child = Bun.spawn({
+        cmd: [process.execPath, "--no-env-file", "-e", script],
+        cwd: new URL("../..", import.meta.url).pathname,
+        env: {
+          PATH: process.env["PATH"],
+          NODE_ENV: "test",
+          STELLA_LOCAL_DEV: "1",
+          DATABASE_URL: "postgres://fixture:fixture@localhost:5432/fixture",
+          S3_ENDPOINT: "http://localhost:9000",
+          S3_BUCKET: "fixture",
+          S3_REGION: "us-east-1",
+          S3_CREDENTIALS_PROVIDER: provider,
+          AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: "/fixture",
+          REDIS_URL: "redis://localhost:6379",
+          CONTENT_ENCRYPTION_KEY: "a".repeat(64),
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      const [stdout, stderr, exit] = await Promise.all([
+        new Response(child.stdout).text(),
+        new Response(child.stderr).text(),
+        child.exited,
+      ]);
+      expect(exit).toBe(0);
+      expect(stderr).toBe("");
+      expect(stdout.trim()).toBe("[true,true]");
+    }
+  });
+
+  test("a caller deadline cancels the credential request without falling through", async () => {
+    const controller = new AbortController();
+    let requests = 0;
+    const failure = new DOMException("fixture tick expired", "TimeoutError");
+    const resolved = resolveS3Credentials({
+      provider: "aws-runtime",
+      signal: controller.signal,
+      runtimeEnv: { AWS_CONTAINER_CREDENTIALS_RELATIVE_URI: "/fixture" },
+      fetchImpl: async (_url, init) => {
+        requests++;
+        const signal = init?.signal;
+        if (signal === undefined || signal === null) {
+          return expect.unreachable();
+        }
+        return await new Promise<Response>((_resolve, reject) => {
+          signal.addEventListener("abort", () => reject(signal.reason), {
+            once: true,
+          });
+          controller.abort(failure);
+        });
+      },
+    });
+    await expect(resolved).rejects.toThrow("fixture tick expired");
+    expect(requests).toBe(1);
+  });
   test("treats a lazily built fallback client as stale", () => {
     getS3();
 
@@ -290,6 +365,91 @@ describe("writeS3ObjectWithRetry", () => {
     data: "<html></html>",
     key: "case-law/raw/source/hash",
   };
+
+  test("an in-flight PUT receives cancellation and never starts another attempt", async () => {
+    const controller = new AbortController();
+    let attempts = 0;
+    let canceled = false;
+    await expect(
+      writeS3ObjectWithRetry(
+        { ...object, signal: controller.signal },
+        async ({ signal }) => {
+          attempts++;
+          if (signal === undefined) {
+            return expect.unreachable();
+          }
+          return await new Promise<void>((_resolve, reject) => {
+            signal.addEventListener(
+              "abort",
+              () => {
+                canceled = true;
+                reject(signal.reason);
+              },
+              { once: true },
+            );
+            controller.abort(
+              new DOMException("fixture tick expired", "TimeoutError"),
+            );
+          });
+        },
+      ),
+    ).rejects.toThrow("fixture tick expired");
+    expect(canceled).toBe(true);
+    expect(attempts).toBe(1);
+  });
+
+  test("an already expired deadline starts no object write", async () => {
+    const controller = new AbortController();
+    controller.abort(new DOMException("fixture tick expired", "TimeoutError"));
+    let attempts = 0;
+    await expect(
+      writeS3ObjectWithRetry(
+        { ...object, signal: controller.signal },
+        async () => {
+          attempts++;
+        },
+      ),
+    ).rejects.toThrow("fixture tick expired");
+    expect(attempts).toBe(0);
+  });
+
+  test("the real SDK's unconditional and conditional PUT paths stop on the caller deadline", async () => {
+    const store = startFakeS3();
+    try {
+      for (const conditional of [false, true]) {
+        const key = `fixture-deadline-${conditional}`;
+        const controller = new AbortController();
+        const held = store.holdNext({ method: "PUT", keyIncludes: key });
+        const pending = conditional
+          ? createS3ObjectIfAbsent({
+              ...object,
+              key,
+              signal: controller.signal,
+            })
+          : writeS3ObjectWithRetry({
+              ...object,
+              key,
+              signal: controller.signal,
+            });
+        try {
+          await held.reached;
+          controller.abort(
+            new DOMException("fixture tick expired", "TimeoutError"),
+          );
+          await expect(pending).rejects.toThrow("fixture tick expired");
+          expect(
+            store.requests.filter(
+              (request) => request.key === key && request.method === "PUT",
+            ),
+          ).toHaveLength(1);
+        } finally {
+          held.release();
+        }
+      }
+    } finally {
+      store.stop();
+    }
+  });
 
   const failingWriter =
     (

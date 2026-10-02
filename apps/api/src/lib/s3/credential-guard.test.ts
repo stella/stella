@@ -44,6 +44,27 @@ const expiredTokenError = (): Error =>
   });
 
 describe("createS3CredentialGuard", () => {
+  test("canceling credential refresh stops the object operation before it starts", async () => {
+    const controller = new AbortController();
+    let started = false;
+    const guard = createS3CredentialGuard({
+      isStale: () => true,
+      refresh: async (signal) => {
+        expect(signal).toBe(controller.signal);
+        controller.abort(
+          new DOMException("fixture tick expired", "TimeoutError"),
+        );
+        signal?.throwIfAborted();
+      },
+    });
+    await expect(
+      guard.run(async () => {
+        started = true;
+      }, controller.signal),
+    ).rejects.toThrow("fixture tick expired");
+    expect(started).toBe(false);
+  });
+
   test("rebuilds the client before the credentials expire", async () => {
     const source = createFakeCredentialSource();
     const guard = createS3CredentialGuard(source.lifecycle);

@@ -70,6 +70,24 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_replay_sparse_idx" ON public."case_law_decisions" USING btree (source_id, parser_version, id) WHERE redacted_at IS NULL AND source_raw_s3_key IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, parser_version, id) WHERE ((redacted_at IS NULL) AND (source_raw_s3_key IS NOT NULL))",
+    isUnique: false,
+    name: "case_law_decisions_replay_sparse_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    createSql:
+      'CREATE INDEX CONCURRENTLY "case_law_decisions_replay_walk_idx" ON public."case_law_decisions" USING btree (source_id, id, parser_version) WHERE redacted_at IS NULL AND source_raw_s3_key IS NOT NULL',
+    definitionBody:
+      "ON public.case_law_decisions USING btree (source_id, id, parser_version) WHERE ((redacted_at IS NULL) AND (source_raw_s3_key IS NOT NULL))",
+    isUnique: false,
+    name: "case_law_decisions_replay_walk_idx",
+    tableName: "case_law_decisions",
+  },
+  {
+    createSql:
       'CREATE INDEX CONCURRENTLY "case_law_decisions_source_parser_version_id_idx" ON public."case_law_decisions" USING btree ("source_id", "parser_version", "id")',
     definitionBody:
       "ON public.case_law_decisions USING btree (source_id, parser_version, id)",

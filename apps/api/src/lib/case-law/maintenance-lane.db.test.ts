@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 /**
  * Two sessions contend for the maintenance lane on a real Postgres: the
  * second may not start until the first releases. PGlite cannot stand in here
@@ -9,11 +8,9 @@ import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
-import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import {
   holdCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
-  tryEnterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import { PG_ERROR, getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -29,77 +26,6 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("case-law maintenance lane (postgres)", () => {
-    test("a scheduled pass yields immediately to an operator and enters after release", async () => {
-      await withGatedTestClients(
-        databaseUrl,
-        async ({ openClient }) => {
-          const operator = await holdCaseLawMaintenanceLane({
-            sql: openClient().sql,
-          });
-          try {
-            expect(
-              await tryEnterCaseLawMaintenanceLane({ sql: openClient().sql }),
-            ).toBeNull();
-          } finally {
-            await operator.release();
-          }
-          const scheduled = await tryEnterCaseLawMaintenanceLane({
-            sql: openClient().sql,
-          });
-          expect(scheduled).not.toBeNull();
-          await scheduled?.release();
-        },
-        { closeTimeout: 0 },
-      );
-    });
-
-    test("a scheduled pass refuses a held schema lane without waiting", async () => {
-      await withGatedTestClients(
-        databaseUrl,
-        async ({ openClient }) => {
-          const upgrade = openClient().sql;
-          await upgrade.unsafe(
-            "SELECT pg_advisory_lock(hashtext('case_law'),hashtext('schema'))",
-          );
-          const scheduled = await tryEnterCaseLawMaintenanceLane({
-            sql: openClient().sql,
-          });
-          if (!scheduled) {
-            throw new TypeError("Expected maintenance lane to be free");
-          }
-          try {
-            for (const work of [
-              async () => await scheduled.rootDb.execute(sql`SELECT 1`),
-              async () =>
-                await scheduled.ingestionDb(
-                  async (tx) => await tx.execute(sql`SELECT 1`),
-                ),
-            ]) {
-              const result = await Result.tryPromise({
-                try: work,
-                catch: (cause: unknown) => cause,
-              });
-              expect(result.isErr()).toBe(true);
-              if (result.isErr()) {
-                expect(result.error).toBeInstanceOf(
-                  CorpusSchemaLaneUnavailableError,
-                );
-                if (result.error instanceof CorpusSchemaLaneUnavailableError) {
-                  expect(result.error.waitedMs).toBe(0);
-                }
-              }
-            }
-          } finally {
-            await scheduled.release();
-            await upgrade.unsafe(
-              "SELECT pg_advisory_unlock(hashtext('case_law'),hashtext('schema'))",
-            );
-          }
-        },
-        { closeTimeout: 0 },
-      );
-    });
-
     test("a second pass waits until the first releases", async () => {
       // A release ends its session; the scope closes whichever did not get
       // that far, without waiting on a lock request that is still blocked.

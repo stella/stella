@@ -23,6 +23,7 @@ import { logger } from "@/api/lib/observability/logger";
 /** Everything one decision's row write reads, decided before it runs. */
 export type DecisionRowWrite = Omit<DecisionIdentity, "decisionId"> &
   Pick<ObservedDecision, "persistedDecisionDate"> & {
+    signal?: AbortSignal;
     sourceId: SafeId<"caseLawSource">;
     decisionId: SafeId<"caseLawDecision">;
     /** The observation composed with the supplements its document takes in. */

@@ -90,6 +90,7 @@ export type SourceRawArtifact = {
 };
 
 type AcquireSourceRawArtifactOptions = {
+  signal?: AbortSignal;
   result: IngestionResult;
   existing: ExistingDecision | undefined;
   preservesExistingDetail: boolean;
@@ -110,6 +111,7 @@ export const acquireSourceRawArtifact = async ({
   sourceId,
   decisionId,
   rawWrites,
+  signal,
 }: AcquireSourceRawArtifactOptions) => {
   const rawContentType = result.sourceRawContentType ?? "text/plain";
   const storedRawKey = existing?.sourceRawS3Key ?? null;
@@ -180,6 +182,7 @@ export const acquireSourceRawArtifact = async ({
     Result<string | undefined, RawSourceWriteFailure>
   > =>
     await writeOwnedRawPayload({
+      signal,
       result,
       sourceId,
       ownerId: decisionId,
@@ -193,7 +196,9 @@ export const acquireSourceRawArtifact = async ({
     });
 
   try {
+    signal?.throwIfAborted();
     const written = await writeRaw();
+    signal?.throwIfAborted();
     if (Result.isError(written)) {
       return rawWriteFailed(written.error);
     }
@@ -209,6 +214,7 @@ export const acquireSourceRawArtifact = async ({
           sourceRawContentType: rawContentType,
         });
   } catch (error) {
+    signal?.throwIfAborted();
     return rawWriteFailed(error);
   }
 };

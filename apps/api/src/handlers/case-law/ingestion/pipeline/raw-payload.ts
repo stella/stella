@@ -97,6 +97,7 @@ const planSourceRawPayload = ({
 };
 
 type WriteOwnedRawPayloadOptions = {
+  signal?: AbortSignal;
   result: IngestionResult;
   sourceId: SafeId<"caseLawSource">;
   /** The decision whose prefix holds the payload and the files it names. */
@@ -125,9 +126,11 @@ export const writeOwnedRawPayload = async ({
   storedContentType,
   window,
   onWriteStart,
+  signal,
 }: WriteOwnedRawPayloadOptions): Promise<
   Result<string | undefined, RawSourceWriteFailure>
 > => {
+  signal?.throwIfAborted();
   const plan = planSourceRawPayload({ result, sourceId, decisionId: ownerId });
   if (plan === undefined) {
     return Result.ok(undefined);
@@ -159,6 +162,7 @@ export const writeOwnedRawPayload = async ({
         bytes,
         contentType: fileContentType,
         window,
+        signal,
       });
       if (Result.isError(file)) {
         return file;
@@ -168,7 +172,13 @@ export const writeOwnedRawPayload = async ({
       const copied = await copyRawObject({
         copy,
         window,
-        signal: AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
+        signal:
+          signal === undefined
+            ? AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS)
+            : AbortSignal.any([
+                signal,
+                AbortSignal.timeout(RAW_OBJECT_COPY_TIMEOUT_MS),
+              ]),
       });
       if (Result.isError(copied)) {
         return copied;
@@ -177,7 +187,9 @@ export const writeOwnedRawPayload = async ({
   }
   // Failing here holds the page cursor; see `rawWriteFailed` and
   // `writeRawSourcePayload` for why that is safe.
+  signal?.throwIfAborted();
   return await writeCaseLawRawPayload({
+    signal,
     owner,
     window,
     data: homed.value.payload,

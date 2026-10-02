@@ -99,6 +99,7 @@ const storedScopeRow = async (
 };
 
 type StoredScopeStateOptions = {
+  signal?: AbortSignal;
   decisionId: SafeId<"caseLawDecision">;
   scopedDb: ScopedDb;
   corpus: CaseLawCorpusDependencies;
@@ -108,11 +109,13 @@ const storedScopeState = async ({
   decisionId,
   scopedDb,
   corpus,
+  signal,
 }: StoredScopeStateOptions) => {
   const row = await storedScopeRow(decisionId, scopedDb);
   const ast = row?.astS3Key
     ? await readCorpusAst(row.astS3Key, {
         ...corpus.readBytes,
+        signal,
         readTombstones: async (locations) =>
           await scopedDb(
             async (tx) => await corpusTombstoneReaderForTx(tx)(locations),
@@ -137,11 +140,13 @@ const verifyStoredCitationScopes = async ({
   reusedCitationScopeEnvelope,
   scopedDb,
   corpus,
+  signal,
 }: VerifyStoredCitationScopesOptions) => {
   if (existing === undefined || reusedCitationScopeEnvelope === undefined) {
     return Result.ok(false);
   }
   const snapshot = await storedScopeState({
+    signal,
     decisionId: existing.id,
     scopedDb,
     corpus,
@@ -461,6 +466,7 @@ const planCorpusPayload = ({
 };
 
 type PlanDecisionWriteOptions = {
+  signal?: AbortSignal;
   result: IngestionResult;
   existing: ExistingDecision | undefined;
   decisionId: SafeId<"caseLawDecision">;
@@ -485,6 +491,7 @@ export const planDecisionWrite = async ({
   corpus,
   incomingCarriesDocument,
   polarityRules,
+  signal,
 }: PlanDecisionWriteOptions) => {
   const sections = decisionSections(result);
 
@@ -514,6 +521,7 @@ export const planDecisionWrite = async ({
       ? existing.metadata[CITATION_SCOPE_METADATA_KEY]
       : undefined;
   const verified = await verifyStoredCitationScopes({
+    signal,
     scopedDb,
     corpus,
     existing,

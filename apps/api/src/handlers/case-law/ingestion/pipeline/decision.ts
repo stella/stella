@@ -142,7 +142,9 @@ const runDecisionAttempt = async ({
   corpus,
   corpusBatch,
   polarityRules,
+  signal,
 }: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
+  signal?.throwIfAborted();
   const observation = observeDecision({ input, sourceId });
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
@@ -193,7 +195,9 @@ const runDecisionAttempt = async ({
     return existingPolicyOutcome;
   }
 
+  signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
+    signal,
     result,
     existing,
     preservesExistingDetail: shape.preservesExistingDetail,
@@ -216,6 +220,7 @@ const runDecisionAttempt = async ({
   const attempted = await Result.tryPromise({
     try: async () => {
       const planned = await planDecisionWrite({
+        signal,
         result,
         existing,
         decisionId,
@@ -232,7 +237,9 @@ const runDecisionAttempt = async ({
       if ("status" in plan) {
         return Result.ok(RECONCILE_CONTENTION);
       }
+      signal?.throwIfAborted();
       const write: DecisionRowWrite = {
+        signal,
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
         sourceId,
@@ -295,6 +302,7 @@ const runDecisionAttempt = async ({
     return settled;
   }
 
+  signal?.throwIfAborted();
   const flushed = await enqueueCorpusMirror({
     scopedDb,
     write,

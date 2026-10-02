@@ -777,6 +777,14 @@ export const caseLawDecisions = p.pgTable(
       .index("case_law_decisions_source_parser_version_id_idx")
       .on(t.sourceId, t.parserVersion, t.id),
     p
+      .index("case_law_decisions_replay_sparse_idx")
+      .on(t.sourceId, t.parserVersion, t.id)
+      .where(sql`${t.redactedAt} IS NULL AND ${t.sourceRawS3Key} IS NOT NULL`),
+    p
+      .index("case_law_decisions_replay_walk_idx")
+      .on(t.sourceId, t.id, t.parserVersion)
+      .where(sql`${t.redactedAt} IS NULL AND ${t.sourceRawS3Key} IS NOT NULL`),
+    p
       .index("case_law_decisions_textless_detail_recheck_idx")
       .on(
         t.sourceId,

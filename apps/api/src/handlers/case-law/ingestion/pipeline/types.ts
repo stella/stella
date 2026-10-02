@@ -98,6 +98,7 @@ export type DecisionRefresh =
   (typeof DECISION_REFRESH)[keyof typeof DECISION_REFRESH];
 
 export type ProcessDecisionAttemptOptions = {
+  signal?: AbortSignal;
   input: IngestionResult;
   judges: CaseLawJudgeDependencies;
   sourceId: SafeId<"caseLawSource">;

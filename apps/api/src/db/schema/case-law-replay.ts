@@ -1,6 +1,10 @@
 import type { Verdict } from "@stll/db-load-gate/health";
 
 import type { ReplayRowOutcome } from "@/api/handlers/case-law/ingestion/replay";
+import {
+  REPLAY_FAILURE_CODES,
+  type ReplayFailure,
+} from "@/api/handlers/case-law/ingestion/replay-failure";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/lib/legal-search/ingestion-types";
 
 import { caseLawSources } from "./case-law";
@@ -10,9 +14,14 @@ export const REPLAY_BATCH_STATUSES = [
   "reserved",
   "completed",
   "superseded",
+  "failed",
 ] as const;
 export const REPLAY_BLOCKED_REASONS = [
   "missing-payload",
+  "no-write-settled",
+  "redacted",
+  "superseded",
+  "retry-exhausted",
   ...Object.values(STORED_RAW_REPARSE_REJECTION),
 ] as const;
 
@@ -40,6 +49,12 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     gateVerdict: jsonb("gate_verdict").$type<Verdict>().notNull(),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     completedAt: timestamptz("completed_at"),
+    attempts: p.integer().default(0).notNull(),
+    retryAt: timestamptz("retry_at"),
+    failureCode: p.text("failure_code", { enum: REPLAY_FAILURE_CODES }),
+    failureMessageClass: p
+      .text("failure_message_class")
+      .$type<ReplayFailure["messageClass"]>(),
   },
   (t) => [
     p
@@ -48,6 +63,23 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     p
       .index("case_law_replay_batches_source_status_idx")
       .on(t.sourceId, t.status),
+    p
+      .index("case_law_replay_batches_due_idx")
+      .on(t.sourceId, t.status, t.retryAt),
+    p
+      .index("case_law_replay_batches_document_version_idx")
+      .on(t.sourceId, t.firstDecisionId, t.parserVersionTo),
+    p
+      .index("case_law_replay_batches_retention_idx")
+      .on(t.completedAt, t.id)
+      .where(sql`${t.status} IN ('completed', 'superseded', 'failed')`),
+    p.check(
+      "case_law_replay_batches_failure_code_check",
+      sql`${t.failureCode} IS NULL OR ${t.failureCode} IN (${sql.join(
+        REPLAY_FAILURE_CODES.map((code) => sql.raw(`'${code}'`)),
+        sql`, `,
+      )})`,
+    ),
     p.check(
       "case_law_replay_batches_status_check",
       sql`${t.status} IN (${sql.join(
@@ -57,7 +89,7 @@ export const caseLawReplayBatches = p.pgTable.withRLS(
     ),
     p.check(
       "case_law_replay_batches_counts_check",
-      sql`${t.attempted} > 0 AND ${t.applied} >= 0 AND ${t.blocked} >= 0 AND ${t.failed} >= 0 AND ${t.applied} + ${t.blocked} + ${t.failed} <= ${t.attempted} AND ${t.durationMs} >= 0`,
+      sql`${t.attempts} >= 0 AND ${t.attempted} > 0 AND ${t.applied} >= 0 AND ${t.blocked} >= 0 AND ${t.failed} >= 0 AND ${t.applied} + ${t.blocked} + ${t.failed} <= ${t.attempted} AND ${t.durationMs} >= 0`,
     ),
     p.pgPolicy("case_law_replay_batches_owner_access", {
       for: "all",
@@ -108,10 +140,7 @@ export const caseLawReplayBlocked = p.pgTable.withRLS(
 export const caseLawReplayDailyRows = p.pgTable.withRLS(
   "case_law_replay_daily_rows",
   {
-    batchId: p
-      .text("batch_id")
-      .notNull()
-      .references(() => caseLawReplayBatches.id, { onDelete: "restrict" }),
+    batchId: p.text("batch_id").notNull(),
     budgetDay: p.date("budget_day").notNull(),
     sourceId: safeUuid<"caseLawSource">("source_id")
       .notNull()
@@ -120,6 +149,13 @@ export const caseLawReplayDailyRows = p.pgTable.withRLS(
   (t) => [
     p.primaryKey({ columns: [t.batchId, t.budgetDay] }),
     p
+      .foreignKey({
+        name: "case_law_replay_daily_batch_fk",
+        columns: [t.batchId],
+        foreignColumns: [caseLawReplayBatches.id],
+      })
+      .onDelete("restrict"),
+    p
       .index("case_law_replay_daily_rows_source_day_idx")
       .on(t.sourceId, t.budgetDay),
     p.pgPolicy("case_law_replay_daily_rows_owner_access", {
@@ -127,6 +163,108 @@ export const caseLawReplayDailyRows = p.pgTable.withRLS(
       to: "public",
       using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_daily_rows'::regclass)`,
       withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_daily_rows'::regclass)`,
+    }),
+  ],
+);
+
+export const caseLawReplaySourceProgress = p.pgTable.withRLS(
+  "case_law_replay_source_progress",
+  {
+    sourceId: safeUuid<"caseLawSource">("source_id")
+      .primaryKey()
+      .references(() => caseLawSources.id, { onDelete: "restrict" }),
+    ticksWithoutProgress: p
+      .integer("ticks_without_progress")
+      .default(0)
+      .notNull(),
+    lastCompletedAt: timestamptz("last_completed_at"),
+    lastServedAt: timestamptz("last_served_at"),
+  },
+  (t) => [
+    p.check(
+      "case_law_replay_source_progress_ticks_check",
+      sql`${t.ticksWithoutProgress} >= 0`,
+    ),
+    p.pgPolicy("case_law_replay_source_progress_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_source_progress'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_source_progress'::regclass)`,
+    }),
+  ],
+);
+
+export const REPLAY_MAINTENANCE_AUDIT_ACTIONS = [
+  "source-scheduled",
+  "daily-row-charged",
+  "receipt-superseded",
+  "checkpoint-created",
+  "gate-state-saved",
+  "receipt-reserved",
+  "progress-completed",
+  "receipt-applied",
+  "receipt-failed",
+  "receipt-blocked",
+  "dry-run-advanced",
+  "dry-run-reset",
+  "receipts-compacted",
+  "tick-recorded",
+] as const;
+export const REPLAY_MAINTENANCE_AUDIT_SERVICE = "case-law-background-replay";
+export type ReplayMaintenanceAuditDetails = {
+  attempts?: number;
+  failureCode?: ReplayFailure["code"];
+  status?: (typeof REPLAY_BATCH_STATUSES)[number];
+  parserVersion?: number;
+  ticksWithoutProgress?: number;
+  compactedReceipts?: number;
+  compactedAuditEvents?: number;
+  receiptIds?: string[];
+};
+
+// Independent of receipt FKs: audit history survives bounded receipt compaction.
+// Source deletion is explicit and restricted while its retained history exists.
+export const caseLawReplayAuditEvents = p.pgTable.withRLS(
+  "case_law_replay_audit_events",
+  {
+    id: p.text().primaryKey(),
+    sourceId: safeUuid<"caseLawSource">("source_id").references(
+      () => caseLawSources.id,
+      { onDelete: "restrict" },
+    ),
+    serviceId: p.text("service_id").notNull(),
+    action: p.text({ enum: REPLAY_MAINTENANCE_AUDIT_ACTIONS }).notNull(),
+    resourceId: p.text("resource_id").notNull(),
+    details: jsonb().$type<ReplayMaintenanceAuditDetails>().notNull(),
+    createdAt: timestamptz("created_at").defaultNow().notNull(),
+  },
+  (t) => [
+    p.index("case_law_replay_audit_events_retention_idx").on(t.createdAt, t.id),
+    p
+      .index("case_law_replay_audit_events_source_idx")
+      .on(t.sourceId, t.createdAt, t.id),
+    p.check(
+      "case_law_replay_audit_events_action_check",
+      sql`${t.action} IN (${sql.join(
+        REPLAY_MAINTENANCE_AUDIT_ACTIONS.map((action) =>
+          sql.raw(`'${action}'`),
+        ),
+        sql`, `,
+      )})`,
+    ),
+    p.check(
+      "case_law_replay_audit_events_service_check",
+      sql`${t.serviceId} = ${REPLAY_MAINTENANCE_AUDIT_SERVICE}`,
+    ),
+    p.check(
+      "case_law_replay_audit_events_details_check",
+      sql`jsonb_typeof(${t.details}) = 'object' AND octet_length(${t.details}::text) <= 32768`,
+    ),
+    p.pgPolicy("case_law_replay_audit_events_owner_access", {
+      for: "all",
+      to: "public",
+      using: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
+      withCheck: sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.case_law_replay_audit_events'::regclass)`,
     }),
   ],
 );

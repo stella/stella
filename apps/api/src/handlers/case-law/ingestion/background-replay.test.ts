@@ -1,7 +1,6 @@
-import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
-import { defaultConfig } from "@stll/db-load-gate/health";
+import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
 
 import {
   runBackgroundReplayTick,
@@ -20,8 +19,6 @@ const fixture = (dailyBudget = 3) => {
     dailyBudget,
     mode: "enrolled",
     rowsBehind: 20,
-    oldestAgeMs: 1000,
-    blockedCount: 0,
   };
   let clock = Date.UTC(2026, 9, 1);
   let spent = 0;
@@ -119,7 +116,10 @@ const fixture = (dailyBudget = 3) => {
       pending = null;
       completed += 1;
       writes += 1;
+      return "applied";
     },
+    recordFailure: async () => "retryable",
+    advancePreview: async () => {},
     metric: () => {},
     now: () => clock,
     sleep: async (milliseconds) => {
@@ -332,17 +332,9 @@ test("a failed receipt completion resumes the charged reservation before selecti
   state.dependencies.completeBatch = async () => {
     throw new TypeError("receipt unavailable");
   };
-  const failed = await Result.tryPromise({
-    try: async () => await state.run(),
-    catch: (cause: unknown) => cause,
-  });
-  expect(failed.isErr()).toBe(true);
-  if (failed.isErr()) {
-    expect(failed.error).toBeInstanceOf(TypeError);
-    if (failed.error instanceof TypeError) {
-      expect(failed.error.message).toBe("receipt unavailable");
-    }
-  }
+  const failed = await state.run();
+  expect(failed.errors).toBe(1);
+  expect(failed.applied).toBe(0);
   expect(state.counts().spent).toBe(1);
   expect(state.counts().leased).toBe(false);
   state.dependencies.completeBatch = complete;
@@ -352,7 +344,7 @@ test("a failed receipt completion resumes the charged reservation before selecti
   expect(state.counts().completed).toBe(1);
 });
 
-test("retryable outcomes keep their receipt pending and stop at the error ceiling", async () => {
+test("retryable outcomes persist a deferred receipt before ending a bounded tick", async () => {
   const state = fixture(1);
   state.dependencies.replay = async (batch) => {
     const report = state.success(batch);
@@ -360,7 +352,7 @@ test("retryable outcomes keep their receipt pending and stop at the error ceilin
     report.outcomes.retryable = 1;
     return report;
   };
-  expect((await state.run()).status).toBe("error-ceiling");
+  expect((await state.run()).status).toBe("budget-exhausted");
   expect(state.counts().completed).toBe(0);
   state.dependencies.replay = async (batch) => state.success(batch);
   expect((await state.run()).applied).toBe(1);
@@ -377,8 +369,8 @@ test("a halted replay without visited rows never completes its reservation", asy
     return report;
   };
   const report = await state.run();
-  expect(report.status).toBe("error-ceiling");
-  expect(report.errors).toBe(1);
+  expect(report.status).toBe("budget-exhausted");
+  expect(report.errors).toBe(3);
   expect(state.counts().completed).toBe(0);
 });
 
@@ -392,4 +384,95 @@ test("higher priority work can claim the heavy slot at the next batch boundary",
   expect(state.counts().spent).toBe(1);
   expect(state.counts().leased).toBe(false);
   expect(state.counts().slotted).toBe(false);
+});
+
+test("a deferred throwing row yields to later rows within the same tick", async () => {
+  const state = fixture(4);
+  const pending = state.dependencies.pendingBatch;
+  let deferred = false;
+  const seen: string[] = [];
+  const failures: string[] = [];
+  state.dependencies.pendingBatch = async (...args) =>
+    deferred ? { type: "empty" } : await pending(...args);
+  state.dependencies.recordFailure = async (batch, failure) => {
+    deferred = true;
+    failures.push(batch.id);
+    expect(failure).toMatchObject({
+      code: "unexpected",
+      messageClass: "unexpected",
+    });
+    return "retryable";
+  };
+  state.dependencies.replay = async (batch) => {
+    seen.push(batch.id);
+    if (seen.length === 1) {
+      throw new TypeError(
+        "fixture exception with content that must not persist",
+      );
+    }
+    return state.success(batch);
+  };
+  const report = await state.run(4);
+  expect(failures).toEqual(seen.slice(0, 1));
+  expect(new Set(seen).size).toBe(4);
+  expect(report).toMatchObject({
+    attempted: 4,
+    errors: 1,
+    applied: 3,
+    failed: 0,
+  });
+  expect(state.counts().leased).toBe(false);
+  expect(state.counts().slotted).toBe(false);
+});
+
+test("tick counts use the verified completion disposition rather than the replay claim", async () => {
+  const state = fixture(1);
+  state.dependencies.completeBatch = async () => "blocked";
+  const report = await state.run(1);
+  expect(report.applied).toBe(0);
+  expect(report.blocked).toBe(1);
+});
+
+test("a persisted hold short-circuits before a lease or reservation", async () => {
+  const state = fixture(1);
+  state.dependencies.loadGateState = async () => ({
+    ...initialBatchState(),
+    heldSince: state.dependencies.now(),
+    holdUntil: state.dependencies.now() + 60_000,
+  });
+  state.dependencies.acquireLease = async () => {
+    throw new TypeError("held tick reached lease");
+  };
+  expect((await state.run()).status).toBe("held");
+  expect(state.counts().spent).toBe(0);
+});
+
+test("an unknown or failed preflight gate never selects or leases a source", async () => {
+  for (const kind of ["unknown", "stop", "error"] as const) {
+    const state = fixture();
+    state.dependencies.chooseSource = async () => {
+      throw new TypeError("held tick reached probe");
+    };
+    state.dependencies.gate = async () => {
+      if (kind === "error") {
+        throw new TypeError("fixture gate unavailable");
+      }
+      return { kind, signals: [] };
+    };
+    expect((await state.run()).status).toBe("held");
+    expect(state.counts().writes).toBe(0);
+  }
+});
+
+test("a dry run records each preview cursor without completing an apply reservation", async () => {
+  const state = fixture(3);
+  state.source.mode = "dry-run";
+  const previews: string[] = [];
+  state.dependencies.advancePreview = async (batch) => {
+    previews.push(batch.decisionId);
+  };
+  expect((await state.run(3)).attempted).toBe(3);
+  expect(previews).toHaveLength(3);
+  expect(state.counts().spent).toBe(0);
+  expect(state.counts().completed).toBe(0);
 });

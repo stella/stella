@@ -810,6 +810,7 @@ export const readCorpusBytesAt = async ({
  * answer to "where is this read's erasure list", and is required.
  */
 export type CorpusByteSourceSeams = {
+  signal?: AbortSignal;
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
   readTombstones: CorpusTombstoneReader;
@@ -844,25 +845,34 @@ type ReadCorpusTextOptions = CorpusByteSourceSeams & {
  */
 export const readCorpusText = async (
   storedKey: string,
-  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions,
+  { timeoutMs = CORPUS_IO_TIMEOUT_MS, signal, ...seams }: ReadCorpusTextOptions,
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
-    { timeoutMs },
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { timeoutMs, signal },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
 
 export const readCorpusSections = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams,
+  { signal, ...seams }: CorpusByteSourceSeams,
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { signal },
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -882,12 +892,17 @@ export type SizedCorpusAst = {
 
 export const readSizedCorpusAst = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams,
+  { signal, ...seams }: CorpusByteSourceSeams,
 ): Promise<SizedCorpusAst> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { signal },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
   const parsed: unknown = JSON.parse(decoded);

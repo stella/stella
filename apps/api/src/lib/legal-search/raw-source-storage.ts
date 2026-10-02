@@ -153,6 +153,7 @@ const checkWriteWindow = (
     : Result.ok(undefined);
 
 type RawSourcePayloadWrite = {
+  signal?: AbortSignal;
   data: Uint8Array | string;
   contentType: string;
   /** The raw-payload key the row already records, or null for none. */
@@ -182,14 +183,16 @@ const putRawSourcePayload = async ({
   data,
   contentType,
   storedKey,
+  signal,
 }: Omit<RawSourcePayloadWrite, "storedContentType"> & {
   key: string;
 }): Promise<void> => {
+  signal?.throwIfAborted();
   if (key !== storedKey) {
-    await createS3ObjectIfAbsent({ contentType, data, key });
+    await createS3ObjectIfAbsent({ contentType, data, key, signal });
     return;
   }
-  await writeS3ObjectWithRetry({ contentType, data, key });
+  await writeS3ObjectWithRetry({ contentType, data, key, signal });
 };
 
 /**
@@ -210,10 +213,11 @@ export const writeRawSourcePayload = async ({
   contentType,
   storedKey,
   storedContentType,
+  signal,
 }: WriteRawSourcePayloadOptions): Promise<string> => {
   const key = rawSourcePayloadKey({ owner, data });
   if (key !== storedKey || contentType !== storedContentType) {
-    await putRawSourcePayload({ key, data, contentType, storedKey });
+    await putRawSourcePayload({ key, data, contentType, storedKey, signal });
   }
   return key;
 };
@@ -234,6 +238,7 @@ export const writeCaseLawRawPayload = async ({
   contentType,
   storedKey,
   storedContentType,
+  signal,
 }: WriteCaseLawRawPayloadOptions): Promise<
   Result<string, RawSourceWriteWindowClosedError>
 > => {
@@ -245,7 +250,7 @@ export const writeCaseLawRawPayload = async ({
   if (Result.isError(open)) {
     return open;
   }
-  await putRawSourcePayload({ key, data, contentType, storedKey });
+  await putRawSourcePayload({ key, data, contentType, storedKey, signal });
   return Result.ok(key);
 };
 
@@ -295,10 +300,13 @@ export const sourceBinaryRef = ({
  */
 export const writeSourceBinary = async ({
   window,
+  signal,
   ...input
 }: SourceBinaryInput & {
   window: RawSourceWriteWindow;
+  signal?: AbortSignal;
 }): Promise<Result<SourceRawObjectRef, RawSourceWriteWindowClosedError>> => {
+  signal?.throwIfAborted();
   const ref = sourceBinaryRef(input);
   const location = parseCorpusLocation(ref.location);
   if (location.type !== "object") {
@@ -312,6 +320,7 @@ export const writeSourceBinary = async ({
     contentType: input.contentType,
     data: input.bytes,
     key: location.key,
+    signal,
   });
   return Result.ok(ref);
 };

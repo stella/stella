@@ -87,6 +87,10 @@ const AUDIT_RECORDER_NAME =
 // Imported helpers that write their own audit row.
 const AUDITED_HELPERS = [
   {
+    module: "apps/api/src/lib/legal-search/case-law-replay-audit",
+    names: new Set(["recordReplayMaintenanceAuditEvent"]),
+  },
+  {
     module: "apps/api/src/lib/audited-download",
     names: new Set(["auditedPresignDownload"]),
   },

@@ -88,7 +88,7 @@ type PutCorpusPacksOptions = {
   timeoutMs?: number;
   /** Test seams; production writes through the corpus bucket client. */
   put?: (key: string, bytes: Uint8Array, signal: AbortSignal) => Promise<void>;
-  exists?: (key: string) => Promise<boolean>;
+  exists?: (key: string, signal: AbortSignal) => Promise<boolean>;
 };
 
 const putPack = async (
@@ -222,7 +222,7 @@ export const putCorpusPacks = async ({
     const written = await Result.tryPromise({
       try: async () => {
         const already = await withTimeout(
-          async () => await exists(pack.packKey),
+          async (probeSignal) => await exists(pack.packKey, probeSignal),
           { label: "corpus-pack-exists", signal, timeoutMs },
         );
         if (!already) {

@@ -8,6 +8,8 @@ import {
 } from "@aws-sdk/client-s3";
 import { panic, Result, TaggedError } from "better-result";
 import { S3Client } from "bun";
+import { readFile } from "node:fs/promises";
+import { setTimeout as sleep } from "node:timers/promises";
 
 import { classifyFailure } from "@stll/errors";
 import { fetchWithTimeout } from "@stll/fetch";
@@ -22,6 +24,7 @@ import {
 } from "@/api/lib/s3/credential-guard";
 import {
   credentialsFromEnvValues,
+  isUsableStaticCredential,
   type OptionalS3Credentials,
 } from "@/api/lib/s3/credentials";
 import { isRecord } from "@/api/lib/type-guards";
@@ -63,18 +66,24 @@ const fetchCredentialJson = async (
   {
     fetchImpl,
     headers,
+    signal,
   }: {
+    signal?: AbortSignal;
     fetchImpl: Fetcher;
     headers?: Record<string, string>;
   },
 ): Promise<S3Credentials | null> => {
   // An unreachable or malformed endpoint means this credential source is not
   // available here; the caller falls through to the next one.
+  signal?.throwIfAborted();
   const fetched = await Result.tryPromise(
     async (): Promise<S3Credentials | null> => {
       const response = await fetchImpl(url, {
         ...(headers ? { headers } : {}),
-        signal: AbortSignal.timeout(2000),
+        signal:
+          signal === undefined
+            ? AbortSignal.timeout(2000)
+            : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
       });
       if (!response.ok) {
         return null;
@@ -92,6 +101,7 @@ const fetchCredentialJson = async (
       };
     },
   );
+  signal?.throwIfAborted();
   return fetched.unwrapOr(null);
 };
 
@@ -133,10 +143,13 @@ const containerCredentialsUrl = (
 const fetchEcsCredentials = async ({
   fetchImpl = fetch,
   runtimeEnv = process.env,
+  signal,
 }: {
+  signal?: AbortSignal;
   fetchImpl?: Fetcher;
   runtimeEnv?: CredentialRuntimeEnv;
 } = {}): Promise<S3Credentials | null> => {
+  signal?.throwIfAborted();
   const url = containerCredentialsUrl(runtimeEnv);
   if (!url) {
     return null;
@@ -156,8 +169,10 @@ const fetchEcsCredentials = async ({
     // from the cause; report it here and let the caller fall through to the
     // next credential source.
     const token = await Result.tryPromise(
-      async () => await Bun.file(authorizationTokenFile).text(),
+      async () =>
+        await readFile(authorizationTokenFile, { encoding: "utf-8", signal }),
     );
+    signal?.throwIfAborted();
     if (token.isErr()) {
       logger.warn(
         "s3.container_credentials_token_unreadable",
@@ -170,7 +185,7 @@ const fetchEcsCredentials = async ({
     headers["Authorization"] = token.value.trim();
   }
 
-  return await fetchCredentialJson(url, { fetchImpl, headers });
+  return await fetchCredentialJson(url, { fetchImpl, headers, signal });
 };
 
 /**
@@ -183,11 +198,14 @@ const fetchEcsCredentials = async ({
  */
 const fetchImdsCredentials = async ({
   fetchImpl = fetch,
+  signal,
 }: {
+  signal?: AbortSignal;
   fetchImpl?: Fetcher;
 } = {}): Promise<S3Credentials | null> => {
   // Off EC2 the metadata endpoint does not answer; that is the local-dev case,
   // not a failure.
+  signal?.throwIfAborted();
   const fetched = await Result.tryPromise(
     async (): Promise<S3Credentials | null> => {
       const tokenResponse = await fetchImpl(
@@ -195,7 +213,10 @@ const fetchImdsCredentials = async ({
         {
           method: "PUT",
           headers: { "X-aws-ec2-metadata-token-ttl-seconds": "300" },
-          signal: AbortSignal.timeout(2000),
+          signal:
+            signal === undefined
+              ? AbortSignal.timeout(2000)
+              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
         },
       );
       if (!tokenResponse.ok) {
@@ -207,7 +228,10 @@ const fetchImdsCredentials = async ({
         "http://169.254.169.254/latest/meta-data/iam/security-credentials/",
         {
           headers: { "X-aws-ec2-metadata-token": imdsToken },
-          signal: AbortSignal.timeout(2000),
+          signal:
+            signal === undefined
+              ? AbortSignal.timeout(2000)
+              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
         },
       );
       if (!roleResponse.ok) {
@@ -219,7 +243,10 @@ const fetchImdsCredentials = async ({
         `http://169.254.169.254/latest/meta-data/iam/security-credentials/${roleName}`,
         {
           headers: { "X-aws-ec2-metadata-token": imdsToken },
-          signal: AbortSignal.timeout(2000),
+          signal:
+            signal === undefined
+              ? AbortSignal.timeout(2000)
+              : AbortSignal.any([signal, AbortSignal.timeout(2000)]),
         },
       );
       if (!credsResponse.ok) {
@@ -237,6 +264,7 @@ const fetchImdsCredentials = async ({
       };
     },
   );
+  signal?.throwIfAborted();
   return fetched.unwrapOr(null);
 };
 
@@ -295,6 +323,7 @@ const corpusBucket = (): string =>
   envBase.LEGAL_CORPUS_S3_BUCKET ?? envBase.S3_BUCKET;
 
 type ResolveS3CredentialsOptions = {
+  signal?: AbortSignal;
   endpoint?: string;
   fetchImpl?: Fetcher;
   provider?: S3CredentialsProvider;
@@ -308,11 +337,23 @@ const staticCredentialsFromEnv = (): OptionalS3Credentials | null =>
     envBase.S3_SECRET_ACCESS_KEY,
   );
 
-const resolveAwsRuntimeCredentials = async (
-  fetchImpl: Fetcher,
-  runtimeEnv: CredentialRuntimeEnv,
-): Promise<S3Credentials | null> => {
-  const ecsCredentials = await fetchEcsCredentials({ fetchImpl, runtimeEnv });
+type ResolveAwsRuntimeCredentialsOptions = {
+  fetchImpl: Fetcher;
+  runtimeEnv: CredentialRuntimeEnv;
+  signal?: AbortSignal;
+};
+
+const resolveAwsRuntimeCredentials = async ({
+  fetchImpl,
+  runtimeEnv,
+  signal,
+}: ResolveAwsRuntimeCredentialsOptions): Promise<S3Credentials | null> => {
+  signal?.throwIfAborted();
+  const ecsCredentials = await fetchEcsCredentials({
+    fetchImpl,
+    runtimeEnv,
+    signal,
+  });
   if (ecsCredentials) {
     return ecsCredentials;
   }
@@ -331,7 +372,7 @@ const resolveAwsRuntimeCredentials = async (
     return null;
   }
 
-  const imdsCredentials = await fetchImdsCredentials({ fetchImpl });
+  const imdsCredentials = await fetchImdsCredentials({ fetchImpl, signal });
   if (imdsCredentials) {
     return imdsCredentials;
   }
@@ -345,7 +386,9 @@ export const resolveS3Credentials = async ({
   provider = envBase.S3_CREDENTIALS_PROVIDER,
   runtimeEnv = process.env,
   staticCredentials = staticCredentialsFromEnv(),
+  signal,
 }: ResolveS3CredentialsOptions = {}): Promise<OptionalS3Credentials | null> => {
+  signal?.throwIfAborted();
   if (provider === "none") {
     return null;
   }
@@ -355,25 +398,54 @@ export const resolveS3Credentials = async ({
   }
 
   if (provider === "aws-runtime") {
-    return await resolveAwsRuntimeCredentials(fetchImpl, runtimeEnv);
+    return await resolveAwsRuntimeCredentials({
+      fetchImpl,
+      runtimeEnv,
+      signal,
+    });
   }
 
   if (!isAwsS3Endpoint(endpoint)) {
     return (
       staticCredentials ??
-      (await resolveAwsRuntimeCredentials(fetchImpl, runtimeEnv))
+      (await resolveAwsRuntimeCredentials({ fetchImpl, runtimeEnv, signal }))
     );
   }
 
-  const awsRuntimeCredentials = await resolveAwsRuntimeCredentials(
+  const awsRuntimeCredentials = await resolveAwsRuntimeCredentials({
     fetchImpl,
     runtimeEnv,
-  );
+    signal,
+  });
   if (awsRuntimeCredentials) {
     return awsRuntimeCredentials;
   }
 
   return staticCredentials;
+};
+
+export class S3DeadlineCredentialsError extends TaggedError(
+  "S3DeadlineCredentialsError",
+)<{
+  message: string;
+}> {}
+
+/** A bounded job must not fall through to the SDK's unbounded credential chain. */
+const resolveRefreshCredentials = async (signal?: AbortSignal) => {
+  const credentials = await resolveS3Credentials({ signal });
+  signal?.throwIfAborted();
+  if (
+    signal !== undefined &&
+    (credentials === null ||
+      !isUsableStaticCredential(credentials.accessKeyId) ||
+      !isUsableStaticCredential(credentials.secretAccessKey))
+  ) {
+    throw new S3DeadlineCredentialsError({
+      message:
+        "Deadline-bound S3 operations require complete explicit credentials",
+    });
+  }
+  return credentials;
 };
 
 /**
@@ -384,8 +456,9 @@ export const resolveS3Credentials = async ({
  * Call at process startup and periodically in long-running
  * processes to prevent STS credential expiry.
  */
-export const refreshS3 = async (): Promise<void> => {
-  const credentials = await resolveS3Credentials();
+export const refreshS3 = async (signal?: AbortSignal): Promise<void> => {
+  const credentials = await resolveRefreshCredentials(signal);
+  signal?.throwIfAborted();
   _client = buildS3Client(envBase.S3_BUCKET, credentials);
   _abortableClient = buildAbortableS3Client(credentials);
   _clientCreatedAt = Temporal.Now.instant().epochMilliseconds;
@@ -429,8 +502,9 @@ let _corpusClient: S3Client | null = null;
 let _abortableCorpusClient: AwsS3Client | null = null;
 let _corpusClientCreatedAt = 0;
 
-export const refreshCorpusS3 = async (): Promise<void> => {
-  const credentials = await resolveS3Credentials();
+export const refreshCorpusS3 = async (signal?: AbortSignal): Promise<void> => {
+  const credentials = await resolveRefreshCredentials(signal);
+  signal?.throwIfAborted();
   _corpusClient = buildS3Client(corpusBucket(), credentials);
   _abortableCorpusClient = buildAbortableS3Client(credentials);
   _corpusClientCreatedAt = Temporal.Now.instant().epochMilliseconds;
@@ -453,15 +527,15 @@ export const isCorpusS3Stale = (): boolean =>
 
 const documentsCredentials = createS3CredentialGuard({
   isStale: () => isS3Stale(),
-  refresh: async () => {
-    await refreshS3();
+  refresh: async (signal) => {
+    await refreshS3(signal);
   },
 });
 
 const corpusCredentials = createS3CredentialGuard({
   isStale: () => isCorpusS3Stale(),
-  refresh: async () => {
-    await refreshCorpusS3();
+  refresh: async (signal) => {
+    await refreshCorpusS3(signal);
   },
 });
 
@@ -536,6 +610,7 @@ const s3WriteRetryDelayMs = (attempt: number): number =>
   Math.random() * S3_WRITE_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
 
 type S3ObjectWrite = {
+  signal?: AbortSignal;
   contentType?: string | undefined;
   data: Uint8Array | string;
   /**
@@ -559,8 +634,29 @@ export const S3_OBJECT_WRITE_CERTAINTY = {
 export type S3ObjectWriteCertainty =
   (typeof S3_OBJECT_WRITE_CERTAINTY)[keyof typeof S3_OBJECT_WRITE_CERTAINTY];
 
-const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
-  await documentsCredentials.run(
+const writeViaClient: S3ObjectWriter = async ({
+  contentType,
+  data,
+  key,
+  signal,
+}) => {
+  if (signal !== undefined) {
+    signal.throwIfAborted();
+    return await documentsCredentials.run(
+      async () =>
+        await getAbortableS3().send(
+          new PutObjectCommand({
+            Body: data,
+            Bucket: envBase.S3_BUCKET,
+            ContentType: contentType,
+            Key: key,
+          }),
+          { abortSignal: signal },
+        ),
+      signal,
+    );
+  }
+  return await documentsCredentials.run(
     async () =>
       await getS3().write(
         key,
@@ -568,6 +664,7 @@ const writeViaClient: S3ObjectWriter = async ({ contentType, data, key }) =>
         contentType === undefined ? undefined : { type: contentType },
       ),
   );
+};
 
 /**
  * Write one object with a per-attempt deadline and a bounded, jittered retry.
@@ -591,14 +688,23 @@ export const writeS3ObjectWithRetry = async (
   let lastError: unknown;
   let priorAttemptMayCompleteLate = false;
   for (let attempt = 1; attempt <= S3_WRITE_MAX_ATTEMPTS; attempt += 1) {
+    object.signal?.throwIfAborted();
     const written = await Result.tryPromise({
       try: async () =>
-        await withTimeout(async () => await write(object), {
-          label: "s3 object write",
-          timeoutMs: S3_WRITE_TIMEOUT_MS,
-        }),
+        await withTimeout(
+          async (signal) =>
+            await write(
+              object.signal === undefined ? object : { ...object, signal },
+            ),
+          {
+            signal: object.signal,
+            label: "s3 object write",
+            timeoutMs: S3_WRITE_TIMEOUT_MS,
+          },
+        ),
       catch: (cause) => cause,
     });
+    object.signal?.throwIfAborted();
     if (!Result.isError(written)) {
       return priorAttemptMayCompleteLate
         ? S3_OBJECT_WRITE_CERTAINTY.UNCERTAIN
@@ -610,7 +716,9 @@ export const writeS3ObjectWithRetry = async (
       break;
     }
     if (attempt < S3_WRITE_MAX_ATTEMPTS) {
-      await Bun.sleep(s3WriteRetryDelayMs(attempt));
+      await sleep(s3WriteRetryDelayMs(attempt), undefined, {
+        signal: object.signal,
+      });
     }
   }
   throw lastError;
@@ -633,9 +741,10 @@ export const createS3ObjectIfAbsent = async (
   let conditional = true;
   await writeS3ObjectWithRetry(
     object,
-    async ({ contentType, data, key }): Promise<void> => {
+    async ({ contentType, data, key, signal }): Promise<void> => {
+      signal?.throwIfAborted();
       if (!conditional) {
-        await writeViaClient({ contentType, data, key });
+        await writeViaClient({ contentType, data, key, signal });
         return;
       }
       const written = await Result.tryPromise({
@@ -650,8 +759,12 @@ export const createS3ObjectIfAbsent = async (
                   IfNoneMatch: "*",
                   Key: key,
                 }),
-                { abortSignal: AbortSignal.timeout(S3_WRITE_TIMEOUT_MS) },
+                {
+                  abortSignal:
+                    signal ?? AbortSignal.timeout(S3_WRITE_TIMEOUT_MS),
+                },
               ),
+            signal,
           ),
         catch: (cause) => cause,
       });
@@ -666,7 +779,7 @@ export const createS3ObjectIfAbsent = async (
       }
       if (code === "NotImplemented") {
         conditional = false;
-        await writeViaClient({ contentType, data, key });
+        await writeViaClient({ contentType, data, key, signal });
         return;
       }
       // `ConditionalRequestConflict` (a concurrent conditional write to the
@@ -722,6 +835,7 @@ export const headS3ObjectWithSignal = async (
             new HeadObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
             { abortSignal: signal },
           ),
+        signal,
       ),
   );
   return head === null
@@ -757,7 +871,7 @@ export const getS3ObjectWithSignal = async (
     const buffer = new ArrayBuffer(bytes.byteLength);
     new Uint8Array(buffer).set(bytes);
     return buffer;
-  });
+  }, signal);
 
 /** Hash an object one stream chunk at a time; recovery must not buffer a large file. */
 export const hashS3ObjectSha256WithSignal = async (
@@ -801,7 +915,7 @@ export const hashS3ObjectSha256WithSignal = async (
           } finally {
             reader.releaseLock();
           }
-        }),
+        }, signal),
       catch: (cause) =>
         new S3ObjectReadError({
           message: "S3 object could not be hashed",
@@ -838,8 +952,9 @@ export const isMissingS3ObjectError = (error: unknown): boolean => {
 const presentOrNull = async <T>(
   request: () => Promise<T>,
 ): Promise<T | null> => {
+  const attempted = Promise.resolve().then(request);
   const response = await Result.tryPromise({
-    try: request,
+    try: async () => await attempted,
     catch: (cause) => cause,
   });
   if (Result.isOk(response)) {
@@ -848,7 +963,7 @@ const presentOrNull = async <T>(
   if (isMissingS3ObjectError(response.error)) {
     return null;
   }
-  throw response.error;
+  return await attempted;
 };
 
 /**
@@ -872,6 +987,7 @@ export const deleteS3ObjectWithSignal = async (
         new DeleteObjectCommand({ Bucket: envBase.S3_BUCKET, Key: key }),
         { abortSignal: signal },
       ),
+    signal,
   );
 };
 
@@ -893,6 +1009,7 @@ export const putS3ObjectWithSignal = async (
         }),
         { abortSignal: signal },
       ),
+    signal,
   );
 };
 
@@ -1075,7 +1192,7 @@ export const readS3ObjectBounded = async ({
       });
     }
     return await response.Body.transformToByteArray();
-  });
+  }, signal);
 
 /**
  * {@link readS3ObjectBounded} from the documents bucket, or `null` when the
@@ -1247,7 +1364,7 @@ const fetchObject = async (
       });
     }
     return response;
-  });
+  }, signal);
 
 /** Read a legal-corpus object's bytes. See `fetchObject`. */
 export const readCorpusS3Bytes = async (
@@ -1396,7 +1513,7 @@ export const readCorpusS3Range = async ({
       });
     }
     return served;
-  });
+  }, signal);
   const contentRange = CONTENT_RANGE_PATTERN.exec(
     response.headers.get("content-range") ?? "",
   );
@@ -1447,10 +1564,21 @@ export const readS3ArrayBuffer = async (
  * caller: a probe run once per row by a backfill has to survive a credential
  * rotation the same way every other object-store call in this module does.
  */
-export const corpusS3ObjectExists = async (key: string): Promise<boolean> =>
-  await corpusCredentials.run(
-    async () => await getCorpusS3().file(key).exists(),
-  );
+export const corpusS3ObjectExists = async (
+  key: string,
+  signal: AbortSignal = AbortSignal.timeout(OBJECT_READ_TIMEOUT_MS),
+): Promise<boolean> =>
+  (await presentOrNull(
+    async () =>
+      await corpusCredentials.run(
+        async () =>
+          await getAbortableCorpusS3().send(
+            new HeadObjectCommand({ Bucket: corpusBucket(), Key: key }),
+            { abortSignal: signal },
+          ),
+        signal,
+      ),
+  )) !== null;
 
 /** Publish into the legal-corpus bucket with an abortable AWS SDK request. */
 export const putCorpusS3ObjectWithSignal = async (
@@ -1470,6 +1598,7 @@ export const putCorpusS3ObjectWithSignal = async (
         }),
         { abortSignal: signal },
       ),
+    signal,
   );
 };
 

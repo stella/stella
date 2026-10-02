@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 import {
   defaultConfig,
@@ -7,11 +7,19 @@ import {
   type BatchState,
   type HealthConfig,
   type Verdict,
+  isHeldTooLong,
 } from "@stll/db-load-gate/health";
 
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
+
+import { BACKGROUND_REPLAY_LIMITS } from "./replay-enrolment";
+import {
+  classifyReplayFailure,
+  replayFailure,
+  type ReplayFailure,
+} from "./replay-failure";
 
 export type BackgroundReplaySource = {
   id: SafeId<"caseLawSource">;
@@ -20,8 +28,6 @@ export type BackgroundReplaySource = {
   dailyBudget: number;
   mode: "enrolled" | "dry-run";
   rowsBehind: number;
-  oldestAgeMs: number;
-  blockedCount: number;
 };
 
 export type BackgroundReplayBatch = {
@@ -54,7 +60,8 @@ export type BackgroundReplayTickStatus =
   | "error-ceiling"
   | "retryable"
   | "time-limit"
-  | "row-limit";
+  | "row-limit"
+  | "failed";
 
 export type BackgroundReplayTickReport = {
   status: BackgroundReplayTickStatus;
@@ -63,6 +70,8 @@ export type BackgroundReplayTickReport = {
   applied: number;
   blocked: number;
   errors: number;
+  failed: number;
+  heldTooLong: boolean;
 };
 
 export type BackgroundReplayDependencies = {
@@ -99,7 +108,12 @@ export type BackgroundReplayDependencies = {
   completeBatch: (
     batch: BackgroundReplayBatch,
     completion: BackgroundReplayCompletion,
-  ) => Promise<void>;
+  ) => Promise<"applied" | "blocked" | "unchanged" | "retryable">;
+  recordFailure: (
+    batch: BackgroundReplayBatch,
+    failure: ReplayFailure & { durationMs: number; verdict: Verdict },
+  ) => Promise<"retryable" | "failed" | "applied">;
+  advancePreview: (batch: BackgroundReplayBatch) => Promise<void>;
   metric: (report: BackgroundReplayTickReport) => void;
   now: () => number;
   sleep: (milliseconds: number) => Promise<void>;
@@ -111,6 +125,7 @@ type BackgroundReplayTickOptions = {
   maxDurationMs: number;
   errorRateCeiling: number;
   healthConfig?: HealthConfig;
+  signal?: AbortSignal;
 };
 
 type AdmitReplayBatchOptions = {
@@ -167,6 +182,7 @@ type ReplayLoopOptions = {
   maxDurationMs: number;
   errorRateCeiling: number;
   healthConfig: HealthConfig;
+  signal: AbortSignal | undefined;
 };
 
 type LoadReplayGateOptions = {
@@ -188,6 +204,87 @@ const loadReplayGate = async ({
   );
 };
 
+type RunReplayBatchOptions = {
+  dependencies: BackgroundReplayDependencies;
+  source: BackgroundReplaySource;
+  batch: BackgroundReplayBatch;
+  report: BackgroundReplayTickReport;
+  verdict: Verdict;
+  signal: AbortSignal | undefined;
+};
+
+const runReplayBatch = async ({
+  dependencies,
+  source,
+  batch,
+  report,
+  verdict,
+  signal,
+}: RunReplayBatchOptions) => {
+  const started = dependencies.now();
+  const attempt = await Result.tryPromise({
+    try: async () =>
+      await dependencies.replay(batch, { apply: source.mode === "enrolled" }),
+    catch: (cause) => cause,
+  });
+  const durationMs = Math.max(0, dependencies.now() - started);
+  report.attempted += 1;
+  const replayed = attempt.isOk() ? attempt.value : null;
+  const rowErrors =
+    replayed === null
+      ? 1
+      : replayed.outcomes.retryable + replayed.outcomes["withdraw-incomplete"];
+  let failure = replayed?.failure ?? null;
+  if (signal?.aborted) {
+    failure = replayFailure("tick-deadline");
+  } else if (attempt.isErr()) {
+    failure = classifyReplayFailure(attempt.error);
+  } else if (
+    failure === null &&
+    (rowErrors > 0 || replayed?.haltReason !== null)
+  ) {
+    failure = replayFailure("writer-retryable");
+  }
+  if (failure !== null) {
+    report.errors += 1;
+    if (source.mode === "enrolled") {
+      const disposition = await dependencies.recordFailure(batch, {
+        ...failure,
+        durationMs,
+        verdict,
+      });
+      report.failed += Number(disposition === "failed");
+      report.applied += Number(disposition === "applied");
+    }
+  } else if (source.mode === "enrolled" && replayed !== null) {
+    const completion = await Result.tryPromise(
+      async () =>
+        await dependencies.completeBatch(batch, {
+          report: replayed,
+          durationMs,
+          verdict,
+        }),
+    );
+    if (completion.isOk()) {
+      report.applied += Number(completion.value === "applied");
+      report.blocked += Number(completion.value === "blocked");
+    } else {
+      report.errors += 1;
+      const disposition = await dependencies.recordFailure(batch, {
+        ...replayFailure(signal?.aborted ? "tick-deadline" : "receipt-write"),
+        durationMs,
+        verdict,
+      });
+      report.failed += Number(disposition === "failed");
+      report.applied += Number(disposition === "applied");
+    }
+  }
+  if (source.mode === "dry-run") {
+    await dependencies.advancePreview(batch);
+  }
+  return durationMs;
+};
+
 /** Each batch owns a session slot across remote I/O and yields it before pacing. */
 const runReplayLoop = async ({
   dependencies,
@@ -200,6 +297,7 @@ const runReplayLoop = async ({
   maxDurationMs,
   errorRateCeiling,
   healthConfig,
+  signal,
 }: ReplayLoopOptions): Promise<BackgroundReplayTickReport> => {
   let releaseSlot: (() => Promise<void>) | null = null;
   try {
@@ -208,6 +306,9 @@ const runReplayLoop = async ({
     let lastDurationMs: number | null = null;
     let after: SafeId<"caseLawDecision"> | null = null;
     const stopRequested = async () => {
+      if (signal?.aborted) {
+        return "time-limit" as const;
+      }
       if (await dependencies.killRequested(source)) {
         return "killed" as const;
       }
@@ -221,9 +322,17 @@ const runReplayLoop = async ({
         return finish(beforeHealth);
       }
       if (state.holdUntil !== null && dependencies.now() < state.holdUntil) {
+        report.heldTooLong = isHeldTooLong(
+          state,
+          dependencies.now(),
+          healthConfig,
+        );
         return finish("held");
       }
-      const verdict = await dependencies.gate();
+      const readVerdict = await Result.tryPromise(dependencies.gate);
+      const verdict = readVerdict.isOk()
+        ? readVerdict.value
+        : ({ kind: "unknown", signals: [] } satisfies Verdict);
       const plan = nextBatch({
         state,
         verdict,
@@ -236,6 +345,11 @@ const runReplayLoop = async ({
         await dependencies.saveGateState(source, state);
       }
       if (plan.action === "hold") {
+        report.heldTooLong = isHeldTooLong(
+          state,
+          dependencies.now(),
+          healthConfig,
+        );
         return finish("held");
       }
       // A kill flipped during health I/O must not reserve another row.
@@ -273,47 +387,27 @@ const runReplayLoop = async ({
       if (afterAdmission !== null) {
         return finish(afterAdmission);
       }
-      const batchStart = dependencies.now();
-      const replayed = await dependencies.replay(batch, {
-        apply: source.mode === "enrolled",
+      lastDurationMs = await runReplayBatch({
+        dependencies,
+        source,
+        batch,
+        report,
+        verdict,
+        signal,
       });
-      lastDurationMs = Math.max(0, dependencies.now() - batchStart);
-      report.attempted += 1;
-      report.applied += replayed.outcomes.applied;
-      report.blocked +=
-        replayed.outcomes.rejected + replayed.outcomes["missing-payload"];
-      const rowErrors =
-        replayed.outcomes.retryable + replayed.outcomes["withdraw-incomplete"];
-      report.errors += Math.max(
-        rowErrors,
-        replayed.haltReason === null ? 0 : 1,
-      );
-      // Retryable work keeps its charged reservation for the next tick.
-      if (
-        source.mode === "enrolled" &&
-        rowErrors === 0 &&
-        replayed.haltReason === null
-      ) {
-        await dependencies.completeBatch(batch, {
-          report: replayed,
-          durationMs: lastDurationMs,
-          verdict,
-        });
-      }
       await releaseSlot?.();
       releaseSlot = null;
       after = batch.decisionId;
-      if (replayed.haltReason !== null) {
-        return finish("error-ceiling");
+      const afterReplay = await stopRequested();
+      if (afterReplay !== null) {
+        return finish(afterReplay);
       }
+      // Small samples must let a deferred poison row yield to later documents.
       if (
-        report.errors > 0 &&
+        report.attempted >= BACKGROUND_REPLAY_LIMITS.minErrorSampleRows &&
         report.errors / report.attempted >= errorRateCeiling
       ) {
         return finish("error-ceiling");
-      }
-      if (rowErrors > 0) {
-        return finish("retryable");
       }
       if (report.attempted >= rowLimit) {
         return finish(
@@ -342,6 +436,7 @@ export const runBackgroundReplayTick = async ({
   maxDurationMs,
   errorRateCeiling,
   healthConfig = defaultConfig,
+  signal,
 }: BackgroundReplayTickOptions): Promise<BackgroundReplayTickReport> => {
   if (
     !Number.isSafeInteger(maxRows) ||
@@ -357,6 +452,40 @@ export const runBackgroundReplayTick = async ({
     );
   }
   const start = dependencies.now();
+  const admission = signal?.aborted
+    ? Result.err(signal.reason)
+    : await Result.tryPromise(dependencies.gate);
+  if (signal?.aborted) {
+    const report: BackgroundReplayTickReport = {
+      status: "time-limit",
+      source: null,
+      attempted: 0,
+      applied: 0,
+      blocked: 0,
+      errors: 0,
+      failed: 0,
+      heldTooLong: false,
+    };
+    dependencies.metric(report);
+    return report;
+  }
+  if (
+    admission.isErr() ||
+    (admission.value.kind !== "normal" && admission.value.kind !== "degraded")
+  ) {
+    const report: BackgroundReplayTickReport = {
+      status: "held",
+      source: null,
+      attempted: 0,
+      applied: 0,
+      blocked: 0,
+      errors: 0,
+      failed: 0,
+      heldTooLong: false,
+    };
+    dependencies.metric(report);
+    return report;
+  }
   const source = await dependencies.chooseSource();
   const report: BackgroundReplayTickReport = {
     status: "empty",
@@ -365,6 +494,8 @@ export const runBackgroundReplayTick = async ({
     applied: 0,
     blocked: 0,
     errors: 0,
+    failed: 0,
+    heldTooLong: false,
   };
   const finish = (status: BackgroundReplayTickStatus) => {
     report.status = status;
@@ -382,6 +513,15 @@ export const runBackgroundReplayTick = async ({
     return finish("killed");
   }
 
+  const held = await dependencies.loadGateState(source);
+  if (
+    held?.holdUntil !== null &&
+    held?.holdUntil !== undefined &&
+    dependencies.now() < held.holdUntil
+  ) {
+    report.heldTooLong = isHeldTooLong(held, dependencies.now(), healthConfig);
+    return finish("held");
+  }
   let releaseLease: (() => Promise<void>) | null = null;
   try {
     if (source.mode === "enrolled") {
@@ -401,6 +541,7 @@ export const runBackgroundReplayTick = async ({
       maxDurationMs,
       errorRateCeiling,
       healthConfig,
+      signal,
     });
   } finally {
     await releaseLease?.();
