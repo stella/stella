@@ -1,5 +1,5 @@
 import { Result, TaggedError } from "better-result";
-import { and, eq, isNull, or, sql } from "drizzle-orm";
+import { and, asc, eq, isNull, or, sql } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import * as v from "valibot";
 
@@ -121,9 +121,8 @@ export const setSourceReportedTotal = async ({
 
 /** Minimum interval between attempts, including failures and worker restarts. */
 export const SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS = 6 * 60 * 60 * 1000;
-export const SOURCE_STORED_TOTAL_REFRESH_WINDOW_MS = 60 * 60 * 1000;
 
-/** Stable source phases skip missed work instead of replaying a refresh backlog. */
+/** Stable source phases spread normal refreshes; overdue slots remain due. */
 export const sourceStoredTotalNextRefreshAt = (
   sourceId: SafeId<"caseLawSource">,
   earliest: Date,
@@ -147,7 +146,7 @@ export type StoredTotalRefresh =
   | "fresh"
   /** The previous figure stands; a claimed attempt still backs off. */
   | "unavailable"
-  /** Admission held; the durable schedule prevents a recovery burst. */
+  /** Admission held; the overdue slot remains available for a later cycle. */
   | "held";
 
 type RefreshSourceStoredTotalOptions = {
@@ -241,18 +240,11 @@ export const sourceStoredTotalRefreshClaim = ({
   // audit: skip — public case-law corpus bookkeeping, no workspace data
   return tx
     .update(caseLawSources)
-    .set({
-      storedTotalAttemptedAt: now,
-      storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
-        sourceId,
-        new Date(now.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-      ),
-    })
+    .set({ storedTotalAttemptedAt: now })
     .where(
       and(
         eq(caseLawSources.id, sourceId),
         sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
-        sql`${caseLawSources.storedTotalNextRefreshAt} > ${new Date(now.getTime() - SOURCE_STORED_TOTAL_REFRESH_WINDOW_MS).toISOString()}::timestamptz`,
         or(
           sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) IS NULL`,
           sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) <= ${dueBefore.toISOString()}::timestamptz`,
@@ -262,12 +254,20 @@ export const sourceStoredTotalRefreshClaim = ({
     .returning({ id: caseLawSources.id });
 };
 
-/**
- * One durable claim per source and interval, including failures. The estimate
- * reflects PostgreSQL's current statistics, which may lag ingestion. A stale
- * worker cannot replace a later claim or a later measurement. Public readers
- * never trigger this work, and no exact count is reachable from a sync cycle.
- */
+const initialSourceRefreshSlot = (
+  sourceId: SafeId<"caseLawSource">,
+  now: Date,
+) => {
+  const phase = sourceStoredTotalNextRefreshAt(sourceId, new Date(0)).getTime();
+  return sql`to_timestamp((
+    ${phase} + ceil((greatest(
+      ${now.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS + 1},
+      extract(epoch FROM greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf})) * 1000 + ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
+    ) - ${phase}) / ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}) * ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
+  ) / 1000)`;
+};
+
+/** Failed work backs off; held admission leaves the durable overdue slot intact. */
 export const refreshSourceStoredTotal = async ({
   now,
   scopedDb,
@@ -275,39 +275,59 @@ export const refreshSourceStoredTotal = async ({
   acquireAdmission,
   estimateSource = estimateSourceOnDedicatedConnection,
 }: RefreshSourceStoredTotalOptions): Promise<StoredTotalRefresh> => {
+  let claimedAttempt: { previousAttempt: Date | null } | undefined;
   const attempt = await Result.tryPromise(async () => {
-    // Missing/expired slots are rescheduled without doing catch-up work. A
-    // persisted legacy measurement still enforces the minimum attempt interval.
-    await scopedDb(async (tx) => {
+    const claimed = await scopedDb(async (tx) => {
       // audit: skip — public case-law corpus bookkeeping, no workspace data
       await tx
         .update(caseLawSources)
         .set({
-          storedTotalNextRefreshAt: sql`to_timestamp((
-            ${sourceStoredTotalNextRefreshAt(sourceId, new Date(0)).getTime()} +
-            ceil((greatest(
-              ${now.getTime() + 1},
-              extract(epoch FROM greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf})) * 1000 + ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
-            ) - ${sourceStoredTotalNextRefreshAt(sourceId, new Date(0)).getTime()}) / ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}) * ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
-          ) / 1000)`,
+          storedTotalNextRefreshAt: initialSourceRefreshSlot(sourceId, now),
         })
         .where(
           and(
             eq(caseLawSources.id, sourceId),
-            or(
-              isNull(caseLawSources.storedTotalNextRefreshAt),
-              sql`${caseLawSources.storedTotalNextRefreshAt} <= ${new Date(now.getTime() - SOURCE_STORED_TOTAL_REFRESH_WINDOW_MS).toISOString()}::timestamptz`,
-            ),
+            isNull(caseLawSources.storedTotalNextRefreshAt),
           ),
         );
+      const previous = (
+        await tx
+          .select({ attemptedAt: caseLawSources.storedTotalAttemptedAt })
+          .from(caseLawSources)
+          .where(eq(caseLawSources.id, sourceId))
+          .limit(1)
+          .for("update")
+      ).at(0);
+      if (previous === undefined) {
+        return undefined;
+      }
+      const updated = await sourceStoredTotalRefreshClaim({
+        tx,
+        sourceId,
+        now,
+      });
+      return updated.length === 0
+        ? undefined
+        : { previousAttempt: previous.attemptedAt };
     });
-    const claimed = await scopedDb(
-      async (tx) => await sourceStoredTotalRefreshClaim({ tx, sourceId, now }),
-    );
-    if (claimed.length === 0) {
+    if (claimed === undefined) {
       return "fresh" as const;
     }
+    claimedAttempt = claimed;
     if ((await acquireAdmission()) === "held") {
+      await scopedDb(async (tx) => {
+        // audit: skip — public case-law corpus bookkeeping, no workspace data
+        await tx
+          .update(caseLawSources)
+          .set({ storedTotalAttemptedAt: claimed.previousAttempt })
+          .where(
+            and(
+              eq(caseLawSources.id, sourceId),
+              sql`${caseLawSources.storedTotalAttemptedAt} = ${now.toISOString()}::timestamptz`,
+            ),
+          );
+      });
+      claimedAttempt = undefined;
       logger.info("case_law.source_stored_total.held", { sourceId });
       return "held" as const;
     }
@@ -319,7 +339,14 @@ export const refreshSourceStoredTotal = async ({
       // audit: skip — public case-law corpus bookkeeping, no workspace data
       const written = await tx
         .update(caseLawSources)
-        .set({ storedTotal: estimated, storedTotalAsOf: now })
+        .set({
+          storedTotal: estimated,
+          storedTotalAsOf: now,
+          storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
+            sourceId,
+            new Date(now.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
+          ),
+        })
         .where(
           and(
             eq(caseLawSources.id, sourceId),
@@ -334,8 +361,37 @@ export const refreshSourceStoredTotal = async ({
       return written.length > 0 ? ("refreshed" as const) : ("fresh" as const);
     });
   });
-
   if (Result.isError(attempt)) {
+    if (claimedAttempt !== undefined) {
+      const rescheduled = await Result.tryPromise(
+        async () =>
+          await scopedDb(async (tx) => {
+            // audit: skip — public case-law corpus bookkeeping, no workspace data
+            await tx
+              .update(caseLawSources)
+              .set({
+                storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
+                  sourceId,
+                  new Date(
+                    now.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+                  ),
+                ),
+              })
+              .where(
+                and(
+                  eq(caseLawSources.id, sourceId),
+                  sql`${caseLawSources.storedTotalAttemptedAt} = ${now.toISOString()}::timestamptz`,
+                ),
+              );
+          }),
+      );
+      if (Result.isError(rescheduled)) {
+        logger.warn("case_law.source_stored_total.schedule_unavailable", {
+          sourceId,
+          ...errorSystemFields(rescheduled.error),
+        });
+      }
+    }
     logger.warn("case_law.source_stored_total.unavailable", {
       sourceId,
       ...errorSystemFields(attempt.error),
@@ -344,6 +400,78 @@ export const refreshSourceStoredTotal = async ({
     return "unavailable";
   }
   return attempt.value;
+};
+
+type RefreshNextSourceStoredTotalOptions = Omit<
+  RefreshSourceStoredTotalOptions,
+  "sourceId"
+>;
+
+/** One oldest eligible source per ingestion cycle, including after a restart. */
+export const refreshNextSourceStoredTotal = async (
+  options: RefreshNextSourceStoredTotalOptions,
+): Promise<StoredTotalRefresh> => {
+  const { scopedDb, now } = options;
+  const selected = await Result.tryPromise(
+    async () =>
+      await scopedDb(async (tx) => {
+        const unscheduled = await tx
+          .select({ id: caseLawSources.id })
+          .from(caseLawSources)
+          .where(isNull(caseLawSources.storedTotalNextRefreshAt))
+          .limit(SOURCE_READ_LIMIT);
+        for (const source of unscheduled) {
+          // db-await-in-loop: the fixed adapter catalog is bounded to SOURCE_READ_LIMIT; initialize durable phases in one transaction.
+          // audit: skip — public case-law corpus bookkeeping, no workspace data
+          await tx
+            .update(caseLawSources)
+            .set({
+              storedTotalNextRefreshAt: initialSourceRefreshSlot(
+                source.id,
+                now,
+              ),
+            })
+            .where(
+              and(
+                eq(caseLawSources.id, source.id),
+                isNull(caseLawSources.storedTotalNextRefreshAt),
+              ),
+            );
+        }
+        return (
+          await tx
+            .select({ id: caseLawSources.id })
+            .from(caseLawSources)
+            .where(
+              and(
+                sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
+                or(
+                  sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) IS NULL`,
+                  sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) <= ${new Date(now.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS).toISOString()}::timestamptz`,
+                ),
+              ),
+            )
+            .orderBy(
+              asc(caseLawSources.storedTotalNextRefreshAt),
+              asc(caseLawSources.id),
+            )
+            .limit(1)
+        ).at(0);
+      }),
+  );
+  if (Result.isError(selected)) {
+    logger.warn("case_law.source_stored_total.selection_unavailable", {
+      ...errorSystemFields(selected.error),
+    });
+    return "unavailable";
+  }
+  if (selected.value === undefined) {
+    return "fresh";
+  }
+  return await refreshSourceStoredTotal({
+    ...options,
+    sourceId: selected.value.id,
+  });
 };
 
 /** Every source's reported total, for coverage reporting. */

@@ -4,11 +4,11 @@ import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
 
 import { createSourceStoredTotalAdmission } from "./source-total-admission";
 
-test("admission reads current load and charges exactly one ten-second operation before work", async () => {
+test("one cycle admits at most one planner unit even when three units fit its budget", async () => {
   const clock = spyOn(performance, "now").mockReturnValue(0);
   try {
     const deadline = {
-      expiresAt: 15_000,
+      expiresAt: 30_000,
       signal: new AbortController().signal,
     };
     let reads = 0;
@@ -19,9 +19,10 @@ test("admission reads current load and charges exactly one ten-second operation 
       },
     });
     expect(await admit({ deadline })).toBe("granted");
-    expect(remainingCycleMs(deadline)).toBe(5000);
+    expect(remainingCycleMs(deadline)).toBe(20_000);
     expect(await admit({ deadline })).toBe("held");
-    expect(remainingCycleMs(deadline)).toBe(5000);
+    expect(await admit({ deadline })).toBe("held");
+    expect(remainingCycleMs(deadline)).toBe(20_000);
     expect(reads).toBe(1);
   } finally {
     clock.mockRestore();
@@ -108,7 +109,7 @@ test("concurrent admissions cannot reserve the same remaining operation budget",
   const clock = spyOn(performance, "now").mockReturnValue(0);
   try {
     const deadline = {
-      expiresAt: 10_000,
+      expiresAt: 30_000,
       signal: new AbortController().signal,
     };
     const release = Promise.withResolvers<undefined>();
@@ -125,7 +126,7 @@ test("concurrent admissions cannot reserve the same remaining operation budget",
     expect(reads).toBe(2);
     release.resolve(undefined);
     expect(await Promise.all([first, second])).toEqual(["granted", "held"]);
-    expect(remainingCycleMs(deadline)).toBe(0);
+    expect(remainingCycleMs(deadline)).toBe(20_000);
   } finally {
     clock.mockRestore();
   }

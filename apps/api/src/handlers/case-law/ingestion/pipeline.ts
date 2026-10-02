@@ -34,7 +34,7 @@ import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestio
 import { readStoredRawFromS3 } from "@/api/handlers/case-law/ingestion/pipeline/stored-raw";
 import { processSupplement } from "@/api/handlers/case-law/ingestion/pipeline/supplement";
 import { DECISION_REFRESH } from "@/api/handlers/case-law/ingestion/pipeline/types";
-import { refreshSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
+import { refreshNextSourceStoredTotal } from "@/api/handlers/case-law/ingestion/source-totals";
 import type { RuleCache } from "@/api/handlers/case-law/polarity/rule-engine";
 import { captureError } from "@/api/lib/analytics/capture";
 import {
@@ -675,9 +675,8 @@ export const runIngestionPipeline = async ({
 
   // Outside the checkpoint transaction: a durable refresh claim bounds
   // planning attempts, including failures, without counting corpus rows.
-  await refreshSourceStoredTotal({
+  await refreshNextSourceStoredTotal({
     scopedDb,
-    sourceId: source.id,
     now: new Date(),
     acquireAdmission: async () =>
       await acquireStoredTotalAdmission({ deadline }),

@@ -375,7 +375,7 @@ export const caseLawSources = p.pgTable(
     storedTotalAsOf: timestamptz("stored_total_as_of"),
     /** Claims and failed refreshes share the same durable interval. */
     storedTotalAttemptedAt: timestamptz("stored_total_attempted_at"),
-    /** Durable source phase; missed refresh windows are skipped. */
+    /** Durable source phase; overdue refreshes remain queued. */
     storedTotalNextRefreshAt: timestamptz("stored_total_next_refresh_at"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")

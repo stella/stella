@@ -17,24 +17,31 @@ type SourceStoredTotalAdmissionRequest = {
 };
 
 /** Recheck load and commit the operation's full budget before planning. */
-export const createSourceStoredTotalAdmission =
-  ({ readVerdict }: SourceStoredTotalAdmissionOptions) =>
-  async ({
+export const createSourceStoredTotalAdmission = ({
+  readVerdict,
+}: SourceStoredTotalAdmissionOptions) => {
+  let admittedCycles: WeakSet<CycleDeadline> | undefined;
+  return async ({
     deadline,
   }: SourceStoredTotalAdmissionRequest): Promise<"granted" | "held"> => {
     if (
       deadline === undefined ||
+      admittedCycles?.has(deadline) ||
       !canStartCyclePage(deadline, SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS)
     ) {
       return "held";
     }
     const verdict = await readVerdict();
     if (
-      decideStart(verdict, "backfill_batch", defaultConfig).decision === "wait"
+      decideStart(verdict, "backfill_batch", defaultConfig).decision ===
+        "wait" ||
+      admittedCycles?.has(deadline) ||
+      !reserveCycleBudget(deadline, SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS)
     ) {
       return "held";
     }
-    return reserveCycleBudget(deadline, SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS)
-      ? "granted"
-      : "held";
+    admittedCycles ??= new WeakSet();
+    admittedCycles.add(deadline);
+    return "granted";
   };
+};
