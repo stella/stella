@@ -1,4 +1,4 @@
-// parser-output-unchanged: retries affect request scheduling only, not parsed output.
+// parser-output-unchanged: completion controls bound requests and recovery; adapter parsing and ordinary request semantics are unchanged.
 /**
  * The only way a case-law adapter reaches its publisher.
  *
