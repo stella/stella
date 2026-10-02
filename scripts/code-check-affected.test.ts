@@ -54,11 +54,14 @@ const plan = (
 describe("changed-file result boundary lint", () => {
   test("enforces the exact Oxlint rules for files without baseline debt", () => {
     expect(
-      resultBoundaryLintCommand([
-        "apps/api/src/lib/new-client.ts",
-        "apps/api/src/lib/new-client.ts",
-        "packages/boe/src/new-client.ts",
-      ]),
+      resultBoundaryLintCommand(
+        [
+          "apps/api/src/lib/new-client.ts",
+          "apps/api/src/lib/new-client.ts",
+          "packages/boe/src/new-client.ts",
+        ],
+        new Set(),
+      ),
     ).toEqual([
       "bun",
       "--bun",
@@ -71,21 +74,29 @@ describe("changed-file result boundary lint", () => {
     ]);
   });
 
-  test("skips baselined debt, boundaries, generated output, tests, and unrelated source", () => {
+  test("skips measured debt, boundaries, generated output, tests, and unrelated source", () => {
     expect(
-      resultBoundaryLintCommand([
-        "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
-        "apps/api/src/lib/document-processing-queue.ts",
-        "apps/api/src/lib/document-processing-queue.test.ts",
-        "apps/api/src/mcp/generated/capability-dispatch.ts",
-        "packages/start-runtime/src/runtime.ts",
-        "packages/ssr-testkit/src/assert-document.ts",
-        // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
-        // an opt-out reason, so its source is not planned for this lint.
-        "apps/landing/src/example.ts",
-        "apps/api/src/lib/new-client.ts",
-        "apps/web/src/lib/example.ts",
-      ]),
+      resultBoundaryLintCommand(
+        [
+          "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+          "apps/api/src/lib/document-processing-queue.ts",
+          "apps/api/src/lib/document-processing-queue.test.ts",
+          "apps/api/src/mcp/generated/capability-dispatch.ts",
+          "packages/start-runtime/src/runtime.ts",
+          "packages/ssr-testkit/src/assert-document.ts",
+          // apps/landing is outside RESULT_CONVENTION_SOURCE_GLOBS and carries
+          // an opt-out reason, so its source is not planned for this lint.
+          "apps/landing/src/example.ts",
+          "apps/api/src/lib/new-client.ts",
+          "apps/web/src/lib/example.ts",
+        ],
+        new Set([
+          "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts",
+          "apps/api/src/lib/document-processing-queue.ts",
+          "packages/start-runtime/src/runtime.ts",
+          "packages/ssr-testkit/src/assert-document.ts",
+        ]),
+      ),
     ).toEqual([
       "bun",
       "--bun",

@@ -371,6 +371,11 @@ Convention and suppression ratchets may only tighten. Every lint suppression nam
 a rule and reason; security-tier suppressions also need a waiver. Type-cost baseline
 increases require PR justification and are never a mechanical way to pass CI.
 
+`bun scripts/ratchet.ts --check` measures the merge-base tree and the current
+tree using the same metric registry. Metrics and per-file ceilings may only
+decrease. No committed ratchet baseline or `--write` step is needed, including
+after merging main. New metrics measure both trees; report-only metrics do not gate.
+
 ## Property Failure Discipline
 
 A failing property seed is a real bug: fix it, then pin it with a neutral note

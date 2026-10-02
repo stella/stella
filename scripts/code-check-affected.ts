@@ -13,7 +13,7 @@
 // fails safe to the full check.
 
 import { panic } from "better-result";
-import { existsSync, readFileSync, readdirSync } from "node:fs";
+import { existsSync, readdirSync } from "node:fs";
 import path from "node:path";
 
 import {
@@ -22,6 +22,7 @@ import {
   type CodeCheckLeg,
 } from "../packages/scripts/src/code-quality-partition";
 import { isChangedLintPath } from "./lint-paths";
+import { measureResultBoundaryDebt } from "./ratchet";
 import {
   isResultConventionExcludedFile,
   isResultConventionSourceFile,
@@ -30,50 +31,6 @@ import {
 const REPO_ROOT = path.resolve(import.meta.dirname, "..");
 const DEFAULT_BASE = "origin/main";
 const WORKSPACE_PARENTS = ["apps", "packages"] as const;
-const RESULT_BOUNDARY_BASELINE_PATH = path.join(
-  REPO_ROOT,
-  "scripts/ratchet-baseline.json",
-);
-const RESULT_BOUNDARY_METRICS = [
-  "throw-outside-boundary",
-  "try-catch-outside-boundary",
-] as const;
-
-type JsonRecord = Record<string, unknown>;
-
-const isJsonRecord = (value: unknown): value is JsonRecord =>
-  typeof value === "object" && value !== null && !Array.isArray(value);
-
-/**
- * Files already tracked by the result ratchet carry deliberate legacy debt.
- * The ratchet rejects any increase; running the strict lint over those files
- * rejects every existing violation as well, so a change unrelated to that
- * debt cannot pass the affected-file gate. Keep the two guards monotone by
- * linting only files with no baseline entry here.
- */
-const readResultBoundaryBaselineFiles = (): ReadonlySet<string> => {
-  const parsed: unknown = JSON.parse(
-    readFileSync(RESULT_BOUNDARY_BASELINE_PATH, "utf-8"),
-  );
-  if (!isJsonRecord(parsed)) {
-    panic("result-boundary ratchet baseline must be an object");
-  }
-
-  const files = new Set<string>();
-  for (const metric of RESULT_BOUNDARY_METRICS) {
-    const snapshot = parsed[metric];
-    if (!isJsonRecord(snapshot) || !isJsonRecord(snapshot["files"])) {
-      panic(`result-boundary ratchet baseline is missing ${metric}.files`);
-    }
-    for (const file of Object.keys(snapshot["files"])) {
-      files.add(file);
-    }
-  }
-  return files;
-};
-
-const RESULT_BOUNDARY_BASELINE_FILES = readResultBoundaryBaselineFiles();
-
 export const DEPENDENCY_CACHE_INPUTS = [
   "$TURBO_ROOT$/.npmrc",
   "$TURBO_ROOT$/bun.lock",
@@ -531,11 +488,12 @@ const hasTargets = (scope: TaskScope): boolean =>
 
 export const resultBoundaryLintCommand = (
   changedFiles: readonly string[],
+  debtFiles: ReadonlySet<string>,
 ): string[] | null => {
   const paths = [...new Set(changedFiles)]
     .filter(isResultConventionSourceFile)
     .filter((file) => !isResultConventionExcludedFile(file))
-    .filter((file) => !RESULT_BOUNDARY_BASELINE_FILES.has(file))
+    .filter((file) => !debtFiles.has(file))
     .toSorted();
   if (paths.length === 0) {
     return null;
@@ -718,10 +676,17 @@ const main = () => {
   const options = parseArgs(process.argv.slice(2));
   const { plan, presentChangedPaths } = planScope(options.scope);
   const leg = options.leg;
+  const baseRef =
+    options.scope.type === "affected" ? options.scope.base : DEFAULT_BASE;
+  const debtBase = run(["git", "merge-base", baseRef, "HEAD"], {
+    capture: true,
+  }).trim();
+  const debtFiles = measureResultBoundaryDebt(debtBase);
   const resultBoundaryCommand = resultBoundaryLintCommand(
     leg === undefined
       ? presentChangedPaths
       : presentChangedPaths.filter((file) => ownsCodeCheckPath(file, leg)),
+    debtFiles,
   );
   if (resultBoundaryCommand !== null) {
     process.stdout.write("code-check: exact result boundary lint\n");

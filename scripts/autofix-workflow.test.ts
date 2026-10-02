@@ -266,7 +266,6 @@ describe("changed-file autofix boundary", () => {
     );
     expect(ordered.map(({ id }) => id).toSorted()).toEqual(
       [
-        "ratchet-improvements",
         "capability-catalog",
         "cli-registry",
         "cli-runtime",

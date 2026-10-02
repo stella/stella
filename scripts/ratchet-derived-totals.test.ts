@@ -1,10 +1,9 @@
-import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
 import {
   copyFileSync,
   mkdirSync,
-  mkdtempSync,
   readFileSync,
+  mkdtempSync,
   rmSync,
   symlinkSync,
   writeFileSync,
@@ -12,14 +11,7 @@ import {
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import {
-  assessBaselineIncrease,
-  inspectConfiguration,
-  rebaseSnapshot,
-  scanAll,
-  serializeBaseline,
-  type RatchetMetric,
-} from "./ratchet";
+import { inspectConfiguration, scanAll, type RatchetMetric } from "./ratchet";
 
 const metric = {
   id: "test-metric",
@@ -33,34 +25,6 @@ const snapshot = (files: Record<string, number>) => ({
 });
 
 describe("derived ratchet budgets", () => {
-  test("serialization retains metric order and derives every total on round trip", () => {
-    for (let allowance = 0; allowance < 12; allowance += 1) {
-      const first =
-        allowance === 0
-          ? snapshot({})
-          : snapshot({ "a.ts": allowance, "z.ts": 2 });
-      const baseline = {
-        second: snapshot({ "b.ts": 1 }),
-        first,
-      };
-      const serialized = serializeBaseline(baseline, ["first", "second"]);
-      expect(serialized).not.toContain('"count"');
-      expect(serialized.indexOf('"first"')).toBeLessThan(
-        serialized.indexOf('"second"'),
-      );
-      expect(
-        inspectConfiguration(
-          [{ id: "first" }, { id: "second" }],
-          JSON.parse(serialized),
-        ),
-      ).toEqual({
-        status: "valid",
-        baseline,
-      });
-      expect(serializeBaseline(baseline, ["first", "second"])).toBe(serialized);
-    }
-  });
-
   test("historical totals must agree with their file budgets", () => {
     expect(
       inspectConfiguration([metric], {
@@ -76,53 +40,11 @@ describe("derived ratchet budgets", () => {
       baseline: { "test-metric": snapshot({ "a.ts": 2 }) },
     });
   });
-
-  test("raised budgets require the writer's exact per-file delta, including retained headroom", () => {
-    const mergeBaseEntry = snapshot({ "a.ts": 5, "b.ts": 4 });
-    const base = snapshot({ "a.ts": 3, "b.ts": 2 });
-    const head = snapshot({ "a.ts": 4, "b.ts": 2 });
-    const candidate = rebaseSnapshot({ mergeBaseEntry, base, head });
-    expect(candidate).toEqual(snapshot({ "a.ts": 6, "b.ts": 4 }));
-    const assess = (entry: ReturnType<typeof snapshot>) =>
-      assessBaselineIncrease({
-        baseline: { "test-metric": entry },
-        mergeBaseBaseline: { "test-metric": mergeBaseEntry },
-        current: { "test-metric": head },
-        baseSnapshot: { "test-metric": base },
-        metrics: [metric],
-      });
-    expect(assess(candidate)).toEqual([]);
-    expect(assess(snapshot({ "a.ts": 7, "b.ts": 3 })).length).toBeGreaterThan(
-      0,
-    );
-    expect(assess(snapshot({ "a.ts": 5, "b.ts": 5 })).length).toBeGreaterThan(
-      0,
-    );
-    expect(assess(snapshot({ "a.ts": 4, "b.ts": 4 }))).toEqual([]);
-  });
-
-  test("full regeneration tightens unused headroom while recording a real regression", () => {
-    const assess = (entry: ReturnType<typeof snapshot>) =>
-      assessBaselineIncrease({
-        baseline: { "test-metric": entry },
-        mergeBaseBaseline: { "test-metric": snapshot({ "a.ts": 2 }) },
-        current: { "test-metric": snapshot({ "a.ts": 3 }) },
-        baseSnapshot: { "test-metric": snapshot({ "a.ts": 1 }) },
-        metrics: [metric],
-      });
-    expect(assess(snapshot({ "a.ts": 3 }))).toEqual([]);
-    expect(assess(snapshot({ "a.ts": 4 }))).toEqual([]);
-    expect(assess(snapshot({ "a.ts": 5 })).length).toBeGreaterThan(0);
-    expect(
-      assess(snapshot({ "a.ts": 3, "absent.ts": 1 })).length,
-    ).toBeGreaterThan(0);
-  });
 });
 
 const ROOT = path.resolve(import.meta.dir, "..");
 const BASELINE = "scripts/ratchet-baseline.json";
 const FIRST = "apps/api/src/a.ts";
-const LAST = "apps/api/src/z.ts";
 const casts = (count: number) =>
   `${Array.from(
     { length: count },
@@ -134,6 +56,7 @@ const run = (cwd: string, command: readonly string[]) => {
     cwd,
     env: {
       ...process.env,
+      RATCHET_BASE_REF: undefined,
       CI: "true",
       GIT_CONFIG_NOSYSTEM: "1",
       GIT_CONFIG_GLOBAL: "/dev/null",
@@ -164,7 +87,7 @@ const commit = (root: string, message: string) => {
   git(root, "-c", "commit.gpgsign=false", "commit", "-m", message);
 };
 
-// Copy the real writer and its import closure; the clone's scans and Git
+// Copy the real guard and its import closure; the clone's scans and Git
 // history stay small while both branches execute production CLI behavior.
 const withClone = (exercise: (root: string) => void) => {
   const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-derived-totals-"));
@@ -174,7 +97,6 @@ const withClone = (exercise: (root: string) => void) => {
     mkdirSync(seed);
     for (const relative of [
       "scripts/ratchet.ts",
-      "scripts/baseline-paths.ts",
       "scripts/db-await-in-loop.ts",
       "scripts/lint-suppressions.ts",
       "scripts/ownership.ts",
@@ -198,7 +120,7 @@ const withClone = (exercise: (root: string) => void) => {
       relative: "apps/api/src/middle.ts",
       contents: casts(2),
     });
-    write({ root: seed, relative: LAST, contents: casts(2) });
+    write({ root: seed, relative: "apps/api/src/z.ts", contents: casts(2) });
     symlinkSync(
       path.join(ROOT, "node_modules"),
       path.join(seed, "node_modules"),
@@ -207,12 +129,6 @@ const withClone = (exercise: (root: string) => void) => {
     git(seed, "init", "-b", "main");
     git(seed, "config", "user.name", "Ratchet fixture");
     git(seed, "config", "user.email", "ratchet@example.invalid");
-    const initial = scanAll(seed);
-    write({
-      root: seed,
-      relative: BASELINE,
-      contents: serializeBaseline(initial, Object.keys(initial)),
-    });
     commit(seed, "fixture base");
     git(temporary, "clone", "--quiet", seed, clone);
     git(clone, "config", "user.name", "Ratchet fixture");
@@ -228,168 +144,184 @@ const withClone = (exercise: (root: string) => void) => {
   }
 };
 
-test("CI rejects hand-raised budgets and accepts writer deltas and decreases", () => {
+test("a metric increase fails even with a forged committed budget", () => {
   withClone((root) => {
-    git(root, "checkout", "-b", "raise");
-    const original = readFileSync(path.join(root, BASELINE), "utf-8");
-    const inspection = inspectConfiguration(
-      Object.keys(JSON.parse(original)).map((id) => ({ id })),
-      JSON.parse(original),
-    );
-    expect(inspection.status).toBe("valid");
-    if (inspection.status !== "valid") {
-      panic(inspection.errors.join("\n"));
-    }
-    const entry = inspection.baseline["as-casts"];
-    expect(entry?.files[FIRST]).toBe(2);
-    if (entry === undefined) {
-      panic("fixture as-casts metric missing");
-    }
-    entry.files[FIRST] = 3;
-    entry.count += 1;
+    write({ root, relative: FIRST, contents: casts(3) });
     write({
       root,
       relative: BASELINE,
-      contents: serializeBaseline(
-        inspection.baseline,
-        Object.keys(inspection.baseline),
-      ),
+      contents:
+        '{"as-casts":{"count":999,"files":{"apps/api/src/a.ts":999}}}\n',
     });
-    commit(root, "hand raise");
+    commit(root, "raise with forged budget");
     const rejected = run(root, [
       process.execPath,
       "scripts/ratchet.ts",
       "--check",
     ]);
     expect(rejected.code, rejected.output).toBe(1);
-    expect(rejected.output).toContain("as-casts");
-    expect(rejected.output).toContain("unrecorded baseline increase");
-    for (const scenario of [
-      {
-        name: "baseline for an absent file",
-        file: "apps/api/src/absent.ts",
-        allowance: 1,
-        sources: [],
-      },
-      {
-        name: "baseline exceeds the source delta",
-        file: FIRST,
-        allowance: 4,
-        sources: [{ file: FIRST, count: 3 }],
-      },
-    ]) {
-      git(root, "reset", "--hard", "origin/main");
-      const candidate = inspectConfiguration(
-        Object.keys(JSON.parse(original)).map((id) => ({ id })),
-        JSON.parse(original),
-      );
-      if (candidate.status !== "valid") {
-        panic(candidate.errors.join("\n"));
-      }
-      const budget = candidate.baseline["as-casts"];
-      if (budget === undefined) {
-        panic("fixture as-casts metric missing");
-      }
-      if (scenario.sources.length === 0) {
-        expect(
-          run(root, ["git", "cat-file", "-e", `origin/main:${scenario.file}`])
-            .code,
-        ).not.toBe(0);
-      }
-      budget.count += scenario.allowance - (budget.files[scenario.file] ?? 0);
-      budget.files[scenario.file] = scenario.allowance;
-      for (const source of scenario.sources) {
-        write({ root, relative: source.file, contents: casts(source.count) });
-      }
-      write({
-        root,
-        relative: BASELINE,
-        contents: serializeBaseline(
-          candidate.baseline,
-          Object.keys(candidate.baseline),
-        ),
-      });
-      commit(root, scenario.name);
-      const excess = run(root, [
-        process.execPath,
-        "scripts/ratchet.ts",
-        "--check",
-      ]);
-      expect(excess.code, excess.output).toBe(1);
-      expect(excess.output).toContain("as-casts");
-      expect(excess.output).toContain("unrecorded baseline increase");
-    }
-    git(root, "reset", "--hard", "origin/main");
-    write({ root, relative: FIRST, contents: casts(3) });
-    ratchet(root, "--write");
-    commit(root, "writer raise");
-    succeed(root, [process.execPath, "scripts/ratchet.ts", "--check"]);
-    git(root, "reset", "--hard", "origin/main");
-    write({ root, relative: FIRST, contents: casts(1) });
-    ratchet(root, "--write");
-    commit(root, "writer decrease");
-    succeed(root, [process.execPath, "scripts/ratchet.ts", "--check"]);
+    expect(rejected.output).toContain("as-casts: 6 -> 7");
+    expect(rejected.output).toContain("measured base tree");
+    // Mutation proof: substituting a head measurement for the base makes this
+    // exact regression pass, so the exit-code assertion binds base selection.
+    const script = path.join(root, "scripts/ratchet.ts");
+    const original = readFileSync(script, "utf-8");
+    const mutant = original.replaceAll(
+      "const baseline = scanMergeBase(base);",
+      "const baseline = scanAll(REPO_ROOT);",
+    );
+    expect(mutant).not.toBe(original);
+    writeFileSync(script, mutant);
+    const bypassed = run(root, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--check",
+    ]);
+    expect(bypassed.code, bypassed.output).toBe(0);
   });
 }, 30_000);
 
-test("the real --write --all and later CI check accept an exact scan with merge-base headroom", () => {
+test("decreases need no baseline and merging main needs no generated edit", () => {
   withClone((root) => {
-    // Keep the baseline budget at 2 while the merge-base source counts only 1.
+    git(root, "checkout", "-b", "improve");
     write({ root, relative: FIRST, contents: casts(1) });
-    commit(root, "unused headroom");
+    commit(root, "branch improvement");
+    const before = git(root, "status", "--porcelain");
+    expect(ratchet(root, "--check")).toContain("as-casts dropped 6 -> 5");
+    expect(git(root, "status", "--porcelain")).toBe(before);
+    git(root, "checkout", "-b", "advance-main", "origin/main");
+    write({ root, relative: "apps/api/src/z.ts", contents: casts(1) });
+    commit(root, "main improvement");
     git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
-    git(root, "checkout", "-b", "full-regeneration");
-    write({ root, relative: FIRST, contents: casts(3) });
-    ratchet(root, "--write", "--all");
-    const generated = JSON.parse(
-      readFileSync(path.join(root, BASELINE), "utf-8"),
-    );
-    expect(generated["as-casts"].files[FIRST]).toBe(3);
-    expect(generated["as-casts"]).not.toHaveProperty("count");
-    commit(root, "full regeneration");
-    ratchet(root, "--check");
+    git(root, "checkout", "improve");
+    git(root, "merge", "--no-edit", "origin/main");
+    expect(ratchet(root, "--check")).toContain("as-casts dropped 5 -> 4");
+    expect(git(root, "status", "--porcelain")).toBe("");
+    expect(git(root, "ls-files", BASELINE)).toBe("");
   });
 }, 30_000);
 
-test("independent improvements merge cleanly and the real writer has a deterministic fixed point", () => {
+test("the measured base overrides stale headroom and explicit merge-group bases", () => {
   withClone((root) => {
-    for (const [branch, file] of [
-      ["improve-first", FIRST],
-      ["improve-last", LAST],
-    ] as const) {
-      git(root, "checkout", "-b", branch, "origin/main");
-      write({ root, relative: file, contents: casts(1) });
-      commit(root, `${branch} source`);
-      git(root, "branch", `${branch}-inputs`);
-      ratchet(root, "--write");
-      const once = readFileSync(path.join(root, BASELINE), "utf-8");
-      ratchet(root, "--write");
-      expect(readFileSync(path.join(root, BASELINE), "utf-8")).toBe(once);
-      commit(root, branch);
+    const oldBase = git(root, "rev-parse", "HEAD");
+    write({ root, relative: FIRST, contents: casts(1) });
+    write({
+      root,
+      relative: BASELINE,
+      contents: '{"as-casts":{"files":{"apps/api/src/a.ts":100}}}\n',
+    });
+    commit(root, "lower source with stale budget");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    write({ root, relative: FIRST, contents: casts(2) });
+    const rejected = run(root, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--check",
+    ]);
+    expect(rejected.code, rejected.output).toBe(1);
+    expect(rejected.output).toContain("as-casts: 5 -> 6");
+    expect(ratchet(root, "--check", "--base", oldBase)).toContain(
+      "ratchet --check: OK",
+    );
+    const badBase = run(root, [
+      process.execPath,
+      "scripts/ratchet.ts",
+      "--check",
+      "--base",
+      "absent-ref",
+    ]);
+    expect(badBase.code).not.toBe(0);
+    expect(badBase.output).toContain("rev-parse failed");
+  });
+}, 30_000);
+
+test("a counter cannot supply an inflated total detached from its files", () => {
+  expect(() =>
+    scanAll(ROOT, [
+      { ...metric, count: () => ({ count: 999, files: { "a.ts": 1 } }) },
+    ]),
+  ).toThrow("does not equal its per-file total");
+});
+
+const workflow = readFileSync(
+  new URL("../.github/workflows/ci.yml", import.meta.url),
+  "utf-8",
+);
+const selection = workflow.slice(
+  workflow.indexOf("      - name: Select measured ratchet base"),
+  workflow.indexOf("      - name: Ratchet guard"),
+);
+const selectionCommand = selection
+  .slice(selection.indexOf("        run: |\n") + "        run: |\n".length)
+  .split("\n")
+  .map((line) => line.replace(/^ {10}/u, ""))
+  .join("\n");
+
+test("CI selects the merge base on PRs and the event base on merge groups", () => {
+  expect(selection).toContain("github.event.merge_group.base_sha");
+  expect(workflow.indexOf("Select measured ratchet base")).toBeLessThan(
+    workflow.indexOf("Ratchet guard"),
+  );
+  withClone((root) => {
+    const base = git(root, "rev-parse", "HEAD");
+    write({ root, relative: FIRST, contents: casts(1) });
+    commit(root, "new main");
+    git(root, "update-ref", "refs/remotes/origin/main", "HEAD");
+    const newBase = git(root, "rev-parse", "HEAD");
+    expect(newBase).not.toBe(base);
+    for (const eventBase of ["", base]) {
+      const output = path.join(root, "github-env");
+      writeFileSync(output, "");
+      const selected = Bun.spawnSync(["bash", "-c", selectionCommand], {
+        cwd: root,
+        env: {
+          ...process.env,
+          GITHUB_ENV: output,
+          MERGE_GROUP_BASE_SHA: eventBase,
+        },
+        stdout: "pipe",
+        stderr: "pipe",
+      });
+      expect(selected.exitCode, selected.stderr.toString()).toBe(0);
+      expect(readFileSync(output, "utf-8")).toBe(
+        `RATCHET_BASE_REF=${eventBase || newBase}\n`,
+      );
+      const checked = Bun.spawnSync(
+        [process.execPath, "scripts/ratchet.ts", "--check"],
+        {
+          cwd: root,
+          env: { ...process.env, RATCHET_BASE_REF: eventBase || newBase },
+          stdout: "pipe",
+          stderr: "pipe",
+        },
+      );
+      expect(checked.exitCode, checked.stderr.toString()).toBe(0);
+      expect(checked.stdout.toString()).toContain(`(${eventBase || newBase})`);
     }
-    git(
-      root,
-      "merge-tree",
-      "--write-tree",
-      "--name-only",
-      "improve-first-inputs",
-      "improve-last-inputs",
-    );
-    const merged = git(
-      root,
-      "merge-tree",
-      "--write-tree",
-      "--name-only",
-      "improve-first",
-      "improve-last",
-    );
-    expect(merged).toMatch(/^[a-f0-9]{40}$/u);
-    git(root, "read-tree", "--reset", "-u", merged);
-    const mergedBytes = readFileSync(path.join(root, BASELINE), "utf-8");
-    expect(mergedBytes).not.toContain('"count"');
-    ratchet(root, "--write");
-    expect(readFileSync(path.join(root, BASELINE), "utf-8")).toBe(mergedBytes);
-    ratchet(root, "--write");
-    expect(readFileSync(path.join(root, BASELINE), "utf-8")).toBe(mergedBytes);
+  });
+}, 30_000);
+
+test("removed writer options fail explicitly", () => {
+  const result = run(ROOT, [process.execPath, "scripts/ratchet.ts", "--write"]);
+  expect(result.code).not.toBe(0);
+  expect(result.output).toContain("unsupported ratchet option: --write");
+});
+
+test("the lint planner inherits only result-boundary debt measured in the base tree", () => {
+  withClone((root) => {
+    const legacy = "apps/api/src/lib/legacy.ts";
+    const fresh = "apps/api/src/lib/fresh.ts";
+    write({ root, relative: legacy, contents: 'throw new Error("legacy");\n' });
+    commit(root, "base debt");
+    const base = git(root, "rev-parse", "HEAD");
+    write({ root, relative: legacy, contents: "export const clean = 1;\n" });
+    write({ root, relative: fresh, contents: 'throw new Error("fresh");\n' });
+    const measured = succeed(root, [
+      process.execPath,
+      "--eval",
+      'import { measureResultBoundaryDebt } from "./scripts/ratchet"; console.log(JSON.stringify([...measureResultBoundaryDebt(process.argv.at(-1) ?? "")]));',
+      base,
+    ]);
+    expect(JSON.parse(measured)).toEqual([legacy]);
   });
 }, 30_000);
