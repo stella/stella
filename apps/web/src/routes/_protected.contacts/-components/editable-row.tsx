@@ -1,5 +1,3 @@
-import { useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Input } from "@stll/ui/input";
@@ -9,7 +7,6 @@ import { useInlineRename } from "@/hooks/use-inline-rename";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
-import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import {
   buildNumericContactPayload,
   buildTextContactPayload,
@@ -21,8 +18,6 @@ import type {
   ContactData,
   EditableField,
 } from "@/routes/_protected.contacts/-components/types";
-
-const protectedRouteApi = getRouteApi("/_protected");
 
 type EditableRowProps = {
   label: string;
@@ -38,11 +33,7 @@ export const EditableRow = ({
   contact,
 }: EditableRowProps) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
 
   const policy = EDITABLE_FIELD_POLICY[field];
   const inputAttributes = getEditableFieldInputAttributes(field);
@@ -93,18 +84,12 @@ export const EditableRow = ({
       }
 
       updateContact.mutate(
-        { contactId: contact.id, ...payload },
         {
-          onSuccess: () => {
-            detached(
-              invalidateContactCaches(queryClient, {
-                activeOrganizationId,
-                contactId: contact.id,
-                invalidateWorkspaces: field === "displayName",
-              }),
-              "editable-row.invalidate-contact-caches",
-            );
-          },
+          organizationId: contact.organizationId,
+          contactId: contact.id,
+          ...payload,
+        },
+        {
           onError: () => {
             stellaToast.add({
               title: t("errors.actionFailed"),

@@ -1,13 +1,15 @@
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 
 import type { ContactType } from "@stll/api-contract";
 
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
+import { contactsKeys } from "@/lib/contacts/queries";
 import type { contactOptions } from "@/lib/contacts/queries";
 import { toAPIError, unwrapEden } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import type { SafeId } from "@/lib/safe-id";
+import { workspacesKeys } from "@/lib/workspaces/queries";
 
 type ContactDetail = NonNullable<
   Awaited<ReturnType<NonNullable<ReturnType<typeof contactOptions>["queryFn"]>>>
@@ -62,6 +64,10 @@ type ContactMetadata = {
   dataBoxes?: ContactDataBox[];
   customFields?: ContactCustomField[];
 };
+
+type ContactMetadataSection =
+  | { dataBoxes: ContactDataBox[]; customFields?: never }
+  | { customFields: ContactCustomField[]; dataBoxes?: never };
 
 type CreateContactVars = {
   id: SafeId<"contact">;
@@ -118,7 +124,7 @@ export type ContactUpdateFields = {
   notes: string | null;
   emails: ContactEmail[] | null;
   phones: ContactPhone[] | null;
-  metadata: ContactMetadata | null;
+  metadata: ContactMetadataSection;
   color: string | null;
   registrationNumber: string | null;
   taxId: string | null;
@@ -136,17 +142,44 @@ export type ContactUpdateFields = {
 export type ContactUpdate = NonEmptyPatch<ContactUpdateFields>;
 
 type UpdateContactVars = {
+  organizationId: SafeId<"organization">;
   contactId: SafeId<"contact">;
 } & ContactUpdate;
 
 export const useUpdateContact = () => {
   const analytics = useAnalytics();
+  const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ contactId, ...body }: UpdateContactVars) => {
+    mutationFn: async ({
+      contactId,
+      organizationId: _organizationId,
+      ...body
+    }: UpdateContactVars) => {
       const response = await api.contacts({ contactId }).post(body);
 
       return unwrapEden(response);
+    },
+    onSuccess: async (_data, vars) => {
+      // Mutation callbacks outlive page observers. Use the submitted scope even
+      // when the route has moved to another contact or organization meanwhile.
+      const invalidations = [
+        queryClient.invalidateQueries({
+          queryKey: contactsKeys.byId(vars.organizationId, vars.contactId),
+        }),
+        queryClient.invalidateQueries({
+          queryKey: contactsKeys.lists(vars.organizationId),
+        }),
+      ];
+      if (
+        vars.displayName !== undefined ||
+        vars.responsibleAttorneyId !== undefined
+      ) {
+        invalidations.push(
+          queryClient.invalidateQueries({ queryKey: workspacesKeys.all }),
+        );
+      }
+      await Promise.all(invalidations);
     },
     onError: (error) => {
       analytics.captureError(error);

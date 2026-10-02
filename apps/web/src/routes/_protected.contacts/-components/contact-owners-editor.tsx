@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { getRouteApi } from "@tanstack/react-router";
 import { panic } from "better-result";
 import { useTranslations } from "use-intl";
@@ -14,10 +14,8 @@ import { stellaToast } from "@stll/ui/toast";
 
 import { UserIdentity } from "@/components/user-avatar";
 import { useUpdateContact } from "@/lib/contacts/mutations";
-import { detached } from "@/lib/detached";
 import { organizationOptions } from "@/lib/organization/queries";
 import { toSafeId } from "@/lib/safe-id";
-import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
 const NO_OWNER_VALUE = "__none";
@@ -41,7 +39,6 @@ const contactOwnerPatch = (field: ContactOwnerField, value: string | null) => {
 
 export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
     select: (ctx) => ctx.user.activeOrganizationId,
@@ -66,20 +63,11 @@ export const ContactOwnersEditor = ({ contact }: { contact: ContactData }) => {
 
     updateContact.mutate(
       {
+        organizationId: contact.organizationId,
         contactId: contact.id,
         ...contactOwnerPatch(field, nextValue),
       },
       {
-        onSuccess: () => {
-          detached(
-            invalidateContactCaches(queryClient, {
-              activeOrganizationId,
-              contactId: contact.id,
-              invalidateWorkspaces: field === "responsibleAttorneyId",
-            }),
-            "contact-owners-editor.invalidate-contact-caches",
-          );
-        },
         onError: () => {
           stellaToast.add({
             title: t("errors.actionFailed"),

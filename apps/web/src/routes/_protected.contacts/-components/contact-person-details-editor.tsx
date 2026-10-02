@@ -1,15 +1,11 @@
 import { useState } from "react";
 
-import { useQueryClient } from "@tanstack/react-query";
-import { getRouteApi } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
 import { Button } from "@stll/ui/button";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useUpdateContact } from "@/lib/contacts/mutations";
-import { detached } from "@/lib/detached";
-import { invalidateContactCaches } from "@/routes/_protected.contacts/-components/contact-caches";
 import { PersonDetailsFields } from "@/routes/_protected.contacts/-components/person-details-fields";
 import {
   birthDateDraft,
@@ -18,19 +14,13 @@ import {
 import type { BirthDateDraft } from "@/routes/_protected.contacts/-components/person-details-fields.logic";
 import type { ContactData } from "@/routes/_protected.contacts/-components/types";
 
-const protectedRouteApi = getRouteApi("/_protected");
-
 export const ContactPersonDetailsEditor = ({
   contact,
 }: {
   contact: ContactData;
 }) => {
   const t = useTranslations();
-  const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
-  const activeOrganizationId = protectedRouteApi.useRouteContext({
-    select: (ctx) => ctx.user.activeOrganizationId,
-  });
   const [birthDate, setBirthDate] = useState<BirthDateDraft>(() =>
     birthDateDraft(contact.dateOfBirth),
   );
@@ -58,17 +48,15 @@ export const ContactPersonDetailsEditor = ({
       return;
     }
     updateContact.mutate(
-      { contactId: contact.id, dateOfBirth, nationalityCodes },
+      {
+        organizationId: contact.organizationId,
+        contactId: contact.id,
+        dateOfBirth,
+        nationalityCodes,
+      },
       {
         onSuccess: () => {
           setBirthDate(birthDateDraft(dateOfBirth));
-          detached(
-            invalidateContactCaches(queryClient, {
-              activeOrganizationId,
-              contactId: contact.id,
-            }),
-            "contact-person-details.invalidate-contact-caches",
-          );
           stellaToast.add({ title: t("contacts.saved"), type: "success" });
         },
         onError: () => {
