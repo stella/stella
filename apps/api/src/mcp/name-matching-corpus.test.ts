@@ -25,17 +25,13 @@ import {
  * counts the cases only the matcher under test redacts, where the same fields
  * without it stay visible. Raise a floor when a change redacts more; never
  * lower one to make a change pass.
- *
- * `typo-1` misses a one-letter typo of a five-letter name, which the matcher
- * treats as too short for approximate matching; the next matcher release
- * raises this floor to the full class.
  */
 const RECALL_FLOORS = {
   exact: { held: 11, attributed: 3 },
   case: { held: 7, attributed: 7 },
   "diacritics-dropped": { held: 8, attributed: 0 },
   "diacritics-added": { held: 5, attributed: 3 },
-  "typo-1": { held: 6, attributed: 0 },
+  "typo-1": { held: 7, attributed: 1 },
   "typo-2": { held: 6, attributed: 2 },
   inflected: { held: 13, attributed: 7 },
   "inflected-diacritics-dropped": { held: 7, attributed: 4 },
@@ -55,16 +51,13 @@ const RECALL_FLOORS = {
  * (redacted with it, intact without it), for every matcher that runs the
  * class. Lower a ceiling when a change redacts less; never raise one to make
  * a change pass.
- *
- * `marker` allows the one short name glued to a digit inside a marker-like
- * wrapper; the next matcher release lowers it to zero.
  */
 const FALSE_POSITIVE_CEILINGS = {
   hex: 0,
   uuid: 0,
   hash: 0,
   "id-code": 0,
-  marker: 1,
+  marker: 0,
   "ordinary-word": 0,
   "adjacent-word": 0,
   "forced-near-miss": 0,
