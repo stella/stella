@@ -862,6 +862,7 @@ export const fetchSkUsListing = async ({
       try: async (): Promise<SkUsListingFetchOutcome> => {
         const response = await request(SEARCH_URL, {
           adapterKey: ADAPTER_KEYS.SK_US,
+          fetchStage: "listing",
           method: "POST",
           headers: {
             "Content-Type": "application/json",
