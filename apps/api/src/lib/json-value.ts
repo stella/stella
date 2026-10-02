@@ -28,13 +28,13 @@ export const toJsonValue = (value: unknown): JsonValue => {
   return null;
 };
 
-export const toJsonObject = (value: Record<string, unknown>): JsonObject => {
-  const out: JsonObject = {};
-  for (const [key, nestedValue] of Object.entries(value)) {
-    out[key] = toJsonValue(nestedValue);
-  }
-  return out;
-};
+export const toJsonObject = (value: Record<string, unknown>): JsonObject =>
+  Object.fromEntries(
+    Object.entries(value).map(([key, nestedValue]) => [
+      key,
+      toJsonValue(nestedValue),
+    ]),
+  );
 
 const MAX_NULL_FOLD_DEPTH = 64;
 
