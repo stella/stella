@@ -52,6 +52,11 @@
     "takenOverTitle": "Edycja przeniesiona na inne urządzenie"
   },
   "dialog": {
+    "accountWindowTitle": "Połącz konto",
+    "accountTitle": "Połączyć to konto?",
+    "accountSubtitle": "Połącz stella desktop z tym kontem i organizacją.",
+    "accountEmail": "Konto",
+    "organizationName": "Organizacja",
     "allow": "Zezwól",
     "apiUrl": "Adres API",
     "cancel": "Anuluj",

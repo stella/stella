@@ -4764,6 +4764,7 @@ dependencies = [
  "opener",
  "plist",
  "reqwest",
+ "ring",
  "serde",
  "serde_json",
  "sha2 0.11.0",
@@ -4793,6 +4794,7 @@ dependencies = [
  "windows-native-keyring-store",
  "winsafe",
  "zbus-secret-service-keyring-store",
+ "zeroize",
  "zip 8.6.0",
 ]
 
