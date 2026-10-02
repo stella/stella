@@ -988,6 +988,7 @@ const createContext = ({
     withTimeout: withTimeoutDependency,
   },
   userId: toSafeId<"user">("user_1"),
+  userEmail: "standard@example.test",
 });
 
 /**

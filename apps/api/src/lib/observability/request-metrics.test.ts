@@ -12,6 +12,7 @@ import {
   buildRequestDurationRecord,
   emitActionCostDropMetric,
   emitChatRunLogMetric,
+  emitPromptCacheMetric,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
@@ -82,6 +83,52 @@ test("chat shadow metrics emit append latency and per-turn write volume without 
     expect(JSON.parse(lines.at(1) ?? "null")).toMatchObject({
       ChatRunLogRows: 3,
       ChatRunLogBytes: 512,
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("prompt-cache metrics emit a run's input, cached input and hit rate by surface and provider", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    emitPromptCacheMetric({
+      cachedInputTokens: 750,
+      inputTokens: 1000,
+      provider: "anthropic",
+      surface: "chat",
+    });
+    // A call that reported no input has no rate to report.
+    emitPromptCacheMetric({
+      cachedInputTokens: 0,
+      inputTokens: 0,
+      provider: "openai",
+      surface: "chat",
+    });
+    expect(lines).toHaveLength(1);
+    const record: unknown = JSON.parse(lines.at(0) ?? "null");
+    expect(record).toMatchObject({
+      _aws: {
+        CloudWatchMetrics: [
+          {
+            Dimensions: [["surface", "provider"]],
+            Metrics: [
+              { Name: "PromptInputTokens", Unit: "Count" },
+              { Name: "PromptCachedInputTokens", Unit: "Count" },
+              { Name: "PromptCacheHitRate", Unit: "Percent" },
+            ],
+            Namespace: "Stella/Api",
+          },
+        ],
+      },
+      PromptCacheHitRate: 75,
+      PromptCachedInputTokens: 750,
+      PromptInputTokens: 1000,
+      provider: "anthropic",
+      surface: "chat",
     });
   } finally {
     resetMetricLineSinkForTesting();

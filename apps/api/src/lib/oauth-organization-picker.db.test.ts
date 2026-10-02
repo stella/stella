@@ -9,7 +9,7 @@ import {
 import { decodeJwt } from "jose";
 
 import { getAuth } from "@/api/lib/auth";
-import { getAuthEndpointUrl } from "@/api/lib/auth-paths";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { signInHuman } from "@/api/tests/helpers/human-session";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 import {

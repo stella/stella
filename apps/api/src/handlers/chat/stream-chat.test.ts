@@ -83,6 +83,7 @@ import {
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
 import { richChatParts } from "./__fixtures__/rich-chat-parts";
+import { buildGlobalPromptParts } from "./chat-prompt";
 import type { GuardedChatSurfaces } from "./stream-chat";
 import {
   chatMessageUsageFromTokenUsage,
@@ -478,6 +479,39 @@ const persistNativeInterruptTurn = async (
   }
   return { emitted, finish: terminal.finish, source };
 };
+
+test("whitespace rejected as an empty completion remains in the raw live processor", async () => {
+  const whitespace = " \n\t\u00a0";
+  const { emitted, finish, source } = await persistNativeInterruptTurn(
+    chat({
+      adapter: createTextReplyAdapter(whitespace),
+      messages: [{ role: "user", content: "Summarize the NDA" }],
+      threadId: "thread-whitespace",
+    }),
+  );
+  expect(
+    source.some(
+      (chunk) =>
+        chunk.type === EventType.TEXT_MESSAGE_CONTENT &&
+        chunk.delta === whitespace,
+    ),
+  ).toBe(true);
+  expect(finish?.outcome).toEqual({
+    type: "failed",
+    error: "empty_completion",
+  });
+  expect(finish?.responseMessage.parts).toEqual([]);
+  expect(emitted.at(-1)?.type).toBe(EventType.RUN_ERROR);
+
+  // RUN_ERROR does not finalize the browser processor as RUN_FINISHED would.
+  const live = new StreamProcessor();
+  for (const chunk of emitted) {
+    live.processChunk(chunk);
+  }
+  expect(
+    live.getMessages().findLast(({ role }) => role === "assistant")?.parts,
+  ).toContainEqual({ type: "text", content: whitespace });
+});
 
 /**
  * A turn that is cut while the model thinks about a tool result: the run is
@@ -3758,6 +3792,7 @@ describe("guarded model-ingress seam", () => {
     const surfaces: GuardedChatSurfaces = {
       messages: guardProviderHistory({ messages, workspaceIds }),
       system: guardModelSystemPrompt({ system, workspaceIds }),
+      systemLayers: buildGlobalPromptParts({ userContext: null }).safeLayers,
       tenantWorkspaceIds: workspaceIds,
       tools: guardModelToolSchemas({ tools, workspaceIds }),
     };
