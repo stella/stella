@@ -49,12 +49,18 @@ type SoftLawStoreContext = SoftLawIngestionStoreOptions & {
   leaseToken: SafeId<"softLawIngestionLease">;
   ownsLease: SQL | undefined;
 };
+type SoftLawSourceClaim =
+  | { type: "blocked"; reason: "forbidden" | "rate_limited" | "challenge" }
+  | { type: "claimed"; row: typeof softLawSources.$inferSelect }
+  | { type: "busy" };
 const claimSoftLawSource = async ({
   sourceId,
   scopedDb,
   adapter,
   leaseToken,
-}: SoftLawStoreContext) =>
+}: SoftLawStoreContext): Promise<
+  Result<SoftLawSourceClaim, SoftLawIngestionError>
+> =>
   await scopedDb(async (tx) => {
     const row = (
       await tx

@@ -23,9 +23,11 @@ import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 export const SOFT_LAW_RESPONSE_MAX_BYTES = 32 * 1024 * 1024;
 const REQUEST_TIMEOUT_MS = 30_000;
 
-const readPublisherBytes = async (
-  reader: ReadableStreamDefaultReader<Uint8Array>,
-) => {
+type PublisherBodyReader = Pick<
+  ReadableStreamDefaultReader<Uint8Array>,
+  "read" | "cancel"
+>;
+const readPublisherBytes = async (reader: PublisherBodyReader) => {
   const chunks: Uint8Array[] = [];
   let size = 0;
   while (true) {
@@ -53,7 +55,7 @@ const readPublisherBytes = async (
 };
 
 type ReadPublisherBodyOptions = {
-  reader: ReadableStreamDefaultReader<Uint8Array>;
+  reader: PublisherBodyReader;
   signal: AbortSignal;
   read: () => Promise<Result<SoftLawResponse, SoftLawFetchError>>;
 };

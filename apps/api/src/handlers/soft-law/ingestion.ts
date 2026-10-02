@@ -114,12 +114,12 @@ const fetchSoftLawItem = async ({
   maxRawBytes,
 }: FetchSoftLawItemOptions) => {
   const fetched = await adapter.fetchDocument(entry, { signal, fetch });
-  if (Result.isError(fetched)) {
+  if (fetched.status === "error") {
     return fetched;
   }
   const input = fetched.value;
   const identity = softLawIdentityKey(adapter.authority, input.metadata);
-  if (Result.isError(identity)) {
+  if (identity.status === "error") {
     return identity;
   }
   const identityKey = identity.value;
@@ -204,22 +204,23 @@ const fetchSoftLawPage = async ({
     const count = (previous?.count ?? 0) + 1;
     // db-await-in-loop: Renew the lease before each potentially slow document so an expired writer stops before fetching.
     const renewed = await store.renew();
-    if (Result.isError(renewed)) {
+    if (renewed.status === "error") {
       return renewed;
     }
     const maxRawBytes = PAGE_RAW_BYTE_LIMIT - retainedRawBytes;
     const attempted = await Result.tryPromise(() =>
       fetchSoftLawItem({ entry, adapter, signal, fetch, count, maxRawBytes }),
     );
-    const result = Result.isError(attempted)
-      ? Result.err(attempted.error.cause)
-      : attempted.value;
+    const result =
+      attempted.status === "error"
+        ? Result.err(attempted.error.cause)
+        : attempted.value;
     const available = assertPublisherAvailable(fetch);
-    if (Result.isError(available)) {
+    if (available.status === "error") {
       return available;
     }
     signal.throwIfAborted();
-    if (Result.isError(result)) {
+    if (result.status === "error") {
       attempts.push(rejectedAttempt(entry, result.error, count));
       continue;
     }
@@ -231,7 +232,7 @@ const fetchSoftLawPage = async ({
 const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
   const { store, sourceId, writeRaw } = options;
   const page = await fetchSoftLawPage(options);
-  if (Result.isError(page)) {
+  if (page.status === "error") {
     return page;
   }
   const { attempts, fetched } = page.value;
@@ -307,7 +308,7 @@ const prepareSoftLawPage = async (options: PrepareSoftLawPageOptions) => {
       }
       return { entry, input, documentId, identityKey, contentHash, rawObjects };
     });
-    if (Result.isError(written)) {
+    if (written.status === "error") {
       attempts.push(rejectedAttempt(entry, written.error.cause, count));
       continue;
     }
@@ -337,7 +338,7 @@ export const runSoftLawIngestion = async ({
 }: RunSoftLawIngestionOptions): Promise<SoftLawRunResult> => {
   const store = createSoftLawIngestionStore({ sourceId, adapter, scopedDb });
   const claimed = await store.claim();
-  if (Result.isError(claimed)) {
+  if (claimed.status === "error") {
     return { status: "failed", error: claimed.error };
   }
   const source = claimed.value;
@@ -364,7 +365,7 @@ export const runSoftLawIngestion = async ({
     async (): Promise<Result<SoftLawRunResult, unknown>> => {
       const total = await adapter.getTotalCount({ signal, fetch });
       const available = assertPublisherAvailable(fetch);
-      if (Result.isError(available)) {
+      if (available.status === "error") {
         return available;
       }
       if (total.type === "probe-failed") {
@@ -389,12 +390,12 @@ export const runSoftLawIngestion = async ({
         signal.throwIfAborted();
         // db-await-in-loop: Cursor pages depend on the previous checkpoint; renew before each discovery request.
         const renewed = await store.renew();
-        if (Result.isError(renewed)) {
+        if (renewed.status === "error") {
           return renewed;
         }
         const page = await adapter.discover({ cursor, signal, fetch });
         const pageAvailable = assertPublisherAvailable(fetch);
-        if (Result.isError(pageAvailable)) {
+        if (pageAvailable.status === "error") {
           return pageAvailable;
         }
         if (
@@ -419,7 +420,7 @@ export const runSoftLawIngestion = async ({
           fetch,
           writeRaw,
         });
-        if (Result.isError(prepared)) {
+        if (prepared.status === "error") {
           return prepared;
         }
         const retryable = prepared.value.attempts.some(
@@ -434,7 +435,7 @@ export const runSoftLawIngestion = async ({
           expectedTotal,
           pendingRetries: retryable,
         });
-        if (Result.isError(persisted)) {
+        if (persisted.status === "error") {
           return persisted;
         }
         if (persisted.value.status === "listing_incomplete") {
@@ -451,9 +452,10 @@ export const runSoftLawIngestion = async ({
       return Result.ok({ status: "paused" });
     },
   );
-  const outcome = Result.isError(attemptedOutcome)
-    ? Result.err(attemptedOutcome.error.cause)
-    : attemptedOutcome.value;
+  const outcome =
+    attemptedOutcome.status === "error"
+      ? Result.err(attemptedOutcome.error.cause)
+      : attemptedOutcome.value;
   const blocked = fetch.getBlockReason();
   if (blocked) {
     await store.settle({ status: "blocked", reason: blocked });
@@ -463,7 +465,7 @@ export const runSoftLawIngestion = async ({
     await store.settle({ status: "paused", reason: "deferred_window" });
     return { status: "paused", reason: "deferred_window" };
   }
-  if (Result.isOk(outcome)) {
+  if (outcome.status === "ok") {
     if (outcome.value.status === "paused") {
       await store.settle({ status: "paused" });
     }
