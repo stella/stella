@@ -283,10 +283,7 @@ const inspectPropertySpawns = ({ relativePath, source }: PropertyTestFile) => {
       if (specifier === "fast-check" && PROPERTY_BUILDERS.has(imported)) {
         propertyBindings.add(binding.name.text);
       }
-      if (
-        spawnExports === "all" ||
-        (spawnExports !== undefined && spawnExports.has(imported))
-      ) {
+      if (spawnExports === "all" || spawnExports?.has(imported) === true) {
         spawnBindings.add(binding.name.text);
       }
     }
