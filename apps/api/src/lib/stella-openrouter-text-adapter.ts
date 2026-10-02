@@ -7,6 +7,8 @@ import type {
 } from "@tanstack/ai-openrouter";
 import { Result } from "better-result";
 
+import { Temporal } from "@stll/time";
+
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import {
   assertManagedOpenRouterModel,
@@ -14,6 +16,7 @@ import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
 } from "@/api/lib/chat/provider-data-policy";
+import type { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withOptionalsNullable } from "@/api/lib/json-schema/null-optionals";
 import { readProviderStatus } from "@/api/lib/observability/failure-evidence";
 
@@ -122,9 +125,49 @@ const isManagedRoutingRefusal = (error: unknown): boolean => {
   );
 };
 
+const checkManagedOpenRouterRequest = (
+  options: OpenRouterTextOptions,
+): Result<void, HandlerError<503>> => {
+  const selection = assertManagedOpenRouterModel(options.model);
+  if (Result.isError(selection)) {
+    return selection;
+  }
+  for (const model of options.modelOptions?.models ?? []) {
+    const fallback = assertManagedOpenRouterModel(model);
+    if (Result.isError(fallback)) {
+      return fallback;
+    }
+  }
+  return Result.ok(undefined);
+};
+
 const withManagedRoutingErrors = async function* (
   stream: AsyncIterable<AdapterYieldChunk>,
+  options: OpenRouterTextOptions,
 ): AsyncGenerator<AdapterYieldChunk> {
+  const eligibility = checkManagedOpenRouterRequest(options);
+  if (Result.isError(eligibility)) {
+    yield {
+      type: EventType.RUN_STARTED,
+      runId: Bun.randomUUIDv7(),
+      threadId: options.threadId ?? Bun.randomUUIDv7(),
+      model: options.model,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+      parentRunId: options.parentRunId,
+    };
+    yield {
+      type: EventType.RUN_ERROR,
+      model: options.model,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+      message: eligibility.error.message,
+      code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      error: {
+        message: eligibility.error.message,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+      },
+    };
+    return;
+  }
   for await (const chunk of stream) {
     if (
       chunk.type !== EventType.RUN_ERROR ||
@@ -151,14 +194,21 @@ const withManagedRoutingErrors = async function* (
 
 class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   override chatStream(options: OpenRouterTextOptions) {
-    return withManagedRoutingErrors(super.chatStream(options));
+    return withManagedRoutingErrors(super.chatStream(options), options);
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return withManagedRoutingErrors(super.structuredOutputStream(options));
+    return withManagedRoutingErrors(
+      super.structuredOutputStream(options),
+      options.chatOptions,
+    );
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
+    const eligibility = checkManagedOpenRouterRequest(options.chatOptions);
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
     const result = await Result.tryPromise({
       try: async () => await super.structuredOutput(options),
       catch: (error) =>
@@ -173,10 +223,6 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
-    assertManagedOpenRouterModel(options.model);
-    for (const model of options.modelOptions?.models ?? []) {
-      assertManagedOpenRouterModel(model);
-    }
     const {
       plugins: _plugins,
       variant: _variant,
@@ -202,20 +248,32 @@ type ManagedOpenRouterTextOptions = {
   managedAIResidency: ManagedAIResidency;
 };
 
+type ManagedOpenRouterTextResult = Result<
+  StellaOpenRouterTextAdapter,
+  HandlerError<503>
+>;
+
 export const createManagedOpenRouterText = ({
   model,
   apiKey,
   managedAIResidency,
-}: ManagedOpenRouterTextOptions): StellaOpenRouterTextAdapter => {
-  assertManagedOpenRouterModel(model);
-  return new ManagedOpenRouterTextAdapter(
-    {
-      apiKey,
-      retryConfig: OPENROUTER_RETRY,
-      serverURL:
-        PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[managedAIResidency],
-    },
-    model,
+}: ManagedOpenRouterTextOptions): ManagedOpenRouterTextResult => {
+  const eligibility = assertManagedOpenRouterModel(model);
+  if (Result.isError(eligibility)) {
+    return eligibility;
+  }
+  return Result.ok(
+    new ManagedOpenRouterTextAdapter(
+      {
+        apiKey,
+        retryConfig: OPENROUTER_RETRY,
+        serverURL:
+          PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[
+            managedAIResidency
+          ],
+      },
+      model,
+    ),
   );
 };
 

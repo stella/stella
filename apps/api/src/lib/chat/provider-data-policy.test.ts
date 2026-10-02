@@ -22,6 +22,7 @@ import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
   PROVIDER_DATA_POLICY,
+  assertManagedOpenRouterModel,
   isManagedProviderAvailable,
 } from "@/api/lib/chat/provider-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -478,17 +479,36 @@ describe("provider request policy", () => {
             "not/in-the-catalog",
             "gpt-4o-mini",
           ]) {
-            expect(() => factory(modelId)).toThrow(
-              "Managed AI is not available",
-            );
-            expect(() =>
-              getTanStackTextModelInfoById(
-                `openrouter::${modelId}`,
-                null,
-                "chat",
-                dataClass,
-              ),
-            ).toThrow("Managed AI is not available");
+            const eligibility = assertManagedOpenRouterModel(modelId);
+            expect(eligibility.isErr()).toBe(true);
+            if (eligibility.isErr()) {
+              expect(eligibility.error).toMatchObject({
+                status: 503,
+                code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+              });
+            }
+            for (const select of [
+              () => factory(modelId),
+              () =>
+                getTanStackTextModelInfoById(
+                  `openrouter::${modelId}`,
+                  null,
+                  "chat",
+                  dataClass,
+                ),
+            ]) {
+              const selection = Result.try({
+                try: () => select(),
+                catch: (error) => error,
+              });
+              expect(selection.isErr()).toBe(true);
+              if (selection.isErr()) {
+                expect(selection.error).toMatchObject({
+                  status: 503,
+                  code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                });
+              }
+            }
             const result = Result.try({
               try: () =>
                 getTanStackTextModelById(`openrouter::${modelId}`, null, {
@@ -507,6 +527,7 @@ describe("provider request policy", () => {
             }
           }
           for (const model of BYOK_MODEL_OPTIONS.openrouter) {
+            expect(assertManagedOpenRouterModel(model).isOk()).toBe(true);
             expect(factory(model).name).toBe("openrouter");
           }
         }
@@ -597,9 +618,14 @@ describe("provider request policy", () => {
                 for await (const chunk of stream) {
                   chunks.push(chunk);
                 }
+                expect(chunks.map((chunk) => chunk.type)).toEqual([
+                  EventType.RUN_STARTED,
+                  EventType.RUN_ERROR,
+                ]);
                 expect(chunks.at(-1)).toMatchObject({
                   type: EventType.RUN_ERROR,
                   code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+                  error: { code: MANAGED_PROVIDER_UNAVAILABLE_CODE },
                 });
               }
               expect(sent).toBe(0);

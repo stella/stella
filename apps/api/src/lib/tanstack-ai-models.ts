@@ -599,12 +599,17 @@ const createExtendedOpenRouterAdapter = ({
       switch (policy.keySource) {
         case "byok":
           return createStellaOpenRouterText(model, key);
-        case "instance":
-          return createManagedOpenRouterText({
+        case "instance": {
+          const adapter = createManagedOpenRouterText({
             model,
             apiKey: key,
             managedAIResidency: policy.managedAIResidency,
           });
+          if (Result.isError(adapter)) {
+            throw adapter.error;
+          }
+          return adapter.value;
+        }
         default:
           policy satisfies never;
           return panic("Unhandled OpenRouter key source");
@@ -1937,7 +1942,10 @@ const resolveInstanceTextModel = ({
   const supportedProvider = resolveTanStackTextProvider({ provider });
   assertTanStackProviderRoleSupport(supportedProvider, role);
   if (supportedProvider === "openrouter") {
-    assertManagedOpenRouterModel(modelId);
+    const eligibility = assertManagedOpenRouterModel(modelId);
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
   }
   assertInstanceModelRated(modelId);
 
@@ -2036,7 +2044,10 @@ export const getTanStackTextModelInfoForRole = (
   // Metadata must agree with dispatch: never advertise an instance
   // model that resolveInstanceTextModel would refuse as unrated.
   if (supportedProvider === "openrouter") {
-    assertManagedOpenRouterModel(modelId);
+    const eligibility = assertManagedOpenRouterModel(modelId);
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
   }
   assertInstanceModelRated(modelId);
   return {
@@ -2109,7 +2120,10 @@ export const getTanStackTextModelInfoById = (
 
   const provider = override.provider ?? getActiveProvider();
   if (provider === "openrouter") {
-    assertManagedOpenRouterModel(override.modelId);
+    const eligibility = assertManagedOpenRouterModel(override.modelId);
+    if (Result.isError(eligibility)) {
+      throw eligibility.error;
+    }
   }
   return {
     availability:
@@ -2166,7 +2180,10 @@ export const getTanStackTextModelById = (
   const resolvedModelId = override.modelId;
   if (override.provider) {
     if (supportedProvider === "openrouter") {
-      assertManagedOpenRouterModel(resolvedModelId);
+      const eligibility = assertManagedOpenRouterModel(resolvedModelId);
+      if (Result.isError(eligibility)) {
+        throw eligibility.error;
+      }
     }
     assertInstanceModelRated(resolvedModelId);
     const factory = createTanStackTextAdapterFactory({

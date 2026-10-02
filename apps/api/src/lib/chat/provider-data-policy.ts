@@ -97,7 +97,9 @@ const OPENROUTER_AUTO_MODEL_ID = "openrouter/auto";
 const GLOBAL_ONLY_OPENROUTER_VARIANT = /:(?:batch|online)(?=:|$)/u;
 
 /** Validate every managed selection, including fallback models on the wire. */
-export const assertManagedOpenRouterModel = (modelId: string): void => {
+export const assertManagedOpenRouterModel = (
+  modelId: string,
+): Result<void, HandlerError<503>> => {
   const catalog: readonly string[] = BYOK_MODEL_OPTIONS.openrouter;
   if (
     modelId === OPENROUTER_AUTO_MODEL_ID ||
@@ -105,6 +107,7 @@ export const assertManagedOpenRouterModel = (modelId: string): void => {
     !catalog.includes(modelId) ||
     getModelRate(modelId) === undefined
   ) {
-    throw managedProviderUnavailable("openrouter");
+    return Result.err(managedProviderUnavailable("openrouter"));
   }
+  return Result.ok(undefined);
 };
