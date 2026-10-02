@@ -14,6 +14,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedTimeTimerId } from "@/api/lib/safe-id-boundaries";
 
 const listMyTimeTimers = createSafeRootHandler(
@@ -45,7 +46,9 @@ const listMyTimeTimers = createSafeRootHandler(
         }),
       );
     }
-    const limit = query.limit ?? LIMITS.timeEntriesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.timeEntriesPageSizeDefault,
+    );
     const rows = yield* Result.await(
       safeDb((tx) =>
         tx

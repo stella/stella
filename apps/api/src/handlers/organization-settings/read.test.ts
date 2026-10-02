@@ -13,6 +13,7 @@ describe("projectOrganizationSettingsRow", () => {
         { countryCode: "SK", isPrimary: false },
       ],
       promptCachingEnabled: true,
+      managedAIResidency: "us",
       memoryExtractionEnabled: false,
       timeMinimumUnitMinutes: 6,
       timeEditWindowDays: 90,
@@ -25,6 +26,7 @@ describe("projectOrganizationSettingsRow", () => {
       { countryCode: "SK", isPrimary: false },
     ]);
     expect(result.documentProcessingMode).toBe("searchable-text");
+    expect(result.managedAIResidency).toBe("us");
   });
 
   test("defaults practiceJurisdictions to an empty array when no row exists", () => {
@@ -48,6 +50,7 @@ describe("projectOrganizationSettingsRow", () => {
       timeEditWindowDays: 90,
       timeLockedThroughMonth: null,
       timeNarrativeRequired: true,
+      managedAIResidency: "eu",
     });
   });
 });

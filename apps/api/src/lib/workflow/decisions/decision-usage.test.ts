@@ -74,6 +74,7 @@ describe("decision usage accounting", () => {
       const { client, rows, usageMetering } = setup(keySource);
       const result = await decideMany({
         id: "test.usage",
+        dataClass: "public_corpus",
         orgAIConfig: null,
         state: "eligible",
         questions,
@@ -115,6 +116,7 @@ describe("decision usage accounting", () => {
     const { client, rows, usageMetering, calls } = setup("instance");
     const result = await decideMany({
       id: "test.byok-preflight",
+      dataClass: "public_corpus",
       orgAIConfig: {
         providers: [{ provider: "openai", apiKey: "org-key" }],
         overrideModels: {
@@ -149,6 +151,7 @@ describe("decision usage accounting", () => {
       });
       const result = await decideMany({
         id: "test.ledger-failure",
+        dataClass: "public_corpus",
         orgAIConfig: null,
         state: "eligible",
         questions,

@@ -73,20 +73,23 @@ const polishTimeEntryNarrative = createSafeHandler(
     }
 
     const organizationId = session.activeOrganizationId;
-    const { orgAIConfig, promptCachingEnabled } = yield* Result.await(
-      scopedDb(
-        async (tx) =>
-          await loadOrgAISettings(tx, { organizationId, userId: user.id }),
-      ),
-    );
+    const { orgAIConfig, managedAIResidency, promptCachingEnabled } =
+      yield* Result.await(
+        scopedDb(
+          async (tx) =>
+            await loadOrgAISettings(tx, { organizationId, userId: user.id }),
+        ),
+      );
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: ORG_AI_CONFIG_STATUS.ok,
       orgConfig: orgAIConfig,
       role: "fast",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -106,6 +109,7 @@ const polishTimeEntryNarrative = createSafeHandler(
       Result.tryPromise({
         try: async () =>
           await generateTanStackTextForRole({
+            dataClass: "customer",
             abortSignal: AbortSignal.any([
               request.signal,
               AbortSignal.timeout(POLISH_TIMEOUT_MS),
@@ -129,6 +133,7 @@ const polishTimeEntryNarrative = createSafeHandler(
             finishPolicy: "require-complete",
             organizationId,
             orgAIConfig,
+            managedAIResidency,
             role: "fast",
             serviceTier: "standard",
             system: TIME_NARRATIVE_SYSTEM_PROMPT,

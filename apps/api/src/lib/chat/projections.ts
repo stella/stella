@@ -59,6 +59,7 @@ import {
   DECISION_READ_STATUS,
 } from "@/api/lib/case-law/decision-read-vocabulary";
 import { AGENT_CASE_LAW_SEARCH_WARNING_CODES } from "@/api/lib/case-law/search-warnings";
+import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
   DOCUMENT_PROCESSING_FAILURE_CODE,
   DOCUMENT_PROCESSING_KIND,
@@ -1648,6 +1649,29 @@ const caseLawDecisionProjection = v.strictObject({
   // than leaving the caller to derive one from `source.adapterKey`.
   sourceAttributionUrl: v.optional(v.nullable(publicUrl())),
   text: v.nullable(v.string()),
+  outline: v.optional(
+    v.pipe(
+      v.array(
+        v.strictObject({
+          title: v.pipe(
+            v.string(),
+            v.description(
+              "Heading or numbered paragraph opening, in document order.",
+            ),
+          ),
+          cursor: v.pipe(
+            v.string(),
+            v.description(
+              "Pass as cursor with this decision id to read from this heading; citation lists are skipped.",
+            ),
+          ),
+        }),
+      ),
+      v.description(
+        'Navigation entries for one decision, supplied by default on the cursor-less window or requested with include: ["outline"], when AI use of the text is permitted.',
+      ),
+    ),
+  ),
   charCount: v.nullable(v.number()),
   truncated: v.boolean(),
   // Why there is no text, when there is none. At most one is present, and
@@ -2745,6 +2769,7 @@ export const MANAGE_ORGANIZATION_REMOVE_MEMBER_PROJECTION = v.strictObject({
 });
 
 export const MANAGE_ORGANIZATION_SETTINGS_PROJECTION = v.strictObject({
+  managedAIResidency: v.optional(v.picklist(MANAGED_AI_RESIDENCIES)),
   matterNumberPattern: v.optional(v.string()),
   matterNumberPadding: v.optional(v.number()),
   promptCachingEnabled: v.optional(v.boolean()),

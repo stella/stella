@@ -1,3 +1,4 @@
+import * as v from "valibot";
 /**
  * The model half of AI template preparation: given a (typically filled)
  * document's plain text, ask the model which values should become fillable
@@ -15,13 +16,12 @@
  * first so it is not silent.
  */
 
-import * as v from "valibot";
-
 import { isFieldPath } from "@stll/template-conditions";
 
 import { resolveCaching, type OrgAIConfig } from "@/api/lib/ai-config";
 import type { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { FieldSuggestion } from "@/api/lib/docx/apply-field-suggestions";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -98,6 +98,7 @@ export const suggestTemplateFields = async ({
   documentText,
   instructions,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   aiAnalytics,
   generateObjectForRole,
@@ -105,6 +106,7 @@ export const suggestTemplateFields = async ({
   documentText: string;
   instructions?: string | undefined;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   organizationId: SafeId<"organization">;
   aiAnalytics: ReturnType<typeof createTanStackAIAnalyticsCallbacks>;
   /** External model-dispatch boundary; supplied by focused integration tests. */
@@ -117,8 +119,10 @@ export const suggestTemplateFields = async ({
   const { suggestions } = await (
     generateObjectForRole ?? generateTanStackObjectForRole
   )({
+    dataClass: "customer",
     role: "fast",
     orgAIConfig,
+    managedAIResidency,
     organizationId,
     // No workspace id is threaded through this helper's options.
     tenantWorkspaceIds: [],

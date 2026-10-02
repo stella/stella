@@ -47,7 +47,14 @@ const config = {
  */
 const suggestFields = createSafeRootHandler(
   config,
-  async function* ({ session, body, safeDb, orgAIConfig, user }) {
+  async function* ({
+    session,
+    body,
+    safeDb,
+    orgAIConfig,
+    managedAIResidency,
+    user,
+  }) {
     const organizationId = session.activeOrganizationId;
     const { text, instructions } = body;
     const trimmed = text.trim();
@@ -56,6 +63,7 @@ const suggestFields = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -78,6 +86,7 @@ const suggestFields = createSafeRootHandler(
             documentText: trimmed,
             instructions,
             orgAIConfig,
+            managedAIResidency,
             organizationId,
             aiAnalytics,
           }),
