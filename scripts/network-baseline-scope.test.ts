@@ -402,6 +402,20 @@ describe("network baseline workflows", () => {
       "needs.deliver.outputs.committed == 'true'",
     );
     expect(step?.run).toContain("state=failure");
+    // The merge-queue remedy is offered only when the commit step failed
+    // and the pull request is still queued, never for other failures.
+    expect(deliver.outputs?.["commit-outcome"]).toContain(
+      "steps.commit.outcome",
+    );
+    expect(step?.env?.["COMMIT_FAILED"]).toContain(
+      "needs.deliver.outputs.commit-outcome == 'failure'",
+    );
+    const queueHint = step?.run?.indexOf("merge queue, and a queued branch");
+    const queueGate = step?.run?.indexOf('if [[ "$queued" == true ]]; then');
+    expect(step?.run).toContain('if [[ "$COMMIT_FAILED" == true ]]; then');
+    expect(step?.run).toContain("isInMergeQueue");
+    expect(queueGate).toBeGreaterThan(-1);
+    expect(queueHint).toBeGreaterThan(queueGate ?? Infinity);
     expect(step?.run).toContain(
       '"repos/$REPOSITORY/issues/$PR_NUMBER/comments"',
     );
