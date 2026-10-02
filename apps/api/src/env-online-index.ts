@@ -15,7 +15,8 @@ const integer = (fallback: number, minimum = 1) =>
     String(fallback),
   );
 
-const schema = v.object({
+/** Online index runner settings, cataloged with the API environment. */
+export const envOnlineIndexServerSchema = {
   DB_LOAD_GATE_START_FLOOR: integer(defaultConfig.startFloor, 0),
   DB_LOAD_GATE_HARD_FLOOR: integer(defaultConfig.hardFloor, 0),
   DB_LOAD_GATE_MAX_STALENESS_MS: integer(defaultConfig.maxStalenessMs),
@@ -52,7 +53,9 @@ const schema = v.object({
     "1",
   ),
   ONLINE_INDEX_MAINTENANCE_WORK_MEM_MB: integer(64),
-});
+};
+
+const schema = v.object(envOnlineIndexServerSchema);
 
 export type OnlineIndexConfig = {
   health: HealthConfig;
