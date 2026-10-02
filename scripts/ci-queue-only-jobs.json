@@ -1,12 +1,10 @@
 {
   "docker-checks": "queue-only because sandbox and dependency-image integration retain the merged-tree runner tier",
-  "ci-browser": "queue-only because the desktop, UI and extension browser matrix retains the merged-tree runner tier",
-  "migration-upgrade-rehearsal": "queue-only because the rehearsal resolves the promoted release and validates the final queued migrations against it",
-  "mobile-build": "queue-only because the complete Expo bundle and doctor retain the merged-tree build tier",
-  "stack-redaction-browsers": "queue-only because the Firefox and WebKit redaction matrix retains the merged-tree browser tier",
+  "ci-browser": "queue-only because PR lint/typecheck and unit tests check desktop, UI and extension sources; only the queue executes their browser specs and extension boundary behavior",
+  "migration-upgrade-rehearsal": "queue-only because PR lint/typecheck, migration guards and scoped database suites check API changes; only the queue rehearses final queued migrations against the promoted release schema at scale, including rerun and schema parity",
+  "mobile-build": "queue-only because PR lint/typecheck and scoped unit tests check mobile sources; only the queue runs Expo doctor and Android, iOS and web exports to validate the dependency graph and Metro/Babel platform resolution",
+  "stack-redaction-browsers": "queue-only because PR lint/typecheck checks analytics sources and browser specs, and unit tests check redaction logic; only the queue executes stack-redaction assertions in Firefox and WebKit",
   "e2e-vite-canary": "queue-only because the development-server canary supplements production PR coverage in the merged-tree tier",
   "e2e-landing": "queue-only because the production-preview landing browser suite retains the merged-tree browser tier",
-  "legal-atlas-image": "queue-only because the complete runner image retains the merged-tree packaging tier",
-  "windows-scripts": "queue-only because native Windows script execution retains the merged-tree platform tier",
-  "desktop-clippy": "queue-only because the native desktop Rust matrix retains the merged-tree platform tier"
+  "legal-atlas-image": "queue-only because the complete runner image retains the merged-tree packaging tier"
 }
