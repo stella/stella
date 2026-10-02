@@ -98,7 +98,9 @@ export const readAgentClientCredential = async ({
         : attempt.value;
       if (Result.isError(updated)) {
         // Only a confirmed different value invalidates the current exchange.
-        if (updated.error.status === 409) {return Result.err(updated.error);}
+        if (updated.error.status === 409) {
+          return Result.err(updated.error);
+        }
         logger.warn("agent.credentials.upgrade_deferred", {
           "migration.deferred_count": 1,
         });

@@ -113,24 +113,28 @@ describe("migration source comparison", () => {
   });
 
   test("ignores type-only named import changes while retaining value imports", () => {
-    const source =
-      `import { text, type Brand } from "drizzle-orm/pg-core";\n${  baseSource}`;
+    const source = `import { text, type Brand } from "drizzle-orm/pg-core";\n${baseSource}`;
     expect(
       compareSources(
         [
-          `import { text, type OtherBrand } from "drizzle-orm/pg-core";\n${ 
-            baseSource}`,
-          `import { text, type Brand as OtherBrand } from "drizzle-orm/pg-core";\n${ 
-            baseSource}`,
-          `import { text } from "drizzle-orm/pg-core";\n${  baseSource}`,
-          `import { type Brand, text, type OtherBrand } from "drizzle-orm/pg-core";\n${ 
-            baseSource}`,
-          `import { text, Brand } from "drizzle-orm/pg-core";\n${  baseSource}`,
-          `import { varchar, type Brand } from "drizzle-orm/pg-core";\n${ 
-            baseSource}`,
-          `import { text as otherText, type Brand } from "drizzle-orm/pg-core";\n${ 
-            baseSource}`,
-          `import { text, type Brand } from "other-module";\n${  baseSource}`,
+          `import { text, type OtherBrand } from "drizzle-orm/pg-core";\n${
+            baseSource
+          }`,
+          `import { text, type Brand as OtherBrand } from "drizzle-orm/pg-core";\n${
+            baseSource
+          }`,
+          `import { text } from "drizzle-orm/pg-core";\n${baseSource}`,
+          `import { type Brand, text, type OtherBrand } from "drizzle-orm/pg-core";\n${
+            baseSource
+          }`,
+          `import { text, Brand } from "drizzle-orm/pg-core";\n${baseSource}`,
+          `import { varchar, type Brand } from "drizzle-orm/pg-core";\n${
+            baseSource
+          }`,
+          `import { text as otherText, type Brand } from "drizzle-orm/pg-core";\n${
+            baseSource
+          }`,
+          `import { text, type Brand } from "other-module";\n${baseSource}`,
         ],
         source,
       ),
