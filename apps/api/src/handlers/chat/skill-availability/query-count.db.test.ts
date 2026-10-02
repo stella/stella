@@ -31,8 +31,13 @@ import {
  * each in its own scoped transaction (5 x 2).
  */
 const WITH_SESSION_SNAPSHOT = 12;
-/** Without the snapshot cookie auth reads the session and its user. */
-const WITHOUT_SESSION_SNAPSHOT = WITH_SESSION_SNAPSHOT + 2;
+/**
+ * Without the snapshot cookie auth checks the live session row, then reads the
+ * session and its user (3). The first such call also records the session's
+ * activity; later calls inside the write interval skip that write.
+ */
+const WITHOUT_SESSION_SNAPSHOT = WITH_SESSION_SNAPSHOT + 3;
+const SESSION_ACTIVITY_WRITE = 1;
 const CONCURRENT_CALLS = 4;
 
 setDefaultTimeout(120_000);
@@ -86,7 +91,7 @@ describe("skill availability runs a fixed query plan", () => {
     );
   });
 
-  test("a call without the session snapshot adds only the session read", async () => {
+  test("a call without the session snapshot adds only the session reads and one activity write", async () => {
     const { cookieHeader } = await createHumanSession({
       email: `skill-queries-${Bun.randomUUIDv7()}@stella.dev`,
       orgName: "Skill queries",
@@ -98,6 +103,9 @@ describe("skill availability runs a fixed query plan", () => {
       .join("; ");
     expect(withoutSnapshot).not.toBe(cookieHeader);
 
+    expect(await countQueries(withoutSnapshot)).toBe(
+      WITHOUT_SESSION_SNAPSHOT + SESSION_ACTIVITY_WRITE,
+    );
     expect(await countQueries(withoutSnapshot)).toBe(WITHOUT_SESSION_SNAPSHOT);
     expect(await countQueries(withoutSnapshot)).toBe(WITHOUT_SESSION_SNAPSHOT);
   });
