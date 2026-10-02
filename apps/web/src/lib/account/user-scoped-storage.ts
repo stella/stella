@@ -343,6 +343,17 @@ const browserStorageAreas = (): Areas => ({
   session: Result.try(() => window.sessionStorage).unwrapOr(null),
 });
 
+export const hasCurrentTabStorageOwner = (
+  areas: Areas = browserStorageAreas(),
+) => {
+  const tabOwner = Result.try(() => readTabOwner(areas)).unwrapOr(null);
+  return (
+    currentOwner.kind === "user" &&
+    tabOwner !== null &&
+    sameOwner(currentOwner, tabOwner)
+  );
+};
+
 /** Moves the browser's entries to `next`, whoever held them before. */
 const handOver = (areas: Areas, next: StorageOwner) => {
   // A tab reloaded since its last owner still remembers them: the tab's own
