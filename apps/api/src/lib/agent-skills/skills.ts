@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 import { and, asc, eq, inArray, or } from "drizzle-orm";
 
-import { roles } from "@stll/permissions";
 import {
   listSkillMetadata,
   loadSkill,
@@ -25,7 +24,7 @@ import { requireEditableSkillOrigin } from "@/api/lib/agent-skills/origin";
 import type { SafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
-import { isMemberRole } from "@/api/lib/member-roles";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 
 /**
  * Where a chat skill comes from: an `agent_skills` row, or a skill shipped
@@ -122,9 +121,7 @@ type ActiveChatSkillRequest = {
   skillName: string;
 };
 
-type ChatMemberRole = {
-  role: string;
-};
+type ChatMemberRole = AuthorizedMemberRole;
 
 /**
  * The active skill as resolved from its source, before any surface acts on
@@ -347,17 +344,11 @@ export const canEditActiveSkill = ({
   userId: SafeId<"user">;
 }): boolean => {
   if (
-    !isMemberRole(memberRole.role) ||
-    !roles[memberRole.role].authorize({ agentSkill: ["update"] }).success
-  ) {
-    return false;
-  }
-
-  if (
     !canManageSkill({
       memberRole,
       skill: { scope, userId: skillUserId },
       userId,
+      spends: "update",
     })
   ) {
     return false;
