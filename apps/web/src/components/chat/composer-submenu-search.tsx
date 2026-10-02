@@ -75,7 +75,7 @@ export const ComposerSubmenuSearch = ({
         return;
       default:
         route satisfies never;
-        return panic(`Unhandled popup key route: ${String(route)}`);
+        panic(`Unhandled popup key route: ${String(route)}`);
     }
   });
   // Listens on the popup's own node: a nested submenu is a separate portal,

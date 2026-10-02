@@ -32,7 +32,12 @@ const renderPicker = ({ value, withTrigger }: RenderPickerOptions) => {
           ref={searchRef}
           trigger={
             withTrigger
-              ? { char: "@", onErase: () => erased.push("erased") }
+              ? {
+                  char: "@",
+                  onErase: () => {
+                    erased.push("erased");
+                  },
+                }
               : undefined
           }
           value={value}
