@@ -54,6 +54,6 @@ export const refuseAnonymizedCrossing = <
       message,
       status,
     }),
-    { failureCode: BOUNDARY_REFUSAL_FAILURE_CODE },
+    { failureCode: BOUNDARY_REFUSAL_FAILURE_CODE } as const,
   );
 };

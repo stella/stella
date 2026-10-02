@@ -227,6 +227,7 @@ describe("chat turn outcome metrics", () => {
           overrideModels: {
             chat: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
             fast: { provider: "openai", modelId: "gpt-5.4-nano" },
+            pdf: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
             reasoning: { provider: "openai", modelId: HARNESS_CHAT_MODEL_ID },
           },
           decision: null,
