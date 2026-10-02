@@ -83,6 +83,24 @@ describe("API environment", () => {
     );
   });
 
+  test("service budgets cannot be enabled without action admission", () => {
+    for (const admission of [undefined, "false", "true"]) {
+      const result = bootApiEnvironment({
+        ...baseEnv,
+        FEATURE_ORG_SERVICE_BUDGETS: "true",
+        FEATURE_ACTION_ADMISSION: admission,
+      });
+      if (admission === "true") {
+        expect(result.exitCode, result.stderr.toString()).toBe(0);
+      } else {
+        expect(result.exitCode).not.toBe(0);
+        expect(result.stderr.toString()).toContain(
+          "FEATURE_ORG_SERVICE_BUDGETS requires FEATURE_ACTION_ADMISSION",
+        );
+      }
+    }
+  });
+
   test("infers SMTP provider from complete SMTP settings", () => {
     expect(
       readEnvProvider({

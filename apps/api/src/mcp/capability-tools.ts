@@ -62,6 +62,7 @@ import { defineMcpToolSet } from "@/api/mcp/tool-types";
 import type {
   InternalToolErrorResult,
   McpEgressPlan,
+  McpReadClass,
   McpToolDefinition,
   McpToolHandler,
   McpToolResponse,
@@ -122,6 +123,7 @@ type CatalogEntry = {
   description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
+  readClass?: McpReadClass;
   destructive: boolean;
   scope: string;
   additionalScopes?: readonly string[];
@@ -247,7 +249,11 @@ const isCatalogEntry = (value: unknown): value is CatalogEntry =>
   (value["description"] === undefined ||
     typeof value["description"] === "string") &&
   isHandlerKind(value["handlerKind"]) &&
-  (value["access"] === "read" || value["access"] === "write") &&
+  (value["access"] === "write" ||
+    (value["access"] === "read" &&
+      (value["readClass"] === "tenant" ||
+        value["readClass"] === "public" ||
+        value["readClass"] === "both"))) &&
   typeof value["destructive"] === "boolean" &&
   typeof value["scope"] === "string" &&
   (value["additionalScopes"] === undefined ||
@@ -2036,6 +2042,20 @@ export const mapHandlerResult = ({
   return successEgress(result, access);
 };
 
+export const resolveCapabilityReadClass = async (args: unknown) => {
+  if (!isRecord(args) || typeof args["capability"] !== "string") {
+    return undefined;
+  }
+  const entry = (await getCatalogById()).get(args["capability"]);
+  if (entry === undefined || entry.access === "write") {
+    return undefined;
+  }
+  return (
+    entry.readClass ??
+    panic(`Missing read classification for capability ${entry.id}`)
+  );
+};
+
 // --- tool set ----------------------------------------------------------------
 
 const CAPABILITY_TOOL_DEFINITIONS = [
@@ -2049,6 +2069,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "list_capabilities",
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
     description:
@@ -2072,6 +2093,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "describe_capability",
     access: "read",
+    readClass: "tenant",
     anonymized: { exposure: "excluded", reason: "dynamic_tenant_payload" },
     scope: "stella:read",
     description:
@@ -2101,6 +2123,7 @@ const CAPABILITY_TOOL_DEFINITIONS = [
     },
     name: "invoke_capability",
     access: "write",
+    readClass: resolveCapabilityReadClass,
     anonymized: { exposure: "excluded", reason: "write" },
     destructiveBehavior: { type: "capability-catalog" },
     scope: "stella:read",

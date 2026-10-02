@@ -62,7 +62,7 @@ import {
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
-import type { McpToolDefinition } from "../src/mcp/tool-types";
+import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import { generateCapabilityRuntime } from "./generate-capability-runtime";
 import {
@@ -496,6 +496,7 @@ type CapabilityEntry = {
   description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
+  readClass?: McpReadClass;
   destructive: boolean;
   consumesServices: CatalogServiceClassification;
   scope: string;
@@ -857,6 +858,40 @@ const serviceConsumptionOf = (
   );
 };
 
+type ResolveReadClassificationOptions = {
+  id: string;
+  access: "read" | "write";
+  exposure: Extract<
+    ParsedExposure,
+    { type: "capability" | "tool" | "covered" }
+  >;
+  toolReadClassesByName: ReadonlyMap<string, McpToolDefinition["readClass"]>;
+};
+
+/** Resolve read ownership before projecting the generated transport contract. */
+const resolveReadClassification = ({
+  id,
+  access,
+  exposure,
+  toolReadClassesByName,
+}: ResolveReadClassificationOptions) => {
+  if (access === "write") {
+    return undefined;
+  }
+  if (exposure.readClass !== undefined) {
+    return exposure.readClass;
+  }
+  if (exposure.type === "capability") {
+    return panic(`Missing read classification for capability ${id}`);
+  }
+  const covering = exposure.type === "tool" ? exposure.name : exposure.by;
+  const classification = toolReadClassesByName.get(covering);
+  if (classification === undefined || typeof classification === "function") {
+    return panic(`Missing static read classification for capability ${id}`);
+  }
+  return classification;
+};
+
 type BuildCatalogEntryOptions = {
   id: string;
   /** Handler config's `description`, absent when the handler declares none. */
@@ -864,6 +899,7 @@ type BuildCatalogEntryOptions = {
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
   consumesServices: ServiceClassification;
+  readClass: McpReadClass | undefined;
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
@@ -894,6 +930,7 @@ const buildCatalogEntry = ({
   kind,
   access,
   consumesServices,
+  readClass,
   scope,
   additionalScopes,
   requestTimeoutMs,
@@ -908,6 +945,7 @@ const buildCatalogEntry = ({
   ...(description === undefined ? {} : { description }),
   handlerKind: kind,
   access: access.access,
+  ...(readClass === undefined ? {} : { readClass }),
   destructive: access.destructive,
   consumesServices:
     typeof consumesServices === "function"
@@ -1142,6 +1180,9 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const { DEFAULT_MCP_TOOL_DEFINITIONS: narrowToolDefinitions } =
     await import("../src/mcp/static-tool-definitions");
   const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
+  const toolReadClassesByName = new Map(
+    toolDefinitions.map((tool) => [tool.name, tool.readClass]),
+  );
   const toolServicesByName = new Map(
     toolDefinitions.map((tool) => [tool.name, tool.consumesServices]),
   );
@@ -1545,6 +1586,12 @@ const buildCatalog = async (): Promise<BuildResult> => {
         kind: kindResolution.kind,
         access: accessResolution,
         consumesServices,
+        readClass: resolveReadClassification({
+          id,
+          access: accessResolution.access,
+          exposure: endpoint.exposure,
+          toolReadClassesByName,
+        }),
         scope,
         additionalScopes,
         requestTimeoutMs,

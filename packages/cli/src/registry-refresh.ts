@@ -19,13 +19,13 @@ import { access, readFile } from "node:fs/promises";
 import { Temporal } from "temporal-polyfill/full";
 
 import type { CliActionAdmissionRefusal } from "./action-admission-refusal.js";
-import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { loadBakedCapabilityCatalog } from "./capability-catalog-load.js";
 import { fetchLatestCliVersion } from "./cli-release-channel.js";
 import { buildVersionNudge } from "./cli-version-nudge.js";
 import { buildCliRouteTree } from "./generate-capability-tree.js";
 import { CLI_VERSION } from "./generated/cli-version.js";
 import { generatedRouteMap } from "./generated/route-map.js";
+import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import {
   fetchToolsListRaw,
   type McpClientError,

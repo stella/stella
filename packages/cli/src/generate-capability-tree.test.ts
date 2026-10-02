@@ -1,6 +1,5 @@
 import { describe, expect, test } from "bun:test";
 
-import { TOOL_ANNOTATIONS } from "./annotations.js";
 import { readCapabilityCatalog } from "./capability-catalog-data.js";
 import { parseCapabilityCatalog } from "./capability-catalog-load.js";
 import {
@@ -16,6 +15,7 @@ import {
   generateRouteMap,
   RouteGenerationError,
 } from "./generate-route-map.js";
+import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "./generated/tool-annotations.js";
 import type {
   CapabilityFlagSpec,
   CapabilityLeafSpec,

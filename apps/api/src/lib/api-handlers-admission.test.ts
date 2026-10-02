@@ -171,7 +171,11 @@ describe("finite HTTP action admission", () => {
         {
           admit: async (options) => {
             identities.push(options.periodIdentity);
-            return Result.ok(await options.run(new AbortController().signal));
+            return Result.ok(
+              await options.run(new AbortController().signal, {
+                reservePeriod: async () => Result.ok(undefined),
+              }),
+            );
           },
         },
       );

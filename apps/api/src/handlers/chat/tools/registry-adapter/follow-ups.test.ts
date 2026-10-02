@@ -50,6 +50,7 @@ const buildContext = (tx: unknown): McpRequestContext => {
       pinnedIds: [],
     }),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   });
 };
 

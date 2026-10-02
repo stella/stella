@@ -92,7 +92,7 @@
       "apps/api/src/lib/analytics/server-analytics.ts": 7,
       "apps/api/src/lib/api-handlers.ts": 4,
       "apps/api/src/lib/audit-log.ts": 3,
-      "apps/api/src/lib/auth-paths.ts": 1,
+      "apps/api/src/lib/auth/auth-paths.ts": 1,
       "apps/api/src/lib/auth.ts": 2,
       "apps/api/src/lib/bilingual/contract.ts": 1,
       "apps/api/src/lib/bilingual/formatting.ts": 3,

@@ -2422,6 +2422,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The mode/parent_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [DOCUMENT_LIST_TEXT_FIELD_PATH],
@@ -2454,6 +2455,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
         "The compare_with_version_id/version_id dependency remains authoritative in the runtime schema.",
     },
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: READ_DOCUMENT_TEXT_FIELD_PATHS,
@@ -2533,6 +2535,7 @@ export const DOCUMENT_TOOL_DEFINITIONS = [
       "upload/version tools replace only a document's primary file.",
     inputSchema: listPropertiesArgsSchema,
     access: "read",
+    readClass: "tenant",
     anonymized: {
       exposure: "anonymize",
       textFields: [PROPERTY_LIST_TEXT_FIELD_PATH],

@@ -82,26 +82,40 @@ test("capability shard additions are registered and feed CLI generation", () => 
   expect(generatorsForFiles([catalogShard]).map(({ id }) => id)).toContain(
     "cli-registry",
   );
+  expect(generatorsForFiles([catalogShard]).map(({ id }) => id)).toContain(
+    "cli-runtime",
+  );
   expect(generator("capability-catalog").outputs).not.toContain(
     "apps/api/src/mcp/generated/capability-dispatch.ts",
   );
 });
 
-test("runtime aggregate outputs stay ignored when generators write them", () => {
-  const outputs = generator("capability-runtime").outputs;
-  const ignored = Bun.spawnSync(
-    ["git", "check-ignore", "--no-index", "--stdin"],
-    {
-      cwd: new URL("..", import.meta.url).pathname,
-      stdin: new TextEncoder().encode(`${outputs.join("\n")}\n`),
-      stdout: "pipe",
-      stderr: "pipe",
-    },
-  );
-  expect(ignored.exitCode).toBe(0);
-  expect(
-    new TextDecoder().decode(ignored.stdout).trim().split("\n").toSorted(),
-  ).toEqual([...outputs].toSorted());
+test("derived runtime outputs have one owner and stay ignored when regenerated", () => {
+  for (const id of ["capability-runtime", "cli-runtime"] as const) {
+    const outputs = generator(id).outputs;
+    for (const output of outputs) {
+      expect(
+        GENERATORS.filter(({ outputs: ownerOutputs }) =>
+          ownerOutputs.some((glob) => matchesGeneratedGlob(glob, output)),
+        ).map((owner) => owner.id),
+        output,
+      ).toEqual([id]);
+    }
+    const ignored = Bun.spawnSync(
+      ["git", "check-ignore", "--no-index", "--stdin"],
+      {
+        cwd: new URL("..", import.meta.url).pathname,
+        stdin: new TextEncoder().encode(`${outputs.join("\n")}\n`),
+        stdout: "pipe",
+        stderr: "pipe",
+      },
+    );
+    expect(ignored.exitCode, id).toBe(0);
+    expect(
+      new TextDecoder().decode(ignored.stdout).trim().split("\n").toSorted(),
+      id,
+    ).toEqual([...outputs].toSorted());
+  }
 });
 
 test("Guard A ignores hand-written certificate and error fixtures", async () => {
@@ -193,6 +207,7 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
     "capability-catalog",
     "capability-runtime",
     "cli-registry",
+    "cli-runtime",
     "mcp-surface",
   ] satisfies readonly (typeof GENERATORS)[number]["id"][];
   expect(
@@ -221,6 +236,9 @@ test("autofix selects only owners of changed inputs and preserves dependencies",
   expect(
     ordered.findIndex(({ id }) => id === "capability-runtime"),
   ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
+  expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
+    ordered.findIndex(({ id }) => id === "cli-runtime"),
+  );
 });
 
 test("autofix selection closes over generated outputs and ordering dependencies", () => {
@@ -234,6 +252,7 @@ test("autofix selection closes over generated outputs and ordering dependencies"
       "capability-catalog",
       "capability-runtime",
       "cli-registry",
+      "cli-runtime",
     ],
     [
       "packages/api-contract/src/mcp-tool.ts",
@@ -517,7 +536,7 @@ test("CI determinism selectors cover the cached generators' input contracts", ()
 
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ci.slice(
-    ci.indexOf("- name: CLI sharded registry snapshot guard"),
+    ci.indexOf("- name: CLI sharded registry and derived runtime guard"),
     ci.indexOf("- name: MCP App bundle guard"),
   );
   const diff = cli.split("git diff --exit-code -- \\\n")[1];

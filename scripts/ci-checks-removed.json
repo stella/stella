@@ -13,7 +13,11 @@
   },
   {
     "name": "CLI registry snapshot guard",
-    "reason": "Replaced by CLI sharded registry snapshot guard: derives the API capability runtime from committed shards before exporting the CLI registry."
+    "reason": "Replaced by CLI committed registry and derived runtime guard: checks committed projections separately and verifies ignored runtime generation."
+  },
+  {
+    "name": "CLI committed registry and derived runtime guard",
+    "reason": "Replaced by CLI sharded registry and derived runtime guard: derives the API capability runtime from committed shards before regenerating the CLI registry and runtime."
   },
   {
     "name": "Web API types drift guard",

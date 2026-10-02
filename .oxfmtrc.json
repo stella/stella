@@ -25,6 +25,8 @@
     "apps/api/src/mcp/apps/**/generated/**",
     "apps/api/src/mcp/generated/capability-dispatch/*.ts",
     "packages/cli/capabilities/*.json",
+    "packages/cli/src/generated/route-map.ts",
+    "packages/cli/src/generated/tool-annotations.ts",
     "packages/cli/skills/stella-cli/SKILL.md",
     "docs/capability-coverage.md",
     "**/i18n-check-baseline.json",

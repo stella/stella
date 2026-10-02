@@ -187,6 +187,7 @@ const createContext = ({
     scopedDb,
     ...(toolConfirmation === undefined ? {} : { toolConfirmation }),
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 

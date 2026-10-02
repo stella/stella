@@ -17,6 +17,9 @@
 # caught here.
 set -euo pipefail
 
+bun --cwd=packages/cli run codegen:runtime
+bun apps/api/scripts/generate-capability-runtime.ts
+
 files=()
 while IFS= read -r file; do
   files+=("${file}")

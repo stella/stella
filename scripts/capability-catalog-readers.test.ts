@@ -7,6 +7,7 @@ const historicalCatalogConsumers = new Set([
   "scripts/check-cli-contract-changeset.test.ts",
   "scripts/check-cli-release-coupling.ts",
   "scripts/check-cli-release-coupling.test.ts",
+  "scripts/cli-runtime-pack.test.ts",
   // This archived plan describes the original catalog layout.
   ".agents/plans/049-capability-catalog-full-surface-cli.md",
 ]);

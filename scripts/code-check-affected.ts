@@ -601,6 +601,10 @@ export const scopedCommands = (
     commands.push(["bash", "scripts/lint-root-scripts.sh"]);
   }
   if (plan.rootLintPaths.length > 0) {
+    if (!rootChecks.has(ROOT_CHECKS.rootScriptLint)) {
+      commands.push(["bun", "--cwd=packages/cli", "run", "codegen:runtime"]);
+      commands.push(["bun", "apps/api/scripts/generate-capability-runtime.ts"]);
+    }
     commands.push([
       "bun",
       "--bun",
