@@ -17,6 +17,20 @@ const optionalString = (value: unknown): string | undefined => {
   throw new Error("Expected optional registry text");
 };
 
+const directInputSchema = (value: unknown) => {
+  if (value === undefined) {
+    return undefined;
+  }
+  if (!isRecord(value)) {
+    throw new Error("Invalid direct registry metadata");
+  }
+  const schema = value["inputSchema"];
+  if (!isRecord(schema)) {
+    throw new Error("Invalid direct registry schema");
+  }
+  return schema;
+};
+
 const registryTool = (value: unknown) => {
   if (!isRecord(value)) {
     throw new Error("Expected registry metadata");
@@ -40,12 +54,7 @@ const registryTool = (value: unknown) => {
   ) {
     throw new Error("Invalid registry tool metadata");
   }
-  if (
-    direct !== undefined &&
-    (!isRecord(direct) || !isRecord(direct["inputSchema"]))
-  ) {
-    throw new Error("Invalid direct registry schema");
-  }
+  const directSchema = directInputSchema(direct);
   if (
     !Array.isArray(exactProperties) ||
     !exactProperties.every((entry: unknown) => typeof entry === "string")
@@ -76,8 +85,8 @@ const registryTool = (value: unknown) => {
       }),
       { definitionNames: "property" },
     ),
-    ...(direct !== undefined && {
-      direct: { inputSchema: direct["inputSchema"] },
+    ...(directSchema !== undefined && {
+      direct: { inputSchema: directSchema },
     }),
     exactProperties,
     run: async (args: Record<string, unknown>) =>
@@ -157,6 +166,9 @@ test("compact schemas preserve prototype-named nested properties and instance ke
   const expected: unknown = JSON.parse(
     '{"type":"object","properties":{"__proto__":{"type":"integer"},"constructor":{"type":"object","properties":{"toString":{"type":"string"}}},"literal":{"const":{"__proto__":{"maximum":9007199254740991,"$schema":"instance"}}}}}',
   );
+  if (!isRecord(expected)) {
+    throw new Error("Expected compacted prototype-key schema fixture");
+  }
   expect(
     compactSchema(schema, { omitMaxSafeInteger: true, schemaDialect: "omit" }),
   ).toEqual(expected);
