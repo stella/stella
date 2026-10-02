@@ -128,7 +128,7 @@ export const uncalledCallbackHooks = {
       const later = async () => {
         await removeMember(tx, scope);
       };
-      void later;
+      await Promise.resolve(later);
     });
   },
 };

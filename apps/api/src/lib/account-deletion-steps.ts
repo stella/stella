@@ -9,7 +9,7 @@ import {
   or,
   sql,
 } from "drizzle-orm";
-import type { PgTable } from "drizzle-orm/pg-core";
+import type { AnyPgColumn, PgTable } from "drizzle-orm/pg-core";
 
 import { agentDelegation, agentRegistration } from "@/api/db/agent-auth-schema";
 import {
@@ -1294,13 +1294,11 @@ type AccountDeletionNonFkOwnership = {
     Table in (typeof ACCOUNT_DELETION_MANUAL_TABLES)[number] as Table["_"]["name"]
   ]: {
     table: Table;
-    userColumn: {
-      [
-        Key in keyof Table["_"]["columns"]
-      ]: Table["_"]["columns"][Key]["_"]["data"] extends string
-        ? Table["_"]["columns"][Key]
-        : never;
-    }[keyof Table["_"]["columns"]];
+    userColumn: AnyPgColumn<{
+      tableName: Table["_"]["name"];
+      dataType: "string";
+      data: string;
+    }>;
   };
 }[(typeof ACCOUNT_DELETION_MANUAL_TABLES)[number]["_"]["name"]];
 

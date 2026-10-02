@@ -216,7 +216,6 @@ const manualOwnershipProblems = (
     declaredTables.add(table);
     if (
       !config.columns.includes(userColumn) ||
-      userColumn.table !== table ||
       userColumn.dataType !== authSchema.user.id.dataType ||
       userColumn.getSQLType() !== authSchema.user.id.getSQLType()
     ) {
