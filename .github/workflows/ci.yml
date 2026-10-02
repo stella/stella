@@ -1330,6 +1330,7 @@ jobs:
         run: bun run policies:check
 
       - name: Marketing content evidence
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: bun run marketing:check
 
       - name: Railway template shape
@@ -1428,8 +1429,9 @@ jobs:
 
       - name: Release marketing freshness warning
         if: >-
-          github.event_name == 'pull_request'
-          || github.event_name == 'merge_group'
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && (github.event_name == 'pull_request'
+          || github.event_name == 'merge_group')
         env:
           BASE_REF: ${{ github.base_ref || 'main' }}
         run: |
@@ -1632,7 +1634,9 @@ jobs:
           bun scripts/chat-fixture-guard.ts
 
       - name: Model catalog snapshot drift guard
-        if: needs.ci-plan.outputs.model_catalog_drift_required == 'true'
+        if: >-
+          needs.ci-plan.outputs.package_checks_required == 'true'
+          && needs.ci-plan.outputs.model_catalog_drift_required == 'true'
         # These fetch models.dev and OpenRouter and byte-compare the
         # deterministic output with the committed snapshots, so hand-editing a
         # `.gen.ts` row instead of regenerating it cannot ship: only the
@@ -1842,6 +1846,7 @@ jobs:
           scripts/check-release-upload-retry.test.ts
           scripts/check-base-image-pulls.test.ts
           scripts/dependabot-changeset.test.ts
+          scripts/install-free-ci.test.ts
 
       # Needs the installed workspace (fast-check, property-testing), so it
       # cannot join the no-install invariants step above.
