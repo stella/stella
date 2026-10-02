@@ -7,6 +7,7 @@ import type { TransactionOf } from "@/api/db/scoped";
 import { sharedPoolConnectionSettings } from "@/api/db/shared-pool-connection-settings";
 import { envBase } from "@/api/env-base";
 import { queryCountLogger } from "@/api/lib/db-query-counter";
+import { runTransactionsInCallerContext } from "@/api/lib/db/caller-async-context";
 import { isLocalDevOpen } from "@/api/runtime-mode";
 
 // Per-request query counter feeds the `x-db-queries` response header for the
@@ -24,18 +25,24 @@ const poolRecycling = {
   idleTimeout: envBase.DATABASE_POOL_IDLE_TIMEOUT_S,
 } as const;
 
-const rootClient = new SQL({
-  url: envBase.DATABASE_URL,
-  max: envBase.DATABASE_ROOT_POOL_MAX,
-  ...poolRecycling,
-  ...sharedPoolConnectionSettings("root"),
-});
-const rlsClient = new SQL({
-  url: envBase.DATABASE_URL,
-  max: envBase.DATABASE_RLS_POOL_MAX,
-  ...poolRecycling,
-  ...sharedPoolConnectionSettings("raw_rls"),
-});
+// A transaction runs in the async context of the request that opened it, so
+// its statements count toward that request's query budget, not a neighbour's.
+const rootClient = runTransactionsInCallerContext(
+  new SQL({
+    url: envBase.DATABASE_URL,
+    max: envBase.DATABASE_ROOT_POOL_MAX,
+    ...poolRecycling,
+    ...sharedPoolConnectionSettings("root"),
+  }),
+);
+const rlsClient = runTransactionsInCallerContext(
+  new SQL({
+    url: envBase.DATABASE_URL,
+    max: envBase.DATABASE_RLS_POOL_MAX,
+    ...poolRecycling,
+    ...sharedPoolConnectionSettings("raw_rls"),
+  }),
+);
 
 /**
  * Primary database handle connecting as postgres (table owner).

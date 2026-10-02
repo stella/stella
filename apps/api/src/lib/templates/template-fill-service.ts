@@ -1,3 +1,4 @@
+import { panic, Result } from "better-result";
 /**
  * The single template fill pipeline. Every fill boundary — the REST routes
  * (raw upload, by-id download, live preview, fill-to-workspace), the chat and
@@ -9,8 +10,6 @@
  * writes) stay with the caller; only genuinely different fill semantics are
  * options here (see `requiredFields`).
  */
-
-import { panic, Result } from "better-result";
 
 import { compareCodeUnit } from "@stll/collation";
 
@@ -78,6 +77,10 @@ import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
 } from "@/api/lib/templates/stored-template-file";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 
 import {
   collectRawTemplateInputSources,
@@ -604,6 +607,10 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
 }: FillDocxWithPolicyOptions<TRejection>): Promise<
   FilledDocx | FillRejection<TRejection>
 > => {
+  const observer = actionRequestObserver(
+    organizationId,
+    ACTION_COST_CALL_KIND.registryRequest,
+  );
   const loaded = source;
   const { templateId } = source;
   const manifest = await deriveManifestFromDocx(loaded.file);
@@ -730,6 +737,7 @@ const fillTemplateDocxWithPolicy = async <TRejection = never>({
     values: record,
     manifest,
     resolveLookup: createDispatchLookupResolver({
+      observer,
       dispatch: await getOrganizationRegistryDispatch({
         scopedDb,
         organizationId,
