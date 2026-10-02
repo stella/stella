@@ -1846,8 +1846,9 @@ describe("provision history", () => {
   });
 
   // A walk that returned the provision must end in an ordinary last page,
-  // whichever page the versions without the anchor land on; only a Work no
-  // version of which carries it reads as not found, and only on a first page.
+  // whichever page the versions without the anchor land on. Not found is an
+  // answer only a first page that holds every version can give; a Work no
+  // version of which carries the anchor otherwise walks to an empty end.
   test.each(HISTORY_PATTERNS)(
     "walking every cursor collects each carrying version once (pattern $mask)",
     async ({ mask, versions }) => {
@@ -1858,7 +1859,7 @@ describe("provision history", () => {
         .toReversed();
 
       for (let limit = 1; limit <= versions.length; limit += 1) {
-        if (mask === 0) {
+        if (mask === 0 && limit >= versions.length) {
           expect(
             await readProvisionHistoryHandler({
               documentId: newest.id,
