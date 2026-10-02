@@ -1939,6 +1939,7 @@ type StreamSettlementOptions = Pick<
   rawArgumentsByIncompleteToolCallId: Map<string, string>;
   toolCallsWithCompleteInput: Set<string>;
   getUsage: () => TokenUsage | undefined;
+  announceBeforeFailure: () => StreamChunk[];
   /** Whether the run streamed an answer (see `processServerChatStream`). */
   getProducedAnswer: () => boolean;
   terminal: { state: "open" | "settled" };
@@ -1959,6 +1960,7 @@ const createStreamSettlement = ({
   toolCallsWithCompleteInput,
   getUsage,
   getProducedAnswer,
+  announceBeforeFailure,
   terminal,
 }: StreamSettlementOptions) => {
   const admissionLost = () =>
@@ -2060,6 +2062,7 @@ const createStreamSettlement = ({
       return;
     }
     const refusal = outcome.refusal;
+    yield* announceBeforeFailure();
     yield {
       type: EventType.RUN_ERROR,
       code: refusal.code,
@@ -2231,6 +2234,7 @@ export const processServerChatStream = async function* ({
     toolCallsWithCompleteInput,
     getUsage: () => usage,
     getProducedAnswer: () => producedAnswer,
+    announceBeforeFailure: () => announceBeforeFailure(),
     terminal,
   });
   // Whether the client has been told which message this turn writes.
@@ -2247,15 +2251,6 @@ export const processServerChatStream = async function* ({
             mapMessageId(ASSISTANT_RESPONSE_MESSAGE_ID_SENTINEL),
           ),
         ];
-  const announceAdmissionFailure = function* (
-    outcome: ChatTurnOutcome,
-  ): Generator<PublicStreamChunk> {
-    if (outcome.type !== "failed" || outcome.refusal === undefined) {
-      return;
-    }
-    yield* announceBeforeFailure();
-    yield* admissionFailureChunks(outcome);
-  };
   try {
     const normalizedSource = ensureAssistantMessageStart({
       getOrCreateMessageId: () =>
@@ -2291,7 +2286,7 @@ export const processServerChatStream = async function* ({
         for (const finish of deferredRunFinishedChunks.splice(0)) {
           yield finish;
         }
-        yield* announceAdmissionFailure(outcome);
+        yield* admissionFailureChunks(outcome);
         return;
       }
       const processed = processPersistenceChunk({
@@ -2333,7 +2328,7 @@ export const processServerChatStream = async function* ({
       for (const chunk of deferredRunFinishedChunks.splice(0)) {
         yield chunk;
       }
-      yield* announceAdmissionFailure(outcome);
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const finalRunFinishedChunks = deferredRunFinishedChunks.splice(0);
@@ -2372,7 +2367,7 @@ export const processServerChatStream = async function* ({
       for (const finish of deferredRunFinishedChunks.splice(0)) {
         yield finish;
       }
-      yield* announceAdmissionFailure(outcome);
+      yield* admissionFailureChunks(outcome);
       return;
     }
     const kind = classifyAIError(error);

@@ -856,7 +856,7 @@ describe("admission loss before message production identifies the persisted assi
         new Set([...client.getMessages(), reloaded].map(({ id }) => id)).size,
       ).toBe(1);
       expect(client.getMessages()).toHaveLength(1);
-      expect(client.getMessages().at(0)?.id).toBe(finish?.responseMessage.id);
+      expect(client.getMessages().at(0)?.id).toBe(finish.responseMessage.id);
       expect(emitted.at(0)?.type).toBe(EventType.TEXT_MESSAGE_START);
       expect(emitted.at(1)).toEqual(
         expect.objectContaining({
@@ -864,8 +864,8 @@ describe("admission loss before message production identifies the persisted assi
           code: ACTION_ADMISSION_CODES.admissionUnavailable,
         }),
       );
-      expect(finish?.responseMessage.metadata?.turnOutcome).toEqual(
-        finish?.outcome,
+      expect(finish.responseMessage.metadata.turnOutcome).toEqual(
+        finish.outcome,
       );
     });
   }
