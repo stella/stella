@@ -138,10 +138,11 @@ describe("route traffic changes require the route smoke", () => {
   });
 
   test("CLI prints only the boolean scope decision", () => {
-    for (const [file, expected] of [
+    const cases: readonly (readonly [string, string])[] = [
       ["apps/web/src/routes/new.tsx", "true\n"],
       ["docs/development.md", "false\n"],
-    ]) {
+    ];
+    for (const [file, expected] of cases) {
       const result = Bun.spawnSync([
         process.execPath,
         path.join(import.meta.dirname, "detect-route-smoke-changes.ts"),
