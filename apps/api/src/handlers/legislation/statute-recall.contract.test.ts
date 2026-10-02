@@ -8,6 +8,7 @@ import { createHash } from "node:crypto";
 import * as v from "valibot";
 
 import { normalizeEli } from "@stll/agent-input";
+import { readStatuteQueryReferences } from "@stll/api-contract/statute-query-intent";
 
 import {
   corpusIndexGenerations,
@@ -28,6 +29,7 @@ import {
 } from "@/api/lib/legal-search/corpus-index-manifest";
 import { buildLegislationV2ProjectionDocuments } from "@/api/lib/legal-search/corpus-index-projection-builder";
 import type { LegislationV2ProjectionInput } from "@/api/lib/legal-search/corpus-index-projection-descriptor";
+import { corpusFreeTextClause } from "@/api/lib/legal-search/corpus-query";
 import { corpusIndexId } from "@/api/lib/legal-search/index-naming";
 import { EFFECTIVE_CONSOLIDATION } from "@/api/lib/legal-search/legislation-expression-classification";
 import type {
@@ -64,6 +66,11 @@ const baselineSchema = v.strictObject({
 });
 const baseline = v.parse(baselineSchema, fixtureBaseline);
 export const STATUTE_RECALL_TOP5_FLOOR = baseline.top5Floor;
+const PROTECTED_RELAXED_QUERY_ID = "land-register-good-faith";
+const protectedRelaxedQuery =
+  fixtureQueries.find(({ id }) => id === PROTECTED_RELAXED_QUERY_ID) ??
+  panic("Recall fixture is missing its protected relaxed-only query");
+
 const documentSchema = v.object({
   id: v.string(),
   eli: v.string(),
@@ -128,6 +135,9 @@ test("the committed statute recall floor and nonempty coverage only increase", (
   expect(new Set(fixtureDocuments.map(({ id }) => id)).size).toBe(
     fixtureDocuments.length,
   );
+  expect(
+    readStatuteQueryReferences("cze", protectedRelaxedQuery.query),
+  ).toEqual([]);
   const fixtureWorks = new Set(
     fixtureDocuments.map(({ eli }) => canonicalWorkEli(eli)),
   );
@@ -188,6 +198,7 @@ describe.skipIf(!runEngineTests)(
     let legislationDb: LegislationReadDb;
     let restoreSearch: (() => void) | undefined;
     let fixtureIndexCreated = false;
+    const nativeReads: { query: string; documentIds: unknown[] }[] = [];
     beforeAll(async () => {
       databaseClient = await createTestPglite();
       const db = drizzle({ client: databaseClient });
@@ -306,8 +317,19 @@ describe.skipIf(!runEngineTests)(
 
       const originalSearch = corpusClient.search.bind(corpusClient);
       const searchSpy = spyOn(corpusClient, "search").mockImplementation(
-        async (options) =>
-          await originalSearch({ ...options, indexId: INDEX_ID }),
+        async (options) => {
+          const result = await originalSearch({
+            ...options,
+            indexId: INDEX_ID,
+          });
+          if (result.isOk()) {
+            nativeReads.push({
+              query: options.query,
+              documentIds: result.value.hits.map((hit) => hit["document_id"]),
+            });
+          }
+          return result;
+        },
       );
       restoreSearch = () => searchSpy.mockRestore();
     }, ENGINE_TIMEOUT_MS);
@@ -322,6 +344,79 @@ describe.skipIf(!runEngineTests)(
         throw deleted.error;
       }
     }, ENGINE_TIMEOUT_MS);
+
+    test(
+      "the protected official passage is retrieved only through public relaxed search",
+      async () => {
+        expect(
+          readStatuteQueryReferences("cze", protectedRelaxedQuery.query),
+        ).toEqual([]);
+        const expectedWorks = new Set(
+          protectedRelaxedQuery.expectedActs.map((act) =>
+            canonicalWorkEli(`cz/sb/${act}`),
+          ),
+        );
+        const expectedDocumentIds = VERSIONS.filter(({ eli }) =>
+          expectedWorks.has(canonicalWorkEli(eli)),
+        ).map(({ id }) => String(id));
+        expect(expectedDocumentIds.length).toBeGreaterThan(0);
+        const definition = createPublicStatuteSearch(
+          async (body, _publicDb, observability) =>
+            await searchLegislationHandler(body, legislationDb, observability, {
+              provider: "corpus-index",
+              loadSearchConfigs: async () => [],
+            }),
+        );
+        const app = new Elysia().get(
+          "/law/statutes/search",
+          definition.handler,
+          {
+            query: definition.config.query,
+            response: definition.config.response,
+          },
+        );
+        const url = new URL("http://localhost/law/statutes/search");
+        url.searchParams.set("query", protectedRelaxedQuery.query);
+        url.searchParams.set("country", "CZE");
+        url.searchParams.set("limit", "10");
+        const firstRead = nativeReads.length;
+        const response = await app.handle(new Request(url));
+        expect(response.status).toBe(200);
+        const body: unknown = await response.json();
+        if (!Value.Check(searchLegislationSuccessResponseSchema, body)) {
+          panic("Protected public statute query returned an invalid response");
+        }
+        const reads = nativeReads.slice(firstRead);
+        const strictClause = corpusFreeTextClause(protectedRelaxedQuery.query);
+        expect(strictClause).not.toBeNull();
+        if (strictClause === null) {
+          panic("Protected query has no strict search clause");
+        }
+        expect(reads.at(0)?.query.startsWith(strictClause)).toBe(true);
+        const strictReads = reads.filter(({ query }) =>
+          query.startsWith(strictClause),
+        );
+        expect(strictReads.length).toBeGreaterThan(0);
+        expect(
+          strictReads
+            .flatMap(({ documentIds }) => documentIds)
+            .some((id) => expectedDocumentIds.includes(String(id))),
+        ).toBe(false);
+        const hit = body.items.find(({ eli }) =>
+          expectedWorks.has(canonicalWorkEli(eli)),
+        );
+        expect(hit).toBeDefined();
+        if (hit === undefined) {
+          panic("Protected official passage was not retrieved");
+        }
+        expect(hit.match.type).toBe("relaxed");
+        expect(hit.headline).not.toBeNull();
+        expect(
+          hit.headline?.replace(/<\/?mark>/gu, "").normalize("NFC"),
+        ).toMatch(/dobr[éeá] (?:víře|víra)/u);
+      },
+      ENGINE_TIMEOUT_MS,
+    );
 
     test(
       "public statute search preserves its measured top-five act recall and nonempty pages",
