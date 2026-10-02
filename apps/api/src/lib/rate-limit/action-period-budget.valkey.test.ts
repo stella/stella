@@ -757,5 +757,83 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         }
       });
     });
+
+    test("organization and user lease caps independently reject contenders in the store", async () => {
+      for (const limiting of ["organization", "user"] as const) {
+        await withStore(async ({ client, organizationId }) => {
+          const { promise: entered, resolve: enter } =
+            Promise.withResolvers<undefined>();
+          const { promise: finish, resolve: complete } =
+            Promise.withResolvers<undefined>();
+          const contenderUser =
+            limiting === "organization"
+              ? toSafeId<"user">("independent_user")
+              : userId;
+          const asymmetricPolicy = {
+            organizationConcurrency: limiting === "organization" ? 1 : 2,
+            userConcurrency: limiting === "user" ? 1 : 2,
+            leaseMs: 120_000,
+          };
+          const common = {
+            organizationId,
+            enabled: true,
+            policy: asymmetricPolicy,
+            periodPolicy: { periodMs: 86_400_000, limit: 10 },
+            serviceBudgetsEnabled: false,
+            redis: client,
+          };
+          const owner = withActionAdmission({
+            ...common,
+            userId,
+            periodIdentity: {
+              actionKind: "chat.improve-prompt",
+              logicalPhaseId: "owner",
+            },
+            run: async () => {
+              enter(undefined);
+              await finish;
+              return "owner-completed";
+            },
+          });
+          await entered;
+          let ran = false;
+          try {
+            const contender = await withActionAdmission({
+              ...common,
+              userId: contenderUser,
+              periodIdentity: {
+                actionKind: "chat.improve-prompt",
+                logicalPhaseId: "contender",
+              },
+              run: async () => {
+                ran = true;
+              },
+            });
+            expect(Result.isError(contender)).toBe(true);
+            if (Result.isError(contender)) {
+              expect(contender.error).toMatchObject({
+                reason: "busy",
+                code: ACTION_ADMISSION_CODES.concurrencyBusy,
+              });
+            }
+            expect(ran).toBe(false);
+          } finally {
+            complete(undefined);
+            expect(await owner).toEqual(Result.ok("owner-completed"));
+          }
+
+          const afterRelease = await withActionAdmission({
+            ...common,
+            userId: contenderUser,
+            periodIdentity: {
+              actionKind: "chat.improve-prompt",
+              logicalPhaseId: "after-release",
+            },
+            run: async () => "admitted",
+          });
+          expect(afterRelease).toEqual(Result.ok("admitted"));
+        });
+      }
+    });
   });
 }

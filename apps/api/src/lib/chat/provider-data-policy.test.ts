@@ -542,6 +542,7 @@ describe("provider request policy", () => {
         {
           status: 403,
           message: "No endpoints found supporting your data region.",
+          metadata: { failed_routing_step: "Filter by Data Region" },
           routingRefusal: false,
         },
         { status: 404, message: "Request unavailable", routingRefusal: false },
@@ -553,12 +554,34 @@ describe("provider request policy", () => {
         {
           status: 404,
           message: "No endpoints found supporting your data region.",
+          metadata: {
+            routing_funnel: [{ step: "Initial Endpoints", endpoint_count: 1 }],
+            failed_routing_step: "Filter by Data Region",
+          },
           routingRefusal: true,
         },
         {
           status: 404,
-          message: "No endpoints found matching your data policy.",
+          message: "Region endpoint unavailable.",
+          metadata: { failed_routing_step: "Filter by Data Region" },
           routingRefusal: true,
+        },
+        {
+          status: 404,
+          message: "No endpoints found supporting your data region.",
+          routingRefusal: false,
+        },
+        {
+          status: 404,
+          message: "No endpoints found supporting your data region.",
+          metadata: { failed_routing_step: "Filter by Data Policy" },
+          routingRefusal: false,
+        },
+        {
+          status: 404,
+          message: "No endpoints found matching your data policy.",
+          metadata: { failed_routing_step: "Filter by Data Policy" },
+          routingRefusal: false,
         },
         { status: 429, message: "Request unavailable", routingRefusal: false },
         {
@@ -590,7 +613,13 @@ describe("provider request policy", () => {
               }
               return new Response(
                 JSON.stringify({
-                  error: { code: status, message },
+                  error: {
+                    code: status,
+                    message,
+                    ...("metadata" in response
+                      ? { metadata: response.metadata }
+                      : {}),
+                  },
                 }),
                 { status, headers: { "content-type": "application/json" } },
               );
