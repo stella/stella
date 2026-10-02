@@ -35,7 +35,7 @@ export default createSafeRootHandler(
           sql`SELECT pg_advisory_xact_lock(hashtextextended(${`${session.activeOrganizationId}:number-series:${target.documentType}`}, 0))`,
         );
         const active = await tx.query.numberSeries.findFirst({
-          columns: { id: true },
+          columns: { id: true, sellerProfileId: true },
           where: {
             id: { eq: target.id },
             organizationId: { eq: session.activeOrganizationId },
@@ -52,6 +52,9 @@ export default createSafeRootHandler(
             and(
               eq(numberSeries.organizationId, session.activeOrganizationId),
               eq(numberSeries.documentType, target.documentType),
+              active.sellerProfileId === null
+                ? isNull(numberSeries.sellerProfileId)
+                : eq(numberSeries.sellerProfileId, active.sellerProfileId),
               eq(numberSeries.isDefault, true),
               isNull(numberSeries.archivedAt),
             ),
