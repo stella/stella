@@ -207,11 +207,11 @@ if (!databaseUrl || !runPostgresTests) {
             } finally {
               if (seeded) {
                 await setup.db
-                  .delete(expenses)
-                  .where(eq(expenses.id, expenseId));
-                await setup.db
                   .delete(invoices)
                   .where(eq(invoices.id, invoiceId));
+                await setup.db
+                  .delete(expenses)
+                  .where(eq(expenses.id, expenseId));
                 await setup.db
                   .delete(workspaces)
                   .where(eq(workspaces.id, workspaceId));
