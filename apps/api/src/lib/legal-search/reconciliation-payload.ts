@@ -26,7 +26,7 @@ export const fingerprintReconciliationPayload = (payload: unknown): string => {
         message: "Reconciliation payload cannot be serialized",
         cause,
       }),
-  }).unwrap();
+  }).unwrap("Reconciliation payload must be JSON serializable.");
   const hasher = new Bun.CryptoHasher("sha256");
   hasher.update(stableStringify(normalized));
   return hasher.digest("hex");
