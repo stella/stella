@@ -35,6 +35,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedAuditLogId,
   brandPersistedDocumentReviewRunId,
@@ -501,7 +502,7 @@ type ReadOverviewActivityPageOptions = {
 export const readOverviewActivityPage = async ({
   cursor: cursorValue,
   filters,
-  limit,
+  limit: requestedLimit,
   organizationId,
   safeDb,
   workspaceId,
@@ -509,6 +510,7 @@ export const readOverviewActivityPage = async ({
   Result<MatterActivityPage, HandlerError | SafeDbError>
 > =>
   await Result.gen(async function* () {
+    const limit = normalizeTenantPageLimit(requestedLimit);
     const fromDate =
       filters.from === null ? null : timestampMicroseconds(filters.from);
     const toExclusiveDate =

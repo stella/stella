@@ -54,7 +54,6 @@ const partitionIds = [
 const prerequisites = new Set([
   "Checkout",
   "Setup Bun",
-  "Install Safe Chain",
   "Turbo remote cache",
   "Install dependencies",
   "Prepare environment",
@@ -93,12 +92,33 @@ const expectCoverage = ({ current, base, removed }: CoverageOptions) => {
     expect(expected.map((step) => step.name)).toContain(name);
     expect(actual.map((step) => step.name)).not.toContain(name);
   }
-  expect(actual).toEqual(
+  // Every merge-base check survives unchanged unless its removal is listed;
+  // a new check is an addition, which needs no ledger entry.
+  const expectedNames = new Set(expected.map(({ name }) => name));
+  expect(actual.filter(({ name }) => expectedNames.has(name))).toEqual(
     expected.filter(({ name }) => !removedNames.has(name)),
   );
 };
-const actualSteps = partitions.flatMap(({ steps }) => steps);
-const baseSteps = baseline.flatMap(({ steps }) => steps);
+// Setup removals are owned by their leg, so repeated names cannot authorize
+// removing another leg's protection implicitly.
+const baselineIds = baseJobs["ci-checks"] ? ["ci-checks"] : partitionIds;
+const legSteps = (
+  legs: readonly v.InferOutput<typeof jobSchema>[],
+  ids: readonly string[],
+) =>
+  legs.flatMap(({ steps }, index) => {
+    const id = ids.at(index);
+    if (!id) {
+      panic("CI check leg has no identifier");
+    }
+    return steps.map((step) =>
+      step.name === "Install Safe Chain"
+        ? { ...step, name: `${id}: ${step.name}` }
+        : step,
+    );
+  });
+const actualSteps = legSteps(partitions, partitionIds);
+const baseSteps = legSteps(baseline, baselineIds);
 
 test("parallel CI checks preserve every merge-base check exactly once", () => {
   expect(jobs).not.toHaveProperty("ci-checks");
@@ -116,6 +136,28 @@ test("parallel CI checks preserve every merge-base check exactly once", () => {
 });
 
 test("each CI check leg preserves merge-base setup, supply-chain protection and scope", () => {
+  const result = v.parse(
+    v.looseObject({
+      needs: v.array(v.string()),
+      steps: v.array(
+        v.looseObject({ env: v.optional(v.record(v.string(), v.string())) }),
+      ),
+    }),
+    jobs["ci-result"],
+  );
+  expect(result.needs).toContain("dependency-malware");
+  const scopes = result.steps.find(({ env }) => env?.["JOB_SCOPES"])?.env?.[
+    "JOB_SCOPES"
+  ];
+  expect(
+    v.parse(
+      v.record(v.string(), v.nullable(v.string())),
+      JSON.parse(v.parse(v.string(), scopes)),
+    )["dependency-malware"],
+  ).toBe("dependency_malware_required");
+  expect(
+    v.parse(v.looseObject({ if: v.string() }), jobs["dependency-malware"]).if,
+  ).toContain("needs.ci-plan.outputs.dependency_malware_required == 'true'");
   for (const base of baseline) {
     const { steps: originalSteps, ...originalScope } = base;
     const originalSetup = originalSteps.filter(({ name }) =>
@@ -133,9 +175,9 @@ test("each CI check leg preserves merge-base setup, supply-chain protection and 
       expect(steps.findIndex(({ name }) => name === "Setup Bun")).toBeLessThan(
         installIndex,
       );
-      expect(
-        steps.findIndex(({ name }) => name === "Install Safe Chain"),
-      ).toBeLessThan(installIndex);
+      expect(steps.at(installIndex)?.["run"]).toBe(
+        "bash scripts/retry.sh bun ci --ignore-scripts",
+      );
     }
   }
 });
@@ -151,6 +193,27 @@ test("CI coverage rejects a dropped check and accepts only an explicitly listed 
     expectCoverage({ current: dropped, base: baseSteps, removed: [] }),
   ).toThrow("toEqual");
   expectCoverage({ current: dropped, base: baseSteps, removed: [step.name] });
+});
+
+test("CI coverage accepts a new check alongside every merge-base check", () => {
+  const added = { name: "A newly added check", run: "bun test new.test.ts" };
+  expectCoverage({
+    current: [...baseSteps, added],
+    base: baseSteps,
+    removed: [],
+  });
+  const step = ownedSteps(baseSteps).at(0);
+  if (!step) {
+    panic("Merge-base CI checks contain no checks");
+  }
+  const renamed = baseSteps.map((current) =>
+    current.name === step.name
+      ? { ...current, name: `${step.name} (renamed)` }
+      : current,
+  );
+  expect(() =>
+    expectCoverage({ current: renamed, base: baseSteps, removed: [] }),
+  ).toThrow("toEqual");
 });
 
 test("CI coverage rejects duplicate and modified checks", () => {

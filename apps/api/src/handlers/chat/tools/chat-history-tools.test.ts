@@ -8,6 +8,7 @@ import type { SafeDb } from "@/api/db/safe-db";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import { toSafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
+import { LIMITS } from "@/api/lib/limits";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 import {
@@ -40,6 +41,31 @@ const createSafeDbCapture = () => {
 };
 
 describe("chat history tools", () => {
+  test("uses the schema page default when the caller omits a limit", async () => {
+    const { queries, safeDb } = createSafeDbCapture();
+    const tools = createChatHistoryTools({
+      refRegistry: createChatRefRegistry(),
+      organizationId,
+      pastChatScope: { type: PAST_CHAT_SCOPE_TYPE.allChats },
+      safeDb,
+      threadId,
+      userId,
+    });
+    const searchTool = tools[SEARCH_CHAT_HISTORY_TOOL_NAME];
+    await searchTool.execute?.(
+      { query: "earlier context" },
+      asTestRaw<Parameters<NonNullable<typeof searchTool.execute>>[1]>({}),
+    );
+    const query = queries.at(0);
+    expect(query).toBeDefined();
+    if (query === undefined) {
+      return;
+    }
+    const compiled = new PgDialect().sqlToQuery(query);
+    expect(compiled.params).toContain(LIMITS.chatHistorySearchPageSizeDefault);
+    expect(compiled.params).not.toContain(undefined);
+  });
+
   test("preserves the tagged failure for an empty search query", async () => {
     const { safeDb } = createSafeDbCapture();
     const tools = createChatHistoryTools({

@@ -144,6 +144,7 @@ const runListAs = async ({
       memberRole: { role },
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       promptCachingEnabled: false,
       recordAuditEvent,
       request: new Request("https://example.test/signals"),

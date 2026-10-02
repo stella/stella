@@ -125,14 +125,14 @@ const runDeniedTitle = async ({
     FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
     USAGE_ENFORCEMENT_ENABLED: env.USAGE_ENFORCEMENT_ENABLED,
     AI_PROVIDER: env.AI_PROVIDER,
-    OPENAI_API_KEY: env.OPENAI_API_KEY,
+    OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
     REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
   };
   Object.assign(env, {
     FEATURE_ACTION_ADMISSION: enabled,
     USAGE_ENFORCEMENT_ENABLED: true,
-    AI_PROVIDER: "openai",
-    OPENAI_API_KEY: "fixture-instance-key",
+    AI_PROVIDER: "openrouter",
+    OPENROUTER_API_KEY: "fixture-instance-key",
     REQUIRE_PERSONAL_AI_KEY: false,
   });
   try {
@@ -149,6 +149,7 @@ const runDeniedTitle = async ({
         memberRole: { role: "owner" },
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        managedAIResidency: "eu" as const,
         params: { threadId },
         promptCachingEnabled: false,
         query: { workspaceId },

@@ -29,6 +29,7 @@ import {
   isUuidPaginationCursorPart,
   isDateOnlyPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
 
 export const listStatuteVersionsParamsSchema = t.Object({
@@ -87,7 +88,9 @@ export const listStatuteVersionsHandler = async ({
   query,
   legislationDb,
 }: ListStatuteVersionsOptions) => {
-  const limit = query.limit ?? LIMITS.legislationVersionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.legislationVersionsPageSizeDefault,
+  );
   let cursor: VersionCursor | null = null;
 
   if (query.cursor !== undefined) {

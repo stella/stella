@@ -139,14 +139,14 @@ describe("isChatModelSelectionAvailable", () => {
     }
   });
 
-  test("falls back to the single instance provider when no org config exists", () => {
+  test("excludes unavailable instance selections when no org config exists", () => {
     expect(
       isChatModelSelectionAvailable({
         provider: "openai",
         modelId: "gpt-5.4",
         orgAIConfig: null,
       }),
-    ).toBe(true);
+    ).toBe(false);
     expect(
       isChatModelSelectionAvailable({
         provider: "anthropic",
@@ -154,6 +154,39 @@ describe("isChatModelSelectionAvailable", () => {
         orgAIConfig: null,
       }),
     ).toBe(false);
+  });
+
+  test("offers only the active eligible instance provider", () => {
+    const previous = {
+      AI_PROVIDER: env.AI_PROVIDER,
+      OPENROUTER_API_KEY: env.OPENROUTER_API_KEY,
+      USE_MOCK_AI: env.USE_MOCK_AI,
+      REQUIRE_PERSONAL_AI_KEY: env.REQUIRE_PERSONAL_AI_KEY,
+    };
+    Object.assign(env, {
+      AI_PROVIDER: "openrouter",
+      OPENROUTER_API_KEY: "test-openrouter-instance-key",
+      USE_MOCK_AI: false,
+      REQUIRE_PERSONAL_AI_KEY: false,
+    });
+    try {
+      expect(
+        isChatModelSelectionAvailable({
+          provider: "openrouter",
+          modelId: "google/gemini-3.7-flash",
+          orgAIConfig: null,
+        }),
+      ).toBe(true);
+      expect(
+        isChatModelSelectionAvailable({
+          provider: "openai",
+          modelId: "gpt-5.4",
+          orgAIConfig: null,
+        }),
+      ).toBe(false);
+    } finally {
+      Object.assign(env, previous);
+    }
   });
 });
 
