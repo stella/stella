@@ -377,9 +377,9 @@ describe("a turn's settlement count", () => {
             signal: admission.signal,
             release: async () => undefined,
           }),
-        externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () =>
-          { throw new DatabaseError({ message: "No connectors expected" }); },
-        ),
+        externalMcpToolsLoader: createLazyExternalMcpToolsLoader(async () => {
+          throw new DatabaseError({ message: "No connectors expected" });
+        }),
         indexThread: async () => undefined,
         mode: "raw",
         recordAuditEvent: async () => undefined,
