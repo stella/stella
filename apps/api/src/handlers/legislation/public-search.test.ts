@@ -12,7 +12,6 @@ import {
 } from "@/api/lib/legal-search/corpus-search-cursor";
 import { NO_EXPANSION_DICTIONARY_IDENTITY } from "@/api/lib/legal-search/morphology/dictionary";
 import { legislationPublicReadDb } from "@/api/lib/legislation-public-read-db";
-import { LIMITS } from "@/api/lib/limits";
 
 const result = {
   items: [],
@@ -63,7 +62,7 @@ test("public page limits are bounded before the shared operation runs", async ()
     calls.push(args);
     return result;
   });
-  for (const limit of [0, LIMITS.publicStatuteSearchPageSizeMax + 1, 100]) {
+  for (const limit of [0, 21, 100]) {
     const response = await app.handle(
       new Request(
         `http://localhost/law/statutes/search?query=text&country=CZE&limit=${String(limit)}`,
@@ -77,7 +76,7 @@ test("public page limits are bounded before the shared operation runs", async ()
   );
   expect(response.status).toBe(200);
   expect(calls.at(0)?.at(0)).toMatchObject({
-    limit: LIMITS.publicStatuteSearchPageSizeMax,
+    limit: 20,
   });
 });
 
