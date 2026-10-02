@@ -210,6 +210,8 @@ export const CASE_LAW_SOURCE_INGESTION_UPDATE_COLUMNS = [
   "stored_total_as_of",
   "stored_total_attempted_at",
   "stored_total_next_refresh_at",
+  "stored_total_held_since",
+  "stored_total_warned_slot",
 ] as const;
 
 /**

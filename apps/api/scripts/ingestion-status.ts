@@ -12,6 +12,7 @@
 import { count, desc, gte, sql } from "drizzle-orm";
 
 import {
+  caseLawDecisions,
   caseLawIngestionEvents,
   caseLawIngestionFailures,
   caseLawSources,

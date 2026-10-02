@@ -1,4 +1,6 @@
 import { panic } from "better-result";
+
+import { Temporal } from "@stll/time";
 /**
  * Continuous case law ingestion daemon.
  *
@@ -17,8 +19,6 @@ import { panic } from "better-result";
  * Without arguments, runs all sources in independent loops.
  * With an adapter key, runs only that source once and exits.
  */
-
-import { Temporal } from "@stll/time";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import { SOURCE_TOTAL_ORIGIN, caseLawIngestionEvents } from "@/api/db/schema";
@@ -54,6 +54,7 @@ import {
   runReconciliationWorkUnit,
 } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import { createSourceStoredTotalAdmission } from "@/api/handlers/case-law/ingestion/source-total-admission";
+import { emitSourceStoredTotalHoldHeartbeats } from "@/api/handlers/case-law/ingestion/source-total-hold";
 import {
   readSourceReportedTotals,
   setSourceReportedTotal,
@@ -380,6 +381,19 @@ const MAX_CONCURRENT_DB_WRITES = Math.max(
 );
 const dbWriteSemaphore = createSemaphore("DB slot", MAX_CONCURRENT_DB_WRITES);
 
+let storedTotalAdmission:
+  | ReturnType<typeof createSourceStoredTotalAdmission>
+  | undefined;
+const getStoredTotalAdmission = () => {
+  storedTotalAdmission ??= createSourceStoredTotalAdmission({
+    readVerdict: createDatabaseLoadVerdictReader({
+      db: { transaction: ingestionDb },
+      tableName: "case_law_decisions",
+    }),
+  });
+  return storedTotalAdmission;
+};
+
 /**
  * Max adapter cycles running concurrently. Unlike the DB-write slot, this
  * also covers the fetch + finaldoc-enrich + AST-parse phase, which is
@@ -671,12 +685,7 @@ const runOneCycle = async (
       source,
       sourceLease,
       scopedDb: ingestionDb,
-      acquireStoredTotalAdmission: createSourceStoredTotalAdmission({
-        readVerdict: createDatabaseLoadVerdictReader({
-          db: { transaction: ingestionDb },
-          tableName: "case_law_decisions",
-        }),
-      }),
+      acquireStoredTotalAdmission: getStoredTotalAdmission(),
       dbSlot: dbWriteSemaphore,
       cycle: {
         budgetMs: adapter?.maxCycleMs ?? MAX_CYCLE_MS,
@@ -1032,6 +1041,7 @@ export const runCaseLawIngest = async (
 
   // Health loop: heartbeat + S3 credential refresh.
   const healthLoop = (async () => {
+    let nextStoredTotalHeartbeatAt = 0;
     while (true) {
       if (isDraining()) {
         return;
@@ -1043,6 +1053,13 @@ export const runCaseLawIngest = async (
       writeHeartbeat();
       logHeartbeat();
       try {
+        if (
+          Temporal.Now.instant().epochMilliseconds >= nextStoredTotalHeartbeatAt
+        ) {
+          await emitSourceStoredTotalHoldHeartbeats(ingestionDb);
+          nextStoredTotalHeartbeatAt =
+            Temporal.Now.instant().epochMilliseconds + 60_000;
+        }
         if (isS3Stale()) {
           await refreshS3();
         }
@@ -1050,7 +1067,7 @@ export const runCaseLawIngest = async (
           await refreshCorpusS3();
         }
       } catch (error) {
-        logError("S3 credential refresh failed:", error);
+        logError("Health refresh failed:", error);
       }
     }
   })();

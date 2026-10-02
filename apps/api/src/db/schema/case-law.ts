@@ -377,6 +377,9 @@ export const caseLawSources = p.pgTable(
     storedTotalAttemptedAt: timestamptz("stored_total_attempted_at"),
     /** Durable source phase; overdue refreshes remain queued. */
     storedTotalNextRefreshAt: timestamptz("stored_total_next_refresh_at"),
+    /** Unavailable indicators preserve the first hold and its warning slot. */
+    storedTotalHeldSince: timestamptz("stored_total_held_since"),
+    storedTotalWarnedSlot: timestamptz("stored_total_warned_slot"),
     createdAt: timestamptz("created_at").defaultNow().notNull(),
     updatedAt: timestamptz("updated_at")
       .defaultNow()

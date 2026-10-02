@@ -74,7 +74,7 @@ type PipelineInput = {
   ) => Promise<number>;
   acquireStoredTotalAdmission: (options: {
     deadline: CycleDeadline | undefined;
-  }) => Promise<"granted" | "held">;
+  }) => Promise<"granted" | "held" | "unknown">;
   /**
    * The cycle's time budget, and the signals that end it early. The loop
    * starts a page only while enough of the budget is left for the page to

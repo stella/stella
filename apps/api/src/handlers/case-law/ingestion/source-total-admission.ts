@@ -24,7 +24,9 @@ export const createSourceStoredTotalAdmission = ({
   let admittedCycles: WeakSet<CycleDeadline> | undefined;
   return async ({
     deadline,
-  }: SourceStoredTotalAdmissionRequest): Promise<"granted" | "held"> => {
+  }: SourceStoredTotalAdmissionRequest): Promise<
+    "granted" | "held" | "unknown"
+  > => {
     if (
       deadline === undefined ||
       admittedCycles?.has(deadline) ||
@@ -33,6 +35,9 @@ export const createSourceStoredTotalAdmission = ({
       return "held";
     }
     const verdict = await readVerdict();
+    if (verdict.kind === "unknown") {
+      return "unknown";
+    }
     if (
       decideStart(verdict, "backfill_batch", defaultConfig).decision ===
         "wait" ||

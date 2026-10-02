@@ -18,7 +18,6 @@ import {
   caseLawDecisions,
   caseLawSources,
 } from "@/api/db/schema";
-import { withSharedStatementTimeout } from "@/api/db/shared-pool-timeouts";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
@@ -349,8 +348,6 @@ type CountReplayabilityOptions = {
   scope: CaseLawReplayScope;
 };
 
-const REPLAY_PREFLIGHT_STATEMENT_TIMEOUT_MS = 120_000;
-
 /**
  * How much of a scope can be replayed without the publisher. Redacted rows
  * are in neither count: they are not re-parsed by any path.
@@ -362,25 +359,20 @@ export const countReplayability = async ({
 }: CountReplayabilityOptions): Promise<ReplayabilitySplit> => {
   const [counts] = await scopedDb(
     async (tx) =>
-      await withSharedStatementTimeout(
-        tx,
-        REPLAY_PREFLIGHT_STATEMENT_TIMEOUT_MS,
-        async () =>
-          // sql-perf-allow: bounded by one operator preflight and a 120s statement timeout
-          await tx
-            .select({
-              storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
-              needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
-            })
-            .from(caseLawDecisions)
-            .where(
-              and(
-                eq(caseLawDecisions.sourceId, sourceId),
-                replayScopePredicate(scope),
-                isNull(caseLawDecisions.redactedAt),
-              ),
-            ),
-      ),
+      // sql-perf-allow: bounded by one explicit operator replay preflight
+      await tx
+        .select({
+          storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,
+          needsRefetch: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is null)`,
+        })
+        .from(caseLawDecisions)
+        .where(
+          and(
+            eq(caseLawDecisions.sourceId, sourceId),
+            replayScopePredicate(scope),
+            isNull(caseLawDecisions.redactedAt),
+          ),
+        ),
   );
 
   return {

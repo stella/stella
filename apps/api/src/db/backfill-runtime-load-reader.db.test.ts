@@ -1,11 +1,16 @@
 import { panic, Result } from "better-result";
-import { beforeAll, describe, expect, test } from "bun:test";
-import { sql } from "drizzle-orm";
+import { beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { sql, TransactionRollbackError } from "drizzle-orm";
 
 import { defaultConfig } from "@stll/db-load-gate/health";
+import {
+  AUTOVACUUM_SQL,
+  LONG_TRANSACTION_SQL,
+} from "@stll/db-load-gate/indicators";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
+import { logger } from "@/api/lib/observability/logger";
 import { isPgError, PG_ERROR } from "@/api/lib/pg-error";
 import {
   openGatedTestDatabase,
@@ -21,7 +26,9 @@ const restrictedRunner = (db: GatedTestDb, role: string, schema: string) => ({
   transaction: async <T>(fn: (tx: Transaction) => Promise<T>): Promise<T> =>
     await db.transaction(async (tx) => {
       await tx.execute(sql.raw(`SET LOCAL ROLE ${role}`));
-      await tx.execute(sql.raw(`SET LOCAL search_path TO ${schema}, public`));
+      await tx.execute(
+        sql.raw(`SET LOCAL search_path TO ${schema}, pg_catalog, public`),
+      );
       const visibility = (
         await tx.execute(sql`
         SELECT current_user AS role,
@@ -47,6 +54,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
     const schema = `load_reader_${suffix}`;
     const role = `load_reader_noexec_${suffix}`;
     const target = `${schema}.target`;
+    const blindOwner = `load_reader_blind_${suffix}`;
     const config = {
       ...defaultConfig,
       busyWindows: [],
@@ -55,6 +63,8 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
     fixture.cleanUp(async () => {
       await db.execute(sql.raw(`DROP SCHEMA ${schema} CASCADE`));
       await db.execute(sql.raw(`DROP ROLE ${role}`));
+      await db.execute(sql.raw(`DROP OWNED BY ${blindOwner}`));
+      await db.execute(sql.raw(`DROP ROLE ${blindOwner}`));
     });
     beforeAll(async () => {
       const version = (
@@ -96,6 +106,20 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       await db.execute(
         sql.raw(`GRANT USAGE ON SCHEMA ${schema} TO stella_ingestion, ${role}`),
       );
+      await db.execute(
+        sql.raw(`CREATE ROLE ${blindOwner} NOLOGIN NOSUPERUSER NOINHERIT`),
+      );
+      await db.execute(sql.raw(`GRANT ${blindOwner} TO CURRENT_USER`));
+      await db.execute(
+        sql.raw(`GRANT USAGE, CREATE ON SCHEMA public TO ${blindOwner}`),
+      );
+      for (const definition of [
+        "clock_timestamp() RETURNS timestamptz LANGUAGE sql AS 'SELECT NULL::timestamptz'",
+        "pg_backend_pid() RETURNS integer LANGUAGE sql AS 'SELECT -1'",
+        "current_database() RETURNS name LANGUAGE sql AS 'SELECT NULL::name'",
+      ]) {
+        await db.execute(sql.raw(`CREATE FUNCTION ${schema}.${definition}`));
+      }
       // Caller-visible lookalikes must not supply the function's observations.
       for (const name of [
         "pg_stat_activity",
@@ -112,7 +136,15 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
     test("the function returns only its three indicators with a fixed catalog search path", async () => {
       await db.transaction(async (tx) => {
         await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
-        await tx.execute(sql.raw(`SET LOCAL search_path TO ${schema}, public`));
+        await tx.execute(
+          sql.raw(`SET LOCAL search_path TO ${schema}, pg_catalog, public`),
+        );
+        const access = (
+          await tx.execute(
+            sql`SELECT pg_catalog.has_table_privilege(session_user, ${target}::regclass, 'SELECT') AS permitted`,
+          )
+        ).at(0);
+        expect(access?.["permitted"]).toBe(true);
         const row = (
           await tx.execute(
             sql`SELECT * FROM public.stella_database_load_indicators(${target}::regclass)`,
@@ -133,7 +165,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
       const definition = (
         await db.execute(sql`
-        SELECT p.prosecdef AS definer, p.proconfig AS configuration,
+        SELECT p.prosecdef AS definer, p.provolatile AS volatility, p.proconfig AS configuration,
           r.rolsuper OR pg_has_role(r.oid, 'pg_read_all_stats', 'USAGE') AS owner_visible,
           pg_get_function_result(p.oid) AS result
         FROM pg_proc p JOIN pg_roles r ON r.oid = p.proowner
@@ -141,6 +173,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       `)
       ).at(0);
       expect(definition?.["definer"]).toBe(true);
+      expect(definition?.["volatility"]).toBe("v");
       expect(definition?.["owner_visible"]).toBe(true);
       expect(definition?.["configuration"]).toEqual([
         "search_path=pg_catalog, pg_temp",
@@ -180,6 +213,25 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           expect(transaction?.value).toBeGreaterThan(0);
           expect(transaction?.value).toBeGreaterThanOrEqual(holderAge);
           expect(transaction?.observedAt).not.toBeNull();
+          // Observe the direct query from an independent backend.
+          const observer = openClient().sql;
+          const visible = (
+            await observer.unsafe(LONG_TRANSACTION_SQL, ["table", target])
+          ).at(0);
+          expect(visible?.["ageMs"]).toBeGreaterThan(0);
+          const aggregate = (
+            await observer.unsafe(
+              "SELECT * FROM public.stella_database_load_indicators($1::regclass)",
+              [target],
+            )
+          ).at(0);
+          const age = visible?.["ageMs"];
+          const aggregateAge = aggregate?.["transaction_age_ms"];
+          if (typeof age !== "number" || typeof aggregateAge !== "number") {
+            panic("Missing scoped transaction ages");
+          }
+          expect(aggregateAge).toBeGreaterThanOrEqual(age);
+          expect(aggregateAge - age).toBeLessThan(1000);
         } finally {
           await holder`ROLLBACK`;
           holder.release();
@@ -214,7 +266,103 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("ingestion detects a real active vacuum on the target and excludes other relations", async () => {
+    for (const failure of [
+      "function missing",
+      "owner lacks statistics visibility",
+    ] as const) {
+      test(`${failure} holds and warns with a bounded cause`, async () => {
+        const warn = spyOn(logger, "warn").mockImplementation(() => {});
+        try {
+          const outcome = await Result.tryPromise(
+            async () =>
+              await db.transaction(async (tx) => {
+                if (failure === "function missing") {
+                  await tx.execute(
+                    sql.raw(
+                      `ALTER FUNCTION public.stella_database_load_indicators(regclass) RENAME TO load_indicators_${suffix}`,
+                    ),
+                  );
+                } else {
+                  const visible = (
+                    await tx.execute(
+                      sql`SELECT pg_has_role(${blindOwner}, 'pg_read_all_stats', 'USAGE') AS visible`,
+                    )
+                  ).at(0);
+                  expect(visible?.["visible"]).toBe(false);
+                  await tx.execute(
+                    sql.raw(
+                      `ALTER FUNCTION public.stella_database_load_indicators(regclass) OWNER TO ${blindOwner}`,
+                    ),
+                  );
+                }
+                const verdict = await createDatabaseLoadVerdictReader({
+                  db: {
+                    transaction: async (fn) =>
+                      await fn(asTestRaw<Transaction>(tx)),
+                  },
+                  tableName: target,
+                  config,
+                  clock: () => Date.now() + 24 * 60 * 60_000,
+                })();
+                expect(verdict.kind).toBe("unknown");
+                expect(verdict.signals.at(0)?.reason).toBe(
+                  "Database indicators are unavailable",
+                );
+                expect(warn.mock.calls).toEqual([
+                  [
+                    "database_load_gate.indicators_unavailable",
+                    {
+                      cause:
+                        failure === "function missing"
+                          ? "function_missing"
+                          : "owner_lacks_visibility",
+                      sqlState:
+                        failure === "function missing" ? "42883" : "42501",
+                    },
+                  ],
+                ]);
+                // Restore the shared function atomically, including on failed assertions.
+                tx.rollback();
+              }),
+          );
+          if (Result.isOk(outcome)) {
+            panic("Expected explicit fixture rollback");
+          }
+          if (!(outcome.error instanceof TransactionRollbackError)) {
+            throw outcome.error;
+          }
+        } finally {
+          warn.mockRestore();
+        }
+      });
+    }
+
+    test("an unrelated transaction is absent from both scoped indicator reads", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const holder = await openClient().sql.reserve();
+        const observer = openClient().sql;
+        try {
+          await holder`BEGIN`;
+          await holder.unsafe(`SELECT * FROM ${schema}.pg_database`);
+          const direct = (
+            await observer.unsafe(LONG_TRANSACTION_SQL, ["table", target])
+          ).at(0);
+          const aggregate = (
+            await observer.unsafe(
+              "SELECT * FROM public.stella_database_load_indicators($1::regclass)",
+              [target],
+            )
+          ).at(0);
+          expect(direct?.["ageMs"]).toBe(0);
+          expect(aggregate?.["transaction_age_ms"]).toBe(0);
+        } finally {
+          await holder`ROLLBACK`;
+          holder.release();
+        }
+      });
+    });
+
+    test("manual vacuum is excluded just as in the direct autovacuum indicator", async () => {
       await db.execute(
         sql.raw(`ALTER TABLE ${target} ALTER COLUMN payload SET STORAGE PLAIN`),
       );
@@ -265,8 +413,12 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           const signal = (await read()).signals.find(
             (entry) => entry.indicator === "autovacuum_on_target",
           );
-          expect(signal?.kind).toBe("degraded");
-          expect(signal?.value).toBe(1);
+          expect(signal?.kind).toBe("normal");
+          expect(signal?.value).toBe(0);
+          const direct = (await observer.unsafe(AUTOVACUUM_SQL, [target])).at(
+            0,
+          );
+          expect(direct?.["active"]).toBe(false);
           await db.transaction(async (tx) => {
             await tx.execute(sql`SET LOCAL ROLE stella_ingestion`);
             const other = (

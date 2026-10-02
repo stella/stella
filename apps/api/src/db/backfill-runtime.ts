@@ -7,7 +7,7 @@ import {
   defaultConfig,
   initialBatchState,
 } from "@stll/db-load-gate/health";
-import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
+import type { HealthConfig, Signal, Verdict } from "@stll/db-load-gate/health";
 import {
   AUTOVACUUM_SQL,
   LONG_TRANSACTION_SQL,
@@ -20,6 +20,9 @@ import {
   tryAcquireBackfillTransactionSlot,
 } from "@stll/db-load-gate/slot";
 import { Temporal } from "@stll/time";
+
+import { logger } from "@/api/lib/observability/logger";
+import { getPgErrorCode } from "@/api/lib/pg-error";
 
 import {
   createEbsSignalReader,
@@ -98,17 +101,8 @@ const decodeCheckpoint = (row: unknown) => {
   };
 };
 
-const createVerdictReader = ({
-  query,
-  tableName,
-  clock,
-  config,
-}: {
-  query: Query;
-  tableName: string;
-  clock: () => number;
-  config: HealthConfig;
-}) => {
+type EbsSignalOptions = { clock: () => number; config: HealthConfig };
+const createCachedEbsSignalReader = ({ clock, config }: EbsSignalOptions) => {
   const initializeReader = async () => {
     const { envDbLoadGate } = await import("../env-db-load-gate");
     return createEbsSignalReader({
@@ -118,12 +112,29 @@ const createVerdictReader = ({
     });
   };
   let initialized: ReturnType<typeof initializeReader> | undefined;
-  const readEbsSignal = async () => {
+  return async () => {
     initialized ??= initializeReader();
     return await (
       await initialized
     )();
   };
+};
+
+const createVerdictReader = ({
+  query,
+  tableName,
+  clock,
+  config,
+  sharedReadEbsSignal,
+}: {
+  query: Query;
+  tableName: string;
+  clock: () => number;
+  config: HealthConfig;
+  sharedReadEbsSignal?: () => Promise<Signal>;
+}) => {
+  const readEbsSignal =
+    sharedReadEbsSignal ?? createCachedEbsSignalReader({ clock, config });
   return async () =>
     combine(
       await Promise.all([
@@ -309,6 +320,58 @@ const drizzleQuery =
     return executedRows(await tx.execute(sql.join(parts, sql``)));
   };
 
+const INDICATOR_WARNING_INTERVAL_MS = 10 * 60_000;
+const indicatorWarnings = new Map<string, number>();
+
+type IndicatorFailureCause =
+  | "function_missing"
+  | "execute_denied"
+  | "owner_lacks_visibility"
+  | "target_access_denied"
+  | "ebs_signal_unconfigured"
+  | "read_error";
+
+const warnIndicatorFailure = (
+  cause: IndicatorFailureCause,
+  now: number,
+  sqlState?: string,
+) => {
+  const previous = indicatorWarnings.get(cause);
+  if (
+    previous !== undefined &&
+    now - previous < INDICATOR_WARNING_INTERVAL_MS
+  ) {
+    return;
+  }
+  indicatorWarnings.set(cause, now);
+  logger.warn("database_load_gate.indicators_unavailable", {
+    // oxlint-disable-next-line no-raw-error-logging/no-raw-error-logging -- cause is a closed diagnostic category, never an error object or message.
+    cause,
+    ...(sqlState === undefined ? {} : { sqlState }),
+  });
+};
+
+const indicatorFailureCause = (error: unknown): IndicatorFailureCause => {
+  const state = getPgErrorCode(error);
+  if (state === "42883") {
+    return "function_missing";
+  }
+  if (state !== "42501") {
+    return "read_error";
+  }
+  let node = error;
+  for (let depth = 0; depth < 10 && isRecord(node); depth += 1) {
+    if (node["detail"] === "owner_lacks_visibility") {
+      return "owner_lacks_visibility";
+    }
+    if (node["detail"] === "target_access_denied") {
+      return "target_access_denied";
+    }
+    node = node["cause"];
+  }
+  return "execute_denied";
+};
+
 type DatabaseLoadVerdictReaderOptions = {
   db: { transaction: IngestionTransactionRunner<Transaction> };
   tableName: string;
@@ -323,6 +386,7 @@ export const createDatabaseLoadVerdictReader = ({
   config = defaultConfig,
   clock = () => Temporal.Now.instant().epochMilliseconds,
 }: DatabaseLoadVerdictReaderOptions) => {
+  const sharedReadEbsSignal = createCachedEbsSignalReader({ clock, config });
   const indicators = createBoundedIndicatorQuery({
     runInTransaction: db.transaction.bind(db),
     transactionQuery: (tx: Transaction) => drizzleQuery(tx),
@@ -343,6 +407,7 @@ export const createDatabaseLoadVerdictReader = ({
         typeof row["active"] !== "boolean" ||
         typeof row["observedAt"] !== "string"
       ) {
+        warnIndicatorFailure("read_error", clock());
         return {
           kind: "unknown",
           signals: [
@@ -362,11 +427,27 @@ export const createDatabaseLoadVerdictReader = ({
         tableName,
         clock,
         config,
+        sharedReadEbsSignal,
       });
-      return await read();
+      const verdict = await read();
+      const { envDbLoadGate } = await import("../env-db-load-gate");
+      const missingEbs =
+        verdict.signals.some(
+          ({ indicator, kind }) =>
+            indicator === "ebs_balance" && kind === "unknown",
+        ) && resolveEbsConfiguration(envDbLoadGate).type === "missing";
+      if (missingEbs) {
+        warnIndicatorFailure("ebs_signal_unconfigured", clock());
+      }
+      return verdict;
     });
     await indicators.settle();
     if (Result.isError(result)) {
+      warnIndicatorFailure(
+        indicatorFailureCause(result.error),
+        clock(),
+        getPgErrorCode(result.error),
+      );
       return {
         kind: "unknown",
         signals: [

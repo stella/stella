@@ -870,3 +870,33 @@ test("source relation aliases and reversed adapter restrictions remain guarded",
     ),
   ).toContain("per-source-full-count");
 });
+
+test.each([
+  ["self-recursive closure", "const predicate = () => predicate();"],
+  [
+    "mutually recursive closures",
+    "const predicate = () => alternate(); const alternate = () => predicate();",
+  ],
+  [
+    "closure alias cycle",
+    "const predicate = () => alias(); const alias = predicate;",
+  ],
+  [
+    "initializer containing its declaration",
+    "const predicate = () => { const selected = predicate(); return selected; };",
+  ],
+])(
+  "source count traversal terminates on %s and still detects the later restriction",
+  (_, declarations) => {
+    const source = `import { count, eq, and } from "drizzle-orm";
+    ${declarations}
+    db.select({ total: count() }).from(caseLawDecisions)
+      .where(and(predicate(), eq(caseLawDecisions.sourceId, sourceId)));`;
+    expect(kinds(source)).toContain("per-source-full-count");
+    expect(
+      kinds(
+        source.replace("caseLawDecisions.sourceId", "caseLawDecisions.country"),
+      ),
+    ).not.toContain("per-source-full-count");
+  },
+);

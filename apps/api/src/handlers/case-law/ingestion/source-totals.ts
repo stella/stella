@@ -16,7 +16,9 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
 import { logger } from "@/api/lib/observability/logger";
-import { isPgError, PG_ERROR, pgErrorFields } from "@/api/lib/pg-error";
+import { pgErrorFields } from "@/api/lib/pg-error";
+
+import { recordSourceStoredTotalUnknownHold } from "./source-total-hold";
 
 /**
  * Both halves of a source's coverage figure, and the only writer of either.
@@ -137,6 +139,7 @@ export const sourceStoredTotalNextRefreshAt = (
   return new Date(period * SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS + phase);
 };
 
+export const SOURCE_STORED_TOTAL_GLOBAL_SPACING = 10 * 60_000;
 const STORED_TOTAL_STATEMENT_TIMEOUT_MS = 120_000;
 const STORED_TOTAL_LOCK_TIMEOUT_MS = 1000;
 const STORED_TOTAL_ABORT_TIMEOUT_MS = 130_000;
@@ -154,7 +157,7 @@ type RefreshSourceStoredTotalOptions = {
   scopedDb: ScopedDb;
   sourceId: SafeId<"caseLawSource">;
   readDatabaseNow?: (tx: Transaction) => Promise<Date>;
-  acquireAdmission: () => Promise<"granted" | "held">;
+  acquireAdmission: () => Promise<"granted" | "held" | "unknown">;
   countSource?: (sourceId: SafeId<"caseLawSource">) => Promise<number>;
 };
 
@@ -251,6 +254,7 @@ export const sourceStoredTotalRefreshClaim = ({
     .update(caseLawSources)
     .set({
       storedTotalAttemptedAt: now,
+      storedTotalHeldSince: null,
       storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
         sourceId,
         new Date(now.getTime() + 1),
@@ -259,6 +263,7 @@ export const sourceStoredTotalRefreshClaim = ({
     .where(
       and(
         eq(caseLawSources.id, sourceId),
+        sql`NOT EXISTS (SELECT 1 FROM case_law_sources AS recent WHERE recent.stored_total_attempted_at > ${new Date(now.getTime() - SOURCE_STORED_TOTAL_GLOBAL_SPACING).toISOString()}::timestamptz)`,
         or(
           isNull(caseLawSources.storedTotalNextRefreshAt),
           sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
@@ -275,7 +280,7 @@ const initialSourceRefreshSlot = (
   return sql`to_timestamp((
     ${phase} + ceil((greatest(
       ${now.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS + 1},
-      extract(epoch FROM greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf})) * 1000 + ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
+      extract(epoch FROM greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf})) * 1000 + 1
     ) - ${phase}) / ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}) * ${SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS}
   ) / 1000)`;
 };
@@ -288,6 +293,7 @@ export const refreshSourceStoredTotal = async ({
   readDatabaseNow = readSourceRefreshDatabaseNow,
   countSource = countSourceOnDedicatedConnection,
 }: RefreshSourceStoredTotalOptions): Promise<StoredTotalRefresh> => {
+  let claimedAt: Date | undefined;
   const attempt = await Result.tryPromise(async () => {
     const candidate = await scopedDb(async (tx) => {
       const now = await readDatabaseNow(tx);
@@ -304,55 +310,40 @@ export const refreshSourceStoredTotal = async ({
       ).at(0);
       if (
         row === undefined ||
-        (row.due !== null && row.due.getTime() > now.getTime()) ||
-        Math.max(
-          row.attempted?.getTime() ?? -Infinity,
-          row.asOf?.getTime() ?? -Infinity,
-        ) +
-          SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS >
-          now.getTime()
+        (row.due !== null && row.due.getTime() > now.getTime())
       ) {
         return undefined;
       }
-      return { now };
+      return { now, slot: row.due ?? new Date(0) };
     });
     if (candidate === undefined) {
       return "fresh" as const;
     }
-    if ((await acquireAdmission()) === "held") {
+    const admission = await acquireAdmission();
+    if (admission !== "granted") {
+      if (admission === "unknown") {
+        await recordSourceStoredTotalUnknownHold({
+          scopedDb,
+          sourceId,
+          now: candidate.now,
+          slot: candidate.slot,
+        });
+      }
       logger.info("case_law.source_stored_total.held", { sourceId });
       return "held" as const;
     }
     const claimed = await scopedDb(async (tx) => {
+      await tx.execute(
+        sql`SELECT pg_advisory_xact_lock(hashtextextended('case-law-source-stored-total', 0))`,
+      );
       const now = await readDatabaseNow(tx);
-      const previous = (
-        await tx
-          .select({
-            attempted: caseLawSources.storedTotalAttemptedAt,
-            asOf: caseLawSources.storedTotalAsOf,
-          })
-          .from(caseLawSources)
-          .where(eq(caseLawSources.id, sourceId))
-          .limit(1)
-          .for("update")
-      ).at(0);
-      if (
-        previous === undefined ||
-        Math.max(
-          previous.attempted?.getTime() ?? -Infinity,
-          previous.asOf?.getTime() ?? -Infinity,
-        ) +
-          SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS >
-          now.getTime()
-      ) {
-        return undefined;
-      }
       const rows = await sourceStoredTotalRefreshClaim({ tx, sourceId, now });
       return rows.length === 0 ? undefined : now;
     });
     if (claimed === undefined) {
       return "fresh" as const;
     }
+    claimedAt = claimed;
     const total = v.parse(storedTotalCountSchema, await countSource(sourceId));
     return await scopedDb(async (tx) => {
       // audit: skip — public case-law corpus bookkeeping, no workspace data
@@ -379,8 +370,37 @@ export const refreshSourceStoredTotal = async ({
       ...errorSystemFields(attempt.error),
       ...pgErrorFields(attempt.error),
     });
-    if (isPgError(attempt.error, PG_ERROR.INSUFFICIENT_PRIVILEGE)) {
-      throw attempt.error;
+    const failedClaim = claimedAt;
+    if (failedClaim !== undefined) {
+      const backoff = await Result.tryPromise(
+        async () =>
+          await scopedDb(async (tx) => {
+            // audit: skip — failed public corpus refresh retains durable daily backoff.
+            await tx
+              .update(caseLawSources)
+              .set({
+                storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
+                  sourceId,
+                  new Date(
+                    failedClaim.getTime() +
+                      SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+                  ),
+                ),
+              })
+              .where(
+                and(
+                  eq(caseLawSources.id, sourceId),
+                  sql`${caseLawSources.storedTotalAttemptedAt} = ${failedClaim.toISOString()}::timestamptz`,
+                ),
+              );
+          }),
+      );
+      if (Result.isError(backoff)) {
+        logger.warn("case_law.source_stored_total.backoff_unavailable", {
+          sourceId,
+          ...pgErrorFields(backoff.error),
+        });
+      }
     }
     return "unavailable";
   }
@@ -429,13 +449,7 @@ export const refreshNextSourceStoredTotal = async (
             .select({ id: caseLawSources.id })
             .from(caseLawSources)
             .where(
-              and(
-                sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
-                or(
-                  sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) IS NULL`,
-                  sql`greatest(${caseLawSources.storedTotalAttemptedAt}, ${caseLawSources.storedTotalAsOf}) <= ${new Date(now.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS).toISOString()}::timestamptz`,
-                ),
-              ),
+              sql`${caseLawSources.storedTotalNextRefreshAt} <= ${now.toISOString()}::timestamptz`,
             )
             .orderBy(
               asc(caseLawSources.storedTotalNextRefreshAt),

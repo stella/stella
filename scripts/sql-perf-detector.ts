@@ -706,9 +706,23 @@ const drizzleSourceCount = (
     count: dollarCount,
     source: false,
   };
+  // Resolving bindings turns the syntax tree into a graph (recursive closures
+  // and aliases can revisit their own initializer).
+  const inspected = new Set<ts.Node>();
+  const inspectedSources = new Set<ts.Node>();
   const inspect = (child: ts.Node) => {
+    if (inspected.has(child)) {
+      return;
+    }
+    inspected.add(child);
     if (ts.isExpression(child)) {
       const value = resolve(child, bindings);
+      if (value !== child) {
+        if (inspected.has(value)) {
+          return;
+        }
+        inspected.add(value);
+      }
       if (ts.isCallExpression(value)) {
         const name = drizzleCallName(value, imports);
         if (name === "count") {
@@ -756,8 +770,18 @@ const drizzleSourceCount = (
     ts.forEachChild(child, inspect);
   };
   const inspectSource = (child: ts.Node) => {
+    if (inspectedSources.has(child)) {
+      return;
+    }
+    inspectedSources.add(child);
     if (ts.isExpression(child)) {
       const value = resolve(child, bindings);
+      if (value !== child) {
+        if (inspectedSources.has(value)) {
+          return;
+        }
+        inspectedSources.add(value);
+      }
       if (
         joining &&
         ts.isCallExpression(value) &&

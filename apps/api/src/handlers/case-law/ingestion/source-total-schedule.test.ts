@@ -74,3 +74,29 @@ test("a successful slot's next future phase has a gap of at most one day", () =>
     ),
   );
 });
+
+test("late successful refreshes return to their fixed source phase instead of shifting by a day", () => {
+  assertProperty(
+    "late successful refreshes return to their fixed source phase instead of shifting by a day",
+    fc.property(
+      fc.uuid(),
+      fc.integer({ min: 0, max: 2_000_000_000_000 }),
+      fc.integer({ min: 1, max: SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS - 1 }),
+      (id, time, lateness) => {
+        const sourceId = toSafeId<"caseLawSource">(id);
+        const slot = sourceStoredTotalNextRefreshAt(sourceId, new Date(time));
+        const claimedAt = slot.getTime() + lateness;
+        const next = sourceStoredTotalNextRefreshAt(
+          sourceId,
+          new Date(claimedAt + 1),
+        );
+        expect(next.getTime()).toBe(
+          slot.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+        );
+        expect(next.getTime()).toBeLessThan(
+          claimedAt + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+        );
+      },
+    ),
+  );
+});

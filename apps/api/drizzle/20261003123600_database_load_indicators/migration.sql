@@ -12,7 +12,7 @@ RETURNS TABLE (
   observed_at timestamptz
 )
 LANGUAGE plpgsql
-STABLE
+VOLATILE
 SECURITY DEFINER
 SET search_path = pg_catalog, pg_temp
 AS $$
@@ -27,7 +27,7 @@ BEGIN
     )
   ) THEN
     RAISE EXCEPTION 'Statistics visibility is unavailable'
-      USING ERRCODE = 'insufficient_privilege';
+      USING ERRCODE = 'insufficient_privilege', DETAIL = 'owner_lacks_visibility';
   END IF;
 
   IF target_relation IS NULL OR NOT EXISTS (
@@ -38,6 +38,13 @@ BEGIN
       USING ERRCODE = 'invalid_parameter_value';
   END IF;
 
+  IF NOT pg_catalog.has_table_privilege(session_user, target_relation, 'SELECT') THEN
+    RAISE EXCEPTION 'Target relation access is unavailable'
+      USING ERRCODE = 'insufficient_privilege', DETAIL = 'target_access_denied';
+  END IF;
+
+  -- SET LOCAL ROLE changes current_user; session_user remains the authenticated
+  -- connection identity, whose target-table SELECT permission bounds this call.
   observation := pg_catalog.clock_timestamp();
   RETURN QUERY
   SELECT
@@ -53,8 +60,9 @@ BEGIN
         JOIN pg_catalog.pg_stat_activity AS worker ON worker.pid = progress.pid
         WHERE worker.backend_type = 'autovacuum worker'
       ) AS vacuum
+      JOIN pg_catalog.pg_stat_activity AS worker ON worker.pid = vacuum.pid
       WHERE vacuum.relid = target_relation
-        AND vacuum.pid <> pg_catalog.pg_backend_pid()
+        AND worker.backend_type = 'autovacuum worker'
         AND vacuum.datid = (
           SELECT database.oid FROM pg_catalog.pg_database AS database
           WHERE database.datname = pg_catalog.current_database()
@@ -65,6 +73,8 @@ BEGIN
   WHERE activity.datname = pg_catalog.current_database()
     AND activity.pid <> pg_catalog.pg_backend_pid()
     AND activity.xact_start IS NOT NULL
+    AND EXISTS (SELECT 1 FROM pg_catalog.pg_locks AS lock
+      WHERE lock.pid = activity.pid AND lock.relation = target_relation AND lock.granted)
     AND (activity.backend_type <> 'autovacuum worker' OR activity.state IS DISTINCT FROM 'idle');
 END;
 $$;--> statement-breakpoint

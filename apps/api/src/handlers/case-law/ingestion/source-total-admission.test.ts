@@ -47,9 +47,12 @@ for (const kind of ["stop", "unknown", "degraded"] as const) {
       const admit = createSourceStoredTotalAdmission({
         readVerdict: async () => ({ kind, signals: [] }),
       });
-      expect(await admit({ deadline })).toBe(
-        kind === "degraded" ? "granted" : "held",
-      );
+      const expectedAdmission = {
+        stop: "held",
+        unknown: "unknown",
+        degraded: "granted",
+      } as const;
+      expect(await admit({ deadline })).toBe(expectedAdmission[kind]);
       expect(remainingCycleMs(deadline)).toBe(
         kind === "degraded"
           ? 5000

@@ -2,6 +2,7 @@ import { panic } from "better-result";
 import type { ReservedSQL } from "bun";
 import {
   beforeAll,
+  beforeEach,
   describe,
   expect,
   setSystemTime,
@@ -29,6 +30,7 @@ import {
   setSourceReportedTotal,
   SourceReportedTotalError,
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+  SOURCE_STORED_TOTAL_GLOBAL_SPACING,
   sourceStoredTotalNextRefreshAt,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
@@ -66,6 +68,10 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
     const schema = `source_totals_${Bun.randomUUIDv7().replaceAll("-", "")}`;
     fixture.cleanUp(async () => {
       await db.execute(sql.raw(`DROP SCHEMA ${schema} CASCADE`));
+    });
+    beforeEach(async () => {
+      // Each scenario owns its durable global spacing history in this isolated schema.
+      await db.execute(sql`TRUNCATE case_law_decisions, case_law_sources`);
     });
     beforeAll(async () => {
       const version = (
@@ -363,7 +369,17 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
     const NOW = new Date("2026-09-19T12:00:00.000Z");
 
     const seedCountedSource = async (rows: number, dueAt = NOW) => {
-      const id = createSafeId<"caseLawSource">();
+      let id = createSafeId<"caseLawSource">();
+      // Phase-focused fixtures leave room for independently tested deployment spacing.
+      while (
+        sourceStoredTotalNextRefreshAt(
+          id,
+          new Date(NOW.getTime() + 1),
+        ).getTime() <
+        NOW.getTime() + 2 * SOURCE_STORED_TOTAL_GLOBAL_SPACING
+      ) {
+        id = createSafeId<"caseLawSource">();
+      }
       const adapterKey = `stored-total-${id}`;
       await db.insert(caseLawSources).values({
         id,
@@ -410,32 +426,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       }
       return due;
     };
-    const readEligibleDue = async (sourceId: SafeId<"caseLawSource">) => {
-      const row = (
-        await db
-          .select({
-            due: caseLawSources.storedTotalNextRefreshAt,
-            attempted: caseLawSources.storedTotalAttemptedAt,
-            asOf: caseLawSources.storedTotalAsOf,
-          })
-          .from(caseLawSources)
-          .where(eq(caseLawSources.id, sourceId))
-          .limit(1)
-      ).at(0);
-      if (row === undefined || row.due === null) {
-        return panic("Expected durable source refresh schedule");
-      }
-      const previous = Math.max(
-        row.attempted?.getTime() ?? Number.NEGATIVE_INFINITY,
-        row.asOf?.getTime() ?? Number.NEGATIVE_INFINITY,
-      );
-      return new Date(
-        Math.max(
-          row.due.getTime(),
-          previous + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
-        ),
-      );
-    };
+    const readEligibleDue = readScheduledDue;
     const setDue = async (sourceId: SafeId<"caseLawSource">, due: Date) => {
       await db
         .update(caseLawSources)
@@ -477,11 +468,11 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("a source counted within the interval is not recounted", async () => {
+    test("a source is not recounted before its own next phase", async () => {
       const sourceId = await seedCountedSource(2);
       await refreshForTest({ scopedDb, sourceId, now: NOW });
 
-      // The corpus grows, but the interval has not elapsed.
+      // The corpus grows, but the source phase is not due.
       await db.insert(caseLawDecisions).values({
         caseNumber: `${sourceId}-late`,
         country: "CZE",
@@ -503,7 +494,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("the interval's own boundary recounts", async () => {
+    test("the source phase boundary recounts", async () => {
       const sourceId = await seedCountedSource(1);
       await refreshForTest({ scopedDb, sourceId, now: NOW });
       await db.insert(caseLawDecisions).values({
@@ -514,6 +505,13 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         sourceId,
       });
       const atBoundary = await readEligibleDue(sourceId);
+      // The obsolete rolling 24-hour guard would refuse this fixed phase.
+      expect(atBoundary.getTime()).toBeLessThan(
+        NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+      );
+      expect(atBoundary.getTime()).toBeGreaterThanOrEqual(
+        NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING,
+      );
 
       expect(
         await refreshForTest({ scopedDb, sourceId, now: atBoundary }),
@@ -928,7 +926,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("recent pre-migration success and independent source freshness govern claims", async () => {
+    test("legacy successes resume their own phase while independent due sources remain eligible", async () => {
       const first = await seedCountedSource(0);
       const second = await seedCountedSource(0);
       await db
@@ -951,20 +949,22 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         calls += 1;
         return 20;
       };
+      await setDue(
+        second,
+        new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
+      );
       expect(
-        await refreshForTest({
+        await refreshNextSourceStoredTotal({
           scopedDb,
-          sourceId: first,
-          now: new Date(NOW.getTime() + 1),
+          readDatabaseNow: async () => new Date(NOW.getTime() + 1),
+          acquireAdmission: async () =>
+            panic("Future legacy phase must not request admission"),
           countSource,
         }),
       ).toBe("fresh");
       expect(calls).toBe(0);
       expect(await readEligibleDue(first)).toEqual(
-        sourceStoredTotalNextRefreshAt(
-          first,
-          new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-        ),
+        sourceStoredTotalNextRefreshAt(first, new Date(NOW.getTime() + 1)),
       );
       expect(await readStoredPair(second)).toEqual({
         storedTotal: 8,
@@ -979,6 +979,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             .limit(1)
         ).at(0)?.at,
       ).toBeNull();
+      await setDue(second, new Date(NOW.getTime() + 1));
       expect(
         await refreshForTest({
           scopedDb,
@@ -995,6 +996,23 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       expect(await readStoredPair(second)).toEqual({
         storedTotal: 20,
         storedTotalAsOf: new Date(NOW.getTime() + 1),
+      });
+      const phase = await readScheduledDue(first);
+      expect(phase.getTime()).toBeLessThan(
+        NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+      );
+      expect(
+        await refreshForTest({
+          scopedDb,
+          sourceId: first,
+          now: phase,
+          countSource,
+        }),
+      ).toBe("refreshed");
+      expect(calls).toBe(2);
+      expect(await readStoredPair(first)).toEqual({
+        storedTotal: 20,
+        storedTotalAsOf: phase,
       });
     });
 
@@ -1085,7 +1103,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         await refreshForTest({
           scopedDb,
           sourceId: second,
-          now: NOW,
+          now: new Date(NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING),
           countSource,
         }),
       ).toBe("refreshed");
@@ -1117,7 +1135,12 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           ),
         );
       await db.execute(sql`ANALYZE case_law_decisions`);
-      const later = await readEligibleDue(first);
+      const later = new Date(
+        Math.max(
+          (await readEligibleDue(first)).getTime(),
+          (await readEligibleDue(second)).getTime(),
+        ),
+      );
       expect(
         await refreshForTest({
           scopedDb,
@@ -1130,7 +1153,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         await refreshForTest({
           scopedDb,
           sourceId: second,
-          now: await readEligibleDue(second),
+          now: new Date(later.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING),
           countSource,
         }),
       ).toBe("refreshed");
@@ -1286,7 +1309,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       );
     });
 
-    test("held admission restores the original attempt and due slot for immediate retry", async () => {
+    test("held admission preserves the original attempt and due slot for immediate retry", async () => {
       const sourceId = await seedCountedSource(0);
       const previous = new Date(
         NOW.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS * 2,
@@ -1475,13 +1498,16 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           admissions += 1;
           return "granted" as const;
         };
-        for (const expected of entries) {
+        for (const [index, expected] of entries.entries()) {
+          const cycleNow = new Date(
+            NOW.getTime() + index * SOURCE_STORED_TOTAL_GLOBAL_SPACING,
+          );
           const before = counted.length;
           // db-await-in-loop: a bounded 24-source matrix proves each cycle drains exactly one durable overdue source.
           expect(
             await refreshNextSourceStoredTotal({
               scopedDb: restartScope,
-              readDatabaseNow: async () => NOW,
+              readDatabaseNow: async () => cycleNow,
               acquireAdmission,
               countSource,
             }),
@@ -1492,18 +1518,19 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           expect(await readScheduledDue(expected.id)).toEqual(
             sourceStoredTotalNextRefreshAt(
               expected.id,
-              new Date(NOW.getTime() + 1),
+              new Date(cycleNow.getTime() + 1),
             ),
           );
         }
+        const cycleNow = new Date(
+          NOW.getTime() +
+            (entries.length - 1) * SOURCE_STORED_TOTAL_GLOBAL_SPACING,
+        );
         expect(
           await refreshNextSourceStoredTotal({
             scopedDb: restartScope,
-            readDatabaseNow: async () => NOW,
-            acquireAdmission: async () => {
-              admissions += 1;
-              return "granted";
-            },
+            readDatabaseNow: async () => cycleNow,
+            acquireAdmission: async () => "granted",
             countSource,
           }),
         ).toBe("fresh");
@@ -1511,6 +1538,219 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       expect(counted).toEqual(entries.map(({ id }) => id));
       expect(admissions).toBe(entries.length + 1);
     });
+    test("concurrent independent workers share one durable global slot across overdue sources and restart", async () => {
+      const sources = await Promise.all(
+        Array.from({ length: 6 }, async () => await seedCountedSource(0)),
+      );
+      let counts = 0;
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const workers = Array.from({ length: 4 }, () => openClient());
+        const pids: number[] = [];
+        const scopes: ScopedDb[] = [];
+        for (const worker of workers) {
+          // db-await-in-loop: each worker must own an independent backend in the same fixture schema.
+          await worker.db.execute(
+            sql.raw(`SET search_path TO ${schema}, public`),
+          );
+          const pid = (
+            await worker.db.execute(sql`SELECT pg_backend_pid() AS pid`)
+          ).at(0)?.["pid"];
+          if (typeof pid !== "number") {
+            return panic("Missing independent worker pid");
+          }
+          pids.push(pid);
+          scopes.push(
+            async (callback) =>
+              await worker.db.transaction(
+                async (tx) => await callback(asTestRaw<Transaction>(tx)),
+              ),
+          );
+        }
+        expect(new Set(pids).size).toBe(workers.length);
+        const locker = await openClient().sql.reserve();
+        await locker.unsafe("BEGIN");
+        await locker.unsafe(
+          `SELECT id FROM ${schema}.case_law_sources FOR UPDATE`,
+        );
+        const entered = Promise.withResolvers<undefined>();
+        const released = Promise.withResolvers<undefined>();
+        let admissions = 0;
+        const pending = scopes.map(async (scope, index) => {
+          const sourceId =
+            sources.at(index) ?? panic("Missing concurrent source");
+          return await refreshForTest({
+            scopedDb: scope,
+            sourceId,
+            now: NOW,
+            acquireAdmission: async () => {
+              admissions += 1;
+              if (admissions === scopes.length) {
+                entered.resolve(undefined);
+              }
+              await released.promise;
+              return "granted";
+            },
+            countSource: async () => {
+              counts += 1;
+              return 13;
+            },
+          });
+        });
+        try {
+          await entered.promise;
+          released.resolve(undefined);
+          const deadline = performance.now() + 3000;
+          let blocked = false;
+          while (!blocked && performance.now() < deadline) {
+            // db-await-in-loop: each claimant must reach a server-side lock before the decisive rows are released.
+            const expression = pids
+              .map((pid) => `cardinality(pg_blocking_pids(${pid})) > 0`)
+              .join(" AND ");
+            blocked =
+              (await locker.unsafe(`SELECT ${expression} AS blocked`)).at(0)?.[
+                "blocked"
+              ] === true;
+            if (!blocked) {
+              await Bun.sleep(10);
+            }
+          }
+          expect(blocked).toBe(true);
+          expect(counts).toBe(0);
+        } finally {
+          released.resolve(undefined);
+          await locker.unsafe("COMMIT");
+          locker.release();
+        }
+        const outcomes = await Promise.all(pending);
+        expect(outcomes.filter((value) => value === "refreshed")).toHaveLength(
+          1,
+        );
+        expect(outcomes.filter((value) => value === "fresh")).toHaveLength(
+          workers.length - 1,
+        );
+        expect(counts).toBe(1);
+        const claimed = await db
+          .select({ id: caseLawSources.id })
+          .from(caseLawSources)
+          .where(
+            sql`${caseLawSources.storedTotalAttemptedAt} = ${NOW.toISOString()}::timestamptz`,
+          );
+        expect(claimed).toHaveLength(1);
+      });
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const restarted = openClient();
+        await restarted.db.execute(
+          sql.raw(`SET search_path TO ${schema}, public`),
+        );
+        const restartScope: ScopedDb = async (callback) =>
+          await restarted.db.transaction(
+            async (tx) => await callback(asTestRaw<Transaction>(tx)),
+          );
+        const countSource = async () => {
+          counts += 1;
+          return 17;
+        };
+        const refresh = async (now: Date) =>
+          await refreshNextSourceStoredTotal({
+            scopedDb: restartScope,
+            readDatabaseNow: async () => now,
+            acquireAdmission: async () => "granted",
+            countSource,
+          });
+        expect(await refresh(NOW)).toBe("fresh");
+        expect(
+          await refresh(
+            new Date(NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING - 1),
+          ),
+        ).toBe("fresh");
+        expect(counts).toBe(1);
+        expect(
+          await refresh(
+            new Date(NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING),
+          ),
+        ).toBe("refreshed");
+        expect(counts).toBe(2);
+        expect(
+          await refresh(
+            new Date(NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING),
+          ),
+        ).toBe("fresh");
+        expect(counts).toBe(2);
+      });
+    });
+
+    test("a failed count consumes global spacing while a held admission leaves it immediately available", async () => {
+      const first = await seedCountedSource(0);
+      const second = await seedCountedSource(0);
+      let calls = 0;
+      expect(
+        await refreshForTest({
+          scopedDb,
+          sourceId: first,
+          now: NOW,
+          acquireAdmission: async () => "held",
+          countSource: async () => panic("Held admission must not count"),
+        }),
+      ).toBe("held");
+      expect(
+        (
+          await db
+            .select({ attempted: caseLawSources.storedTotalAttemptedAt })
+            .from(caseLawSources)
+            .where(eq(caseLawSources.id, first))
+        ).at(0)?.attempted,
+      ).toBeNull();
+      expect(
+        await refreshForTest({
+          scopedDb,
+          sourceId: first,
+          now: NOW,
+          countSource: async () => {
+            calls += 1;
+            throw Object.assign(new Error("count timed out"), {
+              code: "57014",
+            });
+          },
+        }),
+      ).toBe("unavailable");
+      const failedDue = await readScheduledDue(first);
+      expect(failedDue).toEqual(
+        sourceStoredTotalNextRefreshAt(
+          first,
+          new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
+        ),
+      );
+      const countSource = async () => {
+        calls += 1;
+        return 19;
+      };
+      expect(
+        await refreshForTest({
+          scopedDb,
+          sourceId: second,
+          now: new Date(NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING - 1),
+          countSource,
+        }),
+      ).toBe("fresh");
+      expect(calls).toBe(1);
+      const boundary = new Date(
+        NOW.getTime() + SOURCE_STORED_TOTAL_GLOBAL_SPACING,
+      );
+      expect(
+        await refreshForTest({
+          scopedDb,
+          sourceId: second,
+          now: boundary,
+          countSource,
+        }),
+      ).toBe("refreshed");
+      expect(calls).toBe(2);
+      expect(await readStoredPair(second)).toEqual({
+        storedTotal: 19,
+        storedTotalAsOf: boundary,
+      });
+    });
+
     test("an admission exception preserves the due pair and attempt because no count started", async () => {
       const sourceId = await seedCountedSource(0);
       const previous = new Date(
