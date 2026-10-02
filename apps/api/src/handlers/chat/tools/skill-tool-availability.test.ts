@@ -8,6 +8,7 @@ import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { ChatThirdPartyBoundary } from "@/api/handlers/chat/third-party-boundary";
 import { resolveToolWorkspaceIds } from "@/api/handlers/chat/tools/authorized-workspace-ids";
 import { COUNTERPARTY_CHECK_TOOL_NAME } from "@/api/handlers/chat/tools/counterparty-check-tools";
+import { DIRECT_ONLY_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { PAST_CHAT_SCOPE_TYPE } from "@/api/handlers/chat/tools/past-chat-tools";
 import {
   chatToolNamesForSkills,
@@ -125,5 +126,16 @@ describe("chat skill availability", () => {
     expect(availabilityIn("list_playbooks ask-user")).toEqual({
       status: "available",
     });
+  });
+
+  test("a direct-only read is offered exactly where its direct tool is", () => {
+    const offered = chatToolNamesForSkills(chatContext());
+    const directTools = Object.values(DIRECT_ONLY_CHAT_READ_TOOLS);
+    expect(directTools.some((tool) => offered.has(tool))).toBe(true);
+    for (const [read, directTool] of Object.entries(
+      DIRECT_ONLY_CHAT_READ_TOOLS,
+    )) {
+      expect(offered.has(read)).toBe(offered.has(directTool));
+    }
   });
 });

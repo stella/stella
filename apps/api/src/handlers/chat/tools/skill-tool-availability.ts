@@ -5,9 +5,10 @@ import {
   type GetChatToolsProps,
 } from "@/api/handlers/chat/tools/chat-tools";
 import {
-  chatProjectableReadToolNames,
+  chatScriptReadToolNames,
   CODE_MODE_EXECUTE_TOOL_NAME,
 } from "@/api/handlers/chat/tools/execute/chat-code-mode";
+import { DIRECT_ONLY_CHAT_READ_TOOLS } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import {
   restrictChatToolsToScope,
   type ChatToolScope,
@@ -52,7 +53,14 @@ const chatOfferedToolNames = ({
     tool === undefined ? [] : [name],
   );
   if (names.includes(CODE_MODE_EXECUTE_TOOL_NAME)) {
-    names.push(...chatProjectableReadToolNames());
+    names.push(...chatScriptReadToolNames());
+  }
+  for (const [readName, directTool] of Object.entries(
+    DIRECT_ONLY_CHAT_READ_TOOLS,
+  )) {
+    if (names.includes(directTool)) {
+      names.push(readName);
+    }
   }
   return new Set(
     names.filter((name) => isRegistryToolUsable(name, memberRole)),

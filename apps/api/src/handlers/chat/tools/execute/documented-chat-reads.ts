@@ -1,3 +1,4 @@
+import { isChatScriptRead } from "@/api/handlers/chat/tools/execute/chat-read-script-policy";
 import { READ_TOOL_REF_FIELD_MAP } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 import type { RegistryReadToolName } from "@/api/handlers/chat/tools/registry-adapter/ref-field-map";
 
@@ -41,8 +42,8 @@ const isRegistryReadToolName = (name: string): name is RegistryReadToolName =>
   Object.hasOwn(READ_TOOL_REF_FIELD_MAP, name);
 
 /**
- * The reads a skill may document up front: every chat-projectable read that
- * the base prompt does not already document. Derived, so a read that becomes
+ * The reads a skill may document up front: every chat script read that the
+ * base prompt does not already document. Derived, so a read that becomes
  * projectable is documentable the same day and an always-eager read never is.
  * Map order; the prompt orders stubs by the registry and the variant key sorts.
  */
@@ -52,6 +53,7 @@ export const DOCUMENTABLE_CHAT_READ_NAMES: readonly RegistryReadToolName[] =
     .filter(
       (name) =>
         READ_TOOL_REF_FIELD_MAP[name].chatProjectable &&
+        isChatScriptRead(name) &&
         !EAGER_CHAT_READ_TOOLS.has(name),
     );
 
