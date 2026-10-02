@@ -153,8 +153,8 @@ describe("permission authorization", () => {
     ).toBe(true);
   });
 
-  test("a session spends exactly its role", async () => {
-    await assertProperty(
+  test("a session spends exactly its role", () => {
+    assertProperty(
       "a session spends exactly its role",
       fc.property(
         fc.constantFrom(...MEMBER_ROLES),
@@ -171,8 +171,8 @@ describe("permission authorization", () => {
     );
   });
 
-  test("an attenuated credential spends what both its role and its set grant", async () => {
-    await assertProperty(
+  test("an attenuated credential spends what both its role and its set grant", () => {
+    assertProperty(
       "an attenuated credential spends what both its role and its set grant",
       fc.property(
         fc.constantFrom(...MEMBER_ROLES),
