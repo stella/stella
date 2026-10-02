@@ -17,6 +17,7 @@ import {
   type AgentSkillOrigin,
   type AgentSkillScope,
 } from "@/api/db/schema";
+import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -31,6 +32,7 @@ import {
 } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
+import { sqlCaseFragment } from "@/api/lib/sql-case-expression";
 
 const listSkillsQuerySchema = t.Object({
   limit: t.Optional(
@@ -102,8 +104,9 @@ const decodeSkillCursor = (cursor: string): SkillCursor | null => {
 
 /**
  * Who wrote a skill's newest revision. `stella` is a starter skill (origin
- * `default`) whose newest revision is a system write, so no member has edited
- * it. `unattributed` covers other system writes, deleted accounts, and authors
+ * `default`) whose newest revision is a system write that still holds the
+ * starter body, so no member has edited it; an authorless revision with
+ * another body was written by an account since deleted. `unattributed` covers other system writes, deleted accounts, and authors
  * who have left the organization: names resolve through the membership so they
  * never leak across organizations. `null` means the skill has no recorded
  * revision.
@@ -121,6 +124,7 @@ type ReadSkillLastEditInput = {
   at: Date | null;
   origin: AgentSkillOrigin;
   authorId: string | null;
+  isStarterBody: boolean;
   editorId: string | null;
   editorName: string | null;
   editorImage: string | null;
@@ -132,13 +136,14 @@ const readSkillLastEdit = ({
   editorId,
   editorName,
   editorImage,
+  isStarterBody,
   origin,
 }: ReadSkillLastEditInput): SkillLastEdit | null => {
   if (at === null) {
     return null;
   }
   if (authorId === null) {
-    return origin === "default"
+    return origin === "default" && isStarterBody
       ? { type: "stella", at }
       : { type: "unattributed", at };
   }
@@ -215,6 +220,17 @@ const listSkills = createSafeRootHandler(
             // A revision absorbs its author's consecutive saves, so its
             // update time is when the body last changed.
             updatedAt: agentSkillRevisions.updatedAt,
+            // Compared here so the body never leaves the database.
+            isStarterBody: sql<boolean>`coalesce(
+              ${agentSkillRevisions.body} = ${sqlCaseFragment({
+                operand: sql`${agentSkills.slug}`,
+                branches: [...DEFAULT_SKILL_BODY_BY_SLUG].map(
+                  ([slug, body]) => sql`when ${slug} then ${body}`,
+                ),
+                fallback: sql`null`,
+              })},
+              false
+            )`.as("is_starter_body"),
           })
           .from(agentSkillRevisions)
           .where(
@@ -255,6 +271,7 @@ const listSkills = createSafeRootHandler(
             createdAt: agentSkills.createdAt,
             lastEditAt: latestRevision.updatedAt,
             lastEditAuthorId: latestRevision.createdBy,
+            lastEditIsStarterBody: latestRevision.isStarterBody,
             editorId: user.id,
             editorName: user.name,
             editorImage: user.image,
@@ -305,6 +322,7 @@ const listSkills = createSafeRootHandler(
         ({
           lastEditAt,
           lastEditAuthorId,
+          lastEditIsStarterBody,
           editorId,
           editorName,
           editorImage,
@@ -314,6 +332,8 @@ const listSkills = createSafeRootHandler(
           lastEdit: readSkillLastEdit({
             at: lastEditAt,
             authorId: lastEditAuthorId,
+            // Null only when the skill has no revision, which `at` reports.
+            isStarterBody: lastEditIsStarterBody === true,
             editorId,
             editorName,
             editorImage,

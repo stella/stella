@@ -7,6 +7,7 @@ import { listSkillMetadata, readSkillDisplayName } from "@stll/skills";
 import { member, user } from "@/api/db/auth-schema";
 import { agentSkillRevisions } from "@/api/db/schema";
 import type { AgentSkillOrigin } from "@/api/db/schema";
+import { DEFAULT_SKILL_BODY_BY_SLUG } from "@/api/lib/agent-skills/default-skills";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
@@ -108,6 +109,19 @@ const insertListedSkill = async (origin?: AgentSkillOrigin) =>
     organizationId: ids.orgB,
     userId: ids.userB1,
     origin,
+  });
+
+// A starter skill as seeded: its slug and body, with the authorless first
+// revision the body trigger writes on the owner connection.
+const insertStarterSkill = async (slug: string) =>
+  await insertTestSkill(testDb, {
+    organizationId: ids.orgB,
+    userId: ids.userB1,
+    origin: "default",
+    slug,
+    body:
+      DEFAULT_SKILL_BODY_BY_SLUG.get(slug) ??
+      panic(`no starter skill has slug ${slug}`),
   });
 
 const lastEditOf = async (skillId: SafeId<"agentSkill">) => {
@@ -231,7 +245,7 @@ describe("a listed skill's last edit", () => {
   });
 
   test("is stella for a starter skill no member has edited", async () => {
-    const skillId = await insertListedSkill("default");
+    const skillId = await insertStarterSkill("summarize-default");
 
     expect(await lastEditOf(skillId)).toMatchObject({ type: "stella" });
   });
@@ -277,6 +291,34 @@ describe("a listed skill's last edit", () => {
       updatedAt: at,
     });
     await testDb.delete(member).where(eq(member.id, membershipId));
+
+    expect(await lastEditOf(skillId)).toEqual({ type: "unattributed", at });
+  });
+
+  test("is unattributed for a starter skill edited by an account since deleted", async () => {
+    const editorId = mintAuthProviderId<"user">();
+    await testDb.insert(user).values({
+      id: editorId,
+      name: "Deleted Editor",
+      email: `${editorId}@test.local`,
+    });
+    await testDb.insert(member).values({
+      id: mintAuthProviderIdValue(),
+      organizationId: ids.orgB,
+      userId: editorId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const skillId = await insertStarterSkill("risks-default");
+    const at = new Date("2026-09-01T10:00:00.000Z");
+    await insertRevision({
+      skillId,
+      revisionNumber: 2,
+      createdBy: editorId,
+      updatedAt: at,
+    });
+    // Deleting the account clears the revision's author.
+    await testDb.delete(user).where(eq(user.id, editorId));
 
     expect(await lastEditOf(skillId)).toEqual({ type: "unattributed", at });
   });
