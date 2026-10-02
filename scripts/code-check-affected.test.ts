@@ -186,6 +186,7 @@ describe("affected code-check planning", () => {
     }
     const commands = scopedCommands(planned);
 
+    expect(commands).toContainEqual(["bun", "run", "generate"]);
     const oxc = commands.find((command) => command.includes("oxlint"));
     expect(oxc).toContain("--type-aware");
     expect(oxc).toContain("--type-check");
