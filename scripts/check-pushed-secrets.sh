@@ -25,8 +25,11 @@ if [[ ! -t 0 ]]; then
     records=$((records + 1))
     # Deleting a remote ref publishes no commits.
     [[ "${local_oid}" == "${zero_oid}" ]] && continue
-    if [[ "${remote_oid}" == "${zero_oid}" ]]; then
-      # New remote ref: everything not already on any remote-tracking ref.
+    if [[ "${remote_oid}" == "${zero_oid}" ]] ||
+      ! git cat-file -e "${remote_oid}^{commit}" 2>/dev/null; then
+      # New remote ref, or a remote tip this clone has not fetched (gitleaks
+      # reads an unknown range as zero commits and exits 0): everything not
+      # already on any remote-tracking ref.
       ranges+=("${local_oid} --not --remotes")
     else
       ranges+=("${remote_oid}..${local_oid}")
