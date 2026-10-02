@@ -20,6 +20,15 @@ import {
   runSkUsRawBatch,
 } from "@/api/scripts/complete-sk-us-raw-plan";
 
+/** A fixture row that must exist; a missing one fails loudly, never as `undefined`. */
+const rowAt = <T>(items: readonly T[], index: number): T => {
+  const item = items.at(index);
+  if (item === undefined) {
+    throw new TypeError(`fixture row ${index} is missing`);
+  }
+  return item;
+};
+
 const journalSchema = v.array(
   v.object({
     cursor: v.object({ id: v.string() }),
@@ -112,7 +121,7 @@ test("killing a multi-page batch resumes its durable checkpoint without duplicat
           sourceId,
         });
         expect(beforeResume).toEqual(
-          rows.at(pauseAt === "after_checkpoint" ? 2 : 1),
+          rowAt(rows, pauseAt === "after_checkpoint" ? 2 : 1),
         );
         expect(
           (await readJournal(checkpointPath)).map(({ cursor }) => cursor.id),
@@ -139,7 +148,7 @@ test("killing a multi-page batch resumes its durable checkpoint without duplicat
         expect(summary.scanned).toBe(pauseAt === "after_checkpoint" ? 2 : 3);
         expect(
           await readSkUsRawCheckpoint({ checkpointPath, sourceId }),
-        ).toEqual(rows.at(-1));
+        ).toEqual(rowAt(rows, -1));
         const journal = await readJournal(checkpointPath);
         const expectedJournalRows =
           pauseAt === "after_journal"
@@ -501,7 +510,7 @@ test("every retryable row is durably journaled before stopping without advancing
       expect(resumed.stopped).toBe(false);
       expect(resumedVisits).toEqual(rows.slice(1).map(({ id }) => id));
       expect(await readSkUsRawCheckpoint({ checkpointPath, sourceId })).toEqual(
-        rows.at(-1),
+        rowAt(rows, -1),
       );
       const journal = await readJournal(checkpointPath);
       expect(journal).toHaveLength(4);

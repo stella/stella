@@ -35,6 +35,15 @@ import {
 } from "@/api/scripts/complete-sk-us-raw-plan";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 
+/** A fixture row that must exist; a missing one fails loudly, never as `undefined`. */
+const rowAt = <T>(items: readonly T[], index: number): T => {
+  const item = items.at(index);
+  if (item === undefined) {
+    throw new TypeError(`fixture row ${index} is missing`);
+  }
+  return item;
+};
+
 const identity = {
   documentId: "7964d54e-6708-48e9-92cc-5cc400aab1e3",
   caseNumber: "PL. ÚS 4/2020",
@@ -790,9 +799,7 @@ test("bounded batch results are invariant under page size and stop before later 
         expect(result.counts["already_complete"] ?? 0).toBe(terminalCount);
         expect(result.counts[failure] ?? 0).toBe(stopped ? 1 : 0);
         expect(result.cursor).toEqual(
-          rows.at(terminalCount - 1) === undefined || terminalCount === 0
-            ? previous
-            : rows.at(terminalCount - 1),
+          terminalCount === 0 ? previous : rowAt(rows, terminalCount - 1),
         );
       },
     ),

@@ -174,7 +174,7 @@ test("source page walks partition tied microsecond rows without skips or duplica
       return leftKey < rightKey ? -1 : 1;
     })
     .map(({ id }) => id);
-  const ids = new Set(fixture.map(({ id }) => id));
+  const ids = new Set<string>(fixture.map(({ id }) => id));
 
   const walk = async (pageSizes: readonly number[]) => {
     const walked: string[] = [];
