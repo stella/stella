@@ -178,6 +178,7 @@ const withClone = (exercise: (root: string) => void) => {
       "scripts/db-await-in-loop.ts",
       "scripts/lint-suppressions.ts",
       "scripts/ownership.ts",
+      "scripts/parse-memo.ts",
       "scripts/generated-artifacts.ts",
       "scripts/result-boundary-globs.ts",
       "scripts/root-connection-shapes.ts",

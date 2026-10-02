@@ -1112,7 +1112,7 @@ jobs:
         # claims and that a rise regresses, so a broken guard cannot pass
         # silently. Regenerate: `bun scripts/ratchet.ts --write`.
         run: |
-          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
+          bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts scripts/ratchet-scan.test.ts
           bun scripts/ratchet.ts --self-test
           bun scripts/ratchet.ts --check
 

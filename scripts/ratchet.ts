@@ -11,9 +11,9 @@
 // To add a metric: append an entry to RATCHET_METRICS with a stable `id`, a
 // human `description`, and one of two `scope`s.
 //   scope: "file" — the `include` globs (repo-relative), an `exclude`
-//     predicate, and a `count(content)` per-file counter (a lexical/regex
-//     scan; keep it deterministic and cheap).
-//   scope: "repo" — a `count(root)` that walks the tree itself and returns
+//     predicate, and a `count(content, file)` per-file counter (a lexical or
+//     syntax scan; a pure function of text and path, deterministic and cheap).
+//   scope: "repo" — a `count(tree)` over the shared source tree, returning
 //     `{ count, files }`, for a property no single file carries: the same
 //     helper copied into two apps, one name defined in two workspaces, the
 //     size of a flat bucket.
@@ -71,6 +71,7 @@ import {
   type TrackedRule,
 } from "./lint-suppressions";
 import { ROOT_CONNECTION_DOORS } from "./ownership";
+import { memoizeRecent, type ParseDialect, parseSource } from "./parse-memo";
 import {
   isResultConventionExcludedFile,
   RESULT_CONVENTION_SOURCE_GLOBS,
@@ -104,6 +105,42 @@ const isExcludedFromResultConventionMetrics = (file: string): boolean =>
   isExcludedSource(file) ||
   file.includes("/specs/") ||
   isResultConventionExcludedFile(file);
+
+// --- Source tree ------------------------------------------------------------
+// Every metric scans the same checkout, so each distinct glob is walked once
+// and each file is read once, however many metrics select it.
+
+type SourceTree = {
+  readonly root: string;
+  readonly globs: Map<string, readonly string[]>;
+  readonly contents: Map<string, string>;
+};
+
+export const openSourceTree = (root: string): SourceTree => ({
+  root,
+  globs: new Map(),
+  contents: new Map(),
+});
+
+const globFiles = (tree: SourceTree, glob: string): readonly string[] => {
+  const cached = tree.globs.get(glob);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const files = [...new Bun.Glob(glob).scanSync(tree.root)];
+  tree.globs.set(glob, files);
+  return files;
+};
+
+const readSource = (tree: SourceTree, rel: string): string => {
+  const cached = tree.contents.get(rel);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const content = readFileSync(path.join(tree.root, rel), "utf-8");
+  tree.contents.set(rel, content);
+  return content;
+};
 
 // --- Counters ---------------------------------------------------------------
 // All counters take raw file text and return a per-file occurrence count. Most
@@ -209,19 +246,6 @@ const stripStringLiterals = (
   return { code: out, state: { inTemplate } };
 };
 
-// Blank literals, then drop the trailing `//` comment. Order matters: doing
-// this on the ORIGINAL line (as the counters used to) means a `//` inside a
-// string (e.g. `const s = "http://x" as string;`) truncates the line before
-// the string is ever recognized as a string, silently dropping real code
-// (including real casts) after it. Stripping literals first fixes that.
-const stripLine = (
-  raw: string,
-  state: LiteralScanState,
-): { code: string; state: LiteralScanState } => {
-  const { code, state: nextState } = stripStringLiterals(raw, state);
-  return { code: code.replace(LINE_COMMENT_TAIL, ""), state: nextState };
-};
-
 const stripBlockComments = (
   code: string,
   inBlockComment: boolean,
@@ -255,14 +279,52 @@ const stripBlockComments = (
   return { code: output, inBlockComment: inside };
 };
 
-const countAsCasts = (content: string): number => {
-  const source = ts.createSourceFile(
-    "ratchet-source.tsx",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
+// The lexical counters below all scan the same stripped lines of a file, so
+// each stripping pass runs once per file rather than once per counter.
+const recentLiteralBlankedLines = memoizeRecent<readonly string[]>(2);
+const recentLiteralStrippedLines = memoizeRecent<readonly string[]>(2);
+const recentCodeLines = memoizeRecent<readonly string[]>(2);
+
+// Every line with string and template literal contents blanked.
+const literalBlankedLines = (content: string): readonly string[] =>
+  recentLiteralBlankedLines(content, () => {
+    const lines: string[] = [];
+    let literalState = NO_OPEN_TEMPLATE;
+    for (const raw of content.split("\n")) {
+      const { code, state } = stripStringLiterals(raw, literalState);
+      literalState = state;
+      lines.push(code);
+    }
+    return lines;
+  });
+
+// The same lines with their trailing `//` comment dropped. Order matters:
+// doing this on the ORIGINAL line (as the counters used to) means a `//`
+// inside a string (e.g. `const s = "http://x" as string;`) truncates the line
+// before the string is ever recognized as a string, silently dropping real
+// code (including real casts) after it. Blanking literals first fixes that.
+const literalStrippedLines = (content: string): readonly string[] =>
+  recentLiteralStrippedLines(content, () =>
+    literalBlankedLines(content).map((code) =>
+      code.replace(LINE_COMMENT_TAIL, ""),
+    ),
   );
+
+// The same lines with block comments removed as well.
+const codeLines = (content: string): readonly string[] =>
+  recentCodeLines(content, () => {
+    const lines: string[] = [];
+    let inBlockComment = false;
+    for (const line of literalStrippedLines(content)) {
+      const stripped = stripBlockComments(line, inBlockComment);
+      inBlockComment = stripped.inBlockComment;
+      lines.push(stripped.code);
+    }
+    return lines;
+  });
+
+const countAsCasts = (content: string): number => {
+  const source = parseSource("ratchet-source.tsx", content, ts.ScriptKind.TSX);
   let total = 0;
 
   const visit = (node: ts.Node): void => {
@@ -526,13 +588,7 @@ const countLegacyPaintScriptTransitions = (
   content: string,
   file: string,
 ): number => {
-  const source = ts.createSourceFile(
-    file,
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TSX,
-  );
+  const source = parseSource(file, content, ts.ScriptKind.TSX);
   let total = 0;
   const visit = (node: ts.Node): void => {
     if (
@@ -721,15 +777,7 @@ const NULLISH_ARRAY = /\?\?\s*\[\]/gu;
 // stripLine helper by construction, so it gets the same fix for free.
 const countNullishArrayFallback = (content: string): number => {
   let total = 0;
-  let inBlockComment = false;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const blockResult = stripBlockComments(lineCode, inBlockComment);
-    const code = blockResult.code;
-    inBlockComment = blockResult.inBlockComment;
+  for (const code of codeLines(content)) {
     if (COMMENT_LINE.test(code)) {
       continue;
     }
@@ -747,15 +795,7 @@ const ENTITY_GLYPH_IDENTIFIER = /\b(?:Folder|FolderOpen|ListTodo)(?:Icon)?\b/gu;
 
 const countEntityKindGlyphs = (content: string): number => {
   let total = 0;
-  let inBlockComment = false;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const blockResult = stripBlockComments(lineCode, inBlockComment);
-    const code = blockResult.code;
-    inBlockComment = blockResult.inBlockComment;
+  for (const code of codeLines(content)) {
     if (COMMENT_LINE.test(code)) {
       continue;
     }
@@ -809,15 +849,7 @@ const isBareIdentifierThrow = (code: string): boolean => {
 
 const countThrowsOutsideBoundary = (content: string): number => {
   let total = 0;
-  let inBlockComment = false;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const blockResult = stripBlockComments(lineCode, inBlockComment);
-    const code = blockResult.code;
-    inBlockComment = blockResult.inBlockComment;
+  for (const code of codeLines(content)) {
     if (
       COMMENT_LINE.test(code) ||
       isBareIdentifierThrow(code) ||
@@ -851,15 +883,7 @@ const isCatchClauseOpen = (code: string): boolean => {
 
 const countTryCatchOutsideBoundary = (content: string): number => {
   let total = 0;
-  let inBlockComment = false;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const blockResult = stripBlockComments(lineCode, inBlockComment);
-    const code = blockResult.code;
-    inBlockComment = blockResult.inBlockComment;
+  for (const code of codeLines(content)) {
     if (COMMENT_LINE.test(code)) {
       continue;
     }
@@ -873,21 +897,41 @@ const countTryCatchOutsideBoundary = (content: string): number => {
 const countMatches = (content: string, pattern: RegExp): number =>
   (content.match(pattern) ?? []).length;
 
+// Stripping comments only turns characters into spaces, so text without
+// spaces that appears in the stripped file appears in the original at the
+// same offset. A file that never spells a text every match must contain
+// therefore matches nothing, and skips the parse that stripping needs.
+type CodeMatchOptions = {
+  content: string;
+  pattern: RegExp;
+  // Text without spaces that every match of `pattern` contains.
+  required: RegExp;
+};
+
+const countCodeMatches = ({
+  content,
+  pattern,
+  required,
+}: CodeMatchOptions): number =>
+  required.test(content) ? countMatches(stripComments(content), pattern) : 0;
+
 const LEGACY_REALTIME_INVALIDATION_PRODUCER =
   /(?:["']invalidate-query["']|\bREALTIME_EVENT_TYPE\.INVALIDATE_QUERY\b|\binvalidate(?:Organization)?Query\s*:\s*true\b|\bbroadcast(?:QueryInvalidationTo(?:Organization|TargetWorkspace)|Invalidation)\s*\()/gu;
 
 const countLegacyRealtimeInvalidationProducers = (content: string): number =>
-  countMatches(stripComments(content), LEGACY_REALTIME_INVALIDATION_PRODUCER);
+  countCodeMatches({
+    content,
+    pattern: LEGACY_REALTIME_INVALIDATION_PRODUCER,
+    required: /invalidate|REALTIME_EVENT_TYPE|broadcast/u,
+  });
 
 // Preserve strings, templates, and regex literals because some shared-helper
 // metrics inspect import sources and SQL literals. Only parser-recognized
 // comment trivia is blanked, with line breaks retained so tokens cannot join.
-const stripComments = (content: string): string => {
-  const sourceFile = ts.createSourceFile(
+const stripCommentTrivia = (content: string): string => {
+  const sourceFile = parseSource(
     "ratchet-comments.tsx",
     content,
-    ts.ScriptTarget.Latest,
-    true,
     ts.ScriptKind.TSX,
   );
   const ranges = new Map<number, ts.CommentRange>();
@@ -920,17 +964,30 @@ const stripComments = (content: string): string => {
   return output + content.slice(previousEnd);
 };
 
+// Most counters over one file strip its comments; they share the result.
+const recentStrippedComments = memoizeRecent<string>(2);
+
+const stripComments = (content: string): string =>
+  recentStrippedComments(content, () => stripCommentTrivia(content));
+
+// An identifier spells its name, or writes it with a `\u` escape.
+const mayNameIdentifier = (content: string, name: string): boolean =>
+  content.includes(name) || content.includes("\\u");
+
+// Without a spelling of `importedName`, no import can bind it under another
+// name, so only the name itself is a binding.
 const importedLocalBindings = (
   content: string,
   moduleName: string,
   importedName: string,
 ): Set<string> => {
   const bindings = new Set([importedName]);
-  const sourceFile = ts.createSourceFile(
+  if (!mayNameIdentifier(content, importedName)) {
+    return bindings;
+  }
+  const sourceFile = parseSource(
     "ratchet-source.tsx",
     content,
-    ts.ScriptTarget.Latest,
-    true,
     ts.ScriptKind.TSX,
   );
   for (const statement of sourceFile.statements) {
@@ -963,18 +1020,26 @@ const escapeRegExp = (value: string): string =>
 // Both the flat subpath and the deprecated grouped alias reach the same
 // module, so the metric counts either spelling.
 const countRawUserAvatarPrimitive = (content: string): number =>
-  countMatches(
-    stripComments(content),
-    /["']@stll\/ui\/(?:components\/)?avatar["']/gu,
-  );
+  countCodeMatches({
+    content,
+    pattern: /["']@stll\/ui\/(?:components\/)?avatar["']/gu,
+    required: /@stll\/ui\/(?:components\/)?avatar/u,
+  });
 
 const countShadowedUserNameHelpers = (content: string): number =>
-  countMatches(
-    stripComments(content),
-    /\b(?:const|function)\s+(?:getDisplayName|getInitials)\b/gu,
-  );
+  countCodeMatches({
+    content,
+    pattern: /\b(?:const|function)\s+(?:getDisplayName|getInitials)\b/gu,
+    required: /getDisplayName|getInitials/u,
+  });
+
+// Both patterns below need `title={` or `dateStyle` in the stripped text.
+const AD_HOC_RELATIVE_TIME_REQUIRED = /title=\{|dateStyle/u;
 
 const countAdHocRelativeTimeFormatting = (content: string): number => {
+  if (!AD_HOC_RELATIVE_TIME_REQUIRED.test(content)) {
+    return 0;
+  }
   const code = stripComments(content);
   const fullTimestampBindings = importedLocalBindings(
     code,
@@ -1000,6 +1065,9 @@ const countAdHocRelativeTimeFormatting = (content: string): number => {
 };
 
 const countDirectAuditLogInserts = (content: string): number => {
+  if (!content.includes(".insert")) {
+    return 0;
+  }
   const code = stripComments(content);
   const auditLogBindings = importedLocalBindings(
     code,
@@ -1053,13 +1121,19 @@ const AUDIT_SKIP_DIRECTIVE = /\baudit:\s*skip\b/giu;
 
 const countAuditSkipDirectives = (content: string): number =>
   countMatches(content, AUDIT_SKIP_DIRECTIVE) -
-  countMatches(stripComments(content), AUDIT_SKIP_DIRECTIVE);
+  countCodeMatches({
+    content,
+    pattern: AUDIT_SKIP_DIRECTIVE,
+    required: /audit:/iu,
+  });
 
 const countInlineTimestampCursorSql = (content: string): number =>
-  countMatches(
-    stripComments(content),
-    /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")|::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/giu,
-  );
+  countCodeMatches({
+    content,
+    pattern:
+      /YYYY-MM-DD"T"HH24:MI:SS\.US(?!"Z")|::\s*timestamp\s+AT\s+TIME\s+ZONE\s*['"]UTC['"]/giu,
+    required: /YYYY-MM-DD|['"]UTC['"]/iu,
+  });
 
 // `navigator.clipboard.writeText`, with or without optional chaining on either
 // hop. `.astro` files are markup with inline scripts rather than TypeScript, so
@@ -1078,11 +1152,9 @@ const countInlineClipboardWrites = (content: string): number =>
  * identifier — the shape the gate replaced — and nothing else.
  */
 const countDirectRedistributableCalls = (content: string): number => {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = parseSource(
     "ratchet-source.ts",
     content,
-    ts.ScriptTarget.Latest,
-    true,
     ts.ScriptKind.TS,
   );
 
@@ -1101,19 +1173,18 @@ const countDirectRedistributableCalls = (content: string): number => {
   return total;
 };
 
+const BOUNDARY_HELPER = "pgTimestampCursorBoundary";
+
 const countRepeatedTimestampCursorBoundaries = (content: string): number => {
+  if (!mayNameIdentifier(content, BOUNDARY_HELPER)) {
+    return 0;
+  }
   const code = stripComments(content);
-  const sourceFile = ts.createSourceFile(
-    "ratchet-source.ts",
-    code,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSource("ratchet-source.ts", code, ts.ScriptKind.TS);
   const boundaryBindings = importedLocalBindings(
     code,
     "@/api/lib/db-pagination",
-    "pgTimestampCursorBoundary",
+    BOUNDARY_HELPER,
   );
   const orBindings = importedLocalBindings(code, "drizzle-orm", "or");
 
@@ -1169,11 +1240,9 @@ const countSuperLinearRegexes = (content: string, file: string): number => {
   // and the parser's recovery can swallow the rest of the file — which
   // would silently hide regexes from a guard whose whole value is that
   // it cannot be evaded.
-  const source = ts.createSourceFile(
+  const source = parseSource(
     file,
     content,
-    ts.ScriptTarget.Latest,
-    true,
     file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 
@@ -1213,11 +1282,7 @@ const DIRECT_ERROR_MESSAGE =
 
 const countDirectErrorMessageDisplay = (content: string): number => {
   const strippedLines: string[] = [];
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code, state } = stripLine(raw, literalState);
-    literalState = state;
+  for (const code of literalStrippedLines(content)) {
     if (COMMENT_LINE.test(code)) {
       strippedLines.push("");
       continue;
@@ -1249,11 +1314,7 @@ const MODULE_MUTABLE_COLLECTION =
 
 const countModuleLevelMutableCollections = (content: string): number => {
   let total = 0;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code, state } = stripLine(raw, literalState);
-    literalState = state;
+  for (const code of literalStrippedLines(content)) {
     if (COMMENT_LINE.test(code)) {
       continue;
     }
@@ -1292,11 +1353,7 @@ const TS_SUPPRESSION_DIRECTIVE =
 
 const countTsSuppressions = (content: string): number => {
   let total = 0;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code, state } = stripStringLiterals(raw, literalState);
-    literalState = state;
+  for (const code of literalBlankedLines(content)) {
     if (TS_SUPPRESSION_DIRECTIVE.test(code)) {
       total += 1;
     }
@@ -1325,15 +1382,7 @@ const TERMINAL_CATCH = /\.catch\s*\(/u;
 
 const countUnhandledDetachedPromises = (content: string): number => {
   let total = 0;
-  let inBlockComment = false;
-  let literalState = NO_OPEN_TEMPLATE;
-
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const blockResult = stripBlockComments(lineCode, inBlockComment);
-    const code = blockResult.code;
-    inBlockComment = blockResult.inBlockComment;
+  for (const code of codeLines(content)) {
     if (COMMENT_LINE.test(code)) {
       continue;
     }
@@ -1540,13 +1589,13 @@ const webImporterSlice = (file: string): string => {
   return SHARED_IMPORTER;
 };
 
-const countSliceOwnedWebComponents: RepoCounter = (root) => {
-  const sources = scanRepoFiles(root, [WEB_SOURCE_GLOB]);
+const countSliceOwnedWebComponents: RepoCounter = (tree) => {
+  const sources = scanRepoFiles(tree, [WEB_SOURCE_GLOB]);
   const known = new Set(sources);
   const importerSlices = new Map<string, Set<string>>();
   for (const file of sources) {
     const slice = webImporterSlice(file);
-    const content = readFileSync(path.join(root, file), "utf-8");
+    const content = readSource(tree, file);
     // The compiler's import pre-scan, not the per-line MODULE_SPECIFIER scan:
     // a lazily loaded component is formatted as a multi-line `import(...)`.
     const { importedFiles } = ts.preProcessFile(content, true, true);
@@ -2084,15 +2133,9 @@ const isTerminalCapture = (
 const countDirectFailureSinksAs = (
   content: string,
   file: string,
-  scriptKind: ts.ScriptKind,
+  scriptKind: ParseDialect,
 ): number => {
-  const sourceFile = ts.createSourceFile(
-    "ratchet-source",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind,
-  );
+  const sourceFile = parseSource("ratchet-source", content, scriptKind);
   const imported = importedFailureBindings(sourceFile, file);
   const bindings: FailureSinkBindings = {
     ...imported,
@@ -2134,13 +2177,7 @@ const countDirectFailureSinks: FileCounter = (content, file) =>
 // `callbacks.captureError(…)`-shaped seams: adapters that also do generation
 // bookkeeping, inventoried apart from the terminal sinks above.
 const countAnalyticsCallbackSeams = (content: string): number => {
-  const sourceFile = ts.createSourceFile(
-    "ratchet-source",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSource("ratchet-source", content, ts.ScriptKind.TS);
   let count = 0;
   const visit = (node: ts.Node): void => {
     if (
@@ -2160,13 +2197,7 @@ const FAILURE_SINK_FACTORY = "failureSink";
 
 // The `failureSink({ … })` spec objects in a file.
 const failureSinkSpecs = (content: string): ts.ObjectLiteralExpression[] => {
-  const sourceFile = ts.createSourceFile(
-    "ratchet-source",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    ts.ScriptKind.TS,
-  );
+  const sourceFile = parseSource("ratchet-source", content, ts.ScriptKind.TS);
   const specs: ts.ObjectLiteralExpression[] = [];
   const visit = (node: ts.Node): void => {
     const spec = ts.isCallExpression(node) ? node.arguments.at(0) : undefined;
@@ -2222,7 +2253,7 @@ type FileCounter = (content: string, file: string) => number;
 
 // A repo metric answers a question no single file can — the same helper copied
 // into two apps, one name defined in two workspaces, the size of a flat
-// catch-all directory — so it walks the tree itself. It returns the same
+// catch-all directory — so it reads the whole tree. It returns the same
 // per-file breakdown a file metric produces, which keeps the baseline shape,
 // the diff, and the regression report identical for both scopes.
 type RepoMetricResult = {
@@ -2230,7 +2261,7 @@ type RepoMetricResult = {
   readonly files: Record<string, number>;
 };
 
-type RepoCounter = (root: string) => RepoMetricResult;
+type RepoCounter = (tree: SourceTree) => RepoMetricResult;
 
 export type RatchetMetric =
   | {
@@ -2330,12 +2361,12 @@ const workspaceOf = (rel: string): string =>
   rel.split("/").slice(0, 2).join("/");
 
 const scanRepoFiles = (
-  root: string,
+  tree: SourceTree,
   globs: readonly string[],
 ): readonly string[] => {
   const seen = new Set<string>();
   for (const glob of globs) {
-    for (const rel of new Bun.Glob(glob).scanSync(root)) {
+    for (const rel of globFiles(tree, glob)) {
       if (!isExcludedSource(rel)) {
         seen.add(rel);
       }
@@ -2351,9 +2382,9 @@ const scanRepoFiles = (
 // `lib/chat/types.ts` are two domains sharing a convention name.
 const LIB_SEGMENT = "/src/lib/";
 
-const countCrossAppLibPathCopies: RepoCounter = (root) => {
+const countCrossAppLibPathCopies: RepoCounter = (tree) => {
   const byLibPath = new Map<string, Map<string, string[]>>();
-  for (const rel of scanRepoFiles(root, [APP_LIB_GLOB])) {
+  for (const rel of scanRepoFiles(tree, [APP_LIB_GLOB])) {
     const libPath = rel.slice(rel.indexOf(LIB_SEGMENT) + LIB_SEGMENT.length);
     const app = workspaceOf(rel);
     const byApp = byLibPath.get(libPath) ?? new Map<string, string[]>();
@@ -2390,14 +2421,14 @@ const MIN_DUPLICATE_EXPORT_NAME_LENGTH = 4;
 
 // One name defined in N workspaces costs N-1: one workspace owns it, every
 // other definition is the copy that should have imported it instead.
-const countCrossWorkspaceDuplicateExportNames: RepoCounter = (root) => {
+const countCrossWorkspaceDuplicateExportNames: RepoCounter = (tree) => {
   const definitions = new Map<string, Map<string, string>>();
-  for (const rel of scanRepoFiles(root, WORKSPACE_OWNED_GLOBS)) {
+  for (const rel of scanRepoFiles(tree, WORKSPACE_OWNED_GLOBS)) {
     // A name emitted by a code generator is the generator's to deduplicate.
     if (rel.includes("/generated/")) {
       continue;
     }
-    const content = readFileSync(path.join(root, rel), "utf-8");
+    const content = readSource(tree, rel);
     for (const match of content.matchAll(TOP_LEVEL_EXPORTED_BINDING)) {
       const name = match.groups?.["name"] ?? "";
       if (name.length < MIN_DUPLICATE_EXPORT_NAME_LENGTH) {
@@ -2432,7 +2463,7 @@ const countCrossWorkspaceDuplicateExportNames: RepoCounter = (root) => {
 // metric, so a new file and a new directory cost the same.
 const countLibTopLevelEntries =
   (libDir: string): RepoCounter =>
-  (root) => {
+  ({ root }) => {
     const dir = path.join(root, libDir);
     if (!existsSync(dir)) {
       return { count: 0, files: {} };
@@ -2470,7 +2501,7 @@ const parseJson5Record = (
   return parsed.value;
 };
 
-const countDirectThirdPartyDeclarations: RepoCounter = (root) => {
+const countDirectThirdPartyDeclarations: RepoCounter = ({ root }) => {
   const manifests = ["package.json"];
   for (const group of ["apps", "packages"] as const) {
     const directory = path.join(root, group);
@@ -2517,7 +2548,7 @@ const countDirectThirdPartyDeclarations: RepoCounter = (root) => {
   return { count, files };
 };
 
-const countLockfilePackageEntries: RepoCounter = (root) => {
+const countLockfilePackageEntries: RepoCounter = ({ root }) => {
   const lockfile = parseJson5Record(root, "bun.lock");
   const packages = lockfile["packages"];
   if (!isRecord(packages)) {
@@ -2580,19 +2611,8 @@ const cloneTokensOf = (
   content: string,
   cache: Map<string, number>,
 ): readonly number[] => {
-  const strippedLines: string[] = [];
-  let literalState = NO_OPEN_TEMPLATE;
-  let inBlockComment = false;
-  for (const raw of content.split("\n")) {
-    const { code: lineCode, state } = stripLine(raw, literalState);
-    literalState = state;
-    const stripped = stripBlockComments(lineCode, inBlockComment);
-    inBlockComment = stripped.inBlockComment;
-    strippedLines.push(stripped.code);
-  }
-
   const tokens: number[] = [];
-  for (const token of strippedLines.join("\n").match(CLONE_TOKEN) ?? []) {
+  for (const token of codeLines(content).join("\n").match(CLONE_TOKEN) ?? []) {
     const cached = cache.get(token);
     if (cached !== undefined) {
       tokens.push(cached);
@@ -2622,8 +2642,8 @@ const cloneBlockCount = (positions: number[]): number => {
   return blocks;
 };
 
-const countDuplicateTokenBlocks: RepoCounter = (root) => {
-  const scanned = scanRepoFiles(root, ALL_SOURCE_GLOBS).filter(
+const countDuplicateTokenBlocks: RepoCounter = (tree) => {
+  const scanned = scanRepoFiles(tree, ALL_SOURCE_GLOBS).filter(
     // A generated file's copies belong to its generator, not to this budget.
     (rel) => !rel.includes("/generated/"),
   );
@@ -2637,13 +2657,12 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
   const fileLength: number[] = [];
   const tokenCache = new Map<string, number>();
   for (const rel of scanned) {
-    const full = path.join(root, rel);
     fileStart.push(tokens.length);
-    if (statSync(full).size > MAX_CLONE_SCAN_BYTES) {
+    if (statSync(path.join(tree.root, rel)).size > MAX_CLONE_SCAN_BYTES) {
       fileLength.push(0);
       continue;
     }
-    const fileTokens = cloneTokensOf(readFileSync(full, "utf-8"), tokenCache);
+    const fileTokens = cloneTokensOf(readSource(tree, rel), tokenCache);
     for (const token of fileTokens) {
       tokens.push(token);
     }
@@ -2796,7 +2815,7 @@ const countDuplicateTokenBlocks: RepoCounter = (root) => {
   return { count, files };
 };
 
-const RATCHET_METRICS: readonly RatchetMetric[] = [
+export const RATCHET_METRICS: readonly RatchetMetric[] = [
   {
     scope: "file",
     id: "as-casts",
@@ -3314,9 +3333,9 @@ const REPORT_ONLY_METRICS = [
   },
 ] as const satisfies readonly RatchetMetric[];
 
-const printReportOnlyMetrics = (root: string): void => {
+const printReportOnlyMetrics = (tree: SourceTree): void => {
   for (const metric of REPORT_ONLY_METRICS) {
-    console.log(`  ${metric.id}: ${metric.count(root).count} (report only)`);
+    console.log(`  ${metric.id}: ${metric.count(tree).count} (report only)`);
   }
 };
 
@@ -3501,55 +3520,120 @@ const sortedSnapshot = (result: RepoMetricResult): MetricSnapshot => {
   return { count: result.count, files };
 };
 
-const scanMetric = (metric: RatchetMetric, root: string): MetricSnapshot => {
-  switch (metric.scope) {
-    case "repo":
-      return sortedSnapshot(metric.count(root));
-    case "file": {
-      const seen = new Set<string>();
-      const files: Record<string, number> = {};
-      let count = 0;
+type FileMetric = Extract<RatchetMetric, { scope: "file" }>;
 
-      for (const glob of metric.include) {
-        for (const rel of new Bun.Glob(glob).scanSync(root)) {
-          if (seen.has(rel)) {
-            continue;
-          }
-          seen.add(rel);
-          if (metric.exclude(rel)) {
-            continue;
-          }
-          const n = metric.count(
-            readFileSync(path.join(root, rel), "utf-8"),
-            rel,
-          );
-          if (n > 0) {
-            files[rel] = n;
-            count += n;
-          }
-        }
+// The files a file metric counts: every include match, once, minus excludes.
+export const selectMetricFiles = (
+  tree: SourceTree,
+  metric: FileMetric,
+): string[] => {
+  const seen = new Set<string>();
+  const selected: string[] = [];
+  for (const glob of metric.include) {
+    for (const rel of globFiles(tree, glob)) {
+      if (seen.has(rel)) {
+        continue;
       }
-
-      return sortedSnapshot({ count, files });
-    }
-    default: {
-      metric satisfies never;
-      return panic(`ratchet metric has an unknown scope: ${String(metric)}`);
+      seen.add(rel);
+      if (!metric.exclude(rel)) {
+        selected.push(rel);
+      }
     }
   }
+  return selected;
+};
+
+// One file's text and the count of every file metric that selected it, zeros
+// included, so a scan of another tree can reuse them for identical text.
+type FileCounts = {
+  readonly content: string;
+  readonly counts: ReadonlyMap<string, number>;
+};
+
+type TreeScan = {
+  readonly snapshot: Baseline;
+  readonly files: ReadonlyMap<string, FileCounts>;
+};
+
+type ScanTreeOptions = {
+  tree: SourceTree;
+  metrics: readonly RatchetMetric[];
+  // A file counter reads only the text and the path, so a file whose text
+  // matches the earlier scan at the same path keeps that scan's counts.
+  previous?: TreeScan | undefined;
+};
+
+// File by file rather than metric by metric: every counter over one file runs
+// back to back, so they share its read, its parses, and its stripped text.
+export const scanTree = ({
+  tree,
+  metrics,
+  previous,
+}: ScanTreeOptions): TreeScan => {
+  assertMetricRegistry();
+  const metricsByFile = new Map<string, FileMetric[]>();
+  for (const metric of metrics) {
+    if (metric.scope !== "file") {
+      continue;
+    }
+    for (const rel of selectMetricFiles(tree, metric)) {
+      const selected = metricsByFile.get(rel);
+      if (selected === undefined) {
+        metricsByFile.set(rel, [metric]);
+        continue;
+      }
+      selected.push(metric);
+    }
+  }
+
+  const totals = new Map<
+    string,
+    { count: number; files: Record<string, number> }
+  >();
+  const files = new Map<string, FileCounts>();
+  for (const [rel, selected] of metricsByFile) {
+    const content = readSource(tree, rel);
+    const earlier = previous?.files.get(rel);
+    const reusable = earlier?.content === content ? earlier.counts : undefined;
+    const counts = new Map<string, number>();
+    for (const metric of selected) {
+      const n = reusable?.get(metric.id) ?? metric.count(content, rel);
+      counts.set(metric.id, n);
+      if (n === 0) {
+        continue;
+      }
+      const total = totals.get(metric.id) ?? { count: 0, files: {} };
+      total.files[rel] = n;
+      total.count += n;
+      totals.set(metric.id, total);
+    }
+    files.set(rel, { content, counts });
+  }
+
+  const snapshot: Baseline = {};
+  for (const metric of metrics) {
+    switch (metric.scope) {
+      case "repo":
+        snapshot[metric.id] = sortedSnapshot(metric.count(tree));
+        break;
+      case "file":
+        snapshot[metric.id] = sortedSnapshot(
+          totals.get(metric.id) ?? { count: 0, files: {} },
+        );
+        break;
+      default: {
+        metric satisfies never;
+        return panic(`ratchet metric has an unknown scope: ${String(metric)}`);
+      }
+    }
+  }
+  return { snapshot, files };
 };
 
 export const scanAll = (
   root: string,
   metrics: readonly RatchetMetric[] = RATCHET_METRICS,
-): Baseline => {
-  assertMetricRegistry();
-  const snapshot: Baseline = {};
-  for (const metric of metrics) {
-    snapshot[metric.id] = scanMetric(metric, root);
-  }
-  return snapshot;
-};
+): Baseline => scanTree({ tree: openSourceTree(root), metrics }).snapshot;
 
 const readBaseline = (): Baseline => {
   const parsed = Result.try((): unknown =>
@@ -3666,10 +3750,17 @@ const readMergeBaseBaseline = (ref: string): Baseline => {
   return inspection.baseline;
 };
 
-const scanMergeBase = (
-  ref: string,
-  metrics: readonly RatchetMetric[] = RATCHET_METRICS,
-): Baseline => {
+type ScanMergeBaseOptions = {
+  ref: string;
+  head: TreeScan;
+  metrics?: readonly RatchetMetric[];
+};
+
+const scanMergeBase = ({
+  ref,
+  head,
+  metrics = RATCHET_METRICS,
+}: ScanMergeBaseOptions): Baseline => {
   const temporary = mkdtempSync(path.join(tmpdir(), "ratchet-merge-base-"));
   try {
     const archive = path.join(temporary, "base.tar");
@@ -3685,7 +3776,8 @@ const scanMergeBase = (
         `ratchet base extraction failed: ${extracted.stderr.toString().trim()}`,
       );
     }
-    return scanAll(root, metrics);
+    return scanTree({ tree: openSourceTree(root), metrics, previous: head })
+      .snapshot;
   } finally {
     rmSync(temporary, { recursive: true, force: true });
   }
@@ -3781,7 +3873,8 @@ const formatDelta = (delta: number): string => {
 };
 
 const runReport = (): number => {
-  const current = scanAll(REPO_ROOT);
+  const tree = openSourceTree(REPO_ROOT);
+  const current = scanTree({ tree, metrics: RATCHET_METRICS }).snapshot;
   const baseline = readBaseline();
   const showDetails = process.argv.includes("--details");
   console.log("ratchet: current metric counts (vs baseline)\n");
@@ -3800,7 +3893,7 @@ const runReport = (): number => {
       }
     }
   }
-  printReportOnlyMetrics(REPO_ROOT);
+  printReportOnlyMetrics(tree);
   return 0;
 };
 
@@ -4009,16 +4102,19 @@ const buildImprovementsOnlyContext = ({
   mergeBase,
   baselineAtHead,
 }: BuildImprovementsOnlyContextOptions): ImprovementsOnlyContext => {
-  const head = scanAll(REPO_ROOT);
+  const head = scanTree({
+    tree: openSourceTree(REPO_ROOT),
+    metrics: RATCHET_METRICS,
+  });
   const candidate = deltaBaseline({
-    head,
+    head: head.snapshot,
     mergeBaseBaseline: readMergeBaseBaseline(mergeBase),
-    baseSnapshot: scanMergeBase(mergeBase),
+    baseSnapshot: scanMergeBase({ ref: mergeBase, head }),
   });
   return {
     candidate,
     assessment: assessImprovementWrite({
-      current: head,
+      current: head.snapshot,
       candidate,
       baseline: baselineAtHead.baseline,
     }),
@@ -4109,8 +4205,10 @@ const checkImprovementsOnly = (): number => {
 
 const runWrite = (all: boolean): number => {
   const existingOrder = readBaselineOrder();
-  const head = scanAll(REPO_ROOT);
-  let snapshot = head;
+  const tree = openSourceTree(REPO_ROOT);
+  const head = scanTree({ tree, metrics: RATCHET_METRICS });
+  let snapshot = head.snapshot;
+  let mergeBaseScan: MergeBaseScan | undefined;
   if (!all) {
     const baseIndex = process.argv.indexOf("--base");
     const baseRef =
@@ -4131,9 +4229,10 @@ const runWrite = (all: boolean): number => {
             `${baseRef}^{commit}`,
           ]);
     const baseline = readMergeBaseBaseline(mergeBase);
-    const base = scanMergeBase(mergeBase);
+    const base = scanMergeBase({ ref: mergeBase, head });
+    mergeBaseScan = { ref: mergeBase, snapshot: base };
     snapshot = deltaBaseline({
-      head,
+      head: head.snapshot,
       mergeBaseBaseline: baseline,
       baseSnapshot: base,
     });
@@ -4146,16 +4245,25 @@ const runWrite = (all: boolean): number => {
       `  ${metric.id.padEnd(30)} ${String(snap.count).padStart(5)} across ${Object.keys(snap.files).length} file(s)`,
     );
   }
-  const status = runCheck();
+  const status = runCheck({ tree, head, mergeBaseScan });
   if (status !== 0) {
     console.error("ratchet --write: rebase onto main, or run `--write --all`.");
   }
   return status;
 };
 
-const runCheck = (): number => {
-  printReportOnlyMetrics(REPO_ROOT);
-  const current = scanAll(REPO_ROOT);
+// The merge-base tree already scanned for every metric by the same process.
+type MergeBaseScan = { readonly ref: string; readonly snapshot: Baseline };
+
+type RunCheckOptions = {
+  tree: SourceTree;
+  head: TreeScan;
+  mergeBaseScan?: MergeBaseScan | undefined;
+};
+
+const runCheck = ({ tree, head, mergeBaseScan }: RunCheckOptions): number => {
+  printReportOnlyMetrics(tree);
+  const current = head.snapshot;
   const baseline = readBaseline();
 
   const mergeBase = improvementsMergeBase();
@@ -4169,7 +4277,10 @@ const runCheck = (): number => {
       baseline,
       mergeBaseBaseline,
       current,
-      baseSnapshot: scanMergeBase(mergeBase, raisedMetrics),
+      baseSnapshot:
+        mergeBaseScan?.ref === mergeBase
+          ? mergeBaseScan.snapshot
+          : scanMergeBase({ ref: mergeBase, head, metrics: raisedMetrics }),
       metrics: raisedMetrics,
     });
     if (errors.length > 0) {
@@ -5995,7 +6106,7 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
     '{ packages: { "first@1.0.0": [], "@scope/second@2.0.0": [] }, workspaces: { "": {} } }',
   );
   const directDependencies = countDirectThirdPartyDeclarations(
-    dependencyFixtureRoot,
+    openSourceTree(dependencyFixtureRoot),
   );
   if (directDependencies.count !== 7) {
     failures.push(
@@ -6024,7 +6135,9 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
       "direct-third-party-declarations did not flag declaration growth",
     );
   }
-  const lockfileEntries = countLockfilePackageEntries(dependencyFixtureRoot);
+  const lockfileEntries = countLockfilePackageEntries(
+    openSourceTree(dependencyFixtureRoot),
+  );
   if (lockfileEntries.count !== 2 || lockfileEntries.files["bun.lock"] !== 2) {
     failures.push(
       `lockfile-package-entries counted ${lockfileEntries.count}, expected 2 resolution entries`,
@@ -6039,7 +6152,10 @@ const dependencyMetricSelfTestFailures = (root: string): string[] => {
     path.join(dependencyFixtureRoot, "bun.lock"),
     '{ packages: { "first@1.0.0": [], "second@2.0.0": [], "third@3.0.0": [] } }',
   );
-  if (countLockfilePackageEntries(dependencyFixtureRoot).count !== 3) {
+  if (
+    countLockfilePackageEntries(openSourceTree(dependencyFixtureRoot)).count !==
+    3
+  ) {
     failures.push("lockfile-package-entries did not report resolution growth");
   }
   return failures;
@@ -6930,7 +7046,11 @@ const main = (): number => {
     return runWrite(process.argv.includes("--all"));
   }
   if (process.argv.includes("--check")) {
-    return runCheck();
+    const tree = openSourceTree(REPO_ROOT);
+    return runCheck({
+      tree,
+      head: scanTree({ tree, metrics: RATCHET_METRICS }),
+    });
   }
   return runReport();
 };

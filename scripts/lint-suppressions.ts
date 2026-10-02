@@ -22,6 +22,8 @@
 import { panic } from "better-result";
 import ts from "typescript";
 
+import { parseSource } from "./parse-memo";
+
 // --- Tracked rules ----------------------------------------------------------
 
 // A `security` rule guards a tenancy, authorization, credential, or audit
@@ -298,12 +300,10 @@ export type LintDirective = {
   readonly rules: readonly string[];
 };
 
-const parseSource = (content: string, file: string): ts.SourceFile =>
-  ts.createSourceFile(
+const parseFile = (content: string, file: string): ts.SourceFile =>
+  parseSource(
     file,
     content,
-    ts.ScriptTarget.Latest,
-    true,
     file.endsWith(".tsx") ? ts.ScriptKind.TSX : ts.ScriptKind.TS,
   );
 
@@ -333,7 +333,7 @@ const scanDirectives = (
   content: string,
   file: string,
 ): readonly LintDirective[] => {
-  const source = parseSource(content, file);
+  const source = parseFile(content, file);
   const comments = new Map<string, ts.CommentRange>();
   const collect = (ranges: readonly ts.CommentRange[] | undefined) => {
     for (const range of ranges ?? []) {
@@ -484,7 +484,7 @@ export const resolveDirectiveAnchors = (
   file: string,
   directives: readonly LintDirective[],
 ): readonly string[] => {
-  const source = parseSource(content, file);
+  const source = parseFile(content, file);
   const lineOf = (pos: number): number =>
     source.getLineAndCharacterOfPosition(pos).line;
 

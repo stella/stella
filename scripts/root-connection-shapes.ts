@@ -54,6 +54,8 @@
 
 import ts from "typescript";
 
+import { type ParseDialect, parseSource } from "./parse-memo";
+
 // `apps/api/src/db/root.ts`, by alias or path. `./root` is how a sibling in
 // `apps/api/src/db/` names it; no other API module is called `root`.
 const ROOT_CONNECTION_MODULE =
@@ -461,15 +463,9 @@ type RootConnectionScan = {
 const scanRootConnectionShapes = (
   content: string,
   file: string,
-  scriptKind: ts.ScriptKind,
+  scriptKind: ParseDialect,
 ): RootConnectionScan => {
-  const sourceFile = ts.createSourceFile(
-    "root-connection-source",
-    content,
-    ts.ScriptTarget.Latest,
-    true,
-    scriptKind,
-  );
+  const sourceFile = parseSource("root-connection-source", content, scriptKind);
   const bindings = collectRootBindings(sourceFile);
   if (bindings.handles.size === 0 && bindings.namespaces.size === 0) {
     return { hits: [], exemptOperations: [] };
@@ -692,13 +688,11 @@ const importTypeHandles = (node: ts.ImportTypeNode): number => {
 
 const countRootConnectionReferencesAs = (
   content: string,
-  scriptKind: ts.ScriptKind,
+  scriptKind: ParseDialect,
 ): RootConnectionReferences => {
-  const sourceFile = ts.createSourceFile(
+  const sourceFile = parseSource(
     "root-connection-imports",
     content,
-    ts.ScriptTarget.Latest,
-    true,
     scriptKind,
   );
   let value = 0;
