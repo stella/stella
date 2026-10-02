@@ -1,4 +1,12 @@
-import type { QueryState } from "@tanstack/react-query";
+import type {
+  DataTag,
+  DefaultError,
+  FetchStatus,
+  QueryClient,
+  QueryKey,
+  QueryState,
+} from "@tanstack/react-query";
+import { panic } from "better-result";
 
 import { stableStringify } from "@stll/stable-stringify";
 
@@ -145,27 +153,109 @@ export const hasPlaybookDraftChanges = ({
 type CachedDetailState = Pick<QueryState, "isInvalidated" | "dataUpdatedAt">;
 
 /**
- * When the detail a mount finds in the cache was invalidated by a write (this
- * editor's save or approve, a chat save, a restore), when that stale snapshot
- * was fetched; null when the cache holds nothing invalidated. The form seeds
- * once and saves a full replace, so seeding from pre-write content would put
- * back whatever the write changed.
+ * What the form may seed from, decided when the editor mounts or reloads.
+ * `awaiting` holds back the snapshot fetched at `supersededAt`: a write (this
+ * editor's save or approve, a chat save, a restore, a rejected stale save)
+ * invalidated it, and the form seeds once and saves a full replace, so seeding
+ * from pre-write content would put back whatever the write changed. `stale`
+ * is `awaiting` after the refetch could not be had: the form was seeded from
+ * that snapshot and stays on it until the user reloads.
  */
-export const invalidatedSnapshotAt = (state: CachedDetailState | undefined) =>
-  state?.isInvalidated === true ? state.dataUpdatedAt : null;
+export type DetailSeedGate =
+  | { type: "open" }
+  | { type: "awaiting"; supersededAt: number }
+  | { type: "stale"; supersededAt: number };
 
-type IsSeedableDetailArgs = {
-  /** From `invalidatedSnapshotAt`, read once when the editor mounts. */
-  invalidatedAt: number | null;
+export const detailSeedGate = (
+  state: CachedDetailState | undefined,
+): DetailSeedGate =>
+  state?.isInvalidated === true
+    ? { type: "awaiting", supersededAt: state.dataUpdatedAt }
+    : { type: "open" };
+
+/** Whether a detail newer than a stale-seeded form's snapshot is in hand. */
+export type FresherDetail = "unavailable" | "loading" | "loaded";
+
+export type DetailSeed =
+  | { type: "wait" }
+  | { type: "current" }
+  | { type: "stale"; fresher: FresherDetail };
+
+type ResolveDetailSeedArgs = {
+  gate: DetailSeedGate;
   dataUpdatedAt: number;
+  fetchStatus: FetchStatus;
 };
 
-/** Whether the detail now in hand is newer than the invalidated snapshot. */
-export const isSeedableDetail = ({
-  invalidatedAt,
+/**
+ * What the editor shows for the detail now in hand. A superseded snapshot is
+ * held back only while its refetch is in flight; once that refetch has paused
+ * (offline) or failed, the snapshot is all there is, and it is shown as stale
+ * rather than hidden behind a spinner.
+ */
+export const resolveDetailSeed = ({
+  gate,
   dataUpdatedAt,
-}: IsSeedableDetailArgs) =>
-  invalidatedAt === null || dataUpdatedAt !== invalidatedAt;
+  fetchStatus,
+}: ResolveDetailSeedArgs): DetailSeed => {
+  switch (gate.type) {
+    case "open": {
+      return { type: "current" };
+    }
+    case "awaiting": {
+      if (dataUpdatedAt !== gate.supersededAt) {
+        return { type: "current" };
+      }
+      return fetchStatus === "fetching"
+        ? { type: "wait" }
+        : { type: "stale", fresher: "unavailable" };
+    }
+    case "stale": {
+      if (dataUpdatedAt !== gate.supersededAt) {
+        return { type: "stale", fresher: "loaded" };
+      }
+      return {
+        type: "stale",
+        fresher: fetchStatus === "fetching" ? "loading" : "unavailable",
+      };
+    }
+    default: {
+      gate satisfies never;
+      return panic(`Unhandled seed gate: ${String(gate)}`);
+    }
+  }
+};
+
+/**
+ * The gate once a form has been seeded from the superseded snapshot; null
+ * while there is nothing to latch. Latched so a later refetch cannot put the
+ * editor back into waiting and unmount a form the user is typing in.
+ */
+export const latchedSeedGate = (
+  gate: DetailSeedGate,
+  seed: DetailSeed,
+): DetailSeedGate | null =>
+  gate.type === "awaiting" && seed.type === "stale"
+    ? { type: "stale", supersededAt: gate.supersededAt }
+    : null;
+
+/**
+ * Supersede the cached detail and refetch it. The cache is marked before the
+ * request starts, so a reload issued while it is in flight waits for it
+ * instead of seeding from the superseded snapshot. Resolves to the fresh
+ * detail, or null when the refetch did not land.
+ */
+export const refetchSupersededDetail = async <TData>(
+  queryClient: QueryClient,
+  queryKey: DataTag<QueryKey, TData, DefaultError>,
+): Promise<TData | null> => {
+  await queryClient.invalidateQueries({ queryKey, exact: true });
+  const state = queryClient.getQueryState(queryKey);
+  if (state === undefined || state.isInvalidated) {
+    return null;
+  }
+  return state.data ?? null;
+};
 
 // ── Position sources ──────────────────────────────────
 

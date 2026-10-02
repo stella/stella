@@ -3555,6 +3555,10 @@
         "blocker": "Blokeeriv"
       },
       "severityLabel": "Raskusaste",
+      "staleCopy": {
+        "loaded": "Sellest playbookist on laaditud uuem versioon. Enne muutmist laadige uuesti.",
+        "unavailable": "Selle playbooki uusimat versiooni ei õnnestunud laadida. See on viimati laaditud koopia ja võib olla aegunud."
+      },
       "starters": {
         "addedToast": "Playbook lisatud",
         "browseButton": "Sirvi valmis playbooke",

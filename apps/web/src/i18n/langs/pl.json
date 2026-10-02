@@ -3555,6 +3555,10 @@
         "blocker": "Blokująca"
       },
       "severityLabel": "Waga",
+      "staleCopy": {
+        "loaded": "Wczytano nowszą wersję tego playbooka. Wczytaj ponownie przed edycją.",
+        "unavailable": "Nie udało się załadować najnowszej wersji tego playbooka. To ostatnio wczytana kopia, która może być nieaktualna."
+      },
       "starters": {
         "addedToast": "Dodano playbook",
         "browseButton": "Przeglądaj gotowe playbooki",

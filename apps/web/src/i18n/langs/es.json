@@ -3555,6 +3555,10 @@
         "blocker": "Bloqueante"
       },
       "severityLabel": "Gravedad",
+      "staleCopy": {
+        "loaded": "Se ha cargado una versión más reciente de este playbook. Recárguelo antes de editarlo.",
+        "unavailable": "No se pudo cargar la última versión de este playbook. Esta es la última copia cargada y puede estar desactualizada."
+      },
       "starters": {
         "addedToast": "Playbook añadido",
         "browseButton": "Explorar playbooks de inicio",

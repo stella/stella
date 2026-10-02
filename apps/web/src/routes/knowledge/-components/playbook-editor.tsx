@@ -2,6 +2,7 @@ import { useCallback, useRef, useState } from "react";
 
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link } from "@tanstack/react-router";
+import { panic } from "better-result";
 import { useTranslations } from "use-intl";
 
 import {
@@ -30,6 +31,7 @@ import {
 import { Input } from "@stll/ui/input";
 import { Label } from "@stll/ui/label";
 import { Menu, MenuItem, MenuPopup, MenuTrigger } from "@stll/ui/menu";
+import { ReviewOutOfDateNotice } from "@stll/ui/review-out-of-date-notice";
 import {
   Select,
   SelectItem,
@@ -84,6 +86,7 @@ import {
 import { toSafeId } from "@/lib/safe-id";
 import { LeaveConfirmDialog } from "@/routes/knowledge/-components/leave-confirm-dialog";
 import type {
+  FresherDetail,
   PlaybookDraft,
   PositionSourceLookup,
 } from "@/routes/knowledge/-components/playbook-editor.logic";
@@ -92,8 +95,10 @@ import {
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
-  invalidatedSnapshotAt,
-  isSeedableDetail,
+  detailSeedGate,
+  latchedSeedGate,
+  refetchSupersededDetail,
+  resolveDetailSeed,
   resolvePlaybookScrollTop,
   resolvePositionSources,
   toPositionSourceLookup,
@@ -176,26 +181,48 @@ const PlaybookEditorLoader = ({
   onSaved: () => void;
 }) => {
   const t = useTranslations();
-  // Bumped after a version restore so the form below remounts with the
-  // freshly refetched (already-invalidated) detail instead of holding on to
-  // its own stale name/description/positions state.
-  const [reloadKey, setReloadKey] = useState(0);
   const queryClient = useQueryClient();
   const detailOptions = playbookDetailOptions(organizationId, playbookId);
-  // Read once at mount: reopening after a save finds the detail invalidated
-  // but still holding its pre-save content until this mount's refetch lands.
-  const [invalidatedAt] = useState(() =>
-    invalidatedSnapshotAt(queryClient.getQueryState(detailOptions.queryKey)),
-  );
+  // The gate is read when the form is about to seed: at mount, and again on
+  // each reload (a version restore, a rejected stale save). Reopening after a
+  // save finds the detail invalidated but still holding its pre-save content
+  // until the refetch lands. `reloadKey` remounts the form on the new seed.
+  const [seedState, setSeedState] = useState(() => ({
+    reloadKey: 0,
+    gate: detailSeedGate(queryClient.getQueryState(detailOptions.queryKey)),
+  }));
   const detailQuery = useQuery(detailOptions);
-  const awaitingFreshDetail =
-    !detailQuery.isError &&
-    !isSeedableDetail({
-      invalidatedAt,
-      dataUpdatedAt: detailQuery.dataUpdatedAt,
-    });
+  const seed = resolveDetailSeed({
+    gate: seedState.gate,
+    dataUpdatedAt: detailQuery.dataUpdatedAt,
+    fetchStatus: detailQuery.fetchStatus,
+  });
+  // Latch the fallback: the form is seeded from the superseded snapshot now,
+  // and a later refetch must not unmount it and drop what the user typed.
+  const latchedGate = latchedSeedGate(seedState.gate, seed);
+  if (latchedGate !== null) {
+    setSeedState({ reloadKey: seedState.reloadKey, gate: latchedGate });
+  }
 
-  if (detailQuery.isPending || awaitingFreshDetail) {
+  const refetchDetail = () => {
+    // Joins a refetch already in flight instead of restarting it.
+    detached(
+      detailQuery.refetch({ cancelRefetch: false }),
+      "playbook-editor.refetch-detail",
+    );
+  };
+
+  const reload = () => {
+    const gate = detailSeedGate(
+      queryClient.getQueryState(detailOptions.queryKey),
+    );
+    if (gate.type === "awaiting") {
+      refetchDetail();
+    }
+    setSeedState((current) => ({ reloadKey: current.reloadKey + 1, gate }));
+  };
+
+  if (detailQuery.isPending || seed.type === "wait") {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -205,8 +232,10 @@ const PlaybookEditorLoader = ({
     );
   }
 
+  // A failed refetch keeps the detail it could not replace, and that detail
+  // is shown; only a load with nothing cached is a failure.
   const detail = detailQuery.data;
-  if (detailQuery.isError || !detail || !("positions" in detail)) {
+  if (!detail || !("positions" in detail)) {
     return (
       <div className="flex flex-1 items-center justify-center p-8">
         <p className="text-muted-foreground text-sm">
@@ -226,20 +255,101 @@ const PlaybookEditorLoader = ({
       initialStatus={detail.status}
       initialTrigger={detail.scope?.trigger ?? null}
       initialPositions={detail.positions.items}
-      key={reloadKey}
+      key={seedState.reloadKey}
       onBack={onBack}
       // Derived from the org's findings on every read, so it tracks the cache
       // rather than freezing at mount like the `initial*` seeds.
       positionDecisions={readPositionDecisions(detail.positionDecisions)}
       // Resolved for this reader on every read, like the decisions above.
       positionSources={toPositionSourceLookup(detail.positionSources)}
-      onReload={() => setReloadKey((current) => current + 1)}
+      onReload={reload}
       onSaved={onSaved}
       organizationId={organizationId}
       playbookId={playbookId}
       initialUpdatedAt={detail.updatedAt}
+      staleDetail={
+        seed.type === "stale"
+          ? { fresher: seed.fresher, onRetry: refetchDetail }
+          : undefined
+      }
     />
   );
+};
+
+// ── Stale detail notice ───────────────────────────────
+
+type StaleDetail = {
+  fresher: FresherDetail;
+  onRetry: () => void;
+};
+
+/**
+ * Shown above a form seeded from a superseded detail. Retrying only refetches:
+ * the form is swapped for the fresh copy by a reload the user asks for once
+ * that copy is in hand, so a retry that fails again costs them nothing.
+ */
+const StaleDetailNotice = ({
+  staleDetail: { fresher, onRetry },
+  isDirty,
+  onReload,
+}: {
+  staleDetail: StaleDetail;
+  isDirty: boolean;
+  onReload: (() => void) | undefined;
+}) => {
+  const t = useTranslations();
+  switch (fresher) {
+    case "unavailable": {
+      return (
+        <ReviewOutOfDateNotice
+          actionLabel={t("common.retry")}
+          onAction={onRetry}
+          reasons={[
+            {
+              id: "stale-detail",
+              label: t("knowledge.playbooks.staleCopy.unavailable"),
+            },
+          ]}
+        />
+      );
+    }
+    case "loading": {
+      return (
+        <ReviewOutOfDateNotice
+          reasons={[
+            {
+              id: "stale-detail",
+              label: t("knowledge.playbooks.staleCopy.unavailable"),
+            },
+          ]}
+        />
+      );
+    }
+    case "loaded": {
+      return (
+        <ReviewOutOfDateNotice
+          // Reloading swaps in the server's copy, so name it for what it
+          // costs while the draft still holds unsaved edits.
+          actionLabel={
+            isDirty
+              ? t("knowledge.playbooks.discardChanges")
+              : t("common.reload")
+          }
+          onAction={onReload}
+          reasons={[
+            {
+              id: "stale-detail",
+              label: t("knowledge.playbooks.staleCopy.loaded"),
+            },
+          ]}
+        />
+      );
+    }
+    default: {
+      fresher satisfies never;
+      return panic(`Unhandled stale detail state: ${String(fresher)}`);
+    }
+  }
 };
 
 // ── Editor form ───────────────────────────────────────
@@ -267,6 +377,9 @@ type PlaybookEditorFormProps = {
   positionSources?: PositionSourceLookup | undefined;
   /** Concurrency token the seeds were read with; null for a new playbook. */
   initialUpdatedAt: string | null;
+  /** Set when the seeds came from a superseded detail because its refetch
+   *  could not be had (offline, or the request failed). */
+  staleDetail?: StaleDetail | undefined;
   onBack: () => void;
   onSaved: () => void;
   // Only supplied when editing an existing playbook (see
@@ -289,6 +402,7 @@ const PlaybookEditorForm = ({
   positionDecisions,
   positionSources,
   initialUpdatedAt,
+  staleDetail,
   onBack,
   onSaved,
   onReload,
@@ -533,11 +647,11 @@ const PlaybookEditorForm = ({
   };
 
   const takeFreshToken = async (id: string) => {
-    const fresh = await queryClient.query({
-      ...playbookDetailOptions(organizationId, id),
-      staleTime: 0,
-    });
-    if ("updatedAt" in fresh) {
+    const fresh = await refetchSupersededDetail(
+      queryClient,
+      playbookDetailOptions(organizationId, id).queryKey,
+    );
+    if (fresh !== null && "updatedAt" in fresh) {
       setUpdatedAt(fresh.updatedAt);
     }
   };
@@ -891,6 +1005,14 @@ const PlaybookEditorForm = ({
               </Button>
             </div>
           </div>
+
+          {staleDetail !== undefined && (
+            <StaleDetailNotice
+              isDirty={isDirty}
+              onReload={onReload}
+              staleDetail={staleDetail}
+            />
+          )}
 
           {isEdit &&
             canApprove &&

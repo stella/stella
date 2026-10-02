@@ -3555,6 +3555,10 @@
         "blocker": "Bloķējoša"
       },
       "severityLabel": "Nopietnība",
+      "staleCopy": {
+        "loaded": "Ir ielādēta jaunāka šī pārbaudes ceļveža versija. Pirms rediģēšanas pārlādējiet.",
+        "unavailable": "Neizdevās ielādēt šī pārbaudes ceļveža jaunāko versiju. Šī ir pēdējā ielādētā kopija, un tā var būt novecojusi."
+      },
       "starters": {
         "addedToast": "Pārbaudes ceļvedis pievienots",
         "browseButton": "Pārlūkot sākuma pārbaudes ceļvežus",

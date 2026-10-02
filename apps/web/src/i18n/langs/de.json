@@ -3555,6 +3555,10 @@
         "blocker": "Kritisch"
       },
       "severityLabel": "Schweregrad",
+      "staleCopy": {
+        "loaded": "Eine neuere Version dieses Playbooks wurde geladen. Laden Sie neu, bevor Sie es bearbeiten.",
+        "unavailable": "Die neueste Version dieses Playbooks konnte nicht geladen werden. Dies ist die zuletzt geladene Kopie; sie ist möglicherweise veraltet."
+      },
       "starters": {
         "addedToast": "Playbook hinzugefügt",
         "browseButton": "Playbook-Vorlagen durchsuchen",

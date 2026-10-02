@@ -3555,6 +3555,10 @@
         "blocker": "Blokuojanti"
       },
       "severityLabel": "Svarba",
+      "staleCopy": {
+        "loaded": "Įkelta naujesnė šio peržiūros vadovo versija. Prieš redaguodami įkelkite iš naujo.",
+        "unavailable": "Nepavyko įkelti naujausios šio peržiūros vadovo versijos. Tai paskutinė įkelta kopija; ji gali būti pasenusi."
+      },
       "starters": {
         "addedToast": "Peržiūros vadovas pridėtas",
         "browseButton": "Naršyti parengtus peržiūros vadovus",

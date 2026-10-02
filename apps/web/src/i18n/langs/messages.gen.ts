@@ -3558,6 +3558,10 @@ type Messages = {
         "blocker": "Blocker";
       };
       "severityLabel": "Severity";
+      "staleCopy": {
+        "loaded": "A newer version of this playbook has loaded. Reload before editing.";
+        "unavailable": "The latest version of this playbook could not be loaded. This is the last loaded copy and may be out of date.";
+      };
       "starters": {
         "addedToast": "Playbook added";
         "browseButton": "Browse starter playbooks";

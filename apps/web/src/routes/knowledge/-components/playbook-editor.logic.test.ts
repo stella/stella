@@ -1,4 +1,9 @@
-import { QueryClient } from "@tanstack/react-query";
+import {
+  onlineManager,
+  QueryClient,
+  QueryObserver,
+  queryOptions,
+} from "@tanstack/react-query";
 import { describe, expect, test } from "bun:test";
 
 import {
@@ -16,14 +21,19 @@ import type {
   Position,
 } from "@/lib/knowledge/playbook-types";
 import { toSafeId } from "@/lib/safe-id";
-import type { PlaybookDraft } from "@/routes/knowledge/-components/playbook-editor.logic";
+import type {
+  DetailSeedGate,
+  PlaybookDraft,
+} from "@/routes/knowledge/-components/playbook-editor.logic";
 import {
   buildPlaybookSavePayload,
   createPlaybookBaseline,
   hasPlaybookDraftChanges,
   hasResolvedPositionSources,
-  invalidatedSnapshotAt,
-  isSeedableDetail,
+  detailSeedGate,
+  latchedSeedGate,
+  refetchSupersededDetail,
+  resolveDetailSeed,
   resolvePlaybookScrollTop,
   resolvePositionSources,
   toPositionSourceLookup,
@@ -54,56 +64,227 @@ describe("Playbook outline navigation", () => {
 });
 
 describe("Seeding the editor from the cached detail", () => {
-  const key = ["playbook", "detail"];
+  type Detail = { name: string };
+  const { queryKey: key } = queryOptions({
+    queryKey: ["playbook", "detail"],
+    queryFn: async (): Promise<Detail> => ({ name: "on the server" }),
+  });
 
   // The cache as the list-to-editor round trip leaves it: the detail was read,
   // then a save invalidated it while no editor was observing it.
-  const cacheAfterSave = () => {
+  const cacheAfterSave = async () => {
     const queryClient = new QueryClient();
     queryClient.setQueryData(key, { name: "before save" });
+    await queryClient.invalidateQueries({ queryKey: key });
+    // Strictly later than the stale snapshot, as any real refetch is.
+    await Bun.sleep(2);
     return queryClient;
   };
 
-  test("a reopened editor waits for the refetch instead of seeding pre-save content", async () => {
-    const queryClient = cacheAfterSave();
-    await queryClient.invalidateQueries({ queryKey: key });
-    const invalidatedAt = invalidatedSnapshotAt(queryClient.getQueryState(key));
-    const stale = queryClient.getQueryState(key);
-
-    expect(
-      isSeedableDetail({
-        invalidatedAt,
-        dataUpdatedAt: stale?.dataUpdatedAt ?? 0,
-      }),
-    ).toBe(false);
-
-    // Strictly later than the stale snapshot, as any real refetch is.
-    await Bun.sleep(2);
-    await queryClient.query({
-      queryKey: key,
-      queryFn: () => ({ name: "after save" }),
+  const seedOf = (queryClient: QueryClient, gate: DetailSeedGate) => {
+    const state = queryClient.getQueryState(key);
+    if (state === undefined) {
+      throw new TypeError("expected a cached detail");
+    }
+    return resolveDetailSeed({
+      gate,
+      dataUpdatedAt: state.dataUpdatedAt,
+      fetchStatus: state.fetchStatus,
     });
-    const fresh = queryClient.getQueryState(key);
+  };
 
-    expect(fresh?.data).toEqual({ name: "after save" });
-    expect(
-      isSeedableDetail({
-        invalidatedAt,
-        dataUpdatedAt: fresh?.dataUpdatedAt ?? 0,
-      }),
-    ).toBe(true);
+  const latchedAfterSeeding = (
+    queryClient: QueryClient,
+    gate: DetailSeedGate,
+  ) => {
+    const latched = latchedSeedGate(gate, seedOf(queryClient, gate));
+    if (latched === null) {
+      throw new TypeError("expected the stale seed to latch its gate");
+    }
+    return latched;
+  };
+
+  /** The refetch a mounting editor starts, answered by `queryFn`. */
+  const refetchOnMount = async (
+    queryClient: QueryClient,
+    queryFn: () => Promise<Detail>,
+  ) =>
+    await queryClient
+      .query({ queryKey: key, queryFn, retry: false, staleTime: 0 })
+      .then(
+        () => "landed" as const,
+        () => "failed" as const,
+      );
+
+  test("a reopened editor waits for the refetch instead of seeding pre-save content", async () => {
+    const queryClient = await cacheAfterSave();
+    const gate = detailSeedGate(queryClient.getQueryState(key));
+    const fresh = Promise.withResolvers<Detail>();
+
+    const refetch = refetchOnMount(
+      queryClient,
+      async () => await fresh.promise,
+    );
+    expect(seedOf(queryClient, gate)).toEqual({ type: "wait" });
+
+    fresh.resolve({ name: "after save" });
+    expect(await refetch).toBe("landed");
+    expect(queryClient.getQueryState(key)?.data).toEqual({
+      name: "after save",
+    });
+    expect(seedOf(queryClient, gate)).toEqual({ type: "current" });
   });
 
   test("an editor opened on a detail nothing invalidated seeds at once", () => {
-    const queryClient = cacheAfterSave();
-    const state = queryClient.getQueryState(key);
+    const queryClient = new QueryClient();
+    queryClient.setQueryData(key, { name: "before save" });
 
-    expect(
-      isSeedableDetail({
-        invalidatedAt: invalidatedSnapshotAt(state),
-        dataUpdatedAt: state?.dataUpdatedAt ?? 0,
-      }),
-    ).toBe(true);
+    const gate = detailSeedGate(queryClient.getQueryState(key));
+
+    expect(gate).toEqual({ type: "open" });
+    expect(seedOf(queryClient, gate)).toEqual({ type: "current" });
+  });
+
+  test("a reopened editor whose refetch fails opens the cached detail as stale", async () => {
+    const queryClient = await cacheAfterSave();
+    const gate = detailSeedGate(queryClient.getQueryState(key));
+
+    const refetch = refetchOnMount(queryClient, async () => {
+      throw new Error("the API is down");
+    });
+    expect(seedOf(queryClient, gate)).toEqual({ type: "wait" });
+    expect(await refetch).toBe("failed");
+
+    expect(queryClient.getQueryState(key)?.status).toBe("error");
+    expect(queryClient.getQueryState(key)?.data).toEqual({
+      name: "before save",
+    });
+    expect(seedOf(queryClient, gate)).toEqual({
+      type: "stale",
+      fresher: "unavailable",
+    });
+  });
+
+  test("a reopened editor whose refetch is paused opens the cached detail as stale", async () => {
+    const queryClient = await cacheAfterSave();
+    const gate = detailSeedGate(queryClient.getQueryState(key));
+    // Mounted, as under the provider: the client resumes paused fetches when
+    // the connection returns.
+    queryClient.mount();
+    onlineManager.setOnline(false);
+    try {
+      const refetch = refetchOnMount(queryClient, async () => ({
+        name: "after save",
+      }));
+      await Bun.sleep(0);
+
+      expect(queryClient.getQueryState(key)?.fetchStatus).toBe("paused");
+      expect(seedOf(queryClient, gate)).toEqual({
+        type: "stale",
+        fresher: "unavailable",
+      });
+
+      // Back online the paused refetch lands. The form stays on the snapshot
+      // it was seeded from (the gate is latched as stale) and is told a
+      // fresher detail is in hand.
+      const latched = latchedAfterSeeding(queryClient, gate);
+      onlineManager.setOnline(true);
+      expect(await refetch).toBe("landed");
+      expect(seedOf(queryClient, latched)).toEqual({
+        type: "stale",
+        fresher: "loaded",
+      });
+    } finally {
+      onlineManager.setOnline(true);
+      queryClient.unmount();
+    }
+  });
+
+  test("a stale-seeded form is not unmounted by a retry in flight", async () => {
+    const queryClient = await cacheAfterSave();
+    const gate = detailSeedGate(queryClient.getQueryState(key));
+    // The refetch has failed or paused, and the form is seeded from the cache.
+    const latched = latchedAfterSeeding(queryClient, gate);
+    const fresh = Promise.withResolvers<Detail>();
+
+    const refetch = refetchOnMount(
+      queryClient,
+      async () => await fresh.promise,
+    );
+    expect(seedOf(queryClient, gate)).toEqual({ type: "wait" });
+
+    expect(seedOf(queryClient, latched)).toEqual({
+      type: "stale",
+      fresher: "loading",
+    });
+    fresh.resolve({ name: "after save" });
+    await refetch;
+  });
+
+  test("a reload issued before the conflict refetch lands waits for it", async () => {
+    // A mounted editor: the detail is observed, current, and not invalidated.
+    const queryClient = new QueryClient();
+    const fresh = Promise.withResolvers<Detail>();
+    let serverDetail: Promise<Detail> = Promise.resolve({ name: "mine" });
+    const observer = new QueryObserver(queryClient, {
+      queryKey: key,
+      queryFn: async () => await serverDetail,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    try {
+      await observer.refetch();
+      expect(detailSeedGate(queryClient.getQueryState(key))).toEqual({
+        type: "open",
+      });
+      await Bun.sleep(2);
+
+      // A rejected stale save: the editor refetches for the fresh token,
+      // detached, and offers Reload.
+      serverDetail = fresh.promise;
+      const takeFreshToken = refetchSupersededDetail(queryClient, key);
+
+      // Reload clicked while that refetch is still in flight.
+      const gate = detailSeedGate(queryClient.getQueryState(key));
+      expect(gate.type).toBe("awaiting");
+      expect(queryClient.getQueryState(key)?.data).toEqual({ name: "mine" });
+      expect(seedOf(queryClient, gate)).toEqual({ type: "wait" });
+
+      fresh.resolve({ name: "theirs" });
+      expect(await takeFreshToken).toEqual({ name: "theirs" });
+      expect(seedOf(queryClient, gate)).toEqual({ type: "current" });
+      expect(queryClient.getQueryState(key)?.data).toEqual({ name: "theirs" });
+    } finally {
+      unsubscribe();
+    }
+  });
+
+  test("a conflict refetch that fails hands back no token", async () => {
+    const queryClient = new QueryClient();
+    let fails = false;
+    const observer = new QueryObserver(queryClient, {
+      queryKey: key,
+      queryFn: async () => {
+        if (fails) {
+          throw new Error("the API is down");
+        }
+        return { name: "mine" };
+      },
+      retry: false,
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => undefined);
+    try {
+      await observer.refetch();
+      fails = true;
+
+      expect(await refetchSupersededDetail(queryClient, key)).toBeNull();
+      expect(detailSeedGate(queryClient.getQueryState(key)).type).toBe(
+        "awaiting",
+      );
+    } finally {
+      unsubscribe();
+    }
   });
 });
 

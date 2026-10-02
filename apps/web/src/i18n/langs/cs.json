@@ -3555,6 +3555,10 @@
         "blocker": "Blokující"
       },
       "severityLabel": "Závažnost",
+      "staleCopy": {
+        "loaded": "Byla načtena novější verze tohoto playbooku. Před úpravami ji načtěte znovu.",
+        "unavailable": "Nejnovější verzi tohoto playbooku se nepodařilo načíst. Zobrazuje se poslední načtená kopie, která může být zastaralá."
+      },
       "starters": {
         "addedToast": "Playbook přidán",
         "browseButton": "Procházet úvodní playbooky",
