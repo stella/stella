@@ -774,9 +774,6 @@ export const caseLawDecisions = p.pgTable(
       .on(t.sourceId, t.createdAt, t.id),
     p.index("case_law_decisions_source_id_page_idx").on(t.sourceId, t.id),
     p
-      .index("case_law_decisions_source_parser_version_id_idx")
-      .on(t.sourceId, t.parserVersion, t.id),
-    p
       .index("case_law_decisions_textless_detail_recheck_idx")
       .on(
         t.sourceId,

@@ -1,4 +1,6 @@
-import { readReplayTickEnvironment } from "@/api/env-base-schema";
+import { panic } from "better-result";
+
+import { readReplayTickEnvironment } from "@/api/env-replay";
 import {
   ADAPTER_KEYS,
   type AdapterKey,
@@ -10,7 +12,6 @@ export type ReplayEnrolment =
   | { mode: "enrolled"; dailyBudget: number; reviewedDryRun: string };
 
 // Enrolment is a reviewed code change, never an environment override.
-// The special-case sources cz-ns, sk-us and eu-ecj remain manual.
 export const REPLAY_ENROLMENT = {
   [ADAPTER_KEYS.CZ_REGIONAL]: { mode: "off" },
   [ADAPTER_KEYS.CZ_NS]: { mode: "off" },
@@ -45,11 +46,32 @@ export const REPLAY_ENROLMENT = {
 
 export const BACKGROUND_REPLAY_LIMITS = {
   maxRows: 100,
-  maxDurationMs: 5 * 60_000,
+  maxDurationMs: 4 * 60_000,
+  hardDurationMs: 5 * 60_000,
   maxDailyBudget: 10_000,
-  errorRateCeiling: 0.1,
   storedRawReadTimeoutMs: 30_000,
+  maxRowAttempts: 5,
+  rowRetryBaseMs: 60_000,
+  rowRetryMaxMs: 60 * 60_000,
+  receiptRetentionDays: 90,
+  maxCompactRows: 600,
 } as const;
+
+export const validateReplayEnrolment = (policy: ReplayEnrolment): void => {
+  if (policy.mode === "off") {
+    return;
+  }
+  if (
+    !Number.isSafeInteger(policy.dailyBudget) ||
+    policy.dailyBudget <= 0 ||
+    policy.dailyBudget > BACKGROUND_REPLAY_LIMITS.maxDailyBudget
+  ) {
+    panic("Replay daily budget must be a positive bounded integer");
+  }
+  if (policy.mode === "enrolled" && policy.reviewedDryRun.trim().length === 0) {
+    panic("Replay enrolment requires a reviewed dry run");
+  }
+};
 
 // Default stopped. Operators must explicitly enable the scheduled task.
 export const replayKillRequested = (adapterKey: AdapterKey) => {

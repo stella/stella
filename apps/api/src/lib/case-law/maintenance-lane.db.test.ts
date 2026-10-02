@@ -1,4 +1,3 @@
-import { Result } from "better-result";
 /**
  * Two sessions contend for the maintenance lane on a real Postgres: the
  * second may not start until the first releases. PGlite cannot stand in here
@@ -6,14 +5,14 @@ import { Result } from "better-result";
  * meaningful across sessions. The read-only door is proved the same way: a
  * write through it must be refused by the server, not by a convention.
  */
+import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 import { sql } from "drizzle-orm";
 
-import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import {
+  enterCaseLawMaintenanceLane,
   holdCaseLawMaintenanceLane,
   openCaseLawReadOnlySession,
-  tryEnterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 import { PG_ERROR, getPgErrorCode } from "@/api/lib/pg-error";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
@@ -29,77 +28,6 @@ if (!databaseUrl || !runPostgresTests) {
   });
 } else {
   describe("case-law maintenance lane (postgres)", () => {
-    test("a scheduled pass yields immediately to an operator and enters after release", async () => {
-      await withGatedTestClients(
-        databaseUrl,
-        async ({ openClient }) => {
-          const operator = await holdCaseLawMaintenanceLane({
-            sql: openClient().sql,
-          });
-          try {
-            expect(
-              await tryEnterCaseLawMaintenanceLane({ sql: openClient().sql }),
-            ).toBeNull();
-          } finally {
-            await operator.release();
-          }
-          const scheduled = await tryEnterCaseLawMaintenanceLane({
-            sql: openClient().sql,
-          });
-          expect(scheduled).not.toBeNull();
-          await scheduled?.release();
-        },
-        { closeTimeout: 0 },
-      );
-    });
-
-    test("a scheduled pass refuses a held schema lane without waiting", async () => {
-      await withGatedTestClients(
-        databaseUrl,
-        async ({ openClient }) => {
-          const upgrade = openClient().sql;
-          await upgrade.unsafe(
-            "SELECT pg_advisory_lock(hashtext('case_law'),hashtext('schema'))",
-          );
-          const scheduled = await tryEnterCaseLawMaintenanceLane({
-            sql: openClient().sql,
-          });
-          if (!scheduled) {
-            throw new TypeError("Expected maintenance lane to be free");
-          }
-          try {
-            for (const work of [
-              async () => await scheduled.rootDb.execute(sql`SELECT 1`),
-              async () =>
-                await scheduled.ingestionDb(
-                  async (tx) => await tx.execute(sql`SELECT 1`),
-                ),
-            ]) {
-              const result = await Result.tryPromise({
-                try: work,
-                catch: (cause: unknown) => cause,
-              });
-              expect(result.isErr()).toBe(true);
-              if (result.isErr()) {
-                expect(result.error).toBeInstanceOf(
-                  CorpusSchemaLaneUnavailableError,
-                );
-                if (result.error instanceof CorpusSchemaLaneUnavailableError) {
-                  expect(result.error.waitedMs).toBe(0);
-                }
-              }
-            }
-          } finally {
-            await scheduled.release();
-            await upgrade.unsafe(
-              "SELECT pg_advisory_unlock(hashtext('case_law'),hashtext('schema'))",
-            );
-          }
-        },
-        { closeTimeout: 0 },
-      );
-    });
-
     test("a second pass waits until the first releases", async () => {
       // A release ends its session; the scope closes whichever did not get
       // that far, without waiting on a lock request that is still blocked.
@@ -127,6 +55,87 @@ if (!databaseUrl || !runPostgresTests) {
         },
         { closeTimeout: 0 },
       );
+    });
+
+    test("the bounded door skips a held lane without starting work", async () => {
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const held = await holdCaseLawMaintenanceLane({
+          sql: openClient().sql,
+        });
+        try {
+          const skipped = await enterCaseLawMaintenanceLane({
+            mode: "bounded",
+            signal: AbortSignal.timeout(10_000),
+            statementTimeout: 5000,
+            lockTimeout: 5000,
+            work: async () =>
+              panic("Contended maintenance work must not start"),
+          });
+          expect(skipped).toBeNull();
+        } finally {
+          await held.release();
+        }
+      });
+    });
+
+    test("the bounded door serializes root and ingestion work on one backend and releases after failure", async () => {
+      const roles = await enterCaseLawMaintenanceLane({
+        mode: "bounded",
+        signal: AbortSignal.timeout(10_000),
+        statementTimeout: 5000,
+        lockTimeout: 5000,
+        work: async ({ rootDb, ingestionDb }) =>
+          await Promise.all([
+            rootDb.transaction(async (tx) =>
+              (
+                await tx.execute<{ pid: number; role: string }>(
+                  sql`SELECT pg_backend_pid() AS pid, current_user AS role, pg_sleep(0.01)`,
+                )
+              ).at(0),
+            ),
+            ingestionDb(async (tx) =>
+              (
+                await tx.execute<{ pid: number; role: string }>(
+                  sql`SELECT pg_backend_pid() AS pid, current_user AS role`,
+                )
+              ).at(0),
+            ),
+            rootDb.transaction(async (tx) =>
+              (
+                await tx.execute<{ pid: number; role: string }>(
+                  sql`SELECT pg_backend_pid() AS pid, current_user AS role`,
+                )
+              ).at(0),
+            ),
+          ]),
+      });
+      if (roles === null) {
+        return panic("Expected uncontended bounded maintenance lane");
+      }
+      expect(new Set(roles.map((row) => row?.pid)).size).toBe(1);
+      expect(roles.at(0)?.role).not.toBe("stella_ingestion");
+      expect(roles.at(1)?.role).toBe("stella_ingestion");
+      expect(roles.at(2)?.role).toBe(roles.at(0)?.role);
+      const failed = await Result.tryPromise(
+        async () =>
+          await enterCaseLawMaintenanceLane({
+            mode: "bounded",
+            signal: AbortSignal.timeout(10_000),
+            statementTimeout: 5000,
+            lockTimeout: 5000,
+            work: async () => panic("Deliberate fixture work failure"),
+          }),
+      );
+      expect(failed.isErr()).toBe(true);
+      expect(
+        await enterCaseLawMaintenanceLane({
+          mode: "bounded",
+          signal: AbortSignal.timeout(10_000),
+          statementTimeout: 5000,
+          lockTimeout: 5000,
+          work: async () => "released",
+        }),
+      ).toBe("released");
     });
 
     test("the read-only door refuses a write with 25006", async () => {

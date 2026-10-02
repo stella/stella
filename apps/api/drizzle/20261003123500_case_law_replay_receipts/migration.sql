@@ -57,7 +57,7 @@ CREATE TABLE "case_law_replay_daily_rows" (
   "budget_day" date NOT NULL,
   "source_id" uuid NOT NULL,
   CONSTRAINT "case_law_replay_daily_rows_batch_id_budget_day_pk" PRIMARY KEY ("batch_id", "budget_day"),
-  CONSTRAINT "case_law_replay_daily_rows_batch_id_case_law_replay_batches_id_fk" FOREIGN KEY ("batch_id") REFERENCES "case_law_replay_batches"("id") ON DELETE RESTRICT,
+  CONSTRAINT "case_law_replay_daily_batch_fk" FOREIGN KEY ("batch_id") REFERENCES "case_law_replay_batches"("id") ON DELETE RESTRICT,
   CONSTRAINT "case_law_replay_daily_rows_source_id_case_law_sources_id_fk" FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id") ON DELETE RESTRICT
 );--> statement-breakpoint
 CREATE INDEX "case_law_replay_daily_rows_source_day_idx" ON "case_law_replay_daily_rows" ("source_id", "budget_day");--> statement-breakpoint

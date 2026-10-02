@@ -58,6 +58,7 @@ import {
   readCorpusS3BytesBounded,
   readCorpusS3Range,
 } from "@/api/lib/s3";
+import type { S3CredentialRefreshOptions } from "@/api/lib/s3/credential-guard";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 /**
@@ -136,7 +137,12 @@ const boundedCorpusIo = async <T>(
     signal,
     timeoutMs = CORPUS_IO_TIMEOUT_MS,
   }: { signal?: AbortSignal; timeoutMs?: number } = {},
-): Promise<T> => await withTimeout(operation, { label, signal, timeoutMs });
+): Promise<T> =>
+  await withTimeout(operation, {
+    label,
+    ...(signal === undefined ? {} : { signal }),
+    timeoutMs,
+  });
 
 type CorpusKeyInput = {
   documentId: string;
@@ -247,7 +253,10 @@ type WriteCorpusInput = CorpusPayload & {
   stored: WriteCorpusResult | null;
 };
 
-type CorpusIoOptions = { signal?: AbortSignal };
+type CorpusIoOptions = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
+};
 
 type StartedCorpusIo<T> = {
   result: Promise<T>;
@@ -606,7 +615,7 @@ export const corpusPayloadDisposition = ({
  */
 export const writeCorpusDocument = async (
   input: WriteCorpusInput,
-  { signal }: CorpusIoOptions = {},
+  { signal, s3Policy }: CorpusIoOptions = {},
 ): Promise<CorpusWriteOutcome> => {
   const plan = planCorpusDocumentWrite(input);
   if (plan.type !== "put") {
@@ -630,34 +639,37 @@ export const writeCorpusDocument = async (
     startCancellableCorpusIo(
       "corpus-write-text",
       async (writeSignal) =>
-        await putCorpusS3ObjectWithSignal(
-          keys.textKey,
-          frames.text,
-          CONTENT_TYPE,
-          writeSignal,
-        ),
+        await putCorpusS3ObjectWithSignal({
+          key: keys.textKey,
+          bytes: frames.text,
+          mimeType: CONTENT_TYPE,
+          signal: writeSignal,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        }),
       writeOptions,
     ),
     startCancellableCorpusIo(
       "corpus-write-sections",
       async (writeSignal) =>
-        await putCorpusS3ObjectWithSignal(
-          keys.sectionsKey,
-          frames.sections,
-          CONTENT_TYPE,
-          writeSignal,
-        ),
+        await putCorpusS3ObjectWithSignal({
+          key: keys.sectionsKey,
+          bytes: frames.sections,
+          mimeType: CONTENT_TYPE,
+          signal: writeSignal,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        }),
       writeOptions,
     ),
     startCancellableCorpusIo(
       "corpus-write-ast",
       async (writeSignal) =>
-        await putCorpusS3ObjectWithSignal(
-          keys.astKey,
-          frames.ast,
-          CONTENT_TYPE,
-          writeSignal,
-        ),
+        await putCorpusS3ObjectWithSignal({
+          key: keys.astKey,
+          bytes: frames.ast,
+          mimeType: CONTENT_TYPE,
+          signal: writeSignal,
+          ...(s3Policy === undefined ? {} : { s3Policy }),
+        }),
       writeOptions,
     ),
   ];
@@ -674,6 +686,7 @@ type BoundedObjectReader = (options: {
   key: string;
   maxBytes: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 }) => Promise<Uint8Array>;
 
 type RangeReader = (options: {
@@ -681,6 +694,7 @@ type RangeReader = (options: {
   offset: number;
   length: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 }) => Promise<Uint8Array>;
 
 type ReadCorpusBytesAtOptions = {
@@ -688,6 +702,7 @@ type ReadCorpusBytesAtOptions = {
   /** Ceiling on the transferred (still-compressed) bytes. */
   maxBytes: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   /** Test seams; production reads through the corpus bucket client. */
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
@@ -714,6 +729,7 @@ type ReadPackedMemberOptions = {
   location: PackedCorpusLocation;
   maxBytes: number;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   readRange: RangeReader;
   readTombstones: CorpusTombstoneReader;
 };
@@ -728,6 +744,7 @@ const readPackedMember = async ({
   location,
   maxBytes,
   signal,
+  s3Policy,
   readRange,
   readTombstones,
 }: ReadPackedMemberOptions): Promise<
@@ -760,6 +777,7 @@ const readPackedMember = async ({
     offset: location.offset,
     length: location.length,
     signal,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
   });
   const digest = corpusMemberDigest(bytes);
   return digest === location.sha256
@@ -777,18 +795,25 @@ export const readCorpusBytesAt = async ({
   location,
   maxBytes,
   signal,
+  s3Policy,
   readObject = readCorpusS3BytesBounded,
   readRange = readCorpusS3Range,
   readTombstones,
 }: ReadCorpusBytesAtOptions): Promise<Uint8Array> => {
   switch (location.type) {
     case "object":
-      return await readObject({ key: location.key, maxBytes, signal });
+      return await readObject({
+        key: location.key,
+        maxBytes,
+        signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
+      });
     case "packed": {
       const member = await readPackedMember({
         location,
         maxBytes,
         signal,
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         readRange,
         readTombstones,
       });
@@ -810,6 +835,8 @@ export const readCorpusBytesAt = async ({
  * answer to "where is this read's erasure list", and is required.
  */
 export type CorpusByteSourceSeams = {
+  signal?: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
   readObject?: BoundedObjectReader;
   readRange?: RangeReader;
   readTombstones: CorpusTombstoneReader;
@@ -818,17 +845,20 @@ export type CorpusByteSourceSeams = {
 type ReadStoredCorpusBytesOptions = CorpusByteSourceSeams & {
   storedKey: string;
   signal: AbortSignal;
+  s3Policy?: S3CredentialRefreshOptions;
 };
 
 const readStoredCorpusBytes = async ({
   storedKey,
   signal,
+  s3Policy,
   ...seams
 }: ReadStoredCorpusBytesOptions): Promise<Uint8Array> =>
   await readCorpusBytesAt({
     location: parseCorpusLocation(storedKey),
     maxBytes: CORPUS_TRANSFER_MAX_BYTES,
     signal,
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     ...seams,
   });
 
@@ -844,25 +874,34 @@ type ReadCorpusTextOptions = CorpusByteSourceSeams & {
  */
 export const readCorpusText = async (
   storedKey: string,
-  { timeoutMs = CORPUS_IO_TIMEOUT_MS, ...seams }: ReadCorpusTextOptions,
+  { timeoutMs = CORPUS_IO_TIMEOUT_MS, signal, ...seams }: ReadCorpusTextOptions,
 ): Promise<string> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-text",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
-    { timeoutMs },
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { timeoutMs, ...(signal === undefined ? {} : { signal }) },
   );
   return await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
 };
 
 export const readCorpusSections = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams,
+  { signal, ...seams }: CorpusByteSourceSeams,
 ): Promise<DecisionSection[] | null> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-sections",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { ...(signal === undefined ? {} : { signal }) },
   );
   const parsed: unknown = JSON.parse(
     await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES),
@@ -882,12 +921,17 @@ export type SizedCorpusAst = {
 
 export const readSizedCorpusAst = async (
   storedKey: string,
-  seams: CorpusByteSourceSeams,
+  { signal, ...seams }: CorpusByteSourceSeams,
 ): Promise<SizedCorpusAst> => {
   const bytes = await boundedCorpusIo(
     "corpus-read-ast",
-    async (signal) =>
-      await readStoredCorpusBytes({ storedKey, signal, ...seams }),
+    async (requestSignal) =>
+      await readStoredCorpusBytes({
+        storedKey,
+        signal: requestSignal,
+        ...seams,
+      }),
+    { ...(signal === undefined ? {} : { signal }) },
   );
   const decoded = await zstdDecompressToStringBounded(bytes, PAYLOAD_MAX_BYTES);
   const parsed: unknown = JSON.parse(decoded);

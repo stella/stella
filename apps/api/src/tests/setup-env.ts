@@ -1,5 +1,11 @@
 import { configureTestDatabaseEnvironment } from "./test-database-environment";
 
+// Postgres fixtures are non-RDS: resolve telemetry before any env owner loads.
+if (process.env["STELLA_RUN_POSTGRES_TESTS"] === "true") {
+  process.env["DB_LOAD_GATE_EBS_SIGNAL"] = "disabled";
+  delete process.env["DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER"];
+}
+
 configureTestDatabaseEnvironment();
 // The API suites and the tooling that loads the API graph (catalog export,
 // route guards) exercise local development capabilities, which require an

@@ -70,15 +70,6 @@ type OnlineIndex = RequiredMigrationIndex & {
 export const ONLINE_MIGRATION_INDEXES: readonly OnlineIndex[] = [
   {
     createSql:
-      'CREATE INDEX CONCURRENTLY "case_law_decisions_source_parser_version_id_idx" ON public."case_law_decisions" USING btree ("source_id", "parser_version", "id")',
-    definitionBody:
-      "ON public.case_law_decisions USING btree (source_id, parser_version, id)",
-    isUnique: false,
-    name: "case_law_decisions_source_parser_version_id_idx",
-    tableName: "case_law_decisions",
-  },
-  {
-    createSql:
       'CREATE INDEX CONCURRENTLY "time_entries_org_status_date_id_idx" ON public."time_entries" USING btree ("organization_id", "status", "date_worked", "id")',
     definitionBody:
       "ON public.time_entries USING btree (organization_id, status, date_worked, id)",

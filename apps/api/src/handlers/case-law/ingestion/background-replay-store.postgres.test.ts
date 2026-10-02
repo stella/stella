@@ -1,16 +1,20 @@
 import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
-import { eq, inArray, sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 import type { Verdict } from "@stll/db-load-gate/health";
 import { createHeavyWorkSlot } from "@stll/db-load-gate/slot";
+import { DAY_IN_MS } from "@stll/time";
 
 import type { ScopedDb } from "@/api/db/safe-db";
 import {
+  CASE_LAW_CORPUS_MIRROR_STATUS,
   caseLawDecisions,
   caseLawReplayBatches,
   caseLawReplayDailyRows,
   caseLawReplayBlocked,
+  caseLawReplaySourceProgress,
+  caseLawReplayAuditEvents,
   caseLawSources,
   databaseBackfillStates,
 } from "@/api/db/schema";
@@ -24,14 +28,25 @@ import type {
   BackgroundReplaySource,
 } from "@/api/handlers/case-law/ingestion/background-replay";
 import { createBackgroundReplayRunner } from "@/api/handlers/case-law/ingestion/background-replay-runner";
-import { createBackgroundReplayStore } from "@/api/handlers/case-law/ingestion/background-replay-store";
 import {
+  buildReplayCompactionQuery,
+  buildReplayRetirementQuery,
+  createBackgroundReplayStore,
+} from "@/api/handlers/case-law/ingestion/background-replay-store";
+import {
+  CASE_LAW_REPLAY_SCOPE,
   REPLAY_ROW_OUTCOME,
   replayCaseLawSource,
   selectScopeEnd,
+  buildBackgroundReplayProbe,
+  buildReplayPageQuery,
+  buildReplayScopeEndQuery,
 } from "@/api/handlers/case-law/ingestion/replay";
-import { REPLAY_ENROLMENT } from "@/api/handlers/case-law/ingestion/replay-enrolment";
-import { createSafeId } from "@/api/lib/branded-types";
+import {
+  BACKGROUND_REPLAY_LIMITS,
+  REPLAY_ENROLMENT,
+} from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import { createSafeId, toSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
   TEXT_ABSENCE_REASON,
@@ -46,6 +61,16 @@ import {
   openGatedTestDatabase,
 } from "@/api/tests/gated-test-database";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
+import {
+  explainRoot,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
+import {
+  scaleTableToProfile,
+  SYNTHETIC_SCALE_PROFILE,
+} from "@/api/tests/query-plans/scale-profile";
+
+import { replayFailure } from "./replay-failure";
 
 const databaseUrl = process.env["DATABASE_URL"];
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
@@ -64,6 +89,20 @@ if (!databaseUrl || !enabled) {
     const sources: BackgroundReplaySource[] = [];
     cleanUp(async () => {
       for (const source of sources) {
+        await db
+          .delete(caseLawReplayAuditEvents)
+          .where(eq(caseLawReplayAuditEvents.sourceId, source.id));
+        await db
+          .delete(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, source.id));
+        await db
+          .delete(databaseBackfillStates)
+          .where(
+            eq(
+              databaseBackfillStates.name,
+              `case-law-replay:${source.id}:${source.currentParserVersion}:dry-run`,
+            ),
+          );
         await db
           .delete(caseLawReplayBlocked)
           .where(eq(caseLawReplayBlocked.sourceId, source.id));
@@ -92,8 +131,6 @@ if (!databaseUrl || !enabled) {
         dailyBudget,
         mode: "enrolled",
         rowsBehind: 3,
-        oldestAgeMs: 1,
-        blockedCount: 0,
       } as const satisfies BackgroundReplaySource;
       sources.push(source);
       await db.insert(caseLawSources).values({
@@ -133,9 +170,9 @@ if (!databaseUrl || !enabled) {
       verdict: verdict(),
     });
 
-    test("largest enabled lag yields to a smaller source after its daily budget is spent", async () => {
-      const eu = await fixture(1);
-      const cz = await fixture(1);
+    test("persisted round-robin serves dry-run and enrolled sources fairly with bounded probes", async () => {
+      const eu = await fixture(3);
+      const cz = await fixture(3);
       await db
         .update(caseLawSources)
         .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
@@ -144,95 +181,71 @@ if (!databaseUrl || !enabled) {
         .update(caseLawSources)
         .set({ adapterKey: ADAPTER_KEYS.CZ_NSS })
         .where(eq(caseLawSources.id, cz.source.id));
-      const euVersion = PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ];
-      const czVersion = PARSER_VERSIONS[ADAPTER_KEYS.CZ_NSS];
+      // Reset only the fixture-owned scheduler state for deterministic ordering.
       await db
-        .update(caseLawDecisions)
-        .set({ parserVersion: czVersion })
-        .where(inArray(caseLawDecisions.id, cz.ids.slice(1)));
-      const blockedId = eu.ids.at(0);
-      if (!blockedId) {
-        throw new TypeError("Expected blocked lag fixture");
-      }
-      await db.insert(caseLawReplayBlocked).values({
-        sourceId: eu.source.id,
-        decisionId: blockedId,
-        parserVersionFrom: 1,
-        parserVersionTo: euVersion,
-        reason: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
-      });
+        .delete(databaseBackfillStates)
+        .where(eq(databaseBackfillStates.name, "case-law-replay:round-robin"));
       const enrolment = {
         ...REPLAY_ENROLMENT,
-        [ADAPTER_KEYS.EU_ECJ]: {
-          mode: "enrolled",
-          dailyBudget: 1,
-          reviewedDryRun: "fixture",
-        },
+        [ADAPTER_KEYS.EU_ECJ]: { mode: "dry-run", dailyBudget: 3 },
         [ADAPTER_KEYS.CZ_NSS]: {
           mode: "enrolled",
-          dailyBudget: 1,
+          dailyBudget: 3,
           reviewedDryRun: "fixture",
         },
       } as const;
-      const lag: BackgroundReplaySource[] = [];
-      const exhausted: BackgroundReplaySource[] = [];
+      const observations: BackgroundReplaySource[] = [];
       const store = createBackgroundReplayStore({
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        onLag: (source) => {
-          lag.push(source);
-        },
-        onBudgetExhausted: (source) => {
-          exhausted.push(source);
-        },
+        onLag: (source) => observations.push(source),
       });
-      const selected = await store.chooseSource();
-      expect(selected?.id).toBe(eu.source.id);
-      expect(selected?.currentParserVersion).toBe(euVersion);
-      expect(lag.find((source) => source.id === eu.source.id)).toMatchObject({
-        rowsBehind: 3,
-        blockedCount: 1,
-      });
-      expect(lag.find((source) => source.id === cz.source.id)).toMatchObject({
-        rowsBehind: 1,
-        blockedCount: 0,
-      });
-      const disabled = createBackgroundReplayStore({
+      const first = await store.chooseSource();
+      const second = await store.chooseSource();
+      const restarted = createBackgroundReplayStore({
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        sourceEnabled: (key) => key !== ADAPTER_KEYS.EU_ECJ,
       });
-      expect((await disabled.chooseSource())?.id).toBe(cz.source.id);
-      if (!selected) {
-        throw new TypeError("Expected largest lag source");
+      const third = await restarted.chooseSource();
+      expect(first?.id).toBe(cz.source.id);
+      expect(second?.id).toBe(eu.source.id);
+      expect(third?.id).toBe(cz.source.id);
+      expect(observations.map(({ rowsBehind }) => rowsBehind)).toEqual([1, 1]);
+      if (!first || !second) {
+        throw new TypeError("Expected both eligible sources");
       }
-      sources.push(selected, { ...cz.source, currentParserVersion: czVersion });
-      const reserved = await store.reserveBatch(
-        selected,
-        "2026-10-01",
-        verdict(),
-      );
-      expect(reserved.type).toBe("reserved");
-      if (reserved.type !== "reserved") {
-        throw new TypeError("Expected largest lag reservation");
-      }
-      // Its charged pending work remains recoverable without another allowance.
-      expect((await store.chooseSource())?.id).toBe(eu.source.id);
-      await store.completeBatch(reserved.batch, {
-        report: {
-          id: reserved.batch.decisionId,
-          caseNumber: "fixture",
-          language: "cs",
-          outcome: REPLAY_ROW_OUTCOME.REJECTED,
-          rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
-        },
-        durationMs: 1,
-        verdict: verdict(),
+      sources.push(first, second);
+      const held: string[] = [];
+      await store.saveGateState(first, {
+        ...(await store.loadGateState(first)),
+        holdUntil: Date.UTC(2026, 9, 2),
       });
-      expect((await store.chooseSource())?.id).toBe(cz.source.id);
-      expect(exhausted.map((source) => source.id)).toEqual([eu.source.id]);
+      const heldStore = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+        enrolment,
+        onHeld: (source) => held.push(source.id),
+      });
+      expect((await heldStore.chooseSource())?.id).toBe(eu.source.id);
+      expect((await heldStore.chooseSource())?.id).toBe(eu.source.id);
+      expect(held).toEqual([cz.source.id]);
+      const stopped = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+        enrolment,
+        gate: async () => ({ kind: "unknown", signals: [] }),
+      });
+      expect(await stopped.chooseSource()).toBeNull();
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: `fixture-${eu.source.id}` })
+        .where(eq(caseLawSources.id, eu.source.id));
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: `fixture-${cz.source.id}` })
+        .where(eq(caseLawSources.id, cz.source.id));
     });
 
     test("charges reservations once, reuses pending work, and resets the daily allowance", async () => {
@@ -249,8 +262,38 @@ if (!databaseUrl || !enabled) {
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
         .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
       await store.completeBatch(first.batch, applied(first.batch));
       await store.completeBatch(first.batch, applied(first.batch));
+      const history = await db
+        .select()
+        .from(caseLawReplayAuditEvents)
+        .where(eq(caseLawReplayAuditEvents.sourceId, source.id));
+      expect(
+        history.filter(({ action }) => action === "receipt-applied"),
+      ).toHaveLength(1);
+      expect(
+        history.find(({ action }) => action === "receipt-reserved"),
+      ).toMatchObject({
+        resourceId: first.batch.id,
+        serviceId: "case-law-background-replay",
+      });
+      expect(
+        history.find(({ action }) => action === "receipt-applied"),
+      ).toMatchObject({
+        resourceId: first.batch.id,
+        details: { status: "completed", attempts: 1 },
+      });
+      const progress = (
+        await db
+          .select()
+          .from(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+      ).at(0);
+      expect(progress).toMatchObject({
+        ticksWithoutProgress: 0,
+        lastCompletedAt: new Date(Date.UTC(2026, 9, 1)),
+      });
       expect(await store.reserveBatch(source, "2026-10-01", verdict())).toEqual(
         { type: "budget-exhausted" },
       );
@@ -464,11 +507,13 @@ if (!databaseUrl || !enabled) {
             });
             expect(recovered.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
             expect(recovered.outcomes[REPLAY_ROW_OUTCOME.WOULD_APPLY]).toBe(0);
-            await recoveredRunner.completeBatch(reserved.batch, {
-              report: recovered,
-              durationMs: 1,
-              verdict: verdict(),
-            });
+            expect(
+              await recoveredRunner.completeBatch(reserved.batch, {
+                report: recovered,
+                durationMs: 1,
+                verdict: verdict(),
+              }),
+            ).toBe("applied");
           }
         } finally {
           await secondLease.release();
@@ -757,42 +802,56 @@ if (!databaseUrl || !enabled) {
               .from(caseLawDecisions)
               .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
           ).at(0);
-          const runner = createBackgroundReplayRunner({
-            rootDb: db,
-            ingestionDb: scopedDb,
-            getLease: () => null,
-            assertSlot: async () => {
-              throw new TypeError("Rejected preview must not enter writer");
-            },
-            store,
-            log: () => {},
-            readStoredRaw: async () =>
-              new TextEncoder().encode("rejected fixture"),
-            adapterFor: () => ({
-              ...registered,
-              reparseStoredRaw: () => ({
-                type: "rejected",
-                rejection,
-                detail: "synthetic rejected payload",
+          const lease = await acquireCaseLawSourceIngestionLease({
+            scopedDb,
+            sourceId: source.id,
+          });
+          if (!lease) {
+            throw new TypeError("Expected rejected-row completion lease");
+          }
+          let slotChecks = 0;
+          try {
+            const runner = createBackgroundReplayRunner({
+              rootDb: db,
+              ingestionDb: scopedDb,
+              getLease: () => lease,
+              assertSlot: async () => {
+                slotChecks += 1;
+              },
+              store,
+              log: () => {},
+              readStoredRaw: async () =>
+                new TextEncoder().encode("rejected fixture"),
+              adapterFor: () => ({
+                ...registered,
+                reparseStoredRaw: () => ({
+                  type: "rejected",
+                  rejection,
+                  detail: "synthetic rejected payload",
+                }),
               }),
-            }),
-          });
-          const report = await runner.replay(reserved.batch, { apply: true });
-          expect(report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
-          expect(report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
-          await runner.completeBatch(reserved.batch, {
-            report,
-            durationMs: 1,
-            verdict: verdict(),
-          });
-          const after = (
-            await db
-              .select()
-              .from(caseLawDecisions)
-              .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
-          ).at(0);
-          expect(after).toEqual(before);
-          expect(fake.requests).toHaveLength(0);
+            });
+            const report = await runner.replay(reserved.batch, { apply: true });
+            expect(report.outcomes[REPLAY_ROW_OUTCOME.REJECTED]).toBe(1);
+            expect(report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(0);
+            expect(slotChecks).toBe(0);
+            await runner.completeBatch(reserved.batch, {
+              report,
+              durationMs: 1,
+              verdict: verdict(),
+            });
+            expect(slotChecks).toBe(1);
+            const after = (
+              await db
+                .select()
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+            ).at(0);
+            expect(after).toEqual(before);
+            expect(fake.requests).toHaveLength(0);
+          } finally {
+            await lease.release();
+          }
         }
       } finally {
         fake.stop();
@@ -933,20 +992,59 @@ if (!databaseUrl || !enabled) {
       expect(settled?.cursor).toBe(reserved.batch.decisionId);
     });
 
-    test("concurrent reservation calls return the same single charged receipt", async () => {
-      const { source, store } = await fixture(3);
-      const results = await Promise.all([
-        store.reserveBatch(source, "2026-10-01", verdict()),
-        store.reserveBatch(source, "2026-10-01", verdict()),
-      ]);
-      expect(results.at(0)?.type).toBe("reserved");
-      expect(results.at(1)).toEqual(results.at(0));
-      expect(
+    test("independent workers share one daily budget charge under concurrent reservation", async () => {
+      const { source, store } = await fixture(1);
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const firstStore = createBackgroundReplayStore({
+          db: openClient().db,
+          now: () => Date.UTC(2026, 9, 1),
+        });
+        const secondStore = createBackgroundReplayStore({
+          db: openClient().db,
+          now: () => Date.UTC(2026, 9, 1),
+        });
+        const results = await Promise.all([
+          firstStore.reserveBatch(source, "2026-10-01", verdict()),
+          secondStore.reserveBatch(source, "2026-10-01", verdict()),
+        ]);
+        const first = results.at(0);
+        expect(first?.type).toBe("reserved");
+        expect(results.at(1)).toEqual(first);
+        if (first?.type !== "reserved") {
+          throw new TypeError("Expected shared receipt");
+        }
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.sourceId, source.id)),
+        ).toHaveLength(1);
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayDailyRows)
+            .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+        ).toHaveLength(1);
         await db
-          .select()
-          .from(caseLawReplayBatches)
-          .where(eq(caseLawReplayBatches.sourceId, source.id)),
-      ).toHaveLength(1);
+          .update(caseLawDecisions)
+          .set({ parserVersion: 2 })
+          .where(eq(caseLawDecisions.id, first.batch.decisionId));
+        await store.completeBatch(first.batch, applied(first.batch));
+        const denied = await Promise.all([
+          firstStore.reserveBatch(source, "2026-10-01", verdict()),
+          secondStore.reserveBatch(source, "2026-10-01", verdict()),
+        ]);
+        expect(denied).toEqual([
+          { type: "budget-exhausted" },
+          { type: "budget-exhausted" },
+        ]);
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayDailyRows)
+            .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+        ).toHaveLength(1);
+      });
     });
 
     test("rejected completion is idempotent and removes only the current blocked generation from selection", async () => {
@@ -986,7 +1084,7 @@ if (!databaseUrl || !enabled) {
           .from(caseLawReplayBatches)
           .where(eq(caseLawReplayBatches.id, reserved.batch.id))
       ).at(0);
-      expect(row?.status).toBe("completed");
+      expect(row?.status).toBe("blocked");
       expect(row?.blocked).toBe(1);
       expect(row?.applied).toBe(0);
       const scope = {
@@ -1021,6 +1119,869 @@ if (!databaseUrl || !enabled) {
           )
       ).at(0);
       expect(checkpoint?.cursor).toBe(reserved.batch.decisionId);
+    });
+    test("reported applied without a moved database stamp excludes the row across wrap-around", async () => {
+      const { source, store, ids } = await fixture(10);
+      const completed = [];
+      for (let index = 0; index < 3; index++) {
+        const reserved = await store.reserveBatch(
+          source,
+          "2026-10-01",
+          verdict(),
+        );
+        if (reserved.type !== "reserved") {
+          throw new TypeError("Expected next lagging fixture");
+        }
+        completed.push(reserved.batch.decisionId);
+        expect(
+          await store.completeBatch(reserved.batch, applied(reserved.batch)),
+        ).toBe("blocked");
+      }
+      expect(completed).toEqual(ids);
+      expect(await store.reserveBatch(source, "2026-10-01", verdict())).toEqual(
+        { type: "empty" },
+      );
+      const exclusions = await db
+        .select()
+        .from(caseLawReplayBlocked)
+        .where(eq(caseLawReplayBlocked.sourceId, source.id));
+      expect(exclusions.map(({ reason }) => reason)).toEqual([
+        "no-write-settled",
+        "no-write-settled",
+        "no-write-settled",
+      ]);
+      // A new low-ID insert forces the cursor to wrap; dropping wrap-around loses it.
+      const lowId = ids.at(0);
+      if (!lowId) {
+        throw new TypeError("Expected sorted fixture IDs");
+      }
+      const lower = toSafeId<"caseLawDecision">(
+        "00000000-0000-4000-8000-000000000001",
+      );
+      expect(lower < lowId).toBe(true);
+      await db.insert(caseLawDecisions).values({
+        id: lower,
+        sourceId: source.id,
+        caseNumber: "late fixture",
+        court: "fixture court",
+        country: "CZE",
+        language: "cs",
+        parserVersion: 1,
+        sourceRawS3Key: `fixture/${lower}`,
+      });
+      const next = await store.reserveBatch(source, "2026-10-01", verdict());
+      expect(next.type).toBe("reserved");
+      if (next.type !== "reserved") {
+        throw new TypeError("Expected wrapped fixture");
+      }
+      expect(next.batch.decisionId).toBe(lower);
+    });
+
+    test("backoff skips poison rows, persists classified reasons and bounds attempts", async () => {
+      const { source, ids } = await fixture(30);
+      let currentTime = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => currentTime });
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected poison fixture");
+      }
+      const failure = {
+        ...replayFailure("adapter-exception"),
+        healthyEvidence: "none",
+        durationMs: 1,
+        verdict: verdict(),
+      } as const;
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
+      expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+        type: "empty",
+      });
+      const second = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (second.type !== "reserved") {
+        throw new TypeError("Expected later fixture while first backs off");
+      }
+      expect(second.batch.decisionId).toBe(ids.at(1));
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: 2 })
+        .where(eq(caseLawDecisions.id, second.batch.decisionId));
+      await store.completeBatch(second.batch, applied(second.batch));
+      for (
+        let attempt = 2;
+        attempt <= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+        attempt++
+      ) {
+        currentTime += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        const recovered = await store.pendingBatch(source, "2026-10-01");
+        if (recovered.type !== "reserved") {
+          throw new TypeError("Expected due poison fixture");
+        }
+        expect(recovered.batch.id).toBe(first.batch.id);
+        expect(await store.pickUpBatch(recovered.batch)).toBe("ready");
+        expect(await store.recordFailure(recovered.batch, failure)).toBe(
+          attempt === BACKGROUND_REPLAY_LIMITS.maxRowAttempts
+            ? "failed"
+            : "retryable",
+        );
+      }
+      const failed = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, first.batch.id))
+      ).at(0);
+      expect(failed).toMatchObject({
+        status: "failed",
+        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
+        failed: 1,
+        failureCode: "adapter-exception",
+        failureMessageClass: "adapter",
+      });
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+        type: "empty",
+      });
+      const next = await store.reserveBatch(source, "2026-10-01", verdict());
+      expect(next.type).toBe("reserved");
+      if (next.type !== "reserved") {
+        throw new TypeError("Expected remaining row");
+      }
+      expect(next.batch.decisionId).toBe(ids.at(2));
+    });
+
+    test("crashed pickups exhaust the row budget and automatically re-admit after seven days", async () => {
+      const { source } = await fixture(30);
+      let time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected crash fixture");
+      }
+      for (
+        let attempt = 0;
+        attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+        attempt++
+      ) {
+        expect(await store.pickUpBatch(first.batch)).toBe("ready");
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+      }
+      expect(await store.pickUpBatch(first.batch)).toBe("failed");
+      time += 7 * DAY_IN_MS;
+      const readmitted = await store.pendingBatch(source, "2026-10-08");
+      expect(readmitted.type).toBe("reserved");
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
+      const receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, first.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        status: "reserved",
+        attempts: 1,
+        attemptState: "picked-up",
+      });
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.decisionId, first.batch.decisionId)),
+      ).toHaveLength(0);
+    });
+
+    test("systemic failure refunds only its pickup and persists a source hold without settling a pending mirror", async () => {
+      const { source } = await fixture(30);
+      const time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const first = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected systemic fixture");
+      }
+      expect(await store.pickUpBatch(first.batch)).toBe("ready");
+      await db
+        .update(caseLawDecisions)
+        .set({
+          parserVersion: 2,
+          corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+        })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      const failure = {
+        ...replayFailure("tick-deadline"),
+        healthyEvidence: "none" as const,
+        durationMs: 1,
+        verdict: verdict(),
+      };
+      expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
+      expect(await store.recordFailure(first.batch, failure)).toBe("retryable");
+      const receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, first.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        status: "reserved",
+        attempts: 0,
+        attemptState: "idle",
+        applied: 0,
+      });
+      expect((await store.loadGateState(source)).holdUntil).toBeGreaterThan(
+        time,
+      );
+      await db
+        .update(caseLawDecisions)
+        .set({ corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED })
+        .where(eq(caseLawDecisions.id, first.batch.decisionId));
+      expect(await store.completeBatch(first.batch, applied(first.batch))).toBe(
+        "applied",
+      );
+    });
+
+    test("systemic queue samples healthy rows and isolates poison only with fresh verified progress", async () => {
+      const { source } = await fixture(30);
+      let time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const poison = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (poison.type !== "reserved") {
+        throw new TypeError("Expected poison row");
+      }
+      const failure = {
+        ...replayFailure("stored-raw-timeout"),
+        healthyEvidence: "none" as const,
+        durationMs: 1,
+        verdict: verdict(),
+      };
+      expect(await store.pickUpBatch(poison.batch)).toBe("ready");
+      expect(await store.recordFailure(poison.batch, failure)).toBe(
+        "retryable",
+      );
+      time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+        type: "empty",
+      });
+      const healthy = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (healthy.type !== "reserved") {
+        throw new TypeError("Expected healthy sample");
+      }
+      expect(healthy.batch.decisionId).not.toBe(poison.batch.decisionId);
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: healthy.batch.targetParserVersion })
+        .where(eq(caseLawDecisions.id, healthy.batch.decisionId));
+      expect(
+        await store.completeBatch(healthy.batch, applied(healthy.batch)),
+      ).toBe("applied");
+      for (let attempt = 2; attempt <= 3; attempt++) {
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        expect(await store.pickUpBatch(poison.batch)).toBe("ready");
+        expect(await store.recordFailure(poison.batch, failure)).toBe(
+          attempt === 3 ? "isolated" : "retryable",
+        );
+      }
+      let receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, poison.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        attempts: 1,
+        systemicFailures: 0,
+        systemicProgress: 1,
+      });
+      // A later whole-system outage gets a fresh progress baseline; the old
+      // successful neighbour cannot keep charging the suspect row.
+      for (let attempt = 0; attempt < 6; attempt++) {
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        expect(await store.pickUpBatch(poison.batch)).toBe("ready");
+        expect(await store.recordFailure(poison.batch, failure)).toBe(
+          "retryable",
+        );
+      }
+      receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, poison.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        status: "reserved",
+        attempts: 1,
+        systemicFailures: 3,
+        systemicProgress: 1,
+      });
+      const progress = (
+        await db
+          .select()
+          .from(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+      ).at(0);
+      expect(progress?.completedRows).toBe(1);
+    });
+
+    test("a real systemic outage rotates the pending queue without exhausting any row", async () => {
+      const { source } = await fixture(30);
+      let time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const failure = {
+        ...replayFailure("stored-raw-read"),
+        healthyEvidence: "none" as const,
+        durationMs: 1,
+        verdict: verdict(),
+      };
+      const picked: string[] = [];
+      for (let tick = 0; tick < 9; tick++) {
+        const pending = await store.pendingBatch(source, "2026-10-01");
+        const admission =
+          pending.type === "empty"
+            ? await store.reserveBatch(source, "2026-10-01", verdict())
+            : pending;
+        if (admission.type !== "reserved") {
+          throw new TypeError("Expected outage sample");
+        }
+        picked.push(admission.batch.id);
+        expect(await store.pickUpBatch(admission.batch)).toBe("ready");
+        expect(await store.recordFailure(admission.batch, failure)).toBe(
+          "retryable",
+        );
+        time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+      }
+      expect(new Set(picked.slice(0, 3)).size).toBe(3);
+      expect(picked.slice(3, 6)).toEqual(picked.slice(0, 3));
+      const receipts = await db
+        .select()
+        .from(caseLawReplayBatches)
+        .where(eq(caseLawReplayBatches.sourceId, source.id));
+      expect(
+        receipts.every(
+          ({ status, attempts }) => status === "reserved" && attempts === 0,
+        ),
+      ).toBe(true);
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.sourceId, source.id)),
+      ).toHaveLength(0);
+    });
+
+    test("a moved stamp settles applied after a receipt failure on the final allowed attempt", async () => {
+      const { source, store } = await fixture(10);
+      const reserved = await store.reserveBatch(
+        source,
+        "2026-10-01",
+        verdict(),
+      );
+      if (reserved.type !== "reserved") {
+        throw new TypeError("Expected final-attempt receipt");
+      }
+      await db
+        .update(caseLawReplayBatches)
+        .set({
+          attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts - 1,
+          failed: 1,
+        })
+        .where(eq(caseLawReplayBatches.id, reserved.batch.id));
+      expect(await store.pickUpBatch(reserved.batch)).toBe("ready");
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: reserved.batch.targetParserVersion })
+        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      expect(
+        await store.recordFailure(reserved.batch, {
+          ...replayFailure("receipt-write"),
+          healthyEvidence: "none",
+          durationMs: 1,
+          verdict: verdict(),
+        }),
+      ).toBe("applied");
+      const receipt = (
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, reserved.batch.id))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        status: "completed",
+        outcome: REPLAY_ROW_OUTCOME.APPLIED,
+        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts - 1,
+        applied: 1,
+        failed: 0,
+        blocked: 0,
+        retryAt: null,
+      });
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(
+            eq(caseLawReplayBlocked.decisionId, reserved.batch.decisionId),
+          ),
+      ).toHaveLength(0);
+      const cursor = (
+        await db
+          .select()
+          .from(databaseBackfillStates)
+          .where(
+            eq(
+              databaseBackfillStates.name,
+              `case-law-replay:${source.id}:${source.currentParserVersion}`,
+            ),
+          )
+      ).at(0)?.cursor;
+      expect(cursor).toBe(reserved.batch.decisionId);
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+        type: "empty",
+      });
+      // No recordTick call occurs: the verified receipt transaction owns progress.
+      const progress = (
+        await db
+          .select()
+          .from(caseLawReplaySourceProgress)
+          .where(eq(caseLawReplaySourceProgress.sourceId, source.id))
+      ).at(0);
+      expect(progress).toMatchObject({
+        ticksWithoutProgress: 0,
+        lastCompletedAt: new Date(Date.UTC(2026, 9, 1)),
+      });
+    });
+
+    test("dry-run cursor resumes across fresh stores and reset changes no decision or receipt", async () => {
+      const { source } = await fixture(10);
+      const store = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+      });
+      const before = await db
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, source.id));
+      const first = await store.previewBatch(source, null);
+      if (!first) {
+        throw new TypeError("Expected first preview");
+      }
+      await store.advancePreview(first);
+      const restarted = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+      });
+      const second = await restarted.previewBatch(source, null);
+      expect(second?.decisionId).not.toBe(first.decisionId);
+      await restarted.resetDryRunCursor(source);
+      expect((await restarted.previewBatch(source, null))?.decisionId).toBe(
+        first.decisionId,
+      );
+      expect(
+        await db
+          .select()
+          .from(caseLawDecisions)
+          .where(eq(caseLawDecisions.sourceId, source.id)),
+      ).toEqual(before);
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.sourceId, source.id)),
+      ).toHaveLength(0);
+    });
+
+    test("compaction generation retires never-reserved-again receipts while preserving the latest generation", async () => {
+      const { source, store } = await fixture(10);
+      const reserved = await store.reserveBatch(
+        source,
+        "2026-10-01",
+        verdict(),
+      );
+      if (reserved.type !== "reserved") {
+        throw new TypeError("Expected receipt fixture");
+      }
+      await store.completeBatch(reserved.batch, applied(reserved.batch));
+      await db
+        .update(caseLawReplayBatches)
+        .set({ completedAt: new Date(Date.UTC(2025, 0, 1)) })
+        .where(eq(caseLawReplayBatches.id, reserved.batch.id));
+      expect(await store.compact()).toBe(0);
+      await db.insert(caseLawReplayBatches).values({
+        id: `${reserved.batch.id}:new`,
+        sourceId: source.id,
+        firstDecisionId: reserved.batch.decisionId,
+        lastDecisionId: reserved.batch.decisionId,
+        parserVersionTo: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+        budgetDay: "2026-10-01",
+        status: "completed",
+        attempted: 1,
+        applied: 1,
+        gateVerdict: verdict(),
+      });
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
+        .where(eq(caseLawSources.id, source.id));
+      expect(await store.compact()).toBe(1);
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.batchId, reserved.batch.id)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.sourceId, source.id)),
+      ).toHaveLength(1);
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: `fixture-${source.id}` })
+        .where(eq(caseLawSources.id, source.id));
+    });
+
+    test("audit retention prunes a bounded old page and preserves recent observations", async () => {
+      const { source, store } = await fixture(10);
+      await db.insert(caseLawReplayAuditEvents).values([
+        {
+          id: `old-audit-${source.id}`,
+          sourceId: source.id,
+          serviceId: "case-law-background-replay",
+          action: "tick-recorded",
+          resourceId: source.id,
+          details: {},
+          createdAt: new Date(Date.UTC(2025, 0, 1)),
+        },
+        {
+          id: `new-audit-${source.id}`,
+          sourceId: source.id,
+          serviceId: "case-law-background-replay",
+          action: "tick-recorded",
+          resourceId: source.id,
+          details: {},
+          createdAt: new Date(Date.UTC(2026, 9, 1)),
+        },
+      ]);
+      expect(await store.compact(1)).toBe(0);
+      const retained = await db
+        .select()
+        .from(caseLawReplayAuditEvents)
+        .where(eq(caseLawReplayAuditEvents.sourceId, source.id));
+      expect(retained.map(({ id }) => id)).toEqual([`new-audit-${source.id}`]);
+    });
+
+    test("no-progress ticks survive process restarts and only verified applies reset them", async () => {
+      const { source, store } = await fixture(10);
+      const report = {
+        source,
+        status: "row-limit",
+        attempted: 1,
+        applied: 0,
+        blocked: 1,
+        errors: 0,
+        failed: 0,
+        heldTooLong: false,
+      } as const;
+      expect((await store.recordTick(report))?.ticksWithoutProgress).toBe(1);
+      const restarted = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+      });
+      expect((await restarted.recordTick(report))?.ticksWithoutProgress).toBe(
+        2,
+      );
+      expect(
+        (
+          await restarted.recordTick({
+            ...report,
+            status: "held",
+            attempted: 0,
+          })
+        )?.ticksWithoutProgress,
+      ).toBe(2);
+      expect(
+        (
+          await restarted.recordTick({
+            ...report,
+            status: "budget-exhausted",
+            errors: 1,
+          })
+        )?.ticksWithoutProgress,
+      ).toBe(3);
+      expect(
+        await restarted.recordTick({ ...report, applied: 1 }),
+      ).toMatchObject({
+        ticksWithoutProgress: 0,
+        lastCompletedAt: new Date(Date.UTC(2026, 9, 1)),
+      });
+    });
+    test("held source selection performs no decision scan even while the corpus table is locked", async () => {
+      const { source } = await fixture(10);
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: ADAPTER_KEYS.EU_ECJ })
+        .where(eq(caseLawSources.id, source.id));
+      const actual = {
+        ...source,
+        currentParserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+      };
+      sources.push(actual);
+      const enrolment = {
+        ...REPLAY_ENROLMENT,
+        [ADAPTER_KEYS.EU_ECJ]: {
+          mode: "enrolled",
+          dailyBudget: 10,
+          reviewedDryRun: "fixture",
+        },
+      } as const;
+      const held: BackgroundReplaySource[] = [];
+      const store = createBackgroundReplayStore({
+        db,
+        now: () => Date.UTC(2026, 9, 1),
+        enrolment,
+        onHeld: (row) => held.push(row),
+      });
+      await store.saveGateState(actual, {
+        ...(await store.loadGateState(actual)),
+        holdUntil: Date.UTC(2026, 9, 2),
+      });
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        await openClient().db.transaction(async (lockTx) => {
+          await lockTx.execute(
+            sql`LOCK TABLE case_law_decisions IN ACCESS EXCLUSIVE MODE`,
+          );
+          expect(await store.chooseSource()).toBeNull();
+          expect(held.map(({ id }) => id)).toEqual([source.id]);
+        });
+      });
+      await db
+        .update(caseLawSources)
+        .set({ adapterKey: `fixture-${source.id}` })
+        .where(eq(caseLawSources.id, source.id));
+    });
+
+    test("source progress is forced owner-only and the database rejects unclassified failures", async () => {
+      const { source, store } = await fixture(10);
+      const row = await store.reserveBatch(source, "2026-10-01", verdict());
+      if (row.type !== "reserved") {
+        throw new TypeError("Expected failure fixture");
+      }
+      const invalid = await Result.tryPromise(async () => {
+        await db.execute(
+          sql`UPDATE case_law_replay_batches SET failure_code = 'unclassified' WHERE id = ${row.batch.id}`,
+        );
+      });
+      expect(Result.isError(invalid)).toBe(true);
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const restricted = openClient().db;
+        const denied = await Result.tryPromise(
+          async () =>
+            await restricted.transaction(async (tx) => {
+              await tx.execute(sql`SET LOCAL ROLE stella`);
+              await tx
+                .select()
+                .from(caseLawReplaySourceProgress)
+                .where(eq(caseLawReplaySourceProgress.sourceId, source.id));
+            }),
+        );
+        expect(Result.isError(denied)).toBe(true);
+      });
+      const rls = await db
+        .select({
+          forced: sql<boolean>`relforcerowsecurity`,
+          enabled: sql<boolean>`relrowsecurity`,
+        })
+        .from(sql`pg_class`)
+        .where(sql`oid = 'public.case_law_replay_source_progress'::regclass`);
+      expect(rls.at(0)).toEqual({ forced: true, enabled: true });
+    });
+
+    test("actual compaction query scans only the indexed superseded retention page at production scale", async () => {
+      const { source, ids } = await fixture(10);
+      await db.insert(caseLawReplayBatches).values(
+        ids.map((id, index) => ({
+          id: `retention-${id}`,
+          sourceId: source.id,
+          firstDecisionId: id,
+          lastDecisionId: id,
+          parserVersionTo: 2,
+          budgetDay: "2026-10-01",
+          status: "completed" as const,
+          attempted: 1,
+          gateVerdict: verdict(),
+          supersededAt: index === 0 ? new Date(Date.UTC(2025, 0, 1)) : null,
+        })),
+      );
+      const rolledBack = await Result.tryPromise(
+        async () =>
+          await db.transaction(async (tx) => {
+            await tx.execute(sql`ANALYZE case_law_replay_batches`);
+            await scaleTableToProfile(
+              tx,
+              "case_law_replay_batches",
+              SYNTHETIC_SCALE_PROFILE,
+            );
+            const retirement = buildReplayRetirementQuery(
+              tx,
+              BACKGROUND_REPLAY_LIMITS.maxCompactRows,
+            );
+            const retirementRoot = explainRoot(
+              await tx.execute(
+                sql`EXPLAIN (FORMAT JSON) ${retirement.getSQL()}`,
+              ),
+            );
+            const retiringScans = scanOccurrences(retirementRoot).filter(
+              ({ relation }) => relation === "case_law_replay_batches",
+            );
+            expect(retiringScans.length).toBeGreaterThan(0);
+            expect(
+              retiringScans.every(({ nodeType }) => nodeType.includes("Index")),
+            ).toBe(true);
+            expect(
+              retiringScans.some(
+                ({ index }) => index === "case_law_replay_batches_retire_idx",
+              ),
+            ).toBe(true);
+            const query = buildReplayCompactionQuery(tx, {
+              cutoff: new Date(Date.UTC(2026, 6, 1)),
+              limit: BACKGROUND_REPLAY_LIMITS.maxCompactRows,
+            });
+            const root = explainRoot(
+              await tx.execute(sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`),
+            );
+            const scans = scanOccurrences(root).filter(
+              ({ relation }) => relation === "case_law_replay_batches",
+            );
+            expect(scans.length).toBeGreaterThan(0);
+            expect(
+              scans.every(({ nodeType }) => nodeType.includes("Index")),
+            ).toBe(true);
+            expect(
+              scans.some(
+                ({ index }) =>
+                  index === "case_law_replay_batches_retention_idx",
+              ),
+            ).toBe(true);
+            const cost = root["Total Cost"];
+            expect(typeof cost).toBe("number");
+            if (typeof cost !== "number") {
+              throw new TypeError("Expected numeric retention plan cost");
+            }
+            expect(cost).toBeLessThan(10_000);
+            throw new TypeError("restore compaction statistics");
+          }),
+      );
+      expect(Result.isError(rolledBack)).toBe(true);
+      if (Result.isError(rolledBack)) {
+        expect(String(rolledBack.error)).toContain(
+          "restore compaction statistics",
+        );
+      }
+    });
+
+    test("actual selector and probe remain indexed and bounded under sparse and full synthetic corpus lag", async () => {
+      const { source } = await fixture(10);
+      // Seed only synthetic rows; catalog restoration is transaction-local and
+      // a deliberate rollback restores every table/index statistic afterwards.
+      await db.execute(sql`INSERT INTO case_law_decisions (id, source_id, case_number, court, country, language, parser_version, source_raw_s3_key)
+        SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${source.id}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
+          CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
+        FROM generate_series(1, 1000) AS series(n)`);
+      await db.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, reason, detail)
+        SELECT ${source.id}, id, 1, 2, 'missing-payload', 'synthetic blocked fixture'
+        FROM case_law_decisions WHERE source_id = ${source.id} AND case_number LIKE 'plan-%'`);
+      const end = toSafeId<"caseLawDecision">(
+        "ffffffff-ffff-4fff-bfff-ffffffffffff",
+      );
+      const rolledBack = await Result.tryPromise(
+        async () =>
+          await db.transaction(async (tx) => {
+            // Enrolment will ship these corpus indexes; the dormant feature
+            // creates them only inside this rolled-back planner fixture.
+            await tx.execute(
+              sql`CREATE INDEX IF NOT EXISTS case_law_decisions_replay_sparse_idx ON case_law_decisions (source_id, parser_version, id) WHERE redacted_at IS NULL AND source_raw_s3_key IS NOT NULL`,
+            );
+            await tx.execute(
+              sql`CREATE INDEX IF NOT EXISTS case_law_decisions_replay_walk_idx ON case_law_decisions (source_id, id, parser_version) WHERE redacted_at IS NULL AND source_raw_s3_key IS NOT NULL`,
+            );
+            await tx.execute(sql`ANALYZE case_law_decisions`);
+            await tx.execute(sql`ANALYZE case_law_replay_blocked`);
+            await scaleTableToProfile(
+              tx,
+              "case_law_replay_blocked",
+              SYNTHETIC_SCALE_PROFILE,
+            );
+            await scaleTableToProfile(
+              tx,
+              "case_law_decisions",
+              SYNTHETIC_SCALE_PROFILE,
+            );
+            for (const lag of ["sparse", "all"] as const) {
+              const frequencies =
+                lag === "sparse" ? [0.00001, 0.99999] : [0.99999, 0.00001];
+              await tx.execute(sql`SELECT pg_restore_attribute_stats(
+            'schemaname', 'public', 'relname', 'case_law_decisions',
+            'attname', 'parser_version', 'inherited', false, 'null_frac', 0::real, 'n_distinct', 2::real,
+            'most_common_vals', '{1,2}', 'most_common_freqs', ARRAY[${frequencies.at(0)}::real, ${frequencies.at(1)}::real]::real[]
+          )`);
+              const queries = [
+                buildReplayScopeEndQuery(tx, {
+                  sourceId: source.id,
+                  scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+                  selection: { type: "background", currentParserVersion: 2 },
+                }),
+                buildBackgroundReplayProbe(tx, {
+                  sourceId: source.id,
+                  currentParserVersion: 2,
+                }),
+                buildReplayPageQuery(tx, {
+                  sourceId: source.id,
+                  scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+                  selection: { type: "background", currentParserVersion: 2 },
+                  after: null,
+                  until: end,
+                  limit: 1,
+                }),
+              ];
+              for (const query of queries) {
+                const root = explainRoot(
+                  await tx.execute(
+                    sql`EXPLAIN (FORMAT JSON) ${query.getSQL()}`,
+                  ),
+                );
+                const decisions = scanOccurrences(root).filter(
+                  ({ relation }) => relation === "case_law_decisions",
+                );
+                expect(decisions.length).toBeGreaterThan(0);
+                expect(
+                  decisions.every(({ nodeType }) => nodeType.includes("Index")),
+                ).toBe(true);
+                expect(
+                  decisions.some(
+                    ({ index }) =>
+                      index === "case_law_decisions_replay_sparse_idx" ||
+                      index === "case_law_decisions_replay_walk_idx",
+                  ),
+                ).toBe(true);
+                const blocked = scanOccurrences(root).filter(
+                  ({ relation }) => relation === "case_law_replay_blocked",
+                );
+                expect(blocked.length).toBeGreaterThan(0);
+                expect(
+                  blocked.every(({ nodeType }) => nodeType.includes("Index")),
+                ).toBe(true);
+                const cost = root["Total Cost"];
+                expect(typeof cost).toBe("number");
+                if (typeof cost !== "number") {
+                  throw new TypeError("Expected numeric synthetic plan cost");
+                }
+                expect(cost).toBeLessThan(10_000);
+              }
+            }
+            throw new TypeError("restore synthetic plan statistics");
+          }),
+      );
+      expect(Result.isError(rolledBack)).toBe(true);
+      if (Result.isError(rolledBack)) {
+        expect(String(rolledBack.error)).toContain(
+          "restore synthetic plan statistics",
+        );
+      }
     });
   });
 }

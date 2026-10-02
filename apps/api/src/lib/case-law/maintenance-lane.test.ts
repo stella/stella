@@ -4,18 +4,17 @@ import path from "node:path";
 
 import {
   CASE_LAW_MAINTENANCE_LANE,
+  enterCaseLawMaintenanceLane,
   holdCaseLawMaintenanceLane,
-  tryEnterCaseLawMaintenanceLane,
 } from "@/api/lib/case-law/maintenance-lane";
 
 const API_SRC = path.resolve(import.meta.dir, "../..");
 const SCRIPTS_DIR = path.join(API_SRC, "scripts");
 
-/** A case-law script imports a sanctioned lane door. */
+/** The two doors; a case-law script imports at least one, and nothing else. */
 const LANE_MODULE = "@/api/lib/case-law/maintenance-lane";
 const DOORS = [
   "enterCaseLawMaintenanceLane",
-  "tryEnterCaseLawMaintenanceLane",
   "openCaseLawReadOnlySession",
 ] as const;
 
@@ -161,9 +160,23 @@ const doorsOpened = (name: string): string[] =>
   );
 
 describe("case-law maintenance lane", () => {
+  test("an aborted bounded door refuses work before database initialization", async () => {
+    const controller = new AbortController();
+    controller.abort();
+    await expect(
+      enterCaseLawMaintenanceLane({
+        mode: "bounded",
+        signal: controller.signal,
+        statementTimeout: 5000,
+        lockTimeout: 5000,
+        work: async () => "must not run",
+      }),
+    ).rejects.toThrow("abort");
+  });
+
   // The structural rule: a case-law script that can reach the database does
-  // so through the write or read-only door and nothing else. A script that imports
-  // a handle directly has found another way and fails here; one that opens
+  // so through one of the two doors and nothing else. A script that imports
+  // a handle directly has found a third way and fails here; one that opens
   // no door yet reaches the database has found another, which is the same
   // finding from the other side. Pure planners and formatters reach nothing
   // and need nothing.
@@ -215,7 +228,6 @@ describe("case-law maintenance lane", () => {
     expect(doorsImported(source)).toEqual([]);
     expect(doorsOpened("backfill-cz-us-judges.ts")).toContain(
       "enterCaseLawMaintenanceLane",
-      "tryEnterCaseLawMaintenanceLane",
     );
   });
 
@@ -265,30 +277,5 @@ describe("case-law maintenance lane", () => {
     };
     const hold = await holdCaseLawMaintenanceLane({ sql: fake, now: () => 0 });
     expect(hold.release()).rejects.toThrow("Maintenance lane was not held");
-  });
-
-  test("scheduled lane refusal and failed acquisition both close their lock connection", async () => {
-    for (const fails of [false, true]) {
-      let closed = 0;
-      const sql = {
-        unsafe: async () => {
-          if (fails) {
-            throw new TypeError("lane connection unavailable");
-          }
-          return [{ acquired: false }];
-        },
-        end: async () => {
-          closed += 1;
-        },
-      };
-      if (fails) {
-        await expect(tryEnterCaseLawMaintenanceLane({ sql })).rejects.toThrow(
-          "lane connection unavailable",
-        );
-      } else {
-        expect(await tryEnterCaseLawMaintenanceLane({ sql })).toBeNull();
-      }
-      expect(closed).toBe(1);
-    }
   });
 });

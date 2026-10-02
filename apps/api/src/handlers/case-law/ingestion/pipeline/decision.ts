@@ -142,7 +142,10 @@ const runDecisionAttempt = async ({
   corpus,
   corpusBatch,
   polarityRules,
+  signal,
+  s3Policy,
 }: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
+  signal?.throwIfAborted();
   const observation = observeDecision({ input, sourceId });
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
@@ -193,7 +196,10 @@ const runDecisionAttempt = async ({
     return existingPolicyOutcome;
   }
 
+  signal?.throwIfAborted();
   const sourceRawArtifact = await acquireSourceRawArtifact({
+    ...(signal === undefined ? {} : { signal }),
+    ...(s3Policy === undefined ? {} : { s3Policy }),
     result,
     existing,
     preservesExistingDetail: shape.preservesExistingDetail,
@@ -216,6 +222,8 @@ const runDecisionAttempt = async ({
   const attempted = await Result.tryPromise({
     try: async () => {
       const planned = await planDecisionWrite({
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         result,
         existing,
         decisionId,
@@ -232,7 +240,10 @@ const runDecisionAttempt = async ({
       if ("status" in plan) {
         return Result.ok(RECONCILE_CONTENTION);
       }
+      signal?.throwIfAborted();
       const write: DecisionRowWrite = {
+        ...(signal === undefined ? {} : { signal }),
+        ...(s3Policy === undefined ? {} : { s3Policy }),
         ...identity,
         persistedDecisionDate: observation.persistedDecisionDate,
         sourceId,
@@ -295,6 +306,7 @@ const runDecisionAttempt = async ({
     return settled;
   }
 
+  signal?.throwIfAborted();
   const flushed = await enqueueCorpusMirror({
     scopedDb,
     write,

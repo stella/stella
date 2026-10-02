@@ -29,6 +29,20 @@ const receipts = [
     update:
       "UPDATE case_law_replay_daily_rows SET budget_day = '2026-10-03' RETURNING batch_id",
   },
+  {
+    prepare: null,
+    table: "case_law_replay_source_progress",
+    insert: `INSERT INTO case_law_replay_source_progress (source_id) VALUES ('${sourceId}')`,
+    update:
+      "UPDATE case_law_replay_source_progress SET ticks_without_progress = 1 RETURNING source_id",
+  },
+  {
+    prepare: null,
+    table: "case_law_replay_audit_events",
+    insert: `INSERT INTO case_law_replay_audit_events (id, source_id, service_id, action, resource_id, details) VALUES ('audit', '${sourceId}', 'case-law-background-replay', 'tick-recorded', 'fixture', '{}')`,
+    update:
+      "UPDATE case_law_replay_audit_events SET resource_id = 'changed' RETURNING id",
+  },
 ] as const;
 
 describe.skipIf(!enabled)("replay receipt row security", () => {
@@ -45,6 +59,12 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
       const migration = await Bun.file(
         new URL(
           "../../drizzle/20261003123500_case_law_replay_receipts/migration.sql",
+          import.meta.url,
+        ),
+      ).text();
+      const recoveryMigration = await Bun.file(
+        new URL(
+          "../../drizzle/20261003123600_case_law_replay_recovery/migration.sql",
           import.meta.url,
         ),
       ).text();
@@ -69,7 +89,7 @@ describe.skipIf(!enabled)("replay receipt row security", () => {
         await client.unsafe(
           `INSERT INTO case_law_sources VALUES ('${sourceId}')`,
         );
-        for (const statement of migration
+        for (const statement of `${migration}--> statement-breakpoint${recoveryMigration}`
           .replaceAll(
             '"public"."case_law_sources"',
             () => `"${schema}"."case_law_sources"`,
