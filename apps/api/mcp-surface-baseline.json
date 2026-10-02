@@ -50,7 +50,7 @@
     "fetch": {
       "anonymized": {"title": 5, "description": 393, "inputSchema": 622, "outputSchema": 680, "annotations": 83, "payloadUtf8Bytes": 1873},
       "default": {"title": 5, "description": 337, "inputSchema": 622, "outputSchema": 680, "annotations": 83, "payloadUtf8Bytes": 1817},
-      "law": {"title": 5, "description": 363, "inputSchema": 512, "outputSchema": 680, "annotations": 83, "payloadUtf8Bytes": 1733}
+      "law": {"title": 5, "description": 363, "inputSchema": 512, "outputSchema": 549, "annotations": 83, "payloadUtf8Bytes": 1602}
     },
     "fill_template": {
       "default": {"title": 13, "description": 485, "inputSchema": 877, "outputSchema": 1595, "annotations": 114, "payloadUtf8Bytes": 3182}
