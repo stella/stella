@@ -168,7 +168,7 @@ describe.skipIf(!enabled)(
           )
         ).at(0);
         if (row === undefined) {
-          return panic("Missing load indicator row");
+          panic("Missing load indicator row");
         }
         expect(Object.keys(row).toSorted()).toEqual([
           "observed_at",
@@ -214,7 +214,7 @@ describe.skipIf(!enabled)(
             await holder`SELECT (extract(epoch FROM clock_timestamp() - transaction_timestamp()) * 1000)::float8 AS age`
           ).at(0)?.["age"];
           if (typeof holderAge !== "number") {
-            return panic("Missing holder transaction age");
+            panic("Missing holder transaction age");
           }
           expect(holderAge).toBeGreaterThan(0);
           const read = createDatabaseLoadVerdictReader({
@@ -452,7 +452,7 @@ describe.skipIf(!enabled)(
             "pid"
           ];
           if (typeof pid !== "number") {
-            return panic("Missing vacuum backend pid");
+            panic("Missing vacuum backend pid");
           }
           vacuum = Result.tryPromise(
             async () =>

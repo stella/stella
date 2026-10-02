@@ -4,7 +4,6 @@ import type { HealthConfig, Verdict } from "@stll/db-load-gate/health";
 import {
   canStartCyclePage,
   reserveCycleBudget,
-  remainingCycleMs,
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { CycleDeadline } from "@/api/lib/legal-search/cycle-deadline";
 
@@ -25,7 +24,7 @@ export const createSourceStoredTotalAdmission = ({
   readVerdict,
   config = defaultConfig,
 }: SourceStoredTotalAdmissionOptions) => {
-  let admittedCycles: WeakSet<CycleDeadline> | undefined;
+  const admittedCycles = new WeakSet<CycleDeadline>();
   return async ({
     deadline,
     phase = "reserve",
@@ -36,11 +35,11 @@ export const createSourceStoredTotalAdmission = ({
       return "held";
     }
     if (phase === "start") {
-      if (!admittedCycles?.has(deadline) || remainingCycleMs(deadline) < 0) {
+      if (!admittedCycles.has(deadline) || !canStartCyclePage(deadline, 0)) {
         return "held";
       }
     } else if (
-      admittedCycles?.has(deadline) ||
+      admittedCycles.has(deadline) ||
       !canStartCyclePage(deadline, SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS)
     ) {
       return "held";
@@ -51,10 +50,9 @@ export const createSourceStoredTotalAdmission = ({
     }
     if (
       decideStart(verdict, "backfill_batch", config).decision === "wait" ||
-      deadline.signal.aborted ||
       (phase === "start"
-        ? remainingCycleMs(deadline) < 0
-        : admittedCycles?.has(deadline) ||
+        ? !canStartCyclePage(deadline, 0)
+        : admittedCycles.has(deadline) ||
           !reserveCycleBudget(
             deadline,
             SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS,
@@ -62,7 +60,6 @@ export const createSourceStoredTotalAdmission = ({
     ) {
       return "held";
     }
-    admittedCycles ??= new WeakSet();
     admittedCycles.add(deadline);
     return "granted";
   };

@@ -364,7 +364,7 @@ test("the emitted fixed-dimension gauge includes only due held sources on the da
   );
   const epoch = clock.rows.at(0)?.["epoch_ms"];
   if (typeof epoch !== "number") {
-    return panic("Missing database clock in hold fixture");
+    panic("Missing database clock in hold fixture");
   }
   const due = await seed();
   const future = await seed();

@@ -1748,7 +1748,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           await worker.db.execute(sql`SELECT pg_backend_pid() AS pid`)
         ).at(0)?.["pid"];
         if (typeof pid !== "number") {
-          return panic("Missing independent worker pid");
+          panic("Missing independent worker pid");
         }
         pids.push(pid);
         scopes.push(
@@ -2030,7 +2030,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         )
       ).at(0);
       if (settings === undefined) {
-        return panic("Missing dedicated count settings");
+        panic("Missing dedicated count settings");
       }
       budgets.push(settings.budget);
       pids.push(settings.pid);
@@ -2070,7 +2070,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       0,
     )?.["now"];
     if (!(before instanceof Date)) {
-      return panic("Expected PostgreSQL database clock Date");
+      panic("Expected PostgreSQL database clock Date");
     }
     await setDue(sourceId, new Date(before.getTime() - 1));
     setSystemTime(new Date(before.getTime() + 30 * 24 * 60 * 60_000));
@@ -2090,7 +2090,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       0,
     )?.["now"];
     if (!(after instanceof Date)) {
-      return panic("Expected PostgreSQL database clock Date");
+      panic("Expected PostgreSQL database clock Date");
     }
     const row = await readStoredPair(sourceId);
     expect(row?.storedTotalAsOf?.getTime()).toBeGreaterThanOrEqual(

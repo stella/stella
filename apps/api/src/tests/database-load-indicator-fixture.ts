@@ -33,9 +33,11 @@ export const withFreshIndicatorDatabase = async (
           // The lane fixture holds one connection while corpus work uses the other.
           const { sql: client, db } = scope.openClient({ max: 2 });
           const absent = (
-            await client`SELECT to_regprocedure('public.stella_database_load_indicators(regclass)') IS NULL AS absent`
+            await client.unsafe<{ absent: boolean }[]>(
+              "SELECT to_regprocedure('public.stella_database_load_indicators(regclass)') IS NULL AS absent",
+            )
           ).at(0);
-          expect(absent?.["absent"]).toBe(true);
+          expect(absent?.absent).toBe(true);
           const migration = await Bun.file(
             new URL(
               "../../drizzle/20261003123600_database_load_indicators/migration.sql",

@@ -53,7 +53,7 @@ test("a real pipeline deadline admits one exact count and persists its pair", as
       sourceId,
     });
     if (lease === null) {
-      return panic("Expected source ingestion lease");
+      panic("Expected source ingestion lease");
     }
     czNsAdapter.fetchPage = async () =>
       Result.ok({ decisions: [], nextCursor: null });

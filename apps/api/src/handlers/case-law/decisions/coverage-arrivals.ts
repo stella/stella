@@ -76,7 +76,6 @@ export const readCaseLawArrivalsQuery = definePublicLawSharedQuery(
       tx,
       ARRIVALS_STATEMENT_TIMEOUT_MS,
       async () =>
-        // sql-perf-allow: index case_law_decisions_source_generation_cursor_idx, bounded by seven days and a 3s statement timeout
         await tx.execute(sql`
       SELECT
         named.source_id AS source_id,

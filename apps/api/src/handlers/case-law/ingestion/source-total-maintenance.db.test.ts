@@ -101,9 +101,7 @@ const installCorpusTables = async (
       .split("--> statement-breakpoint")
       .find((statement) => statement.trim().startsWith("GRANT UPDATE ("));
     if (grant === undefined) {
-      return panic(
-        "The stored-total refresh migration must own its column grant",
-      );
+      panic("The stored-total refresh migration must own its column grant");
     }
     // Only this disposable database receives the exact owning migration's new-column grant.
     await db.execute(sql.raw(grant));
@@ -249,7 +247,7 @@ describe.skipIf(!enabled)(
               "owner"
             ];
             if (typeof owner !== "string") {
-              return panic("Fixture login omitted its role name");
+              panic("Fixture login omitted its role name");
             }
             const quotedOwner = `"${owner.replaceAll('"', '""')}"`;
             switch (failure) {
@@ -276,7 +274,7 @@ describe.skipIf(!enabled)(
                 sourceId,
               });
               if (lease === null) {
-                return panic("Fixture source lease was unavailable");
+                panic("Fixture source lease was unavailable");
               }
               try {
                 await runIngestionPipeline({

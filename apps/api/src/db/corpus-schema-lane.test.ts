@@ -1,4 +1,4 @@
-import { Panic } from "better-result";
+import { Panic, Result } from "better-result";
 import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import nodePath from "node:path";
@@ -211,16 +211,22 @@ test("schema-lane budgets include time spent acquiring a transaction", async () 
       return await work({ execute: async () => [{ granted: true }] });
     },
   };
-  await expect(
-    runUnderCorpusSchemaLane({
-      database,
-      clock: () => now,
-      laneWaitMs: 250,
-      work: async () => {
-        started = true;
-      },
-    }),
-  ).rejects.toBeInstanceOf(CorpusSchemaLaneUnavailableError);
+  const outcome = await Result.tryPromise({
+    try: async () =>
+      await runUnderCorpusSchemaLane({
+        database,
+        clock: () => now,
+        laneWaitMs: 250,
+        work: async () => {
+          started = true;
+        },
+      }),
+    catch: (cause) => cause,
+  });
+  expect(outcome.isErr()).toBe(true);
+  if (outcome.isErr()) {
+    expect(outcome.error).toBeInstanceOf(CorpusSchemaLaneUnavailableError);
+  }
   expect(started).toBe(false);
 });
 
@@ -237,6 +243,13 @@ test("a cycle abort interrupts schema-lane pacing without starting corpus work",
     },
   });
   abort.abort();
-  await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  const outcome = await Result.tryPromise({
+    try: async () => await waiting,
+    catch: (cause) => cause,
+  });
+  expect(outcome.isErr()).toBe(true);
+  if (outcome.isErr()) {
+    expect(outcome.error).toMatchObject({ name: "AbortError" });
+  }
   expect(started).toBe(false);
 });

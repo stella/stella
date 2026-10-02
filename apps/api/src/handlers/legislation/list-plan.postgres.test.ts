@@ -15,7 +15,8 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 const enabled = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
-const WORKS = 2000;
+const WORKS = 500;
+const SOURCES = 8;
 const VERSIONS = 8;
 const PAGE_SIZE = 100;
 const WORK_INDEX = "legislation_documents_eli_version_lang_idx";
@@ -36,7 +37,7 @@ const planNodes = (root: Record<string, unknown>) => {
       return;
     }
     if (!isUnknownArray(children) || !children.every(isRecord)) {
-      return panic("The list plan has malformed children");
+      panic("The list plan has malformed children");
     }
     for (const child of children) {
       visit(child);
@@ -62,7 +63,7 @@ const assertAmendmentProbe = (root: Record<string, unknown>) => {
     counts.at(0) ?? panic("The production amendment count is absent");
   const loops = count["Actual Loops"];
   if (typeof loops !== "number") {
-    return panic("The list plan needs ANALYZE loop counts");
+    panic("The list plan needs ANALYZE loop counts");
   }
   expect(loops).toBe(PAGE_SIZE + 1);
   const scans = planNodes(count).filter(
@@ -70,17 +71,27 @@ const assertAmendmentProbe = (root: Record<string, unknown>) => {
   );
   expect(scans).toHaveLength(1);
   const scan = scans.at(0) ?? panic("The amendment count has no work scan");
-  expect(scan).toMatchObject({
-    "Node Type": "Index Scan",
-    "Index Name": WORK_INDEX,
-  });
-  const condition = scan["Index Cond"];
+  const indexes = planNodes(scan).filter(
+    (node) => node["Index Name"] === WORK_INDEX,
+  );
+  expect(indexes).toHaveLength(1);
+  const index =
+    indexes.at(0) ?? panic("The amendment count has no canonical work index");
+  if (index["Node Type"] === "Bitmap Index Scan") {
+    expect(scan["Node Type"]).toBe("Bitmap Heap Scan");
+  } else {
+    expect(index["Node Type"]).toBe("Index Scan");
+    expect(scan).toBe(index);
+  }
+  const condition = index["Index Cond"];
   if (typeof condition !== "string") {
-    return panic("The amendment count has no index condition");
+    panic("The amendment count has no index condition");
   }
   for (const key of ["source_id", "eli", "language"]) {
     expect(condition).toContain(key);
   }
+  expect(index["Actual Loops"]).toBe(PAGE_SIZE + 1);
+  expect(index["Actual Rows"]).toBe(VERSIONS);
   expect(scan["Actual Loops"]).toBe(PAGE_SIZE + 1);
   expect(scan["Actual Rows"]).toBe(VERSIONS);
   expect(scan["Rows Removed by Filter"] ?? 0).toBe(0);
@@ -134,16 +145,15 @@ describe.skipIf(!enabled)("public list amendment probe (postgres)", () => {
         expect(indexes).toHaveLength(1);
         const indexName = indexes.at(0)?.["indexname"];
         if (typeof indexName !== "string") {
-          return panic("The canonical unique work index was not cloned");
+          panic("The canonical unique work index was not cloned");
         }
         if (indexName !== WORK_INDEX) {
           await db.execute(sql`ALTER INDEX ${schema}.${sql.identifier(indexName)}
             RENAME TO ${sql.identifier(WORK_INDEX)}`);
         }
-        const sourceIds = [
+        const sourceIds = Array.from({ length: SOURCES }, () =>
           createSafeId<"legislationSource">(),
-          createSafeId<"legislationSource">(),
-        ];
+        );
         await db.insert(legislationSources).values(
           sourceIds.map((id) => ({
             id,
@@ -151,8 +161,9 @@ describe.skipIf(!enabled)("public list amendment probe (postgres)", () => {
             name: "List plan fixture",
           })),
         );
-        // Native bulk insertion produces 64k actual rows, with the same ELI in
-        // both sources and languages. No planner switches or synthetic statistics.
+        // Native bulk insertion produces 64k actual rows. Eight sources share
+        // every ELI and both languages, so a source filter cannot hide a broad
+        // ELI-only scan. No planner switches or synthetic statistics.
         await db.execute(sql`INSERT INTO legislation_documents
           (id, source_id, eli, title, country, language, version_valid_from, version_valid_to)
           SELECT gen_random_uuid(), sources.id, 'eli/plan/' || works.n,
