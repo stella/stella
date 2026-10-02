@@ -1360,7 +1360,7 @@ if (!databaseUrl || !enabled) {
 
     test("undated unnumbered title collisions are rejected and replay cannot churn versions", async () =>
       await assertProperty(
-        "soft-law unnumbered identity collision is stable",
+        "undated unnumbered title collisions are rejected and replay cannot churn versions",
         fc.asyncProperty(
           fc
             .string({ minLength: 1, maxLength: 30 })

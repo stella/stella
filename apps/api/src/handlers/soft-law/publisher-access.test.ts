@@ -173,7 +173,7 @@ test("binary response bytes cannot trigger a text challenge", async () => {
   for (const [url, contentType] of [
     ["https://uoou.gov.cz/media/document.pdf", "application/pdf"],
     ["https://uoou.gov.cz/page", "application/pdf"],
-  ]) {
+  ] as const) {
     const fetch = createSoftLawFetch({
       policy,
       signal: new AbortController().signal,

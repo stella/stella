@@ -182,6 +182,7 @@ const fetchSoftLawPage = async ({
       continue;
     }
     const count = (previous?.count ?? 0) + 1;
+    // db-await-in-loop: Renew the lease before each potentially slow document so an expired writer stops before fetching.
     await store.renew();
     const maxRawBytes = PAGE_RAW_BYTE_LIMIT - retainedRawBytes;
     const result = await Result.tryPromise(() =>
@@ -342,6 +343,7 @@ export const runSoftLawIngestion = async ({
       }
       for (let pageNumber = 0; pageNumber < PAGE_BUDGET; pageNumber++) {
         signal.throwIfAborted();
+        // db-await-in-loop: Cursor pages depend on the previous checkpoint; renew before each discovery request.
         await store.renew();
         const page = await adapter.discover({ cursor, signal, fetch });
         assertPublisherAvailable(fetch);
@@ -368,6 +370,7 @@ export const runSoftLawIngestion = async ({
         const retryable = prepared.attempts.some(
           (attempt) => attempt.status === "retryable",
         );
+        // db-await-in-loop: Commit this page and checkpoint atomically before walking the next cursor.
         const persisted = await store.persistPage({
           ...prepared,
           expectedCursor: cursor,
