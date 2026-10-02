@@ -26,6 +26,7 @@ import {
   sanctionsEntryPayloads,
 } from "@/api/db/schema";
 import type { AuditEvent } from "@/api/lib/audit-log";
+import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { commitSanctionsMonitoringBatch } from "@/api/lib/lists/sanctions/monitoring-diff";
 import {
@@ -1891,6 +1892,181 @@ test(
     ).unwrap();
     expect(disabledPage.items).toEqual([]);
     expect(disabledPage.nextCursor).toBeNull();
+  },
+  TIMEOUT,
+);
+
+test(
+  "review records complete decision evidence and audit exactly once",
+  async () => {
+    const organizationId = await isolatedOrganization();
+    const tenantDb = scopedFor(organizationId);
+    await activate("6");
+    const contact = await addContact(organizationId);
+    await commit(await prepare(contact), organizationId);
+    const initial = await matchFor(contact.id);
+    const audits: AuditEvent[] = [];
+    const record = async (
+      _tx: Transaction,
+      event: AuditEvent | AuditEvent[],
+    ) => {
+      audits.push(...(Array.isArray(event) ? event : [event]));
+    };
+    const options = {
+      organizationId,
+      contactId: contact.id,
+      reviewerId,
+      source: "eu" as const,
+      sourceEntryId: "one",
+      disposition: "dismissed" as const,
+      reason: "  Reviewed evidence  ",
+      expectedContactFingerprint: initial.contactFingerprint,
+      expectedEntryHash: initial.entryHash,
+      clock: () => now,
+      recordAuditEvent: record,
+    };
+    const reviewed = (
+      await tenantDb(async (tx) => await reviewSanctionsMatch(tx, options))
+    ).unwrap();
+    expect(reviewed).toMatchObject({
+      disposition: "dismissed",
+      reviewedBy: reviewerId,
+      reviewedAt: now,
+      reviewReason: "Reviewed evidence",
+      reviewedContactFingerprint: initial.contactFingerprint,
+      reviewedEntryHash: initial.entryHash,
+    });
+    const audit = {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.CONTACT,
+      resourceId: contact.id,
+      workspaceId: null,
+      changes: {
+        sanctionsReview: { old: "needs-review", new: "dismissed" },
+        sanctionsReviewReason: { old: null, new: "Reviewed evidence" },
+        sanctionsReviewEntry: { old: null, new: "eu:one" },
+      },
+    } satisfies AuditEvent;
+    expect(audits).toEqual([audit]);
+    const firstEvents = await eventsFor(contact.id);
+    expect(firstEvents).toHaveLength(2);
+    expect(firstEvents.at(-1)).toEqual({
+      id: firstEvents.at(-1)?.id,
+      organizationId,
+      contactId: contact.id,
+      sourceId: "eu",
+      sourceEntryId: "one",
+      type: "dismissed",
+      oldEditionId: initial.editionId,
+      newEditionId: initial.editionId,
+      reason: "Reviewed evidence",
+      reviewerId,
+      contactFingerprint: initial.contactFingerprint,
+      entryHash: initial.entryHash,
+      oldMatch: initial.match,
+      newMatch: initial.match,
+      createdAt: now,
+    });
+    await tenantDb(async (tx) => await reviewSanctionsMatch(tx, options));
+    expect(await eventsFor(contact.id)).toEqual(firstEvents);
+    expect(audits).toEqual([audit]);
+    const changedReason = (
+      await tenantDb(
+        async (tx) =>
+          await reviewSanctionsMatch(tx, {
+            ...options,
+            reason: "Second assessment",
+          }),
+      )
+    ).unwrap();
+    expect(changedReason.reviewReason).toBe("Second assessment");
+    expect(audits).toHaveLength(2);
+    expect(audits.at(-1)).toEqual({
+      ...audit,
+      changes: {
+        sanctionsReview: { old: "dismissed", new: "dismissed" },
+        sanctionsReviewReason: {
+          old: "Reviewed evidence",
+          new: "Second assessment",
+        },
+        sanctionsReviewEntry: { old: null, new: "eu:one" },
+      },
+    });
+    const secondReviewer = mintAuthProviderId<"user">();
+    await db.insert(user).values({
+      id: secondReviewer,
+      name: "Second Reviewer",
+      email: `${secondReviewer}@example.test`,
+      emailVerified: false,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const changedActor = (
+      await tenantDb(
+        async (tx) =>
+          await reviewSanctionsMatch(tx, {
+            ...options,
+            reason: "Second assessment",
+            reviewerId: secondReviewer,
+          }),
+      )
+    ).unwrap();
+    expect(changedActor.reviewedBy).toBe(secondReviewer);
+    expect(audits).toHaveLength(3);
+    expect(audits.at(-1)).toEqual({
+      ...audit,
+      changes: {
+        sanctionsReview: { old: "dismissed", new: "dismissed" },
+        sanctionsReviewReason: {
+          old: "Second assessment",
+          new: "Second assessment",
+        },
+        sanctionsReviewEntry: { old: null, new: "eu:one" },
+      },
+    });
+    const decisions = await eventsFor(contact.id);
+    expect(decisions).toHaveLength(4);
+    expect(decisions.at(-2)).toMatchObject({
+      reason: "Second assessment",
+      reviewerId,
+      type: "dismissed",
+    });
+    expect(decisions.at(-1)).toMatchObject({
+      reason: "Second assessment",
+      reviewerId: secondReviewer,
+      type: "dismissed",
+    });
+    await tenantDb(
+      async (tx) =>
+        await reviewSanctionsMatch(tx, {
+          ...options,
+          reason: "Second assessment",
+          reviewerId: secondReviewer,
+        }),
+    );
+    expect(await eventsFor(contact.id)).toEqual(decisions);
+    expect(audits).toHaveLength(3);
+    for (const reason of [" \n \t", "x".repeat(2001)]) {
+      const before = await stateFor(contact.id);
+      const rejected = await tenantDb(
+        async (tx) => await reviewSanctionsMatch(tx, { ...options, reason }),
+      );
+      expect(rejected.isErr() && rejected.error.status).toBe(400);
+      expect(await stateFor(contact.id)).toEqual(before);
+      expect(audits).toHaveLength(3);
+    }
+    const boundary = (
+      await tenantDb(
+        async (tx) =>
+          await reviewSanctionsMatch(tx, {
+            ...options,
+            reason: `  ${"x".repeat(2000)}  `,
+          }),
+      )
+    ).unwrap();
+    expect(boundary.reviewReason).toBe("x".repeat(2000));
+    expect(audits).toHaveLength(4);
+    expect(await eventsFor(contact.id)).toHaveLength(5);
   },
   TIMEOUT,
 );
