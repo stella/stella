@@ -2,7 +2,7 @@ import { afterEach, expect, test } from "bun:test";
 import fc from "fast-check";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { assertProperty } from "@stll/property-testing";
 
 import { envBaseServerSchema } from "@/api/env-base-schema";
 import {
@@ -55,7 +55,11 @@ const stubRankingScores = (scores: readonly number[]) => {
       _input: Parameters<typeof fetch>[0],
       init?: Parameters<typeof fetch>[1],
     ) => {
-      const body = JSON.parse(String(init?.body));
+      const requestBody = init?.body;
+      if (typeof requestBody !== "string") {
+        throw new TypeError("Expected a JSON request body");
+      }
+      const body = JSON.parse(requestBody);
       const hits = scores.map((score, rank) => ({
         _source: {
           document_id: `doc-${rank}`,
@@ -85,7 +89,8 @@ const orderedPositiveScores = fc
   .map((scores) => scores.toSorted((left, right) => right - left));
 
 test("BM25 normalization preserves ordering and pages under positive score scaling", async () => {
-  await fc.assert(
+  await assertProperty(
+    "BM25 normalization preserves ordering and pages under positive score scaling",
     fc.asyncProperty(
       orderedPositiveScores,
       fc.constantFrom(-8, -4, -1, 1, 4, 8),
@@ -134,12 +139,12 @@ test("BM25 normalization preserves ordering and pages under positive score scali
         }
       },
     ),
-    propertyConfig(),
   );
 });
 
 test("omitting the ranking flag preserves explicit OFF pages and cursors", async () => {
-  await fc.assert(
+  await assertProperty(
+    "omitting the ranking flag preserves explicit OFF pages and cursors",
     fc.asyncProperty(
       orderedPositiveScores,
       fc.integer({ min: 1, max: 6 }),
@@ -179,7 +184,6 @@ test("omitting the ranking flag preserves explicit OFF pages and cursors", async
         }
       },
     ),
-    propertyConfig(),
   );
 });
 
@@ -222,9 +226,9 @@ test.each([
   { scores: [1, 2], message: "BM25 ratio ranking received an invalid score" },
 ])(
   "BM25 ranking rejects invalid engine scores $scores",
-  async ({ scores, message }) => {
+  ({ scores, message }) => {
     stubRankingScores(scores);
-    await expect(
+    expect(
       readCorpusIndexSearchPage({
         ...rankingTestOptions,
         rankingMode: "bm25-ratio",
@@ -258,7 +262,11 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
       _input: Parameters<typeof fetch>[0],
       init?: Parameters<typeof fetch>[1],
     ) => {
-      const body = JSON.parse(String(init?.body));
+      const requestBody = init?.body;
+      if (typeof requestBody !== "string") {
+        throw new TypeError("Expected a JSON request body");
+      }
+      const body = JSON.parse(requestBody);
       requests.push({ from: body.from, size: body.size });
       const hits = Array.from({ length: 7100 }, (_, rank) => ({
         _source: {
@@ -353,7 +361,7 @@ test("BM25 ranking replays a bounded deduplicated universe with scale-invariant 
   ).toBe(true);
 });
 
-test("BM25 ranking refuses a moving window or a transport without scores", async () => {
+test("BM25 ranking refuses a moving window or a transport without scores", () => {
   const base = {
     observer: "unobserved",
     cluster: "q09",
@@ -369,10 +377,10 @@ test("BM25 ranking refuses a moving window or a transport without scores", async
     unseenScoreUpperBound: stableBlendUpperBound,
     rankCandidates: async () => ({ context: null, ranked: [] }),
   } satisfies Parameters<typeof readCorpusIndexSearchPage>[0];
-  await expect(readCorpusIndexSearchPage(base)).rejects.toThrow(
+  expect(readCorpusIndexSearchPage(base)).rejects.toThrow(
     "BM25 ranking requires",
   );
-  await expect(
+  expect(
     readCorpusIndexSearchPage({
       ...base,
       scanTransport: { type: "scored", fields: ["document_id"] },
@@ -384,7 +392,7 @@ test("BM25 ranking refuses a moving window or a transport without scores", async
       },
     }),
   ).rejects.toThrow("BM25 ranking requires");
-  await expect(
+  expect(
     readCorpusIndexSearchPage({
       ...base,
       scanTransport: { type: "scored", fields: ["document_id"] },

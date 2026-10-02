@@ -1,3 +1,4 @@
+// parser-output-unchanged: Search ranking flag and policy; ingestion parsers never read them.
 import { createHash } from "node:crypto";
 
 export const CORPUS_INDEX_RANKING_MODES = ["off", "bm25-ratio"] as const;

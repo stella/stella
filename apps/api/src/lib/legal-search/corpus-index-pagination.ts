@@ -887,7 +887,10 @@ const readPositionSearchPage = async <TContext>({
 
   const snippets = await readPageSnippets({
     observer,
-    clauses: pageRanked.flatMap((hit) => passageClauseById.get(hit.id) ?? []),
+    clauses: pageRanked.flatMap((hit) => {
+      const clause = passageClauseById.get(hit.id);
+      return clause === undefined ? [] : [clause];
+    }),
     cluster,
     extractId,
     extractSnippet,
@@ -1006,7 +1009,10 @@ const readBm25SearchPage = async <TContext>({
       : null;
   const snippets = await readPageSnippets({
     observer,
-    clauses: pageRanked.flatMap((hit) => passageClauseById.get(hit.id) ?? []),
+    clauses: pageRanked.flatMap((hit) => {
+      const clause = passageClauseById.get(hit.id);
+      return clause === undefined ? [] : [clause];
+    }),
     cluster,
     extractId,
     extractSnippet,
