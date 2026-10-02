@@ -3,7 +3,14 @@ import * as v from "valibot";
 
 import { DAY_IN_MS } from "@stll/time";
 
-import { envApiServerSchema } from "./env-schema";
+import { envApiInvariantViolation, envApiServerSchema } from "./env-schema";
+
+test("agent client storage format requires explicit enablement", () => {
+  const schema = envApiServerSchema.AGENT_CLIENT_STORAGE_V1_ENABLED;
+  expect(v.parse(schema, undefined)).toBe(false);
+  expect(v.parse(schema, "false")).toBe(false);
+  expect(v.parse(schema, "true")).toBe(true);
+});
 
 test("accepted retention settings keep cutoff timestamps in positive ISO years", () => {
   const now = new Date("2021-03-04T10:00:00Z");
@@ -25,6 +32,92 @@ test("accepted retention settings keep cutoff timestamps in positive ISO years",
         .success,
     ).toBe(false);
   }
+});
+
+const environment = {
+  BETTER_AUTH_URL: "https://example.test",
+  FRONTEND_URL: "https://example.test",
+  GOTENBERG_URL: "https://example.test",
+  E2E_DISABLE_AUTH_RATE_LIMIT: false,
+  USE_MOCK_AI: false,
+  nodeEnv: "production",
+  runtimeMode: { mode: "strict" },
+} as const satisfies Parameters<typeof envApiInvariantViolation>[0];
+
+test("managed checks require an explicit supported provider and bounded configuration", () => {
+  for (const provider of [
+    undefined,
+    ...envApiServerSchema.AI_PROVIDER.wrapped.options,
+  ]) {
+    const input = {
+      ...environment,
+      AI_PROVIDER: provider,
+      FEATURE_MANAGED_PROVIDER_CHECKS: true,
+      OPENROUTER_API_KEY: "fixture-key",
+      MANAGED_PROVIDER_CHECK_INTERVAL_MS: 71,
+      MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 13,
+    };
+    expect(envApiInvariantViolation(input)).toBe(
+      provider === "openrouter"
+        ? null
+        : "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.",
+    );
+    expect(
+      envApiInvariantViolation({
+        ...input,
+        FEATURE_MANAGED_PROVIDER_CHECKS: false,
+      }),
+    ).toBeNull();
+  }
+  const supported = {
+    ...environment,
+    FEATURE_MANAGED_PROVIDER_CHECKS: true,
+    AI_PROVIDER: "openrouter" as const,
+    OPENROUTER_API_KEY: "fixture-key",
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS: 71,
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 13,
+  };
+  expect(
+    envApiInvariantViolation({ ...supported, OPENROUTER_API_KEY: undefined }),
+  ).toContain("requires OPENROUTER_API_KEY");
+  for (const settings of [
+    { MANAGED_PROVIDER_CHECK_INTERVAL_MS: undefined },
+    { MANAGED_PROVIDER_CHECK_TIMEOUT_MS: undefined },
+    { MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 71 },
+    { MANAGED_PROVIDER_CHECK_TIMEOUT_MS: 73 },
+  ]) {
+    expect(envApiInvariantViolation({ ...supported, ...settings })).toContain(
+      "timeout must be shorter than interval",
+    );
+  }
+  expect(
+    v.parse(envApiServerSchema.FEATURE_MANAGED_PROVIDER_CHECKS, undefined),
+  ).toBe(false);
+  for (const schema of [
+    envApiServerSchema.MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+    envApiServerSchema.MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
+  ]) {
+    for (const invalid of ["0", "-1", "1.2", "2147483648"]) {
+      expect(v.safeParse(schema, invalid).success).toBe(false);
+    }
+    expect(v.parse(schema, "17")).toBe(17);
+  }
+});
+
+test("catalog check deadlines have a bounded operator ceiling", () => {
+  expect(
+    v.parse(envApiServerSchema.MANAGED_PROVIDER_CHECK_TIMEOUT_MS, "30000"),
+  ).toBe(30_000);
+  expect(
+    v.safeParse(envApiServerSchema.MANAGED_PROVIDER_CHECK_TIMEOUT_MS, "30001")
+      .success,
+  ).toBe(false);
+  expect(
+    v.parse(
+      envApiServerSchema.MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+      "2147483647",
+    ),
+  ).toBe(2_147_483_647);
 });
 
 test("Microsoft claim configuration defaults to disabled", () => {

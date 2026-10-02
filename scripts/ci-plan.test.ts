@@ -18,6 +18,7 @@ import { propertyConfig } from "@stll/property-testing";
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+import queueOnlyReasons from "./ci-queue-only-jobs.json";
 import { GENERATORS } from "./generated-files";
 
 const workflow = readFileSync(
@@ -49,6 +50,7 @@ const runSelector = (
       "-e",
       "-c",
       `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
+desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
 e2e_landing_required="$E2E_LANDING_REQUIRED"
 package_checks_required=true
 ${selector}
@@ -1517,6 +1519,13 @@ test("CLI packaging parity runs whenever CLI sources, codegen or generated outpu
     "needs.ci-plan.outputs.package_checks_required == 'true'",
   );
   expect(jobScopes["ci-checks-rest"]).toBeNull();
+  expect(fastRequired).toContain("ci-checks-rest");
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "ci-checks-rest": "skipped" },
+    }),
+  ).toBe(1);
 
   const generators = GENERATORS.filter(({ id }) =>
     ["cli-registry", "cli-runtime"].includes(id),
@@ -2039,7 +2048,7 @@ test("direct web compiler package scripts generate before inspecting types", () 
       expect(
         command.slice(0, consumer.index),
         `${manifest} ${name} materializes the API contract`,
-      ).toMatch(/bun(?: --cwd \.\.\/\.\.)? run generate/u);
+      ).toMatch(/bun run(?: --cwd \.\.\/\.\.)? generate/u);
       if (command.includes("$TURBO_HASH")) {
         const task = `${manifest === "../package.json" ? "//" : owner}#${name}`;
         expect(
@@ -3168,4 +3177,357 @@ test("the production service-scope capture rejects crashed or malformed detector
   } finally {
     rmSync(directory, { recursive: true, force: true });
   }
+});
+const queueOnlyJobs = v.parse(
+  v.record(
+    v.string(),
+    v.pipe(v.string(), v.startsWith("queue-only because "), v.minLength(50)),
+  ),
+  queueOnlyReasons,
+);
+
+// Evaluate the actual predicate with a successful trusted plan. Unfamiliar
+// expression syntax fails closed instead of silently evading parity.
+type DepthContext = { event: Event; depth: SuiteDepth };
+const runsAtDepth = (condition: string, { event, depth }: DepthContext) => {
+  const expression = condition
+    .replaceAll(/\balways\(\)/gu, "true")
+    .replaceAll(/\bcancelled\(\)/gu, "false")
+    .replaceAll(
+      /([\w.-]+)\s*(==|!=)\s*'([^']*)'/gu,
+      (_, context: string, operator: string, expected: string) => {
+        let actual: string;
+        if (context === "github.event_name") {
+          actual = event;
+        } else if (context === "needs.ci-plan.outputs.suite_depth") {
+          actual = depth;
+        } else if (context.startsWith("needs.ci-plan.outputs.")) {
+          actual = "true";
+        } else if (/^needs\.[\w-]+\.result$/u.test(context)) {
+          actual = "success";
+        } else {
+          throw new TypeError(`Unknown CI predicate context: ${context}`);
+        }
+        return String(
+          operator === "==" ? actual === expected : actual !== expected,
+        );
+      },
+    );
+  if (!/^(?:\s|true|false|&&|\|\||!|\(|\))+$/u.test(expression)) {
+    throw new TypeError(`Unknown CI predicate syntax: ${expression}`);
+  }
+  const tokens = expression.match(/true|false|&&|\|\||!|\(|\)/gu) ?? [];
+  let cursor = 0;
+  const primary = (): boolean => {
+    const token = tokens.at(cursor++);
+    if (token === "!") {
+      return !primary();
+    }
+    if (token === "(") {
+      const value = disjunction();
+      if (tokens.at(cursor++) !== ")") {
+        throw new TypeError("Unclosed CI predicate group");
+      }
+      return value;
+    }
+    if (token === "true" || token === "false") {
+      return token === "true";
+    }
+    throw new TypeError(`Invalid CI predicate token: ${String(token)}`);
+  };
+  const conjunction = (): boolean => {
+    let value = primary();
+    while (tokens.at(cursor) === "&&") {
+      cursor++;
+      const right = primary();
+      value = value && right;
+    }
+    return value;
+  };
+  const disjunction = (): boolean => {
+    let value = conjunction();
+    while (tokens.at(cursor) === "||") {
+      cursor++;
+      const right = conjunction();
+      value = value || right;
+    }
+    return value;
+  };
+  const value = disjunction();
+  if (cursor !== tokens.length) {
+    throw new TypeError("Trailing CI predicate tokens");
+  }
+  return value;
+};
+
+type ParityJob = { name: string; condition: string; required: boolean };
+const parityViolations = (
+  jobs: readonly ParityJob[],
+  exceptions: Record<string, string>,
+) => {
+  const violations: string[] = [];
+  for (const name of Object.keys(exceptions)) {
+    const job = jobs.find((candidate) => candidate.name === name);
+    if (
+      job === undefined ||
+      !runsAtDepth(job.condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+      }) ||
+      runsAtDepth(job.condition, {
+        event: EVENT.pullRequest,
+        depth: SUITE_DEPTH.fast,
+      })
+    ) {
+      violations.push(`${name}: stale queue-only exception`);
+    }
+  }
+  for (const job of jobs) {
+    if (
+      !runsAtDepth(job.condition, {
+        event: EVENT.mergeGroup,
+        depth: SUITE_DEPTH.full,
+      })
+    ) {
+      continue;
+    }
+    if (
+      runsAtDepth(job.condition, {
+        event: EVENT.pullRequest,
+        depth: SUITE_DEPTH.fast,
+      }) &&
+      job.required
+    ) {
+      continue;
+    }
+    if (!Object.hasOwn(exceptions, job.name)) {
+      violations.push(
+        `${job.name}: missing required PR path or queue-only reason`,
+      );
+    }
+  }
+  return violations;
+};
+
+const parityJobs = gatedJobs.map((name) => ({
+  name,
+  condition: jobIf(ciJobs[name]),
+  required: fastRequired.includes(name),
+}));
+
+test("every gated merge-group job has a required PR path or an explicit queue-only reason", () => {
+  expect(parityViolations(parityJobs, queueOnlyJobs)).toEqual([]);
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const pathScopes = new Set<string>();
+  for (const { name, condition } of parityJobs) {
+    if (
+      !runsAtDepth(condition, {
+        event: EVENT.pullRequest,
+        depth: SUITE_DEPTH.fast,
+      })
+    ) {
+      continue;
+    }
+    expect(jobScopes, name).toHaveProperty(name);
+    const scope = fastJobScopes[name] ?? jobScopes[name];
+    if (scope !== null && scope !== undefined) {
+      expect(plan.outputs, name).toHaveProperty(scope);
+      expect(condition, name).toContain(
+        `needs.ci-plan.outputs.${scope} == 'true'`,
+      );
+      // The release screenshot planner has its own ready-release behavioral
+      // matrix above; every changed-files scope must actually select a PR.
+      if (scope !== "marketing_screenshots_required") {
+        pathScopes.add(scope);
+      }
+    }
+  }
+  const paths = [
+    ".github/workflows/ci.yml",
+    "bun.lock",
+    "VERSION",
+    "apps/landing/src/pages/index.astro",
+    "apps/api/src/modules/workspaces/workspace.test.ts",
+    "apps/desktop/src-tauri/src/lib.rs",
+    "apps/web/e2e/playwright.config.ts",
+  ];
+  const scopes = [...pathScopes];
+  expect(
+    runSelector(
+      paths,
+      scopes,
+      "fast",
+      "false",
+      "pull_request",
+      "fix: update checks",
+    ),
+  ).toEqual(scopes.map(() => "true"));
+});
+
+test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions", () => {
+  const name = "new-check";
+  const condition =
+    "needs.ci-plan.outputs.new_required == 'true' && needs.ci-plan.outputs.suite_depth == 'full'";
+  expect(
+    parityViolations(
+      [...parityJobs, { name, condition, required: false }],
+      queueOnlyJobs,
+    ),
+  ).toEqual([`${name}: missing required PR path or queue-only reason`]);
+  expect(
+    parityViolations(
+      [
+        {
+          name,
+          condition: "needs.ci-plan.outputs.new_required == 'true'",
+          required: false,
+        },
+      ],
+      {},
+    ),
+  ).toEqual([`${name}: missing required PR path or queue-only reason`]);
+  expect(
+    parityViolations([], {
+      removed: "queue-only because the removed check used the merged tree",
+    }),
+  ).toEqual(["removed: stale queue-only exception"]);
+  expect(
+    parityViolations(
+      [
+        {
+          name,
+          condition: "needs.ci-plan.outputs.new_required == 'true'",
+          required: true,
+        },
+      ],
+      {
+        [name]: "queue-only because this check previously used the merged tree",
+      },
+    ),
+  ).toEqual([`${name}: stale queue-only exception`]);
+  expect(() =>
+    runsAtDepth("contains(github.ref, 'main')", {
+      event: EVENT.pullRequest,
+      depth: SUITE_DEPTH.fast,
+    }),
+  ).toThrow("Unknown CI predicate syntax");
+});
+
+test("parity predicates follow GitHub precedence and reject malformed expressions", () => {
+  const context = {
+    event: EVENT.pullRequest,
+    depth: SUITE_DEPTH.fast,
+  } as const;
+  for (const left of [true, false]) {
+    for (const middle of [true, false]) {
+      for (const right of [true, false]) {
+        expect(runsAtDepth(`${left} || ${middle} && ${right}`, context)).toBe(
+          left || (middle && right),
+        );
+        expect(
+          runsAtDepth(`(${left} || ${middle}) && !${right}`, context),
+        ).toBe((left || middle) && !right);
+      }
+    }
+  }
+  expect(() => runsAtDepth("true &&", context)).toThrow(
+    "Invalid CI predicate token",
+  );
+  expect(() => runsAtDepth("(true", context)).toThrow(
+    "Unclosed CI predicate group",
+  );
+  expect(() => runsAtDepth("true false", context)).toThrow(
+    "Trailing CI predicate tokens",
+  );
+  expect(() => runsAtDepth("github.unknown == 'true'", context)).toThrow(
+    "Unknown CI predicate context",
+  );
+});
+
+test("property suites and their budgets select required PR checks", () => {
+  for (const file of [
+    "packages/property-testing/src/index.ts",
+    "packages/property-testing/src/run-factor.ts",
+    "packages/property-testing/src/preload.ts",
+    "packages/property-testing/property-seeds.json",
+    "packages/property-testing/src/index.test.ts",
+    "scripts/prepare-maintenance-release.property.test.ts",
+    "apps/api/src/handlers/case-law/judges/judge-name.property.test.ts",
+    "turbo.json",
+  ]) {
+    expect(packageChecksPlan([file]), file).toBe("true");
+  }
+  expect(packageChecksPlan(["provenance/manifest.json"])).toBe("false");
+  for (const job of ["ci-tests", "ci-checks-policy", "ci-checks-rest"]) {
+    expect(
+      runsAtDepth(jobIf(ciJobs[job]), {
+        event: EVENT.pullRequest,
+        depth: SUITE_DEPTH.fast,
+      }),
+      job,
+    ).toBe(true);
+    expect(fastRequired, job).toContain(job);
+    expect(
+      evaluateResult({
+        event: EVENT.pullRequest,
+        results: { [job]: "skipped" },
+      }),
+      job,
+    ).toBe(1);
+  }
+  const propertyGuard = jobSteps(ciJobs["ci-checks-rest"]).find(
+    ({ name }) => name === "Property-test convention guard",
+  );
+  expect(propertyGuard?.if).toBe(
+    "needs.ci-plan.outputs.package_checks_required == 'true'",
+  );
+  const tests = jobSteps(ciJobs["ci-tests"]).find(
+    ({ name }) => name === "Test API or rest",
+  );
+  expect(tests?.if).toContain(
+    "needs.ci-plan.outputs.package_checks_required == 'true'",
+  );
+});
+
+test("network-baseline PR coverage reuses the route-smoke profile and path scope", () => {
+  for (const file of [
+    "apps/web/src/routes/__root.tsx",
+    "apps/web/e2e/network-baseline.json",
+    "scripts/network-baseline-scope.ts",
+    "scripts/network-baseline-scope.test.ts",
+  ]) {
+    expect(
+      runSelector([file], ["route_smoke_required", "web_build_required"]),
+      file,
+    ).toEqual(["true", "true"]);
+  }
+  // Loose steps keep `env`, which jobSteps' strict schema drops.
+  const network = v
+    .parse(
+      v.object({
+        steps: v.array(v.looseObject({ name: v.optional(v.string()) })),
+      }),
+      ciJobs["route-smoke"],
+    )
+    .steps.find(({ name }) => name === "Check route network baseline");
+  const step = v.parse(
+    v.object({ env: v.record(v.string(), v.string()), run: v.string() }),
+    network,
+  );
+  expect(step.env["E2E_EXECUTION_PROFILE"]).toBe("network-baseline");
+  expect(step.run).toContain("route-smoke.spec.ts");
+  expect(jobIf(ciJobs["route-smoke"])).toContain(
+    "needs.ci-plan.outputs.route_smoke_required == 'true'",
+  );
+  expect(jobScopes["route-smoke"]).toBe("route_smoke_required");
+  expect(fastRequired).toContain("route-smoke");
+  expect(
+    evaluateResult({
+      event: EVENT.pullRequest,
+      results: { "route-smoke": "skipped" },
+    }),
+  ).toBe(1);
 });

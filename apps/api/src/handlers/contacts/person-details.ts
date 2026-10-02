@@ -1,45 +1,16 @@
 import { t } from "elysia";
-import type { Static } from "elysia";
 
 import { isCountryCode } from "@stll/country-codes";
 
+import type { DateOfBirth } from "@/api/lib/business-registries/date-of-birth";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 export const MAX_CONTACT_NATIONALITY_CODES = 250;
-
-export const dateOfBirthSchema = t.Union([
-  t.Object(
-    {
-      precision: t.Literal("year"),
-      year: t.Integer({ minimum: 1000, maximum: 9999 }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      precision: t.Literal("month"),
-      year: t.Integer({ minimum: 1000, maximum: 9999 }),
-      month: t.Integer({ minimum: 1, maximum: 12 }),
-    },
-    { additionalProperties: false },
-  ),
-  t.Object(
-    {
-      precision: t.Literal("day"),
-      year: t.Integer({ minimum: 1000, maximum: 9999 }),
-      month: t.Integer({ minimum: 1, maximum: 12 }),
-      day: t.Integer({ minimum: 1, maximum: 31 }),
-    },
-    { additionalProperties: false },
-  ),
-]);
 
 export const nationalityCodesSchema = t.Array(
   t.String({ pattern: "^[A-Z]{2}$" }),
   { maxItems: MAX_CONTACT_NATIONALITY_CODES, uniqueItems: true },
 );
-
-export type DateOfBirth = Static<typeof dateOfBirthSchema>;
 
 export const dateOfBirthFromColumns = ({
   dateOfBirthYear: year,

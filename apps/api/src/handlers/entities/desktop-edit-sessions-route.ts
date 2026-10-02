@@ -46,8 +46,12 @@ export const desktopEditSessionsRoute = new Elysia({
   )
   .post(
     "/desktop-edit-handoffs/:handoffId/opened",
-    async ({ body, params }) =>
-      await acknowledgeDesktopEditHandoffOpenedHandler({ body, params }),
+    async ({ body, params, request }) =>
+      await acknowledgeDesktopEditHandoffOpenedHandler({
+        body,
+        params,
+        request,
+      }),
     {
       body: acknowledgeDesktopEditHandoffOpenedBodySchema,
       params: acknowledgeDesktopEditHandoffOpenedParamsSchema,

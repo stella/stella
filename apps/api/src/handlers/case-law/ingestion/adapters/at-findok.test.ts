@@ -11,6 +11,8 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/at-findok";
 import { loadDocxArchive } from "@/api/lib/docx-archive";
 
+import { PublisherPageError } from "./publisher-page";
+
 const DOCUMENT_ID = "b68202a0-55e4-4dea-9e93-971f0b71ae32";
 const MANIFEST_ITEM = {
   stammNr: 152_257,
@@ -28,15 +30,13 @@ const MANIFEST_ITEM = {
   dokumentId: DOCUMENT_ID,
 } as const;
 
-type ManifestFixture = Record<string, unknown>;
-
 const xmlFixture = async (): Promise<string> =>
   await Bun.file(
     new URL("../parsers/__fixtures__/at-findok-bfg-2026.xml", import.meta.url),
   ).text();
 
 const manifestResponse = (
-  items: readonly ManifestFixture[] = [MANIFEST_ITEM],
+  items: readonly unknown[] = [MANIFEST_ITEM],
 ): Response =>
   new Response(
     Bun.gzipSync(
@@ -54,6 +54,145 @@ const reconciliationOf = (adapter: ReturnType<typeof createAtFindokAdapter>) =>
   adapter.reconciliation;
 
 describe("Austrian Findok adapter", () => {
+  for (const fixture of [
+    { name: "HTML challenge", body: "<html><form><input></form></html>" },
+    { name: "empty JSON", body: "{}" },
+    { name: "missing timestamp", body: '{"data":[]}' },
+    { name: "truncated manifest", body: '{"data":[' },
+    { name: "empty manifest bytes", body: "" },
+  ]) {
+    it(`rejects a 200 ${fixture.name} before advancing the listing`, async () => {
+      const adapter = createAtFindokAdapter({
+        now: () => new Date("2026-08-12T00:00:00Z"),
+        request: async () => new Response(fixture.body),
+        sleep: async () => {},
+      });
+      const result = await adapter.fetchPage(null, {});
+      expect(result.isErr()).toBe(true);
+      if (result.isErr()) {
+        expect(result.error).toBeInstanceOf(PublisherPageError);
+      }
+    });
+  }
+  for (const fixture of [
+    { name: "HTML challenge", body: "<html><script></script></html>" },
+    { name: "empty JSON", body: "{}" },
+    { name: "missing archive field", body: '{"data":[]}' },
+    { name: "truncated ZIP", body: new Uint8Array([0x50, 0x4b, 3, 4]) },
+  ]) {
+    it(`isolates a 200 ${fixture.name} document and advances past it`, async () => {
+      const healthyId = "c68202a0-55e4-4dea-9e93-971f0b71ae32";
+      const responses = [
+        manifestResponse([
+          MANIFEST_ITEM,
+          { ...MANIFEST_ITEM, dokumentId: healthyId },
+        ]),
+        new Response(fixture.body),
+        await detailResponse(),
+      ];
+      const adapter = createAtFindokAdapter({
+        now: () => new Date("2026-08-12T00:00:00Z"),
+        request: async () =>
+          responses.shift() ?? new Response(null, { status: 500 }),
+        sleep: async () => {},
+      });
+      const page = (await adapter.fetchPage(null, {})).unwrap();
+      expect(responses).toHaveLength(0);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      expect(page.decisions).toHaveLength(2);
+      expect(page.decisions.at(0)).toMatchObject({
+        sourceDocumentId: DOCUMENT_ID,
+        isListingOnly: true,
+      });
+      expect(page.decisions.at(1)?.sourceDocumentId).toBe(healthyId);
+      expect(page.decisions.at(1)?.isListingOnly).not.toBe(true);
+      expect(page.nextCursor).not.toBeNull();
+    });
+  }
+  it("accepts a small manifest with its required envelope and no active rows", async () => {
+    const adapter = createAtFindokAdapter({
+      now: () => new Date("2026-08-12T00:00:00Z"),
+      request: async () => manifestResponse([]),
+      sleep: async () => {},
+    });
+    const page = (await adapter.fetchPage(null, {})).unwrap();
+    expect(page.decisions).toEqual([]);
+    expect(page.nextCursor).not.toBeNull();
+  });
+  for (const xml of [
+    "<html><form></form></html>",
+    "<root/>",
+    "<Segmente><Segment></Segmente>",
+    "<Segmente><Segment>",
+  ]) {
+    it(`isolates malformed or unexpected decision XML ${xml}`, async () => {
+      const zip = new JSZip();
+      zip.file("Gesamt/152257.Entscheidungstext.xml", xml);
+      const bytes = await zip.generateAsync({ type: "uint8array" });
+      let requests = 0;
+      const adapter = createAtFindokAdapter({
+        now: () => new Date("2026-08-12T00:00:00Z"),
+        request: async () =>
+          ++requests === 1 ? manifestResponse() : new Response(bytes),
+        sleep: async () => {},
+      });
+      const result = await adapter.fetchPage(null, {});
+      expect(requests).toBe(2);
+      const page = result.unwrap();
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      expect(page.decisions.at(0)).toMatchObject({
+        sourceDocumentId: DOCUMENT_ID,
+        isListingOnly: true,
+      });
+      expect(page.nextCursor).not.toBeNull();
+    });
+  }
+  it("keeps HTTP detail failures at the page failure boundary", async () => {
+    const responses = [manifestResponse(), new Response(null, { status: 503 })];
+    const adapter = createAtFindokAdapter({
+      now: () => new Date("2026-08-12T00:00:00Z"),
+      request: async () =>
+        responses.shift() ?? new Response(null, { status: 500 }),
+      sleep: async () => {},
+    });
+    const page = await adapter.fetchPage(null, {});
+    expect(page.isErr()).toBe(true);
+    if (page.isErr()) {
+      expect(page.error.httpStatus).toBe(503);
+    }
+  });
+
+  it("retains the listing when a complete archive has no decision XML", async () => {
+    const zip = new JSZip();
+    zip.file("Gesamt/152257.Rechtssaetze.xml", "<root/>");
+    const responses = [
+      manifestResponse(),
+      new Response(await zip.generateAsync({ type: "uint8array" })),
+    ];
+    const adapter = createAtFindokAdapter({
+      now: () => new Date("2026-08-12T00:00:00Z"),
+      request: async () =>
+        responses.shift() ?? new Response(null, { status: 500 }),
+      sleep: async () => {},
+    });
+    const page = (await adapter.fetchPage(null, {})).unwrap();
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.decisions.at(0)).toMatchObject({
+      sourceDocumentId: DOCUMENT_ID,
+      isListingOnly: true,
+    });
+    expect(page.nextCursor).not.toBeNull();
+  });
+
   it("walks the UFS to BFG successor chain in lexical order", () => {
     expect(atFindokNextSlice("2012-ufs")).toBe("2013-ufs");
     expect(atFindokNextSlice("2013-ufs")).toBe("2014-bfg");
@@ -135,17 +274,58 @@ describe("Austrian Findok adapter", () => {
     ]);
   });
 
-  it("rejects malformed active rows instead of silently under-ingesting", () => {
-    expect(() =>
-      parseFindokManifest(
+  for (const rejected of [
+    { gueltig: true },
+    { ...MANIFEST_ITEM, pathZip: "https://invalid.example/document.zip" },
+    { ...MANIFEST_ITEM, appdat: "invalid" },
+    null,
+    MANIFEST_ITEM,
+  ]) {
+    it(`quarantines a rejected manifest member ${JSON.stringify(rejected)} and advances alongside a healthy decision`, async () => {
+      const responses = [
+        manifestResponse([MANIFEST_ITEM, rejected]),
+        await detailResponse(),
+      ];
+      const adapter = createAtFindokAdapter({
+        now: () => new Date("2026-08-12T00:00:00Z"),
+        request: async () =>
+          responses.shift() ?? new Response(null, { status: 500 }),
+        sleep: async () => {},
+      });
+      const page = (await adapter.fetchPage(null, {})).unwrap();
+      expect(responses).toHaveLength(0);
+      expect(page.decisions).toHaveLength(2);
+      expect(page.itemBuildFailures).toEqual({
+        type: "item_build_failed",
+        count: 1,
+      });
+      const quarantined = page.decisions.find(
+        ({ isListingOnly }) => isListingOnly,
+      );
+      expect(quarantined?.sourceDocumentId).toStartWith("findok-quarantine:");
+      expect(quarantined?.documentUrl).toBeUndefined();
+      expect(quarantined?.metadata["detailStatus"]).toBe("item_build_failed");
+      expect(quarantined?.sourceRaw).toBeDefined();
+      const parts = decodeSourceRawEnvelope(quarantined?.sourceRaw ?? "");
+      expect(JSON.parse(parts?.["listing"] ?? "null")).toEqual(rejected);
+      expect(
+        page.decisions.find(
+          ({ sourceDocumentId }) => sourceDocumentId === DOCUMENT_ID,
+        )?.isListingOnly,
+      ).not.toBe(true);
+      expect(page.nextCursor).not.toBeNull();
+      const repeated = parseFindokManifest(
         "bfg",
         JSON.stringify({
           generierungsdatum: "07.08.2026 06:16",
-          data: [{ gueltig: true }, MANIFEST_ITEM],
+          data: [MANIFEST_ITEM, rejected],
         }),
-      ),
-    ).toThrow("invalid item at 0");
-  });
+      );
+      expect(
+        repeated.items.find(({ type }) => type === "quarantine")?.dokumentId,
+      ).toBe(quarantined?.sourceDocumentId);
+    });
+  }
 
   it("quarantines an invalid publisher UUID without hiding later documents", async () => {
     const invalidIdentity = {

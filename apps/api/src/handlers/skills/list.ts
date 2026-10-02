@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { and, asc, desc, eq, gt, or, sql } from "drizzle-orm";
 import { t } from "elysia";
 
-import { isOrganizationManagementRole } from "@stll/permissions";
 import {
   listSkillMetadata,
   listSkillResources,
@@ -26,6 +25,7 @@ import {
   encodePaginationCursor,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { hasManagementPermission } from "@/api/lib/permission-authorization";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAgentSkillId } from "@/api/lib/safe-id-boundaries";
 
@@ -191,7 +191,9 @@ const listSkills = createSafeRootHandler(
     });
 
     return Result.ok({
-      canManageTeam: isOrganizationManagementRole(memberRole.role),
+      canManageTeam: hasManagementPermission(memberRole, {
+        agentSkill: ["update"],
+      }),
       builtIn: listSkillMetadata().map((skill) => ({
         id: skill.name,
         scope: "built-in" as const,

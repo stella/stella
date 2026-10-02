@@ -1,3 +1,4 @@
+// parser-output-unchanged: Existing decision and supplement branches retain their output; the new failure branch and page counters only expose item failures.
 /**
  * Shared pagination helpers for case-law adapters.
  *
@@ -203,7 +204,11 @@ type PagePaginationOptions<TResponse> = PageWalkDeclaration & {
   parseItem: (
     item: unknown,
     signal?: AbortSignal,
-  ) => Promise<IngestionItem | null>;
+  ) => Promise<
+    | IngestionItem
+    | { type: "item_build_failed"; decision: IngestionResult | null }
+    | null
+  >;
   /**
    * Max parallel parseItem calls within a single page.
    * Defaults to 1 (serial). Raise for adapters whose
@@ -657,6 +662,12 @@ const parsePageItems = async ({
           case "supplement":
             supplements.push(item.supplement);
             break;
+          case "item_build_failed":
+            itemsSkipped++;
+            if (item.decision !== null) {
+              decisions.push(item.decision);
+            }
+            break;
           default:
             item satisfies never;
             return panic(`Unhandled ingestion item: ${String(item)}`);
@@ -1017,6 +1028,14 @@ export const createPagePaginatedFetch = <TResponse>(
 
         return Result.ok({
           decisions,
+          ...(itemsSkipped === 0
+            ? {}
+            : {
+                itemBuildFailures: {
+                  type: "item_build_failed" as const,
+                  count: itemsSkipped,
+                },
+              }),
           ...(supplements.length === 0 ? {} : { supplements }),
           nextCursor,
           sourceUrl: url,
