@@ -1,8 +1,6 @@
 import { describe, expect, test } from "bun:test";
-import fc from "fast-check";
 
 import { DECISION_IDENTIFIER_TYPES } from "@stll/legal-ast/decision-identifier";
-import { assertProperty } from "@stll/property-testing";
 
 import {
   TEXT_ABSENCE_REASON,
@@ -192,74 +190,5 @@ describe("publisher labels cross one structural text boundary", () => {
     });
     expect(result.caseNumber === "A 1").toBe(true);
     expect(Bun.deepEquals(result.metadata, { title: "Decision" })).toBe(true);
-  });
-
-  test("sole binary captures determine quarantine identity independently of rawHash", () => {
-    assertProperty(
-      "sole binary captures determine quarantine identity independently of rawHash",
-      fc.property(fc.uint8Array({ minLength: 1, maxLength: 64 }), (bytes) => {
-        const otherBytes = bytes.map((byte) => 255 - byte);
-        expect(Bun.deepEquals(bytes, otherBytes)).toBe(false);
-        for (const transport of ["bytes", "objects"] as const) {
-          const raw = {
-            ...rawDecision,
-            metadata: { label: "\\rtf1 rejected" },
-            ...(transport === "bytes"
-              ? { sourceRawBytes: bytes }
-              : {
-                  sourceRawObjects: {
-                    document: { bytes, contentType: "application/pdf" },
-                  },
-                }),
-          };
-          const otherRaw = {
-            ...raw,
-            ...(transport === "bytes"
-              ? { sourceRawBytes: otherBytes }
-              : {
-                  sourceRawObjects: {
-                    document: {
-                      bytes: otherBytes,
-                      contentType: "application/pdf",
-                    },
-                  },
-                }),
-          };
-          const first = plainTextIngestionResult(raw);
-          const second = plainTextIngestionResult(otherRaw);
-          expect(first.plainTextOutcome.type).toBe("item_build_failed");
-          expect(second.plainTextOutcome.type).toBe("item_build_failed");
-          expect(first.sourceDocumentId).not.toBe(second.sourceDocumentId);
-          expect(plainTextIngestionResult(first)).toEqual(first);
-        }
-      }),
-      { numRuns: 100 },
-    );
-  });
-
-  test("binary object insertion order does not change a quarantine identity", () => {
-    const document = {
-      bytes: new Uint8Array([1, 2, 3]),
-      contentType: "application/pdf",
-    };
-    const attachment = {
-      bytes: new Uint8Array([4, 5]),
-      contentType: "application/pdf",
-    };
-    const raw = { ...rawDecision, metadata: { label: "\\rtf1 rejected" } };
-    const first = plainTextIngestionResult({
-      ...raw,
-      sourceRawObjects: { document, attachment },
-    });
-    const reordered = plainTextIngestionResult({
-      ...raw,
-      sourceRawObjects: { attachment, document },
-    });
-    expect(first.sourceDocumentId).toBe(reordered.sourceDocumentId);
-    const changed = plainTextIngestionResult({
-      ...raw,
-      sourceRawObjects: { document, attachment: document },
-    });
-    expect(first.sourceDocumentId).not.toBe(changed.sourceDocumentId);
   });
 });

@@ -1,3 +1,4 @@
+// parser-output-unchanged: Rejecting non-finite runtime numbers leaves publisher JSON metadata unchanged.
 import { Result, TaggedError } from "better-result";
 import { decodeHTMLStrict } from "entities";
 import * as v from "valibot";
