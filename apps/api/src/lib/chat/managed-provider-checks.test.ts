@@ -3,6 +3,8 @@ import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result, panic } from "better-result";
 import { describe, expect, jest, spyOn, test } from "bun:test";
 
+import { BYOK_DEFAULT_MODELS } from "@stll/ai-catalog";
+
 import { env } from "@/api/env";
 import { MANAGED_AI_RESIDENCIES } from "@/api/lib/chat/ai-data-policy";
 import {
@@ -18,7 +20,7 @@ import {
   shutdownApiServices,
 } from "@/api/server-shutdown";
 
-const MODEL = "google/gemini-2.5-flash";
+const MODEL = BYOK_DEFAULT_MODELS.openrouter.chat;
 const chatOptions = {
   model: MODEL,
   messages: [{ role: "user" as const, content: "fixture request" }],

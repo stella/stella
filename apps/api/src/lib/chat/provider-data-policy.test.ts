@@ -658,7 +658,8 @@ describe("provider request policy", () => {
               },
             };
             const result = await Result.tryPromise({
-              try: () => adapter.structuredOutput(structuredOptions),
+              try: async () =>
+                await adapter.structuredOutput(structuredOptions),
               catch: (error) => error,
             });
             expect(result.isErr()).toBe(true);
