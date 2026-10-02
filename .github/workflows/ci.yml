@@ -3159,6 +3159,7 @@ jobs:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.e2e_production_required == 'true'
@@ -3582,6 +3583,7 @@ jobs:
     needs: [ci-plan, web-build]
     if: >-
       always()
+      && (github.event_name != 'merge_group' || !cancelled())
       && (needs.ci-plan.outputs.trusted == 'true'
           || github.event_name == 'workflow_dispatch')
       && needs.ci-plan.outputs.marketing_screenshots_required == 'true'
@@ -3985,6 +3987,73 @@ jobs:
         run: bash scripts/scan-dependency-malware.sh
         env:
           NPM_TOKEN: ""
+
+  # Merge groups only: once any job has failed, cancel the rest of the run so
+  # ci-result (which runs under always()) reports the failure at once instead
+  # of after every other job. This job alone may cancel the run: it checks out
+  # no repository code and installs nothing, so no pull request code ever runs
+  # with the write token. It cancels nothing unless a job already failed, and
+  # it never retries anything. It never fails or holds the group: ci-result
+  # does not need it, and any API error or its own deadline just ends it.
+  # The repository token's API budget is shared by every workflow, so it polls
+  # with conditional requests (an unchanged 304 answer is free) and stops as
+  # soon as every other job is done.
+  merge-group-fail-fast:
+    if: github.event_name == 'merge_group'
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      actions: write
+    steps:
+      - name: Cancel the run once a job fails
+        env:
+          GH_TOKEN: ${{ github.token }}
+          POLL_SECONDS: "30"
+          DEADLINE_SECONDS: "2400"
+        run: |
+          set -euo pipefail
+          url="$GITHUB_API_URL/repos/$GITHUB_REPOSITORY/actions/runs/$GITHUB_RUN_ID/attempts/$GITHUB_RUN_ATTEMPT/jobs?per_page=100"
+          headers="$RUNNER_TEMP/fail-fast-headers"
+          body="$RUNNER_TEMP/fail-fast-body"
+          etag=""
+          states=""
+          stop() {
+            echo "::warning::$1; this run finishes normally."
+            exit 0
+          }
+          while ((SECONDS < DEADLINE_SECONDS)); do
+            conditional=()
+            if [[ -n "$etag" ]]; then
+              conditional=(-H "If-None-Match: $etag")
+            fi
+            if ! status=$(curl -sS -o "$body" -D "$headers" -w '%{http_code}' \
+              -H "Authorization: Bearer $GH_TOKEN" \
+              -H "Accept: application/vnd.github+json" \
+              ${conditional[@]+"${conditional[@]}"} "$url"); then
+              stop "Could not read this run's jobs"
+            fi
+            case "$status" in
+              200)
+                etag=$(grep -i '^etag:' "$headers" | head -n 1 | cut -d' ' -f2- | tr -d '\r' || true)
+                # A run with more jobs than one page cannot be watched whole.
+                if ! states=$(jq -er 'if .total_count > (.jobs | length) then error("more jobs than one page") else .jobs[] | select(.name != "merge-group-fail-fast") | [.status, (.conclusion // "")] | @tsv end' "$body"); then
+                  stop "Could not read this run's jobs"
+                fi
+                ;;
+              304) ;;
+              *) stop "Reading this run's jobs returned HTTP $status" ;;
+            esac
+            if grep -Eq $'\t(failure|timed_out)$' <<< "$states"; then
+              echo "A job failed; cancelling the rest of this merge group run."
+              gh run cancel "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" || stop "Could not cancel the run"
+              exit 0
+            fi
+            if [[ -n "$states" ]] && ! grep -qv '^completed' <<< "$states"; then
+              exit 0
+            fi
+            sleep "$POLL_SECONDS"
+          done
+          stop "Stopped watching at the deadline"
 
   # Aggregation job for branch protection. The ruleset requires
   # this check to pass, which ensures untrusted PRs cannot be
