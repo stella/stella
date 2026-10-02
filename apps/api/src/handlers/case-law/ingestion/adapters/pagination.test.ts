@@ -314,6 +314,42 @@ describe("createPagePaginatedFetch", () => {
     expect(page.decisions[0]?.caseNumber).toBe("CASE-1");
     expect(page.decisions[1]?.caseNumber).toBe("CASE-3");
     expect(page.nextCursor).toBe("offset:3");
+    expect(page.itemBuildFailures).toBeUndefined();
+  });
+
+  test("counts explicit item failures while progressing past intentional skips", async () => {
+    const items = [{ id: 1 }, { id: 2 }, { id: 3 }];
+    await saveFixture(FIXTURE_NAME, makeFixture(items, 10));
+    restore = await mockFetchWithFixtures([
+      { pattern: "/test-api", fixture: FIXTURE_NAME },
+    ]);
+    const fetchPage = createPagePaginatedFetch<TestResponse>({
+      adapterKey: ADAPTER_KEYS.PL_COURTS,
+      pageSize: 3,
+      firstPage: 1,
+      buildRequest: (page) => ({
+        url: `https://example.com/test-api?page=${page}`,
+      }),
+      parseResponse: async (response) =>
+        Result.ok(await readTestJson<TestResponse>(response)),
+      extractItems: (data) => ({ items: data.results, total: data.total }),
+      parseItem: async (raw) => {
+        const item = asTestRaw<TestItem>(raw);
+        if (item.id === 2) {
+          return { type: "item_build_failed", decision: null };
+        }
+        return item.id === 3 ? null : itemToDecision(item);
+      },
+    });
+    const page = (await fetchPage(null, {})).unwrap();
+    expect(page.decisions.map(({ caseNumber }) => caseNumber)).toEqual([
+      "CASE-1",
+    ]);
+    expect(page.itemBuildFailures).toEqual({
+      type: "item_build_failed",
+      count: 1,
+    });
+    expect(page.nextCursor).toBe("offset:3");
   });
 
   test("resumes at the next un-fetched item after page size changes", async () => {

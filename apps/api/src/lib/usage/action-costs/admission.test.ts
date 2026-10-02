@@ -3,7 +3,11 @@ import { expect, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
-import type { ActionKind } from "@/api/lib/rate-limit/action-kinds";
+import {
+  ACTION_KINDS,
+  type ActionKind,
+  type PeriodActionKind,
+} from "@/api/lib/rate-limit/action-kinds";
 
 import { createObservationBuffer } from "./buffer";
 import {
@@ -34,17 +38,15 @@ const admissionOptions = {
   redis: { send: async () => 1 },
 };
 
-const registeredKinds = {
-  "chat.send": "chat.send",
-  "chat.generate-thread-title": "chat.generate-thread-title",
-  "chat.improve-prompt": "chat.improve-prompt",
-  "chat.suggest-thread-title": "chat.suggest-thread-title",
-  "mcp.services/call": "mcp.services/call",
-  "mcp.data/call": "mcp.data/call",
-} as const satisfies { [Kind in ActionKind]: Kind };
+const registeredKinds = Object.keys(ACTION_KINDS)
+  .filter((kind): kind is ActionKind => kind in ACTION_KINDS)
+  .filter(
+    (kind): kind is PeriodActionKind =>
+      ACTION_KINDS[kind].admission === "period",
+  );
 
 for (const enabled of [true, false]) {
-  for (const actionKind of Object.values(registeredKinds)) {
+  for (const actionKind of registeredKinds) {
     test(`${actionKind} captures one identity with admission enabled=${enabled}`, async () => {
       const observations: ActionCostObservation[] = [];
       const periodIdentity = { actionKind, logicalPhaseId: "fixture-phase" };

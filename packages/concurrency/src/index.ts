@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 
 /**
  * Running an async operation over a list with a bounded number in flight.
@@ -183,4 +183,44 @@ export const streamWithConcurrency = async function* <Item, Value>({
     }
     await Promise.allSettled(settlements);
   }
+};
+
+type DrainedFanOutOptions<Item, Value> = {
+  items: readonly Item[];
+  signal: AbortSignal;
+  operation: (item: Item, signal: AbortSignal) => Promise<Value>;
+};
+
+/** Abort siblings on the first failure, then drain every owner before rejecting. */
+export const drainFanOut = async <Item, Value>({
+  items,
+  signal,
+  operation,
+}: DrainedFanOutOptions<Item, Value>): Promise<Result<Value[], unknown>> => {
+  const siblings = new AbortController();
+  const combined = AbortSignal.any([signal, siblings.signal]);
+  const failures: unknown[] = [];
+  const settled = await Promise.allSettled(
+    items.map(async (item) => {
+      const result = await Result.tryPromise({
+        try: async () => await operation(item, combined),
+        catch: (cause: unknown) => cause,
+      });
+      if (Result.isError(result) && failures.length === 0) {
+        failures.push(result.error);
+        siblings.abort(result.error);
+      }
+      return result;
+    }),
+  );
+  if (failures.length > 0) {
+    return Result.err(failures[0]);
+  }
+  return Result.ok(
+    settled.map((result) =>
+      result.status === "fulfilled" && Result.isOk(result.value)
+        ? result.value.value
+        : panic("Drained fan-out lost its first failure"),
+    ),
+  );
 };

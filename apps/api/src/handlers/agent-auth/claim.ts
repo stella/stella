@@ -27,6 +27,9 @@ const agentClaimHandler = createSafePublicHandler(
     // A bad/expired/non-anonymous claim token returns the same shape a
     // valid one would, so a caller cannot probe registration state.
     if (Result.isError(result)) {
+      if (HandlerError.is(result.error)) {
+        return Result.err(result.error);
+      }
       return Result.err(
         new HandlerError({
           status: 400,

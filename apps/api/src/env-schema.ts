@@ -32,6 +32,9 @@ type EmailProviderInput = {
 
 // Keep retention cutoffs in positive ISO years supported by timestamptz.
 const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
+// Larger timer delays are clamped to one millisecond by the runtime.
+const MAX_TIMER_DELAY_MS = 2_147_483_647;
+const MAX_MANAGED_PROVIDER_CHECK_TIMEOUT_MS = 30_000;
 
 export const resolveEmailProvider = ({
   EMAIL_PROVIDER,
@@ -84,6 +87,28 @@ export const envApiServerSchema = {
   /** Optional GitHub API token used only for curated catalogue traversal. */
   GITHUB_TOKEN: v.optional(v.string()),
   OPENROUTER_API_KEY: v.optional(v.string()),
+  /** Checks the regional model catalog before accepting managed requests. */
+  FEATURE_MANAGED_PROVIDER_CHECKS: featureFlagSchema,
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_TIMER_DELAY_MS),
+    ),
+  ),
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS: v.optional(
+    v.pipe(
+      v.string(),
+      v.digits(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_MANAGED_PROVIDER_CHECK_TIMEOUT_MS),
+    ),
+  ),
   OPENAI_API_KEY: v.optional(v.string()),
   AZURE_API_KEY: v.optional(v.string()),
   AZURE_RESOURCE_NAME: v.optional(v.string()),
@@ -466,6 +491,12 @@ export const envApiServerSchema = {
   ACTION_ADMISSION_USER_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
+  ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
+  ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY: v.optional(
+    v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),
+  ),
   // Operators must set the lease above the admission store's failover window.
   // Renewal errors retry inside that window; losing admission is not a user stop.
   ACTION_ADMISSION_LEASE_MS: v.optional(
@@ -643,6 +674,8 @@ export const envApiServerSchema = {
     v.pipe(v.string(), v.digits(), v.toNumber(), v.integer(), v.minValue(1)),
   ),
 
+  AGENT_CLIENT_STORAGE_V1_ENABLED: featureFlagSchema,
+
   /** Enables agent-sandbox chat runs when true. */
   AGENT_SANDBOX_RUNS_ENABLED: featureFlagSchema,
 
@@ -723,6 +756,11 @@ export const envApiServerSchema = {
 };
 
 type EnvApiInvariantInput = {
+  AI_PROVIDER?: v.InferOutput<typeof envApiServerSchema.AI_PROVIDER>;
+  FEATURE_MANAGED_PROVIDER_CHECKS?: boolean | undefined;
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS?: number | undefined;
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS?: number | undefined;
+  OPENROUTER_API_KEY?: string | undefined;
   BETTER_AUTH_URL: string;
   DEV_PUBLIC_LAW_CONNECT_COMMAND?: string | undefined;
   E2E_DISABLE_AUTH_RATE_LIMIT: boolean;
@@ -748,7 +786,46 @@ type EnvApiInvariantInput = {
   runtimeMode: RuntimeMode;
 };
 
+type ManagedProviderCheckInvariantInput = Pick<
+  EnvApiInvariantInput,
+  | "AI_PROVIDER"
+  | "FEATURE_MANAGED_PROVIDER_CHECKS"
+  | "MANAGED_PROVIDER_CHECK_INTERVAL_MS"
+  | "MANAGED_PROVIDER_CHECK_TIMEOUT_MS"
+  | "OPENROUTER_API_KEY"
+>;
+
+const managedProviderCheckInvariantViolation = ({
+  AI_PROVIDER,
+  FEATURE_MANAGED_PROVIDER_CHECKS,
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
+  OPENROUTER_API_KEY,
+}: ManagedProviderCheckInvariantInput): string | null => {
+  if (FEATURE_MANAGED_PROVIDER_CHECKS) {
+    if (AI_PROVIDER !== "openrouter") {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires AI_PROVIDER=openrouter.";
+    }
+    if (!OPENROUTER_API_KEY) {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires OPENROUTER_API_KEY.";
+    }
+    if (
+      MANAGED_PROVIDER_CHECK_INTERVAL_MS === undefined ||
+      MANAGED_PROVIDER_CHECK_TIMEOUT_MS === undefined ||
+      MANAGED_PROVIDER_CHECK_TIMEOUT_MS >= MANAGED_PROVIDER_CHECK_INTERVAL_MS
+    ) {
+      return "FEATURE_MANAGED_PROVIDER_CHECKS requires positive MANAGED_PROVIDER_CHECK_INTERVAL_MS and MANAGED_PROVIDER_CHECK_TIMEOUT_MS; timeout must be shorter than interval.";
+    }
+  }
+  return null;
+};
+
 export const envApiInvariantViolation = ({
+  AI_PROVIDER,
+  FEATURE_MANAGED_PROVIDER_CHECKS,
+  MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+  MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
+  OPENROUTER_API_KEY,
   BETTER_AUTH_URL,
   DEV_PUBLIC_LAW_CONNECT_COMMAND,
   E2E_DISABLE_AUTH_RATE_LIMIT,
@@ -773,6 +850,16 @@ export const envApiInvariantViolation = ({
   nodeEnv,
   runtimeMode,
 }: EnvApiInvariantInput): string | null => {
+  const managedViolation = managedProviderCheckInvariantViolation({
+    AI_PROVIDER,
+    FEATURE_MANAGED_PROVIDER_CHECKS,
+    MANAGED_PROVIDER_CHECK_INTERVAL_MS,
+    MANAGED_PROVIDER_CHECK_TIMEOUT_MS,
+    OPENROUTER_API_KEY,
+  });
+  if (managedViolation !== null) {
+    return managedViolation;
+  }
   const localDevOpen = runtimeMode.mode === RUNTIME_MODE.open;
   if (REPORT_SPECS_DIR !== undefined && REPORT_SPECS_S3_PREFIX !== undefined) {
     return "REPORT_SPECS_DIR and REPORT_SPECS_S3_PREFIX are exclusive; set one.";

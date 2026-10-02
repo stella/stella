@@ -46,6 +46,27 @@ describe("action refusal presentation", () => {
     expect(observedMessages.toSorted()).toEqual(expectedMessages.toSorted());
   });
 
+  test("reads native stream refusals with the same actions as HTTP responses", () => {
+    for (const code of Object.values(ACTION_ADMISSION_CODES)) {
+      const metadata = ACTION_ADMISSION_REFUSALS[code];
+      const value = {
+        code,
+        ...metadata,
+        contactUrl: "https://example.test/contact",
+      };
+      const streamed = Object.assign(new Error(metadata.message), {
+        code,
+        rawEvent: value,
+      });
+      expect(actionAdmissionOutcome(streamed)).toEqual(
+        actionAdmissionOutcome(toAPIError({ status: metadata.status, value })),
+      );
+      expect(
+        actionAdmissionOutcome(new Error("Transport", { cause: streamed })),
+      ).toEqual(actionAdmissionOutcome(streamed));
+    }
+  });
+
   test("recognizes a refusal retained in a transport wrapper cause", () => {
     const error = toAPIError({
       status: 403,

@@ -105,8 +105,10 @@ describe("anonymized boundary refusals", () => {
       CHAT_TRANSPORT_ERROR_CODE.thirdPartyBoundaryRefusal,
     );
     expect(retryable.status).toBe(422);
+    expect(retryable.failureCode).toBe("boundary-refusal");
     expect(terminal.code).toBeUndefined();
     expect(terminal.status).toBe(500);
+    expect(terminal.failureCode).toBe("boundary-refusal");
     expect(terminal.cause).toBeInstanceOf(Error);
     expect(lines.map((line): unknown => JSON.parse(line))).toEqual([
       expect.objectContaining({
