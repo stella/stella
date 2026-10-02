@@ -15,6 +15,7 @@ import {
 import { createSafeId } from "@/api/lib/branded-types";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import type { GatedTestDb } from "@/api/tests/gated-test-database";
+import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 
 import { moveEntityHandler } from "./move";
 import type { MoveEntityHandlerProps } from "./move";
@@ -23,7 +24,7 @@ const databaseUrl = process.env["DATABASE_URL"];
 const runPostgresTests = process.env["STELLA_RUN_POSTGRES_TESTS"] === "true";
 
 const seedHierarchy = async (db: GatedTestDb, order: readonly number[]) => {
-  const organizationId = createSafeId<"organization">();
+  const organizationId = mintAuthProviderId<"organization">();
   const workspaceId = createSafeId<"workspace">();
   const ids = Array.from({ length: 4 }, () =>
     createSafeId<"entity">(),
@@ -178,9 +179,14 @@ const permutations = (remaining: readonly number[]): number[][] => {
 
 // These suites need independent sessions and row locks, which PGlite cannot
 // represent. The Postgres-gated CI runner supplies a fully migrated database.
-describe.skipIf(!databaseUrl || !runPostgresTests)(
-  "folder moves on Postgres",
-  () => {
+if (!databaseUrl || !runPostgresTests) {
+  describe.skip("folder moves on Postgres", () => {
+    test("requires STELLA_RUN_POSTGRES_TESTS=true and DATABASE_URL", () => {
+      expect(true).toBe(true);
+    });
+  });
+} else {
+  describe("folder moves on Postgres", () => {
     const cases = [
       ...permutations([0, 1, 2, 3]).flatMap((order) =>
         (["A", "C"] as const).map((firstMove) => ({
@@ -197,9 +203,6 @@ describe.skipIf(!databaseUrl || !runPostgresTests)(
     ];
     for (const { order, firstMove, lockMode } of cases) {
       test(`${lockMode === "take" ? "concurrent moves terminate" : "unserialized control persists a cycle"} for ids ${order.join(",")} with ${firstMove} first`, async () => {
-        if (!databaseUrl) {
-          return panic("Postgres database URL is required");
-        }
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const firstDb = openClient().db;
           const secondDb = openClient().db;
@@ -308,9 +311,6 @@ describe.skipIf(!databaseUrl || !runPostgresTests)(
     }
 
     test("sequential descendant refusal preserves status, message and parents", async () => {
-      if (!databaseUrl) {
-        return panic("Postgres database URL is required");
-      }
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const db = openClient().db;
         const hierarchy = await seedHierarchy(db, [0, 1, 2, 3]);
@@ -341,5 +341,5 @@ describe.skipIf(!databaseUrl || !runPostgresTests)(
         }
       });
     });
-  },
-);
+  });
+}
