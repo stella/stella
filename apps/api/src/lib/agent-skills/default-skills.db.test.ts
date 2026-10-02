@@ -16,6 +16,7 @@ import { hashSkillContent } from "@/api/lib/agent-skills/content-hash";
 import { seedDefaultSkills } from "@/api/lib/agent-skills/default-skills";
 import { AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { getAuth } from "@/api/lib/auth";
+import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import {
   brandPersistedOrganizationId,
@@ -172,18 +173,24 @@ describe("default skills for a new membership", () => {
 const BACKFILL_MIGRATION = "20260925230400_agent_skill_default_backfill";
 const DEFAULT_ORIGIN_MIGRATION = "20261003123500_agent_skill_default_origin";
 
+// The statements run one by one on the test connection, so the migrator's
+// COMMIT/BEGIN split is flattened and the session timeouts it sets are reset.
 const applyMigration = async (name: string) => {
   const migrationPath = nodePath.resolve(
     import.meta.dir,
     `../../../drizzle/${name}/migration.sql`,
   );
   const statements = readFileSync(migrationPath, "utf-8")
+    .replace(/^COMMIT;$/gmu, "")
+    .replace(/^BEGIN;$/gmu, "")
     .split("--> statement-breakpoint")
     .map((statement) => statement.trim())
     .filter((statement) => statement.length > 0);
   for (const statement of statements) {
     await testDb.execute(sql.raw(statement));
   }
+  await testDb.execute(sql`RESET lock_timeout`);
+  await testDb.execute(sql`RESET statement_timeout`);
 };
 
 // Defaults seeded before the `default` origin existed carry `authored`.
@@ -325,6 +332,57 @@ describe("default skills for memberships that predate seeding at creation", () =
     expect(originOf.get(teamSkillId)).toBe("authored");
     expect(rows.filter(({ origin }) => origin === "default")).toHaveLength(
       DEFAULT_COMMANDS.length,
+    );
+  });
+
+  test("the origin backfill leaves a member's own skill under a starter slug authored", async () => {
+    const membership = await ownerMembership("origin-backfill-collision");
+    await deleteMemberSkills(membership, ["summarize"]);
+    await markDefaultsAuthored(membership);
+    // The member recreates the deleted starter word for word; only who wrote
+    // its first revision tells it apart.
+    const name = "Summarise a document";
+    const description = "Get a structured summary of the key terms";
+    const body =
+      "Summarise this document. Cover parties, key obligations, dates, financial terms, and any termination or liability provisions.";
+    const ownSkillId = createSafeId<"agentSkill">();
+    await testDb.transaction(async (tx) => {
+      await tx.execute(
+        sql`SELECT set_config('app.user_id', ${membership.userId}, true)`,
+      );
+      await tx.insert(agentSkills).values({
+        id: ownSkillId,
+        organizationId: membership.organizationId,
+        userId: membership.userId,
+        scope: "private",
+        origin: "authored",
+        slug: "summarize-default",
+        name,
+        description,
+        metadata: {},
+        contentHash: hashSkillContent({
+          body,
+          compatibility: null,
+          description,
+          license: null,
+          metadata: {},
+          name,
+          resources: [],
+          version: null,
+        }),
+        body,
+        enabled: true,
+        command: "summarize",
+      });
+    });
+
+    await applyMigration(DEFAULT_ORIGIN_MIGRATION);
+
+    const rows = await memberSkills(membership);
+    const originOf = new Map(rows.map(({ id, origin }) => [id, origin]));
+    expect(originOf.get(ownSkillId)).toBe("authored");
+    expect(rows.filter(({ origin }) => origin === "default")).toHaveLength(
+      DEFAULT_COMMANDS.length - 1,
     );
   });
 });
