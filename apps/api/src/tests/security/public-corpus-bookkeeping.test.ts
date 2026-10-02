@@ -18,14 +18,14 @@ const declaration = {
   columns: { cursor: "Next public publisher page number" },
 };
 const ownerExpression = sql`current_user = (SELECT pg_catalog.pg_get_userbyid(relowner) FROM pg_catalog.pg_class WHERE oid = 'public.checkpoint'::regclass)`;
-const checkpoint = pgTable("checkpoint", { cursor: text() }, () => [
+const checkpoint = pgTable.withRLS("checkpoint", { cursor: text() }, () => [
   pgPolicy("checkpoint_owner", {
     for: "all",
     to: "public",
     using: ownerExpression,
     withCheck: ownerExpression,
   }),
-]).enableRLS();
+]);
 const ownerPolicy = {
   command: "*",
   publicOnly: true,
@@ -137,14 +137,14 @@ describe("public corpus bookkeeping admission", () => {
   });
 
   test("a policy named owner that admits PUBLIC is rejected", () => {
-    const permissive = pgTable("checkpoint", { cursor: text() }, () => [
+    const permissive = pgTable.withRLS("checkpoint", { cursor: text() }, () => [
       pgPolicy("checkpoint_owner", {
         for: "all",
         to: "public",
         using: sql`true`,
         withCheck: sql`true`,
       }),
-    ]).enableRLS();
+    ]);
     expect(
       verifyPublicCorpusSchema({
         declaration,

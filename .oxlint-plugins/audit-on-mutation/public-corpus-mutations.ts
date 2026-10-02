@@ -149,7 +149,8 @@ export const isPublicCorpusMutation = ({
   const text = staticSql({ context, node: call.arguments.at(0) });
   const targets = text === null ? null : staticCorpusWriteTargets(text);
   return (
-    targets !== null &&
-    targets.every((target) => tables.some((table) => table.sqlName === target))
+    targets?.every((target) =>
+      tables.some((table) => table.sqlName === target),
+    ) ?? false
   );
 };
