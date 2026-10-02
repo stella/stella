@@ -141,11 +141,12 @@ export const VatRateForm = ({
           <form.Field name="validFrom">
             {(field) => (
               <Field name={field.name}>
-                <FieldLabel htmlFor={`${id}-from`}>
+                <FieldLabel id={`${id}-from-label`} htmlFor={`${id}-from`}>
                   {t("billing.vatRates.validFrom")}
                 </FieldLabel>
                 <DatePickerPopover
                   id={`${id}-from`}
+                  labelledBy={`${id}-from-label`}
                   onChange={(date) => {
                     if (!disabled) {
                       field.handleChange(date ?? "");
@@ -160,11 +161,12 @@ export const VatRateForm = ({
           <form.Field name="validTo">
             {(field) => (
               <Field name={field.name}>
-                <FieldLabel htmlFor={`${id}-to`}>
+                <FieldLabel id={`${id}-to-label`} htmlFor={`${id}-to`}>
                   {t("billing.vatRates.validTo")}
                 </FieldLabel>
                 <DatePickerPopover
                   id={`${id}-to`}
+                  labelledBy={`${id}-to-label`}
                   onChange={(date) => {
                     if (!disabled) {
                       field.handleChange(date ?? "");
