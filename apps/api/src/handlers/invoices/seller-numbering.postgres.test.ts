@@ -286,12 +286,13 @@ if (!databaseUrl || !runPostgres) {
         [sellerA, "A"],
         [sellerB, "B"],
       ] as const) {
-        expect(
-          rows
-            .filter((row) => row.sellerProfileId === sellerId)
-            .map((row) => row.invoiceNumber)
-            .toSorted(),
-        ).toEqual([`${prefix}-001`, `${prefix}-002`, `${prefix}-003`]);
+        const sellerNumbers = rows
+          .filter((row) => row.sellerProfileId === sellerId)
+          .map((row) => row.invoiceNumber);
+        expect(sellerNumbers).toHaveLength(3);
+        expect(new Set(sellerNumbers)).toEqual(
+          new Set([`${prefix}-001`, `${prefix}-002`, `${prefix}-003`]),
+        );
       }
       expect(rows.every((row) => row.status === INVOICE_STATUS.FINALIZED)).toBe(
         true,
