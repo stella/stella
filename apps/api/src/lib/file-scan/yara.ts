@@ -1,5 +1,5 @@
 import { compile } from "@litko/yara-x";
-import type { RuleMatch } from "@litko/yara-x";
+import type { MatchData, RuleMatch } from "@litko/yara-x";
 import { panic } from "better-result";
 import { readFileSync } from "node:fs";
 import path from "node:path";
@@ -128,8 +128,8 @@ export const yaraWindowedRules: WindowedRuleSet = {
     ),
   ),
   occurrences: (window) =>
-    occurrenceRules.scan(Buffer.from(window)).flatMap((m) =>
-      m.matches.map(({ identifier, offset, length }) => ({
+    occurrenceRules.scan(Buffer.from(window)).flatMap((m: RuleMatch) =>
+      m.matches.map(({ identifier, offset, length }: MatchData) => ({
         rule: m.ruleIdentifier,
         pattern: identifier,
         offset,
@@ -139,7 +139,7 @@ export const yaraWindowedRules: WindowedRuleSet = {
   evaluate: (rule, evidence) => {
     const match = compiled
       .scan(Buffer.from(evidence))
-      .find((m) => m.ruleIdentifier === rule);
+      .find((m: RuleMatch) => m.ruleIdentifier === rule);
     return match === undefined ? null : toMatch(match);
   },
 };
