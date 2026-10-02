@@ -815,8 +815,15 @@ const replayRow = async ({
     });
   }
 
+  // A legacy spelling the adapter vouched for stands in for the regenerated
+  // docket, and only on a row the write locates by publisher document: one
+  // keyed by its docket would be inserted again under the new spelling.
+  const identityCaseNumber =
+    reparsed.legacyCaseNumber !== undefined && reparsed.result.sourceDocumentId
+      ? reparsed.legacyCaseNumber
+      : reparsed.result.caseNumber;
   const regeneratedIdentity = decisionReplayIdentity(row.country, {
-    caseNumber: reparsed.result.caseNumber,
+    caseNumber: identityCaseNumber,
     country: reparsed.result.country,
     language: reparsed.result.language,
     sourceDocumentId: reparsed.result.sourceDocumentId ?? null,
@@ -1093,6 +1100,14 @@ export type ReplayCaseLawSourceOptions = {
   rejectionPolicy?: ReplayRejectionPolicy;
   /** Test seam; production withdraws through the canonical stores. */
   withdraw?: WithdrawDocument;
+  /**
+   * Receives every visited row's report, in walk order. The report's
+   * problem listing is a sample; this sees every row. A failure stops the
+   * run after that row: an applying run has already written it, so its
+   * report goes into the halt reason instead of being lost to a resume that
+   * would see the row as already done.
+   */
+  recordRow?: ((row: ReplayRowReport) => Promise<void>) | undefined;
 };
 
 export type ReplayRun =
@@ -1164,6 +1179,7 @@ export const replayCaseLawSource = async ({
   scope,
   rejectionPolicy = REPLAY_REJECTION_POLICY.REPORT,
   withdraw = withdrawCaseLawDecisionDocument,
+  recordRow,
 }: ReplayCaseLawSourceOptions): Promise<ReplayRun> => {
   const capability = replayCapability(adapter);
   if (capability.type === "unsupported") {
@@ -1256,11 +1272,25 @@ export const replayCaseLawSource = async ({
     }
     cursor = row.id;
 
+    const recorded =
+      recordRow === undefined
+        ? Result.ok()
+        : await Result.tryPromise({
+            try: async () => {
+              await recordRow(rowReport);
+            },
+            catch: (cause) => cause,
+          });
+
     if (rowReport.outcome === REPLAY_ROW_OUTCOME.RETRYABLE) {
       haltReason = `retryable outcome on ${row.caseNumber} (${row.language}): ${rowReport.detail ?? ""}`;
       return false;
     }
     resumeAfter = row.id;
+    if (Result.isError(recorded)) {
+      haltReason = `result of ${row.caseNumber} (${row.language}) could not be recorded (${failureDetail(recorded.error)}): ${JSON.stringify(rowReport)}`;
+      return false;
+    }
     return await replayPage(page, index + 1);
   };
 

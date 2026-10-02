@@ -545,6 +545,29 @@ type Messages = {
     "noActiveTimer": "No active timer";
     "noEntries": "No time entries for this period";
     "nonBillable": "Non-billable";
+    "numberSeries": {
+      "add": "Add number series";
+      "advance": "Advance";
+      "archiveConfirm": "Archive this number series? It will no longer be available for new documents.";
+      "creditNote": "Credit note";
+      "default": "Default series";
+      "description": "Manage numbering for invoices, advances and credit notes.";
+      "documentType": "Document type";
+      "edit": "Edit number series";
+      "editRestriction": "The template and sequence digits cannot change after a number has been allocated.";
+      "empty": "No number series.";
+      "invoice": "Invoice";
+      "issueDate": "Issue date";
+      "name": "Series name";
+      "padding": "Sequence digits";
+      "pattern": "Number template";
+      "patternHelp": "Use a sequence token with optional year or month tokens to set the period.";
+      "preview": "Next number";
+      "previewAllocated": "This number is already allocated.";
+      "previewHelp": "The preview uses the saved template and does not reserve a number.";
+      "setDefault": "Make default series";
+      "title": "Number series";
+    };
     "quickEntry": {
       "entrySaved": "Time entry saved";
       "expenseSaved": "Expense saved";
@@ -639,6 +662,27 @@ type Messages = {
     "timerActive": "Timer running";
     "timesheets": "Timesheets";
     "total": "Total";
+    "vatRates": {
+      "add": "Add VAT rate";
+      "archiveConfirm": "Archive this VAT rate? It will no longer be available for new documents.";
+      "code": "Rate code";
+      "current": "Current rate";
+      "description": "Manage rates and their validity periods.";
+      "edit": "Edit VAT rate";
+      "empty": "No VAT rates.";
+      "future": "Upcoming rate";
+      "invalidPeriod": "Choose valid dates with the end after the start.";
+      "invalidRate": "Enter a non-negative percentage with at most two decimal places.";
+      "name": "Rate label";
+      "openEnded": "No end date";
+      "overlap": "Validity periods for the same rate code cannot overlap.";
+      "past": "Past rate";
+      "periodHelp": "The start date is included; the end date is excluded. Leave the end date blank for an open period.";
+      "rate": "VAT percentage";
+      "title": "VAT rates";
+      "validFrom": "Valid since";
+      "validTo": "Valid until";
+    };
     "writeOff": "Write off";
   };
   "caseLaw": {
@@ -2179,6 +2223,7 @@ type Messages = {
       "forbidden": "You do not have permission to do this.";
       "notFound": "We could not find what you requested.";
       "payloadTooLarge": "The request is too large.";
+      "publicCountryUnavailable": "Public law for this country is not available. Choose another country.";
       "rateLimited": "Too many requests. Please try again later.";
       "server": "The server could not complete the request. Please try again.";
       "serviceUnavailable": "The service is temporarily unavailable. Please try again.";
@@ -4215,7 +4260,6 @@ type Messages = {
       "deleteAccountWarningExplanation": "We will send a verification code to your email address to confirm this request. Completed workspace history remains attributed to your deleted account.";
       "desktop": "Desktop";
       "desktopAppDescription": "Recall anything you copy, and open stella documents in the desktop apps you already use.";
-      "desktopAutoConnectHint": "Open stella desktop after installing. It connects to this account on its own.";
       "desktopClipboardDescription": "Open, search, organize, and reuse copied text from any app.";
       "desktopClipboardTitle": "Searchable clipboard history";
       "desktopConnectFailed": "Could not connect stella desktop.";

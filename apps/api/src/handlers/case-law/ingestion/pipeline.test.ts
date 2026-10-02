@@ -870,9 +870,11 @@ describe("runIngestionPipeline — failure records", () => {
         decisions: [
           { ...baseResult({}), caseNumber, language: "sk-SK-x-long" },
         ],
+        itemBuildFailures: { type: "item_build_failed", count: 2 },
         nextCursor: "cursor-2",
       });
     const { scopedDb, state } = failingDecisionDb(null);
+    logs = installRecordingLogger();
 
     const result = await runIngestionPipeline({
       source,
@@ -890,6 +892,11 @@ describe("runIngestionPipeline — failure records", () => {
     expect(result.haltReason).toBeNull();
     expect(result.nextCursor).toBe("cursor-2");
     expect(state.persistedCursor).toBe("cursor-2");
+    expect(
+      logs.records.find(
+        ({ message }) => message === "case_law.ingestion.pipeline_page_done",
+      )?.attributes?.["itemBuildFailures"],
+    ).toBe(2);
   });
 
   test("reports a failure record the database rejects as invalid data and moves the cursor on", async () => {

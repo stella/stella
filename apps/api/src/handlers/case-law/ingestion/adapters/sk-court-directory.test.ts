@@ -2,6 +2,7 @@ import { afterEach, describe, expect, test } from "bun:test";
 
 import { getSkCourtSuccessionEdges } from "@stll/api-contract/sk-court-succession";
 
+import { ADAPTER_KEYS, PARSER_VERSIONS } from "@/api/handlers/case-law/consts";
 import {
   decodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -89,7 +90,9 @@ describe("court registry enrichment", () => {
         if (replay?.type !== "parsed") {
           continue;
         }
-        expect(replay.result.parserVersion).toBe(5);
+        expect(replay.result.parserVersion).toBe(
+          PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+        );
         expect(replay.result.court).toBe(name);
         expect(replay.result.metadata).toEqual(decision.metadata);
         expect(replay.result.rawHash).toBe(decision.rawHash);
@@ -496,7 +499,9 @@ describe("court registry enrichment", () => {
       eli: "eli/sk/zz/2004/371",
       edgeIds: expect.arrayContaining([expect.any(String)]),
     });
-    expect(outcome.result.parserVersion).toBe(5);
+    expect(outcome.result.parserVersion).toBe(
+      PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+    );
     expect(outcome.result.rawHash).toBe(decision.rawHash);
   });
 
@@ -540,7 +545,9 @@ describe("court registry enrichment", () => {
       version: "2023-06-01",
     });
     expect(outcome.result.metadata).toEqual(decision.metadata);
-    expect(outcome.result.parserVersion).toBe(5);
+    expect(outcome.result.parserVersion).toBe(
+      PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+    );
     expect(outcome.result.rawHash).toBe(decision.rawHash);
   });
 });

@@ -1,4 +1,9 @@
-import type { OfferedBYOKModelId, ReasoningEffort } from "./index";
+import type {
+  BYOKModelIdByProvider,
+  BYOKProvider,
+  OfferedBYOKModelId,
+  ReasoningEffort,
+} from "./index";
 
 /**
  * Hand-declared capabilities for offered models that models.dev does
@@ -27,3 +32,18 @@ export type CapabilityOverride = {
 export const CAPABILITY_OVERRIDES: Partial<
   Record<OfferedBYOKModelId, CapabilityOverride>
 > = {};
+
+export type ImageInputOverride = {
+  supported: boolean;
+  /** Dated correction with an official provider documentation URL. */
+  reason: string;
+};
+
+export type ImageInputOverrides = {
+  [TProvider in BYOKProvider]?: Partial<
+    Record<BYOKModelIdByProvider[TProvider], ImageInputOverride>
+  >;
+};
+
+/** Only official provider documentation may override input-modality evidence. */
+export const IMAGE_INPUT_OVERRIDES: ImageInputOverrides = {};

@@ -300,4 +300,5 @@ implies a hazard that is gone.
 
 - [`require-running-entry-guard`](./require-running-entry-guard.ts) (`require-running-entry-guard`): requires an awaited running-entry guard and an early refusal in the same transaction before updating or deleting time entries; timer consumption and local fixture reset are scoped exceptions.
 
+- [no-swallowed-item-error](./no-swallowed-item-error.ts): `no-swallowed-item-error` rejects empty or constant fallback handlers inside item loops and iteration callbacks; existing sites use SHA-256 fingerprints of enclosing try/catch or promise-call token values, with reasoned, shrink-only budgets in [the handler ledger](../scripts/swallowed-item-error-ledger.json). The current production debt is optional text-link URL decoding in `cz-us.ts`. It does not prove arbitrary handler bodies record a failure.
 - [no-parser-validator-calls](./no-parser-validator-calls.ts): `no-parser-validator-calls` confines text-retention validation to the ingestion pipeline, with a shrinking legacy import/call ledger.

@@ -1,6 +1,7 @@
 import { panic } from "better-result";
 
 import {
+  getModelImageInputCapability,
   isBYOKModelRoleSupported,
   REASONING_EFFORTS,
   supportsStreamingToolUse,
@@ -214,9 +215,14 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
   },
   ...endpointPredicates("origin"),
   ...endpointPredicates("target"),
+  "attachment: getModelImageInputCapability": (combination, cassettes) =>
+    combination.attachment !== "image" ||
+    getModelImageInputCapability({
+      modelId: modelOf(cassettes, combination.target),
+      provider: combination.target.provider,
+    }) !== "unsupported",
   /** The send path refuses a document attachment the model cannot read
-   *  (`modelAcceptsDocumentAttachment`); an image and an extracted office
-   *  file reach every model. */
+   *  (`modelAcceptsDocumentAttachment`). */
   "attachment: modelAcceptsDocumentAttachment": (combination, cassettes) => {
     const attachment = ATTACHMENTS[combination.attachment];
     if (
@@ -244,6 +250,16 @@ const PREDICATES: Readonly<Record<string, Predicate>> = {
     const model = modelOf(cassettes, combination.target);
     return reasoningModelOf(combination.target.provider, model) !== model;
   },
+  "attempt: the fallback model accepts image input": (combination, cassettes) =>
+    combination.attempt === "primary" ||
+    combination.attachment !== "image" ||
+    getModelImageInputCapability({
+      modelId: reasoningModelOf(
+        combination.target.provider,
+        modelOf(cassettes, combination.target),
+      ),
+      provider: combination.target.provider,
+    }) !== "unsupported",
   /** The chat attempt drops a fallback model that cannot read the turn's
    *  document (`modelRejectsAnyDocument` in `streamChat`). */
   "attempt: the fallback model accepts the attachment": (

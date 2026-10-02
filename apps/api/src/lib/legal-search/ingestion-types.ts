@@ -1,3 +1,4 @@
+// parser-output-unchanged: SyncPage adds optional failure telemetry; decision parsing and stored output are unchanged.
 import { panic, Result, TaggedError } from "better-result";
 
 import type { DecisionJudgeRole } from "@stll/api-contract/case-law-judges";
@@ -359,6 +360,8 @@ export type SliceCoverage = {
 /** A page of ingestion results with an optional cursor. */
 export type SyncPage = {
   decisions: IngestionResult[];
+  /** Failed item builds retained as listing-only rows for reconciliation. */
+  itemBuildFailures?: { type: "item_build_failed"; count: number } | undefined;
   /**
    * Supplements read off the same page. The pipeline processes them after
    * the page's decisions, so a judgment and the reasons listed beside it are
@@ -739,7 +742,18 @@ export type StoredRawReparseRejection =
   (typeof STORED_RAW_REPARSE_REJECTION)[keyof typeof STORED_RAW_REPARSE_REJECTION];
 
 export type StoredRawReparseOutcome =
-  | { type: "parsed"; result: IngestionResult }
+  | {
+      type: "parsed";
+      result: IngestionResult;
+      /**
+       * The docket the selected row is stored under, where the adapter proved
+       * it is an older spelling of `result.caseNumber` (for example one an
+       * earlier parser stored before decoding it). A replay compares identity
+       * under it and writes the new spelling over the row; absent, the docket
+       * must match exactly.
+       */
+      legacyCaseNumber?: string | undefined;
+    }
   /**
    * The payload is a supplement to another decision. A replay does not write
    * it over the row it was read from; the supplement fold does.
