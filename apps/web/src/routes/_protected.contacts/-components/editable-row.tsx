@@ -6,6 +6,7 @@ import { Input } from "@stll/ui/input";
 import { stellaToast } from "@stll/ui/toast";
 
 import { useInlineRename } from "@/hooks/use-inline-rename";
+import { useLocale } from "@/i18n/formatting-context";
 import { useUpdateContact } from "@/lib/contacts/mutations";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import { detached } from "@/lib/detached";
@@ -44,6 +45,7 @@ export const EditableRow = ({
   contact,
 }: EditableRowProps) => {
   const t = useTranslations();
+  const locale = useLocale();
   const queryClient = useQueryClient();
   const updateContact = useUpdateContact();
   const activeOrganizationId = protectedRouteApi.useRouteContext({
@@ -87,6 +89,7 @@ export const EditableRow = ({
         const result = buildContactRatePayload({
           trimmedInput: trimmed,
           currency: contact.currency,
+          locale,
         });
         if (result.status === "invalid") {
           const message = t("errors.actionFailed");

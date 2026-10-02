@@ -117,6 +117,74 @@ describe("contact text editable fields", () => {
 });
 
 describe("contact hourly rates", () => {
+  test("saves localized decimals and canonical dots with exact currency rounding", () => {
+    for (const locale of ["cs", "de", "fr"]) {
+      for (const trimmedInput of ["150,50", "150.50"]) {
+        expect(
+          buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
+        ).toEqual({ status: "valid", payload: { defaultHourlyRate: 15_050 } });
+      }
+      expect(
+        buildContactRatePayload({
+          trimmedInput: "1,005",
+          currency: "EUR",
+          locale,
+        }),
+      ).toEqual({ status: "valid", payload: { defaultHourlyRate: 101 } });
+      expect(
+        buildContactRatePayload({
+          trimmedInput: "150,500",
+          currency: "KWD",
+          locale,
+        }),
+      ).toEqual({ status: "valid", payload: { defaultHourlyRate: 150_500 } });
+      expect(
+        buildContactRatePayload({
+          trimmedInput: "150,50",
+          currency: "JPY",
+          locale,
+        }),
+      ).toEqual({ status: "valid", payload: { defaultHourlyRate: 151 } });
+    }
+    expect(
+      buildContactRatePayload({
+        trimmedInput: "١٥٠٫٥٠",
+        currency: "EUR",
+        locale: "ar-u-nu-arab",
+      }),
+    ).toEqual({ status: "valid", payload: { defaultHourlyRate: 15_050 } });
+    expect(
+      buildContactRatePayload({
+        trimmedInput: "150,50",
+        currency: "EUR",
+        locale: "en",
+      }),
+    ).toEqual({ status: "invalid" });
+  });
+
+  test("rejects grouping and mixed separators instead of reinterpreting a rate", () => {
+    for (const locale of ["en", "cs", "de", "fr", "ar-u-nu-arab"]) {
+      for (const trimmedInput of [
+        "1,234.50",
+        "1.234,50",
+        "1.234.567",
+        "1,234,567",
+        "1 234,50",
+        "1\u00a0234,50",
+        "1\u202f234,50",
+        "١٬٢٣٤٫٥٠",
+        "150,,50",
+        "150..50",
+        "1e3",
+        "-0,001",
+      ]) {
+        expect(
+          buildContactRatePayload({ trimmedInput, currency: "EUR", locale }),
+        ).toEqual({ status: "invalid" });
+      }
+    }
+  });
+
   for (const { currency, text, minorUnits, zeroText } of [
     { currency: "EUR", text: "150.50", minorUnits: 15_050, zeroText: "0.00" },
     { currency: "JPY", text: "150", minorUnits: 150, zeroText: "0" },
@@ -131,7 +199,11 @@ describe("contact hourly rates", () => {
       const displayed = contactRateInput(minorUnits, currency);
       expect(displayed).toBe(text);
       expect(
-        buildContactRatePayload({ trimmedInput: displayed ?? "", currency }),
+        buildContactRatePayload({
+          locale: "en",
+          trimmedInput: displayed ?? "",
+          currency,
+        }),
       ).toEqual({
         status: "valid",
         payload: { defaultHourlyRate: minorUnits },
@@ -144,10 +216,16 @@ describe("contact hourly rates", () => {
     expect(contactRateInput(15_050, null)).toBeNull();
     expect(contactRateInput(null, "EUR")).toBeNull();
     expect(
-      buildContactRatePayload({ trimmedInput: "150.50", currency: null }),
+      buildContactRatePayload({
+        locale: "en",
+        trimmedInput: "150.50",
+        currency: null,
+      }),
     ).toEqual({ status: "invalid" });
     for (const currency of [null, "EUR", "JPY", "KWD"]) {
-      expect(buildContactRatePayload({ trimmedInput: "", currency })).toEqual({
+      expect(
+        buildContactRatePayload({ locale: "en", trimmedInput: "", currency }),
+      ).toEqual({
         status: "valid",
         payload: { defaultHourlyRate: null },
       });
@@ -157,7 +235,9 @@ describe("contact hourly rates", () => {
   test("refuses negative amounts before currency rounding", () => {
     for (const currency of ["EUR", "JPY", "KWD"]) {
       for (const trimmedInput of ["-0", "-0.001", "-0.0001"]) {
-        expect(buildContactRatePayload({ trimmedInput, currency })).toEqual({
+        expect(
+          buildContactRatePayload({ locale: "en", trimmedInput, currency }),
+        ).toEqual({
           status: "invalid",
         });
       }
@@ -173,7 +253,11 @@ describe("contact hourly rates", () => {
       "Infinity",
     ]) {
       expect(
-        buildContactRatePayload({ trimmedInput, currency: "EUR" }),
+        buildContactRatePayload({
+          locale: "en",
+          trimmedInput,
+          currency: "EUR",
+        }),
       ).toEqual({ status: "invalid" });
     }
   });

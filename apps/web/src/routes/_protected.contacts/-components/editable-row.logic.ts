@@ -2,7 +2,10 @@ import { panic } from "better-result";
 
 import { tryToMinorUnits } from "@stll/money";
 
-import { majorUnitInput } from "@/components/billing/amount-input.logic";
+import {
+  majorUnitInput,
+  normalizeMajorUnitInput,
+} from "@/components/billing/amount-input.logic";
 import type { ContactUpdate } from "@/lib/contacts/mutations";
 import type { EditableField } from "@/routes/_protected.contacts/-components/types";
 
@@ -125,11 +128,13 @@ export const contactRateInput = (
 type ContactRatePayloadOptions = {
   trimmedInput: string;
   currency: string | null;
+  locale: string;
 };
 
 export const buildContactRatePayload = ({
   trimmedInput,
   currency,
+  locale,
 }: ContactRatePayloadOptions) => {
   if (trimmedInput === "") {
     return { status: "valid", payload: { defaultHourlyRate: null } } as const;
@@ -137,7 +142,14 @@ export const buildContactRatePayload = ({
   if (!currency || trimmedInput.startsWith("-")) {
     return { status: "invalid" } as const;
   }
-  const amount = tryToMinorUnits({ amount: trimmedInput, currency });
+  const canonicalInput = normalizeMajorUnitInput({
+    input: trimmedInput,
+    locale,
+  });
+  if (canonicalInput === null) {
+    return { status: "invalid" } as const;
+  }
+  const amount = tryToMinorUnits({ amount: canonicalInput, currency });
   if (amount === null || amount < 0) {
     return { status: "invalid" } as const;
   }
