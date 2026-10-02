@@ -1,6 +1,7 @@
 {
   "$schema": "./node_modules/oxfmt/configuration_schema.json",
   "ignorePatterns": [
+    "packages/legal-atlas/src/__fixtures__/cz-esbirka-500-2004-par-64.json",
     "apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**/*.html",
     "apps/api/src/handlers/case-law/ingestion/**/__fixtures__/**/*.json",
     "packages/business-registries/src/**/__fixtures__/**/*.html",

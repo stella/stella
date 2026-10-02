@@ -83,6 +83,7 @@ type ProvisionCitationGrammarSpec<TJurisdiction extends CaseLawJurisdiction> = {
   connectors: readonly string[];
   gazette: {
     eli: (work: GazetteWork) => string;
+    identifier: (work: GazetteWork) => string;
     /** RegExp source with `number` and `year` groups, no flags. */
     source: string;
   };
@@ -99,6 +100,11 @@ type ProvisionCitationGrammarSpec<TJurisdiction extends CaseLawJurisdiction> = {
 export type SupportedProvisionCitationGrammar<
   TJurisdiction extends CaseLawJurisdiction = CaseLawJurisdiction,
 > = {
+  anchor: (reference: ProvisionReference) => string;
+  gazette: {
+    eli: (work: GazetteWork) => string;
+    parse: (raw: string) => { identifier: string; eli: string } | null;
+  };
   jurisdiction: TJurisdiction;
   locateAbbreviatedProvisions: (text: string) => LocatedProvisionCitation[];
   locateGazetteCitations: (text: string) => LocatedGazetteCitation[];
@@ -393,7 +399,22 @@ export const createProvisionCitationGrammar = <
     return null;
   };
 
+  const gazetteInput = new RegExp(`^(?:${gazette.source})$`, "iu");
   return {
+    anchor,
+    gazette: {
+      eli: gazette.eli,
+      parse: (raw) => {
+        const match = gazetteInput.exec(raw.trim());
+        const number = match?.groups?.["number"];
+        const year = match?.groups?.["year"];
+        if (number === undefined || year === undefined) {
+          return null;
+        }
+        const work = { number, year };
+        return { identifier: gazette.identifier(work), eli: gazette.eli(work) };
+      },
+    },
     jurisdiction,
     locateAbbreviatedProvisions: (text) => {
       const citations: LocatedProvisionCitation[] = [];
@@ -456,7 +477,7 @@ const unsupported = <const TJurisdiction extends CaseLawJurisdiction>(
 
 const czechProvisionAnchor = (reference: ProvisionReference): string =>
   [
-    `par_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
+    `${reference.unit === "article" ? "cl" : "par"}_${String(reference.section)}${reference.sectionSuffix ?? ""}`,
     ...(reference.subsection === null ? [] : [`odst_${reference.subsection}`]),
     ...(reference.letter === null ? [] : [`pism_${reference.letter}`]),
     ...(reference.point === null ? [] : [`bod_${reference.point}`]),
@@ -481,7 +502,8 @@ export const PROVISION_CITATION_GRAMMARS = {
     connectors: [",", String.raw`a(?=\s)`, String.raw`ve\s+spojení\s+s(?=\s)`],
     gazette: {
       eli: ({ number, year }) =>
-        `https://www.e-sbirka.cz/eli/cz/sb/${year}/${number}`,
+        `https://www.e-sbirka.cz/eli/cz/sb/${year}/${String(Number(number))}`,
+      identifier: ({ number, year }) => `${String(Number(number))}/${year} Sb.`,
       // Reporters (`Sb. NSS`, `Sb. rozh.`) and the treaty collection
       // (`Sb. m. s.`) share the gazette's suffix and are not statutes.
       source: String.raw`(?<![\p{L}\p{N}])(?:č\.\s*)?(?<number>\d{1,5})\/(?<year>\d{4})\s+Sb\.(?!\s*(?:m\.\s*s\.|NSS|rozh\.))`,
