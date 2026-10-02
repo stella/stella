@@ -1164,13 +1164,14 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
               .for("update")
               .limit(1)
           ).at(0);
-          if (receipt === undefined)
-            {return Result.err(
+          if (receipt === undefined) {
+            return Result.err(
               new CompletionApprovalError({
                 code: "not-found",
                 message: "The supervised receipt does not exist",
               }),
-            );}
+            );
+          }
           const counts = approval.reviewedCounts;
           if (
             Object.values(counts).some(
@@ -1189,14 +1190,15 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
             approval.supervisedBy.length > 128 ||
             !approval.approvedBy.trim() ||
             approval.approvedBy.length > 128
-          )
-            {return Result.err(
+          ) {
+            return Result.err(
               new CompletionApprovalError({
                 code: "invalid-input",
                 message:
                   "Approval requires attributed times, evidence and bounded reviewed counts",
               }),
-            );}
+            );
+          }
           if (
             receipt.status !== "dry-run" ||
             receipt.mode !== "dry-run" ||
@@ -1204,14 +1206,15 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
             receipt.sourceId !== approval.sourceId ||
             receipt.parserVersion !== approval.parserVersion ||
             approval.supervisedAt.getTime() < receipt.completedAt.getTime()
-          )
-            {return Result.err(
+          ) {
+            return Result.err(
               new CompletionApprovalError({
                 code: "invalid-proof",
                 message:
                   "Approval must reference a completed dry-run receipt for the same source and parser, supervised after completion",
               }),
-            );}
+            );
+          }
           // audit: skip — public case-law corpus bookkeeping, no workspace data
           const rows = await tx
             .insert(euCompletionApprovals)
@@ -1224,14 +1227,15 @@ const createApprovalOperations = ({ transaction, now }: StoreContext) => {
             .onConflictDoNothing()
             .returning();
           const approved = rows.at(0);
-          if (approved === undefined)
-            {return Result.err(
+          if (approved === undefined) {
+            return Result.err(
               new CompletionApprovalError({
                 code: "already-approved",
                 message:
                   "This source and parser generation already has supervised approval",
               }),
-            );}
+            );
+          }
           return Result.ok(approved);
         }),
       catch: (cause) =>

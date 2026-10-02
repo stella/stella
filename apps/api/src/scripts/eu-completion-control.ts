@@ -128,8 +128,12 @@ const createOperatorStore = async () => {
   });
 };
 const controlFailureMessage = (error: unknown) => {
-  if (error instanceof Error) {return error.message;}
-  if (typeof error === "string") {return error;}
+  if (error instanceof Error) {
+    return error.message;
+  }
+  if (typeof error === "string") {
+    return error;
+  }
   return "Unknown completion control failure";
 };
 type RunControlOptions = {

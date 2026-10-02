@@ -300,7 +300,9 @@ if (!databaseUrl || !enabled) {
         approvedBy: "fixture-approver",
         approvedAt,
       });
-      if (approval.isErr()) {throw approval.error;}
+      if (approval.isErr()) {
+        throw approval.error;
+      }
       for (const controlSource of [null, sourceId]) {
         await store.setControl({
           sourceId: controlSource,

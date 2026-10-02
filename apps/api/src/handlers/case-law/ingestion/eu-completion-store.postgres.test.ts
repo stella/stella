@@ -161,7 +161,9 @@ if (!databaseUrl || !enabled) {
         approvedAt: new Date(fixtureState.currentTime()),
         reviewedCounts: { reviewed: 1, accepted: 1, requiresReview: 0 },
       });
-      if (approval.isErr()) {throw new TypeError(approval.error.message);}
+      if (approval.isErr()) {
+        throw new TypeError(approval.error.message);
+      }
       return approval.value;
     };
     test("reservation/CAS recovery is idempotent and durable before the cursor moves", async () => {
@@ -268,7 +270,9 @@ if (!databaseUrl || !enabled) {
       for (const item of cases) {
         const result = await state.store.approveSupervisedDryRun(item.input);
         expect(result.isErr()).toBe(true);
-        if (result.isErr()) {expect(result.error.code).toBe(item.code);}
+        if (result.isErr()) {
+          expect(result.error.code).toBe(item.code);
+        }
       }
     });
     test("canonical marker is atomic, pending mirrors cannot settle, and completion is exactly once", async () => {
