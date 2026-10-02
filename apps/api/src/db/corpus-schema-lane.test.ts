@@ -194,3 +194,42 @@ test("the migration runner takes the lane before SQL and releases it in finally"
     "await connection.unsafe(CORPUS_SCHEMA_LANE_UNLOCK_SQL);",
   );
 });
+
+test("schema-lane budgets include time spent acquiring a transaction", async () => {
+  let now = 0;
+  let started = false;
+  const database = {
+    transaction: async <T>(work: (tx: FakeTransaction) => Promise<T>) => {
+      now = 300;
+      return await work({ execute: async () => [{ granted: true }] });
+    },
+  };
+  await expect(
+    runUnderCorpusSchemaLane({
+      database,
+      clock: () => now,
+      laneWaitMs: 250,
+      work: async () => {
+        started = true;
+      },
+    }),
+  ).rejects.toBeInstanceOf(CorpusSchemaLaneUnavailableError);
+  expect(started).toBe(false);
+});
+
+test("a cycle abort interrupts schema-lane pacing without starting corpus work", async () => {
+  const abort = new AbortController();
+  let started = false;
+  const { database } = scriptedDatabase([false, true]);
+  const waiting = runUnderCorpusSchemaLane({
+    database,
+    signal: abort.signal,
+    laneWaitMs: 5000,
+    work: async () => {
+      started = true;
+    },
+  });
+  abort.abort();
+  await expect(waiting).rejects.toMatchObject({ name: "AbortError" });
+  expect(started).toBe(false);
+});

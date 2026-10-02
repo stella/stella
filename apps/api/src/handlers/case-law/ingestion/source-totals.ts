@@ -5,19 +5,27 @@ import type { SQL } from "drizzle-orm";
 import { createHash } from "node:crypto";
 import * as v from "valibot";
 
+import { defaultConfig } from "@stll/db-load-gate/health";
+import type { HealthConfig, Signal } from "@stll/db-load-gate/health";
 import { DAY_IN_MS, Temporal } from "@stll/time";
 
 import { createDatabaseLoadVerdictReader } from "@/api/db/backfill-runtime";
+import { CorpusSchemaLaneUnavailableError } from "@/api/db/corpus-schema-lane";
 import type { Transaction } from "@/api/db/root";
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { IngestionScopedDb, ScopedDb } from "@/api/db/safe-db";
 import { caseLawSources } from "@/api/db/schema";
 import type { SourceTotalOrigin } from "@/api/db/schema";
 import { createIngestionDb, markRlsDatabase } from "@/api/db/scoped";
 import type { RlsDatabase, TransactionOf } from "@/api/db/scoped";
-import { captureError } from "@/api/lib/analytics/capture";
+import {
+  setSharedLockTimeout,
+  setSharedStatementTimeout,
+} from "@/api/db/shared-pool-timeouts";
 import type { SafeId } from "@/api/lib/branded-types";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import { errorSystemFields } from "@/api/lib/errors/utils";
+import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
+import type { CycleDeadline } from "@/api/lib/legal-search/cycle-deadline";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -140,8 +148,8 @@ export const recordSourceStoredTotalHold = async ({
   }
 };
 
-const sourceStoredTotalBackoffFailure = failureSink({
-  event: "case_law.source_stored_total.backoff_unavailable",
+const sourceStoredTotalSelectionFailure = failureSink({
+  event: "case_law.source_stored_total.selection_unavailable",
   expected: [],
 });
 
@@ -268,11 +276,18 @@ export type StoredTotalRefresh =
   | "held";
 
 type RefreshSourceStoredTotalOptions = {
-  scopedDb: ScopedDb;
+  scopedDb: IngestionScopedDb;
   sourceId: SafeId<"caseLawSource">;
   readDatabaseNow?: (tx: Transaction) => Promise<Date>;
-  acquireAdmission: () => Promise<"granted" | "held" | "unknown">;
-  countSource?: (sourceId: SafeId<"caseLawSource">) => Promise<number>;
+  acquireAdmission: (
+    phase?: "reserve" | "start",
+  ) => Promise<"granted" | "held" | "unknown">;
+  deadline?: CycleDeadline;
+  signal?: AbortSignal;
+  countSource?: (
+    sourceId: SafeId<"caseLawSource">,
+    options?: SourceCountConnectionOptions,
+  ) => Promise<number | Result<number, SourceStoredTotalAdmissionExpired>>;
 };
 
 /** The only recurring exact count: one admitted source snapshot per daily slot. */
@@ -292,48 +307,94 @@ const sourceCountRowsSchema = v.tuple([
   v.object({ total: storedTotalCountSchema }),
 ]);
 
-export const countSourceThroughIngestionRole = async (
-  database: RlsDatabase,
-  sourceId: SafeId<"caseLawSource">,
-): Promise<number> => {
+class SourceStoredTotalAdmissionExpired extends TaggedError(
+  "SourceStoredTotalAdmissionExpired",
+)<{
+  message: string;
+}> {}
+
+type SourceCountConnectionOptions = {
+  prepareConnection?: (connection: ReservedSQL) => Promise<void>;
+  signal?: AbortSignal;
+  remainingStartWaitMs?: () => number;
+  validateStart?: () => Promise<"granted" | "held" | "unknown">;
+};
+
+type SourceCountIngestionOptions = SourceCountConnectionOptions & {
+  database: RlsDatabase;
+  sourceId: SafeId<"caseLawSource">;
+};
+
+export const countSourceThroughIngestionRole = async ({
+  database,
+  sourceId,
+  signal,
+  remainingStartWaitMs,
+  validateStart,
+}: SourceCountIngestionOptions): Promise<
+  Result<number, SourceStoredTotalAdmissionExpired>
+> => {
   const ingestionDb = createIngestionDb(database, {
-    laneWaitMs: STORED_TOTAL_STATEMENT_TIMEOUT_MS,
+    laneWaitMs: Math.max(
+      0,
+      Math.ceil(remainingStartWaitMs?.() ?? STORED_TOTAL_STATEMENT_TIMEOUT_MS),
+    ),
+    ...(signal === undefined ? {} : { signal }),
   });
-  return await ingestionDb(
-    async (tx) =>
+  return await ingestionDb(async (tx) => {
+    signal?.throwIfAborted();
+    if (validateStart !== undefined && (await validateStart()) !== "granted") {
+      return Result.err(
+        new SourceStoredTotalAdmissionExpired({
+          message: "Stored-total count admission expired before SQL start",
+        }),
+      );
+    }
+    signal?.throwIfAborted();
+    return Result.ok(
       v.parse(
         sourceCountRowsSchema,
         executedRows(await tx.execute(sourceStoredTotalCountQuery(sourceId))),
       )[0].total,
-  );
-};
-
-type SourceCountConnectionOptions = {
-  prepareConnection?: (connection: ReservedSQL) => Promise<void>;
+    );
+  });
 };
 
 export const countSourceOnDedicatedConnection = async (
   sourceId: SafeId<"caseLawSource">,
-  { prepareConnection }: SourceCountConnectionOptions = {},
-): Promise<number> => {
+  {
+    prepareConnection,
+    signal: cycleSignal,
+    remainingStartWaitMs,
+    validateStart,
+  }: SourceCountConnectionOptions = {},
+): Promise<Result<number, SourceStoredTotalAdmissionExpired>> => {
   const { withLongRunningConnection } =
     await import("@/api/db/long-running-connection");
+  const timeout = AbortSignal.timeout(STORED_TOTAL_ABORT_TIMEOUT_MS);
+  const signal =
+    cycleSignal === undefined
+      ? timeout
+      : AbortSignal.any([cycleSignal, timeout]);
   return await withLongRunningConnection(
     {
       statementTimeout: STORED_TOTAL_STATEMENT_TIMEOUT_MS,
       lockTimeout: STORED_TOTAL_LOCK_TIMEOUT_MS,
-      signal: AbortSignal.timeout(STORED_TOTAL_ABORT_TIMEOUT_MS),
+      signal,
     },
     async ({ db, connection }) => {
       await prepareConnection?.(connection);
-      return await countSourceThroughIngestionRole(
-        markRlsDatabase({
+      return await countSourceThroughIngestionRole({
+        database: markRlsDatabase({
           transaction: async <T>(
             fn: (tx: TransactionOf<typeof db>) => Promise<T>,
           ): Promise<T> => await db.transaction(fn),
         }),
         sourceId,
-      );
+        signal,
+        ...(remainingStartWaitMs === undefined ? {} : { remainingStartWaitMs }),
+        ...(validateStart === undefined ? {} : { validateStart }),
+      });
     },
   );
 };
@@ -357,7 +418,7 @@ type SourceStoredTotalRefreshClaimOptions = {
   now: Date;
 };
 
-/** The primary-key claim commits before counting and survives a failed refresh. */
+/** Commit a full failure backoff first; only a fenced success restores the normal phase. */
 export const sourceStoredTotalRefreshClaim = ({
   tx,
   sourceId,
@@ -370,7 +431,7 @@ export const sourceStoredTotalRefreshClaim = ({
       storedTotalHeldSince: null,
       storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
         sourceId,
-        new Date(now.getTime() + 1),
+        new Date(now.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
       ),
     },
     where: and(
@@ -401,117 +462,169 @@ export const refreshSourceStoredTotal = async ({
   scopedDb,
   sourceId,
   acquireAdmission,
+  deadline,
+  signal = deadline?.signal,
   readDatabaseNow = readSourceRefreshDatabaseNow,
   countSource = countSourceOnDedicatedConnection,
 }: RefreshSourceStoredTotalOptions): Promise<StoredTotalRefresh> => {
-  let claimedAt: Date | undefined;
-  const attempt = await Result.tryPromise(async () => {
-    const candidate = await scopedDb(async (tx) => {
-      const now = await readDatabaseNow(tx);
-      const row = (
-        await tx
-          .select({
-            due: caseLawSources.storedTotalNextRefreshAt,
-            attempted: caseLawSources.storedTotalAttemptedAt,
-            asOf: caseLawSources.storedTotalAsOf,
-          })
-          .from(caseLawSources)
-          .where(
-            and(
-              eq(caseLawSources.id, sourceId),
-              sourceStoredTotalSpacingAvailable(now),
-            ),
-          )
-          .limit(1)
-      ).at(0);
-      if (
-        row === undefined ||
-        (row.due !== null && row.due.getTime() > now.getTime())
-      ) {
-        return undefined;
-      }
-      return { now, slot: row.due ?? new Date(0) };
+  const startWaitMs = () =>
+    Math.max(
+      0,
+      Math.ceil(
+        deadline === undefined
+          ? STORED_TOTAL_ABORT_TIMEOUT_MS
+          : remainingCycleMs(deadline),
+      ),
+    );
+  const boundedDb: IngestionScopedDb = async (fn) =>
+    await scopedDb(fn, {
+      laneWaitMs: startWaitMs(),
+      ...(signal === undefined ? {} : { signal }),
     });
-    if (candidate === undefined) {
-      return "fresh" as const;
-    }
-    const admission = await acquireAdmission();
-    if (admission !== "granted") {
-      await recordSourceStoredTotalHold({
-        scopedDb,
-        sourceId,
-        now: candidate.now,
-        slot: candidate.slot,
-        admission,
-      });
-      logger.info("case_law.source_stored_total.held", { sourceId });
+  const validStart = async () => {
+    if (
+      signal?.aborted ||
+      (deadline !== undefined && remainingCycleMs(deadline) < 0)
+    ) {
       return "held" as const;
     }
-    const claimed = await scopedDb(async (tx) => {
-      await tx.execute(
-        sql`SELECT pg_advisory_xact_lock(hashtextextended(${SOURCE_STORED_TOTAL_CLAIM_LOCK_KEY}, 0))`,
-      );
-      const now = await readDatabaseNow(tx);
-      const rows = await sourceStoredTotalRefreshClaim({ tx, sourceId, now });
-      return rows.length === 0 ? undefined : now;
-    });
-    if (claimed === undefined) {
-      return "fresh" as const;
-    }
-    claimedAt = claimed;
-    const total = v.parse(storedTotalCountSchema, await countSource(sourceId));
-    return await scopedDb(async (tx) => {
-      const written = await writeSourceTotals({
-        tx,
-        values: { storedTotal: total, storedTotalAsOf: claimed },
-        where: and(
-          eq(caseLawSources.id, sourceId),
-          sql`${caseLawSources.storedTotalAttemptedAt} = ${claimed.toISOString()}::timestamptz`,
-          or(
-            isNull(caseLawSources.storedTotalAsOf),
-            sql`${caseLawSources.storedTotalAsOf} <= ${claimed.toISOString()}::timestamptz`,
-          ),
-        ),
+    return await acquireAdmission("start");
+  };
+  const attempt = await Result.tryPromise({
+    try: async () => {
+      signal?.throwIfAborted();
+      const candidate = await boundedDb(async (tx) => {
+        const now = await readDatabaseNow(tx);
+        const row = (
+          await tx
+            .select({
+              due: caseLawSources.storedTotalNextRefreshAt,
+              attempted: caseLawSources.storedTotalAttemptedAt,
+              asOf: caseLawSources.storedTotalAsOf,
+            })
+            .from(caseLawSources)
+            .where(
+              and(
+                eq(caseLawSources.id, sourceId),
+                sourceStoredTotalSpacingAvailable(now),
+              ),
+            )
+            .limit(1)
+        ).at(0);
+        if (
+          row === undefined ||
+          (row.due !== null && row.due.getTime() > now.getTime())
+        ) {
+          return undefined;
+        }
+        return { now, slot: row.due ?? new Date(0) };
       });
-      return written.length > 0 ? ("refreshed" as const) : ("fresh" as const);
-    });
+      if (candidate === undefined) {
+        return "fresh" as const;
+      }
+      const admission = await acquireAdmission();
+      if (admission !== "granted") {
+        await recordSourceStoredTotalHold({
+          scopedDb: boundedDb,
+          sourceId,
+          now: candidate.now,
+          slot: candidate.slot,
+          admission,
+        });
+        logger.info("case_law.source_stored_total.held", { sourceId });
+        return "held" as const;
+      }
+      const claimed = await boundedDb(async (tx) => {
+        await setSharedStatementTimeout(tx, Math.max(1, startWaitMs()));
+        await setSharedLockTimeout(
+          tx,
+          Math.max(1, Math.min(STORED_TOTAL_LOCK_TIMEOUT_MS, startWaitMs())),
+        );
+        await tx.execute(
+          sql`SELECT pg_advisory_xact_lock(hashtextextended(${SOURCE_STORED_TOTAL_CLAIM_LOCK_KEY}, 0))`,
+        );
+        const startAdmission = await validStart();
+        if (startAdmission !== "granted") {
+          return { type: "held", admission: startAdmission } as const;
+        }
+        const now = await readDatabaseNow(tx);
+        const rows = await sourceStoredTotalRefreshClaim({ tx, sourceId, now });
+        return rows.length === 0 ? undefined : now;
+      });
+      if (claimed === undefined) {
+        return "fresh" as const;
+      }
+      if (!(claimed instanceof Date)) {
+        await recordSourceStoredTotalHold({
+          scopedDb: boundedDb,
+          sourceId,
+          now: candidate.now,
+          slot: candidate.slot,
+          admission: claimed.admission,
+        });
+        return "held" as const;
+      }
+      if ((await validStart()) !== "granted") {
+        return "held" as const;
+      }
+      const counted = await countSource(sourceId, {
+        ...(signal === undefined ? {} : { signal }),
+        remainingStartWaitMs: startWaitMs,
+        validateStart: validStart,
+      });
+      if (typeof counted !== "number" && counted.isErr()) {
+        return "held" as const;
+      }
+      const total = v.parse(
+        storedTotalCountSchema,
+        typeof counted === "number" ? counted : counted.value,
+      );
+      const settlementDb: IngestionScopedDb = async (fn) =>
+        await scopedDb(fn, {
+          laneWaitMs: Math.max(
+            0,
+            Math.ceil(
+              deadline === undefined
+                ? STORED_TOTAL_ABORT_TIMEOUT_MS
+                : deadline.expiresAt - performance.now(),
+            ),
+          ),
+          ...(signal === undefined ? {} : { signal }),
+        });
+      return await settlementDb(async (tx) => {
+        const written = await writeSourceTotals({
+          tx,
+          values: {
+            storedTotal: total,
+            storedTotalAsOf: claimed,
+            storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
+              sourceId,
+              new Date(claimed.getTime() + 1),
+            ),
+          },
+          where: and(
+            eq(caseLawSources.id, sourceId),
+            sql`${caseLawSources.storedTotalAttemptedAt} = ${claimed.toISOString()}::timestamptz`,
+            or(
+              isNull(caseLawSources.storedTotalAsOf),
+              sql`${caseLawSources.storedTotalAsOf} <= ${claimed.toISOString()}::timestamptz`,
+            ),
+          ),
+        });
+        return written.length > 0 ? ("refreshed" as const) : ("fresh" as const);
+      });
+    },
+    catch: (error) => error,
   });
   if (Result.isError(attempt)) {
+    if (CorpusSchemaLaneUnavailableError.is(attempt.error) || signal?.aborted) {
+      return "held";
+    }
     logger.warn("case_law.source_stored_total.unavailable", {
       sourceId,
       ...errorSystemFields(attempt.error),
       ...pgErrorFields(attempt.error),
     });
-    const failedClaim = claimedAt;
-    if (failedClaim !== undefined) {
-      const backoff = await Result.tryPromise(
-        async () =>
-          await scopedDb(async (tx) => {
-            await writeSourceTotals({
-              tx,
-              values: {
-                storedTotalNextRefreshAt: sourceStoredTotalNextRefreshAt(
-                  sourceId,
-                  new Date(
-                    failedClaim.getTime() +
-                      SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
-                  ),
-                ),
-              },
-              where: and(
-                eq(caseLawSources.id, sourceId),
-                sql`${caseLawSources.storedTotalAttemptedAt} = ${failedClaim.toISOString()}::timestamptz`,
-              ),
-            });
-          }),
-      );
-      if (Result.isError(backoff)) {
-        observeFailure(backoff.error, {
-          sink: sourceStoredTotalBackoffFailure,
-          ctx: { source: sourceId },
-        });
-      }
-    }
     return "unavailable";
   }
   return attempt.value;
@@ -526,7 +639,24 @@ type RefreshNextSourceStoredTotalOptions = Omit<
 export const refreshNextSourceStoredTotal = async (
   options: RefreshNextSourceStoredTotalOptions,
 ): Promise<StoredTotalRefresh> => {
-  const { scopedDb, readDatabaseNow = readSourceRefreshDatabaseNow } = options;
+  const {
+    scopedDb: baseDb,
+    readDatabaseNow = readSourceRefreshDatabaseNow,
+    deadline,
+    signal = deadline?.signal,
+  } = options;
+  const scopedDb: IngestionScopedDb = async (fn) =>
+    await baseDb(fn, {
+      laneWaitMs: Math.max(
+        0,
+        Math.ceil(
+          deadline === undefined
+            ? STORED_TOTAL_ABORT_TIMEOUT_MS
+            : remainingCycleMs(deadline),
+        ),
+      ),
+      ...(signal === undefined ? {} : { signal }),
+    });
   const selected = await Result.tryPromise(
     async () =>
       await scopedDb(async (tx) => {
@@ -578,12 +708,9 @@ export const refreshNextSourceStoredTotal = async (
       }),
   );
   if (Result.isError(selected)) {
-    captureError(selected.error, {
-      step: "refreshNextSourceStoredTotal.select",
-    });
-    logger.warn("case_law.source_stored_total.selection_unavailable", {
-      ...errorSystemFields(selected.error),
-      ...pgErrorFields(selected.error),
+    observeFailure(selected.error, {
+      sink: sourceStoredTotalSelectionFailure,
+      ctx: { step: "refreshNextSourceStoredTotal.select" },
     });
     return "unavailable";
   }
@@ -620,16 +747,43 @@ const sourceStoredTotalHeartbeatFailure = failureSink({
 });
 
 /** One bound refresh runtime shares its admission budget and hold telemetry across runner cycles. */
+type SourceStoredTotalMaintenanceOptions = {
+  clock?: () => number;
+  readEbsSignal?: () => Promise<Signal>;
+  config?: HealthConfig;
+};
+
 export const createSourceStoredTotalMaintenanceRuntime = (
-  scopedDb: ScopedDb,
-  clock = () => Temporal.Now.instant().epochMilliseconds,
+  scopedDb: IngestionScopedDb,
+  {
+    clock = () => Temporal.Now.instant().epochMilliseconds,
+    readEbsSignal,
+    config = defaultConfig,
+  }: SourceStoredTotalMaintenanceOptions = {},
 ) => {
   const readVerdict = createDatabaseLoadVerdictReader({
     db: { transaction: scopedDb },
     tableName: "case_law_decisions",
     clock,
+    config,
+    ...(readEbsSignal === undefined ? {} : { readEbsSignal }),
   });
-  const acquireAdmission = createSourceStoredTotalAdmission({ readVerdict });
+  const acquireAdmission = createSourceStoredTotalAdmission({
+    config,
+    readVerdict: async ({ deadline }) =>
+      await readVerdict({
+        laneWaitMs: Math.max(
+          0,
+          Math.ceil(
+            Math.min(
+              config.readTimeoutMs,
+              deadline === undefined ? 0 : remainingCycleMs(deadline),
+            ),
+          ),
+        ),
+        ...(deadline === undefined ? {} : { signal: deadline.signal }),
+      }),
+  });
   return {
     acquireAdmission,
     emitHoldHeartbeat: async () =>

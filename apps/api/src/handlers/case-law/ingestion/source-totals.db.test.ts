@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import type { ReservedSQL } from "bun";
 import {
   beforeAll,
@@ -32,6 +32,7 @@ import {
   SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
   SOURCE_STORED_TOTAL_GLOBAL_SPACING,
   sourceStoredTotalNextRefreshAt,
+  sourceStoredTotalRefreshClaim,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId, toSafeId, type SafeId } from "@/api/lib/branded-types";
 import { logger } from "@/api/lib/observability/logger";
@@ -444,7 +445,9 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
   }: Omit<
     Parameters<typeof refreshSourceStoredTotal>[0],
     "acquireAdmission" | "readDatabaseNow"
-  > & { now: Date; acquireAdmission?: () => Promise<"granted" | "held"> }) =>
+  > & { now: Date } & Partial<
+      Pick<Parameters<typeof refreshSourceStoredTotal>[0], "acquireAdmission">
+    >) =>
     await refreshSourceStoredTotal({
       ...options,
       readDatabaseNow: async () => now,
@@ -626,8 +629,11 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         }),
     });
 
-    const total = await countSourceThroughIngestionRole(dedicatedDb, sourceId);
-    expect(total).toBe(3);
+    const total = await countSourceThroughIngestionRole({
+      database: dedicatedDb,
+      sourceId,
+    });
+    expect(total).toEqual(Result.ok(3));
     expect(observedRoles).toEqual(["stella_ingestion"]);
   });
 
@@ -778,6 +784,155 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       }),
     ).toBe("fresh");
     expect(calls).toBe(2);
+  });
+
+  const interruptionCases = [
+    {
+      label: "phase minus eleven minutes",
+      id: "0199a111-1111-7111-8111-000000000000",
+      crossesMidnight: false,
+    },
+    {
+      label: "phase across UTC midnight",
+      id: "0199a111-1111-7111-8111-00000000003b",
+      crossesMidnight: true,
+    },
+  ].flatMap((scenario) =>
+    ["crash", "failed count without a backoff write"].map(
+      (interruption) =>
+        [
+          `${interruption}: ${scenario.label} keeps a full daily backoff across reopening`,
+          scenario,
+          interruption,
+        ] as const,
+    ),
+  );
+  test.each(interruptionCases)("%s", async (_label, scenario, interruption) => {
+    const sourceId = toSafeId<"caseLawSource">(scenario.id);
+    const phase = sourceStoredTotalNextRefreshAt(
+      sourceId,
+      new Date("2026-09-20T00:00:00Z"),
+    );
+    const attempted = new Date(phase.getTime() - 11 * 60_000);
+    const asOf = new Date(
+      attempted.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+    );
+    if (scenario.crossesMidnight) {
+      expect(attempted.toISOString().slice(0, 10)).not.toBe(
+        phase.toISOString().slice(0, 10),
+      );
+    }
+    await db.insert(caseLawSources).values({
+      id: sourceId,
+      adapterKey: `interrupted-${sourceId}`,
+      name: "Interrupted stored-total fixture",
+      storedTotal: 7,
+      storedTotalAsOf: asOf,
+      storedTotalNextRefreshAt: attempted,
+    });
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const worker = openClient();
+      await worker.db.execute(sql.raw(`SET search_path TO ${schema}, public`));
+      const workerScope: ScopedDb = async (callback) =>
+        await worker.db.transaction(
+          async (tx) => await callback(asTestRaw<Transaction>(tx)),
+        );
+      if (interruption === "crash") {
+        expect(
+          await workerScope(
+            async (tx) =>
+              await sourceStoredTotalRefreshClaim({
+                tx,
+                sourceId,
+                now: attempted,
+              }),
+          ),
+        ).toHaveLength(1);
+        return;
+      }
+      let transactions = 0;
+      const rejectPostClaimWrite: ScopedDb = async (callback) => {
+        transactions += 1;
+        if (transactions > 2) {
+          throw new Error("Post-claim backoff storage unavailable");
+        }
+        return await workerScope(callback);
+      };
+      let failedCounts = 0;
+      expect(
+        await refreshForTest({
+          scopedDb: rejectPostClaimWrite,
+          sourceId,
+          now: attempted,
+          countSource: async () => {
+            failedCounts += 1;
+            throw Object.assign(new Error("statement timeout"), {
+              code: "57014",
+            });
+          },
+        }),
+      ).toBe("unavailable");
+      expect(transactions).toBe(2);
+      expect(failedCounts).toBe(1);
+    });
+    const failureDue = await readScheduledDue(sourceId);
+    expect(failureDue.getTime()).toBeGreaterThanOrEqual(
+      attempted.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
+    );
+    expect(await readStoredPair(sourceId)).toEqual({
+      storedTotal: 7,
+      storedTotalAsOf: asOf,
+    });
+    await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+      const worker = openClient();
+      await worker.db.execute(sql.raw(`SET search_path TO ${schema}, public`));
+      const restartScope: ScopedDb = async (callback) =>
+        await worker.db.transaction(
+          async (tx) => await callback(asTestRaw<Transaction>(tx)),
+        );
+      let counts = 0;
+      const countSource = async () => {
+        counts += 1;
+        return 9;
+      };
+      const outcomes = await Promise.all(
+        [
+          phase,
+          new Date(
+            attempted.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS - 1,
+          ),
+        ].map(
+          async (now) =>
+            await refreshForTest({
+              scopedDb: restartScope,
+              sourceId,
+              now,
+              countSource,
+            }),
+        ),
+      );
+      expect(outcomes).toEqual(["fresh", "fresh"]);
+      expect(counts).toBe(0);
+      expect(await readStoredPair(sourceId)).toEqual({
+        storedTotal: 7,
+        storedTotalAsOf: asOf,
+      });
+      expect(
+        await refreshForTest({
+          scopedDb: restartScope,
+          sourceId,
+          now: failureDue,
+          countSource,
+        }),
+      ).toBe("refreshed");
+      expect(counts).toBe(1);
+      expect(await readScheduledDue(sourceId)).toEqual(
+        sourceStoredTotalNextRefreshAt(
+          sourceId,
+          new Date(failureDue.getTime() + 1),
+        ),
+      );
+    });
   });
 
   test("overlapping independent workers claim once before invoking the estimator", async () => {
@@ -946,7 +1101,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       await refreshNextSourceStoredTotal({
         scopedDb,
         readDatabaseNow: async () => NOW,
-        acquireAdmission: async () => {
+        acquireAdmission: async (phase) => {
+          if (phase === "start") {
+            return "granted";
+          }
           admissions += 1;
           return "held";
         },
@@ -1117,10 +1275,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
     let calls = 0;
     const countSource = async (sourceId: SafeId<"caseLawSource">) => {
       calls += 1;
-      const total = await countSourceThroughIngestionRole(
-        ingestionDb,
+      const total = await countSourceThroughIngestionRole({
+        database: ingestionDb,
         sourceId,
-      );
+      });
       return total;
     };
     const assertCount = async (
@@ -1264,6 +1422,12 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           .limit(1)
       ).at(0)?.at,
     ).toEqual(newer);
+    expect(await readScheduledDue(sourceId)).toEqual(
+      sourceStoredTotalNextRefreshAt(
+        sourceId,
+        new Date(newer.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
+      ),
+    );
   });
 
   test("first unmeasured observation is immediately admitted at its most recent source phase", async () => {
@@ -1279,7 +1443,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         scopedDb,
         sourceId,
         now: NOW,
-        acquireAdmission: async () => {
+        acquireAdmission: async (phase) => {
+          if (phase === "start") {
+            return "granted";
+          }
           admissions += 1;
           return "granted";
         },
@@ -1309,7 +1476,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       scopedDb,
       sourceId,
       now: NOW,
-      acquireAdmission: async () => {
+      acquireAdmission: async (phase) => {
+        if (phase === "start") {
+          return "granted";
+        }
         entered.resolve(undefined);
         return await admission.promise;
       },
@@ -1419,7 +1589,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         scopedDb,
         sourceId,
         now: late,
-        acquireAdmission: async () => {
+        acquireAdmission: async (phase) => {
+          if (phase === "start") {
+            return "granted";
+          }
           admissions += 1;
           return "granted";
         },
@@ -1503,7 +1676,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       await refreshNextSourceStoredTotal({
         scopedDb,
         readDatabaseNow: async () => NOW,
-        acquireAdmission: async () => {
+        acquireAdmission: async (phase) => {
+          if (phase === "start") {
+            return "granted";
+          }
           admissions += 1;
           return "held";
         },
@@ -1530,7 +1706,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         await restartedDb.transaction(
           async (tx) => await callback(asTestRaw<Transaction>(tx)),
         );
-      const acquireAdmission = async () => {
+      const acquireAdmission = async (phase?: "reserve" | "start") => {
+        if (phase === "start") {
+          return "granted" as const;
+        }
         admissions += 1;
         return "granted" as const;
       };
@@ -1618,7 +1797,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
           scopedDb: scope,
           sourceId,
           now: NOW,
-          acquireAdmission: async () => {
+          acquireAdmission: async (phase) => {
+            if (phase === "start") {
+              return "granted";
+            }
             admissions += 1;
             if (admissions === scopes.length) {
               entered.resolve(undefined);
@@ -1689,7 +1871,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
         await refreshNextSourceStoredTotal({
           scopedDb: restartScope,
           readDatabaseNow: async () => now,
-          acquireAdmission: async () => {
+          acquireAdmission: async (phase) => {
+            if (phase === "start") {
+              return "granted";
+            }
             restartedAdmissions += 1;
             return "granted";
           },
@@ -1806,7 +1991,10 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       .where(eq(caseLawSources.id, sourceId));
     let admissions = 0;
     let counts = 0;
-    const acquireAdmission = async () => {
+    const acquireAdmission = async (phase?: "reserve" | "start") => {
+      if (phase === "start") {
+        return "granted" as const;
+      }
       admissions += 1;
       throw Object.assign(new Error("budget admission failed"), {
         code: "57014",
@@ -1874,7 +2062,7 @@ describe.skipIf(!enabled)("source totals on PostgreSQL 18", () => {
       await countSourceOnDedicatedConnection(populated, {
         prepareConnection,
       }),
-    ).toBe(3);
+    ).toEqual(Result.ok(3));
     expect(
       await refreshForTest({
         scopedDb,

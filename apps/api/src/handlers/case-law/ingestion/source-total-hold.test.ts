@@ -311,11 +311,11 @@ test("the EMF hold gauge exposes the yielded alarm contract and clears after a g
   });
 });
 
-test("a selection permission failure warns and leaves the ingestion cycle's outcome recoverable", async () => {
+test("a selection permission failure is observed and leaves the ingestion cycle's outcome recoverable", async () => {
   const denied = Object.assign(new Error("selection permission denied"), {
     code: "42501",
   });
-  const warn = spyOn(logger, "warn").mockImplementation(() => {});
+  const errorLog = spyOn(logger, "error").mockImplementation(() => {});
   let admissions = 0;
   let counts = 0;
   try {
@@ -336,12 +336,15 @@ test("a selection permission failure warns and leaves the ingestion cycle's outc
     ).toBe("unavailable");
     expect(admissions).toBe(0);
     expect(counts).toBe(0);
-    expect(warn).toHaveBeenCalledWith(
+    expect(errorLog).toHaveBeenCalledWith(
       "case_law.source_stored_total.selection_unavailable",
-      expect.objectContaining({ "error.cause.pg_code": "42501" }),
+      expect.objectContaining({
+        "error.sqlstate": "42501",
+        "failure.grade": "defect",
+      }),
     );
   } finally {
-    warn.mockRestore();
+    errorLog.mockRestore();
   }
 });
 

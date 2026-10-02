@@ -70,7 +70,10 @@ test("a real pipeline deadline admits one exact count and persists its pair", as
         source: lease.source,
         sourceLease: lease,
         cycle: { budgetMs },
-        acquireStoredTotalAdmission: async ({ deadline }) => {
+        acquireStoredTotalAdmission: async ({ deadline, phase }) => {
+          if (phase === "start") {
+            return await admit({ deadline, phase });
+          }
           admissions += 1;
           if (deadline === undefined) {
             return panic("Pipeline omitted its real cycle deadline");

@@ -37,6 +37,7 @@ import { createBoundedIndicatorQuery } from "./indicator-query";
 import type { IndicatorQuery } from "./indicator-query";
 import type { OnlineMigrationConnection } from "./online-migration-connection";
 import type { Transaction } from "./root";
+import type { CreateIngestionDbOptions } from "./scoped";
 import { setSharedQueryTimeouts } from "./shared-pool-timeouts";
 
 export { BackfillHeldError } from "@stll/db-load-gate/backfill-pass";
@@ -372,10 +373,16 @@ const indicatorFailureCause = (error: unknown): IndicatorFailureCause => {
 };
 
 type DatabaseLoadVerdictReaderOptions = {
-  db: { transaction: IngestionTransactionRunner<Transaction> };
+  db: {
+    transaction: <Value>(
+      work: (tx: Transaction) => Promise<Value>,
+      options?: CreateIngestionDbOptions,
+    ) => Promise<Value>;
+  };
   tableName: string;
   config?: HealthConfig;
   clock?: () => number;
+  readEbsSignal?: () => Promise<Signal>;
 };
 
 /** The database owns the aggregate indicator boundary; unavailable reads hold. */
@@ -384,14 +391,18 @@ export const createDatabaseLoadVerdictReader = ({
   tableName,
   config = defaultConfig,
   clock = () => Temporal.Now.instant().epochMilliseconds,
+  readEbsSignal,
 }: DatabaseLoadVerdictReaderOptions) => {
-  const sharedReadEbsSignal = createCachedEbsSignalReader({ clock, config });
-  const indicators = createBoundedIndicatorQuery({
-    runInTransaction: db.transaction.bind(db),
-    transactionQuery: (tx: Transaction) => drizzleQuery(tx),
-    readTimeoutMs: config.readTimeoutMs,
-  });
-  return async () => {
+  const sharedReadEbsSignal =
+    readEbsSignal ?? createCachedEbsSignalReader({ clock, config });
+  return async (options?: CreateIngestionDbOptions) => {
+    // Pooled reads own their operation budget; concurrent callers cannot replace
+    // one another's schema-lane deadline or abort signal.
+    const indicators = createBoundedIndicatorQuery({
+      runInTransaction: (work) => db.transaction(work, options),
+      transactionQuery: (tx: Transaction) => drizzleQuery(tx),
+      readTimeoutMs: config.readTimeoutMs,
+    });
     const result = await Result.tryPromise(async () => {
       const snapshot = await indicators.query(
         `SELECT transaction_age_ms AS "ageMs", vacuum_active AS active,

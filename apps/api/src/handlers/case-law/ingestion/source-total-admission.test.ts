@@ -173,3 +173,60 @@ test("a long-read admission reserves 130 seconds rather than a planner-sized cha
     clock.mockRestore();
   }
 });
+
+test("start revalidation spends one reservation and rejects a later stop verdict", async () => {
+  const clock = spyOn(performance, "now").mockReturnValue(0);
+  try {
+    const deadline = {
+      expiresAt: 135_000,
+      signal: new AbortController().signal,
+    };
+    let stopped = false;
+    let reads = 0;
+    const admit = createSourceStoredTotalAdmission({
+      readVerdict: async () => {
+        reads += 1;
+        return { kind: stopped ? "stop" : "normal", signals: [] };
+      },
+    });
+    expect(await admit({ deadline, phase: "start" })).toBe("held");
+    expect(reads).toBe(0);
+    expect(await admit({ deadline })).toBe("granted");
+    expect(remainingCycleMs(deadline)).toBe(5000);
+    expect(await admit({ deadline, phase: "start" })).toBe("granted");
+    expect(remainingCycleMs(deadline)).toBe(5000);
+    stopped = true;
+    expect(await admit({ deadline, phase: "start" })).toBe("held");
+    expect(remainingCycleMs(deadline)).toBe(5000);
+    expect(reads).toBe(3);
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+for (const ending of ["elapsed", "aborted"] as const) {
+  test(`a granted reservation cannot start after its ${ending} cycle budget`, async () => {
+    const clock = spyOn(performance, "now").mockReturnValue(0);
+    try {
+      const abort = new AbortController();
+      const deadline = { expiresAt: 135_000, signal: abort.signal };
+      let reads = 0;
+      const admit = createSourceStoredTotalAdmission({
+        readVerdict: async () => {
+          reads += 1;
+          return { kind: "normal", signals: [] };
+        },
+      });
+      expect(await admit({ deadline })).toBe("granted");
+      if (ending === "elapsed") {
+        clock.mockReturnValue(5001);
+      } else {
+        abort.abort();
+      }
+      expect(await admit({ deadline, phase: "start" })).toBe("held");
+      expect(reads).toBe(1);
+    } finally {
+      clock.mockRestore();
+    }
+  });
+}

@@ -1,6 +1,6 @@
 import { Result, panic } from "better-result";
 
-import type { ScopedDb } from "@/api/db/safe-db";
+import type { IngestionScopedDb } from "@/api/db/safe-db";
 import type { caseLawSources } from "@/api/db/schema";
 import {
   ADAPTER_TIMEOUT,
@@ -68,12 +68,13 @@ type DbSlot = {
 type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
-  scopedDb: ScopedDb;
-  countStoredTotalSource?: (
-    sourceId: typeof caseLawSources.$inferSelect.id,
-  ) => Promise<number>;
+  scopedDb: IngestionScopedDb;
+  countStoredTotalSource?: Parameters<
+    typeof refreshNextSourceStoredTotal
+  >[0]["countSource"];
   acquireStoredTotalAdmission: (options: {
     deadline: CycleDeadline | undefined;
+    phase?: "reserve" | "start";
   }) => Promise<"granted" | "held" | "unknown">;
   /**
    * The cycle's time budget, and the signals that end it early. The loop
@@ -684,8 +685,12 @@ export const runIngestionPipeline = async ({
     ...(countStoredTotalSource === undefined
       ? {}
       : { countSource: countStoredTotalSource }),
-    acquireAdmission: async () =>
-      await acquireStoredTotalAdmission({ deadline }),
+    ...(deadline === undefined ? {} : { deadline }),
+    acquireAdmission: async (phase) =>
+      await acquireStoredTotalAdmission({
+        deadline,
+        ...(phase === undefined ? {} : { phase }),
+      }),
   });
 
   return {
