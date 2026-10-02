@@ -200,6 +200,9 @@ class ChatConnectionLostError extends TaggedError("ChatConnectionLostError")<{
 /** The HTTP answer a route's status response makes (a refusal, or a Stop's
  *  answer), as the browser sees it. */
 const statusResponse = (answer: unknown): Response => {
+  if (answer instanceof Response) {
+    return answer;
+  }
   const status: unknown =
     typeof answer === "object" && answer !== null
       ? Reflect.get(answer, "code")
