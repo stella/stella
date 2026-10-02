@@ -19,18 +19,19 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 const PNG = Uint8Array.fromBase64(
   "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==",
 );
-const imageMessages = (bytes = PNG): ModelMessage[] => [
-  {
-    role: "user",
-    content: [
-      { type: "text", content: "Read this image." },
-      {
-        type: "image",
-        source: { type: "url", value: toDataUrl(bytes, "image/png") },
-      },
-    ],
-  },
-];
+const imageMessages = (bytes: Uint8Array = PNG) =>
+  [
+    {
+      role: "user",
+      content: [
+        { type: "text", content: "Read this image." },
+        {
+          type: "image",
+          source: { type: "url", value: toDataUrl(bytes, "image/png") },
+        },
+      ],
+    },
+  ] satisfies ModelMessage[];
 const TEXT: ModelMessage[] = [{ role: "user", content: "Read this text." }];
 
 describe("image input preparation", () => {
@@ -314,11 +315,15 @@ describe("image input preparation", () => {
           kind: "text",
           name: "fixture",
           model: "us.amazon.nova-lite-v1:0",
-          async *chatStream({ messages }) {
+          async *chatStream({
+            messages,
+          }: Parameters<AnyTextAdapter["chatStream"]>[0]) {
             sent.push(messages);
             yield* [];
           },
-          structuredOutput: async ({ chatOptions }) => {
+          structuredOutput: async ({
+            chatOptions,
+          }: Parameters<AnyTextAdapter["structuredOutput"]>[0]) => {
             sent.push(chatOptions.messages);
             return { data: {}, rawText: "{}" };
           },
@@ -430,15 +435,21 @@ describe("image input preparation", () => {
       kind: "text",
       name: "fixture",
       model: "us.amazon.nova-micro-v1:0",
-      async *chatStream({ messages }) {
+      async *chatStream({
+        messages,
+      }: Parameters<AnyTextAdapter["chatStream"]>[0]) {
         sent.push(messages);
         yield* [];
       },
-      structuredOutput: async ({ chatOptions }) => {
+      structuredOutput: async ({
+        chatOptions,
+      }: Parameters<AnyTextAdapter["structuredOutput"]>[0]) => {
         sent.push(chatOptions.messages);
         return { data: {}, rawText: "{}" };
       },
-      async *structuredOutputStream({ chatOptions }) {
+      async *structuredOutputStream({
+        chatOptions,
+      }: Parameters<NonNullable<AnyTextAdapter["structuredOutputStream"]>>[0]) {
         sent.push(chatOptions.messages);
         yield* [];
       },

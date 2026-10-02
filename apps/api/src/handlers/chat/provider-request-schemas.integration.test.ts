@@ -924,7 +924,7 @@ describe("image input at the provider request boundary", () => {
         status: "unknown",
       });
     },
-    CONVERSATION_TIMEOUT_MS,
+    propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
   );
 
   for (const provider of TANSTACK_AI_PROVIDERS) {
@@ -947,7 +947,7 @@ describe("image input at the provider request boundary", () => {
       test(
         `${provider}/${imageModel.status}: image input sends a valid request`,
         async () => await checkImageRequest({ provider, ...imageModel }),
-        CONVERSATION_TIMEOUT_MS,
+        propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
       );
     }
 
@@ -959,7 +959,7 @@ describe("image input at the provider request boundary", () => {
       test(
         `${provider}/${modelId}: a model without image input refuses before any provider request`,
         async () => await checkImageRefusal({ provider, modelId }),
-        CONVERSATION_TIMEOUT_MS,
+        propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
       );
     }
   }
@@ -1048,7 +1048,7 @@ describe("image input at the provider request boundary", () => {
         await session.close();
       }
     },
-    CONVERSATION_TIMEOUT_MS,
+    propertyTestTimeout(CONVERSATION_TIMEOUT_MS),
   );
 });
 
