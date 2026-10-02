@@ -1159,3 +1159,235 @@ test(
   },
   TIMEOUT,
 );
+
+test(
+  "contact marks finish only after every configured source has terminal coverage and retry a later source failure",
+  async () => {
+    const { organizationId, scoped } = await isolatedMonitoringOrganization(
+      "drain-source-census",
+    );
+    const now = futureNow();
+    const sources = sanctionsSourceIds();
+    expect(sources.length).toBeGreaterThan(2);
+    const oldSources = await db.select().from(sanctionsSources);
+    try {
+      for (const sourceId of sources) {
+        const id = toSafeId<"sanctionsEdition">(Bun.randomUUIDv7());
+        const hash = new Bun.CryptoHasher("sha256").update(id).digest("hex");
+        await db.insert(sanctionsEditions).values({
+          id,
+          sourceId,
+          markerKey: hash,
+          contentHash: hash,
+          state: "ready",
+          publishedAt: "2026-09-30",
+          entryCount: 0,
+        });
+        await db
+          .update(sanctionsSources)
+          .set({
+            activeEditionId: id,
+            lastSuccessfulVerifiedAt: now,
+            lastFailureCode: null,
+            lastFailureAt: null,
+          })
+          .where(eq(sanctionsSources.id, sourceId));
+      }
+      const contact =
+        (
+          await scoped(
+            async (tx) =>
+              await tx
+                .insert(contacts)
+                .values({
+                  organizationId,
+                  type: "person",
+                  displayName: "Marisol Benitez",
+                })
+                .returning(),
+          )
+        ).at(0) ?? panic("Source census contact missing");
+      const drain = async (attemptAt: Date) =>
+        await drainSanctionsContactMarks({
+          db: scoped,
+          organizationId,
+          now: attemptAt,
+          signal: new AbortController().signal,
+        });
+      const census = async () =>
+        await scoped(async (tx) => ({
+          coverage: await tx.select().from(sanctionsContactScreenings),
+          events: await tx.select().from(sanctionsScreeningEvents),
+          marks: await tx.select().from(sanctionsContactMarks),
+        }));
+      await drain(futureNow());
+      const previous = await census();
+      expect(
+        previous.coverage.map(({ sourceId }) => sourceId).toSorted(),
+      ).toEqual(sources.toSorted());
+      expect(previous.coverage.every(({ status }) => status === "clear")).toBe(
+        true,
+      );
+      await seedIdentityEdition(now);
+      for (const [index, sourceId] of sources.entries()) {
+        if (index % 3 === 1) {
+          await db
+            .update(sanctionsSources)
+            .set({
+              lastSuccessfulVerifiedAt: new Date(
+                now.getTime() -
+                  SANCTIONS_SOURCE_CONFIG[sourceId].freshnessMs -
+                  SANCTIONS_MARK_LEASE_MS,
+              ),
+            })
+            .where(eq(sanctionsSources.id, sourceId));
+        }
+        if (index % 3 === 2) {
+          await db
+            .update(sanctionsSources)
+            .set({ activeEditionId: null, lastSuccessfulVerifiedAt: null })
+            .where(eq(sanctionsSources.id, sourceId));
+        }
+      }
+      const updated =
+        (
+          await scoped(
+            async (tx) =>
+              await tx
+                .update(contacts)
+                .set({ displayName: "Alexandrov Zhuravlev" })
+                .where(eq(contacts.id, contact.id))
+                .returning(),
+          )
+        ).at(0) ?? panic("Updated source census contact missing");
+      const attemptNow = futureNow();
+      const expected =
+        (
+          await screenSanctionsSubjects({
+            db: scoped,
+            subjects: [monitoringSubject(updated)],
+            practiceJurisdictions: [],
+            now: attemptNow,
+            resultMode: "complete",
+          })
+        ).at(0) ?? panic("Source census screening missing");
+      expect(expected.isOk()).toBe(true);
+      if (expected.isErr()) {
+        panic("Source census subject rejected");
+      }
+      expect(
+        expected.value.lists.map(({ source }) => source).toSorted(),
+      ).toEqual(sources.toSorted());
+      expect(
+        new Set(
+          expected.value.lists.map(
+            ({ status, reason }) => `${status}:${reason}`,
+          ),
+        ).size,
+      ).toBeGreaterThanOrEqual(4);
+      const failingSource = sources.at(2) ?? panic("Later source missing");
+      await client.exec(`CREATE FUNCTION reject_later_source_coverage() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'synthetic later source failure'; END $$;
+      CREATE TRIGGER later_source_coverage_failure BEFORE INSERT OR UPDATE ON sanctions_contact_screenings FOR EACH ROW WHEN (NEW.contact_id = '${contact.id}' AND NEW.source_id = '${failingSource}') EXECUTE FUNCTION reject_later_source_coverage();`);
+      try {
+        const failed = await Result.tryPromise(
+          async () => await drain(attemptNow),
+        );
+        expect(failed.isErr()).toBe(true);
+        if (failed.isErr()) {
+          expect(errorMessages(failed.error)).toContain(
+            "synthetic later source failure",
+          );
+        }
+        const partial = await census();
+        expect(partial.marks).toHaveLength(1);
+        expect(partial.marks.at(0)?.scheduledAt).toEqual(
+          new Date(attemptNow.getTime() + SANCTIONS_MARK_LEASE_MS),
+        );
+        for (const [index, sourceId] of sources.entries()) {
+          const coverage =
+            partial.coverage.find((row) => row.sourceId === sourceId) ??
+            panic("Partial source coverage missing");
+          if (index < 2) {
+            const outcome =
+              expected.value.lists.find(({ source }) => source === sourceId) ??
+              panic("Expected source outcome missing");
+            expect(coverage).toMatchObject({
+              status: outcome.status,
+              reason: outcome.reason,
+              editionId: outcome.editionId,
+              contactFingerprint: monitoringFingerprint(updated),
+            });
+          } else {
+            expect(coverage).toEqual(
+              previous.coverage.find((row) => row.sourceId === sourceId),
+            );
+          }
+        }
+        expect(
+          partial.events.map(
+            ({ contactId, sourceId, sourceEntryId, type }) => ({
+              contactId,
+              sourceId,
+              sourceEntryId,
+              type,
+            }),
+          ),
+        ).toEqual([
+          {
+            contactId: contact.id,
+            sourceId: "eu",
+            sourceEntryId: "identity-a",
+            type: "new",
+          },
+        ]);
+      } finally {
+        await client.exec(
+          "DROP TRIGGER later_source_coverage_failure ON sanctions_contact_screenings; DROP FUNCTION reject_later_source_coverage();",
+        );
+      }
+      expect(
+        await drain(
+          new Date(attemptNow.getTime() + SANCTIONS_MARK_LEASE_MS + 1),
+        ),
+      ).toEqual({ claimed: 1, terminal: 1 });
+      const finished = await census();
+      expect(finished.marks).toEqual([]);
+      expect(
+        finished.coverage.map(({ sourceId }) => sourceId).toSorted(),
+      ).toEqual(sources.toSorted());
+      for (const sourceId of sources) {
+        const outcome =
+          expected.value.lists.find(({ source }) => source === sourceId) ??
+          panic("Expected final outcome missing");
+        expect(
+          finished.coverage.find((row) => row.sourceId === sourceId),
+        ).toMatchObject({
+          status: outcome.status,
+          reason: outcome.reason,
+          editionId: outcome.editionId,
+          contactFingerprint: monitoringFingerprint(updated),
+        });
+      }
+      expect(finished.events).toHaveLength(1);
+      expect(
+        await drain(
+          new Date(attemptNow.getTime() + SANCTIONS_MARK_LEASE_MS + 2),
+        ),
+      ).toEqual({ claimed: 0, terminal: 0 });
+      expect(await census()).toEqual(finished);
+    } finally {
+      for (const source of oldSources) {
+        await db
+          .update(sanctionsSources)
+          .set({
+            activeEditionId: source.activeEditionId,
+            lastSuccessfulVerifiedAt: source.lastSuccessfulVerifiedAt,
+            lastFailureCode: source.lastFailureCode,
+            lastFailureAt: source.lastFailureAt,
+          })
+          .where(eq(sanctionsSources.id, source.id));
+      }
+    }
+  },
+  TIMEOUT,
+);
