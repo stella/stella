@@ -66,11 +66,11 @@ const ownerKey = (permissions: PermissionInput): AuthorizedMemberRole => ({
   credential: { type: "attenuated", permissions },
 });
 
-const VIEW_ONLY = { view: ["create", "update"] } as const;
+const VIEW_ONLY = { view: ["create", "update"] } satisfies PermissionInput;
 const VIEW_AND_COLUMNS = {
   view: ["create", "update"],
   property: ["create"],
-} as const;
+} satisfies PermissionInput;
 
 const templateColumn = (name: string): ViewTemplateProperty => ({
   version: 1,

@@ -200,8 +200,8 @@ describe("permission authorization", () => {
   });
 
   test("management overrides need the role and the permission they spend", () => {
-    const view = { view: ["create"] } as const;
-    const update = { agentSkill: ["update"] } as const;
+    const view = { view: ["create"] } satisfies PermissionInput;
+    const update = { agentSkill: ["update"] } satisfies PermissionInput;
     expect(hasManagementPermission(sessionMemberRole("owner"), update)).toBe(
       true,
     );

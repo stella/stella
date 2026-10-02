@@ -274,10 +274,10 @@ describe("an owner's credential managing another author's proposal or comment", 
     safeDb: ownerSafeDb(),
   });
 
-  test.each([
+  test.each<[string, PermissionInput, boolean]>([
     ["propose only", { agentSkill: ["propose"] }, false],
     ["propose and update", { agentSkill: ["propose", "update"] }, true],
-  ] as const)(
+  ])(
     "edits and withdraws a peer proposal only with update (%s)",
     async (_name, permissions, allowed) => {
       const edited = await insertTeamSkillWithProposal();
@@ -314,10 +314,10 @@ describe("an owner's credential managing another author's proposal or comment", 
     },
   );
 
-  test.each([
+  test.each<[string, PermissionInput, boolean]>([
     ["comment only", { agentSkill: ["comment"] }, false],
     ["comment and update", { agentSkill: ["comment", "update"] }, true],
-  ] as const)(
+  ])(
     "removes a peer comment only with update (%s)",
     async (_name, permissions, allowed) => {
       const { skillId, revisionId } = await insertTeamSkillWithProposal();

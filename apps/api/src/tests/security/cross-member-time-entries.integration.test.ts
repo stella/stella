@@ -225,7 +225,7 @@ type ActorContextOptions = {
   recordAuditEvent?: AuditRecorder;
   workspaceIds?: SafeId<"workspace">[];
   /** The credential behind the call; a person's session when omitted. */
-  credential?: CredentialAuthority;
+  credential?: CredentialAuthority | undefined;
 };
 const contextFor = (
   name: ActorName,
