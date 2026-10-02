@@ -989,7 +989,9 @@ describe("image input at the provider request boundary", () => {
         const images: Record<string, unknown>[] = [];
         const visit = (value: unknown): void => {
           if (isUnknownArray(value)) {
-            for (const item of value) {visit(item);}
+            for (const item of value) {
+              visit(item);
+            }
             return;
           }
           if (!isRecord(value)) {
@@ -999,9 +1001,13 @@ describe("image input at the provider request boundary", () => {
           if (isRecord(image)) {
             images.push(image);
           }
-          for (const item of Object.values(value)) {visit(item);}
+          for (const item of Object.values(value)) {
+            visit(item);
+          }
         };
-        for (const request of requests) {visit(parsedBody(request));}
+        for (const request of requests) {
+          visit(parsedBody(request));
+        }
         expect(images.length).toBeGreaterThan(0);
         for (const image of images) {
           expect(image["format"]).toBe("webp");
