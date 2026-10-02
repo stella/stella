@@ -1220,6 +1220,10 @@ jobs:
           bash scripts/check-ai-skill-sync.test.sh
           bash scripts/verify-step.test.sh
 
+      - name: Check local base selection
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/canonical-base.test.sh
+
       - name: Check local skill overrides
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         run: |

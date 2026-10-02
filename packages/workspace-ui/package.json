@@ -92,8 +92,18 @@
     "@atlaskit/pragmatic-drag-and-drop-hitbox": "^2.2.2",
     "@base-ui/react": "^1.7.0",
     "@tanstack/react-table": "^9.1.2",
+    "@types/react": ">=19",
+    "@types/react-dom": ">=19",
     "react": ">=19",
     "react-dom": ">=19",
     "tailwindcss": "^4.3.0"
+  },
+  "peerDependenciesMeta": {
+    "@types/react": {
+      "optional": true
+    },
+    "@types/react-dom": {
+      "optional": true
+    }
   }
 }
