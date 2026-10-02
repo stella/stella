@@ -45,11 +45,15 @@ const captureSearchRequest = (): {
 
 describe("lookupByIco validation", () => {
   test("throws AresValidationError for invalid IČO", async () => {
-    expect(lookupByIco("12345678")).rejects.toBeInstanceOf(AresValidationError);
+    expect(
+      lookupByIco("12345678", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(AresValidationError);
   });
 
   test("rejects short IČO without leading zeros", async () => {
-    expect(lookupByIco("27383")).rejects.toBeInstanceOf(AresValidationError);
+    expect(
+      lookupByIco("27383", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(AresValidationError);
   });
 });
 
@@ -93,6 +97,7 @@ describe("lookupByIco optional VR enrichment", () => {
 
     let observedError: AresRequestError | undefined;
     const result = await lookupByIco("27082440", {
+      observer: "unobserved",
       onVrError: (error) => {
         if (error instanceof AresRequestError) {
           observedError = error;
@@ -116,7 +121,9 @@ describe("lookupByIco optional VR enrichment", () => {
       preconnect: originalFetch.preconnect,
     });
 
-    expect(lookupByIco("27082440")).rejects.toBeInstanceOf(AresRequestError);
+    expect(
+      lookupByIco("27082440", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(AresRequestError);
   });
 
   test("fails the required RES lookup without waiting for stalled optional VR", async () => {
@@ -155,7 +162,7 @@ describe("lookupByIco optional VR enrichment", () => {
     });
 
     const outcome = await Promise.race([
-      lookupByIco("27082440").then(
+      lookupByIco("27082440", { observer: "unobserved" }).then(
         () => "resolved" as const,
         (error: unknown) => error,
       ),
@@ -204,7 +211,9 @@ describe("lookupByIco optional VR enrichment", () => {
       preconnect: originalFetch.preconnect,
     });
 
-    const outcome = await lookupByIco("27082440").then(
+    const outcome = await lookupByIco("27082440", {
+      observer: "unobserved",
+    }).then(
       () => null,
       (error: unknown) => error,
     );
@@ -271,6 +280,7 @@ describe("lookupByIco optional VR enrichment", () => {
     };
 
     const lookup = lookupByIco("27082440", {
+      observer: "unobserved",
       onVrError,
       signal: controller.signal,
     });
@@ -316,6 +326,7 @@ describe("lookupByIco optional VR enrichment", () => {
     });
 
     const lookup = lookupByIco("27082440", {
+      observer: "unobserved",
       includeVr: false,
       signal: controller.signal,
     });
@@ -332,8 +343,12 @@ describe("lookupByIco optional VR enrichment", () => {
 
 describe("searchByName validation", () => {
   test("throws AresValidationError for empty name", async () => {
-    expect(searchByName("")).rejects.toBeInstanceOf(AresValidationError);
-    expect(searchByName("   ")).rejects.toBeInstanceOf(AresValidationError);
+    expect(searchByName("", { observer: "unobserved" })).rejects.toBeInstanceOf(
+      AresValidationError,
+    );
+    expect(
+      searchByName("   ", { observer: "unobserved" }),
+    ).rejects.toBeInstanceOf(AresValidationError);
   });
 });
 
@@ -349,7 +364,7 @@ describe("searchByName limit clamping", () => {
     const ctx = captureSearchRequest();
     restore = ctx.restore;
 
-    await searchByName("Alza");
+    await searchByName("Alza", { observer: "unobserved" });
     expect(ctx.captured.pocet).toBe(50);
   });
 
@@ -357,7 +372,7 @@ describe("searchByName limit clamping", () => {
     const ctx = captureSearchRequest();
     restore = ctx.restore;
 
-    await searchByName("Alza", { limit: 3 });
+    await searchByName("Alza", { observer: "unobserved", limit: 3 });
     expect(ctx.captured.pocet).toBe(3);
   });
 
@@ -365,7 +380,7 @@ describe("searchByName limit clamping", () => {
     const ctx = captureSearchRequest();
     restore = ctx.restore;
 
-    await searchByName("Alza", { limit: 5000 });
+    await searchByName("Alza", { observer: "unobserved", limit: 5000 });
     expect(ctx.captured.pocet).toBe(100);
   });
 
@@ -373,7 +388,7 @@ describe("searchByName limit clamping", () => {
     const ctx = captureSearchRequest();
     restore = ctx.restore;
 
-    await searchByName("Alza", { limit: 0 });
+    await searchByName("Alza", { observer: "unobserved", limit: 0 });
     expect(ctx.captured.pocet).toBe(1);
   });
 
@@ -382,7 +397,10 @@ describe("searchByName limit clamping", () => {
     restore = ctx.restore;
     const controller = new AbortController();
 
-    const search = searchByName("Alza", { signal: controller.signal });
+    const search = searchByName("Alza", {
+      observer: "unobserved",
+      signal: controller.signal,
+    });
     expect(ctx.captured.signal?.aborted).toBe(false);
     controller.abort();
     expect(ctx.captured.signal?.aborted).toBe(true);

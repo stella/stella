@@ -1,5 +1,9 @@
 import { describe, expect, test } from "bun:test";
+import { decodeHTMLStrict } from "entities";
+import fc from "fast-check";
 import path from "node:path";
+
+import { propertyConfig } from "@stll/property-testing";
 
 import { parseNssDecisionHtml } from "@/api/handlers/case-law/ingestion/parsers/cz-nss";
 import { parseRegionalDecision } from "@/api/handlers/case-law/ingestion/parsers/cz-regional";
@@ -91,6 +95,46 @@ describe("markupResidueIn", () => {
 
     expect(residue?.excerpt.startsWith("\\pict")).toBe(true);
     expect(residue?.excerpt.length).toBeLessThanOrEqual(120);
+  });
+
+  test("only recognized character references count as entity residue", () => {
+    for (const reference of ["&amp;", "&eacute;", "&#8211;", "&amp;amp;"]) {
+      expect(markupResidueIn(`before ${reference} after`)?.rule).toBe("entity");
+    }
+
+    for (const literal of [
+      "&ion;",
+      "fe&ion;",
+      "&notareal;",
+      "&ampere;",
+      "&eacuteXYZ;",
+    ]) {
+      expect(markupResidueIn(`before ${literal} after`)).toBeUndefined();
+    }
+  });
+
+  test("ignores unknown matches before reporting a recognized reference", () => {
+    expect(markupResidueIn("fe&ion; &amp;amp;")).toMatchObject({
+      rule: "entity",
+      excerpt: "&amp;amp;",
+    });
+  });
+
+  test("unknown entity-shaped names stay ordinary text", () => {
+    const unknownNames = fc
+      .stringMatching(/^[a-zA-Z]{2,12}$/u)
+      .filter((name) => decodeHTMLStrict(`&${name};`) === `&${name};`);
+
+    fc.assert(
+      fc.property(unknownNames, (name) => {
+        const token = `&${name};`;
+        expect(token).toMatch(/^&[a-zA-Z]{2,12};$/u);
+        expect(
+          markupResidueIn(`literal ${token} remains text`),
+        ).toBeUndefined();
+      }),
+      propertyConfig({ numRuns: 100 }),
+    );
   });
 });
 

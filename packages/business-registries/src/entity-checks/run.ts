@@ -9,6 +9,7 @@ import { Temporal } from "temporal-polyfill/full";
 import { validate as validateCzDic } from "@stll/stdnum/cz/dic";
 import { validate as validateCzIco } from "@stll/stdnum/cz/ico";
 
+import type { RegistryRequestObservation } from "../shared/request-observer.js";
 import { checkCzInsolvency, CZ_INSOLVENCY_SOURCE } from "./cz-insolvency.js";
 import type { CzInsolvencyFinding } from "./cz-insolvency.js";
 import {
@@ -233,9 +234,11 @@ type SettleOptions<TKind extends EntityCheckKind, TFinding, TRecord> = {
   kind: TKind;
   subject: EntityCheckSubject;
   signal: AbortSignal | undefined;
+  observer: RegistryRequestObservation;
   query: (
     subject: CheckedEntityCheckSubject,
     signal: AbortSignal | undefined,
+    observer: RegistryRequestObservation,
   ) => Promise<Result<SourceAnswer<TFinding, TRecord>, EntityCheckSourceError>>;
 };
 
@@ -246,6 +249,7 @@ const settle = async <TKind extends EntityCheckKind, TFinding, TRecord>({
   kind,
   subject,
   signal,
+  observer,
   query,
 }: SettleOptions<TKind, TFinding, TRecord>): Promise<
   Result<EntityCheckOutcome<TKind, TFinding, TRecord>, EntityCheckError>
@@ -268,7 +272,7 @@ const settle = async <TKind extends EntityCheckKind, TFinding, TRecord>({
   }
   const checked = normalized.value;
   const checkedAt = nowInstant();
-  const answer = await query(checked, signal);
+  const answer = await query(checked, signal, observer);
   if (answer.isErr()) {
     const error = answer.error;
     switch (error._tag) {
@@ -348,27 +352,31 @@ const settle = async <TKind extends EntityCheckKind, TFinding, TRecord>({
 type EntityCheckRunner = (
   subject: EntityCheckSubject,
   signal: AbortSignal | undefined,
+  observer: RegistryRequestObservation,
 ) => Promise<Result<EntityCheckResult, EntityCheckError>>;
 
 // One runner per kind; a new kind fails to compile until it names its source.
 const ENTITY_CHECK_RUNNERS = {
-  "cz-insolvency": async (subject, signal) =>
+  "cz-insolvency": async (subject, signal, observer) =>
     await settle({
       kind: "cz-insolvency",
       subject,
       signal,
+      observer,
       query: checkCzInsolvency,
     }),
-  "cz-vat-reliability": async (subject, signal) =>
+  "cz-vat-reliability": async (subject, signal, observer) =>
     await settle({
       kind: "cz-vat-reliability",
       subject,
       signal,
+      observer,
       query: checkCzVatReliability,
     }),
 } as const satisfies Record<EntityCheckKind, EntityCheckRunner>;
 
 type RunEntityCheckOptions = {
+  observer: RegistryRequestObservation;
   kind: EntityCheckKind;
   subject: EntityCheckSubject;
   signal?: AbortSignal | undefined;
@@ -383,6 +391,7 @@ export const runEntityCheck = async ({
   kind,
   subject,
   signal,
+  observer,
 }: RunEntityCheckOptions): Promise<
   Result<EntityCheckResult, EntityCheckError>
-> => await ENTITY_CHECK_RUNNERS[kind](subject, signal);
+> => await ENTITY_CHECK_RUNNERS[kind](subject, signal, observer);

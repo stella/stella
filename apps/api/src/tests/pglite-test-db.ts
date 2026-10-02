@@ -26,6 +26,7 @@ import {
   installPgliteLegislationExpressionIdentity,
   installPgliteLegislationPayloadRevision,
   installPgliteProvisionExtractionState,
+  installPgliteSchedulerJobPauseLog,
   installPgliteOrganizationMemberCapacity,
   installPglitePdfSigningTokenScopes,
   installPgliteSchemaPrerequisites,
@@ -722,6 +723,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   await installPgliteChatTurnRunIdLookup(db);
   await installPgliteOrganizationMemberCapacity(db);
   await installPgliteChatRunLogRls(db);
+  await installPgliteSchedulerJobPauseLog(db);
 
   for (const statement of ROLE_GRANT_STATEMENTS) {
     await db.execute(sql.raw(statement));

@@ -18,6 +18,7 @@ const bormeSummary = createSafeRootHandler(
     permissions: { workspace: ["read"] },
     mcp: {
       type: "capability",
+      readClass: "public",
       reason: "legal_corpus_admin",
       consumesServices: true,
     },

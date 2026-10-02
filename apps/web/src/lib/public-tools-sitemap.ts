@@ -1,10 +1,4 @@
-import { loadCatalogue } from "@stll/catalogue";
-
-import {
-  publicToolPath,
-  publicToolsBasePath,
-  publicToolsContributePath,
-} from "@/lib/knowledge/public-tools-path";
+import { publicToolsBasePath } from "@/lib/knowledge/public-tools-path";
 import {
   assertSitemapXmlWithinProtocolLimits,
   escapeSitemapXml,
@@ -13,21 +7,13 @@ import {
 } from "@/lib/public-sitemap";
 import { isPublicToolsSitemapEnabled } from "@/lib/public-tools-launch";
 import { createPublicToolsCanonicalUrl } from "@/lib/public-tools-seo";
+import { publicToolCrawlPaths } from "@/public-crawl-policy";
 
 export { SITEMAP_XML_RESPONSE_HEADERS, TOOLS_SITEMAP_PATH };
 
 type PublicToolsSitemapOptions = {
   publicToolsIndexingEnabled?: boolean;
 };
-
-// Static browse surfaces plus every catalogue entry. Content is fully
-// static (the generated `@stll/catalogue` bundle), so the whole set is
-// enumerable in one file without pagination.
-const collectToolPaths = (): readonly `/${string}`[] => [
-  publicToolsBasePath(),
-  publicToolsContributePath(),
-  ...loadCatalogue().map((entry) => publicToolPath(entry.slug)),
-];
 
 export const createPublicToolsSitemapXml = ({
   publicToolsIndexingEnabled = isPublicToolsSitemapEnabled(),
@@ -39,7 +25,7 @@ export const createPublicToolsSitemapXml = ({
 `;
   }
 
-  const entries = collectToolPaths()
+  const entries = publicToolCrawlPaths(publicToolsBasePath())
     .map(
       (path) => `  <url>
     <loc>${escapeSitemapXml(createPublicToolsCanonicalUrl(path))}</loc>

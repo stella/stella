@@ -1,5 +1,6 @@
 import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { performRegistryRequest } from "../shared/http.js";
+import type { RegistryClientOptions } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
   DenueAPIError,
@@ -27,7 +28,7 @@ const DEFAULT_SEARCH_LIMIT = 50;
 const MAX_SEARCH_LIMIT = 100;
 const ALL_STATES_CODE = "00";
 
-export type DenueClientOptions = {
+export type DenueClientOptions = RegistryClientOptions & {
   /**
    * INEGI DENUE API token. Register at
    * https://www.inegi.org.mx/app/api/denue/v1/tokenVerify.aspx.
@@ -87,6 +88,8 @@ const denueGet = async (
   // request + timeout + RequestError wrapping is shared.
   const response = await performRegistryRequest({
     url,
+    observer: options.observer,
+    signal: options.signal,
     init: { headers: { Accept: "application/json" } },
     timeoutMs: options.timeoutMs ?? TIMEOUT_MS,
     wrapRequestError: () =>

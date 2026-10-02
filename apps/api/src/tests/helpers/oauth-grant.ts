@@ -4,7 +4,7 @@ import * as v from "valibot";
 import { MCP_DEFAULT_RESOURCE_SCOPES } from "@stll/api-contract";
 
 import { getAuth } from "@/api/lib/auth";
-import { getAuthEndpointUrl } from "@/api/lib/auth-paths";
+import { getAuthEndpointUrl } from "@/api/lib/auth/auth-paths";
 import { getMcpResourceUrl } from "@/api/mcp/constants";
 import type { HumanBrowser } from "@/api/tests/helpers/human-session";
 

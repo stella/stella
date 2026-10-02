@@ -9,8 +9,13 @@ import type {
 import type { RawModeOnlyChatToolName } from "@/api/handlers/chat/tools/raw-mode-only-tools";
 import { toTanStackToolSchema } from "@/api/handlers/chat/tools/tanstack-tool-schema";
 import { raiseChatToolError } from "@/api/handlers/chat/tools/tool-failure";
+import type { SafeId } from "@/api/lib/branded-types";
 import { runEntityCheckShared } from "@/api/lib/business-registries/entity-checks";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
+import {
+  ACTION_COST_CALL_KIND,
+  actionRequestObserver,
+} from "@/api/lib/usage/action-costs/context";
 import {
   CHECK_COUNTERPARTY_INPUT_SCHEMA,
   toEntityCheckSubject,
@@ -31,6 +36,7 @@ const TOOL_DESCRIPTION =
   "compare the record before relying on one.";
 
 type CreateCounterpartyCheckToolsArgs = {
+  organizationId: SafeId<"organization">;
   runCheck?: typeof runEntityCheck | undefined;
 };
 
@@ -41,14 +47,20 @@ type CreateCounterpartyCheckToolsArgs = {
  */
 export const createCounterpartyCheckTools = ({
   runCheck,
-}: CreateCounterpartyCheckToolsArgs = {}) => ({
+  organizationId,
+}: CreateCounterpartyCheckToolsArgs) => ({
   [COUNTERPARTY_CHECK_TOOL_NAME]: toolDefinition({
     name: COUNTERPARTY_CHECK_TOOL_NAME,
     description: TOOL_DESCRIPTION,
     inputSchema: toTanStackToolSchema(CHECK_COUNTERPARTY_INPUT_SCHEMA),
   }).server(async ({ check, subject }): Promise<EntityCheckResult> => {
+    const observer = actionRequestObserver(
+      organizationId,
+      ACTION_COST_CALL_KIND.registryRequest,
+    );
     const result = (
       await runEntityCheckShared({
+        observer,
         check,
         subject: toEntityCheckSubject(subject),
         runCheck,

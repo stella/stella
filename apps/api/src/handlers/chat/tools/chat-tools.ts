@@ -350,6 +350,7 @@ export type GetChatToolsProps = {
   /** Which earlier chats `search-past-chats` reads; see `resolvePastChatScope`. */
   pastChatScope: PastChatScope;
   userId: SafeId<"user">;
+  userEmail: string;
   // Use `resolveToolWorkspaceIds` to construct this — that helper is
   // the only path that intersects pinned IDs with the currently
   // accessible set, preventing stale stored pins from widening tool
@@ -654,6 +655,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     excludedChatHistoryMessageIds,
     pastChatScope,
     userId,
+    userEmail,
     toolWorkspaceIds,
     activeFile,
     refRegistry,
@@ -740,6 +742,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolDefectMemo,
     toolWorkspaceIds,
     userId,
+    userEmail,
   });
   const skillTools = createSkillTools({
     activeSkillContext,
@@ -761,12 +764,15 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     dispatch: registryDispatch,
   });
   const businessRegistryTools = createBusinessRegistryTools({
+    organizationId,
     enabledHandlers: businessRegistryHandlers,
   });
   // Findings name natural persons with birth dates and identifiers, which the
   // anonymization boundary cannot redact, so anonymized chat never sees them.
   const counterpartyCheckTools =
-    thirdPartyBoundary.type === "raw" ? createCounterpartyCheckTools() : {};
+    thirdPartyBoundary.type === "raw"
+      ? createCounterpartyCheckTools({ organizationId })
+      : {};
   const boeDisabled = disabledNativeToolSlugs?.includes("boe") ?? false;
   const boeTools = boeDisabled ? {} : createBoeTools();
   const browserControlTools = browserClient ? createBrowserControlTool() : {};
@@ -1061,6 +1067,7 @@ export const getChatTools = (props: GetChatToolsProps): ChatToolMap => {
     toolDefectMemo,
     toolWorkspaceIds,
     userId,
+    userEmail,
     workspaceStatusById,
   });
 
