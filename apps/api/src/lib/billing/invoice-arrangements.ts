@@ -95,6 +95,8 @@ export const checkInvoiceBillingArrangement = async (
     return panic("Invoice time charge aggregate returned no row");
   }
   const candidate = BigInt(amount.value);
+  // Only reserved invoice charges count toward the cap here, so only they can
+  // make it uncomputable; approved work in another currency is not invoiced yet.
   const usage = await readBillingUsage(tx, {
     workspaceId,
     currency: arrangement.currency,
@@ -102,7 +104,7 @@ export const checkInvoiceBillingArrangement = async (
   });
   if (
     (BigInt(amount.count) > 0n && invoice.currency !== arrangement.currency) ||
-    usage.currencyMismatch
+    usage.billedCurrencyMismatch
   ) {
     return Result.err(
       new HandlerError({

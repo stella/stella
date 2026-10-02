@@ -12,6 +12,7 @@ import { eq, inArray } from "drizzle-orm";
 import {
   billingArrangements,
   INVOICE_ATTACHMENT,
+  invoiceLines,
   invoices,
   timeEntries,
 } from "@/api/db/schema";
@@ -404,4 +405,260 @@ test("capped invoices refuse foreign-currency time even when its charge is zero"
       where: { workspaceId: { eq: ids.wsA2 } },
     }),
   ).toHaveLength(0);
+});
+
+// Approved work the matter has not invoiced yet, recorded in another currency.
+const seedForeignApproved = async () => {
+  const id = await seedEntry();
+  await db
+    .update(timeEntries)
+    .set({ currency: "EUR" })
+    .where(eq(timeEntries.id, id));
+  return id;
+};
+const invoiceRow = async (invoiceId: SafeId<"invoice">) =>
+  await db.query.invoices.findFirst({ where: { id: { eq: invoiceId } } });
+const entryRow = async (id: SafeId<"timeEntry">) =>
+  await db.query.timeEntries.findFirst({ where: { id: { eq: id } } });
+const timeLines = async (invoiceId: SafeId<"invoice">) => {
+  const lines = await db.query.invoiceLines.findMany({
+    where: { invoiceId: { eq: invoiceId } },
+  });
+  return lines.filter((line) => line.timeEntryId !== null);
+};
+const lineFor = async (
+  invoiceId: SafeId<"invoice">,
+  timeEntryId: SafeId<"timeEntry">,
+) => {
+  const lines = await timeLines(invoiceId);
+  return (
+    lines.find((line) => line.timeEntryId === timeEntryId) ??
+    panic("Time entry has no invoice line")
+  );
+};
+// A capped hourly draft holding two 600 charges, in a matter that afterwards
+// gains approved unbilled work in another currency.
+const cappedDraftBesideForeignApprovedWork = async () => {
+  await setArrangement("hourly", 2000);
+  const first = await seedEntry();
+  const second = await seedEntry();
+  const invoiceId = invoiceIdFrom(await draft([first, second]));
+  const foreign = await seedForeignApproved();
+  return { invoiceId, first, second, foreign };
+};
+const expectForeignWorkUntouched = async (foreign: SafeId<"timeEntry">) => {
+  expect(await entryRow(foreign)).toMatchObject({
+    status: "approved",
+    invoiceId: null,
+    currency: "EUR",
+  });
+};
+
+test("approved work in another currency does not block editing a capped draft's line", async () => {
+  const { invoiceId, first, foreign } =
+    await cappedDraftBesideForeignApprovedWork();
+  const line = await lineFor(invoiceId, first);
+  expect(
+    await updateLine.handler(
+      context(
+        updateLine.handler,
+        { description: "Reworded narrative" },
+        { invoiceId, lineId: line.id },
+      ),
+    ),
+  ).toMatchObject({ id: line.id, totals: { netAmountMinor: 1200 } });
+  expect(await lineFor(invoiceId, first)).toMatchObject({
+    description: "Reworded narrative",
+    netAmount: 600,
+  });
+  await expectForeignWorkUntouched(foreign);
+});
+
+test("approved work in another currency does not block removing an entry from a capped draft", async () => {
+  const { invoiceId, first, second, foreign } =
+    await cappedDraftBesideForeignApprovedWork();
+  expect(
+    await removeEntries.handler(
+      context(removeEntries.handler, { timeEntryIds: [first] }, { invoiceId }),
+    ),
+  ).toMatchObject({ success: true });
+  expect(await entryRow(first)).toMatchObject({
+    status: "approved",
+    invoiceId: null,
+  });
+  expect(await entryRow(second)).toMatchObject({
+    status: "billed",
+    invoiceId,
+  });
+  expect(await invoiceRow(invoiceId)).toMatchObject({ netAmount: 600 });
+  await expectForeignWorkUntouched(foreign);
+});
+
+test("approved work in another currency does not block deleting a capped draft's line", async () => {
+  const { invoiceId, first, second, foreign } =
+    await cappedDraftBesideForeignApprovedWork();
+  const line = await lineFor(invoiceId, first);
+  expect(
+    await deleteLine.handler(
+      context(deleteLine.handler, {}, { invoiceId, lineId: line.id }),
+    ),
+  ).toMatchObject({ id: line.id, totals: { netAmountMinor: 600 } });
+  const remaining = await timeLines(invoiceId);
+  expect(remaining.map((row) => row.timeEntryId)).toEqual([second]);
+  expect(await invoiceRow(invoiceId)).toMatchObject({ netAmount: 600 });
+  await expectForeignWorkUntouched(foreign);
+});
+
+test("approved work in another currency does not block adding charges to a capped draft, and the cap still applies", async () => {
+  const { invoiceId, foreign } = await cappedDraftBesideForeignApprovedWork();
+  const third = await seedEntry();
+  expect(
+    await addEntries.handler(
+      context(addEntries.handler, { timeEntryIds: [third] }, { invoiceId }),
+    ),
+  ).toHaveProperty("totalAmount");
+  expect(await invoiceRow(invoiceId)).toMatchObject({ netAmount: 1800 });
+  // 1800 of 2000 is reserved: the next 600 is refused for the cap, not for
+  // the currency of the unbilled work.
+  const fourth = await seedEntry();
+  const capExceeded = {
+    code: 409,
+    response: { code: "billing_cap_exceeded" },
+  };
+  expect(
+    await addEntries.handler(
+      context(addEntries.handler, { timeEntryIds: [fourth] }, { invoiceId }),
+    ),
+  ).toMatchObject(capExceeded);
+  expect(await draft([fourth])).toMatchObject(capExceeded);
+  expect(await invoiceRow(invoiceId)).toMatchObject({ netAmount: 1800 });
+  await expectForeignWorkUntouched(foreign);
+});
+
+test("approved work in another currency does not block drafting or finalizing a capped invoice", async () => {
+  const { invoiceId, foreign } = await cappedDraftBesideForeignApprovedWork();
+  const third = await seedEntry();
+  const secondInvoiceId = invoiceIdFrom(await draft([third]));
+  expect(await invoiceRow(secondInvoiceId)).toMatchObject({ netAmount: 600 });
+  expect(
+    await transitionInvoice.handler(
+      context(transitionInvoice.handler, { action: "finalize" }, { invoiceId }),
+    ),
+  ).toHaveProperty("id", invoiceId);
+  expect(await invoiceRow(invoiceId)).toMatchObject({
+    status: "finalized",
+    netAmount: 1200,
+  });
+  await expectForeignWorkUntouched(foreign);
+  expect(
+    await transitionInvoice.handler(
+      context(transitionInvoice.handler, { action: "void" }, { invoiceId }),
+    ),
+  ).toHaveProperty("id", invoiceId);
+});
+
+test("approved work in another currency does not block giving an older capped draft its lines", async () => {
+  const { invoiceId, first, second, foreign } =
+    await cappedDraftBesideForeignApprovedWork();
+  // Drafts written before invoice lines existed carry attached entries only;
+  // their first line edit writes those lines and recalculates.
+  await db.delete(invoiceLines).where(eq(invoiceLines.invoiceId, invoiceId));
+  expect(
+    await createLine.handler(
+      context(
+        createLine.handler,
+        {
+          source: {
+            type: "manual",
+            description: "Courier",
+            quantity: "1",
+            unitPriceMinor: 50,
+          },
+          vatRateBps: 0,
+          vatTreatment: "domestic_vat",
+        },
+        { invoiceId },
+      ),
+    ),
+  ).toMatchObject({ totals: { netAmountMinor: 1250 } });
+  const written = await timeLines(invoiceId);
+  expect(written.map((line) => line.timeEntryId).toSorted()).toEqual(
+    [first, second].toSorted(),
+  );
+  expect(await invoiceRow(invoiceId)).toMatchObject({ netAmount: 1250 });
+  await expectForeignWorkUntouched(foreign);
+});
+
+test("time already invoiced in another currency still blocks changes to a capped draft", async () => {
+  // Both drafts predate the cap, so the matter holds invoiced time in two
+  // currencies when the cap arrives.
+  const first = await seedEntry();
+  const invoiceId = invoiceIdFrom(await draft([first]));
+  const foreign = await seedForeignApproved();
+  const foreignInvoice = await createInvoice.handler(
+    context(createInvoice.handler, {
+      invoiceNumber: `A10-${createSafeId<"invoice">()}`,
+      invoiceDate: "2026-09-30",
+      currency: "EUR",
+      timeEntryIds: [foreign],
+    }),
+  );
+  if (!("id" in foreignInvoice)) {
+    panic(`Invoice failed: ${JSON.stringify(foreignInvoice)}`);
+  }
+  const foreignInvoiceId = foreignInvoice.id;
+  invoiceIds.push(foreignInvoiceId);
+  await setArrangement("hourly", 2000);
+  const line = await lineFor(invoiceId, first);
+  const mismatch = {
+    code: 409,
+    response: { code: "billing_currency_mismatch" },
+  };
+  const expectEveryChangeRefused = async () => {
+    expect(
+      await updateLine.handler(
+        context(
+          updateLine.handler,
+          { description: "Reworded narrative" },
+          { invoiceId, lineId: line.id },
+        ),
+      ),
+    ).toMatchObject(mismatch);
+    expect(
+      await removeEntries.handler(
+        context(
+          removeEntries.handler,
+          { timeEntryIds: [first] },
+          { invoiceId },
+        ),
+      ),
+    ).toMatchObject(mismatch);
+    expect(
+      await transitionInvoice.handler(
+        context(
+          transitionInvoice.handler,
+          { action: "finalize" },
+          { invoiceId },
+        ),
+      ),
+    ).toMatchObject(mismatch);
+    expect(await draft([await seedEntry()])).toMatchObject(mismatch);
+    expect(await lineFor(invoiceId, first)).toMatchObject({
+      description: line.description,
+    });
+    expect(await entryRow(first)).toMatchObject({
+      status: "billed",
+      invoiceId,
+    });
+    expect(await invoiceRow(invoiceId)).toMatchObject({
+      status: "draft",
+      netAmount: 600,
+    });
+  };
+  await expectEveryChangeRefused();
+  // The same holds for invoiced time that has no line yet.
+  await db
+    .delete(invoiceLines)
+    .where(eq(invoiceLines.invoiceId, foreignInvoiceId));
+  await expectEveryChangeRefused();
 });

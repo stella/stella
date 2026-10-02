@@ -121,7 +121,10 @@ const billingUsageProjection = ({
   return {
     billedAmount: sql<string>`(${legacyAmount} + COALESCE((SELECT SUM(l.net_amount) FROM ${invoiceLines} l JOIN ${invoices} i ON i.id = l.invoice_id AND i.organization_id = l.organization_id WHERE l.workspace_id = ${workspaceId} AND i.workspace_id = ${workspaceId} AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL AND i.status <> ${INVOICE_STATUS.VOID} AND i.currency = ${currency} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``}), 0))::text`,
     approvedAmount: sql<string>`COALESCE((SELECT SUM(FLOOR((e.rate_at_entry::numeric * e.billed_minutes + 30) / 60)) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge AND e.currency = ${currency}), 0)::text`,
-    mismatchCount: sql<string>`(${legacyMismatch} + (SELECT COUNT(*) FROM ${invoiceLines} l JOIN ${invoices} i ON i.id = l.invoice_id AND i.organization_id = l.organization_id WHERE l.workspace_id = ${workspaceId} AND i.workspace_id = ${workspaceId} AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL AND i.status <> ${INVOICE_STATUS.VOID} AND i.currency <> ${currency} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``}) + (SELECT COUNT(*) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge AND e.currency <> ${currency}))::text`,
+    // Reserved invoice charges and approved unbilled work are counted apart:
+    // an invoice is checked against what is reserved, the cap status against both.
+    billedMismatchCount: sql<string>`(${legacyMismatch} + (SELECT COUNT(*) FROM ${invoiceLines} l JOIN ${invoices} i ON i.id = l.invoice_id AND i.organization_id = l.organization_id WHERE l.workspace_id = ${workspaceId} AND i.workspace_id = ${workspaceId} AND l.source = ${INVOICE_LINE_SOURCE.TIME_ENTRY} AND l.released_at IS NULL AND i.status <> ${INVOICE_STATUS.VOID} AND i.currency <> ${currency} ${excludeInvoiceId ? sql`AND i.id <> ${excludeInvoiceId}` : sql``}))::text`,
+    approvedMismatchCount: sql<string>`(SELECT COUNT(*) FROM ${timeEntries} e WHERE e.workspace_id = ${workspaceId} AND e.activity_group = ${TIME_ENTRY_ACTIVITY_GROUP.CLIENT} AND e.status = 'approved' AND e.invoice_id IS NULL AND e.billable AND NOT e.no_charge AND e.currency <> ${currency})::text`,
   };
 };
 
@@ -135,12 +138,15 @@ export const readBillingUsage = async (
   const row = result.at(0) ?? panic("Billing aggregate returned no row");
   const billedAmount = BigInt(row.billedAmount);
   const approvedAmount = BigInt(row.approvedAmount);
+  const billedMismatchCount = BigInt(row.billedMismatchCount);
+  const mismatchCount = billedMismatchCount + BigInt(row.approvedMismatchCount);
   return {
     billedAmount,
     approvedAmount,
     totalAmount: billedAmount + approvedAmount,
-    mismatchCount: BigInt(row.mismatchCount),
-    currencyMismatch: row.mismatchCount !== "0",
+    mismatchCount,
+    currencyMismatch: mismatchCount !== 0n,
+    billedCurrencyMismatch: billedMismatchCount !== 0n,
   };
 };
 
@@ -201,9 +207,13 @@ export const recordBillingCapCrossingsForMatters = async (
     arrangement,
     billedAmount,
     approvedAmount,
-    mismatchCount,
+    billedMismatchCount,
+    approvedMismatchCount,
   } of rows) {
     const { workspaceId } = arrangement;
+    const mismatchCount = (
+      BigInt(billedMismatchCount) + BigInt(approvedMismatchCount)
+    ).toString();
     if (mismatchCount !== "0") {
       if (arrangement.currencyState === "mismatch") {
         continue;
