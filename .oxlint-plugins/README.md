@@ -302,3 +302,5 @@ implies a hazard that is gone.
 
 - [no-swallowed-item-error](./no-swallowed-item-error.ts): `no-swallowed-item-error` rejects empty or constant fallback handlers inside item loops and iteration callbacks; existing sites use SHA-256 fingerprints of enclosing try/catch or promise-call token values, with reasoned, shrink-only budgets in [the handler ledger](../scripts/swallowed-item-error-ledger.json). The current production debt is optional text-link URL decoding in `cz-us.ts`. It does not prove arbitrary handler bodies record a failure.
 - [no-parser-validator-calls](./no-parser-validator-calls.ts): `no-parser-validator-calls` confines text-retention validation to the ingestion pipeline, with a shrinking legacy import/call ledger.
+
+- [`no-direct-clause-variant-insert`](./no-direct-clause-variant-insert.ts) (`no-direct-clause-variant-insert`): confines variant insertion to the owner that locks parents, checks tenant ownership and capacity, and audits atomically. Imported aliases, namespaces, and constant aliases are resolved; fixture and test seeding remain allowed.

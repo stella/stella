@@ -14,6 +14,8 @@ import { createCursorPage } from "@/api/lib/pagination";
 import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedClauseId } from "@/api/lib/safe-id-boundaries";
 
+import { clauseVariantReadLimit } from "./variant-read";
+
 // ── Cursor helpers ───────────────────────────────────
 
 const clauseCursor = createTimestampIdCursorCodec({
@@ -184,8 +186,13 @@ export const getClauseHandler = async function* ({
   clauseId,
 }: GetClauseProps) {
   const clause = yield* Result.await(
-    safeDb((tx) =>
-      tx.query.clauses.findFirst({
+    safeDb(async (tx) => {
+      const variantLimit = await clauseVariantReadLimit({
+        tx,
+        organizationId,
+        clauseId,
+      });
+      return await tx.query.clauses.findFirst({
         where: {
           id: { eq: clauseId },
           organizationId: { eq: organizationId },
@@ -213,8 +220,8 @@ export const getClauseHandler = async function* ({
               sortOrder: true,
               createdAt: true,
             },
-            orderBy: { sortOrder: "asc" },
-            limit: LIMITS.clauseVariantsPerClause,
+            orderBy: { sortOrder: "asc", createdAt: "asc", id: "asc" },
+            limit: variantLimit,
           },
           versions: {
             columns: {
@@ -226,8 +233,8 @@ export const getClauseHandler = async function* ({
             limit: LIMITS.clauseVersionsPerClause,
           },
         },
-      }),
-    ),
+      });
+    }),
   );
 
   if (!clause) {
