@@ -1,7 +1,6 @@
 import { panic, Result } from "better-result";
 
 import {
-  defaultConfig,
   initialBatchState,
   nextBatch,
   type BatchState,
@@ -14,6 +13,7 @@ import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
 
+import { REPLAY_HEALTH_CONFIG } from "./replay-enrolment";
 import {
   classifyReplayFailure,
   replayFailure,
@@ -521,7 +521,7 @@ export const runBackgroundReplayTick = async ({
   dependencies,
   maxRows,
   maxDurationMs,
-  healthConfig = defaultConfig,
+  healthConfig = REPLAY_HEALTH_CONFIG,
   signal,
 }: BackgroundReplayTickOptions): Promise<BackgroundReplayTickReport> => {
   if (

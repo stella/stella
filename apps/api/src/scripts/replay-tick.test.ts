@@ -1,14 +1,23 @@
 import { describe, expect, test } from "bun:test";
 
-import type { Verdict } from "@stll/db-load-gate/health";
+import {
+  combine,
+  initialBatchState,
+  type Verdict,
+} from "@stll/db-load-gate/health";
+import { ebsBalance } from "@stll/db-load-gate/indicators";
 
 import { readReplayTickEnvironment } from "@/api/env-replay";
 import type { BackgroundReplayTickReport } from "@/api/handlers/case-law/ingestion/background-replay";
-import { REPLAY_ENROLMENT } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import {
+  REPLAY_ENROLMENT,
+  REPLAY_HEALTH_CONFIG,
+} from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import {
   assertReplaySlot,
+  createReplayPreflightGate,
   readReplayGate,
   replayTickMetricRecord,
   runReplayTickScript,
@@ -495,5 +504,42 @@ describe("replay runtime boundaries", () => {
       Mode: source.mode,
       ...values,
     });
+  });
+});
+
+describe("replay load hysteresis", () => {
+  test("preflight preserves a load hold until the configured resume floor", async () => {
+    let clock = Date.parse("2026-10-02T10:00:00Z");
+    let balance = REPLAY_HEALTH_CONFIG.hardFloor - 1;
+    let saved = initialBatchState(REPLAY_HEALTH_CONFIG);
+    const gate = createReplayPreflightGate({
+      clock: () => clock,
+      loadState: async () => saved,
+      saveState: async (state) => {
+        saved = state;
+      },
+      readVerdict: async () => {
+        const signal = await ebsBalance({
+          config: REPLAY_HEALTH_CONFIG,
+          now: () => clock,
+          read: async () => ({
+            byteBalancePct: balance,
+            ioBalancePct: balance,
+            observedAt: new Date(clock).toISOString(),
+          }),
+        });
+        return combine([signal]);
+      },
+    });
+    expect((await gate.readVerdict()).kind).toBe("unknown");
+    expect(saved.holdCause).toBe("load");
+    clock = (saved.holdUntil ?? clock) + 1;
+    balance = REPLAY_HEALTH_CONFIG.resumeFloor - 1;
+    expect((await gate.readVerdict()).kind).toBe("unknown");
+    expect(saved.holdCause).toBe("load");
+    clock = (saved.holdUntil ?? clock) + 1;
+    balance = REPLAY_HEALTH_CONFIG.resumeFloor;
+    expect((await gate.readVerdict()).kind).toBe("normal");
+    expect(saved.holdCause).toBeNull();
   });
 });

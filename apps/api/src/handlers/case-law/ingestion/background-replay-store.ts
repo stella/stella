@@ -19,6 +19,7 @@ import {
 } from "@stll/db-load-gate/health";
 import { DAY_IN_MS } from "@stll/time";
 
+import { decodeCheckpoint } from "@/api/db/backfill-runtime";
 import type { Transaction } from "@/api/db/root";
 import {
   CASE_LAW_CORPUS_MIRROR_STATUS,
@@ -615,7 +616,8 @@ const lockCheckpoint = async (
       .for("update")
       .limit(1)
   ).at(0);
-  return state ?? panic("Replay checkpoint was not created");
+  if (state === undefined) {panic("Replay checkpoint was not created");}
+  return { ...state, batch: decodeCheckpoint(state).batch };
 };
 type PendingBatchOptions = {
   source: BackgroundReplaySource;
@@ -647,7 +649,9 @@ const loadGateState = async (
         .where(eq(databaseBackfillStates.name, checkpointName(source)))
         .limit(1)
     ).at(0);
-    return row?.batch ?? { ...initialBatchState(), size: 1 };
+    return row === undefined
+      ? { ...initialBatchState(), size: 1 }
+      : decodeCheckpoint(row).batch;
   });
 type SaveGateStateOptions = {
   source: BackgroundReplaySource | null;
@@ -1100,6 +1104,7 @@ const recordFailure = async (
             ...checkpoint.batch,
             holdCount: systemicHoldCount,
             heldSince: checkpoint.batch.heldSince ?? now(),
+            holdCause: "other" as const,
             holdUntil: now() + sourceDelay,
           }
         : checkpoint.batch;
@@ -1618,17 +1623,18 @@ export const createBackgroundReplayStore = ({
     pickUpBatch: async (batch: BackgroundReplayBatch) =>
       await pickUpBatch(context, batch),
     loadPreflightGateState: async (): Promise<BatchState> =>
-      await withReplayTransaction(
-        db,
-        async (tx) =>
-          (
-            await tx
-              .select({ batch: databaseBackfillStates.batch })
-              .from(databaseBackfillStates)
-              .where(eq(databaseBackfillStates.name, PREFLIGHT_CHECKPOINT))
-              .limit(1)
-          ).at(0)?.batch ?? initialBatchState(),
-      ),
+      await withReplayTransaction(db, async (tx) => {
+        const row = (
+          await tx
+            .select()
+            .from(databaseBackfillStates)
+            .where(eq(databaseBackfillStates.name, PREFLIGHT_CHECKPOINT))
+            .limit(1)
+        ).at(0);
+        return row === undefined
+          ? initialBatchState()
+          : decodeCheckpoint(row).batch;
+      }),
     savePreflightGateState: async (batch: BatchState) =>
       await saveGateState(context, { source: null, batch }),
     recordTick: async (report: BackgroundReplayTickReport) =>
