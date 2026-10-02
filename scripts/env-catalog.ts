@@ -58,6 +58,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "ACTION_ADMISSION_LEASE_MS",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
+  "ACTION_REQUEST_MAX_BYTES",
+  "ACTION_RESPONSE_MAX_BYTES",
+  "ACTION_PAGE_SIZE_MAX",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -778,6 +781,8 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // ci-result evaluates each independently scoped suite in folded jobs.
+  "FOLDED_SUITES",
   // Preserve Bun global-store links inside browser containers.
   "BUN_INSTALL_CACHE_DIR",
   // Browser commands use only executables baked into the pinned image.

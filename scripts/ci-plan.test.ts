@@ -377,6 +377,11 @@ const jobScopes = v.parse(
   JSON.parse(resultStep.env["JOB_SCOPES"] ?? ""),
 );
 
+const foldedSuites = v.parse(
+  v.record(v.string(), v.record(v.string(), v.string())),
+  JSON.parse(resultStep.env["FOLDED_SUITES"] ?? ""),
+);
+
 const EVENT = {
   mergeGroup: "merge_group",
   pullRequest: "pull_request",
@@ -396,6 +401,7 @@ type EvaluateResultOptions = {
   unplannedScopes?: readonly string[];
   /** The pull request's draft state as the API reports it now; unset fails the lookup. */
   liveDraft?: boolean;
+  suiteResults?: Record<string, string>;
   cancellationEvidence?: "superseded" | "timeout" | "missing" | "wrong-group";
   apiFailure?: "current-run" | "runs" | "jobs" | "annotations";
   newerRun?:
@@ -466,6 +472,7 @@ const evaluateResult = ({
     : SUITE_DEPTH.full,
   unplannedScopes = [],
   liveDraft,
+  suiteResults = {},
   cancellationEvidence = "timeout",
   apiFailure,
   missingJob = false,
@@ -474,7 +481,10 @@ const evaluateResult = ({
   queuedCancellation,
 }: EvaluateResultOptions) => {
   const plan = Object.fromEntries(
-    Object.values(jobScopes).flatMap((scope) =>
+    [
+      ...Object.values(jobScopes),
+      ...Object.values(foldedSuites).flatMap(Object.values),
+    ].flatMap((scope) =>
       scope === null
         ? []
         : [[scope, unplannedScopes.includes(scope) ? "false" : "true"]],
@@ -483,7 +493,15 @@ const evaluateResult = ({
   const needs = Object.fromEntries(
     resultJob.needs.map((job) => [
       job,
-      { result: results[job] ?? "success", outputs: {} },
+      {
+        result: results[job] ?? "success",
+        outputs: Object.fromEntries(
+          Object.keys(foldedSuites[job] ?? {}).map((suite) => [
+            suite,
+            suiteResults[suite] ?? "success",
+          ]),
+        ),
+      },
     ]),
   );
   const group =
@@ -582,6 +600,7 @@ const evaluateResult = ({
       FAKE_ANNOTATIONS: JSON.stringify(checkAnnotations),
       FAKE_LIVE_DRAFT: liveDraft === undefined ? "" : String(liveDraft),
       JOB_SCOPES: resultStep.env["JOB_SCOPES"] ?? "",
+      FOLDED_SUITES: resultStep.env["FOLDED_SUITES"] ?? "",
       NEEDS: JSON.stringify(needs),
       FAST_REQUIRED: resultStep.env["FAST_REQUIRED"] ?? "",
       PATH: `${fakeGhDirectory}:${process.env["PATH"] ?? ""}`,
@@ -1370,6 +1389,173 @@ test("manual full-depth runs leave the merge-group-only exact-base job unplanned
     );
   } finally {
     rmSync(directory, { force: true, recursive: true });
+  }
+});
+
+test("folded Docker suites keep their scopes and fail independently, including missing or cancelled verdicts", () => {
+  expect(foldedSuites["docker-checks"]).toEqual({
+    "agent-sandbox-docker": "agent_sandbox_docker_required",
+    "api-image-deps": "api_image_deps_required",
+  });
+  for (const [job, suites] of Object.entries(foldedSuites)) {
+    const body = v.parse(
+      v.object({
+        outputs: v.record(v.string(), v.string()),
+        steps: v.array(
+          v.object({
+            id: v.optional(v.string()),
+            if: v.optional(v.string()),
+            run: v.optional(v.string()),
+          }),
+        ),
+      }),
+      ciJobs[job],
+    );
+    expect(new Set(Object.keys(body.outputs))).toEqual(
+      new Set(Object.keys(suites)),
+    );
+    for (const [suite, scope] of Object.entries(suites)) {
+      expect(
+        body.steps.some((step) =>
+          step.if?.includes(`needs.ci-plan.outputs.${scope} == 'true'`),
+        ),
+      ).toBe(true);
+      for (const verdict of [
+        "failure",
+        "cancelled",
+        "skipped",
+        "timed_out",
+        "",
+      ]) {
+        expect(
+          evaluateResult({
+            event: EVENT.mergeGroup,
+            results: {},
+            suiteResults: { [suite]: verdict },
+          }),
+          `${suite}: ${verdict}`,
+        ).toBe(1);
+        expect(
+          evaluateResult({
+            event: EVENT.mergeGroup,
+            results: {},
+            suiteResults: { [suite]: verdict },
+            unplannedScopes: [scope],
+          }),
+          `${suite}: unplanned ${verdict}`,
+        ).toBe(0);
+      }
+    }
+    const sandboxVerdict = body.outputs["agent-sandbox-docker"] ?? "";
+    const sandboxSteps = body.steps.filter(
+      (step) =>
+        step.id !== undefined &&
+        step.if?.includes(
+          "needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'",
+        ),
+    );
+    const verdictSteps = [
+      ...sandboxVerdict.matchAll(/steps\.([\w-]+)\.outcome == 'success'/gu),
+    ].map((match) => match.at(1));
+    expect(new Set(verdictSteps)).toEqual(
+      new Set(sandboxSteps.map((step) => step.id)),
+    );
+    const api = body.steps.find((step) => step.id === "api-deps");
+    expect(api?.if).toContain("!cancelled()");
+    expect(api?.run).toContain("--frozen-lockfile --ignore-scripts");
+    expect(api?.run).toContain(
+      "--production --frozen-lockfile --ignore-scripts",
+    );
+    expect(api?.run).toContain(
+      "bun apps/legal-atlas-runner/dist/index.js smoke",
+    );
+    expect(body.outputs["agent-sandbox-docker"]).toContain(
+      "steps.isolation.outcome == 'success'",
+    );
+    expect(body.outputs["agent-sandbox-docker"]).toContain(
+      "steps.cleanup.outcome == 'success'",
+    );
+    expect(body.outputs["api-image-deps"]).toBe(
+      ["$", "{{ steps.api-deps.outcome }}"].join(""),
+    );
+  }
+});
+
+test("the Docker fold is planned by either original scope without changing the suite selectors", () => {
+  for (const files of [
+    [],
+    ["README.md"],
+    ["scripts/retry.sh"],
+    ["apps/api/src/index.ts"],
+    ["bun.lock"],
+  ]) {
+    const [sandbox, imageDeps, folded] = runSelector(
+      files,
+      [
+        "agent_sandbox_docker_required",
+        "api_image_deps_required",
+        "docker_checks_required",
+      ],
+      "full",
+    );
+    expect(folded).toBe(
+      sandbox === "true" || imageDeps === "true" ? "true" : "false",
+    );
+  }
+});
+
+test("folded image checks preserve separate working directories for frozen installs and production smoke", () => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "folded-image-deps-"));
+  const bin = nodePath.join(directory, "bin");
+  mkdirSync(bin);
+  mkdirSync(nodePath.join(directory, "apps"));
+  mkdirSync(nodePath.join(directory, "packages"));
+  writeFileSync(nodePath.join(directory, "bun.lock"), "{}");
+  writeFileSync(nodePath.join(directory, "package.json"), "{}");
+  writeFileSync(
+    nodePath.join(bin, "bun"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+printf '%s:%s\n' "$PWD" "$*" >> "$0.log"
+case "$*" in
+  -p*) echo 2.0.0 ;;
+  *'run case-law-ingest __smoke__') echo 'Unknown adapter: __smoke__'; exit 1 ;;
+esac
+`,
+    { mode: 0o755 },
+  );
+  writeFileSync(
+    nodePath.join(bin, "turbo"),
+    `#!/usr/bin/env bash
+set -euo pipefail
+[[ "$*" == "prune @stll/legal-atlas-runner --docker --out-dir out-runner" ]]
+mkdir -p out-runner/full
+`,
+    { mode: 0o755 },
+  );
+  const api = jobSteps(ciJobs["docker-checks"]).find(
+    ({ name }) => name === "Check image dependency trees and production runner",
+  );
+  try {
+    const result = Bun.spawnSync(["bash", "-eu", "-c", api?.run ?? "exit 1"], {
+      cwd: directory,
+      env: { PATH: `${bin}:${process.env["PATH"] ?? ""}` },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(result.exitCode, new TextDecoder().decode(result.stderr)).toBe(0);
+    const commands = readFileSync(nodePath.join(bin, "bun.log"), "utf-8");
+    expect(commands).toContain(
+      `${directory}/api-install:install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts`,
+    );
+    expect(commands).toContain(
+      `${directory}/runner-install:install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts`,
+    );
+    expect(commands).toContain(
+      `${directory}/runner-install:apps/legal-atlas-runner/dist/index.js smoke`,
+    );
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
   }
 });
 

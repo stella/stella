@@ -56,6 +56,7 @@ jobs:
       suite_depth: ${{ steps.depth.outputs.suite_depth }}
       agent_sandbox_docker_required: ${{ steps.changed-files.outputs.agent_sandbox_docker_required }}
       api_image_deps_required: ${{ steps.changed-files.outputs.api_image_deps_required }}
+      docker_checks_required: ${{ steps.changed-files.outputs.docker_checks_required }}
       # JSON matrix `include` list for api-image-smoke.
       api_image_platforms: ${{ steps.changed-files.outputs.api_image_platforms }}
       api_image_smoke_required: ${{ steps.changed-files.outputs.api_image_smoke_required }}
@@ -233,6 +234,7 @@ jobs:
             {
               echo "agent_sandbox_docker_required=true"
               echo "api_image_deps_required=true"
+              echo "docker_checks_required=true"
               echo 'api_image_platforms=[{"runner":"ubuntu-24.04-arm","platform":"linux/arm64"},{"runner":"ubuntu-latest","platform":"linux/amd64"}]'
               echo "api_image_smoke_required=true"
               echo "collab_redis_required=true"
@@ -266,6 +268,7 @@ jobs:
             {
               echo "agent_sandbox_docker_required=false"
               echo "api_image_deps_required=false"
+              echo "docker_checks_required=false"
               echo "api_image_platforms=[]"
               echo "api_image_smoke_required=false"
               echo "collab_redis_required=false"
@@ -505,6 +508,11 @@ jobs:
             landing_build_required=false
           fi
 
+          docker_checks_required=false
+          if [[ "$agent_sandbox_docker_required" == "true" || "$api_image_deps_required" == "true" ]]; then
+            docker_checks_required=true
+          fi
+
           # The production e2e shards consume web-build's artifact, so any
           # e2e-triggering change must also produce a web build.
           if [[ "$e2e_core_required" == "true" ]]; then
@@ -516,6 +524,7 @@ jobs:
           {
             echo "agent_sandbox_docker_required=$agent_sandbox_docker_required"
             echo "api_image_deps_required=$api_image_deps_required"
+            echo "docker_checks_required=$docker_checks_required"
             echo "api_image_platforms=$api_image_platforms"
             echo "api_image_smoke_required=$api_image_smoke_required"
             echo "collab_redis_required=$collab_redis_required"
@@ -552,16 +561,16 @@ jobs:
   # receives no secrets, keeps the token read-only, and runs on an ephemeral
   # hosted runner. Same-repository branches run immediately; forks wait for
   # the repository's Actions approval gate.
-  agent-sandbox-docker:
-    name: Agent sandbox Docker isolation and lifecycle
+  docker-checks:
+    name: Sandbox Docker and image dependency checks
     needs: ci-plan
     if: >-
       (needs.ci-plan.outputs.trusted == 'true'
        || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+      && needs.ci-plan.outputs.docker_checks_required == 'true'
       && needs.ci-plan.outputs.suite_depth == 'full'
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 35
     permissions:
       contents: read
     env:
@@ -569,6 +578,9 @@ jobs:
       AGENT_ENGINE_DOCKER_NETWORK: stella-agent-ci-${{ github.run_id }}-${{ github.run_attempt }}
       AGENT_ENGINE_DOCKER_CANARY_URL: http://stella-agent-network-canary:8787/health
       NETWORK_CANARY_CONTAINER: stella-agent-network-canary-${{ github.run_id }}-${{ github.run_attempt }}
+    outputs:
+      agent-sandbox-docker: ${{ steps.install.outcome == 'success' && steps.protocol.outcome == 'success' && steps.pull.outcome == 'success' && steps.image.outcome == 'success' && steps.network.outcome == 'success' && steps.canary.outcome == 'success' && steps.isolation.outcome == 'success' && steps.assert-cleanup.outcome == 'success' && steps.cleanup.outcome == 'success' && 'success' || 'failure' }}
+      api-image-deps: ${{ steps.api-deps.outcome }}
     steps:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -581,17 +593,25 @@ jobs:
           bun-version-file: "package.json"
 
       - name: Install dependencies
+        id: install
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         run: bash scripts/retry.sh bun ci --ignore-scripts
         env:
           NPM_TOKEN: ""
 
       - name: Run protocol and malformed-stream tests
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        id: protocol
         run: bun --filter @stll/agent-engine test
 
       - name: Pull sandbox base images
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        id: pull
         run: bash scripts/pull-base-images.sh packages/agent-engine/docker/sandbox.Dockerfile
 
       - name: Build pinned sandbox image
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        id: image
         run: >-
           docker build
           --file packages/agent-engine/docker/sandbox.Dockerfile
@@ -599,9 +619,13 @@ jobs:
           packages/agent-engine/docker
 
       - name: Create internal sandbox network
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        id: network
         run: docker network create --internal "$AGENT_ENGINE_DOCKER_NETWORK"
 
       - name: Start the only reachable network canary
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        id: canary
         run: |
           bun build packages/agent-engine/scripts/mcp-canary-server.ts \
             --target=node \
@@ -628,11 +652,15 @@ jobs:
           exit 1
 
       - name: Exercise Docker provider isolation and cleanup
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        id: isolation
         env:
           AGENT_ENGINE_DOCKER_TEST: "1"
         run: bun test packages/agent-engine/src/bun-docker/provider.integration.test.ts
 
       - name: Assert provider left no sandbox containers
+        if: needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
+        id: assert-cleanup
         run: |
           mapfile -t container_ids < <(
             docker ps --all --no-trunc --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE"
@@ -644,10 +672,75 @@ jobs:
           fi
 
       - name: Cleanup Docker resources
-        if: always()
+        id: cleanup
+        if: always() && needs.ci-plan.outputs.agent_sandbox_docker_required == 'true'
         run: |
           docker ps --all --quiet --filter "ancestor=$AGENT_ENGINE_DOCKER_IMAGE" | xargs --no-run-if-empty docker rm --force
           docker network rm "$AGENT_ENGINE_DOCKER_NETWORK" 2>/dev/null || true
+
+      - name: Check image dependency trees and production runner
+        id: api-deps
+        timeout-minutes: 10
+        if: ${{ !cancelled() && needs.ci-plan.outputs.api_image_deps_required == 'true' }}
+        env:
+          NPM_TOKEN: ""
+        run: |
+          set -euo pipefail
+          echo "::group::Install turbo"
+          (
+            bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
+          )
+          echo ::endgroup::
+          echo "::group::Prepare Docker install inputs"
+          (
+            set -euo pipefail
+            rm -rf install-json
+            mkdir -p install-json
+            cp bun.lock package.json install-json/
+            for input in bunfig.toml .npmrc patches; do
+              [ ! -e "$input" ] || cp -a "$input" install-json/
+            done
+            find apps packages -mindepth 2 -maxdepth 2 -name package.json \
+              -not -path '*/node_modules/*' \
+              -exec cp --parents -t install-json/ {} +
+          )
+          echo ::endgroup::
+          echo "::group::Install API image deps with frozen root lockfile"
+          (
+            set -euo pipefail
+            rm -rf api-install
+            cp -a install-json api-install
+            cd api-install
+            bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
+          )
+          echo ::endgroup::
+          echo "::group::Prod-deps legal atlas runner smoke"
+          (
+            set -euo pipefail
+            rm -rf out-runner
+            turbo prune @stll/legal-atlas-runner --docker --out-dir out-runner
+            rm -rf runner-install
+            cp -a install-json runner-install
+            cd runner-install
+            bun install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts
+            cp -a ../out-runner/full/. .
+            bun --filter @stll/legal-atlas-runner build
+            bun apps/legal-atlas-runner/dist/index.js smoke
+            set +e
+            out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
+                  S3_ENDPOINT=http://localhost \
+                  S3_BUCKET=smoke \
+                  S3_REGION=eu-central-1 \
+                  bun apps/legal-atlas-runner/dist/index.js run case-law-ingest __smoke__ 2>&1)
+            status=$?
+            set -e
+            echo "$out"
+            if ! echo "$out" | grep -q 'Unknown adapter: __smoke__'; then
+              echo "ERROR: legal-atlas runner smoke failed under --production (exit=$status)" >&2
+              exit 1
+            fi
+          )
+          echo ::endgroup::
 
   # Parser versions must advance whenever an adapter's parser inputs change.
   # This guard reads Git history and needs no dependency installation.
@@ -3608,93 +3701,6 @@ jobs:
             done <<< "${lines:-docker build failed}"
           fi
 
-  # Image dependency guard. The API image and legal-atlas-runner Dockerfile use
-  # Turbo only for pruned source overlays; dependency installs come from the
-  # committed root bun.lock plus every workspace package.json so Bun remains
-  # the lockfile source of truth. Mirror that install path here so deploy-time
-  # lockfile drift fails the PR instead of the deploy.
-  #
-  # The job then runs the legal atlas runner production smoke against a
-  # production-only dependency tree; api-image-smoke builds the API image
-  # itself.
-  api-image-deps:
-    needs: ci-plan
-    if: >-
-      (needs.ci-plan.outputs.trusted == 'true'
-       || github.event_name == 'workflow_dispatch')
-      && needs.ci-plan.outputs.api_image_deps_required == 'true'
-      && needs.ci-plan.outputs.suite_depth == 'full'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    permissions:
-      contents: read
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Setup Bun
-        uses: stella/.github/actions/setup-bun-cached@28f9f43d5c1e820500f8526a5527465bcbcdf425
-        with:
-          save: ${{ github.ref == 'refs/heads/main' }}
-
-      - name: Install turbo
-        # Turbo is only used for pruned source overlays.
-        run: bun install -g "turbo@$(bun -p 'require("./package.json").devDependencies.turbo')"
-
-      - name: Prepare Docker install inputs
-        run: |
-          set -euo pipefail
-          rm -rf install-json
-          mkdir -p install-json
-          cp bun.lock package.json install-json/
-          for input in bunfig.toml .npmrc patches; do
-            [ ! -e "$input" ] || cp -a "$input" install-json/
-          done
-          find apps packages -mindepth 2 -maxdepth 2 -name package.json \
-            -not -path '*/node_modules/*' \
-            -exec cp --parents -t install-json/ {} +
-
-      - name: Install API image deps with frozen root lockfile
-        run: |
-          set -euo pipefail
-          rm -rf api-install
-          cp -a install-json api-install
-          cd api-install
-          bun install --filter @stll/api --filter @stll/collab --filter @stll/legal-atlas-runner --frozen-lockfile --ignore-scripts
-        env:
-          NPM_TOKEN: ""
-
-      - name: Prod-deps legal atlas runner smoke
-        run: |
-          set -euo pipefail
-          rm -rf out-runner
-          turbo prune @stll/legal-atlas-runner --docker --out-dir out-runner
-          rm -rf runner-install
-          cp -a install-json runner-install
-          cd runner-install
-          bun install --filter @stll/legal-atlas-runner --production --frozen-lockfile --ignore-scripts
-          cp -a ../out-runner/full/. .
-          bun --filter @stll/legal-atlas-runner build
-          bun apps/legal-atlas-runner/dist/index.js smoke
-          set +e
-          out=$(DATABASE_URL=postgres://smoke:smoke@localhost:5432/smoke \
-                S3_ENDPOINT=http://localhost \
-                S3_BUCKET=smoke \
-                S3_REGION=eu-central-1 \
-                bun apps/legal-atlas-runner/dist/index.js run case-law-ingest __smoke__ 2>&1)
-          status=$?
-          set -e
-          echo "$out"
-          if ! echo "$out" | grep -q 'Unknown adapter: __smoke__'; then
-            echo "ERROR: legal-atlas runner smoke failed under --production (exit=$status)" >&2
-            exit 1
-          fi
-        env:
-          NPM_TOKEN: ""
-
   legal-atlas-image:
     needs: ci-plan
     if: >-
@@ -3949,7 +3955,7 @@ jobs:
       [
         ci-plan,
         dependency-malware,
-        agent-sandbox-docker,
+        docker-checks,
         parser-version-guard,
         ci-checks-generated,
         ci-checks-policy,
@@ -3973,7 +3979,6 @@ jobs:
         e2e-vite-canary,
         e2e-landing,
         stack-redaction-browsers,
-        api-image-deps,
         api-image-smoke,
         legal-atlas-image,
         windows-scripts,
@@ -4006,8 +4011,7 @@ jobs:
           # entry to its job's `if:`, and a job missing here fails the run.
           JOB_SCOPES: >-
             {
-            "agent-sandbox-docker": "agent_sandbox_docker_required",
-            "api-image-deps": "api_image_deps_required",
+            "docker-checks": "docker_checks_required",
             "api-image-smoke": "api_image_smoke_required",
             "ci-browser": null,
             "ci-checks-generated": null,
@@ -4037,6 +4041,8 @@ jobs:
             "web-image-smoke": "web_image_smoke_required",
             "windows-scripts": "windows_scripts_required"
             }
+          FOLDED_SUITES: >-
+            {"docker-checks": {"agent-sandbox-docker": "agent_sandbox_docker_required", "api-image-deps": "api_image_deps_required"}}
           # Jobs a fast-depth run must also see succeed once their scope is
           # planned; any other job may skip there.
           FAST_REQUIRED: >-
@@ -4129,6 +4135,14 @@ jobs:
                     else "\($job) (\($result))"
                     end]
                 | join(", ")' <<< "$NEEDS")
+              folded_violations=$(jq -r --argjson plan "$PLAN" --argjson suites "$FOLDED_SUITES" '
+                . as $needs
+                | [$suites | to_entries[] | .key as $job | .value | to_entries[]
+                  | select($plan[.value] == "true") | .key as $suite
+                  | ($needs[$job].outputs[$suite] // "missing") as $result
+                  | select($result != "success") | "\($suite) (planned, \($result))"]
+                | join(", ")' <<< "$NEEDS")
+              violations="${violations}${violations:+${folded_violations:+, }}${folded_violations}"
               if [[ -n "$violations" ]]; then
                 echo "::error::CI checks did not succeed: $violations"
                 exit 1
