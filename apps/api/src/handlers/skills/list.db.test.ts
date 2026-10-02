@@ -253,6 +253,34 @@ describe("a listed skill's last edit", () => {
     });
   });
 
+  test("is unattributed for a starter skill edited by a member who has left", async () => {
+    const editorId = mintAuthProviderId<"user">();
+    await testDb.insert(user).values({
+      id: editorId,
+      name: "Former Member",
+      email: `${editorId}@test.local`,
+    });
+    const membershipId = mintAuthProviderIdValue();
+    await testDb.insert(member).values({
+      id: membershipId,
+      organizationId: ids.orgB,
+      userId: editorId,
+      role: "member",
+      createdAt: new Date(),
+    });
+    const skillId = await insertListedSkill("default");
+    const at = new Date("2026-09-01T10:00:00.000Z");
+    await insertRevision({
+      skillId,
+      revisionNumber: 2,
+      createdBy: editorId,
+      updatedAt: at,
+    });
+    await testDb.delete(member).where(eq(member.id, membershipId));
+
+    expect(await lastEditOf(skillId)).toEqual({ type: "unattributed", at });
+  });
+
   test("does not sign an unedited catalogue skill as stella", async () => {
     const skillId = await insertListedSkill("bundled");
 

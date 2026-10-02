@@ -102,10 +102,11 @@ const decodeSkillCursor = (cursor: string): SkillCursor | null => {
 
 /**
  * Who wrote a skill's newest revision. `stella` is a starter skill (origin
- * `default`) no member has edited. `unattributed` covers other system writes,
- * deleted accounts, and authors who have left the organization: names resolve
- * through the membership so they never leak across organizations. `null`
- * means the skill has no recorded revision.
+ * `default`) whose newest revision is a system write, so no member has edited
+ * it. `unattributed` covers other system writes, deleted accounts, and authors
+ * who have left the organization: names resolve through the membership so they
+ * never leak across organizations. `null` means the skill has no recorded
+ * revision.
  */
 type SkillLastEdit =
   | {
@@ -119,6 +120,7 @@ type SkillLastEdit =
 type ReadSkillLastEditInput = {
   at: Date | null;
   origin: AgentSkillOrigin;
+  authorId: string | null;
   editorId: string | null;
   editorName: string | null;
   editorImage: string | null;
@@ -126,6 +128,7 @@ type ReadSkillLastEditInput = {
 
 const readSkillLastEdit = ({
   at,
+  authorId,
   editorId,
   editorName,
   editorImage,
@@ -134,10 +137,14 @@ const readSkillLastEdit = ({
   if (at === null) {
     return null;
   }
-  if (editorId === null || editorName === null) {
+  if (authorId === null) {
     return origin === "default"
       ? { type: "stella", at }
       : { type: "unattributed", at };
+  }
+  // An author with no membership here has left the organization.
+  if (editorId === null || editorName === null) {
+    return { type: "unattributed", at };
   }
   return {
     type: "user",
@@ -247,6 +254,7 @@ const listSkills = createSafeRootHandler(
             userId: agentSkills.userId,
             createdAt: agentSkills.createdAt,
             lastEditAt: latestRevision.updatedAt,
+            lastEditAuthorId: latestRevision.createdBy,
             editorId: user.id,
             editorName: user.name,
             editorImage: user.image,
@@ -294,10 +302,18 @@ const listSkills = createSafeRootHandler(
         resourceCount: listSkillResources(skill.name).length,
       })),
       installed: installedPage.items.map(
-        ({ lastEditAt, editorId, editorName, editorImage, ...skill }) => ({
+        ({
+          lastEditAt,
+          lastEditAuthorId,
+          editorId,
+          editorName,
+          editorImage,
+          ...skill
+        }) => ({
           ...skill,
           lastEdit: readSkillLastEdit({
             at: lastEditAt,
+            authorId: lastEditAuthorId,
             editorId,
             editorName,
             editorImage,
