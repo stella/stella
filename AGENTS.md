@@ -330,17 +330,27 @@ Merges go through `bun scripts/merge-bar.ts <pr>`: it re-reads PR state,
 mergeability, the required checks on the exact head SHA, unresolved review
 threads, and migration identity (no merged migration renamed or deleted) in
 one invocation, then
-arms "merge when ready" pinned to that head; a release pull request
-(`chore: release v…`) is instead enqueued at the front of the queue, and
-`--jump` does the same for any pull request. Main has a merge queue: GitHub
+arms "merge when ready" pinned to that head. Release pull requests queue
+normally; only an explicit `--jump` enqueues a pull request at the front.
+Main has a merge queue: GitHub
 builds main plus the pull request, runs CI on that commit, and merges only if
 it passes, so nothing needs a rebase to land and nothing lands past a red
 check. Run the bar once the PR is ready and the user has authorized merging;
 an authorization given earlier in the conversation stands, do not ask again.
 Raw `gh pr merge` asserts nothing and reads an empty check list as green.
 A jump needs every required check green first: while checks run, the bar arms
-nothing and exits non-zero, and after enqueueing it fails unless a fresh queue
-read shows the pull request first.
+nothing and exits non-zero (`NOT JUMPED`). After enqueueing, one fresh queue
+read determines the result: exit 0 verifies the pull request is first. When
+the queue lists the pull request, that entry takes precedence over the enqueue
+response. A recorded jump at position greater than 1 exits 2 with `JUMP PENDING`,
+the position and state, and the one-shot follow-up command
+`pw sub pr <repo>#<n> --on merged,closed,checks-failed`.
+If the queue does not list a newly enqueued pull request yet, a recorded jump
+in the enqueue response also exits 2 with the same follow-up command and says
+the queue read did not list it yet. If first place is not verified, exit 1
+reports `JUMP DROPPED` when the jump flag is false or missing, the queue entry
+conflicts, or the pull request is absent and there is no enqueue response
+(for an already queued pull request).
 
 ## Documentation Access
 
@@ -360,3 +370,12 @@ index or page.
 Convention and suppression ratchets may only tighten. Every lint suppression names
 a rule and reason; security-tier suppressions also need a waiver. Type-cost baseline
 increases require PR justification and are never a mechanical way to pass CI.
+
+## Property Failure Discipline
+
+A failing property seed is a real bug: fix it, then pin it with a neutral note
+in `packages/property-testing/property-seeds.json` after the fix merges.
+Extend the generator or oracle to cover the input class. Never rerun until green.
+Use `assertProperty` with an explicit stable id for new properties. Keep PR and
+merge-queue seeds deterministic; run exploratory fuzzing in the private nightly
+tier. A documented contract wins over a suggested oracle; adapt the oracle.

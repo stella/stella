@@ -1,6 +1,7 @@
-import { faker } from "@faker-js/faker";
-import { Result } from "better-result";
+import { panic, Result } from "better-result";
 import { sleep } from "bun";
+
+import { Temporal } from "@stll/time";
 
 import { createSafeId } from "@/api/lib/branded-types";
 import { Unreachable } from "@/api/lib/errors/tagged-errors";
@@ -20,6 +21,44 @@ import type {
   AIJustificationOutput,
   JustificationFilenames,
 } from "@/api/lib/workflow/parse-justifications";
+
+const MOCK_WORDS = [
+  "review",
+  "document",
+  "record",
+  "client",
+  "agreement",
+] as const;
+
+type RandomIntegerOptions = { min: number; max: number };
+
+const randomInteger = ({ min, max }: RandomIntegerOptions): number =>
+  min + Math.floor(Math.random() * (max - min + 1));
+
+const randomElement = <T>(values: readonly T[]): T => {
+  const value = values.at(randomInteger({ min: 0, max: values.length - 1 }));
+  if (value === undefined) {
+    return panic("mock sampling requires a non-empty array");
+  }
+  return value;
+};
+
+const randomElements = <T>(values: readonly T[]): T[] => {
+  if (values.length === 0) {
+    return [];
+  }
+  const remaining = [...values];
+  const selected: T[] = [];
+  const count = randomInteger({ min: 1, max: remaining.length });
+  for (let index = 0; index < count; index += 1) {
+    const position = randomInteger({ min: 0, max: remaining.length - 1 });
+    selected.push(randomElement(remaining.splice(position, 1)));
+  }
+  return selected;
+};
+
+const randomSentence = (): string =>
+  `${Array.from({ length: 6 }, () => randomElement(MOCK_WORDS)).join(" ")}.`;
 
 const getValueFromInputFields = (
   input: readonly FieldContentForAI[],
@@ -96,7 +135,7 @@ export const generateBatchMock = async ({
       }),
     );
 
-    await sleep(faker.number.int({ min: 1000, max: 3000 }));
+    await sleep(randomInteger({ min: 1000, max: 3000 }));
 
     for (const property of inputProperties) {
       const content = property.content;
@@ -120,7 +159,7 @@ export const generateBatchMock = async ({
       // person, and file properties are never scheduled.
       switch (content.type) {
         case "text": {
-          const value = `${inputFieldValue} + ${faker.lorem.word()}`;
+          const value = `${inputFieldValue} + ${randomElement(MOCK_WORDS)}`;
           await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
@@ -136,7 +175,7 @@ export const generateBatchMock = async ({
 
         case "single-select": {
           const possibleValues = content.options.map((option) => option.value);
-          const value = faker.helpers.arrayElement(possibleValues);
+          const value = randomElement(possibleValues);
           await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
@@ -152,10 +191,7 @@ export const generateBatchMock = async ({
 
         case "multi-select": {
           const possibleValues = content.options.map((option) => option.value);
-          const value = faker.helpers.arrayElements(possibleValues, {
-            min: 1,
-            max: possibleValues.length,
-          });
+          const value = randomElements(possibleValues);
           await onPartialAnswer?.({
             propertyId: property.id,
             answer: value.join(", "),
@@ -174,8 +210,9 @@ export const generateBatchMock = async ({
         }
 
         case "date": {
-          const value =
-            faker.date.past().toISOString().split("T")[0] ?? "1970-01-01";
+          const value = Temporal.Now.plainDateISO()
+            .subtract({ days: randomInteger({ min: 1, max: 365 }) })
+            .toString();
           await onPartialAnswer?.({ propertyId: property.id, answer: value });
           aiResults.push({
             fieldId,
@@ -191,8 +228,8 @@ export const generateBatchMock = async ({
 
         case "int": {
           const currencies = ["USD", "EUR", "CZK", null];
-          const value = faker.number.int({ min: 0, max: 1_000_000 });
-          const currency = faker.helpers.arrayElement(currencies);
+          const value = randomInteger({ min: 0, max: 1_000_000 });
+          const currency = randomElement(currencies);
           await onPartialAnswer?.({
             propertyId: property.id,
             answer: currency ? `${value} ${currency}` : String(value),
@@ -234,11 +271,11 @@ export const createMockJustifications = (
       file: filename.simplified,
       statements: [
         {
-          text: faker.lorem.sentence(),
+          text: randomSentence(),
           citations: [`${filename.simplified}-0001`],
         },
         {
-          text: faker.lorem.sentence(),
+          text: randomSentence(),
           citations: [`${filename.simplified}-0002`],
         },
       ],

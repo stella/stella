@@ -1191,6 +1191,18 @@ export const CAPABILITY_DISPATCH = {
     load: async () =>
       await import("@/api/handlers/templates/versions/summarize"),
   },
+  "time-entries.approval-queue.approve": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/approval-queue/approve"),
+  },
+  "time-entries.approval-queue.list": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/approval-queue/list"),
+  },
+  "time-entries.approval-queue.return": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/approval-queue/return"),
+  },
   "time-entries.batch.delete": {
     load: async () => await import("@/api/handlers/time-entries/batch/delete"),
   },
@@ -1208,6 +1220,10 @@ export const CAPABILITY_DISPATCH = {
   },
   "time-entries.get": {
     load: async () => await import("@/api/handlers/time-entries/get"),
+  },
+  "time-entries.internal.create": {
+    load: async () =>
+      await import("@/api/handlers/time-entries/internal/create"),
   },
   "time-entries.ledes.export": {
     load: async () => await import("@/api/handlers/time-entries/ledes/export"),

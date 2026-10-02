@@ -1,8 +1,18 @@
 import { describe, expect, test } from "bun:test";
 
+import { AI_PROVIDERS } from "@stll/ai-catalog";
+
+import { CHAT_TURN_FAILURE_CODES } from "@/api/handlers/chat/chat-turn-state";
+import type { ChatTurnOutcome } from "@/api/handlers/chat/types";
 import {
+  ANONYMIZATION_REFUSAL_REASONS,
+  ANONYMIZATION_REFUSAL_SITES,
+  buildAnonymizationRefusalRecord,
+  buildChatTurnSettlementRecord,
   buildRequestDurationRecord,
+  emitActionCostDropMetric,
   emitChatRunLogMetric,
+  emitPromptCacheMetric,
   resetMetricLineSinkForTesting,
   setMetricLineSinkForTesting,
 } from "@/api/lib/observability/request-metrics";
@@ -77,4 +87,192 @@ test("chat shadow metrics emit append latency and per-turn write volume without 
   } finally {
     resetMetricLineSinkForTesting();
   }
+});
+
+test("prompt-cache metrics emit a run's input, cached input and hit rate by surface and provider", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    emitPromptCacheMetric({
+      cachedInputTokens: 750,
+      inputTokens: 1000,
+      provider: "anthropic",
+      surface: "chat",
+    });
+    // A call that reported no input has no rate to report.
+    emitPromptCacheMetric({
+      cachedInputTokens: 0,
+      inputTokens: 0,
+      provider: "openai",
+      surface: "chat",
+    });
+    expect(lines).toHaveLength(1);
+    const record: unknown = JSON.parse(lines.at(0) ?? "null");
+    expect(record).toMatchObject({
+      _aws: {
+        CloudWatchMetrics: [
+          {
+            Dimensions: [["surface", "provider"]],
+            Metrics: [
+              { Name: "PromptInputTokens", Unit: "Count" },
+              { Name: "PromptCachedInputTokens", Unit: "Count" },
+              { Name: "PromptCacheHitRate", Unit: "Percent" },
+            ],
+            Namespace: "Stella/Api",
+          },
+        ],
+      },
+      PromptCacheHitRate: 75,
+      PromptCachedInputTokens: 750,
+      PromptInputTokens: 1000,
+      provider: "anthropic",
+      surface: "chat",
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+test("cost drop metrics count observations rather than failed batches", () => {
+  const lines: string[] = [];
+  setMetricLineSinkForTesting((line) => {
+    lines.push(line);
+  });
+  try {
+    emitActionCostDropMetric(7);
+    expect(lines).toHaveLength(1);
+    expect(JSON.parse(lines.at(0) ?? "null")).toMatchObject({
+      ActionCostObservationsDropped: 7,
+      _aws: {
+        CloudWatchMetrics: [
+          {
+            Dimensions: [[]],
+            Metrics: [{ Name: "ActionCostObservationsDropped", Unit: "Count" }],
+          },
+        ],
+      },
+    });
+  } finally {
+    resetMetricLineSinkForTesting();
+  }
+});
+
+/**
+ * EMF contract: every dimension and metric a directive names must be a root
+ * member of the record, or CloudWatch silently drops the metric.
+ */
+const expectExtractable = (record: {
+  _aws: {
+    CloudWatchMetrics: {
+      Dimensions: string[][];
+      Metrics: { Name: string }[];
+      Namespace: string;
+    }[];
+  };
+}) => {
+  for (const directive of record._aws.CloudWatchMetrics) {
+    expect(directive.Namespace).toBe("Stella/Api");
+    for (const dimension of directive.Dimensions.flat()) {
+      expect(record).toHaveProperty(dimension);
+    }
+    for (const metric of directive.Metrics) {
+      expect(record).toHaveProperty(metric.Name);
+    }
+  }
+};
+
+/** Every outcome a turn settles with; a new one fails typecheck here. */
+const SETTLED_OUTCOMES = {
+  "awaiting-user": "awaiting-user",
+  cancelled: "cancelled",
+  completed: "completed",
+  failed: "failed",
+  interrupted: "interrupted",
+} as const satisfies { [TOutcome in ChatTurnOutcome["type"]]: TOutcome };
+
+describe("buildChatTurnSettlementRecord", () => {
+  test("every outcome, mode and provider builds one extractable count", () => {
+    for (const outcome of Object.values(SETTLED_OUTCOMES)) {
+      for (const mode of ["anonymized", "raw"] as const) {
+        for (const provider of [...AI_PROVIDERS, "none" as const]) {
+          const record = buildChatTurnSettlementRecord({
+            failureCode: outcome === "failed" ? "internal" : null,
+            mode,
+            outcome,
+            provider,
+            timestamp: 1_700_000_000_000,
+          });
+          expectExtractable(record);
+          expect(record).toMatchObject({
+            ChatTurnSettlements: 1,
+            mode,
+            outcome,
+            provider,
+          });
+        }
+      }
+    }
+  });
+
+  test("divides by outcome and mode, and by provider beneath them, never by an id", () => {
+    const record = buildChatTurnSettlementRecord({
+      failureCode: "boundary-refusal",
+      mode: "anonymized",
+      outcome: "failed",
+      provider: "anthropic",
+      timestamp: 1_700_000_000_000,
+    });
+    expect(record._aws.CloudWatchMetrics).toEqual([
+      {
+        Namespace: "Stella/Api",
+        Dimensions: [
+          ["outcome", "mode"],
+          ["outcome", "mode", "provider"],
+        ],
+        Metrics: [{ Name: "ChatTurnSettlements", Unit: "Count" }],
+      },
+    ]);
+    // The failure code is a property to query, not a dimension.
+    expect(record.failure_code).toBe("boundary-refusal");
+  });
+
+  test("a settlement without a failure code reads as none", () => {
+    for (const code of [...CHAT_TURN_FAILURE_CODES, null]) {
+      expect(
+        buildChatTurnSettlementRecord({
+          failureCode: code,
+          mode: "raw",
+          outcome: "failed",
+          provider: "openai",
+          timestamp: 0,
+        }).failure_code,
+      ).toBe(code ?? "none");
+    }
+  });
+});
+
+describe("buildAnonymizationRefusalRecord", () => {
+  test("every site and reason builds a count by site and reason, plus a total", () => {
+    for (const site of ANONYMIZATION_REFUSAL_SITES) {
+      for (const reason of ANONYMIZATION_REFUSAL_REASONS) {
+        const record = buildAnonymizationRefusalRecord({
+          reason,
+          site,
+          timestamp: 1_700_000_000_000,
+        });
+        expectExtractable(record);
+        expect(record._aws.CloudWatchMetrics.at(0)?.Dimensions).toEqual([
+          ["site", "reason"],
+          [],
+        ]);
+        expect(record).toMatchObject({
+          AnonymizationRefusals: 1,
+          reason,
+          site,
+        });
+      }
+    }
+  });
 });

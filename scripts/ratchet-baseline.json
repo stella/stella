@@ -1,10 +1,8 @@
 {
   "as-casts": {
-    "count": 0,
     "files": {}
   },
   "package-as-casts": {
-    "count": 11,
     "files": {
       "packages/boe/src/query.ts": 2,
       "packages/business-registries/src/shared/canonical-id.ts": 1,
@@ -15,55 +13,42 @@
     }
   },
   "legacy-paint-transitions": {
-    "count": 0,
     "files": {}
   },
   "super-linear-regexes": {
-    "count": 0,
     "files": {}
   },
   "legacy-realtime-invalidation-producers": {
-    "count": 0,
     "files": {}
   },
   "nullish-array-fallback": {
-    "count": 0,
     "files": {}
   },
   "barrel-index-files": {
-    "count": 0,
     "files": {}
   },
   "direct-error-message-display": {
-    "count": 0,
     "files": {}
   },
   "module-level-mutable-collections": {
-    "count": 0,
     "files": {}
   },
   "entity-kind-glyph-adhoc": {
-    "count": 0,
     "files": {}
   },
   "raw-user-avatar-primitive": {
-    "count": 0,
     "files": {}
   },
   "shadowed-user-name-helpers": {
-    "count": 0,
     "files": {}
   },
   "ad-hoc-relative-time-formatting": {
-    "count": 0,
     "files": {}
   },
   "direct-audit-log-insert": {
-    "count": 0,
     "files": {}
   },
   "direct-root-connection-imports": {
-    "count": 57,
     "files": {
       "apps/api/scripts/apply-search-migration.ts": 1,
       "apps/api/src/agent-auth/id-jag.ts": 1,
@@ -102,7 +87,6 @@
       "apps/api/src/lib/machine-api-key-queries.ts": 1,
       "apps/api/src/lib/notifications.ts": 1,
       "apps/api/src/lib/oauth-connections.ts": 1,
-      "apps/api/src/lib/operator-read-db.ts": 1,
       "apps/api/src/lib/public-law-read-db.ts": 1,
       "apps/api/src/lib/root-scoped-db.ts": 1,
       "apps/api/src/lib/scheduler/jobs.ts": 1,
@@ -122,7 +106,6 @@
     }
   },
   "root-connection-type-imports": {
-    "count": 31,
     "files": {
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
       "apps/api/src/lib/bilingual/run-queue.ts": 1,
@@ -158,7 +141,6 @@
     }
   },
   "implicit-root-connection-shapes": {
-    "count": 18,
     "files": {
       "apps/api/src/lib/agent-audit-principal.ts": 1,
       "apps/api/src/lib/business-registries/desktop/revocation.ts": 1,
@@ -179,7 +161,6 @@
     }
   },
   "audit-skip-directives": {
-    "count": 270,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 2,
@@ -199,6 +180,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-row.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/pipeline/source-observation.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/supplement-placement.ts": 4,
+      "apps/api/src/handlers/case-law/ingestion/replay.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/source-totals.ts": 2,
       "apps/api/src/handlers/case-law/ingestion/supplement-absorption.ts": 4,
       "apps/api/src/handlers/case-law/ingestion/supplement-composition.ts": 3,
@@ -331,19 +313,15 @@
     }
   },
   "landing-inline-clipboard-writes": {
-    "count": 0,
     "files": {}
   },
   "inline-timestamp-cursor-sql": {
-    "count": 0,
     "files": {}
   },
   "repeated-timestamp-cursor-boundary": {
-    "count": 0,
     "files": {}
   },
   "throw-outside-boundary": {
-    "count": 900,
     "files": {
       "apps/api/src/handlers/case-law/decisions/latest.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/adapters/at-courts.ts": 9,
@@ -442,7 +420,6 @@
       "apps/api/src/lib/delete-account.ts": 4,
       "apps/api/src/lib/deployment-feature-route.ts": 1,
       "apps/api/src/lib/document-processing-ocr-result.ts": 3,
-      "apps/api/src/lib/docx-archive.ts": 4,
       "apps/api/src/lib/email/ses.ts": 1,
       "apps/api/src/lib/email/smtp.ts": 1,
       "apps/api/src/lib/entities/create-from-buffer.ts": 2,
@@ -657,7 +634,6 @@
     }
   },
   "try-catch-outside-boundary": {
-    "count": 361,
     "files": {
       "apps/api/src/handlers/ai-autocomplete/stream.ts": 1,
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
@@ -716,7 +692,6 @@
       "apps/api/src/lib/delete-account.ts": 1,
       "apps/api/src/lib/dev-origins.ts": 1,
       "apps/api/src/lib/document-processing-idle-exit.ts": 1,
-      "apps/api/src/lib/docx-archive.ts": 1,
       "apps/api/src/lib/docx-stamp.ts": 1,
       "apps/api/src/lib/docx/ai-field-generator.ts": 2,
       "apps/api/src/lib/docx/resolve-ai-fields.ts": 1,
@@ -747,7 +722,7 @@
       "apps/api/src/lib/scheduler/runner.ts": 2,
       "apps/api/src/lib/scheduler/tasks/desktop-edit-session-expiry-notifications.ts": 1,
       "apps/api/src/lib/scheduler/tasks/infosoud.ts": 1,
-      "apps/api/src/lib/search/extraction-worker.ts": 3,
+      "apps/api/src/lib/search/extraction-worker.ts": 2,
       "apps/api/src/lib/search/index-chat.ts": 1,
       "apps/api/src/lib/search/index-entity.ts": 1,
       "apps/api/src/lib/signals/scout.ts": 1,
@@ -885,107 +860,76 @@
     }
   },
   "no-body-ownership-ids-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-unbranded-ownership-id-param-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-search-scope-suppressions": {
-    "count": 1,
     "files": {
       "apps/api/src/lib/search/index-chat.ts": 1
     }
   },
   "require-safe-route-handlers-no-direct-handler-config-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-safe-route-handlers-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-no-raw-filename-write-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-no-unsanitized-href-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-no-unscoped-user-query-suppressions": {
-    "count": 0,
     "files": {}
   },
   "security-guards-require-secure-document-response-suppressions": {
-    "count": 0,
     "files": {}
   },
   "mcp-security-no-direct-oauth-client-join-suppressions": {
-    "count": 0,
     "files": {}
   },
   "mcp-security-redact-oauth-registration-response-suppressions": {
-    "count": 0,
     "files": {}
   },
   "auth-lifecycle-after-remove-member-revokes-artifacts-suppressions": {
-    "count": 0,
     "files": {}
   },
   "auth-lifecycle-no-direct-auth-artifact-delete-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-unowned-file-version-write-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-direct-audit-log-insert-suppressions": {
-    "count": 0,
     "files": {}
   },
   "scanned-file-boundary-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-direct-buffer-cleanup-intent-delete-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-direct-ingestion-checkpoint-write-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-buffer-cleanup-intent-status-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-query-limit-suppressions": {
-    "count": 2,
     "files": {
       "apps/api/src/handlers/chat/history-window.ts": 2
     }
   },
   "no-raw-zip-load-suppressions": {
-    "count": 13,
     "files": {
       "apps/api/src/handlers/case-law/ingestion/adapters/eu-ecj.ts": 1,
-      "apps/api/src/handlers/chat/export/create-chat-export-docx.ts": 1,
-      "apps/api/src/handlers/templates/prepare-template.ts": 1,
-      "apps/api/src/lib/docx/adapt-ai-fields.ts": 1,
-      "apps/api/src/lib/docx/discover-clause-slots.ts": 1,
-      "apps/api/src/lib/docx/discover-placeholders.ts": 1,
-      "apps/api/src/lib/docx/discover-template.ts": 1,
-      "apps/api/src/lib/docx/patch-template.ts": 3,
-      "apps/api/src/lib/docx/strip-custom-xml-manifest.ts": 1,
-      "apps/api/src/lib/docx/write-field-filters.ts": 1,
-      "apps/api/src/lib/skills/skill-package.ts": 1
+      "apps/api/src/handlers/chat/export/create-chat-export-docx.ts": 1
     }
   },
   "no-db-await-in-loop-suppressions": {
-    "count": 114,
     "files": {
       "apps/api/scripts/backfill-image-thumbnails.ts": 3,
       "apps/api/scripts/backfill-search-previews.ts": 2,
@@ -998,7 +942,7 @@
       "apps/api/src/handlers/case-law/ingestion/pipeline.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/pipeline/batch.ts": 1,
       "apps/api/src/handlers/case-law/ingestion/pipeline/decision-identity.ts": 1,
-      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 2,
+      "apps/api/src/handlers/case-law/ingestion/reconciliation-engine.ts": 3,
       "apps/api/src/handlers/case-law/ingestion/supplement-fold.ts": 2,
       "apps/api/src/handlers/case-law/provisions/previews-for-decision.ts": 1,
       "apps/api/src/handlers/chat/threads/delete.ts": 2,
@@ -1039,14 +983,9 @@
       "apps/api/src/lib/workflow/orphan-cells.ts": 1,
       "apps/api/src/lib/workflow/route-playbooks.ts": 1,
       "apps/api/src/mcp/gateway/external-tools.ts": 1,
-      "apps/api/src/scripts/backfill-citation-authority.ts": 1,
-      "apps/api/src/scripts/backfill-citation-keys.ts": 2,
       "apps/api/src/scripts/backfill-corpus-storage.ts": 1,
-      "apps/api/src/scripts/backfill-legislation-work-names.ts": 1,
       "apps/api/src/scripts/backfill-organization-file-usage.helpers.ts": 1,
       "apps/api/src/scripts/backfill-organization-file-usage.ts": 4,
-      "apps/api/src/scripts/backfill-property-roles.ts": 1,
-      "apps/api/src/scripts/backfill-statute-citation-counts.ts": 1,
       "apps/api/src/scripts/corpus-column-trim.ts": 1,
       "apps/api/src/scripts/cz-regional-repair.ts": 3,
       "apps/api/src/scripts/decision-analysis-candidates.ts": 1,
@@ -1059,7 +998,6 @@
     }
   },
   "no-network-await-in-loop-suppressions": {
-    "count": 13,
     "files": {
       "apps/api/scripts/seed-firm-knowledge.ts": 1,
       "apps/api/src/handlers/external-preview/preview.ts": 1,
@@ -1073,51 +1011,39 @@
     }
   },
   "require-bounded-request-schema-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-unbounded-response-body-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-raw-use-effect-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-awaited-builder-union-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-swallowed-rejection-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-toast-error-capture-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-detached-void-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-detached-label-shape-suppressions": {
-    "count": 0,
     "files": {}
   },
   "require-exhaustive-panic-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-vacuous-throw-assertion-suppressions": {
-    "count": 0,
     "files": {}
   },
   "no-internal-module-mock-suppressions": {
-    "count": 0,
     "files": {}
   },
   "lint-suppression-directives": {
-    "count": 294,
     "files": {
       "apps/api/scripts/lib/compact-schema-defs.ts": 1,
       "apps/api/scripts/seed-case-law.ts": 1,
@@ -1224,7 +1150,6 @@
       "apps/web/src/components/ai-suggestions/host.tsx": 1,
       "apps/web/src/components/ai-suggestions/review-redline-preview.tsx": 1,
       "apps/web/src/components/chat-editor-provider.tsx": 7,
-      "apps/web/src/components/chat-mention-list.tsx": 2,
       "apps/web/src/components/chat/chat-anon-decorations-extension.ts": 1,
       "apps/web/src/components/chat/chat-thread-messages.tsx": 4,
       "apps/web/src/components/chat/tool-approval-card.tsx": 1,
@@ -1317,65 +1242,55 @@
     }
   },
   "ts-suppression-directives": {
-    "count": 0,
     "files": {}
   },
   "detached-promise-review-sites": {
-    "count": 0,
     "files": {}
   },
   "cross-handler-imports": {
-    "count": 0,
     "files": {}
   },
   "ad-hoc-decision-subject-gates": {
-    "count": 0,
     "files": {}
   },
   "lib-to-handler-imports": {
-    "count": 0,
     "files": {}
   },
   "cross-route-private-imports": {
-    "count": 0,
     "files": {}
   },
   "capability-schemas-truncated": {
-    "count": 0,
     "files": {}
   },
   "capability-file-transport-suppressed": {
-    "count": 20,
     "files": {
       "packages/cli/capability-catalog.json": 20
     }
   },
   "read-capabilities-with-write-scope": {
-    "count": 0,
     "files": {}
   },
   "capability-domain-action-verbs": {
-    "count": 0,
     "files": {}
   },
   "cli-shadowed-namespaces": {
-    "count": 0,
     "files": {}
   },
   "cross-feature-imports": {
-    "count": 0,
     "files": {}
   },
   "workspace-only-rls-on-org-tables": {
-    "count": 0,
     "files": {}
   },
+  "parser-validator-call-ledger-entries": {
+    "files": {
+      "scripts/parser-validator-call-ledger.json": 42
+    }
+  },
   "internal-module-mock-ledger-entries": {
-    "count": 0,
     "files": {}
   },
   "direct-failure-sinks": {
-    "count": 539,
     "files": {
       "apps/api/src/handlers/bilingual-translations/create-run.ts": 1,
       "apps/api/src/handlers/bilingual-translations/prepare.ts": 2,
@@ -1462,7 +1377,6 @@
       "apps/api/src/handlers/legislation/ingestion.ts": 2,
       "apps/api/src/handlers/legislation/search-index.ts": 3,
       "apps/api/src/handlers/legislation/shelf.ts": 2,
-      "apps/api/src/handlers/legislation/slug-backfill.ts": 1,
       "apps/api/src/handlers/organization-settings/read-ai-config.ts": 1,
       "apps/api/src/handlers/organization-settings/update-ai-config.ts": 1,
       "apps/api/src/handlers/organization-settings/update-deepl-key.ts": 1,
@@ -1576,7 +1490,6 @@
     }
   },
   "ai-analytics-callback-seams": {
-    "count": 47,
     "files": {
       "apps/api/src/handlers/case-law/analysis/generate.ts": 1,
       "apps/api/src/handlers/case-law/analysis/significance-run.ts": 1,
@@ -1621,19 +1534,15 @@
     }
   },
   "failure-sink-expectations": {
-    "count": 0,
     "files": {}
   },
   "failure-legacy-output-pins": {
-    "count": 0,
     "files": {}
   },
   "cross-app-lib-path-copies": {
-    "count": 0,
     "files": {}
   },
   "cross-workspace-duplicate-export-names": {
-    "count": 6,
     "files": {
       "apps/web/src/lib/detached.ts": 1,
       "apps/web/src/lib/safe-id.ts": 1,
@@ -1643,13 +1552,11 @@
     }
   },
   "duplicate-token-blocks": {
-    "count": 2,
     "files": {
       "apps/api/src/lib/legal-search/morphology/snowball/base-stemmer.ts": 2
     }
   },
   "slice-owned-web-components": {
-    "count": 36,
     "files": {
       "apps/web/src/components/ai-suggestions/scroll-editor-to-pos.ts": 1,
       "apps/web/src/components/auth/two-factor-panel.tsx": 1,
@@ -1690,7 +1597,6 @@
     }
   },
   "api-lib-top-level-entries": {
-    "count": 287,
     "files": {
       "apps/api/src/lib/account-deletion-cleanup-queue.ts": 1,
       "apps/api/src/lib/account-deletion-effect-store.ts": 1,
@@ -1715,6 +1621,7 @@
       "apps/api/src/lib/api-handlers.ts": 1,
       "apps/api/src/lib/api-key-plugin-configs.ts": 1,
       "apps/api/src/lib/array.ts": 1,
+      "apps/api/src/lib/audit-log-details.ts": 1,
       "apps/api/src/lib/audit-log.constants.ts": 1,
       "apps/api/src/lib/audit-log.ts": 1,
       "apps/api/src/lib/audited-download.ts": 1,
@@ -1873,7 +1780,6 @@
       "apps/api/src/lib/ocr-local": 1,
       "apps/api/src/lib/ocr-searchable-pdf-worker.ts": 1,
       "apps/api/src/lib/ocr-searchable-pdf.ts": 1,
-      "apps/api/src/lib/operator-read-db.ts": 1,
       "apps/api/src/lib/optimistic-concurrency.ts": 1,
       "apps/api/src/lib/organization-lifecycle-hooks.ts": 1,
       "apps/api/src/lib/organization-storage-teardown.ts": 1,
@@ -1982,7 +1888,6 @@
     }
   },
   "web-lib-top-level-entries": {
-    "count": 138,
     "files": {
       "apps/web/src/lib/account": 1,
       "apps/web/src/lib/analytics": 1,
@@ -2122,6 +2027,73 @@
       "apps/web/src/lib/workspace-sse-connection.logic.ts": 1,
       "apps/web/src/lib/workspace-sse.ts": 1,
       "apps/web/src/lib/workspaces": 1
+    }
+  },
+  "direct-third-party-declarations": {
+    "files": {
+      "apps/api/package.json": 85,
+      "apps/collab/package.json": 10,
+      "apps/desktop/package.json": 15,
+      "apps/extension/package.json": 7,
+      "apps/landing/package.json": 19,
+      "apps/legal-atlas-runner/package.json": 3,
+      "apps/mobile/package.json": 17,
+      "apps/playground/package.json": 10,
+      "apps/web/package.json": 98,
+      "package.json": 31,
+      "packages/agent-engine/package.json": 7,
+      "packages/agent-input/package.json": 4,
+      "packages/ai-catalog/package.json": 8,
+      "packages/analytics-config/package.json": 1,
+      "packages/anonymize-chat/package.json": 6,
+      "packages/api-client/package.json": 3,
+      "packages/api-contract/package.json": 5,
+      "packages/auth-model/package.json": 3,
+      "packages/boe/package.json": 2,
+      "packages/business-registries/package.json": 7,
+      "packages/calculations/package.json": 4,
+      "packages/catalogue/package.json": 3,
+      "packages/chat-limits/package.json": 1,
+      "packages/chat/package.json": 7,
+      "packages/cli/package.json": 7,
+      "packages/clipboard/package.json": 2,
+      "packages/collation/package.json": 1,
+      "packages/concurrency/package.json": 2,
+      "packages/conditions/package.json": 5,
+      "packages/country-codes/package.json": 1,
+      "packages/db-load-gate/package.json": 3,
+      "packages/docx-utils/package.json": 6,
+      "packages/errors/package.json": 2,
+      "packages/fetch/package.json": 1,
+      "packages/infosoud/package.json": 4,
+      "packages/invoicing/package.json": 3,
+      "packages/legal-ast/package.json": 4,
+      "packages/legal-atlas/package.json": 2,
+      "packages/locales/package.json": 1,
+      "packages/mojibake/package.json": 4,
+      "packages/money/package.json": 3,
+      "packages/permissions/package.json": 2,
+      "packages/property-testing/package.json": 3,
+      "packages/redis-config/package.json": 3,
+      "packages/runtime-mode/package.json": 2,
+      "packages/sanctions/package.json": 6,
+      "packages/scripts/package.json": 5,
+      "packages/skills/package.json": 2,
+      "packages/ssr-kit/package.json": 3,
+      "packages/ssr-testkit/package.json": 3,
+      "packages/stable-stringify/package.json": 1,
+      "packages/start-runtime/package.json": 3,
+      "packages/template-conditions/package.json": 5,
+      "packages/template-packs/package.json": 3,
+      "packages/text-normalize/package.json": 2,
+      "packages/time/package.json": 4,
+      "packages/transactional/package.json": 5,
+      "packages/typescript-config/package.json": 1,
+      "packages/ui/package.json": 32,
+      "packages/user-agent/package.json": 1,
+      "packages/uuid-codec/package.json": 3,
+      "packages/workspace-model/package.json": 2,
+      "packages/workspace-ui/package.json": 22
     }
   }
 }

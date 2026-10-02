@@ -13,7 +13,12 @@ const config = {
     "variants, and enabled flag. Organization-wide terms are not included; " +
     "read those with organization-settings.anonymization-blacklist.get.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

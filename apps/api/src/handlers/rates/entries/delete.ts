@@ -23,7 +23,11 @@ const deleteRateEntry = createSafeHandler(
       "a rate table, leaving the table and its other lines in place. Use " +
       "rates.delete to remove the whole table instead.",
     permissions: { rate: ["delete"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: rateEntryParamsSchema,
     body: deleteRateEntryBodySchema,
   },

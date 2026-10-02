@@ -14,6 +14,7 @@ import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 const config = {
+  actionAdmission: { type: "handler", actionKind: "chat.improve-prompt" },
   permissions: { chat: ["create"] },
   mcp: { type: "internal", reason: "assistant_chat" },
   body: t.Object({
@@ -33,8 +34,10 @@ const IMPROVE_PROMPT_MAX_OUTPUT_TOKENS = 4096;
 const improvePrompt = createSafeRootHandler(
   config,
   async function* ({
+    actionSignal,
     body,
     orgAIConfig,
+    managedAIResidency,
     promptCachingEnabled,
     request,
     safeDb,
@@ -61,6 +64,7 @@ const improvePrompt = createSafeRootHandler(
     }
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -84,8 +88,9 @@ const improvePrompt = createSafeRootHandler(
             body.strategy,
           );
           return await generateTanStackTextForRole({
+            dataClass: "customer",
             abortSignal: AbortSignal.any([
-              request.signal,
+              actionSignal ?? request.signal,
               AbortSignal.timeout(IMPROVE_PROMPT_TIMEOUT_MS),
             ]),
             analytics: aiAnalytics,
@@ -99,6 +104,7 @@ const improvePrompt = createSafeRootHandler(
             maxOutputTokens: IMPROVE_PROMPT_MAX_OUTPUT_TOKENS,
             organizationId: session.activeOrganizationId,
             orgAIConfig,
+            managedAIResidency,
             role: "fast",
             serviceTier: "standard",
             system: modelInput.system,

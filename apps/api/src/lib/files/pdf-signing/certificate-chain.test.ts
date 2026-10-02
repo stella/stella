@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { beforeEach, describe, expect, test } from "bun:test";
 
 import {
   certificationPathReachesAnchor,
@@ -7,24 +7,33 @@ import {
 } from "@/api/lib/files/pdf-signing/certificate-chain";
 import type { PkiFetcher } from "@/api/lib/files/pdf-signing/pki-fetch";
 import { safePkiFetch } from "@/api/lib/files/pdf-signing/pki-fetch";
-import { createTestCertificate } from "@/api/tests/helpers/test-pki";
+import {
+  createTestRsaKeyPool,
+  createTestCertificate,
+} from "@/api/tests/helpers/test-pki";
 import type { TestCertificate } from "@/api/tests/helpers/test-pki";
+
+const keyPool = createTestRsaKeyPool();
+beforeEach(() => keyPool.reset());
 
 const ROOT_URL = "http://pki.example/root.cer";
 const INTERMEDIATE_URL = "http://pki.example/intermediate.cer";
 
 const buildHierarchy = async () => {
   const root = await createTestCertificate({
+    keyPool,
     commonName: "Test Root",
     isCa: true,
   });
   const intermediate = await createTestCertificate({
+    keyPool,
     caIssuersUrl: ROOT_URL,
     commonName: "Test Issuing CA",
     isCa: true,
     issuer: root,
   });
   const leaf = await createTestCertificate({
+    keyPool,
     caIssuersUrl: INTERMEDIATE_URL,
     commonName: "Jane Counsel",
     issuer: intermediate,
@@ -54,7 +63,10 @@ const hex = (chain: readonly Uint8Array[]) =>
 describe("completing the signer's certificate chain", () => {
   test("orders the issuers the desktop sent and drops the ones that issued nothing", async () => {
     const { intermediate, leaf, root } = await buildHierarchy();
-    const stranger = await createTestCertificate({ commonName: "Unrelated" });
+    const stranger = await createTestCertificate({
+      keyPool,
+      commonName: "Unrelated",
+    });
     const { fetcher, requested } = servingFetcher({});
 
     const completed = await completeCertificateChain({
@@ -93,6 +105,7 @@ describe("completing the signer's certificate chain", () => {
     // Same subject name as the real issuing CA, different key: it would
     // pass a name check and must still be refused.
     const impostor = await createTestCertificate({
+      keyPool,
       commonName: "Test Issuing CA",
       isCa: true,
     });
@@ -128,7 +141,7 @@ describe("completing the signer's certificate chain", () => {
   });
 
   test("treats a self-signed certificate as its own complete chain", async () => {
-    const own = await createTestCertificate({ commonName: "Self" });
+    const own = await createTestCertificate({ keyPool, commonName: "Self" });
 
     const completed = await completeCertificateChain({
       candidates: [],
@@ -167,16 +180,19 @@ describe("certification paths to a trust anchor", () => {
 
   test("accepts a path through CAs, and a pinned end entity", async () => {
     const root = await createTestCertificate({
+      keyPool,
       commonName: "Root",
       isCa: true,
     });
     const issuing = await createTestCertificate({
+      keyPool,
       commonName: "Issuing",
       isCa: true,
       issuer: root,
       keyUsage: 0x06,
     });
     const leaf = await createTestCertificate({
+      keyPool,
       commonName: "TSA",
       issuer: issuing,
     });
@@ -187,16 +203,19 @@ describe("certification paths to a trust anchor", () => {
 
   test("refuses a certificate issued by an ordinary end entity", async () => {
     const root = await createTestCertificate({
+      keyPool,
       commonName: "Root",
       isCa: true,
     });
     // Anyone holding an ordinary certificate under the anchor must not be
     // able to mint a certificate that chains to it.
     const ordinary = await createTestCertificate({
+      keyPool,
       commonName: "Ordinary",
       issuer: root,
     });
     const minted = await createTestCertificate({
+      keyPool,
       commonName: "Minted TSA",
       issuer: ordinary,
     });
@@ -206,10 +225,12 @@ describe("certification paths to a trust anchor", () => {
 
   test("refuses a CA whose key may not sign certificates", async () => {
     const root = await createTestCertificate({
+      keyPool,
       commonName: "Root",
       isCa: true,
     });
     const issuing = await createTestCertificate({
+      keyPool,
       commonName: "Issuing",
       isCa: true,
       issuer: root,
@@ -217,6 +238,7 @@ describe("certification paths to a trust anchor", () => {
       keyUsage: 0x80,
     });
     const leaf = await createTestCertificate({
+      keyPool,
       commonName: "TSA",
       issuer: issuing,
     });
@@ -226,16 +248,19 @@ describe("certification paths to a trust anchor", () => {
 
   test("refuses a path longer than a CA allows", async () => {
     const root = await createTestCertificate({
+      keyPool,
       commonName: "Root",
       isCa: true,
       pathLength: 0,
     });
     const issuing = await createTestCertificate({
+      keyPool,
       commonName: "Issuing",
       isCa: true,
       issuer: root,
     });
     const leaf = await createTestCertificate({
+      keyPool,
       commonName: "TSA",
       issuer: issuing,
     });
@@ -246,10 +271,12 @@ describe("certification paths to a trust anchor", () => {
   test("refuses a path with a certificate outside its validity at that time", async () => {
     const day = 86_400_000;
     const root = await createTestCertificate({
+      keyPool,
       commonName: "Root",
       isCa: true,
     });
     const expired = await createTestCertificate({
+      keyPool,
       commonName: "Issuing",
       isCa: true,
       issuer: root,
@@ -257,6 +284,7 @@ describe("certification paths to a trust anchor", () => {
       notBefore: new Date(Date.now() - 30 * day),
     });
     const leaf = await createTestCertificate({
+      keyPool,
       commonName: "TSA",
       issuer: expired,
     });

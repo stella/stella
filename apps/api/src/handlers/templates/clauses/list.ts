@@ -17,7 +17,12 @@ const config = {
     "variant and version, slot name, sort order, and whether the pinned " +
     "version has fallen behind the clause's current one.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "template_authoring_ui" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "template_authoring_ui",
+    consumesServices: false,
+  },
   access: "read",
   params: listTemplateClausesParamsSchema,
 } satisfies HandlerConfig;

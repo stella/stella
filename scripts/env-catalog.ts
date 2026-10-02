@@ -55,9 +55,20 @@ export type EnvCatalogEntry = {
 type SchemaRecord = Record<string, v.GenericSchema>;
 
 const INTERNAL_SERVER_KEYS = new Set([
+  "ACTION_ADMISSION_BACKGROUND_ORG_CONCURRENCY",
+  "ACTION_ADMISSION_BACKGROUND_USER_CONCURRENCY",
   "ACTION_ADMISSION_LEASE_MS",
   "ACTION_ADMISSION_ORG_CONCURRENCY",
   "ACTION_ADMISSION_USER_CONCURRENCY",
+  "ACTION_REQUEST_MAX_BYTES",
+  "ACTION_RESPONSE_MAX_BYTES",
+  "ACTION_PAGE_SIZE_MAX",
+  "MCP_READ_WINDOW_MS",
+  "MCP_READ_WINDOW_MAX_ENTRIES",
+  "MCP_READ_TENANT_ORG_BYTES",
+  "MCP_READ_TENANT_USER_BYTES",
+  "MCP_READ_PUBLIC_ORG_BYTES",
+  "MCP_READ_PUBLIC_USER_BYTES",
   "AGENT_SANDBOX_DOCKER_NETWORK",
   "AGENT_SANDBOX_DOCKER_SOCKET",
   "AGENT_SANDBOX_HARNESS_BASE_URL",
@@ -92,6 +103,8 @@ const INTERNAL_SERVER_KEYS = new Set([
   "DATABASE_STATEMENT_TIMEOUT_MS",
   "DATABASE_RLS_POOL_MAX",
   "DATABASE_ROOT_POOL_MAX",
+  "DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER",
+  "DB_LOAD_GATE_EBS_SIGNAL",
   "DB_HOST",
   "DB_NAME",
   "DB_PORT",
@@ -119,7 +132,9 @@ const INTERNAL_SERVER_KEYS = new Set([
   "FEATURE_KNOWLEDGE_TEMPLATES",
   "FEATURE_LEGAL_LISTS",
   "FEATURE_MCP",
+  "FEATURE_MCP_READ_FENCE",
   "FEATURE_ORG_ACCESS_STATE",
+  "FEATURE_ORG_SERVICE_BUDGETS",
   "FEATURE_PUBLIC_LAW",
   "FEATURE_PUBLIC_KNOWLEDGE",
   "FEATURE_PUBLIC_TOOLS",
@@ -133,6 +148,7 @@ const INTERNAL_SERVER_KEYS = new Set([
   "GOOGLE_AUTH_CLIENT_ID",
   "GOTENBERG_URL",
   "HOSTED_USAGE_PROVIDER",
+  "HOSTED_USAGE_PROVIDER_API_VERSION",
   "HOSTED_USAGE_PROVIDER_BASE_URL",
   "HUGGINGFACE_BASE_URL",
   "INBOUND_MAIL_DOMAIN",
@@ -202,6 +218,7 @@ const EXAMPLE_VALUES: Record<string, string> = {
   INGESTION_USER_AGENT: "acme-ingestion/1.0 (+https://example.com/contact)",
   FEEDBACK_EMAIL_TO: "maintainer@example.com",
   FEEDBACK_GITHUB_REPO: "owner/repo",
+  DB_LOAD_GATE_EBS_SIGNAL: "disabled",
   FRONTEND_URL: "http://localhost:3000",
   GOOGLE_GENERATIVE_AI_API_KEY: "key-test",
   GOTENBERG_PASSWORD: "gotenberg",
@@ -242,6 +259,8 @@ const EXAMPLE_VALUES: Record<string, string> = {
 };
 
 const DESCRIPTION_OVERRIDES: Record<string, string> = {
+  ACTION_LIMIT_CONTACT_URL:
+    "Public http(s) contact link shown when an action is paused or not enabled.",
   AGENT_SANDBOX_DOCKER_NETWORK:
     "Locked-down Docker network used by agent sandboxes. It must deny arbitrary egress.",
   AGENT_SANDBOX_DOCKER_SOCKET:
@@ -286,6 +305,10 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Corpus index read endpoint, accepted on a private corpus-index-v09 service host and otherwise only in local development. Unset uses CORPUS_INDEX_Q09_ENDPOINT; never used for mutations.",
   DATABASE_URL:
     "Postgres owner URL used by Drizzle. Requests downgrade to the stella role so row-level security applies.",
+  DB_LOAD_GATE_RDS_INSTANCE_IDENTIFIER:
+    "RDS instance whose EBS balances gate heavy maintenance. Region and credentials use the AWS SDK provider chain. A set identifier enables EBS reads and takes precedence over DB_LOAD_GATE_EBS_SIGNAL. Missing or failed metrics defer maintenance.",
+  DB_LOAD_GATE_EBS_SIGNAL:
+    "Non-RDS, self-hosted and local databases must set `DB_LOAD_GATE_EBS_SIGNAL=disabled` to explicitly disable the EBS signal. The logged not_configured signal allows other health gates to govern maintenance. If neither setting is supplied, maintenance holds and an error event names the missing configuration.",
   DB_HOST:
     "Postgres hostname used with the component settings when DATABASE_URL is unset.",
   DB_NAME:
@@ -362,8 +385,6 @@ const DESCRIPTION_OVERRIDES: Record<string, string> = {
     "Microsoft OAuth client secret; required when the matching web login flag is enabled.",
   MICROSOFT_AUTH_TENANT_ID:
     "Microsoft OAuth tenant selector accepted by the configured application registration.",
-  OPERATOR_METRICS_TOKEN:
-    "Bearer token for registration metrics. Unset disables the endpoint; use a long random value.",
   POSTHOG_KEY:
     'PostHog project key. The placeholder "phc_" disables capture for local development.',
   POSTHOG_LOCAL_DEBUG:
@@ -609,7 +630,7 @@ export const requirementFor = (schema: v.GenericSchema): EnvRequirement => {
 };
 
 const exposureFor = (name: string, owner: EnvOwner): EnvExposure => {
-  if (owner === ENV_OWNER.web) {
+  if (owner === ENV_OWNER.web || name === "ACTION_LIMIT_CONTACT_URL") {
     return ENV_EXPOSURE.public;
   }
   if (INTERNAL_SERVER_KEYS.has(name)) {
@@ -778,6 +799,13 @@ export const DEPLOYMENT_ENV_KEYS = new Set([
 ]);
 
 export const TOOLING_ENV_KEYS = new Set([
+  // ci-result evaluates each independently scoped suite in folded jobs.
+  "FOLDED_SUITES",
+  // Preserve Bun global-store links inside browser containers.
+  "BUN_INSTALL_CACHE_DIR",
+  // Browser commands use only executables baked into the pinned image.
+  "PLAYWRIGHT_BROWSERS_PATH",
+  "PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD",
   "AGENT_ENGINE_DOCKER_CANARY_URL",
   "AGENT_ENGINE_DOCKER_IMAGE",
   "AGENT_ENGINE_DOCKER_NETWORK",
@@ -813,6 +841,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "CODEX_API_KEY",
   "DEV_API_PROXY_TARGET",
   "DEV_LINKED_PACKAGE_ROOTS",
+  // Nightly issue reporter: suppress writes while exercising failure reporting.
+  "DRY_RUN",
   "E2E_API_URL",
   "E2E_EDGE_HEADER_NAME",
   "E2E_EDGE_HEADER_VALUE",
@@ -825,8 +855,10 @@ export const TOOLING_ENV_KEYS = new Set([
   "E2E_SOAK_SEED",
   "E2E_SOAK_STEPS",
   "E2E_WEB_URL",
+  "EVENT_NAME",
   "EXPECTED_COMMIT",
   "GH_READ_TOKEN",
+  "HEAD_SHA",
   "LANDING_SITE",
   "MARKETING_CAPTURE",
   "MARKETING_COMMIT",
@@ -836,14 +868,26 @@ export const TOOLING_ENV_KEYS = new Set([
   "MCP_APP_INPUT",
   "MCP_CANARY_BASE_URL",
   "MCP_CANARY_TOKEN",
+  "MERGE_GROUP_HEAD_REF",
   "MODE",
   "NETWORK_CANARY_URL",
+  "OSV_SCANNER_LOCAL_DB_CACHE_DIRECTORY",
+  "OSV_SCANNER_MIRROR_RELEASE_URL",
+  "OSV_SCANNER_PRIMARY_RELEASE_URL",
+  "OSV_SCANNER_RELEASE_VERSION",
+  "OSV_SCANNER_SHA256",
   "PGLITE_TEST_SNAPSHOT",
+  "PR_HEAD_SHA",
   "PRODUCT_MEDIA_S3_BUCKET",
   "PROPERTY_ROLE_BACKFILL_BATCH_SIZE",
   "PROPERTY_TEST_NUM_RUNS_FACTOR",
+  "PROPERTY_TEST_PATH",
+  "PROPERTY_TEST_REDACT",
   "PROPERTY_TEST_SEED",
+  "PROPERTY_TEST_TIME_LIMIT_MS",
   "PROPERTY_TEST_TIMEOUT_BASE_MS",
+  "PROVIDER_REQUEST_COMBINATIONS",
+  "PROVIDER_REQUEST_SHARD",
   "RAILWAY_API_TOKEN",
   "RAILWAY_PROJECT_TOKEN",
   "RAILWAY_SMOKE_API_URL",
@@ -863,18 +907,18 @@ export const TOOLING_ENV_KEYS = new Set([
   "REHEARSAL_DECISIONS",
   "REHEARSAL_MIGRATE_BUDGET_SECONDS",
   "REHEARSAL_PRODUCTION_READY_URL",
-  "RELAY_EVENT",
-  "RELAY_HEAD_SHA",
-  "RELAY_PULL_REQUESTS",
   "RELEASE_REF",
   "REPO",
+  "REPOSITORY",
   "RETRY_ATTEMPTS",
-  "REVIEW_GATE_BASE",
   "RETRY_DELAYS_SECONDS",
+  // Nightly issue reporter: workflow run linked from the failure issue.
+  "RUN_URL",
   "SMOKE_AI_JOURNEY",
   "SMOKE_AI_OPENAI_API_KEY",
   "SMOKE_API_URL",
   "SMOKE_TEST",
+  "STAGING_STATE",
   "STELLA_AGENT_CAPTURE_LOG",
   "STELLA_COLLAB_TEST_REDIS_CONTAINER_ID",
   "STELLA_COLLAB_TEST_REDIS_URL",
@@ -883,6 +927,8 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_DESKTOP_SMOKE_API_URL",
   "STELLA_DEV_INSTANCE",
   "STELLA_INFRA_OFFSET",
+  "STELLA_MERGE_HOLD",
+  "STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW",
   "STELLA_PORT_OFFSET",
   "STELLA_QUERY_PLAN_SCALE_PROFILE",
   "STELLA_RUN_CORPUS_ENGINE_TESTS",
@@ -896,7 +942,12 @@ export const TOOLING_ENV_KEYS = new Set([
   "STELLA_TEST_RELEASE_NUMBERS",
   "STELLA_UPDATE_PLAN_CONTRACTS",
   "TANSTACK_DRIFT_INSTALL_OUTCOME",
+  "TURBO_HASH",
   "TURBO_SCM_BASE",
+  "TURN_OUTCOME_COMBINATIONS",
+  "TURN_OUTCOME_SHARD",
+  "UPDATE_CHAT_PROMPT_BASELINE",
+  "UPDATE_PROVIDER_REQUEST_PATHS",
   "WXT_STELLA_ORIGINS",
 ]);
 

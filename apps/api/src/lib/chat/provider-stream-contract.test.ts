@@ -1,5 +1,7 @@
 import { EventType } from "@tanstack/ai";
 import type { AnyTextAdapter, StreamChunk } from "@tanstack/ai";
+import { createAnthropicChat } from "@tanstack/ai-anthropic";
+import { createOpenaiChat } from "@tanstack/ai-openai";
 import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { panic } from "better-result";
 import { describe, expect, test } from "bun:test";
@@ -7,7 +9,9 @@ import { describe, expect, test } from "bun:test";
 import {
   INCOMPLETE_STREAM_CODE,
   withProviderStreamContract,
+  withRunToolCallIds,
 } from "@/api/lib/chat/provider-stream-contract";
+import { ToolCallIdLedger } from "@/api/lib/chat/unique-tool-call-ids";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 const started: StreamChunk = {
@@ -133,10 +137,287 @@ describe("the provider stream contract", () => {
     expect(closed).toBe(true);
   });
 
+  test("a run's call id ledger reaches the stream, never the request", async () => {
+    const seen: unknown[] = [];
+    const adapter = asTestRaw<AnyTextAdapter>({
+      kind: "text",
+      model: "model",
+      name: "fixture",
+      async *chatStream(options: unknown) {
+        seen.push(options);
+        await Promise.resolve();
+        yield started;
+        yield {
+          type: EventType.TOOL_CALL_START,
+          toolCallId: "call_0",
+          toolCallName: "search",
+          toolName: "search",
+          timestamp: 1,
+        };
+        yield finished;
+      },
+    });
+    const request = {
+      logger: resolveDebugOption(false),
+      messages: [],
+      model: "model",
+    };
+    const ids: string[] = [];
+    for await (const chunk of withRunToolCallIds(
+      withProviderStreamContract(adapter),
+      new ToolCallIdLedger(["call_0"]),
+    ).chatStream(request)) {
+      if (chunk.type === EventType.TOOL_CALL_START) {
+        ids.push(chunk.toolCallId);
+      }
+    }
+    expect(ids).toEqual(["call_0_2"]);
+    expect(seen).toHaveLength(1);
+    expect(seen.at(0)).toBe(request);
+  });
+
+  test("an adapter is held to the contract once", () => {
+    const contracted = withProviderStreamContract(adapterOf([]));
+    expect(() => withProviderStreamContract(contracted)).toThrow(
+      "already held to the provider stream contract",
+    );
+    expect(() =>
+      withProviderStreamContract(
+        withRunToolCallIds(contracted, new ToolCallIdLedger([])),
+      ),
+    ).toThrow("already held to the provider stream contract");
+  });
+
+  test("a run's ledger binds only to a contracted adapter", () => {
+    expect(() =>
+      withRunToolCallIds(adapterOf([]), new ToolCallIdLedger([])),
+    ).toThrow("must be held to the provider stream contract");
+  });
+
   test("every other member is the adapter's own", () => {
     const adapter = adapterOf([]);
     const contracted = withProviderStreamContract(adapter);
     expect(contracted.name).toBe("fixture");
     expect(contracted.model).toBe("model");
   });
+});
+
+// --- Reasoning across providers ----------------------------------------------
+
+type ProviderFetch = typeof globalThis.fetch;
+
+/** A `fetch` that answers every request with `answer` and records its body. */
+const recordingFetch = (answer: () => Response) => {
+  const bodies: unknown[] = [];
+  const fetch: ProviderFetch = Object.assign(
+    async (
+      input: Parameters<ProviderFetch>[0],
+      init?: RequestInit,
+    ): Promise<Response> => {
+      const request =
+        input instanceof Request ? input : new Request(input.toString(), init);
+      bodies.push(await request.clone().json());
+      return answer();
+    },
+    { preconnect: globalThis.fetch.preconnect },
+  );
+  return { bodies, fetch };
+};
+
+const eventStream = (
+  events: readonly ({ type: string } & Record<string, unknown>)[],
+) =>
+  new Response(
+    events
+      .map(
+        (event) => `event: ${event.type}\ndata: ${JSON.stringify(event)}\n\n`,
+      )
+      .join(""),
+    { headers: { "content-type": "text/event-stream" } },
+  );
+
+const refused = () =>
+  new Response(
+    JSON.stringify({
+      error: { message: "stop", type: "invalid_request_error" },
+      type: "error",
+    }),
+    { status: 400, headers: { "content-type": "application/json" } },
+  );
+
+const REASONING = "The user asked for the draft.";
+
+/** Anthropic's streamed answer with a signed thinking block. */
+const anthropicReasoningAnswer = () =>
+  eventStream([
+    {
+      type: "message_start",
+      message: {
+        id: "msg_1",
+        type: "message",
+        role: "assistant",
+        model: "claude-sonnet-4-6",
+        content: [],
+        stop_reason: null,
+        usage: { input_tokens: 1, output_tokens: 0 },
+      },
+    },
+    {
+      type: "content_block_start",
+      index: 0,
+      content_block: { type: "thinking", thinking: "", signature: "" },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "thinking_delta", thinking: REASONING },
+    },
+    {
+      type: "content_block_delta",
+      index: 0,
+      delta: { type: "signature_delta", signature: "EqQBCkgIBxABGAIqQJ4xY0b8" },
+    },
+    { type: "content_block_stop", index: 0 },
+    {
+      type: "content_block_start",
+      index: 1,
+      content_block: { type: "text", text: "" },
+    },
+    {
+      type: "content_block_delta",
+      index: 1,
+      delta: { type: "text_delta", text: "Done." },
+    },
+    { type: "content_block_stop", index: 1 },
+    {
+      type: "message_delta",
+      delta: { stop_reason: "end_turn" },
+      usage: { output_tokens: 2 },
+    },
+    { type: "message_stop" },
+  ]);
+
+/** OpenAI's streamed Responses answer with a reasoning item. */
+const openAiReasoningAnswer = () => {
+  const response = {
+    id: "resp_1",
+    object: "response",
+    model: "gpt-5.2",
+    status: "completed",
+    output: [
+      {
+        type: "reasoning",
+        id: "rs_1",
+        encrypted_content: "gAAAAABencrypted",
+        summary: [{ type: "summary_text", text: REASONING }],
+      },
+      {
+        type: "message",
+        id: "msg_1",
+        role: "assistant",
+        status: "completed",
+        content: [{ type: "output_text", text: "Done.", annotations: [] }],
+      },
+    ],
+    usage: { input_tokens: 1, output_tokens: 2, total_tokens: 3 },
+  };
+  return eventStream([
+    {
+      type: "response.created",
+      response: { ...response, status: "in_progress", output: [] },
+    },
+    { type: "response.completed", response },
+  ]);
+};
+
+const REASONING_PROVIDERS = ["anthropic", "openai"] as const;
+type ReasoningProvider = (typeof REASONING_PROVIDERS)[number];
+
+const reasoningAnswers = {
+  anthropic: anthropicReasoningAnswer,
+  openai: openAiReasoningAnswer,
+} satisfies Record<ReasoningProvider, () => Response>;
+
+/** What a provider's request shows of reasoning replayed to it. */
+const replayedReasoning = {
+  anthropic: '"type":"thinking"',
+  openai: '"type":"reasoning"',
+} satisfies Record<ReasoningProvider, string>;
+
+const reasoningAdapter = (
+  provider: ReasoningProvider,
+  fetch: ProviderFetch,
+): AnyTextAdapter =>
+  withProviderStreamContract(
+    provider === "anthropic"
+      ? createAnthropicChat("claude-sonnet-4-6", "test-anthropic-key", {
+          fetch,
+        })
+      : createOpenaiChat("gpt-5.2", "test-openai-key", { fetch }),
+    provider,
+  );
+
+/** The signed reasoning `provider`'s adapter reads from its answer. */
+const reasoningSignedBy = async (provider: ReasoningProvider) => {
+  const { fetch } = recordingFetch(reasoningAnswers[provider]);
+  const adapter = reasoningAdapter(provider, fetch);
+  const signatures: string[] = [];
+  for await (const chunk of adapter.chatStream({
+    logger: resolveDebugOption(false),
+    messages: [{ role: "user", content: "Delete the draft." }],
+    model: adapter.model,
+  })) {
+    // The adapters carry a thinking step's signature on its finish.
+    const signature: unknown =
+      chunk.type === EventType.STEP_FINISHED
+        ? Reflect.get(chunk, "signature")
+        : undefined;
+    if (typeof signature === "string" && signature !== "") {
+      signatures.push(signature);
+    }
+  }
+  expect(signatures).toHaveLength(1);
+  return { content: REASONING, signature: signatures.join("") };
+};
+
+/** The body `provider`'s adapter sends for a thread holding `thinking`. */
+const requestWithReasoning = async (
+  provider: ReasoningProvider,
+  thinking: { content: string; signature: string },
+) => {
+  const { bodies, fetch } = recordingFetch(refused);
+  const adapter = reasoningAdapter(provider, fetch);
+  for await (const _chunk of adapter.chatStream({
+    logger: resolveDebugOption(false),
+    messages: [
+      { role: "user", content: "Delete the draft." },
+      { role: "assistant", content: "Done.", thinking: [thinking] },
+      { role: "user", content: "Thanks." },
+    ],
+    model: adapter.model,
+  })) {
+    // The refusal ends the stream once the request is written.
+  }
+  expect(bodies).toHaveLength(1);
+  return JSON.stringify(bodies.at(0));
+};
+
+describe("signed reasoning in a thread's history", () => {
+  for (const origin of REASONING_PROVIDERS) {
+    for (const target of REASONING_PROVIDERS) {
+      const kept = origin === target;
+      test(`${origin} reasoning is ${kept ? "sent back to" : "left out of"} the ${target} request`, async () => {
+        const body = await requestWithReasoning(
+          target,
+          await reasoningSignedBy(origin),
+        );
+        if (kept) {
+          expect(body).toContain(replayedReasoning[target]);
+        } else {
+          expect(body).not.toContain(replayedReasoning[target]);
+          expect(body).not.toContain(REASONING);
+        }
+      });
+    }
+  }
 });

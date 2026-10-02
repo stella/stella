@@ -34,6 +34,7 @@ import {
 } from "@/api/lib/ai-error";
 import type { TanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { AIRequestPolicy } from "@/api/lib/chat/ai-data-policy";
 import {
   guardModelMessages,
   guardModelSystemPrompt,
@@ -43,6 +44,7 @@ import type {
   GuardedModelMessages,
   GuardedSystemPrompt,
 } from "@/api/lib/chat/model-ingress-guard";
+import { MANAGED_PROVIDER_UNAVAILABLE_CODE } from "@/api/lib/chat/provider-data-policy";
 import { readOutputCeilingStopAsLength } from "@/api/lib/chat/provider-stream-contract";
 import {
   finishReasonOf,
@@ -67,7 +69,12 @@ import {
   type ProviderSafeJsonSchemaProjectionOptions,
 } from "@/api/lib/provider-safe-json-schema";
 import { checkStructuredOutputBudget } from "@/api/lib/structured-output-budget";
-import { tanStackCacheControl } from "@/api/lib/tanstack-ai-caching";
+import {
+  joinLayeredSystemPrompt,
+  promptCachingUsesBreakpoints,
+  tanStackCacheControl,
+} from "@/api/lib/tanstack-ai-caching";
+import type { LayeredSystemPrompt } from "@/api/lib/tanstack-ai-caching";
 import {
   getTanStackTextModelById,
   getTanStackTextModelForRole,
@@ -121,7 +128,7 @@ type GenerateTanStackBaseOptions = {
    */
   tenantWorkspaceIds: readonly SafeId<"workspace">[];
   temperature?: number | undefined;
-};
+} & AIRequestPolicy;
 
 type TanStackTextForRoleOptions = GenerateTanStackBaseOptions &
   GenerateTanStackInputOptions;
@@ -174,7 +181,8 @@ export type TanStackStructuredOutputEvent<TOutput> =
 type ResolveTextModelOptions = Pick<
   GenerateTanStackBaseOptions,
   "modelId" | "organizationId" | "orgAIConfig" | "reasoningEffort" | "role"
->;
+> &
+  AIRequestPolicy;
 
 const CANCELLED_GENERATION_MESSAGE = "AI generation was cancelled";
 
@@ -555,12 +563,15 @@ const throwIfTanStackRunError = (chunk: PublicStreamChunk): void => {
 // be named a transient transport outage.
 const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
   const cause: unknown = chunk.rawEvent ?? providerErrorBody(chunk.message);
-  return new HandlerError({
-    status: 502,
+  const error = new HandlerError({
+    status: chunk.code === MANAGED_PROVIDER_UNAVAILABLE_CODE ? 503 : 502,
     message: chunk.message,
     ...(chunk.code ? { code: chunk.code } : {}),
     ...(cause === undefined ? {} : { cause }),
   });
+  return chunk.code === MANAGED_PROVIDER_UNAVAILABLE_CODE
+    ? classifyFailure(error, "model_unavailable")
+    : error;
 };
 
 /**
@@ -581,7 +592,21 @@ const tanStackRunError = (chunk: RunErrorEvent): HandlerError => {
  * the failure, so an engine-internal error keeps its own identity.
  */
 const withRecoveredProviderStatus = (error: unknown): unknown => {
-  if (!(error instanceof Error) || classifyAIError(error) !== "unknown") {
+  if (!(error instanceof Error)) {
+    return error;
+  }
+  if (hasManagedProviderUnavailableCode(error)) {
+    return classifyFailure(
+      new HandlerError({
+        status: 503,
+        code: MANAGED_PROVIDER_UNAVAILABLE_CODE,
+        message: error.message,
+        cause: error,
+      }),
+      "model_unavailable",
+    );
+  }
+  if (classifyAIError(error) !== "unknown") {
     return error;
   }
   const cause = providerErrorBody(error.message);
@@ -606,6 +631,7 @@ const shouldRetryWithStandardServiceTier = ({
   serviceTier: AIRequestServiceTier;
 }): boolean =>
   model.provider === "openai" &&
+  !hasManagedProviderUnavailableCode(error) &&
   isDeferredServiceTier(serviceTier) &&
   isRetryableServiceTierFallbackError(error);
 
@@ -619,6 +645,20 @@ const shouldRetryWithStandardServiceTier = ({
 // the retry is decided on is the status the failure is named by; the depth
 // bound keeps a cyclic cause from hanging the request.
 const MAX_CAUSE_DEPTH = 8;
+
+const hasManagedProviderUnavailableCode = (error: unknown): boolean => {
+  let current = error;
+  for (let depth = 0; depth < MAX_CAUSE_DEPTH; depth += 1) {
+    if (!isRecord(current)) {
+      return false;
+    }
+    if (current["code"] === MANAGED_PROVIDER_UNAVAILABLE_CODE) {
+      return true;
+    }
+    current = current["cause"];
+  }
+  return false;
+};
 
 const providerErrorInCauseChain = (
   error: unknown,
@@ -825,6 +865,55 @@ export const streamTanStackObjectForRole = <TSchema extends v.GenericSchema>({
   });
 };
 
+// The SDK's non-streaming adapter fallback emits only the error message.
+// Preserve a configured refusal before its status and code are discarded.
+const streamChatObjectWithManagedErrors = async function* (
+  options: Parameters<typeof streamChatObject>[0],
+) {
+  if (options.adapter.structuredOutputStream) {
+    yield* streamChatObject(options);
+    return;
+  }
+
+  let failure: { error: unknown } | undefined;
+  const structuredOutput = async (
+    structuredOptions: Parameters<AnyTextAdapter["structuredOutput"]>[0],
+  ) => {
+    const result = await Result.tryPromise({
+      try: async () =>
+        await options.adapter.structuredOutput(structuredOptions),
+      catch: (error) => error,
+    });
+    if (Result.isOk(result)) {
+      return result.value;
+    }
+    if (hasManagedProviderUnavailableCode(result.error)) {
+      failure = { error: result.error };
+    }
+    throw result.error;
+  };
+  const adapter = new Proxy(options.adapter, {
+    get: (target, key) => {
+      if (key === "structuredOutput") {
+        return structuredOutput;
+      }
+      const value: unknown = Reflect.get(target, key, target);
+      if (typeof value !== "function") {
+        return value;
+      }
+      const bound: unknown = value.bind(target);
+      return bound;
+    },
+  });
+
+  for await (const chunk of streamChatObject({ ...options, adapter })) {
+    if (chunk.type === EventType.RUN_ERROR && failure !== undefined) {
+      throw failure.error;
+    }
+    yield chunk;
+  }
+};
+
 const streamTanStackStructuredOutput = async function* <
   TSchema extends v.GenericSchema,
 >({
@@ -865,7 +954,7 @@ const streamTanStackStructuredOutput = async function* <
     model,
     serviceTier,
     stream: (requestedServiceTier) =>
-      streamChatObject({
+      streamChatObjectWithManagedErrors({
         adapter: model.adapter,
         messages,
         outputSchema: tanStackOutputSchema,
@@ -966,6 +1055,7 @@ export const resolveTanStackTextModel = ({
   orgAIConfig,
   reasoningEffort,
   role,
+  ...policy
 }: ResolveTextModelOptions): ResolvedTanStackTextModel => {
   // Every inference path (chat, subagents, field generators, workflow
   // batches) resolves its model here, so this is the one seam where a
@@ -979,8 +1069,12 @@ export const resolveTanStackTextModel = ({
         role,
         organizationId,
         reasoningEffort,
+        ...policy,
       })
-    : getTanStackTextModelForRole(role, orgAIConfig, { organizationId });
+    : getTanStackTextModelForRole(role, orgAIConfig, {
+        organizationId,
+        ...policy,
+      });
 };
 
 const messagesFromInput = (
@@ -1044,6 +1138,15 @@ const hashCacheScopeKey = (raw: string): string =>
     .digest("hex")
     .slice(0, PROVIDER_CACHE_KEY_MAX);
 
+/**
+ * The request's system prompt. A layered prompt (a chat turn's) is split at
+ * its layer ends for a provider that caches at markers
+ * (`PROVIDER_PROMPT_CACHING`): the static and organization layers each end in
+ * a marker, and the per-user and per-turn tail carries none. Every other
+ * provider, and every request with caching off, receives one string, the
+ * layers joined. A plain prompt keeps its single end-of-prompt marker on
+ * Anthropic.
+ */
 export const systemPromptsPatch = ({
   caching,
   model,
@@ -1051,29 +1154,70 @@ export const systemPromptsPatch = ({
 }: {
   caching: CachingDecision;
   model: ResolvedTanStackTextModel;
-  system: string | undefined;
+  system: string | LayeredSystemPrompt | undefined;
 }): { systemPrompts?: SystemPrompt[] } => {
-  if (!system) {
+  if (system === undefined) {
     return {};
   }
-
-  if (model.provider !== "anthropic") {
-    return { systemPrompts: [system] };
+  const joined =
+    typeof system === "string" ? system : joinLayeredSystemPrompt(system);
+  if (!joined) {
+    return {};
   }
 
   const cacheControl = tanStackCacheControl(caching);
   if (!cacheControl) {
-    return { systemPrompts: [system] };
+    return { systemPrompts: [joined] };
   }
 
+  if (typeof system === "string") {
+    return model.provider === "anthropic"
+      ? {
+          systemPrompts: [
+            { content: system, metadata: { cache_control: cacheControl } },
+          ],
+        }
+      : { systemPrompts: [joined] };
+  }
+
+  if (!promptCachingUsesBreakpoints(model)) {
+    return { systemPrompts: [joined] };
+  }
+
+  // A provider rejects an empty text block, so an empty layer is left out,
+  // and its marker with it.
+  const marked = [system.static, system.organization]
+    .filter((layer) => layer.length > 0)
+    .map((layer): SystemPrompt => ({
+      content: layer,
+      metadata: { cache_control: cacheControl },
+    }));
   return {
-    systemPrompts: [
-      {
-        content: system,
-        metadata: { cache_control: cacheControl },
-      },
-    ],
+    systemPrompts: system.turn.length === 0 ? marked : [...marked, system.turn],
   };
+};
+
+/**
+ * The request-level marker a layered request adds where the provider caches at
+ * markers. It lands on the request's last block, so it moves forward with the
+ * conversation: each request reads the prefix the request before it wrote,
+ * which is what caches history and every tool-loop iteration.
+ */
+const conversationCacheControl = ({
+  cacheConversation,
+  caching,
+  model,
+}: {
+  cacheConversation: boolean;
+  caching: CachingDecision;
+  model: ResolvedTanStackTextModel;
+}) => {
+  const cacheControl = tanStackCacheControl(caching);
+  return cacheConversation &&
+    cacheControl !== undefined &&
+    promptCachingUsesBreakpoints(model)
+    ? cacheControl
+    : undefined;
 };
 
 type AnthropicThinkingOption = Extract<
@@ -1147,18 +1291,29 @@ export const chatTurnOutputTokens = (
 };
 
 export const mergeGenerationOptions = ({
+  cacheConversation = false,
   caching,
   model,
   maxOutputTokens,
   serviceTier,
   temperature,
 }: {
+  /**
+   * The request carries a layered system prompt (a chat turn), so a provider
+   * that caches at markers gets the request-level marker too.
+   */
+  cacheConversation?: boolean | undefined;
   caching: CachingDecision;
   model: ResolvedTanStackTextModel;
   maxOutputTokens: number | undefined;
   serviceTier: AIRequestServiceTier;
   temperature: number | undefined;
 }): TanStackModelOptions => {
+  const conversationMarker = conversationCacheControl({
+    cacheConversation,
+    caching,
+    model,
+  });
   // Caller temperature overrides only apply where the role builder
   // itself emitted a temperature. Builder omission is always
   // deliberate — the model rejects, deprecates, or ignores sampling
@@ -1198,7 +1353,13 @@ export const mergeGenerationOptions = ({
                 anthropicThinkingReservation(model.modelOptions.thinking),
             }),
       };
-      return { ...anthropicOptions, ...temperatureOverride };
+      return {
+        ...anthropicOptions,
+        ...temperatureOverride,
+        ...(conversationMarker === undefined
+          ? {}
+          : { cache_control: conversationMarker }),
+      };
     }
     case "bedrock":
       return {
@@ -1234,6 +1395,9 @@ export const mergeGenerationOptions = ({
           : { maxCompletionTokens: maxOutputTokens }),
         ...temperatureOverride,
         ...openRouterServiceTierOptions(serviceTier),
+        ...(conversationMarker === undefined
+          ? {}
+          : { cacheControl: conversationMarker }),
       };
     default: {
       model satisfies never;

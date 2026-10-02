@@ -3,10 +3,12 @@ import { describe, expect, test } from "bun:test";
 import { existsSync, readdirSync, readFileSync } from "node:fs";
 import nodePath from "node:path";
 
+import { savedTimeNarrativesKeys } from "@/components/billing/saved-time-narratives";
 import { companyFormatKeys } from "@/components/company-format-library";
 import { readerAnnotationKeys } from "@/components/legal-reader/annotations/reader-annotations-query";
 import { savedSearchKeys } from "@/components/saved-searches.logic";
 import { chatKeys } from "@/features/chat/chat-query-contract";
+import { timeTimersOptions } from "@/features/time-timers/queries";
 import {
   linkedAccountsOptions,
   pendingDeletionTasksOptions,
@@ -34,9 +36,9 @@ import { myTimeEntriesInfiniteOptions } from "@/lib/workspaces/queries/my-time-e
 import { reportExportsKeys } from "@/lib/workspaces/queries/report-exports";
 import { timeEntriesKeys } from "@/lib/workspaces/queries/time-entries";
 import { viewTemplateKeys } from "@/lib/workspaces/queries/view-templates";
+import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { connectedAppsOptions } from "@/routes/_protected.settings/-queries/connections";
 import { memoriesKeys } from "@/routes/_protected.settings/-queries/memories";
-import { savedTimeNarrativesKeys } from "@/routes/_protected.workspaces/$workspaceId/-components/billing/saved-time-narratives";
 
 // API reads that answer for the signed-in user are cached under a key that
 // names that user. The manifests below list every such read:
@@ -303,9 +305,7 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "saved-time-narratives/list.ts": {
     kind: "keyed",
     calls: ['api["saved-time-narratives"].get'],
-    files: [
-      "routes/_protected.workspaces/$workspaceId/-components/billing/saved-time-narratives.tsx",
-    ],
+    files: ["components/billing/saved-time-narratives.tsx"],
     keys: () => [savedTimeNarrativesKeys.list(ORG, USER)],
   },
   "search/preview.ts": {
@@ -381,10 +381,11 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     kind: "keyed",
     calls: ["fetchTimeEntries"],
     files: ["lib/workspaces/queries/time-entries.ts"],
-    keys: () => [
-      timeEntriesKeys.list(WORKSPACE, USER, {}),
-      timeEntriesKeys.activeTimer(WORKSPACE, USER),
-    ],
+    keys: () => [timeEntriesKeys.list(WORKSPACE, USER, {})],
+  },
+  "time-entries/approval-queue/list.ts": {
+    kind: "no-web-caller",
+    calls: ['api["time-entries"]["approval-queue"].get'],
   },
   "time-entries/me/list.ts": {
     kind: "keyed",
@@ -417,8 +418,10 @@ const PER_USER_READS: Record<string, PerUserRead> = {
     calls: ['api["time-timers"].admin.get'],
   },
   "time-timers/list.ts": {
-    kind: "no-web-caller",
+    kind: "keyed",
     calls: ['api["time-timers"].get'],
+    files: ["features/time-timers/queries.ts"],
+    keys: () => [timeTimersOptions(ORG, USER).queryKey],
   },
   "usage/get-lane.ts": {
     kind: "keyed",
@@ -441,6 +444,18 @@ const PER_USER_READS: Record<string, PerUserRead> = {
   "work-obligations/queues/list.ts": {
     kind: "no-web-caller",
     calls: ['api["my-work"].get'],
+  },
+  "workspaces/member-previews/list.ts": {
+    kind: "keyed",
+    calls: ['api.workspaces["member-previews"].get'],
+    files: ["lib/workspaces/queries/workspace-member-previews.ts"],
+    keys: () => [
+      workspaceMemberPreviewsOptions({
+        organizationId: ORG,
+        userId: USER,
+        workspaceIds: [WORKSPACE],
+      }).queryKey,
+    ],
   },
   "workspaces/list.ts": { kind: "not-per-user", reason: JOINS_NAMES },
   "workspaces/read-active.ts": {

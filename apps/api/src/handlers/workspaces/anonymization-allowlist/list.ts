@@ -40,7 +40,12 @@ const config = {
     "given, that document's own, merged into one list so a detection run can " +
     "be filtered in a single pass.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "anonymization_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "anonymization_admin",
+    consumesServices: false,
+  },
   access: "read",
   query: t.Object({
     entityId: t.Optional(tSafeId("entity")),

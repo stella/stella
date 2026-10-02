@@ -70,14 +70,12 @@ import type {
   McpToolInputSchema,
 } from "@/api/mcp/tool-types";
 
-import {
-  RESERVED_FLAGS,
-  TOOL_ANNOTATIONS,
-} from "../../../packages/cli/src/annotations";
+import { RESERVED_FLAGS } from "../../../packages/cli/src/annotations";
 import { parseCapabilityCatalog } from "../../../packages/cli/src/capability-catalog-load";
 import { uploadCommand } from "../../../packages/cli/src/commands/upload";
 import { buildCliRouteTree } from "../../../packages/cli/src/generate-capability-tree";
 import { kebabCase } from "../../../packages/cli/src/generate-route-map";
+import { generatedToolAnnotations as TOOL_ANNOTATIONS } from "../../../packages/cli/src/generated/tool-annotations";
 import type {
   RegistryToolListing,
   RouteNode,
@@ -2442,6 +2440,8 @@ const resolveModels = async (
   return modelIds.map((id) => ({
     id,
     model: getTanStackTextModelById(id, null, {
+      dataClass: "customer",
+      managedAIResidency: "eu",
       role: "chat",
       organizationId: null,
     }),

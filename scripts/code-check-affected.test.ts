@@ -9,6 +9,10 @@ import {
 import path from "node:path";
 
 import {
+  CODE_CHECK_LEGS,
+  ownsCodeCheckPath,
+} from "../packages/scripts/src/code-quality-partition";
+import {
   ALL_WORKSPACE_CACHE_INPUTS,
   ALL_WORKSPACE_TYPECHECK_CACHE_INPUTS,
   DEPENDENCY_CACHE_INPUTS,
@@ -598,6 +602,24 @@ describe("full and affected code-check parity", () => {
       expect.arrayContaining(["apps/extension", "apps/landing"]),
     );
     for (const { name } of generating) {
+      const producers = taskField(
+        tasks,
+        `${name}#typecheck`,
+        "dependsOn",
+      ).filter((dependency) => dependency.startsWith("generate:"));
+      if (producers.length > 0) {
+        // A dedicated cached producer owns the artifact; both compiler tasks
+        // await it instead of making lint await the entire typecheck.
+        expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual(
+          expect.arrayContaining(producers),
+        );
+        for (const producer of producers) {
+          expect(
+            taskField(tasks, `${name}#${producer}`, "outputs").length,
+          ).toBeGreaterThan(0);
+        }
+        continue;
+      }
       expect(taskField(tasks, `${name}#lint`, "dependsOn")).toEqual([
         "typecheck",
       ]);
@@ -694,3 +716,107 @@ const workspaceManifests = (): WorkspaceManifest[] =>
         };
       }),
   );
+
+describe("parallel code-quality legs", () => {
+  test("runs result consumption with the same plan scope and owner in every leg", () => {
+    const workflow = readFileSync(".github/workflows/ci.yml", "utf-8");
+    for (const leg of CODE_CHECK_LEGS) {
+      const start = workflow.indexOf(`\n  code-quality-${leg}:\n`);
+      expect(start).toBeGreaterThanOrEqual(0);
+      const nextJob = workflow
+        .slice(start + 1)
+        .search(/\n {2}[a-z][a-z0-9-]*:\n/u);
+      const job =
+        nextJob === -1
+          ? workflow.slice(start)
+          : workflow.slice(start, start + 1 + nextJob);
+      expect(job.match(/- name: Result consumption/gu)).toHaveLength(1);
+      expect(job).toContain(
+        `bun run check:result-consumption -- --all --leg ${leg}`,
+      );
+      expect(job).toContain(
+        `bun run check:result-consumption -- --base "origin/$BASE_REF" --leg ${leg}`,
+      );
+    }
+  });
+
+  test("partition the unsplit workspace tasks and root commands at every scope", () => {
+    const manifests = workspaceManifests();
+    const scriptsByWorkspace = new Map(
+      manifests.map(({ workspace, scripts }) => [workspace, scripts]),
+    );
+    const workspaces = new Set([
+      ...manifests.map(({ workspace }) => workspace),
+      ...WORKSPACES,
+      "packages/new-workspace",
+    ]);
+    const plans = [
+      plan(["bun.lock"], [...WORKSPACES]),
+      plan(["apps/web/src/new.ts"], ["apps/web", "packages/ui"]),
+      plan(["scripts/new.ts"], []),
+    ];
+    for (const planned of plans) {
+      if (planned.type !== "scoped") {
+        throw new TypeError("fixture must produce a scoped plan");
+      }
+      const expand = (commands: string[][]) =>
+        commands.flatMap((command) => {
+          if (command[2] !== "turbo" || command.includes("typecheck:repo")) {
+            return [command.join(" ")];
+          }
+          const tasks = command.filter(
+            (arg) => arg === "lint" || arg === "typecheck",
+          );
+          const included = command
+            .filter((arg) => arg.startsWith("--filter=./"))
+            .map((arg) => arg.slice("--filter=./".length));
+          const excluded = new Set(
+            command
+              .filter((arg) => arg.startsWith("--filter=!./"))
+              .map((arg) => arg.slice("--filter=!./".length)),
+          );
+          return [...workspaces]
+            .filter(
+              (workspace) =>
+                (included.length === 0 || included.includes(workspace)) &&
+                !excluded.has(workspace),
+            )
+            .flatMap((workspace) =>
+              tasks
+                .filter(
+                  (task) =>
+                    !scriptsByWorkspace.has(workspace) ||
+                    typeof scriptsByWorkspace.get(workspace)?.[task] ===
+                      "string",
+                )
+                .map((task) => `${workspace}#${task}`),
+            );
+        });
+      const unsplit = expand(scopedCommands(planned));
+      const split = CODE_CHECK_LEGS.flatMap((leg) =>
+        expand(scopedCommands(planned, { leg, workspaces })),
+      );
+      expect(split.toSorted()).toEqual(unsplit.toSorted());
+      expect(new Set(split).size).toBe(split.length);
+    }
+    expect(
+      CODE_CHECK_LEGS.filter((leg) =>
+        ownsCodeCheckPath("packages/new-workspace", leg),
+      ),
+    ).toEqual(["rest"]);
+  });
+
+  test("partition exact result-boundary lint paths including root sources", () => {
+    const paths = [
+      "apps/api/src/new.ts",
+      "apps/web/src/new.ts",
+      "packages/new/src/new.ts",
+      "scripts/new.ts",
+    ];
+    for (const file of paths) {
+      expect(
+        CODE_CHECK_LEGS.filter((leg) => ownsCodeCheckPath(file, leg)),
+      ).toHaveLength(1);
+    }
+  });
+});

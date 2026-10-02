@@ -17,7 +17,7 @@ import type {
   Paragraph,
   ParagraphAlignment,
 } from "@stll/docx-core/model";
-import { parseDocx } from "@stll/folio-core/server";
+import { parseDocx, table } from "@stll/folio-core/server";
 import {
   DECISION_IDENTIFIER_MAX_LENGTH,
   DECISION_IDENTIFIER_TYPES,
@@ -121,6 +121,64 @@ const shapeOfBlock = (block: Block): string => {
 
 const shapeOf = (blocks: readonly Block[]): string[] =>
   blocks.map(shapeOfBlock);
+
+test("custom XML wrappers retain every body and table-cell paragraph", () => {
+  const document = documentOf([
+    { text: "Indokolás" },
+    { text: "[1] A bíróság minden szót megőriz." },
+    { text: "[2] A következő bekezdés is megmarad." },
+  ]);
+  document.package.document.content.push(
+    table({
+      rows: [
+        [
+          {
+            content: [paragraphOf({ text: "A cella teljes szövege." })],
+          },
+        ],
+      ],
+    }),
+  );
+  const expected = parseDocument(document).documentAst;
+  const wrap = (content: BlockContent[]) =>
+    ({
+      type: "blockCustomXml",
+      openingXml: '<w:customXml w:element="decision">',
+      closingXml: "</w:customXml>",
+      content,
+    }) satisfies BlockContent;
+  for (const depth of [1, 2, 4]) {
+    let content = document.package.document.content.map(
+      (block): BlockContent =>
+        block.type === "table"
+          ? {
+              ...block,
+              rows: block.rows.map((row) => ({
+                ...row,
+                cells: row.cells.map((cell) => ({
+                  ...cell,
+                  content: [wrap(cell.content)],
+                })),
+              })),
+            }
+          : block,
+    );
+    for (let level = 0; level < depth; level += 1) {
+      content = [wrap(content)];
+    }
+    const wrapped = {
+      ...document,
+      package: {
+        ...document.package,
+        document: {
+          ...document.package.document,
+          content,
+        },
+      },
+    };
+    expect(parseDocument(wrapped).documentAst).toEqual(expected);
+  }
+});
 
 // ── Dates, kinds and dockets ─────────────────────────────
 
@@ -231,6 +289,96 @@ describe("the docket the document prints", () => {
 // ── Structure ────────────────────────────────────────────
 
 describe("reading a document folio handed over", () => {
+  test("keeps visible text across fields, tracked insertions, wrappers, and nested links", () => {
+    const paragraph: Paragraph = {
+      type: "paragraph",
+      content: [
+        { type: "run", content: [{ type: "text", text: "before " }] },
+        {
+          type: "complexField",
+          instruction: "PAGE",
+          fieldType: "PAGE",
+          fieldCode: [],
+          fieldResult: [
+            { type: "run", content: [{ type: "text", text: "field " }] },
+          ],
+        },
+        {
+          type: "simpleField",
+          instruction: "PAGE",
+          fieldType: "PAGE",
+          content: [
+            { type: "run", content: [{ type: "text", text: "simple " }] },
+          ],
+        },
+        {
+          type: "insertion",
+          info: { id: 1, author: "court" },
+          content: [
+            { type: "run", content: [{ type: "text", text: "inserted " }] },
+          ],
+        },
+        {
+          type: "moveTo",
+          info: { id: 2, author: "court" },
+          content: [
+            { type: "run", content: [{ type: "text", text: "moved " }] },
+          ],
+        },
+        {
+          type: "inlineSdt",
+          properties: { sdtType: "richText" },
+          content: [
+            { type: "run", content: [{ type: "text", text: "controlled " }] },
+          ],
+        },
+        {
+          type: "inlineWrapper",
+          kind: "smartTag",
+          element: "name",
+          content: [
+            { type: "run", content: [{ type: "text", text: "wrapped " }] },
+          ],
+        },
+        {
+          type: "mathEquation",
+          display: "inline",
+          ommlXml: "<m:oMath><m:r><m:t>math </m:t></m:r></m:oMath>",
+          plainText: "math ",
+        },
+        {
+          type: "preservedInline",
+          xml: "<opaque><w:r><w:t>preserved </w:t></w:r></opaque>",
+          text: "preserved ",
+        },
+        {
+          type: "hyperlink",
+          children: [
+            { type: "run", content: [{ type: "text", text: "link one " }] },
+            {
+              type: "inlineWrapper",
+              kind: "smartTag",
+              element: "linkText",
+              content: [
+                { type: "run", content: [{ type: "text", text: "link two " }] },
+              ],
+            },
+            {
+              type: "preservedInline",
+              xml: "<opaque><w:r><w:t>link three</w:t></w:r></opaque>",
+              text: "link three",
+            },
+          ],
+        },
+      ],
+    };
+    const parsed = parseDocument(bodyOf([paragraph]));
+
+    expect(parsed.fulltext).toContain(
+      "before field simple inserted moved controlled wrapped math preserved link one link two link three",
+    );
+  });
+
   // The same header, as the publisher actually builds it: one paragraph whose
   // runs carry `break` items, which is what an RTF `\line` reads as.
   test("a header paragraph built with soft breaks states the docket alone", () => {

@@ -58,7 +58,12 @@ const config = {
     "describe its most recent run: scope, status, how many targets it covers " +
     "and how many are done, error code, and start and finish times.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies WorkspaceHandlerConfig;
 

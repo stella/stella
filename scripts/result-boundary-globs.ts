@@ -26,6 +26,7 @@ export const RESULT_CONVENTION_SOURCE_GLOBS = [
 // oxlint.config.ts spreads this list rather than restating it, so the lint
 // scope and the enrolment guard cannot drift apart.
 export const RESULT_CONVENTION_ENABLED_GLOBS = [
+  "apps/api/src/lib/auth/**/*.ts",
   "apps/api/src/handlers/agent-auth/**/*.ts",
   "apps/api/src/handlers/ai-config/**/*.ts",
   "apps/api/src/handlers/audit-logs/**/*.ts",
@@ -53,7 +54,6 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/api/src/handlers/notifications/**/*.ts",
   "apps/api/src/handlers/number-series/**/*.ts",
   "apps/api/src/handlers/vat-rates/**/*.ts",
-  "apps/api/src/handlers/operator/**/*.ts",
   "apps/api/src/handlers/organization-settings/**/*.ts",
   "apps/api/src/handlers/public-knowledge/**/*.ts",
   "apps/api/src/handlers/reports/**/*.ts",
@@ -102,6 +102,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/desktop/src/registry/**/*.{ts,tsx}",
   "apps/web/src/components/ai-elements/**/*.{ts,tsx}",
   "apps/web/src/components/ai-prompt-input/**/*.{ts,tsx}",
+  "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/breadcrumbs/**/*.{ts,tsx}",
   "apps/web/src/components/catalogue/**/*.{ts,tsx}",
   "apps/web/src/components/conditions/**/*.{ts,tsx}",
@@ -112,6 +113,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/components/legal-reader/**/*.{ts,tsx}",
   "apps/web/src/components/markdown/**/*.{ts,tsx}",
   "apps/web/src/components/organization/**/*.{ts,tsx}",
+  "apps/web/src/components/billing/**/*.{ts,tsx}",
   "apps/web/src/components/public-law-table/**/*.{ts,tsx}",
   "apps/web/src/features/avt/**/*.{ts,tsx}",
   "apps/web/src/features/command-palette/**/*.{ts,tsx}",
@@ -119,6 +121,8 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/features/guides/**/*.{ts,tsx}",
   "apps/web/src/features/inbox/**/*.{ts,tsx}",
   "apps/web/src/features/knowledge/**/*.{ts,tsx}",
+  "apps/web/src/features/time-timers/**/*.{ts,tsx}",
+  "apps/web/src/features/workspaces/**/*.{ts,tsx}",
   "apps/web/src/lib/deepl/**/*.{ts,tsx}",
   "apps/web/src/lib/inbox/**/*.{ts,tsx}",
   "apps/web/src/lib/prompts/**/*.{ts,tsx}",
@@ -128,6 +132,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "apps/web/src/routes/sitemaps/**/*.{ts,tsx}",
   "apps/web/src/stores/**/*.{ts,tsx}",
   "packages/agent-input/src/**/*.ts",
+  "packages/mcp-kit/src/**/*.ts",
   "packages/ai-catalog/src/**/*.ts",
   "packages/analytics-config/src/**/*.ts",
   "packages/api-client/src/**/*.ts",
@@ -139,6 +144,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/concurrency/src/**/*.ts",
   "packages/conditions/src/**/*.ts",
   "packages/country-codes/src/**/*.ts",
+  "packages/db-load-gate/src/**/*.ts",
   "packages/docx-utils/src/**/*.ts",
   "packages/errors/src/**/*.ts",
   "packages/fetch/src/**/*.ts",
@@ -146,6 +152,7 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
   "packages/legal-atlas/src/**/*.ts",
   "packages/mojibake/src/**/*.ts",
   "packages/permissions/src/**/*.ts",
+  "packages/redis-config/src/**/*.ts",
   "packages/runtime-mode/src/**/*.ts",
   "packages/sanctions/src/**/*.ts",
   "packages/template-packs/src/**/*.ts",
@@ -157,6 +164,9 @@ export const RESULT_CONVENTION_ENABLED_GLOBS = [
 ] as const;
 
 export const RESULT_BOUNDARY_GLOBS = [
+  // Better Auth invokes these hooks and consumes rejected APIError values.
+  "apps/api/src/lib/auth/demo-account-hooks.ts",
+
   "apps/api/src/lib/api-handlers.ts",
   "apps/api/src/handlers/**/routes.ts",
   "apps/api/src/handlers/**/*route.ts",
@@ -172,6 +182,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   "apps/api/src/lib/document-deadline-scout-worker.ts",
   "apps/api/src/lib/style-set-package-cleanup-queue.ts",
   "apps/api/src/lib/tanstack-ai-generate.ts",
+  // TanStack consumes this adapter through its Promise rejection contract;
+  // structuredOutput cannot return a Result to the SDK.
+  "apps/api/src/lib/stella-openrouter-text-adapter.ts",
   // TanStack invokes these server-tool callbacks and turns thrown
   // ChatToolError values into tool failures; it cannot consume Result.err.
   "apps/api/src/handlers/chat/tools/chat-history-tools.ts",
@@ -180,6 +193,9 @@ export const RESULT_BOUNDARY_GLOBS = [
   // rolls back the fenced write transaction.
   "apps/api/src/lib/chat/run-log.ts",
   "apps/api/src/lib/workflow-queue.ts",
+  // Adapts admission Results to BullMQ's DelayedError/rejection protocol and
+  // reservation callbacks whose rejection rolls back the kickoff transaction.
+  "apps/api/src/lib/rate-limit/queued-action-admission.ts",
   "apps/api/src/scripts/**",
   "apps/api/src/handlers/mcp-app-sandbox/**",
   // Web worker entry modules. The browser, not our code, invokes the message
@@ -204,6 +220,7 @@ export const RESULT_BOUNDARY_GLOBS = [
   // assertion failures to test runners.
   "packages/start-runtime/src/runtime.ts",
   "packages/ssr-testkit/src/assert-document.ts",
+  "packages/property-testing/src/index.ts",
 ] as const;
 
 // Declaration files carry no runtime code. The lint ignores them outright, so

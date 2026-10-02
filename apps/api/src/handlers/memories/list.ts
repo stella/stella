@@ -10,6 +10,7 @@ import { tPaginationCursor, tSafeId } from "@/api/lib/custom-schema";
 import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import type { Page } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedAiMemoryId } from "@/api/lib/safe-id-boundaries";
 
 const DEFAULT_LIMIT = 50;
@@ -82,7 +83,7 @@ const listMemories = createSafeRootHandler(
     const readableWorkspaceIds = accessibleWorkspaces
       .filter(({ status: workspaceStatus }) => workspaceStatus !== "deleting")
       .map(({ id }) => id);
-    const limit = requestedLimit ?? DEFAULT_LIMIT;
+    const limit = normalizeTenantPageLimit(requestedLimit ?? DEFAULT_LIMIT);
     const workspaceId = requestedWorkspaceId
       ? readableWorkspaceIds.find(
           (readableWorkspaceId) => readableWorkspaceId === requestedWorkspaceId,

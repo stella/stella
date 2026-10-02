@@ -1,3 +1,4 @@
+// parser-output-unchanged: opt into publisher retries; fetched response parsing is unchanged.
 import { panic, Result } from "better-result";
 import JSZip from "jszip";
 
@@ -41,7 +42,10 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { publisherTarget } from "@/api/handlers/case-law/ingestion/adapters/publisher-target";
-import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
+import {
+  fetchPublisher,
+  PublisherRateLimitRefusalError,
+} from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
   adapterCatch,
@@ -60,6 +64,10 @@ import {
   listEcjFormexFields,
   parseFormexBibliography,
 } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
+import {
+  ecjFormexDocuments,
+  encodeEcjFormexArchive,
+} from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-parts";
 import {
   listEcjNoticeFields,
   parseEcjNotice,
@@ -487,6 +495,7 @@ const queryDecisions = async ({
 
   const response = await fetchPublisher(SPARQL_URL, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     method: "POST",
     signal,
     timeoutMs,
@@ -793,6 +802,7 @@ const readDocumentResponse = async ({
   const url = `${CELLAR_CONTENT_BASE}/${resource}`;
   const response = await fetchPublisher(url, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -930,12 +940,14 @@ const fetchManifestation = async ({
         signal,
       }),
     catch: (cause) =>
-      new AdapterFetchError({
-        message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
-        adapterKey: ADAPTER_KEYS.EU_ECJ,
-        cursor: null,
-        cause,
-      }),
+      cause instanceof AdapterFetchError
+        ? cause
+        : new AdapterFetchError({
+            message: `CJEU manifestation fetch failed for ${celex}/${lang}`,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor: null,
+            cause,
+          }),
   });
   if (Result.isError(fetched)) {
     return fetched;
@@ -1317,17 +1329,11 @@ const courtFromNotice = (code: string | undefined): string | undefined => {
 /** The bench as the notice names it, rapporteur before Advocate General. */
 const noticeJudges = (facts: EcjNoticeFacts): DecisionJudgeInput[] => {
   const judges: DecisionJudgeInput[] = [];
-  if (facts.rapporteur !== undefined) {
-    judges.push({
-      role: DECISION_JUDGE_ROLE.RAPPORTEUR,
-      nameAsPrinted: facts.rapporteur,
-    });
+  for (const nameAsPrinted of facts.rapporteur) {
+    judges.push({ role: DECISION_JUDGE_ROLE.RAPPORTEUR, nameAsPrinted });
   }
-  if (facts.advocateGeneral !== undefined) {
-    judges.push({
-      role: DECISION_JUDGE_ROLE.ADVOCATE_GENERAL,
-      nameAsPrinted: facts.advocateGeneral,
-    });
+  for (const nameAsPrinted of facts.advocateGeneral) {
+    judges.push({ role: DECISION_JUDGE_ROLE.ADVOCATE_GENERAL, nameAsPrinted });
   }
   return judges;
 };
@@ -1353,6 +1359,10 @@ const presentEntries = (
 /** What the notice states about this variant, as the row keeps it. */
 const noticeMetadata = (facts: EcjNoticeFacts): Record<string, unknown> =>
   presentEntries({
+    noticeCelex: facts.celex,
+    noticeEcli: facts.ecli,
+    noticeDecisionDates: facts.decisionDate,
+    noticeCourtCodes: facts.courtCode,
     lodgedOn: facts.lodgedOn,
     form: facts.form,
     celexType: facts.celexType,
@@ -1407,10 +1417,14 @@ const ecjDecisionFromParts = ({
   const formexXml = parts[RAW_PART.FORMEX];
   const facts = noticeXml === undefined ? undefined : parseEcjNotice(noticeXml);
   const bibliography =
-    formexXml === undefined ? undefined : parseFormexBibliography(formexXml);
+    formexXml === undefined
+      ? undefined
+      : parseFormexBibliography(ecjFormexDocuments(formexXml));
   const statedCourt =
-    courtFromNotice(facts?.courtCode) ??
-    courtFromNotice(bibliography?.author) ??
+    courtFromNotice(facts?.courtCode.at(0)) ??
+    bibliography?.author
+      .map(courtFromNotice)
+      .find((name) => name !== undefined) ??
     court;
 
   const caseNumber = celexToCaseNumber(celex);
@@ -1467,6 +1481,9 @@ const ecjDecisionFromParts = ({
       ...(bibliography === undefined
         ? {}
         : presentEntries({
+            formexCelex: bibliography.celex,
+            formexEcli: bibliography.ecli,
+            formexAuthors: bibliography.author,
             reportsSequence: bibliography.sequence,
             reportsPages: bibliography.pages,
           })),
@@ -1662,6 +1679,7 @@ const fetchNotice = async (
   }
   const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -1687,7 +1705,7 @@ const fetchNotice = async (
  *
  * The notice lists every format of the expression with its type, so no
  * second query is needed to reach this one. Cellar serves it either as the
- * XML itself or as a one-entry zip, depending on how the document was
+ * XML itself or as an archive, depending on how the document was
  * published, and negotiates on the exact media type.
  */
 const fetchFormex = async (
@@ -1715,6 +1733,7 @@ const fetchFormex = async (
   }
   const response = await fetchPublisher(contentUrl.value, {
     adapterKey: ADAPTER_KEYS.EU_ECJ,
+    retryPolicy: "publisher-backoff",
     signal,
     timeoutMs: ADAPTER_TIMEOUT.REQUEST,
     headers: {
@@ -1735,10 +1754,22 @@ const fetchFormex = async (
   ) {
     return await response.text();
   }
+  return await readEcjFormexArchive(await response.arrayBuffer());
+};
+
+export const readEcjFormexArchive = async (
+  bytes: ArrayBuffer,
+): Promise<string> => {
   // oxlint-disable-next-line no-raw-zip-load/no-raw-zip-load -- unbounded archive read predating loadDocxArchive; frozen by the rule budget
-  const archive = await JSZip.loadAsync(await response.arrayBuffer());
-  const entry = Object.values(archive.files).find((file) => !file.dir);
-  return await entry?.async("string");
+  const archive = await JSZip.loadAsync(bytes);
+  const entries = await Promise.all(
+    Object.values(archive.files)
+      .filter((file) => !file.dir)
+      .map(
+        async (file) => [file.name, await file.async("uint8array")] as const,
+      ),
+  );
+  return encodeEcjFormexArchive(entries);
 };
 
 /**
@@ -2490,11 +2521,11 @@ const EU_ECJ_SOURCE_FIELDS = {
   },
   "formex.BIB/NO.CELEX": {
     disposition: "stored",
-    target: { type: "identity" },
+    target: { type: "metadata", key: "formexCelex" },
   },
   "formex.BIB/NO.ECLI": {
     disposition: "stored",
-    target: { type: "result", key: "ecli" },
+    target: { type: "metadata", key: "formexEcli" },
   },
   "formex.BIB/NO.SEQ": {
     disposition: "stored",
@@ -2518,7 +2549,7 @@ const EU_ECJ_SOURCE_FIELDS = {
   },
   "formex.BIB/AUTHOR": {
     disposition: "stored",
-    target: { type: "result", key: "court" },
+    target: { type: "metadata", key: "formexAuthors" },
   },
   "formex.body": excludedSourceField(
     "the same decision text the document part carries, in the publisher's semantic encoding; the part is kept so a later parse can be checked against it rather than read into the row today",
@@ -2573,7 +2604,7 @@ const listEuEcjSourceFields = (parts: SourceRawParts): readonly string[] => {
 
   const formex = parts[RAW_PART.FORMEX];
   if (formex !== undefined) {
-    for (const field of listEcjFormexFields(formex)) {
+    for (const field of listEcjFormexFields(ecjFormexDocuments(formex))) {
       stated.add(field);
     }
   }
@@ -2727,6 +2758,7 @@ export const euEcjAdapter = defineSourceAdapter({
     try {
       const response = await fetchPublisher(SPARQL_URL, {
         adapterKey: ADAPTER_KEYS.EU_ECJ,
+        retryPolicy: "publisher-backoff",
         method: "POST",
         signal,
         timeoutMs: 60_000,
@@ -2816,7 +2848,19 @@ export const euEcjAdapter = defineSourceAdapter({
 
         return { decisions, nextCursor };
       },
-      catch: adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor),
+      catch: (cause) => {
+        const error = adapterCatch(ADAPTER_KEYS.EU_ECJ, cursor)(cause);
+        if (error instanceof PublisherRateLimitRefusalError) {
+          return new PublisherRateLimitRefusalError({
+            publisherKey: error.publisherKey,
+            status: error.status,
+            cooldownUntilEpochMs: error.cooldownUntilEpochMs,
+            adapterKey: ADAPTER_KEYS.EU_ECJ,
+            cursor,
+          });
+        }
+        return error;
+      },
     });
   },
 });

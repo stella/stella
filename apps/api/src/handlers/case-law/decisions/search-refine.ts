@@ -1,10 +1,12 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import { status, t } from "elysia";
+import type { ElysiaCustomStatusResponse } from "elysia";
 
 import {
   PUBLIC_CASE_LAW_COUNTRIES,
   publicCaseLawCountry,
 } from "@stll/api-contract/case-law-launch-readiness";
+import type { PublicCountryUnavailable } from "@stll/api-contract/public-country-capability";
 
 import {
   CASE_LAW_SEARCH_REFINE_SYSTEM,
@@ -15,7 +17,10 @@ import { resolveCaching } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { createSafeRootHandler } from "@/api/lib/api-handlers";
-import type { HandlerConfig } from "@/api/lib/api-handlers";
+import type {
+  HandlerConfig,
+  SafeHandlerGenerator,
+} from "@/api/lib/api-handlers";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { corpusMorphologyLanguage } from "@/api/lib/legal-search/morphology/corpus-language";
 import { functionWordsFor } from "@/api/lib/legal-search/morphology/function-words";
@@ -54,16 +59,23 @@ const refineCaseLawSearch = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     request,
     safeDb,
     session,
     user,
-  }) {
+  }): SafeHandlerGenerator<
+    | { query: string }
+    | ElysiaCustomStatusResponse<503, PublicCountryUnavailable>
+  > {
     const countryRead = readPublicLawCountry(body.country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
     });
+    if (countryRead.kind === "unavailable") {
+      return Result.ok(status(503, countryRead.response));
+    }
     if (countryRead.kind === "unreadable") {
       return Result.err(
         new HandlerError({ status: 400, message: countryRead.message }),
@@ -77,6 +89,7 @@ const refineCaseLawSearch = createSafeRootHandler(
     }
 
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
@@ -90,6 +103,7 @@ const refineCaseLawSearch = createSafeRootHandler(
     const functionWords = functionWordsFor(corpusLanguage);
     const organizationId = session.activeOrganizationId;
     const analytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId,
@@ -124,11 +138,12 @@ const refineCaseLawSearch = createSafeRootHandler(
       const generated = await Result.tryPromise({
         try: async () =>
           await generateTanStackObjectForRole({
+            dataClass: "customer",
             role: "fast",
             serviceTier: "standard",
             orgAIConfig,
+            managedAIResidency,
             organizationId,
-            // Public law: no matter's data reaches the model.
             tenantWorkspaceIds: [],
             analytics,
             caching: resolveCaching({

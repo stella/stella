@@ -1,16 +1,15 @@
 import Elysia from "elysia";
 
 import { env } from "@/api/env";
-import {
-  createAuthMetadataHeaders,
-  handleOAuthAuthorizationServerMetadataRequest,
-} from "@/api/handlers/auth/metadata";
+import { createAuthMetadataHeaders } from "@/api/handlers/auth/metadata";
+import metadataHandler from "@/api/handlers/auth/read-authorization-server-metadata";
 import {
   OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
   OPENID_CONFIGURATION_DISCOVERY_PATH,
   ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
-} from "@/api/lib/auth-paths";
+} from "@/api/lib/auth/auth-paths";
 import { isTransactionalEmailConfigured } from "@/api/lib/email/email";
+import { setSecurityHeaders } from "@/api/lib/security-headers";
 import {
   isSelfhostFirstUserRequired,
   isSelfhostLocalPasswordAuthEnabled,
@@ -38,6 +37,9 @@ const getSocialAuthCapabilities = () => ({
 });
 
 export const authMetadataRoute = new Elysia()
+  .onRequest(({ set }) => {
+    setSecurityHeaders(set);
+  })
   .options(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
     applyHeaders({
       headers: createAuthMetadataHeaders(),
@@ -46,11 +48,7 @@ export const authMetadataRoute = new Elysia()
     set.status = 204;
     return "";
   })
-  .get(
-    ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
-    async ({ request }) =>
-      await handleOAuthAuthorizationServerMetadataRequest(request),
-  )
+  .get(ROOT_OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, metadataHandler.handler)
   .options(OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, ({ set }) => {
     applyHeaders({
       headers: createAuthMetadataHeaders(),
@@ -59,11 +57,7 @@ export const authMetadataRoute = new Elysia()
     set.status = 204;
     return "";
   })
-  .get(
-    OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH,
-    async ({ request }) =>
-      await handleOAuthAuthorizationServerMetadataRequest(request),
-  )
+  .get(OAUTH_AUTHORIZATION_SERVER_DISCOVERY_PATH, metadataHandler.handler)
   .options(OPENID_CONFIGURATION_DISCOVERY_PATH, ({ set }) => {
     applyHeaders({
       headers: createAuthMetadataHeaders(),
@@ -72,11 +66,7 @@ export const authMetadataRoute = new Elysia()
     set.status = 204;
     return "";
   })
-  .get(
-    OPENID_CONFIGURATION_DISCOVERY_PATH,
-    async ({ request }) =>
-      await handleOAuthAuthorizationServerMetadataRequest(request),
-  );
+  .get(OPENID_CONFIGURATION_DISCOVERY_PATH, metadataHandler.handler);
 
 export const authCapabilitiesRoute = new Elysia({
   prefix: "/auth",

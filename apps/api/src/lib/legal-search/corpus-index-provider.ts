@@ -1,6 +1,7 @@
 import { Result } from "better-result";
 import { and, eq, inArray, sql } from "drizzle-orm";
 
+import type { RegistryRequestObservation } from "@stll/business-registries/shared/request-observer";
 import { isUuid } from "@stll/uuid-codec";
 
 import {
@@ -159,6 +160,7 @@ export const rehydrateCorpusIndexProviderCandidates =
 
 const searchResult = async (
   query: LegalSearchQuery,
+  observer: RegistryRequestObservation,
 ): Promise<Result<LegalSearchResult, LegalSearchError>> => {
   const limit = query.limit;
   const family = query.documentFamily ?? "case_law";
@@ -213,6 +215,7 @@ const searchResult = async (
   const resolved = await resolveExpandedCorpusQuery({
     build: (expand) =>
       caseLawCorpusQuery({
+        jurisdiction: query.jurisdiction,
         text: query.query,
         filters: {
           court: query.court,
@@ -266,6 +269,7 @@ const searchResult = async (
   const snippetTokens = tokenizeCorpusFreeText(query.query);
 
   const searchPage = await readCorpusIndexSearchPage({
+    observer,
     cluster: serving.cluster,
     indexId,
     query: resolved.query,
@@ -390,9 +394,10 @@ const searchResult = async (
 
 const search = async (
   query: LegalSearchQuery,
+  observer: RegistryRequestObservation,
 ): Promise<Result<LegalSearchResult, LegalSearchError>> => {
   const attempted = await Result.tryPromise({
-    try: async () => await searchResult(query),
+    try: async () => await searchResult(query, observer),
     catch: (cause) =>
       new LegalSearchUnavailableError({
         message: "Corpus index legal search failed.",

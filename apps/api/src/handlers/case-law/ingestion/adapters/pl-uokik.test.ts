@@ -11,7 +11,7 @@
 
 import { PDF } from "@libpdf/core";
 import { panic, Result } from "better-result";
-import { afterEach, describe, expect, test } from "bun:test";
+import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import {
   decodeSourceRawEnvelope,
@@ -107,9 +107,16 @@ const entryOf = (entries: readonly Entry[], unid: string): Entry =>
   panic(`the view fixtures lost ${unid}`);
 
 const originalFetch = globalThis.fetch;
+const originalSleep = Bun.sleep;
+
+beforeEach(() => {
+  // These fixtures prove retry outcomes; backoff timing is covered by retry.test.ts.
+  Bun.sleep = async () => {};
+});
 
 afterEach(() => {
   globalThis.fetch = originalFetch;
+  Bun.sleep = originalSleep;
 });
 
 /** The first decision file a captured page links, by name. */
@@ -606,9 +613,14 @@ describe("what the register does not serve", () => {
   test.each([500, 503, 429, 403])(
     "a decision page answering %p fails the page and holds the cursor",
     async (status) => {
-      await onePage(FILELESS, () => new Response("", { status }));
+      let attempts = 0;
+      await onePage(FILELESS, () => {
+        attempts += 1;
+        return new Response("", { status });
+      });
       const result = await plUokikAdapter.fetchPage(null, {});
       expect(Result.isError(result)).toBe(true);
+      expect(attempts).toBe(status >= 500 ? 3 : 1);
     },
   );
 

@@ -46,7 +46,7 @@ await mock.module("@better-auth/cimd/node", () => ({
 
 const { getAuth } = await import("@/api/lib/auth");
 const { getAuthEndpointUrl, getAuthIssuerUrl } =
-  await import("@/api/lib/auth-paths");
+  await import("@/api/lib/auth/auth-paths");
 const { initAgentAuthTestDb, releaseAgentAuthTestDb } =
   await import("@/api/tests/helpers/mock-agent-auth-db");
 

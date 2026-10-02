@@ -25,7 +25,11 @@ const config = {
     "dereferenced. Succeeds silently when the thread does not exist or belongs " +
     "to someone else.",
   permissions: { chat: ["delete"] },
-  mcp: { type: "capability", reason: "assistant_chat" },
+  mcp: {
+    type: "capability",
+    reason: "assistant_chat",
+    consumesServices: false,
+  },
   params: t.Object({ threadId: tSafeId("chatThread") }),
   query: t.Object({
     workspaceId: t.Optional(tSafeId("workspace")),

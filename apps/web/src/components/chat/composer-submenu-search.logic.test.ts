@@ -2,6 +2,8 @@ import { describe, expect, test } from "bun:test";
 
 import {
   isMenuNavigationKey,
+  isTabPick,
+  isTriggerErase,
   scheduleSearchFocus,
 } from "./composer-submenu-search.logic";
 
@@ -13,6 +15,41 @@ describe("composer submenu search interactions", () => {
     for (const key of ["a", " ", "Backspace", "Tab"]) {
       expect(isMenuNavigationKey(key)).toBe(false);
     }
+  });
+
+  test("picks a highlighted row on a plain Tab, as Enter does", () => {
+    const plainTab = {
+      altKey: false,
+      ctrlKey: false,
+      key: "Tab",
+      metaKey: false,
+      shiftKey: false,
+    };
+    for (const targetRole of [
+      "menuitem",
+      "menuitemcheckbox",
+      "menuitemradio",
+    ]) {
+      expect(isTabPick({ ...plainTab, targetRole })).toBe(true);
+    }
+    // The search field and modified Tabs keep their focus movement.
+    expect(isTabPick({ ...plainTab, targetRole: null })).toBe(false);
+    expect(isTabPick({ ...plainTab, targetRole: "textbox" })).toBe(false);
+    for (const modifier of ["altKey", "ctrlKey", "metaKey", "shiftKey"]) {
+      expect(
+        isTabPick({ ...plainTab, [modifier]: true, targetRole: "menuitem" }),
+      ).toBe(false);
+    }
+    expect(
+      isTabPick({ ...plainTab, key: "Enter", targetRole: "menuitem" }),
+    ).toBe(false);
+  });
+
+  test("erases the trigger only on Backspace in an empty field", () => {
+    expect(isTriggerErase("Backspace", "")).toBe(true);
+    expect(isTriggerErase("Backspace", "c")).toBe(false);
+    expect(isTriggerErase("Delete", "")).toBe(false);
+    expect(isTriggerErase("a", "")).toBe(false);
   });
 
   test("focuses through the scheduled callback", () => {

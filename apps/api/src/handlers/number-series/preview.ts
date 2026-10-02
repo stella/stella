@@ -15,7 +15,12 @@ const config = {
   description:
     "Preview the next number for a date without reserving it. A concurrent issue can change the result.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   params: numberSeriesParams,
   query: t.Object({

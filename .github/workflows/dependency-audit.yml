@@ -17,8 +17,7 @@ on:
       - "bunfig.toml"
       - "package.json"
       - "patches/**"
-      - "scripts/dependency-audit.ts"
-      - "scripts/dependency-audit-baseline.json"
+      - "scripts/dependency-audit*"
       - "scripts/dependency-diff.ts"
       - "scripts/check-trusted-dependencies.ts"
       - ".github/workflows/dependency-audit.yml"
@@ -30,8 +29,8 @@ permissions:
   contents: read
 
 concurrency:
-  group: dependency-audit-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request') && format('pr-{0}', github.event.pull_request.number || github.ref) || format('run-{0}', github.run_id) }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   audit:

@@ -37,9 +37,9 @@ import {
 } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
 import { DECISION_ROW_WRITE_STATUS } from "@/api/handlers/case-law/ingestion/pipeline/types";
 import type { DecisionRowWriteStatus } from "@/api/handlers/case-law/ingestion/pipeline/types";
-import { rowHoldsDocument } from "@/api/handlers/case-law/stored-payload";
 import type { SafeId } from "@/api/lib/branded-types";
 import { preserveStoredTextAfterParseFailure } from "@/api/lib/case-law/decision-text";
+import { rowHoldsDocument } from "@/api/lib/case-law/stored-payload";
 import type { ActiveCorpusProjectionSourceLock } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { metadataMarkedListingOnly } from "@/api/lib/legal-search/partial-observation-sql";
 import { sortDeep } from "@/api/lib/sort-deep";
@@ -272,9 +272,8 @@ export const describeRowUpdateTx = async (
       storesUnpublishedWithoutDocument,
     },
     plan: {
-      caseNumberType,
       corpusPlan,
-      incomingCitationKey,
+      docketColumns,
       languageGroupKey,
       payloadColumns,
       pendingMirrorPayload,
@@ -311,12 +310,13 @@ export const describeRowUpdateTx = async (
   // The row's stated identity and description, as this observation
   // reads them. Compared against the stored row below so that
   // `updated_at` moves only when one of them, or the payload, does.
+  // The file key is derived, never stated: filling it on a row keyed before
+  // it existed is not a change to what the decision says.
+  const { docketFamilyKey, ...statedDocketColumns } = docketColumns;
   const describedColumns = preservesExistingDetail
     ? {}
     : {
-        caseNumber: result.caseNumber,
-        caseNumberType,
-        citationKey: incomingCitationKey,
+        ...statedDocketColumns,
         sourceDocumentId: persistedSourceDocumentId,
         ecli: result.ecli,
         court: result.court,
@@ -362,6 +362,7 @@ export const describeRowUpdateTx = async (
 
   const set = {
     ...describedColumns,
+    ...(preservesExistingDetail ? {} : { docketFamilyKey }),
     ...(metadataWrite === undefined ? {} : { metadata: metadataWrite }),
     ...(preservesExistingDetail
       ? {}

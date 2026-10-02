@@ -7,7 +7,10 @@ import { getDomain } from "tldts";
 
 import type { CorrespondenceOriginalSignature } from "@stll/api-contract/correspondence";
 
-import { INBOUND_MAIL_LIMITS } from "@/api/lib/email/inbound/limits";
+import {
+  findInboundHeaderEnd,
+  INBOUND_MAIL_LIMITS,
+} from "@/api/lib/email/inbound/limits";
 import { withTimeout } from "@/api/lib/with-timeout";
 
 export type MailEnvelope = {
@@ -487,6 +490,12 @@ export const createOriginalSignatureVerifier =
           message: "Invalid original verification input",
         }),
       );
+    }
+    const headerEnd = findInboundHeaderEnd(raw);
+    if (headerEnd === null || headerEnd > INBOUND_MAIL_LIMITS.headerBytes) {
+      return Result.ok({
+        status: "unverified",
+      } as const satisfies CorrespondenceOriginalSignature);
     }
     const verified = await runMailVerification({
       createResolver,

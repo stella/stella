@@ -30,7 +30,11 @@ export const createInvoicePdfExport = (writeObject = writeS3ObjectWithRetry) =>
         "Download an invoice, advance invoice or credit note as PDF, including its parties, lines, VAT breakdown and payment QR. Drafts have no document number. Returns a short-lived downloadUrl, fileName and expiresAt; hand the URL to the user without reading the file bytes.",
       permissions: { workspace: ["read"] },
       access: "write",
-      mcp: { type: "capability", reason: "billing_admin" },
+      mcp: {
+        type: "capability",
+        reason: "billing_admin",
+        consumesServices: false,
+      },
       params: workspaceParams({ invoiceId: tSafeId("invoice") }),
     },
     async function* ({

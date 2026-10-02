@@ -1,6 +1,6 @@
 import { apiKey } from "@better-auth/api-key";
-import { memoryAdapter } from "@better-auth/memory-adapter";
 import { betterAuth } from "better-auth";
+import { memoryAdapter } from "better-auth/adapters/memory";
 import { bearer } from "better-auth/plugins";
 import { panic, Result } from "better-result";
 import { describe, expect, test } from "bun:test";

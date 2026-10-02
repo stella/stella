@@ -11,5 +11,7 @@ export type PublicCaseLawDecision = PublicLawData<
   ReturnType<typeof api.case.decisions>["get"]
 >;
 
-export type PublicDecisionLanguageAlternate =
-  PublicCaseLawDecision["languageAlternates"][number];
+export type PublicDecisionLanguageAlternate = Omit<
+  PublicCaseLawDecision["languageAlternates"][number],
+  "hasDocument"
+>;

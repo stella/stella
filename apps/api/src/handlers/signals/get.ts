@@ -14,7 +14,12 @@ const config = {
     "Read one inbox signal with its evidence and suggestions; 404 when it is " +
     "not visible to the caller.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   params: signalParamsSchema,
 } satisfies HandlerConfig;

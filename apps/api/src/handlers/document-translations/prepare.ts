@@ -15,7 +15,12 @@ const config = {
     "Inspect the current DOCX version and prepare its comment requirements for translation.",
   permissions: { entity: ["create"] },
   access: "read",
-  mcp: { type: "capability", reason: "document_processing" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "document_processing",
+    consumesServices: false,
+  },
   params: workspaceParams({}),
   body: prepareDocumentTranslationBodySchema,
 } satisfies WorkspaceHandlerConfig;

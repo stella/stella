@@ -13,7 +13,6 @@ import {
   getAuthoritativeSessionFromCtx,
 } from "better-auth/api";
 import {
-  bearer,
   emailOTP,
   jwt,
   lastLoginMethod,
@@ -32,7 +31,7 @@ import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
 import { isUuid } from "@stll/uuid-codec";
 
-import { member } from "@/api/db/auth-schema";
+import { member, user as authUser } from "@/api/db/auth-schema";
 import { rootDb, rlsDb } from "@/api/db/root";
 import { workspaceMembers, workspaces } from "@/api/db/schema";
 import {
@@ -54,15 +53,36 @@ import {
   AUTH_VERIFICATION_STORAGE_OPTIONS,
 } from "@/api/lib/auth-adapter-options";
 import { revokeOrganizationMemberAuthArtifacts } from "@/api/lib/auth-artifacts";
-import { authCookiePolicy } from "@/api/lib/auth-cookie-name";
+import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+import { createAgentUserPlugin } from "@/api/lib/auth/agent-auth-user";
+import { authCookiePolicy } from "@/api/lib/auth/auth-cookie-name";
 import {
   getAuthEndpointUrl,
   getAuthIssuerUrl,
   OAUTH_UI_CONSENT_PATH,
   OAUTH_UI_LOGIN_PATH,
   OAUTH_UI_ORGANIZATION_PATH,
-} from "@/api/lib/auth-paths";
-import { AUTH_USER_ADDITIONAL_FIELDS } from "@/api/lib/auth-user-additional-fields";
+} from "@/api/lib/auth/auth-paths";
+import {
+  checkConfiguredDemoAccountAccess,
+  checkDemoAccountOperation,
+  getDemoAccountConfig,
+} from "@/api/lib/auth/demo-account";
+import {
+  requireDemoAccountAccess,
+  createDemoAuthSessionGuard,
+  createDemoSessionPolicy,
+} from "@/api/lib/auth/demo-account-hooks";
+import {
+  createDemoSessionFilter,
+  warnDemoAccountConfiguration,
+} from "@/api/lib/auth/demo-account-policy";
+import { createSessionBearer } from "@/api/lib/auth/session-bearer";
+import {
+  createSocialIdentityValidation,
+  isVerifiedMicrosoftIdentity,
+  SOCIAL_ACCOUNT_LINKING_OPTIONS,
+} from "@/api/lib/auth/social-identity-policy";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { AUTH_CLIENT_ADDRESS_HEADER } from "@/api/lib/client-ip";
@@ -93,6 +113,7 @@ import { isMemberRole } from "@/api/lib/member-roles";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { logger } from "@/api/lib/observability/logger";
 import {
   enrichRequestContext,
   getRequestContext,
@@ -108,7 +129,10 @@ import {
   readAuthorizedMemberRole,
 } from "@/api/lib/permission-authorization";
 import { createAuthRateLimitStorage } from "@/api/lib/rate-limit/auth-storage";
+import { createOtpAccountLimitPlugin } from "@/api/lib/rate-limit/otp-account-budget";
 import type { RateLimitContext } from "@/api/lib/rate-limit/rate-limit";
+import { RedisRateLimitContext } from "@/api/lib/rate-limit/redis-context";
+import { TENANT_ACTION_DETAIL } from "@/api/lib/rate-limit/tenant-action-boundary";
 import { memoizePerRequest } from "@/api/lib/request-memo";
 import {
   brandPersistedOrganizationId,
@@ -846,6 +870,15 @@ const oauthUiFragmentBridgePlugin = {
 // first use prevents the TDZ error when the test runner
 // evaluates this module before db/index.ts finishes.
 const createAuth = () => {
+  const demoConfig = getDemoAccountConfig();
+  const demoSessionGuard = createDemoAuthSessionGuard(demoConfig);
+  warnDemoAccountConfiguration(demoConfig, (attributes) =>
+    logger.warn("auth.account_binding_unset", attributes),
+  );
+  const configuredDemoMode = demoConfig.organizationId ? "bound" : "unbound";
+  logger.info("auth.account_policy", {
+    mode: demoConfig.email ? configuredDemoMode : "disabled",
+  });
   const oauthResources = getBetterAuthOAuthResources();
   const oauthResourceIdentifiers = oauthResources.map(
     ({ identifier }) => identifier,
@@ -935,10 +968,19 @@ const createAuth = () => {
       // weaker protection, disable the path outright — removing the surface is
       // strictly stronger than the freshness it used to carry.
       "/unlink-account",
+      "/organization/leave",
     ],
     user: {
       additionalFields: AUTH_USER_ADDITIONAL_FIELDS,
+      validateUserInfo: createSocialIdentityValidation({
+        tenantId: env.MICROSOFT_AUTH_TENANT_ID,
+        requireMicrosoftVerifiedEmailClaim:
+          env.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM,
+        warn: (attributes) =>
+          logger.warn("auth.provider_claims_unavailable", attributes),
+      }),
     },
+    account: { accountLinking: SOCIAL_ACCOUNT_LINKING_OPTIONS },
     session: {
       expiresIn: SESSION_LIFETIME_SECONDS,
       updateAge: SESSION_UPDATE_AGE_SECONDS,
@@ -1024,6 +1066,31 @@ const createAuth = () => {
         }
       : undefined,
     databaseHooks: {
+      session: {
+        create: {
+          before: createDemoSessionPolicy({
+            config: demoConfig,
+            resolveUser: async (userId: SafeId<"user">) =>
+              await rootDb.query.user.findFirst({
+                where: { id: userId },
+                columns: { email: true },
+              }),
+            hasMembership: async ({
+              userId,
+              organizationId,
+            }: {
+              userId: SafeId<"user">;
+              organizationId: SafeId<"organization">;
+            }) =>
+              Boolean(
+                await rootDb.query.member.findFirst({
+                  where: { userId, organizationId },
+                  columns: { id: true },
+                }),
+              ),
+          }),
+        },
+      },
       user: {
         create: {
           before: async (user, ctx) => {
@@ -1084,12 +1151,29 @@ const createAuth = () => {
               clientId: env.MICROSOFT_AUTH_CLIENT_ID,
               clientSecret: env.MICROSOFT_AUTH_CLIENT_SECRET,
               tenantId: env.MICROSOFT_AUTH_TENANT_ID,
+              mapProfileToUser: env.MICROSOFT_REQUIRE_VERIFIED_EMAIL_CLAIM
+                ? (profile) => ({
+                    emailVerified: isVerifiedMicrosoftIdentity({
+                      profile,
+                      email: profile.email,
+                      tenantId: env.MICROSOFT_AUTH_TENANT_ID,
+                    }),
+                  })
+                : undefined,
             },
           }
         : {}),
     },
     plugins: [
-      bearer(),
+      createAgentUserPlugin(),
+      createSessionBearer(),
+      createDemoSessionFilter(demoConfig),
+      createOtpAccountLimitPlugin({
+        enabled: !env.E2E_DISABLE_AUTH_RATE_LIMIT,
+        context: new RedisRateLimitContext({
+          failurePolicy: "fail_open_local",
+        }),
+      }),
       // The after-hook on /get-session signs a `set-auth-jwt` response
       // header on every session resolution by reading the jwks table.
       // Nothing in the repo consumes that header: JWT issuance already
@@ -1184,6 +1268,15 @@ const createAuth = () => {
         roles,
         organizationHooks: {
           ...organizationLifecycleHooks,
+          async beforeCreateOrganization({ user }) {
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
+            await Promise.resolve();
+          },
           async beforeDeleteOrganization({ organization: org }) {
             // Complete the deletion here, before the plugin's adapter runs.
             // Everything that names the organization cascades away with it, and
@@ -1246,19 +1339,47 @@ const createAuth = () => {
           // A readable refusal before the plugin writes anything; the
           // `member_organization_capacity` trigger is what holds the bound
           // under concurrent additions.
-          async beforeCreateInvitation({ organization: org }) {
+          async beforeCreateInvitation({
+            organization: org,
+            invitation,
+            inviter,
+          }) {
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: inviter.email,
+                operation: "growth",
+              }),
+            );
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: invitation.email,
+                operation: "growth",
+              }),
+            );
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "invitation",
             );
           },
-          async beforeAcceptInvitation({ organization: org }) {
+          async beforeAcceptInvitation({ organization: org, user }) {
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "membership",
             );
           },
-          async beforeAddMember({ organization: org }) {
+          async beforeAddMember({ organization: org, user }) {
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
             await refuseBeyondMemberCapacity(
               brandPersistedOrganizationId(org.id),
               "membership",
@@ -1422,6 +1543,14 @@ const createAuth = () => {
           },
         },
         customAccessTokenClaims: async ({ referenceId, user }) => {
+          if (user) {
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({
+                email: user.email,
+                operation: "growth",
+              }),
+            );
+          }
           if (!referenceId || !user) {
             return { org_id: referenceId };
           }
@@ -1451,6 +1580,50 @@ const createAuth = () => {
     ],
     hooks: {
       before: createAuthMiddleware(async (ctx) => {
+        if (!ctx.path) {
+          return undefined;
+        }
+        if (demoConfig.email) {
+          const body: unknown = ctx.body;
+          const email = isRecord(body) ? body["email"] : undefined;
+          if (
+            typeof email === "string" &&
+            isSessionCreatingAuthPath(ctx.path)
+          ) {
+            requireDemoAccountAccess(
+              checkConfiguredDemoAccountAccess({ email, operation: "sign-in" }),
+            );
+          }
+          if (
+            ctx.path !== "/get-session" &&
+            !isSessionCreatingAuthPath(ctx.path) &&
+            ctx.path !== SEND_VERIFICATION_OTP_PATH
+          ) {
+            const { request, ...middlewareContext } = ctx;
+            await demoSessionGuard({
+              ...middlewareContext,
+              ...(request ? { request } : {}),
+            });
+          }
+          const requestedUserId = isRecord(body) ? body["userId"] : undefined;
+          if (
+            ctx.path === "/api-key/create" &&
+            typeof requestedUserId === "string"
+          ) {
+            const account =
+              await ctx.context.internalAdapter.findUserById(requestedUserId);
+            if (!account) {
+              throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+            }
+            const access = checkDemoAccountOperation(account.email);
+            if (Result.isError(access)) {
+              throw new APIError("FORBIDDEN", {
+                code: "account_access_unavailable",
+                message: "This operation is unavailable for this account.",
+              });
+            }
+          }
+        }
         await assertSelfhostEmailOtpAllowed(ctx.path);
 
         const loopbackRegistration =
@@ -1665,6 +1838,7 @@ export const sessionAuthMacro = new Elysia({ name: "sessionAuthMacro" }).macro({
       return {
         user: {
           id: userId,
+          email: user.email,
         },
       };
     },
@@ -1695,6 +1869,7 @@ type MemberAuthorizationLookup = {
 
 type MemberAuthorization = {
   memberId: string;
+  email: string;
   /** Raw DB value; callers validate it with isMemberRole. */
   role: string;
   workspace: AccessibleWorkspace | null;
@@ -1709,8 +1884,9 @@ export const resolveMemberAuthorization = async (
 ): Promise<MemberAuthorization | null> => {
   if (!workspaceId) {
     const row = await db
-      .select({ memberId: member.id, role: member.role })
+      .select({ memberId: member.id, role: member.role, email: authUser.email })
       .from(member)
+      .innerJoin(authUser, eq(authUser.id, member.userId))
       .where(
         and(
           eq(member.userId, userId),
@@ -1721,7 +1897,12 @@ export const resolveMemberAuthorization = async (
       .then((rows) => rows.at(0));
 
     return row
-      ? { memberId: row.memberId, role: row.role, workspace: null }
+      ? {
+          memberId: row.memberId,
+          email: row.email,
+          role: row.role,
+          workspace: null,
+        }
       : null;
   }
 
@@ -1739,11 +1920,13 @@ export const resolveMemberAuthorization = async (
   const row = await db
     .select({
       memberId: member.id,
+      email: authUser.email,
       role: member.role,
       workspaceId: workspaces.id,
       workspaceStatus: workspaces.status,
     })
     .from(member)
+    .innerJoin(authUser, eq(authUser.id, member.userId))
     .leftJoin(
       workspaces,
       and(
@@ -1770,11 +1953,17 @@ export const resolveMemberAuthorization = async (
   }
 
   if (row.workspaceId === null || row.workspaceStatus === null) {
-    return { memberId: row.memberId, role: row.role, workspace: null };
+    return {
+      memberId: row.memberId,
+      email: row.email,
+      role: row.role,
+      workspace: null,
+    };
   }
 
   return {
     memberId: row.memberId,
+    email: row.email,
     role: row.role,
     workspace: { id: row.workspaceId, status: row.workspaceStatus },
   };
@@ -1986,7 +2175,12 @@ const resolveValidateAuth = async (
     organizationId: activeOrganizationId,
     userId,
   });
-  const { orgAIConfig, orgAIConfigStatus, promptCachingEnabled } = orgSettings;
+  const {
+    orgAIConfig,
+    orgAIConfigStatus,
+    promptCachingEnabled,
+    managedAIResidency,
+  } = orgSettings;
 
   // Preserve the bounded workspace authorization already proved by the
   // membership lookup for the lifetime of this request's transactions. This
@@ -2104,6 +2298,7 @@ const resolveValidateAuth = async (
     value: {
       user: {
         id: toSafeId<"user">(user.id),
+        email: user.email,
       },
       session: {
         activeOrganizationId,
@@ -2122,6 +2317,7 @@ const resolveValidateAuth = async (
       orgAIConfig,
       orgAIConfigStatus,
       promptCachingEnabled,
+      managedAIResidency,
       /**
        * Records audit rows in the supplied tx. Identity fields
        * (org/user/IP/UA) are bound from the request context;
@@ -2169,6 +2365,7 @@ const validateAuthResolutionCache = new WeakMap<
 
 export const authMacro = new Elysia({ name: "authMacro" }).macro({
   validateAuth: {
+    detail: { [TENANT_ACTION_DETAIL]: true },
     async resolve({ params, query, status, request, server }) {
       const initialWorkspaceId = readInitialWorkspaceId(params, query);
       const result = await memoizePerRequest(

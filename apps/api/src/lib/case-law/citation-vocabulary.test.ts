@@ -1,4 +1,4 @@
-import { describe, expect, test } from "bun:test";
+import { describe, expect, expectTypeOf, test } from "bun:test";
 
 import { POLARITIES, POLARITY } from "@/api/handlers/case-law/polarity/consts";
 import type { Polarity } from "@/api/handlers/case-law/polarity/consts";
@@ -7,13 +7,6 @@ import {
   GRAPH_DIRECTION,
 } from "@/api/lib/case-law/citation-vocabulary";
 import type { CitationTreatment } from "@/api/lib/case-law/citation-vocabulary";
-
-/** Both inclusions, so neither list can gain or lose a member on its own. */
-type AssertEqual<A, B> = [A] extends [B]
-  ? [B] extends [A]
-    ? true
-    : never
-  : never;
 
 /**
  * Every stored polarity that is a reading of the text. `unknown` is the one
@@ -28,12 +21,11 @@ const READABLE_POLARITIES = POLARITIES.filter(
 
 describe("the treatment vocabulary and the polarity domain", () => {
   test("are the same set once `unclassified` is taken out, at compile time", () => {
-    const bound: AssertEqual<
-      ReadablePolarity,
+    // Equality, not assignability: neither list can gain or lose a member on
+    // its own.
+    expectTypeOf<ReadablePolarity>().toEqualTypeOf<
       Exclude<CitationTreatment, "unclassified">
-    > = true;
-
-    expect(bound).toBe(true);
+    >();
   });
 
   test("are the same set at run time, in both directions", () => {

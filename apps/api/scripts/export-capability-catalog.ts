@@ -1,3 +1,4 @@
+import { KindGuard } from "@sinclair/typebox";
 // Dev-only exporter: projects the safe-handler universe down to a capability
 // catalog and writes a deterministic JSON snapshot
 // (`packages/cli/capability-catalog.json`).
@@ -33,8 +34,6 @@
 // Env-dependent by design (it imports the handler graph, which validates the API
 // env at module load), so run under `bun --env-file=apps/api/.env`. Wired into
 // `bun run verify` and CI next to the CLI registry-snapshot drift guard.
-
-import { KindGuard } from "@sinclair/typebox";
 import { panic, Result } from "better-result";
 import { mkdtemp, rm } from "node:fs/promises";
 import os from "node:os";
@@ -55,10 +54,15 @@ import {
   isTransportInvocable,
   transportFileResponse,
 } from "../src/lib/capability-transport";
+import {
+  VALIDATED_INPUT_SERVICE_CLASSIFICATION,
+  type CatalogServiceClassification,
+  type ServiceClassification,
+} from "../src/lib/rate-limit/service-classification";
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
-import type { McpToolDefinition } from "../src/mcp/tool-types";
+import type { McpReadClass, McpToolDefinition } from "../src/mcp/tool-types";
 import { WRITE_PRIMITIVE_SCOPES } from "../src/mcp/write-primitive-scopes";
 import {
   type CapabilityDispatchRecord,
@@ -487,7 +491,9 @@ type CapabilityEntry = {
   description?: string;
   handlerKind: HandlerKind;
   access: "read" | "write";
+  readClass?: McpReadClass;
   destructive: boolean;
+  consumesServices: CatalogServiceClassification;
   scope: string;
   /** Additional OAuth grants required by a compound covering tool. */
   additionalScopes?: readonly string[];
@@ -820,12 +826,75 @@ const coveringToolOf = (exposure: ParsedExposure): string | undefined => {
   return undefined;
 };
 
+const serviceConsumptionOf = (
+  exposure: Extract<
+    ParsedExposure,
+    { type: "capability" | "tool" | "covered" }
+  >,
+  toolServicesByName: ReadonlyMap<string, boolean>,
+): ServiceClassification => {
+  let toolName: string;
+  switch (exposure.type) {
+    case "capability":
+      return exposure.consumesServices;
+    case "tool":
+      toolName = exposure.name;
+      break;
+    case "covered":
+      toolName = exposure.by;
+      break;
+    default:
+      exposure satisfies never;
+      return panic("Unhandled capability exposure");
+  }
+  return (
+    toolServicesByName.get(toolName) ??
+    panic(`Missing service classification for covering tool ${toolName}`)
+  );
+};
+
+type ResolveReadClassificationOptions = {
+  id: string;
+  access: "read" | "write";
+  exposure: Extract<
+    ParsedExposure,
+    { type: "capability" | "tool" | "covered" }
+  >;
+  toolReadClassesByName: ReadonlyMap<string, McpToolDefinition["readClass"]>;
+};
+
+/** Resolve read ownership before projecting the generated transport contract. */
+const resolveReadClassification = ({
+  id,
+  access,
+  exposure,
+  toolReadClassesByName,
+}: ResolveReadClassificationOptions) => {
+  if (access === "write") {
+    return undefined;
+  }
+  if (exposure.readClass !== undefined) {
+    return exposure.readClass;
+  }
+  if (exposure.type === "capability") {
+    return panic(`Missing read classification for capability ${id}`);
+  }
+  const covering = exposure.type === "tool" ? exposure.name : exposure.by;
+  const classification = toolReadClassesByName.get(covering);
+  if (classification === undefined || typeof classification === "function") {
+    return panic(`Missing static read classification for capability ${id}`);
+  }
+  return classification;
+};
+
 type BuildCatalogEntryOptions = {
   id: string;
   /** Handler config's `description`, absent when the handler declares none. */
   description: string | undefined;
   kind: HandlerKind;
   access: { access: "read" | "write"; destructive: boolean };
+  consumesServices: ServiceClassification;
+  readClass: McpReadClass | undefined;
   scope: string;
   additionalScopes: readonly string[];
   requestTimeoutMs: number | undefined;
@@ -855,6 +924,8 @@ const buildCatalogEntry = ({
   description,
   kind,
   access,
+  consumesServices,
+  readClass,
   scope,
   additionalScopes,
   requestTimeoutMs,
@@ -869,7 +940,12 @@ const buildCatalogEntry = ({
   ...(description === undefined ? {} : { description }),
   handlerKind: kind,
   access: access.access,
+  ...(readClass === undefined ? {} : { readClass }),
   destructive: access.destructive,
+  consumesServices:
+    typeof consumesServices === "function"
+      ? VALIDATED_INPUT_SERVICE_CLASSIFICATION
+      : consumesServices,
   scope,
   ...(additionalScopes.length === 0 ? {} : { additionalScopes }),
   ...(requestTimeoutMs === undefined ? {} : { requestTimeoutMs }),
@@ -1098,6 +1174,12 @@ const buildCatalog = async (): Promise<BuildResult> => {
   const { DEFAULT_MCP_TOOL_DEFINITIONS: narrowToolDefinitions } =
     await import("../src/mcp/static-tool-definitions");
   const toolDefinitions: readonly McpToolDefinition[] = narrowToolDefinitions;
+  const toolReadClassesByName = new Map(
+    toolDefinitions.map((tool) => [tool.name, tool.readClass]),
+  );
+  const toolServicesByName = new Map(
+    toolDefinitions.map((tool) => [tool.name, tool.consumesServices]),
+  );
   const toolScopeByName = new Map<string, string>(
     toolDefinitions.map((tool) => [tool.name, tool.scope]),
   );
@@ -1487,12 +1569,23 @@ const buildCatalog = async (): Promise<BuildResult> => {
       coveringToolName === undefined
         ? undefined
         : toolFeatureByName.get(coveringToolName);
+    const consumesServices = serviceConsumptionOf(
+      endpoint.exposure,
+      toolServicesByName,
+    );
     entries.push(
       buildCatalogEntry({
         id,
         description: readDescription(endpoint.config),
         kind: kindResolution.kind,
         access: accessResolution,
+        consumesServices,
+        readClass: resolveReadClassification({
+          id,
+          access: accessResolution.access,
+          exposure: endpoint.exposure,
+          toolReadClassesByName,
+        }),
         scope,
         additionalScopes,
         requestTimeoutMs,
@@ -1840,18 +1933,13 @@ const main = async (): Promise<number> => {
     return 1;
   }
 
-  // Formatted here for the same reason as the dispatch module: an unformatted
-  // artifact fails CI's Format gate, and hand-formatting it afterwards makes it
-  // differ from what this exporter regenerates, which then fails the drift
-  // guard instead. Only generator-formatted output satisfies both.
-  const doc = await formatGeneratedArtifact(
-    serializeCoverageDoc({
-      entries,
-      cliCommandPathById,
-      internalWaiverCounts,
-    }),
-    "capability-coverage.md",
-  );
+  // Unpadded rows keep a wider cell from rewriting every other row. This
+  // generated document is excluded from the formatter for the same reason.
+  const doc = serializeCoverageDoc({
+    entries,
+    cliCommandPathById,
+    internalWaiverCounts,
+  });
 
   if (!checkMode) {
     await Bun.write(CATALOG_PATH, serialized);

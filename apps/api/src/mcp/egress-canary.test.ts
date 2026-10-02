@@ -76,11 +76,14 @@ const emptyCatalogsByWorkspace = async ({
   );
 
 const anonymizeTextFieldsMock = mock(
-  async ({ fields }: AnonymizeTextFieldsInput) => ({
-    entityCount: fields.length,
-    fields: fields.map((_field, index) => `[ANON_${index}]`),
-    redactionMap: new Map<string, string>(),
-  }),
+  async ({ fields }: AnonymizeTextFieldsInput) =>
+    await Promise.resolve(
+      Result.ok({
+        entityCount: fields.length,
+        fields: fields.map((_field, index) => `[ANON_${index}]`),
+        redactionMap: new Map<string, string>(),
+      }),
+    ),
 );
 
 type SearchProviderHit = {
@@ -280,6 +283,7 @@ const buildContext = ({
     safeDb,
     scopedDb,
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 
@@ -1275,6 +1279,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "te_1",
+              activityGroup: "client",
               entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_2",
               dateWorked: "2026-01-01",
@@ -1324,6 +1329,7 @@ describe("MCP anonymization canary corpus", () => {
           entryRows: [
             {
               id: "00000000-0000-4000-8000-0000000f0002",
+              activityGroup: "client",
               entityId: "00000000-0000-4000-8000-0000000e0001",
               userId: "user_3",
               dateWorked: "2026-01-01",

@@ -12,7 +12,12 @@ const config = {
     "List inbox signals visible to the caller: open by default, or snoozed " +
     "or resolved via `view`; filter by matter, origin, severity, or assignment.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workflow_orchestration" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workflow_orchestration",
+    consumesServices: false,
+  },
   access: "read",
   query: listSignalsQuerySchema,
 } satisfies HandlerConfig;

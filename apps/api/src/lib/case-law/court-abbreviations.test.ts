@@ -167,6 +167,18 @@ const ECLI_CASES: readonly Case[] = [
 /** No ECLI: only the apex courts have a name a reader abbreviates. */
 const NAME_CASES: readonly Case[] = [
   {
+    name: "Slovak supreme court in a publisher citation",
+    country: "SVK",
+    court: "Najvyššieho súdu Slovenskej republiky",
+    expected: "NS",
+  },
+  {
+    name: "Slovak supreme administrative court in a publisher citation",
+    country: "SVK",
+    court: "Najvyššieho správneho súdu Slovenskej republiky",
+    expected: "NSS",
+  },
+  {
     name: "CZ constitutional court by name",
     country: "CZE",
     court: "Ústavní soud",

@@ -17,7 +17,12 @@ const config = {
     "holds. The items themselves come from lists.items.list.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: paramsSchema,
 } satisfies WorkspaceHandlerConfig;
 

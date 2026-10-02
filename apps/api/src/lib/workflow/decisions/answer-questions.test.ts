@@ -45,6 +45,7 @@ const decisionsFor = async (
     );
   const { decisions } = await decideMany({
     id: "test.answer-questions",
+    dataClass: "customer",
     orgAIConfig: null,
     state: plan.state,
     questions: plan.questions,
@@ -562,6 +563,7 @@ describe("decodeSystemOneAnswers", () => {
     });
     const { decisions } = await decideMany({
       id: "test.answer-questions",
+      dataClass: "customer",
       orgAIConfig: null,
       state: plan.state,
       questions: plan.questions,

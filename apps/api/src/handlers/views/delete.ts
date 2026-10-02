@@ -20,7 +20,11 @@ const config = {
     "of a layout the matter must keep (overview, table, filesystem, kanban); " +
     "past report exports keep their own layout snapshot.",
   permissions: { view: ["delete"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   params: workspaceParams({ viewId: tSafeId("workspaceView") }),
 } satisfies WorkspaceHandlerConfig;
 

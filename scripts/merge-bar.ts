@@ -42,8 +42,14 @@
 //
 // Usage:
 //   bun scripts/merge-bar.ts <pr-number> [--repo owner/name] [--dry-run]
+//
+// A non-empty STELLA_MERGE_HOLD repository variable holds ordinary pull requests;
+// recognized release pull requests remain exempt, including --jump.
+// Set: gh variable set STELLA_MERGE_HOLD --repo stella/stella --body "<reason>"
+// Lift: gh variable delete STELLA_MERGE_HOLD --repo stella/stella
 
-import { panic } from "better-result";
+import { panic, Result, TaggedError } from "better-result";
+import { fileURLToPath } from "node:url";
 
 import { findMigrationIdentityViolation } from "./check-migration-order";
 
@@ -54,6 +60,42 @@ const MERGE_COMMIT_POLL_ATTEMPTS = 5;
 const PULL_NUMBER_PATTERN = /^\d+$/u;
 const MIGRATION_ALIAS_INVENTORY =
   "apps/api/src/lib/db/migration-alias-inventory.json";
+
+export class MergeHoldReadError extends TaggedError("MergeHoldReadError")<{
+  message: string;
+}> {}
+
+class MergeHoldError extends TaggedError("MergeHoldError")<{
+  message: string;
+}> {}
+
+type CheckMergeHoldOptions = {
+  readVariable: () => Result<string | null, MergeHoldReadError>;
+  readIsRelease: () => Result<boolean, MergeHoldReadError>;
+  checkedByWorkflow?: string | undefined;
+  githubActions?: string | undefined;
+};
+
+export const checkMergeHold = ({
+  readVariable,
+  readIsRelease,
+  checkedByWorkflow,
+  githubActions,
+}: CheckMergeHoldOptions) => {
+  if (checkedByWorkflow === "1" && githubActions === "true") {
+    return Result.ok({ source: "workflow" } as const);
+  }
+  return readVariable().andThen((reason) => {
+    if (reason === null || reason === "") {
+      return Result.ok({ source: "repository-variable" } as const);
+    }
+    return readIsRelease().andThen((isRelease) =>
+      isRelease
+        ? Result.ok({ source: "repository-variable" } as const)
+        : Result.err(new MergeHoldError({ message: `MERGE HOLD: ${reason}` })),
+    );
+  });
+};
 
 // --- Repository policy --------------------------------------------------------
 
@@ -521,6 +563,126 @@ export const evaluateMergeBar = (
   };
 };
 
+// Limit unrelated drift too: beyond twenty commits, path overlap alone is
+// too weak a signal for whether an old green run still represents integration.
+const MAX_GREEN_BASE_DRIFT = 20;
+const COMPARE_FILE_LIMIT = 300;
+
+class StaleGreenResultError extends TaggedError("StaleGreenResultError")<{
+  message: string;
+}> {}
+
+type CheckGreenResultFreshnessOptions = {
+  pullRequest: PullRequestSnapshot;
+  jump: boolean;
+  checkRuns: readonly CheckRunSnapshot[];
+  readWorkflowRun: (checkRunId: number) => unknown;
+  readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
+  readPullFiles: () => readonly string[];
+};
+
+export const checkGreenResultFreshness = ({
+  pullRequest,
+  jump,
+  checkRuns,
+  readWorkflowRun,
+  readBaseComparison,
+  readPullFiles,
+}: CheckGreenResultFreshnessOptions) => {
+  if (jump || isReleasePullRequest(pullRequest)) {
+    return Result.ok();
+  }
+  const green = latestRunByName(checkRuns).get("ci-result");
+  if (green?.status !== "completed" || green.conclusion !== "success") {
+    return Result.ok();
+  }
+  const refuse = (detail: string) =>
+    Result.err(
+      new StaleGreenResultError({
+        message: `STALE_GREEN_RESULT: ${detail}; merge main and let CI re-run.`,
+      }),
+    );
+  // Use the workflow's triggering PR snapshot, never today's PR merge ref:
+  // GitHub regenerates that ref whenever the base branch moves.
+  const run = readRecord(readWorkflowRun(green.id), "ci-result workflow run");
+  if (readString(run, "head_sha") !== pullRequest.headSha) {
+    return refuse("ci-result workflow does not match the current PR head");
+  }
+  const pulls = run["pull_requests"];
+  if (!Array.isArray(pulls)) {
+    return refuse("ci-result workflow has no recorded PR base");
+  }
+  const rawPull = pulls.find(
+    (value) =>
+      readRecord(value, "workflow pull request")["number"] ===
+      pullRequest.number,
+  );
+  if (rawPull === undefined) {
+    return refuse("ci-result workflow has no recorded base for this PR");
+  }
+  const pull = readRecord(rawPull, "workflow pull request");
+  if (
+    readString(readRecord(pull["head"], "workflow PR head"), "sha") !==
+    pullRequest.headSha
+  ) {
+    return refuse(
+      "ci-result workflow PR snapshot does not match the current head",
+    );
+  }
+  const base = readRecord(pull["base"], "workflow PR base");
+  if (readString(base, "ref") !== pullRequest.baseRefName) {
+    return refuse("ci-result was computed for another base branch");
+  }
+  const testedBaseSha = readString(base, "sha");
+  const comparison = readRecord(
+    readBaseComparison(testedBaseSha, pullRequest.baseRefName),
+    "base comparison",
+  );
+  const status = readString(comparison, "status");
+  if (status === "identical") {
+    return Result.ok();
+  }
+  if (status !== "ahead") {
+    return refuse(
+      "the tested base is no longer an ancestor of the current base",
+    );
+  }
+  const commits = comparison["ahead_by"];
+  if (
+    typeof commits !== "number" ||
+    !Number.isSafeInteger(commits) ||
+    commits < 0
+  ) {
+    panic("Expected a non-negative commit count in base comparison");
+  }
+  if (commits > MAX_GREEN_BASE_DRIFT) {
+    return refuse(
+      `main advanced ${commits} commits since the green run (limit ${MAX_GREEN_BASE_DRIFT})`,
+    );
+  }
+  const files = comparison["files"];
+  if (!Array.isArray(files) || files.length >= COMPARE_FILE_LIMIT) {
+    return refuse("cannot establish complete changed-file coverage for main");
+  }
+  const changedPaths = new Set<string>();
+  for (const rawFile of files) {
+    const file = readRecord(rawFile, "base changed file");
+    changedPaths.add(readString(file, "filename"));
+    if (typeof file["previous_filename"] === "string") {
+      changedPaths.add(file["previous_filename"]);
+    }
+  }
+  const overlap = readPullFiles().filter((filename) =>
+    changedPaths.has(filename),
+  );
+  if (overlap.length > 0) {
+    return refuse(
+      `main changed files also touched by this PR: ${overlap.join(", ")}`,
+    );
+  }
+  return Result.ok();
+};
+
 // --- gh seam ----------------------------------------------------------------
 
 type GitHubGateway = {
@@ -529,6 +691,9 @@ type GitHubGateway = {
   // needs the SHA, and a narrow read makes the TOCTOU window smaller.
   readHeadSha: () => string;
   readCheckRuns: (headSha: string) => readonly CheckRunSnapshot[];
+  readWorkflowRun: (checkRunId: number) => unknown;
+  readBaseComparison: (testedBaseSha: string, baseRefName: string) => unknown;
+  readPullFiles: () => readonly string[];
   readReviewThreads: () => readonly ReviewThreadSnapshot[];
   readMigrationDirectories: () => MigrationSnapshot;
   // Both writes pin the head every gate was evaluated against, so GitHub
@@ -538,12 +703,12 @@ type GitHubGateway = {
   // GitHub did: enabled auto-merge, or added the pull request to the queue.
   merge: (input: { expectedHeadSha: string }) => string;
   armMergeWhenReady: (input: { expectedHeadSha: string }) => string;
-  // Asks GitHub to add the pull request at the front of the queue; returns
-  // the position the mutation reported, which `readMergeQueue` must confirm.
+  // Preserve the mutation's jump receipt while the fresh queue listing
+  // catches up. Only `readMergeQueue` can confirm first place.
   enqueueWithJump: (input: {
     pullRequestId: string;
     expectedHeadSha: string;
-  }) => number;
+  }) => EnqueuedMergeQueueEntry;
   readMergeQueue: (branch: string) => readonly MergeQueueEntrySnapshot[];
   sleep: (milliseconds: number) => void;
 };
@@ -594,10 +759,8 @@ type MergeHandoff = ReturnType<typeof readMergeHandoff>;
 const RELEASE_TITLE_PREFIX = "chore: release v";
 
 /**
- * A release pull request goes to the front of the merge queue: every pull
- * request that lands between the cut and the release's merge can invalidate
- * the cut. Recognized as in release-pr.yml's gate: a ready pull request into
- * main from this repository whose title starts with "chore: release v".
+ * Recognized as in release-pr.yml's gate: a ready pull request into main
+ * from this repository whose title starts with "chore: release v".
  */
 export const isReleasePullRequest = (
   pullRequest: Pick<
@@ -659,7 +822,17 @@ export const mergeWhenReadyAction = ({
   return { kind: "arm" };
 };
 
-export type MergeQueueEntrySnapshot = { pullNumber: number; position: number };
+export type MergeQueueEntrySnapshot = {
+  pullNumber: number;
+  position: number;
+  jump: boolean;
+  state: string;
+};
+
+type EnqueuedMergeQueueEntry = Pick<
+  MergeQueueEntrySnapshot,
+  "position" | "jump" | "state"
+>;
 
 export type QueuePlacement =
   | { status: "front"; position: number }
@@ -675,7 +848,7 @@ export const evaluateQueuePlacement = ({
   entries,
   pullNumber,
 }: {
-  entries: readonly MergeQueueEntrySnapshot[];
+  entries: readonly Pick<MergeQueueEntrySnapshot, "pullNumber" | "position">[];
   pullNumber: number;
 }): QueuePlacement => {
   const own = entries.find((entry) => entry.pullNumber === pullNumber);
@@ -707,55 +880,58 @@ export const formatQueuePlacementFailure = (
     .join(", ")}`;
 };
 
-const QUEUE_SETTLE_ATTEMPTS = 5;
-const QUEUE_SETTLE_INTERVAL_MS = 2000;
-
 type VerifyFrontOfQueueOptions = {
-  gateway: Pick<GitHubGateway, "readMergeQueue" | "sleep">;
+  gateway: Pick<GitHubGateway, "readMergeQueue">;
   pullNumber: number;
+  repo: string;
   branch: string;
   context: string;
   release: boolean;
+  enqueuedEntry?: EnqueuedMergeQueueEntry;
 };
 
-// The enqueue mutation can precede the updated queue snapshot. Only a read
-// proving first place succeeds; exhausted or incomplete snapshots fail closed.
+// A recorded jump can be pending while GitHub rebuilds merge groups. Read
+// once and report that state; only a fresh first position proves completion.
 export const verifyFrontOfQueue = ({
   gateway,
   pullNumber,
+  repo,
   branch,
   context,
   release,
-}: VerifyFrontOfQueueOptions): { exitCode: 0 | 1; message: string } => {
-  const positionsSeen: (number | "absent")[] = [];
-  for (let attempt = 0; attempt < QUEUE_SETTLE_ATTEMPTS; attempt += 1) {
-    if (attempt > 0) {
-      gateway.sleep(QUEUE_SETTLE_INTERVAL_MS);
-    }
-    const placement = evaluateQueuePlacement({
-      entries: gateway.readMergeQueue(branch),
-      pullNumber,
-    });
-    positionsSeen.push(
-      placement.status === "absent" ? "absent" : placement.position,
-    );
-    const positions = `positions seen: ${positionsSeen.join(", ")}`;
-    if (placement.status === "front") {
-      return {
-        exitCode: 0,
-        message: `\nverdict: QUEUED AT THE FRONT — ${context}; verified first in the queue (position ${placement.position}); ${positions}${release ? " (release pull request)" : ""}`,
-      };
-    }
-    if (attempt === QUEUE_SETTLE_ATTEMPTS - 1) {
-      return {
-        exitCode: 1,
-        message:
-          `\nverdict: NOT AT THE FRONT — ${context}, but ${formatQueuePlacementFailure(placement)}; ${positions}. ` +
-          "The entries ahead of it merge first. Dequeue it, then run the bar again to jump.",
-      };
-    }
+  enqueuedEntry,
+}: VerifyFrontOfQueueOptions): { exitCode: 0 | 1 | 2; message: string } => {
+  const entries = gateway.readMergeQueue(branch);
+  const placement = evaluateQueuePlacement({ entries, pullNumber });
+  if (placement.status === "front") {
+    return {
+      exitCode: 0,
+      message: `\nverdict: QUEUED AT THE FRONT — ${context}; verified first in the queue (position ${placement.position})${release ? " (release pull request)" : ""}`,
+    };
   }
-  return panic("Queue settle schedule must contain at least one attempt");
+  const entry =
+    entries.find((candidate) => candidate.pullNumber === pullNumber) ??
+    enqueuedEntry;
+  if (
+    (placement.status === "absent" || placement.position > 1) &&
+    entry?.jump === true
+  ) {
+    return {
+      exitCode: 2,
+      message:
+        `\nverdict: JUMP PENDING (position ${entry.position}, state ${entry.state}) — ${context}. ` +
+        `GitHub recorded the jump; ${placement.status === "absent" ? "the queue read did not list it yet" : "first place is not yet verified"}.\n` +
+        `pw sub pr ${repo}#${pullNumber} --on merged,closed,checks-failed`,
+    };
+  }
+  const reason =
+    entry !== undefined && !entry.jump
+      ? `GitHub queued the PR without the jump (position ${entry.position}).`
+      : "GitHub did not confirm the jump at the front of the queue.";
+  return {
+    exitCode: 1,
+    message: `\nverdict: JUMP DROPPED — ${context}; ${formatQueuePlacementFailure(placement)}. ${reason}`,
+  };
 };
 
 const readBoolean = (record: Record<string, unknown>, key: string): boolean => {
@@ -780,27 +956,96 @@ const readMember = <T extends string>(
 
 // Automation can supply a workflow read token without widening the release
 // App's permissions. Only the two merge operations use the write credential.
+const githubEnvironment = (access: "read" | "write") => ({
+  ...process.env,
+  GH_TOKEN:
+    access === "read"
+      ? (process.env["GH_READ_TOKEN"] ?? process.env["GH_TOKEN"])
+      : process.env["GH_TOKEN"],
+});
+
+const runGhProcess = (
+  args: readonly string[],
+  access: "read" | "write" = "read",
+) =>
+  Bun.spawnSync(["gh", ...args], {
+    env: githubEnvironment(access),
+    stdout: "pipe",
+    stderr: "pipe",
+  });
+
 const runGh = (
   args: readonly string[],
   access: "read" | "write" = "read",
 ): string => {
-  const result = Bun.spawnSync(["gh", ...args], {
-    env: {
-      ...process.env,
-      GH_TOKEN:
-        access === "read"
-          ? (process.env["GH_READ_TOKEN"] ?? process.env["GH_TOKEN"])
-          : process.env["GH_TOKEN"],
-    },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
+  const result = runGhProcess(args, access);
   if (result.exitCode !== 0) {
     panic(
       `gh ${args.join(" ")} failed (${result.exitCode}): ${result.stderr.toString()}`,
     );
   }
   return result.stdout.toString();
+};
+
+const readRepositoryMergeHold = (repo: string) => {
+  const result = runGhProcess([
+    "variable",
+    "get",
+    "STELLA_MERGE_HOLD",
+    "--repo",
+    repo,
+  ]);
+  if (result.exitCode === 0) {
+    // gh appends a newline; whitespace in the variable itself still activates a hold.
+    return Result.ok(result.stdout.toString().replace(/\r?\n$/u, ""));
+  }
+  if (
+    result.stderr.toString().trim() ===
+    "variable STELLA_MERGE_HOLD was not found"
+  ) {
+    return Result.ok(null);
+  }
+  return Result.err(
+    new MergeHoldReadError({
+      message: `Cannot read STELLA_MERGE_HOLD (${result.exitCode}): ${result.stderr.toString()}`,
+    }),
+  );
+};
+
+const readReleaseRecognition = (repo: string, pullNumber: number) => {
+  const result = Bun.spawnSync(
+    [
+      "bash",
+      fileURLToPath(new URL("release-pull-requests.sh", import.meta.url)),
+      "--repo",
+      repo,
+      "--number",
+      String(pullNumber),
+    ],
+    {
+      env: githubEnvironment("read"),
+      stdout: "pipe",
+      stderr: "pipe",
+    },
+  );
+  if (result.exitCode !== 0) {
+    return Result.err(
+      new MergeHoldReadError({
+        message: `Cannot recognize release pull request (${result.exitCode}): ${result.stderr.toString()}`,
+      }),
+    );
+  }
+  const match = /^current_is_release=(true|false)$/mu.exec(
+    result.stdout.toString(),
+  );
+  if (match === null) {
+    return Result.err(
+      new MergeHoldReadError({
+        message: "Invalid release recognition response",
+      }),
+    );
+  }
+  return Result.ok(match[1] === "true");
 };
 
 const runGhJson = (args: readonly string[]): unknown => JSON.parse(runGh(args));
@@ -859,6 +1104,38 @@ const createGhGateway = ({
     panic(`--repo must be owner/name, got: ${repo}`);
   }
   const prArgs = [String(pullNumber), "--repo", repo];
+
+  const readChangedFiles = () => {
+    const rawChangedFiles = runGhJson([
+      "api",
+      `repos/${repo}/pulls/${pullNumber}`,
+      "--jq",
+      ".changed_files",
+    ]);
+    if (
+      typeof rawChangedFiles !== "number" ||
+      !Number.isSafeInteger(rawChangedFiles) ||
+      rawChangedFiles < 0
+    ) {
+      panic("Expected a nonnegative changed_files count from gh");
+    }
+    const changedFiles = runGh([
+      "api",
+      "--paginate",
+      `repos/${repo}/pulls/${pullNumber}/files`,
+      "--jq",
+      ".[] | {status, filename, previous_filename} | @json",
+    ])
+      .split("\n")
+      .filter(Boolean)
+      .map((line) => readRecord(JSON.parse(line), "changed pull request file"));
+    if (changedFiles.length !== rawChangedFiles) {
+      panic(
+        `Expected ${rawChangedFiles} changed files from gh, received ${changedFiles.length}`,
+      );
+    }
+    return changedFiles;
+  };
 
   return {
     sleep: (milliseconds) => Bun.sleepSync(milliseconds),
@@ -964,6 +1241,47 @@ const createGhGateway = ({
       return runs;
     },
 
+    readWorkflowRun: (checkRunId) => {
+      const check = readRecord(
+        runGhJson(["api", `repos/${repo}/check-runs/${checkRunId}`]),
+        "ci-result check run",
+      );
+      const url = readString(check, "details_url");
+      const parsed = URL.canParse(url) ? new URL(url) : null;
+      const [, urlOwner, urlName, actions, runs, runId] =
+        parsed?.pathname.split("/") ?? [];
+      if (
+        parsed?.origin !== "https://github.com" ||
+        urlOwner === undefined ||
+        urlName === undefined ||
+        `${urlOwner}/${urlName}`.toLowerCase() !== repo.toLowerCase() ||
+        actions !== "actions" ||
+        runs !== "runs" ||
+        runId === undefined ||
+        !PULL_NUMBER_PATTERN.test(runId)
+      ) {
+        panic(
+          "ci-result check does not link to a workflow run in this repository",
+        );
+      }
+      return runGhJson(["api", `repos/${repo}/actions/runs/${runId}`]);
+    },
+
+    readBaseComparison: (testedBaseSha, baseRefName) =>
+      runGhJson([
+        "api",
+        `repos/${repo}/compare/${encodeURIComponent(testedBaseSha)}...${encodeURIComponent(baseRefName)}`,
+      ]),
+
+    readPullFiles: () =>
+      readChangedFiles().flatMap((file) => {
+        const filename = readString(file, "filename");
+        const previousFilename = file["previous_filename"];
+        return typeof previousFilename === "string"
+          ? [filename, previousFilename]
+          : [filename];
+      }),
+
     readReviewThreads: () => {
       const threads: ReviewThreadSnapshot[] = [];
       let cursor: string | null = null;
@@ -1023,36 +1341,7 @@ const createGhGateway = ({
           inventoryChanged: false,
         };
       }
-      const rawChangedFiles = runGhJson([
-        "api",
-        `repos/${repo}/pulls/${pullNumber}`,
-        "--jq",
-        ".changed_files",
-      ]);
-      if (
-        typeof rawChangedFiles !== "number" ||
-        !Number.isSafeInteger(rawChangedFiles) ||
-        rawChangedFiles < 0
-      ) {
-        panic("Expected a nonnegative changed_files count from gh");
-      }
-      const changedFiles = runGh([
-        "api",
-        "--paginate",
-        `repos/${repo}/pulls/${pullNumber}/files`,
-        "--jq",
-        ".[] | {status, filename, previous_filename} | @json",
-      ])
-        .split("\n")
-        .filter(Boolean)
-        .map((line) =>
-          readRecord(JSON.parse(line), "changed pull request file"),
-        );
-      if (changedFiles.length !== rawChangedFiles) {
-        panic(
-          `Expected ${rawChangedFiles} changed files from gh, received ${changedFiles.length}`,
-        );
-      }
+      const changedFiles = readChangedFiles();
       const addedDirectories: string[] = [];
       const removedDirectories: string[] = [];
       const modifiedDirectories: string[] = [];
@@ -1184,7 +1473,7 @@ const createGhGateway = ({
               `query=mutation($id:ID!, $sha:GitObjectID!) {
                 enqueuePullRequest(input:{
                   pullRequestId:$id, expectedHeadOid:$sha, jump:true
-                }) { mergeQueueEntry { position } }
+                }) { mergeQueueEntry { id position jump state } }
               }`,
               "-f",
               `id=${pullRequestId}`,
@@ -1207,7 +1496,14 @@ const createGhGateway = ({
       if (typeof position !== "number") {
         return panic("Expected numeric merge queue position");
       }
-      return position;
+      return {
+        position,
+        jump:
+          entry["jump"] === undefined || entry["jump"] === null
+            ? false
+            : readBoolean(entry, "jump"),
+        state: readString(entry, "state"),
+      };
     },
 
     readMergeQueue: (branch) => {
@@ -1221,7 +1517,7 @@ const createGhGateway = ({
               mergeQueue(branch:$branch) {
                 entries(first:100) {
                   totalCount
-                  nodes { position pullRequest { number } }
+                  nodes { position jump state pullRequest { number } }
                 }
               }
             }
@@ -1265,7 +1561,16 @@ const createGhGateway = ({
         if (typeof position !== "number" || typeof entryNumber !== "number") {
           return panic("Expected numeric merge queue position and number");
         }
-        return { pullNumber: entryNumber, position };
+        return {
+          pullNumber: entryNumber,
+          position,
+          // An omitted jump flag cannot confirm that GitHub recorded it.
+          jump:
+            record["jump"] === undefined || record["jump"] === null
+              ? false
+              : readBoolean(record, "jump"),
+          state: readString(record, "state"),
+        };
       });
     },
   };
@@ -1277,7 +1582,7 @@ type MergeBarOptions = {
   pullNumber: number;
   repo: string;
   dryRun: boolean;
-  // Enqueue at the front of the queue. Release pull requests always jump.
+  // Enqueue at the front of the queue only when explicitly requested.
   jump: boolean;
 };
 
@@ -1368,19 +1673,43 @@ if (import.meta.main) {
     migrationDirectory: repositoryMigrationDirectory(options.repo),
   });
 
+  // Version Packages uses this CLI as release-pr.yml's auto-merge-command too.
+  const hold = checkMergeHold({
+    readVariable: () => readRepositoryMergeHold(options.repo),
+    readIsRelease: () =>
+      readReleaseRecognition(options.repo, options.pullNumber),
+    checkedByWorkflow: process.env["STELLA_MERGE_HOLD_CHECKED_BY_WORKFLOW"],
+    githubActions: process.env["GITHUB_ACTIONS"],
+  });
+  if (hold.isErr()) {
+    console.error(hold.error.message);
+    process.exit(1);
+  }
+
+  if (hold.value.source === "workflow") {
+    console.log(
+      "merge hold: checked by the calling workflow; final CI verdict enforces it",
+    );
+  }
+
   const pullRequest = readSettledPullRequest(gateway);
   const policy = readLiveRepositoryPolicy(
     options.repo,
     pullRequest.baseRefName,
   );
-  const jump = options.jump || isReleasePullRequest(pullRequest);
-  const requireFrontOfQueue = (context: string): void => {
+  const jump = options.jump;
+  const requireFrontOfQueue = (
+    context: string,
+    enqueuedEntry?: EnqueuedMergeQueueEntry,
+  ): void => {
     const verdict = verifyFrontOfQueue({
       gateway,
       pullNumber: pullRequest.number,
+      repo: options.repo,
       branch: pullRequest.baseRefName,
       context,
-      release: !options.jump,
+      release: isReleasePullRequest(pullRequest),
+      ...(enqueuedEntry === undefined ? {} : { enqueuedEntry }),
     });
     if (verdict.exitCode === 0) {
       console.log(verdict.message);
@@ -1406,12 +1735,25 @@ if (import.meta.main) {
   }
   // Read order is load-bearing: each gate's window is the time between its
   // own read and the write, so the head SHA the write pins is read last.
+  const checkRuns = gateway.readCheckRuns(pullRequest.headSha);
+  const freshness = checkGreenResultFreshness({
+    pullRequest,
+    jump: options.jump,
+    checkRuns,
+    readWorkflowRun: gateway.readWorkflowRun,
+    readBaseComparison: gateway.readBaseComparison,
+    readPullFiles: gateway.readPullFiles,
+  });
+  if (freshness.isErr()) {
+    console.error(freshness.error.message);
+    process.exit(1);
+  }
   const snapshot: MergeBarSnapshot = {
     pullRequest,
     landing: policy.landing,
     requiredCheckRuns: policy.requiredCheckRuns,
     checkRunsHeadSha: pullRequest.headSha,
-    checkRuns: gateway.readCheckRuns(pullRequest.headSha),
+    checkRuns,
     migrations: gateway.readMigrationDirectories(),
     reviewThreads: gateway.readReviewThreads(),
     headShaBeforeMerge: gateway.readHeadSha(),
@@ -1489,8 +1831,9 @@ if (import.meta.main) {
             expectedHeadSha: snapshot.headShaBeforeMerge,
           });
           requireFrontOfQueue(
-            `${snapshot.headShaBeforeMerge} was enqueued with a jump ` +
-              `(GitHub reported position ${reported})`,
+            `${snapshot.headShaBeforeMerge} was enqueued after requesting a jump ` +
+              `(GitHub reported position ${reported.position})`,
+            reported,
           );
           break;
         }

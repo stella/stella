@@ -13,7 +13,12 @@ const config = {
     "seeded when the organization is created, so this only ever reads. The " +
     "list is bounded and returned whole rather than paginated.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

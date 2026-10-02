@@ -47,7 +47,12 @@ true satisfies UnexpectedNumberSeriesGetColumn extends never ? true : never;
 const config = {
   description: "Read one active document number series.",
   permissions: { organizationSettings: ["update"] },
-  mcp: { type: "capability", reason: "billing_admin" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "billing_admin",
+    consumesServices: false,
+  },
   access: "read",
   params: numberSeriesParams,
 } satisfies HandlerConfig;

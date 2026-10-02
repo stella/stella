@@ -62,9 +62,11 @@ const zefixSearch = async ({
   nameOrId,
   maxEntries,
   signal,
+  observer,
 }: ZefixSearchOptions): Promise<ZefixSuccessfulSearchResponse | null> => {
   const response = await performRegistryRequest({
     url: SEARCH_URL,
+    observer,
     init: {
       method: "POST",
       headers: {
@@ -120,7 +122,7 @@ export type LookupOptions = RegistryClientOptions;
 
 export const lookupByUid = async (
   uidInput: string,
-  options?: LookupOptions,
+  options: LookupOptions,
 ): Promise<ZefixCompany | null> => {
   const uid = normalizeUid(uidInput);
   if (!validateUid(uid)) {
@@ -130,7 +132,8 @@ export const lookupByUid = async (
   const response = await zefixSearch({
     nameOrId: uid,
     maxEntries: 2,
-    signal: options?.signal,
+    signal: options.signal,
+    observer: options.observer,
   });
   if (!response) {
     return null;
@@ -151,20 +154,21 @@ export type SearchOptions = RegistryClientOptions & {
 
 export const searchByName = async (
   name: string,
-  options?: SearchOptions,
+  options: SearchOptions,
 ): Promise<ZefixSearchResult[]> => {
   const trimmed = name.trim();
   if (trimmed.length === 0) {
     throw new ZefixValidationError("Search name must not be empty");
   }
   const limit = clampSearchLimit(
-    options?.limit ?? DEFAULT_SEARCH_LIMIT,
+    options.limit ?? DEFAULT_SEARCH_LIMIT,
     MAX_SEARCH_LIMIT,
   );
   const response = await zefixSearch({
     nameOrId: trimmed,
     maxEntries: limit,
-    signal: options?.signal,
+    signal: options.signal,
+    observer: options.observer,
   });
   if (!response) {
     return [];

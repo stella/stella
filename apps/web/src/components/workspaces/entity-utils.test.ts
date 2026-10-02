@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import {
   buildTree,
   countDescendants,
+  fileHasThumbnail,
   findNode,
 } from "@/components/workspaces/entity-utils";
 import type { TableTreeNode } from "@/components/workspaces/table/types";
@@ -62,6 +63,24 @@ const ids = (nodes: readonly { entityId: string }[]) =>
 const treeNode = (id: string): TableTreeNode => ({
   ...entity(id),
   children: [],
+});
+
+describe("fileHasThumbnail", () => {
+  test("a file with a generated preview has a thumbnail", () => {
+    expect(
+      fileHasThumbnail({ encrypted: false, thumbnailFileId: "thumb-1" }),
+    ).toBe(true);
+  });
+
+  test("a file without a preview, or an encrypted one, has none", () => {
+    expect(fileHasThumbnail({ encrypted: false })).toBe(false);
+    expect(fileHasThumbnail({ encrypted: false, thumbnailFileId: null })).toBe(
+      false,
+    );
+    expect(
+      fileHasThumbnail({ encrypted: true, thumbnailFileId: "thumb-1" }),
+    ).toBe(false);
+  });
 });
 
 describe("buildTree", () => {

@@ -26,7 +26,11 @@ const config = {
     "skill can, not only the comment's author.",
   permissions: { agentSkill: ["comment"] },
   access: "write",
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   params: updateSkillCommentParamsSchema,
   body: updateSkillCommentBodySchema,
 } satisfies HandlerConfig;

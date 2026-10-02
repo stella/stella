@@ -2,7 +2,6 @@ import { Result } from "better-result";
 import { t } from "elysia";
 
 import {
-  PORTRAIT_CACHE_CONTROL,
   readJudgePortraitObject,
   readJudgePortraitPointer,
 } from "@/api/handlers/case-law/judges/portrait";
@@ -13,6 +12,7 @@ import { tSafeId } from "@/api/lib/custom-schema";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 
 const config = {
+  cache: { kind: "public", maxAge: 86_400 },
   mcp: { type: "internal", reason: "public_indexing" },
   params: t.Object({ judgeId: tSafeId("caseLawJudge") }),
 } satisfies PublicHandlerConfig;
@@ -54,7 +54,6 @@ const readJudgePortrait = createSafePublicHandler(
     return Result.ok(
       new Response(portrait.bytes, {
         headers: {
-          "Cache-Control": PORTRAIT_CACHE_CONTROL,
           "Content-Disposition": "inline",
           "Content-Type": pointer.contentType,
           "X-Content-Type-Options": "nosniff",

@@ -1,3 +1,9 @@
+import path from "node:path";
+
+import {
+  isServiceClassification,
+  type ServiceClassification,
+} from "../../src/lib/rate-limit/service-classification";
 // Shared safe-handler enumeration.
 //
 // The MCP coverage guard (`apps/api/scripts/mcp-coverage-guard.ts`) and the
@@ -13,8 +19,7 @@
 // and is never threaded into the route wiring, so the composed app cannot see
 // it. An endpoint's identifier is its repo-relative module path for the default
 // export, or `path#exportName` for a named export.
-
-import path from "node:path";
+import type { McpReadClass } from "../../src/mcp/tool-types";
 
 // Repo root resolved from this file's location so identifiers are stable
 // regardless of the process working directory. This file sits at
@@ -79,9 +84,14 @@ export const detectHandlerKinds = (source: string): HandlerKind[] => {
 };
 
 export type ParsedExposure =
-  | { type: "tool"; name: string }
-  | { type: "covered"; by: string }
-  | { type: "capability"; reason: string }
+  | { type: "tool"; name: string; readClass?: McpReadClass }
+  | { type: "covered"; by: string; readClass?: McpReadClass }
+  | {
+      type: "capability";
+      reason: string;
+      consumesServices: ServiceClassification;
+      readClass?: McpReadClass;
+    }
   | { type: "internal"; reason: string }
   | { type: "pending" }
   | { type: "invalid"; raw: unknown };
@@ -115,21 +125,42 @@ export const parseExposure = (mcp: unknown): ParsedExposure => {
   if (!isRecord(mcp)) {
     return { type: "invalid", raw: mcp };
   }
+  const readClass = mcp["readClass"];
+  if (
+    readClass !== undefined &&
+    readClass !== "tenant" &&
+    readClass !== "public" &&
+    readClass !== "both"
+  ) {
+    return { type: "invalid", raw: mcp };
+  }
+  const readClassification =
+    readClass === undefined ? {} : ({ readClass } as const);
   const type = mcp["type"];
   if (type === "pending") {
     return { type: "pending" };
   }
   const name = mcp["name"];
   if (type === "tool" && typeof name === "string") {
-    return { type: "tool", name };
+    return { type: "tool", name, ...readClassification };
   }
   const by = mcp["by"];
   if (type === "covered" && typeof by === "string") {
-    return { type: "covered", by };
+    return { type: "covered", by, ...readClassification };
   }
   const reason = mcp["reason"];
-  if (type === "capability" && typeof reason === "string") {
-    return { type: "capability", reason };
+  const consumesServices = mcp["consumesServices"];
+  if (
+    type === "capability" &&
+    typeof reason === "string" &&
+    isServiceClassification(consumesServices)
+  ) {
+    return {
+      type: "capability",
+      reason,
+      consumesServices,
+      ...readClassification,
+    };
   }
   if (type === "internal" && typeof reason === "string") {
     return { type: "internal", reason };

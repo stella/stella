@@ -50,6 +50,7 @@ import {
   encodePaginationCursor,
   isDateOnlyPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedCaseLawDecisionId } from "@/api/lib/safe-id-boundaries";
 
 export const listDecisionsQuerySchema = t.Object({
@@ -238,6 +239,9 @@ export const listDecisionsHandler = async (
   const countryRead = readPublicLawCountry(query.country, {
     admitted: PUBLIC_CASE_LAW_COUNTRIES,
   });
+  if (countryRead.kind === "unavailable") {
+    return status(503, countryRead.response);
+  }
   if (countryRead.kind === "unreadable") {
     return status(400, { message: countryRead.message });
   }
@@ -246,7 +250,9 @@ export const listDecisionsHandler = async (
     return status(404, { message: "Not Found" });
   }
   const scopedQuery = { ...query, country };
-  const limit = query.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const cursor = query.cursor
     ? decodeDecisionDateCursor(query.cursor)
     : undefined;

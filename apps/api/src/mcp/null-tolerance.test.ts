@@ -89,12 +89,14 @@ const createContext = (): McpRequestContext => {
     scopedDb: emptyScopedDb,
     testDependencies: { loadOrgSettingsForAuth: loadOrgSettingsMock },
     userId: toSafeId<"user">("user_1"),
+    userEmail: "standard@example.test",
   };
 };
 
 const loadOrgSettingsMock = mock(async () => ({
   orgAIConfig: null,
   orgAIConfigStatus: "ok" as const,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
 }));
 const { handleMcpToolCall } = await import("@/api/mcp/tools");

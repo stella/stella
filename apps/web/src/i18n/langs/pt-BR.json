@@ -27,6 +27,16 @@
     "errorNotFound": "Não encontramos uma solicitação pendente para esse código. Verifique o código e tente novamente.",
     "title": "Conecte seu agente"
   },
+  "agentSetup": {
+    "addressLabel": "Seu assistente vai pedir este endereço",
+    "copiedToast": "Instruções copiadas. Cole-as em uma conversa com seu assistente.",
+    "copy": "Copie as instruções para ele",
+    "description": "Pergunte ao Claude ou ao ChatGPT sobre seus casos e documentos. Escolha seu assistente para ver um guia curto; leva cerca de um minuto.",
+    "instructions": "Conecte-me ao stella, meu espaço de trabalho jurídico. Siga as instruções para agentes de IA em {guideUrl} e use este endereço de servidor: {mcpUrl}",
+    "openGuide": "Abrir o guia do {assistant}",
+    "selfSetupHint": "Usa o Claude Code ou o Codex?",
+    "title": "Use o stella no seu assistente de IA"
+  },
   "ai": {
     "chooseRewriteInstruction": "Opções de reescrita",
     "editWithAI": "Editar com IA",
@@ -477,6 +487,17 @@
     "failedToStartTimer": "Falha ao iniciar o cronômetro",
     "failedToStopTimer": "Falha ao parar o cronômetro",
     "filterStatus": "Filtrar por status",
+    "globalTimer": {
+      "confirm": "Confirmar tempo",
+      "discard": "Descartar cronômetro",
+      "matterInaccessible": "Escolha um caso ao qual você tenha acesso.",
+      "narrativeRequired": "Adicione uma descrição antes de confirmar o tempo.",
+      "pause": "Pausar",
+      "periodLocked": "Este mês está bloqueado. Peça a um administrador para desbloqueá-lo.",
+      "resume": "Retomar",
+      "timerUnavailable": "Este cronômetro não está mais disponível. Atualize a lista.",
+      "title": "Cronômetros"
+    },
     "hourlyRateMustBeNonNegative": "O valor por hora não pode ser negativo",
     "hours": "Horas",
     "invoiceNarrative": "Narrativa da fatura",
@@ -521,6 +542,20 @@
     "noActiveTimer": "Nenhum temporizador ativo",
     "noEntries": "Nenhuma entrada de tempo para este período",
     "nonBillable": "Não faturável",
+    "quickEntry": {
+      "entrySaved": "Registro de tempo salvo",
+      "expenseSaved": "Despesa salva",
+      "expenseTitle": "Adicionar despesa",
+      "futureDate": "Escolha hoje ou uma data anterior.",
+      "invalidDate": "Escolha uma data de trabalho válida.",
+      "minimumUnit": "O tempo é arredondado para cima conforme a unidade mínima de faturamento.",
+      "narrativeRequired": "Adicione uma descrição antes de salvar o tempo.",
+      "outsideEditWindow": "Esta data está fora do prazo de edição.",
+      "periodLocked": "Este mês está bloqueado.",
+      "saveAndAddExpense": "Salvar e adicionar despesa",
+      "saveAndNew": "Salvar e adicionar outra entrada",
+      "viewDay": "Ver dia"
+    },
     "rates": {
       "addRate": "Adicionar taxa",
       "createRateTable": "Criar tabela de taxas",
@@ -553,6 +588,26 @@
     "selectMatter": "Selecione um caso...",
     "selectMatterToStart": "Selecione um caso para começar a cronometrar",
     "selectedCount": "{count, plural, one {# selecionado} many {# selecionados} other {# selecionados}}",
+    "sellerProfiles": {
+      "add": "Adicionar perfil de vendedor",
+      "archiveConfirm": "Arquivar este perfil de vendedor? Ele não estará mais disponível para novas faturas.",
+      "bic": "Código BIC / SWIFT",
+      "default": "Vendedor padrão",
+      "defaultCurrency": "Moeda padrão",
+      "description": "Gerencie os dados usados para emitir faturas.",
+      "edit": "Editar perfil de vendedor",
+      "empty": "Nenhum perfil de vendedor.",
+      "footerNotes": "Notas de rodapé",
+      "invalidBic": "Insira um BIC válido.",
+      "invalidCurrency": "Insira um código de moeda de três letras.",
+      "invalidIban": "Insira um IBAN válido.",
+      "legalName": "Nome legal",
+      "registrationId": "Número de registro",
+      "setDefault": "Definir como padrão",
+      "title": "Perfis de vendedor",
+      "vatId": "Número de IVA"
+    },
+    "settingsTitle": "Faturamento",
     "split": {
       "addSplit": "Adicionar divisão",
       "percentValue": "{value}%",
@@ -581,6 +636,27 @@
     "timerActive": "Temporizador em execução",
     "timesheets": "Planilhas de horas",
     "total": "Total",
+    "vatRates": {
+      "add": "Adicionar alíquota de IVA",
+      "archiveConfirm": "Arquivar esta alíquota de IVA? Ela não estará mais disponível para novos documentos.",
+      "code": "Código da alíquota",
+      "current": "Alíquota vigente",
+      "description": "Gerencie as alíquotas e seus períodos de validade.",
+      "edit": "Editar alíquota de IVA",
+      "empty": "Nenhuma alíquota de IVA.",
+      "future": "Alíquota futura",
+      "invalidPeriod": "Escolha datas válidas com a data final posterior à inicial.",
+      "invalidRate": "Insira um percentual não negativo com no máximo duas casas decimais.",
+      "name": "Nome da alíquota",
+      "openEnded": "Sem data final",
+      "overlap": "Os períodos de validade do mesmo código de alíquota não podem se sobrepor.",
+      "past": "Alíquota anterior",
+      "periodHelp": "A data inicial está incluída; a data final está excluída. Deixe a data final em branco para um período aberto.",
+      "rate": "Percentual de IVA",
+      "title": "Alíquotas de IVA",
+      "validFrom": "Válida desde",
+      "validTo": "Válida até"
+    },
     "writeOff": "Dar baixa"
   },
   "caseLaw": {
@@ -814,6 +890,7 @@
     },
     "viewer": {
       "abstract": "Resumo",
+      "caseFileMayHoldOthers": "Este processo também pode conter outras decisões.",
       "citedBy": "Citado por",
       "cites": "Cita",
       "dissentByline": "Voto divergente: <bdi>{names}</bdi>",
@@ -837,6 +914,7 @@
         "publishedOnWeb": "Publicado na web"
       },
       "statutes": "Normas aplicáveis",
+      "textNotYetAvailable": "O tribunal não publicou o texto da decisão ou ele ainda não está disponível aqui.",
       "textPending": "O texto da decisão ainda está sendo obtido",
       "textReadFailed": "Não foi possível carregar o texto da decisão",
       "textUnavailable": "Não há texto disponível para esta decisão"
@@ -933,6 +1011,7 @@
         "description": "Confira com atenção o site e o destino. O conteúdo da página não é confiável e não pode aprovar outra ação.",
         "modeReads": "A leitura de páginas é executada sem perguntar até o fim desta sessão.",
         "question": "Permitir esta ação no navegador?",
+        "realValues": "Este site recebe os valores reais mostrados abaixo. O modo anonimizado se aplica apenas ao que a IA vê.",
         "within": "Dentro de"
       },
       "denied": "Negado",
@@ -1037,6 +1116,7 @@
     "focusSuggestion": "Focar sugestão: {topic}",
     "folioCitationFallback": "pág. {n}",
     "forkFromHere": "Criar um novo chat a partir daqui",
+    "forkInSidePanel": "Criar um novo chat a partir daqui no painel lateral",
     "forkedFrom": "Criado a partir de <bdi>{title}</bdi>",
     "forkedFromUnavailable": "Criado a partir de um chat que não está mais disponível",
     "forkedThread": "De outro chat",
@@ -1044,6 +1124,10 @@
     "greeting": "No que você gostaria de trabalhar?",
     "greetingSubtitle": "Comece com um caso, documento ou pergunta simples.",
     "hideThread": "Ocultar conversa",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {e mais #} many {e mais #} other {e mais #}}"
+    },
     "improvePrompt": "Melhorar prompt",
     "improvePromptDraftChanged": "O rascunho mudou, então a melhoria não foi aplicada.",
     "improvePromptPlainTextOnly": "A melhoria de prompts está disponível apenas para texto simples.",
@@ -1096,6 +1180,7 @@
       "viaProvider": "pelo provedor {provider}"
     },
     "newChat": "Novo chat",
+    "newChatInSidePanel": "O novo chat está disponível no painel lateral",
     "noPromptPresetOnly": "Sem mensagem, apenas predefinição",
     "noThreads": "Ainda não há conversas",
     "officeCitationUnavailable": "Esta citação não está mais disponível.",
@@ -1143,6 +1228,12 @@
     "richContentLoading": "Carregando conteúdo interativo…",
     "richContentTitle": "Conteúdo interativo",
     "richContentUnavailable": "Não é possível exibir este conteúdo com segurança.",
+    "selection": {
+      "askInNewChat": "Perguntar em um novo chat",
+      "quoteInReply": "Citar na resposta",
+      "quotedText": "“{quote}”",
+      "toolbarLabel": "Texto selecionado"
+    },
     "sendError": "Ocorreu um problema ao enviar sua mensagem. Entre em contato com o suporte se o erro persistir.",
     "sendErrorAnonymizationBlocked": "A stella não conseguiu anonimizar um anexo, então nada foi enviado. Remova o arquivo ou envie esta mensagem sem anonimização.",
     "sendErrorEmptyCompletion": "A IA retornou uma resposta vazia. Tente novamente ou reformule sua mensagem.",
@@ -1296,7 +1387,8 @@
       "interrupted": "Interrompido antes de concluir",
       "output": "Saída",
       "sourceCode": "Código-fonte",
-      "toggleDetails": "Alternar detalhes"
+      "toggleDetails": "Alternar detalhes",
+      "unrestoredFields": "{count, plural, one {# campo não pôde ser preenchido} other {# campos não puderam ser preenchidos}} com valores reais no modo anonimizado. Revise: {fields}"
     },
     "unsupportedFileType": "Tipo de arquivo não suportado",
     "uploadFailed": "Falha ao processar o arquivo",
@@ -1540,6 +1632,7 @@
     },
     "fact": "Fato",
     "failed": "Falhou",
+    "files": "Arquivos",
     "filter": "Filtro",
     "filters": "Filtros",
     "find": "Localizar",
@@ -2090,6 +2183,13 @@
     "unnamedAttachment": "Anexo sem nome"
   },
   "errors": {
+    "actionAdmission": {
+      "admissionUnavailable": "Esta ação está temporariamente pausada. Tente novamente em instantes.",
+      "concurrencyBusy": "Há outras tarefas em andamento. Tente novamente em instantes.",
+      "contact": "Entre em contato",
+      "notEnabled": "Esta ação não está habilitada para sua organização.",
+      "periodExhausted": "Esta ação está pausada para sua organização."
+    },
     "actionFailed": "Falha na ação",
     "api": {
       "badRequest": "Não foi possível concluir a solicitação.",
@@ -2097,6 +2197,7 @@
       "forbidden": "Você não tem permissão para fazer isso.",
       "notFound": "Não encontramos o que você solicitou.",
       "payloadTooLarge": "A solicitação é grande demais.",
+      "publicCountryUnavailable": "A legislação e a jurisprudência deste país não estão disponíveis. Escolha outro país.",
       "rateLimited": "Muitas solicitações. Tente novamente mais tarde.",
       "server": "Algo deu errado. Tente novamente.",
       "serviceUnavailable": "O serviço está temporariamente indisponível. Tente novamente.",
@@ -2258,7 +2359,8 @@
     "compareUnsupportedReasons": {
       "missingInBase": "A parte do documento existe apenas no destino",
       "missingInTarget": "A parte do documento existe apenas na base",
-      "notEditable": "Parte do documento não é editável"
+      "notEditable": "Parte do documento não é editável",
+      "unsupportedContent": "Esta versão contém conteúdo que ainda não pode ser comparado."
     },
     "compareUnverified": "Comparação não verificada",
     "compareVerificationFailures": "{count, plural, one {Uma verificação de ida e volta falhou. Revise esta comparação antes de confiar nela.} other {# verificações de ida e volta falharam. Revise esta comparação antes de confiar nela.}}",
@@ -3196,7 +3298,6 @@
       "editSkill": "Editar habilidade",
       "enableSkill": "Ativar habilidade",
       "fileExists": "Já existe um arquivo com este caminho",
-      "filesHeading": "Arquivos",
       "howItRuns": "Como funciona",
       "importFailureFetch": "Não foi possível carregar a origem da habilidade.",
       "importFailureIntegrity": "A origem da habilidade mudou após a descoberta. Revise-a novamente.",
@@ -3676,7 +3777,6 @@
     "aiTitle": "Conecte seu provedor de IA",
     "appsSubtitle": "A stella também funciona fora do navegador: no seu computador e no seu assistente de IA. Você pode voltar a esta configuração a qualquer momento.",
     "appsTitle": "Leve a stella para todo lugar",
-    "assistantDocsLink": "Como conectar seu assistente",
     "catalogueAlwaysOn": "Sempre ativo",
     "catalogueClearSearch": "Limpar busca",
     "catalogueCommunityHeading": "Outros",
@@ -4203,31 +4303,40 @@
       "wordEditShortcutPlaceholder": "por exemplo JK"
     },
     "connections": {
+      "accessTitle": "{clientName} pode",
+      "browseIntegrations": "Adicionar um serviço",
       "cliDescription": "Instale o cliente de linha de comando da stella e faça login para automatizar casos, documentos e modelos a partir de um terminal.",
-      "cliHelpHint": "Execute \"stella --help\" para ver a lista completa de comandos.",
       "cliInstallLabel": "Instalação",
       "cliLoginLabel": "Login",
       "cliTitle": "Interface de linha de comando",
-      "connectedAppsDescription": "Aplicativos e ferramentas que você autorizou a acessar sua conta.",
-      "connectedAppsEmpty": "Aplicativos que você autorizar, como Claude ou a CLI da stella, aparecerão aqui.",
-      "connectedAppsTitle": "Aplicativos conectados",
-      "connectedColumn": "Conectado",
-      "description": "Conecte clientes MCP e a interface de linha de comando à sua conta.",
+      "connected": "Conectada",
+      "connectedAgo": "Conectada {time}",
+      "connectedAppsDescription": "Aplicativos em que você entrou com o stella. Desconecte os que não usa mais.",
+      "connectedAppsEmpty": "Nada ainda. Configure o Claude ou o ChatGPT acima e ele aparecerá aqui.",
+      "connectedAppsTitle": "Aplicativos com acesso",
+      "description": "Use o stella pelo seu assistente de IA e veja o que tem acesso à sua conta.",
+      "developerDescription": "Endereços do servidor e a ferramenta de linha de comando, para configurações técnicas.",
+      "developerTitle": "Acesso para desenvolvedores",
       "disconnectConfirmDescription": "Isso revoga o acesso de {clientName} à sua conta, junto com quaisquer tokens emitidos. Você pode se reconectar a qualquer momento.",
       "disconnectConfirmTitle": "Desconectar {clientName}?",
       "disconnectSuccess": "{clientName} foi desconectado",
+      "integrationsDescription": "Serviços externos que a IA pode usar por você, como seu repositório de documentos.",
+      "integrationsEmpty": "Adicione seu primeiro serviço",
+      "integrationsTitle": "Serviços conectados",
       "mcpAnonymizedLabel": "Endpoint anonimizado",
-      "mcpAnonymizedNote": "Também há um endpoint anonimizado disponível; ele expõe as mesmas ferramentas com dados pessoais mascarados.",
-      "mcpDescription": "Conecte um cliente compatível com MCP, como Claude ou Cursor, à sua conta stella usando esta URL de servidor.",
+      "mcpAnonymizedShortNote": "As mesmas ferramentas, com dados pessoais mascarados.",
+      "mcpFullNote": "Acesso completo aos seus casos e documentos.",
       "mcpLawLabel": "Endpoint do corpus jurídico",
-      "mcpLawNote": "Também há um endpoint do corpus jurídico disponível; ele expõe apenas jurisprudência e legislação públicas e não acessa dados dos casos.",
-      "mcpStep1": "Adicione a URL acima como um conector personalizado ou servidor MCP no seu cliente.",
-      "mcpStep2": "Faça login quando o navegador solicitar.",
-      "mcpStep3": "Aprove o acesso na tela de consentimento.",
+      "mcpLawShortNote": "Somente jurisprudência e legislação públicas, sem dados de casos.",
+      "mcpSetupHint": "Adicione uma URL como conector personalizado no Claude, no Cursor ou em outro cliente MCP, depois faça login e aprove o acesso.",
       "mcpTitle": "Servidor MCP",
       "mcpUrlLabel": "URL do servidor",
-      "scopesLabel": "Acesso",
-      "title": "Conexões"
+      "noMatches": "Nenhuma conexão corresponde a “{query}”",
+      "notConnected": "Não conectada",
+      "permissionCount": "{count, plural, one {# permissão} other {# permissões}}",
+      "searchPlaceholder": "Buscar conexões",
+      "title": "Conexões",
+      "turnedOff": "Desativada"
     },
     "organization": {
       "activeMembers": "Membros ativos",
@@ -4306,6 +4415,20 @@
       "renameDescription": "Os membros verão o novo nome imediatamente.",
       "renameTitle": "Renomear organização",
       "renameTypeToConfirm": "Digite o novo nome para confirmar: {name}",
+      "timePolicy": {
+        "description": "Defina o arredondamento do tempo, os limites de edição e os bloqueios mensais.",
+        "editWindow": "Prazo de edição (dias)",
+        "editWindowHelp": "Zero permite edições apenas na data do trabalho.",
+        "invalidEditWindow": "Insira um número inteiro de dias, igual ou maior que zero.",
+        "invalidLockedMonth": "Escolha um mês já encerrado.",
+        "invalidMinimumUnit": "Escolha uma unidade de tempo que divida 60 minutos sem resto.",
+        "lockedThrough": "Bloqueado até",
+        "lockedThroughHelp": "As entradas deste mês e dos meses anteriores não podem ser editadas.",
+        "minimumUnit": "Unidade mínima de tempo",
+        "minimumUnitHelp": "O tempo é faturado em múltiplos deste número de minutos.",
+        "narrativeRequired": "Exigir uma narrativa",
+        "title": "Política de registro de tempo"
+      },
       "usage": "Uso",
       "usageDescription": "Limites de uso e estado da habilitação desta organização",
       "usageEmptyDescription": "Configure uma habilitação de uso para ativar recursos de IA medidos nesta organização.",
@@ -5003,6 +5126,11 @@
     "whenNotToUsePlaceholder": "Quando este modelo deve ser evitado?",
     "whenToUse": "Quando usar",
     "whenToUsePlaceholder": "Quando este modelo deve ser usado? (orienta a seleção de modelos pela IA)"
+  },
+  "timesheets": {
+    "day": {
+      "internalWork": "Trabalho interno"
+    }
   },
   "translate": {
     "dialog": {
@@ -5894,7 +6022,8 @@
         "openReport": "Abrir relatório",
         "submit": "Exportar relatório",
         "templateLabel": "Modelo de relatório",
-        "title": "Exportar relatório"
+        "title": "Exportar relatório",
+        "withoutAiSummaries": "Exportar sem resumos de IA"
       },
       "saveAsTemplate": "Salvar como predefinição…",
       "selectProperty": "Selecione a propriedade",

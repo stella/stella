@@ -54,7 +54,12 @@ const config = {
     "handles the uninstall paths need. The practice jurisdictions behind " +
     "those recommendations are returned alongside.",
   permissions: { workspace: ["read"] },
-  mcp: { type: "capability", reason: "agent_tool_authoring" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "agent_tool_authoring",
+    consumesServices: false,
+  },
   access: "read",
 } satisfies HandlerConfig;
 

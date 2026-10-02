@@ -10,6 +10,7 @@ import { createTimestampIdCursorCodec } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { createCursorPage } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedLegalListId } from "@/api/lib/safe-id-boundaries";
 import { includes } from "@/api/lib/type-guards";
 
@@ -28,7 +29,12 @@ const config = {
     "the name, description, status, and timestamps.",
   permissions: { workspace: ["read"] },
   access: "read",
-  mcp: { type: "capability", reason: "workspace_schema" },
+  mcp: {
+    type: "capability",
+    readClass: "tenant",
+    reason: "workspace_schema",
+    consumesServices: false,
+  },
   query: querySchema,
 } satisfies WorkspaceHandlerConfig;
 
@@ -40,7 +46,9 @@ const listCursorCodec = createTimestampIdCursorCodec({
 const readLists = createSafeHandler(
   config,
   async function* ({ safeDb, workspaceId, query }) {
-    const limit = query.limit ?? LIMITS.legalListsPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.legalListsPageSizeDefault,
+    );
     const status = query.status ?? "active";
     if (!includes(LEGAL_LIST_STATUSES, status)) {
       return Result.err(

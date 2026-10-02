@@ -21,7 +21,11 @@ const updateTimer = createSafeRootHandler(
     description:
       "Set your timer's description or matter. Pass null to clear either field. Confirm requires a matter and any narrative required by the organization.",
     permissions: { timeEntry: ["update"] },
-    mcp: { type: "capability", reason: "billing_admin" },
+    mcp: {
+      type: "capability",
+      reason: "billing_admin",
+      consumesServices: false,
+    },
     params: timerParams,
     body: timerDetails,
   },
