@@ -21,7 +21,6 @@ const SOURCE_EXTENSIONS = [".ts", ".tsx", ".mts", ".cts", ".js", ".mjs"];
 // when one of them reaches it.
 const PACK_ROOT_SCRIPTS = ["prepack", "prepare"] as const;
 const SCRIPT_RUNNERS = new Set(["bun", "npm", "pnpm", "yarn"]);
-const SHELL_SEPARATORS = new Set(["&&", "||", ";", "|"]);
 
 export type GeneratedImportInputs = {
   /** Repository-relative tracked paths (`git ls-files`). */
@@ -105,24 +104,34 @@ export const packScriptClosure = (
       continue;
     }
     reached.add(name);
-    const words = (scripts[name] ?? "").split(/\s+/u);
-    for (const [index, word] of words.entries()) {
-      if (word !== "run" || !SCRIPT_RUNNERS.has(words[index - 1] ?? "")) {
-        continue;
-      }
-      const target = words
-        .slice(index + 1)
-        .find((next) => !next.startsWith("-"));
-      if (
-        target !== undefined &&
-        !SHELL_SEPARATORS.has(target) &&
-        target in scripts
-      ) {
+    for (const target of runTargets(scripts[name] ?? "")) {
+      if (target in scripts) {
         pending.push(target);
       }
     }
   }
   return reached;
+};
+
+/**
+ * Script names a command line runs through `<runner> run <name>`. Separators
+ * may touch a word (`bun run build&& tsc`), so commands are split on them
+ * first; a line ending in a dangling operator is a shell syntax error and runs
+ * nothing.
+ */
+export const runTargets = (line: string): string[] => {
+  if (/(?:&&|\|\||\|)\s*$/u.test(line)) {
+    return [];
+  }
+  return line.split(/&&|\|\||;|\|/u).flatMap((command) => {
+    const words = command.trim().split(/\s+/u);
+    const index = words.indexOf("run");
+    if (index < 1 || !SCRIPT_RUNNERS.has(words[index - 1] ?? "")) {
+      return [];
+    }
+    const target = words.slice(index + 1).find((word) => !word.startsWith("-"));
+    return target === undefined ? [] : [target];
+  });
 };
 
 /** The package script a generator's write command runs, if it runs one. */

@@ -29,6 +29,7 @@ import {
   formatGeneratedImportViolation,
   generatorPackageScript,
   packScriptClosure,
+  runTargets,
   specifierCandidates,
 } from "./generated-imports";
 
@@ -536,6 +537,13 @@ describe("generated imports", () => {
     expect(
       packScriptClosure({ build: "bun run gen", gen: "echo gen" }),
     ).toEqual(new Set());
+    // Separators touching a script name still separate commands.
+    expect(runTargets("bun run build&& tsc")).toEqual(["build"]);
+    expect(runTargets("bun run codegen:runtime;")).toEqual(["codegen:runtime"]);
+    expect(runTargets("tsc|bun run a||npm run --silent b")).toEqual(["a", "b"]);
+    // A dangling operator is a syntax error: nothing runs.
+    expect(runTargets("bun run build &&")).toEqual([]);
+    expect(runTargets("echo bun-run run x")).toEqual([]);
     expect(generatorPackageScript(["bun", "scripts/x.ts"])).toBeNull();
     expect(generatorPackageScript(RUNTIME_GENERATOR.write)).toEqual({
       directory: CLI_DIRECTORY,
