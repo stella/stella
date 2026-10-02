@@ -26,8 +26,11 @@ import {
 import { rootDb } from "@/api/db/root";
 import { env } from "@/api/env";
 import { getAuth } from "@/api/lib/auth";
-import { sessionCookieName } from "@/api/lib/auth-cookie-name";
-import { getAuthEndpointUrl, getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { sessionCookieName } from "@/api/lib/auth/auth-cookie-name";
+import {
+  getAuthEndpointUrl,
+  getAuthIssuerUrl,
+} from "@/api/lib/auth/auth-paths";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { readAccountEmail } from "@/api/lib/db/account-row";
 import type { HandlerError } from "@/api/lib/errors/tagged-errors";

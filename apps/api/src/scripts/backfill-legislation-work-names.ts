@@ -19,6 +19,9 @@
  *   bun run src/scripts/backfill-legislation-work-names.ts --apply [--limit 200000] [--page 1000] [--after <id>]
  */
 
+import { runBackfillPass } from "@stll/db-load-gate/backfill-pass";
+
+import { createScriptBackfillRuntime } from "@/api/db/backfill-runtime";
 import type { ScopedDb } from "@/api/db/safe-db";
 import { backfillLegislationWorkNamesPage } from "@/api/handlers/legislation/work-name-backfill";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -27,12 +30,8 @@ import {
   openCaseLawReadOnlySession,
 } from "@/api/lib/case-law/maintenance-lane";
 import { brandPersistedLegislationDocumentId } from "@/api/lib/safe-id-boundaries";
-import {
-  flagInteger,
-  flagUuid,
-  readApplyFlag,
-  rejectUnknownFlags,
-} from "@/api/scripts/repair-flags";
+import { backfillEntrypoints } from "@/api/scripts/backfill-entrypoint";
+import { rejectUnknownFlags } from "@/api/scripts/repair-flags";
 
 /** Versions one transaction examines. */
 const DEFAULT_PAGE_SIZE = 1000;
@@ -49,18 +48,12 @@ const USAGE = `Usage: bun run src/scripts/backfill-legislation-work-names.ts [op
 
 rejectUnknownFlags({ known: ["limit", "page", "after"], usage: USAGE });
 
-const apply = readApplyFlag(USAGE);
-const limit = flagInteger({
-  fallback: DEFAULT_LIMIT,
-  name: "limit",
-  usage: USAGE,
+const plan = backfillEntrypoints["legislation-work-names"]({
+  args: process.argv.slice(2),
 });
-const pageSize = flagInteger({
-  fallback: DEFAULT_PAGE_SIZE,
-  name: "page",
-  usage: USAGE,
-});
-const afterFlag = flagUuid({ name: "after", usage: USAGE });
+const apply = plan.apply;
+const limit = plan.limit;
+const afterFlag = plan.after;
 
 // A report only reads, so it takes no lane and cannot block a writer.
 const { rootDb } = apply
@@ -76,25 +69,73 @@ let scanned = 0;
 let changedDocuments = 0;
 let insertedRows = 0;
 let deletedRows = 0;
-let reachedEnd = false;
+const progress = { reachedEnd: false };
+const runtime = apply
+  ? plan.open((options) =>
+      createScriptBackfillRuntime({ ...options, db: rootDb }),
+    )
+  : null;
 
-while (scanned < limit) {
-  // db-await-in-loop: keyset page per iteration; the page is the batch
-  const page = await backfillLegislationWorkNamesPage({
-    db,
-    after: cursor,
-    pageSize: Math.min(pageSize, limit - scanned),
-    apply,
+try {
+  const pass = await runBackfillPass({
+    step: async () => {
+      const remaining = limit - scanned;
+      if (runtime === null) {
+        const page = await backfillLegislationWorkNamesPage({
+          db,
+          after: cursor,
+          pageSize: Math.min(plan.initialSize, remaining),
+          apply: false,
+        });
+        return {
+          done: page.cursor === null || scanned + page.scanned >= limit,
+          sleepMs: 0,
+          value: page,
+        };
+      }
+      const result = await runtime.step(
+        async ({ tx, size, cursor: persistedCursor }) => {
+          const after =
+            persistedCursor === null
+              ? cursor
+              : brandPersistedLegislationDocumentId(persistedCursor);
+          const page = await backfillLegislationWorkNamesPage({
+            db: async (work) => await work(tx),
+            after,
+            pageSize: Math.min(size, remaining),
+            apply: true,
+          });
+          return {
+            cursor: page.cursor ?? persistedCursor,
+            done: page.cursor === null,
+            value: page,
+          };
+        },
+      );
+      // The operator limit ends this pass without completing its durable checkpoint.
+      return {
+        ...result,
+        done: result.done || scanned + result.value.scanned >= limit,
+      };
+    },
+    onBatch: ({ value: page }) => {
+      if (page.cursor === null) {
+        progress.reachedEnd = true;
+        return;
+      }
+      cursor = page.cursor;
+      scanned += page.scanned;
+      changedDocuments += page.changedDocuments;
+      insertedRows += page.insertedRows;
+      deletedRows += page.deletedRows;
+    },
+    sleep: Bun.sleep,
   });
-  if (page.cursor === null) {
-    reachedEnd = true;
-    break;
+  if (pass.isErr()) {
+    throw pass.error;
   }
-  cursor = page.cursor;
-  scanned += page.scanned;
-  changedDocuments += page.changedDocuments;
-  insertedRows += page.insertedRows;
-  deletedRows += page.deletedRows;
+} finally {
+  await runtime?.close();
 }
 
 console.info(
@@ -103,7 +144,7 @@ console.info(
     `(${insertedRows.toLocaleString()} names ${apply ? "written" : "to write"}, ` +
     `${deletedRows.toLocaleString()} ${apply ? "removed" : "to remove"}).`,
 );
-if (!reachedEnd && cursor !== null) {
+if (!progress.reachedEnd && cursor !== null) {
   console.info(
     `Stopped at --limit ${String(limit)}; resume with --after ${cursor}.`,
   );

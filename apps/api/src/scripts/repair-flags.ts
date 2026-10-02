@@ -12,6 +12,8 @@
  * usage text, which is where a repair says what it repairs.
  */
 
+import { panic } from "better-result";
+
 const DECIMAL_INTEGER = /^\d+$/u;
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/u;
 
@@ -36,16 +38,53 @@ type FlagIntegerOptions = {
  * a repair that was asked to change ten rows would change its default of
  * thousands.
  */
-const flagValue = (name: string): string | undefined => {
-  const inline = process.argv.find((argument) =>
-    argument.startsWith(`--${name}=`),
-  );
-  if (inline !== undefined) {
-    return inline.slice(`--${name}=`.length);
-  }
-  const index = process.argv.indexOf(`--${name}`);
-  return index === -1 ? undefined : process.argv[index + 1];
+export const readRepairArguments = (args: readonly string[]) => {
+  const value = (name: string): string | undefined => {
+    const inline = args.find((argument) => argument.startsWith(`--${name}=`));
+    if (inline !== undefined) {
+      return inline.slice(`--${name}=`.length);
+    }
+    const index = args.indexOf(`--${name}`);
+    return index === -1 ? undefined : args.at(index + 1);
+  };
+  const integer = (name: string, fallback: number) => {
+    const raw = value(name);
+    if (raw === undefined && !args.includes(`--${name}`)) {
+      return fallback;
+    }
+    const result =
+      raw !== undefined && DECIMAL_INTEGER.test(raw) ? Number(raw) : Number.NaN;
+    if (!Number.isSafeInteger(result) || result <= 0) {
+      panic(`--${name} requires a positive integer`);
+    }
+    return result;
+  };
+  const uuid = (name: string) => {
+    const raw = value(name);
+    if (raw === undefined && !args.includes(`--${name}`)) {
+      return undefined;
+    }
+    if (raw === undefined || !UUID.test(raw)) {
+      return panic(`--${name} requires a UUID`);
+    }
+    return raw;
+  };
+  const requiredValue = (name: string) => {
+    const raw = value(name);
+    if (
+      (raw === undefined && args.includes(`--${name}`)) ||
+      raw === "" ||
+      raw?.startsWith("--")
+    ) {
+      panic(`--${name} requires a value`);
+    }
+    return raw;
+  };
+  return { value: requiredValue, integer, uuid, rawValue: value };
 };
+
+const flagValue = (name: string): string | undefined =>
+  readRepairArguments(process.argv).rawValue(name);
 
 /** A positive integer flag, or its fallback. */
 export const flagInteger = ({

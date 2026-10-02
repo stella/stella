@@ -105,6 +105,7 @@ const mcpRequestContext = async ({
     safeDb,
     scopedDb,
     userId,
+    userEmail: "standard@example.test",
   });
 };
 
@@ -175,6 +176,7 @@ describe("a write that needs a matter in an organization without one", () => {
           pinnedIds: [],
         }),
         userId: caller.userId,
+        userEmail: "standard@example.test",
       }),
       refRegistry: createChatRefRegistry(),
       toolName: "save_task",

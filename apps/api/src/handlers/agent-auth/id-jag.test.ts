@@ -35,7 +35,7 @@ import {
   agentAuthConfirmRoute,
   agentAuthRoute,
 } from "@/api/handlers/agent-auth/routes";
-import { getAuthIssuerUrl } from "@/api/lib/auth-paths";
+import { getAuthIssuerUrl } from "@/api/lib/auth/auth-paths";
 import {
   resetLogSinkForTesting,
   setLogSinkForTesting,
