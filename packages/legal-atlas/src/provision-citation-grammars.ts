@@ -273,13 +273,19 @@ export const createProvisionCitationGrammar = <
       }
       const value = part.slice(level.anchorMarker.length);
       const compiled = compiledLevels.at(values.length);
-      if (compiled === undefined) {return null;}
+      if (compiled === undefined) {
+        return null;
+      }
       const match = matchAt(compiled.value, value, 0);
-      if (match === null || match[0].length !== value.length) {return null;}
+      if (match === null || match[0].length !== value.length) {
+        return null;
+      }
       values.push(valueOf(match));
       index++;
     }
-    if (index !== parts.length) {return null;}
+    if (index !== parts.length) {
+      return null;
+    }
     return referenceOf(compiledLevels, values, unit);
   };
   const head = new RegExp(levels[0].marker, "giu");

@@ -69,7 +69,9 @@ describe("provision identity construction", () => {
           expect(provision.workEli).toBe(work.eli);
           const decoded = parseProvisionKey(formatProvisionKey(provision));
           expect(decoded).not.toBeNull();
-          if (decoded === null) {return;}
+          if (decoded === null) {
+            return;
+          }
           expect(decoded.jurisdiction).toBe(provision.jurisdiction);
           expect(decoded.workIdentifier).toBe(work.identifier);
           expect(decoded.anchor).toBe(provision.anchor);
@@ -376,7 +378,9 @@ describe("provision identity construction", () => {
       reference: ref,
     });
     expect(normalized.status).toBe("resolved");
-    if (normalized.status !== "resolved") {return;}
+    if (normalized.status !== "resolved") {
+      return;
+    }
     expect(normalized.provision.jurisdiction).toBe("CZE");
     expect(normalized.provision.workIdentifier).toBe("89/2012 Sb.");
     expect(normalized.provision.workEli).toBe(

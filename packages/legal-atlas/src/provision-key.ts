@@ -86,8 +86,9 @@ export const parseProvisionKey = (raw: string) => {
     reference === null ||
     !v.safeParse(provisionReferenceSchema, reference).success ||
     grammar.anchor(reference) !== key.output.anchor
-  )
-    {return null;}
+  ) {
+    return null;
+  }
   return key.output;
 };
 
