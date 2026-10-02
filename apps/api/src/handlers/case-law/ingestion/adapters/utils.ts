@@ -1,3 +1,4 @@
+// parser-output-unchanged: removes an unused type guard; no adapter calls it.
 /** Shared utilities for case-law ingestion adapters. */
 
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
@@ -40,15 +41,6 @@ export const isNullishArrayOf = <T>(
   guard: (item: unknown) => item is T,
 ): value is T[] | null | undefined =>
   value === undefined || value === null || isArrayOf(value, guard);
-
-export const isNullishOneOrArrayOf = <T>(
-  value: unknown,
-  guard: (item: unknown) => item is T,
-): value is T | T[] | null | undefined =>
-  value === undefined ||
-  value === null ||
-  guard(value) ||
-  isArrayOf(value, guard);
 
 export const toOptionalValue = <T>(
   value: T | null | undefined,

@@ -322,17 +322,12 @@ pub fn run() {
       // Spawn HTTP bridge server
       {
         let manager_for_bridge = Arc::clone(&manager);
-        let bridge_app = handle.clone();
-        let notify_account: bridge::AccountNotifier = Arc::new(move || {
-          account::notify(&bridge_app);
-        });
         tauri::async_runtime::spawn(async move {
           bridge::start_bridge(
             bridge_port,
             allowed_origins,
             manager_for_bridge,
             account,
-            notify_account,
           )
           .await;
         });

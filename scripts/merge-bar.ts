@@ -1396,7 +1396,7 @@ export const verifyFrontOfQueue = ({
       message:
         `\nverdict: JUMP PENDING (position ${entry.position}, state ${entry.state}) — ${context}. ` +
         `GitHub recorded the jump; ${placement.status === "absent" ? "the queue read did not list it yet" : "first place is not yet verified"}.\n` +
-        `pw sub pr ${repo}#${pullNumber} --on merged,closed,checks-failed`,
+        `next: wait once for ${repo}#${pullNumber} to merge, close or fail checks; do not jump again.`,
     };
   }
   const reason =

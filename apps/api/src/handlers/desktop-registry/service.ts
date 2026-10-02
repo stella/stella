@@ -23,13 +23,13 @@ import {
   BUSINESS_REGISTRY_SLUGS,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
+import { loadPracticeJurisdictions } from "@/api/lib/db/practice-jurisdictions";
 import {
   isPlausibleLookupValue,
   renderLookupOutput,
   stripLookupMarkdown,
 } from "@/api/lib/docx/lookup-fields";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
-import { arrayOrEmpty } from "@/api/lib/mcp-connectors/catalog-metadata";
 import { resolveLookupFormatDefault } from "@/api/lib/templates/lookup-formats/resolve-default";
 import { setLookupFormatUserDefault } from "@/api/lib/templates/lookup-formats/set-user-default";
 import {
@@ -56,21 +56,6 @@ type DesktopRegistrySearch = {
 
 const invalidRegistry = () =>
   new HandlerError({ status: 400, message: "Unsupported business registry" });
-
-// Practice jurisdictions only pick the default registry; the desktop offers
-// every deployable registry so a lookup abroad never needs a settings change.
-const loadPracticeJurisdictions = async ({
-  organizationId,
-  scopedDb,
-}: DesktopRegistryContext) => {
-  const row = await scopedDb((tx) =>
-    tx.query.organizationSettings.findFirst({
-      where: { organizationId: { eq: organizationId } },
-      columns: { practiceJurisdictions: true },
-    }),
-  );
-  return arrayOrEmpty(row?.practiceJurisdictions);
-};
 
 const loadFormats = async (
   { organizationId, scopedDb, userId }: DesktopRegistryContext,
@@ -121,6 +106,8 @@ const loadFormats = async (
 export const getDesktopRegistryConfig = async (
   context: DesktopRegistryContext,
 ): Promise<Result<DesktopRegistryConfig, HandlerError>> => {
+  // Practice jurisdictions only pick the default registry; the desktop offers
+  // every deployable registry so a lookup abroad never needs a settings change.
   const practiceJurisdictions = await loadPracticeJurisdictions(context);
   const dispatchResult = await Result.tryPromise({
     try: async () => await getOrganizationRegistryDispatch(context),

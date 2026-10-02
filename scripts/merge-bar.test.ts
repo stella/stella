@@ -441,7 +441,7 @@ esac
         }
         if (exitCode === 2) {
           expect(result.stderr.toString()).toContain(
-            `pw sub pr ${PRIVATE_REPO}#123 --on merged,closed,checks-failed`,
+            `next: wait once for ${PRIVATE_REPO}#123 to merge, close or fail checks; do not jump again.`,
           );
         }
       } finally {
@@ -1287,7 +1287,7 @@ describe("explicit merge queue jumps", () => {
       if (exitCode === 2) {
         expect(result.message).toContain("position 6, state QUEUED");
         expect(result.message).toContain(
-          `pw sub pr ${PRIVATE_REPO}#4112 --on merged,closed,checks-failed`,
+          `next: wait once for ${PRIVATE_REPO}#4112 to merge, close or fail checks; do not jump again.`,
         );
       }
     },
