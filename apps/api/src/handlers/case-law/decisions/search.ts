@@ -196,6 +196,7 @@ import {
   definePublicLawSharedQuery,
   PUBLIC_LAW_SHARED_QUERY,
 } from "@/api/lib/public-law-shared-query";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { escapeAndHighlight } from "@/api/lib/search/highlight";
 
 /** A scoped search reached an index group that is not attested yet. */
@@ -679,7 +680,9 @@ const searchPostgresDecisions = async (
   body: PostgresSearchBody,
   caseLawDb: CaseLawPublicReadDb,
 ) => {
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
   const excerpt = body.excerpt ?? DEFAULT_SEARCH_EXCERPT;
 
@@ -1782,7 +1785,9 @@ export const searchCorpusIndexDecisions = async (
   caseLawDb: CaseLawPublicReadDb,
 ) => {
   const startedAt = performance.now();
-  const limit = body.limit ?? LIMITS.caseLawSearchPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    body.limit ?? LIMITS.caseLawSearchPageSizeDefault,
+  );
   const sort = body.sort ?? DEFAULT_SEARCH_SORT;
 
   let parsedCursor: CorpusSearchCursor | null = null;

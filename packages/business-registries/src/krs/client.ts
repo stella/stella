@@ -1,4 +1,9 @@
-import { isRecord } from "../shared/guards.js";
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
+import {
+  hasOptionalString,
+  isRecord,
+  isOptionalArrayOf,
+} from "../shared/guards.js";
 import {
   performRegistryRequest,
   type RegistryClientOptions,
@@ -23,8 +28,115 @@ const BASE = "https://api-krs.ms.gov.pl/api/krs";
 // second probe sequentially rather than racing.
 const REGISTER_PROBE_ORDER: readonly KrsRegisterCode[] = KRS_REGISTER_CODES;
 
+const isUnknown = (_value: unknown): boolean => true;
+
+const isKrsIds = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "nip") &&
+    hasOptionalString(value, "regon"));
+
+const isKrsSubject = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "nazwa") &&
+    hasOptionalString(value, "formaPrawna") &&
+    isKrsIds(value["identyfikatory"]));
+
+const isKrsAddress = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "ulica") &&
+    hasOptionalString(value, "nrDomu") &&
+    hasOptionalString(value, "nrLokalu") &&
+    hasOptionalString(value, "miejscowosc") &&
+    hasOptionalString(value, "kodPocztowy") &&
+    hasOptionalString(value, "kraj"));
+
+const isKrsSeat = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "kraj") &&
+    hasOptionalString(value, "wojewodztwo") &&
+    hasOptionalString(value, "powiat") &&
+    hasOptionalString(value, "gmina") &&
+    hasOptionalString(value, "miejscowosc"));
+
+const isKrsSeatAndAddress = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "adresPocztyElektronicznej") &&
+    hasOptionalString(value, "adresStronyInternetowej") &&
+    isKrsSeat(value["siedziba"]) &&
+    isKrsAddress(value["adres"]));
+
+const isKrsMoney = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "wartosc") &&
+    hasOptionalString(value, "waluta"));
+
+const isKrsCapital = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) && isKrsMoney(value["wysokoscKapitaluZakladowego"]));
+
+const isKrsDzial1 = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isKrsSubject(value["danePodmiotu"]) &&
+    isKrsSeatAndAddress(value["siedzibaIAdres"]) &&
+    isKrsCapital(value["kapital"]));
+
+const isKrsProceedingDetail = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) && hasOptionalString(value, "rodzajPostepowania"));
+
+const isKrsProceeding = (value: unknown): boolean =>
+  isRecord(value) &&
+  isKrsProceedingDetail(
+    value[
+      "otwarciePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji"
+    ],
+  ) &&
+  isKrsProceedingDetail(
+    value[
+      "zakonczeniePostepowaniaRestrukturyzacyjnegoNaprawczegoPrzymusowejRestrukturyzacjiUporzadkowanejLikwidacji"
+    ],
+  );
+
+const isKrsDzial6 = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isOptionalArrayOf(value["wykreslenia"], isUnknown) &&
+    isOptionalArrayOf(value["postepowanieUpadlosciowe"], isUnknown) &&
+    isOptionalArrayOf(
+      value[
+        "postepowanieRestrukturyzacyjneNaprawczePrzymusowaRestrukturyzacjaUporzadkowanaLikwidacja"
+      ],
+      isKrsProceeding,
+    ));
+
+const isKrsData = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isKrsDzial1(value["dzial1"]) &&
+    isKrsDzial6(value["dzial6"]));
+
+const isKrsHeader = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "rejestr") &&
+    hasOptionalString(value, "dataRejestracjiWKRS") &&
+    hasOptionalString(value, "dataOstatniegoWpisu"));
+
+const isKrsOdpis = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    isKrsHeader(value["naglowekA"]) &&
+    isKrsData(value["dane"]));
+
 const isKrsLookupResponse = (value: unknown): value is KrsLookupResponse =>
-  isRecord(value) && (value["odpis"] === undefined || isRecord(value["odpis"]));
+  isRecord(value) && isKrsOdpis(value["odpis"]);
 
 const parseErrorBody = (value: unknown): KrsErrorResponse => {
   if (!isRecord(value)) {
@@ -220,7 +332,7 @@ const buildLookupUrl = (
     rejestr: shortCode,
     format: "json",
   });
-  return `${BASE}/OdpisAktualny/${krsNumber}?${params.toString()}`;
+  return `${BASE}/OdpisAktualny/${encodeRegistryComponent(krsNumber)}?${params.toString()}`;
 };
 
 export type LookupOptions = RegistryClientOptions & {

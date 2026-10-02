@@ -1,3 +1,4 @@
+import { encodeRegistryComponent } from "../shared/encode-registry-component.js";
 import { performRegistryRequest } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import {
@@ -58,15 +59,13 @@ const requireToken = ({ token }: DenueClientOptions): string => {
   return trimmed;
 };
 
-const encodePathSegment = (value: string): string => encodeURIComponent(value);
-
 const buildUrl = (
   options: DenueClientOptions,
   segments: readonly string[],
 ): string => {
   const base = options.baseUrl ?? DENUE_API_BASE;
   const cleanBase = stripTrailingSlashes(base);
-  const encodedPath = segments.map(encodePathSegment).join("/");
+  const encodedPath = segments.map(encodeRegistryComponent).join("/");
   return `${cleanBase}/${encodedPath}`;
 };
 
@@ -150,7 +149,7 @@ const redactToken = (value: string, options: DenueClientOptions): string => {
   const token = requireToken(options);
   return value
     .replaceAll(token, "[redacted]")
-    .replaceAll(encodeURIComponent(token), "[redacted]");
+    .replaceAll(encodeRegistryComponent(token), "[redacted]");
 };
 
 const isDenueResponse = (value: unknown): value is DenueResponse => {

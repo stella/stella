@@ -1187,6 +1187,7 @@ describe("native interrupt boundary persistence", () => {
         "22222222-2222-4222-8222-222222222222",
       ),
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       safeDb,
       userId: toSafeId<"user">("33333333-3333-4333-8333-333333333333"),
       workspaceId: null,
@@ -3934,14 +3935,15 @@ describe("native continuation third-party boundary", () => {
   test("anonymizes resolved payload text while preserving protocol fields", async () => {
     const boundary: Extract<ChatThirdPartyBoundary, { type: "anonymized" }> = {
       ...createBoundary([]),
-      anonymizeFields: async ({ fields }) => ({
-        entityCount: fields.filter((field) => field.includes("Jan Novak"))
-          .length,
-        fields: fields.map((field) =>
-          field.replaceAll("Jan Novak", "[PERSON_1]"),
-        ),
-        redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
-      }),
+      anonymizeFields: async ({ fields }) =>
+        Result.ok({
+          entityCount: fields.filter((field) => field.includes("Jan Novak"))
+            .length,
+          fields: fields.map((field) =>
+            field.replaceAll("Jan Novak", "[PERSON_1]"),
+          ),
+          redactionMap: new Map([["[PERSON_1]", "Jan Novak"]]),
+        }),
     };
 
     const prepared = await prepareResumeForThirdParty({

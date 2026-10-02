@@ -12,7 +12,7 @@ import { panic, Result } from "better-result";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import { loadOrgAISettings } from "@/api/lib/ai-config-loader";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
 import type { SafeId } from "@/api/lib/branded-types";
@@ -102,33 +102,29 @@ export const buildTemplateFillAiWiring = ({
   feature,
   documentLanguages,
 }: TemplateFillAiWiringArgs): TemplateFillAiWiring => {
-  let configPromise:
-    | Promise<Result<OrgAIConfig | null, HandlerError<403>>>
-    | undefined;
-  const orgAIConfig = async (): Promise<
-    Result<OrgAIConfig | null, HandlerError<403>>
-  > => {
+  let configPromise: ReturnType<typeof loadOrgAISettings> | undefined;
+  const orgAISettings = async () => {
     configPromise ??= scopedDb(
-      async (tx) => await loadOrgAIConfig(tx, { organizationId, userId }),
+      async (tx) => await loadOrgAISettings(tx, { organizationId, userId }),
     );
     return await configPromise;
   };
 
   return {
     assertUsageAvailable: async () => {
-      const config = await orgAIConfig();
+      const config = await orgAISettings();
       if (Result.isError(config)) {
         return config.error;
       }
       return await assertTemplateFillUsage({
-        orgAIConfig: config.value,
+        orgAIConfig: config.value.orgAIConfig,
         organizationId,
         userId,
         safeDb,
       });
     },
     aiCollaborators: async () => {
-      const configResult = await orgAIConfig();
+      const configResult = await orgAISettings();
       if (Result.isError(configResult)) {
         // The fill service builds collaborators only after this wiring's
         // preflight passed, and the preflight returns this same refusal.
@@ -136,10 +132,12 @@ export const buildTemplateFillAiWiring = ({
       }
       const config = configResult.value;
       const shared = {
-        orgAIConfig: config,
+        orgAIConfig: config.orgAIConfig,
+        managedAIResidency: config.managedAIResidency,
         organizationId,
         skillContext: { organizationId, safeDb, userId },
         aiAnalytics: createTanStackAIAnalyticsCallbacks({
+          dataClass: "customer",
           usageMetering: {
             actionType: "chat",
             organizationId,
@@ -150,7 +148,7 @@ export const buildTemplateFillAiWiring = ({
           },
           feature,
           modelRole: "fast",
-          orgAIConfig: config,
+          orgAIConfig: config.orgAIConfig,
           properties: { organization_id: organizationId },
           traceId: Bun.randomUUIDv7(),
         }),

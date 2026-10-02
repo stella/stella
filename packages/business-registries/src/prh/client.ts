@@ -1,4 +1,8 @@
-import { isRecord } from "../shared/guards.js";
+import {
+  hasOptionalString,
+  isRecord,
+  isOptionalArrayOf,
+} from "../shared/guards.js";
 import { performRegistryRequest, readRegistryJson } from "../shared/http.js";
 import { clampSearchLimit } from "../shared/search.js";
 import { PrhAPIError, PrhRequestError, PrhValidationError } from "./errors.js";
@@ -19,34 +23,66 @@ const DEFAULT_SEARCH_LIMIT = 50;
 // dispatch layer can pass through any limit safely.
 const MAX_SEARCH_LIMIT = 100;
 
-const isOptionalRecord = (value: unknown): boolean =>
-  value === undefined || isRecord(value);
-
-const isOptionalRecordArray = (value: unknown): boolean =>
-  value === undefined || (Array.isArray(value) && value.every(isRecord));
-
 const isPrhSourcedValue = (value: unknown): boolean =>
   isRecord(value) && typeof value["value"] === "string";
 
 const isPrhRawName = (value: unknown): boolean =>
   isRecord(value) &&
   typeof value["name"] === "string" &&
-  typeof value["type"] === "string";
+  typeof value["type"] === "string" &&
+  hasOptionalString(value, "endDate");
+
+const isPrhDescription = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["languageCode"] === "string" &&
+  typeof value["description"] === "string";
+
+const isPrhCompanyForm = (value: unknown): boolean =>
+  isRecord(value) &&
+  hasOptionalString(value, "type") &&
+  hasOptionalString(value, "endDate") &&
+  isOptionalArrayOf(value["descriptions"], isPrhDescription);
+
+const isPrhBusinessLine = (value: unknown): boolean =>
+  value === undefined ||
+  (isRecord(value) &&
+    hasOptionalString(value, "type") &&
+    isOptionalArrayOf(value["descriptions"], isPrhDescription));
+
+const isPrhPostOffice = (value: unknown): boolean =>
+  isRecord(value) &&
+  typeof value["languageCode"] === "string" &&
+  typeof value["city"] === "string";
 
 const isPrhAddress = (value: unknown): boolean =>
-  isRecord(value) && typeof value["type"] === "number";
+  isRecord(value) &&
+  typeof value["type"] === "number" &&
+  [
+    "street",
+    "postCode",
+    "postOfficeBox",
+    "buildingNumber",
+    "entrance",
+    "apartmentNumber",
+    "apartmentIdSuffix",
+    "co",
+    "country",
+    "freeAddressLine",
+    "endDate",
+  ].every((key) => hasOptionalString(value, key)) &&
+  isOptionalArrayOf(value["postOffices"], isPrhPostOffice);
 
 const isPrhRawCompany = (value: unknown): boolean =>
   isRecord(value) &&
   isPrhSourcedValue(value["businessId"]) &&
-  (value["names"] === undefined ||
-    (Array.isArray(value["names"]) && value["names"].every(isPrhRawName))) &&
-  isOptionalRecord(value["mainBusinessLine"]) &&
-  isOptionalRecordArray(value["companyForms"]) &&
-  isOptionalRecordArray(value["companySituations"]) &&
-  (value["addresses"] === undefined ||
-    (Array.isArray(value["addresses"]) &&
-      value["addresses"].every(isPrhAddress)));
+  isOptionalArrayOf(value["names"], isPrhRawName) &&
+  isPrhBusinessLine(value["mainBusinessLine"]) &&
+  isOptionalArrayOf(value["companyForms"], isPrhCompanyForm) &&
+  isOptionalArrayOf(value["companySituations"], isRecord) &&
+  isOptionalArrayOf(value["addresses"], isPrhAddress) &&
+  ["status", "tradeRegisterStatus", "registrationDate", "endDate"].every(
+    (key) => hasOptionalString(value, key),
+  );
 
 const isPrhCompaniesResponse = (
   value: unknown,

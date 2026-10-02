@@ -24,6 +24,9 @@ type EmailProviderInput = {
   SMTP_USERNAME?: string | undefined;
 };
 
+// Keep retention cutoffs in positive ISO years supported by timestamptz.
+const MAX_ACTION_COST_RETENTION_DAYS = 365_000;
+
 export const resolveEmailProvider = ({
   EMAIL_PROVIDER,
   SMTP_HOST,
@@ -333,6 +336,45 @@ export const envApiServerSchema = {
   FEATURE_ACTION_ADMISSION: featureFlagSchema,
   ACTION_LIMIT_CONTACT_URL: v.optional(
     v.pipe(v.string(), v.url(), v.regex(/^https?:\/\//u)),
+  ),
+  FEATURE_ACTION_COST_RECORDS: featureFlagSchema,
+  ACTION_COST_ESTIMATES: v.optional(v.string()),
+  ACTION_COST_CALL_RATES: v.optional(v.string()),
+  ACTION_COST_RETENTION_DAYS: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(MAX_ACTION_COST_RETENTION_DAYS),
+    ),
+  ),
+  ACTION_REQUEST_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_RESPONSE_MAX_BYTES: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
+  ),
+  ACTION_PAGE_SIZE_MAX: v.optional(
+    v.pipe(
+      v.string(),
+      v.toNumber(),
+      v.integer(),
+      v.minValue(1),
+      v.maxValue(Number.MAX_SAFE_INTEGER),
+    ),
   ),
   ACTION_ADMISSION_ORG_CONCURRENCY: v.optional(
     v.pipe(v.string(), v.toNumber(), v.integer(), v.minValue(1)),

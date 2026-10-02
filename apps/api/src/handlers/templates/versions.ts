@@ -18,6 +18,7 @@ import {
   decodePaginationCursor,
   encodePaginationCursor,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   readStoredTemplateFile,
   STORED_TEMPLATE_FILE_COLUMNS,
@@ -72,8 +73,9 @@ export const listTemplateVersionsHandler = async ({
   organizationId,
   templateId,
   cursor,
-  limit,
+  limit: requestedLimit,
 }: ListVersionsProps) => {
+  const limit = normalizeTenantPageLimit(requestedLimit);
   const template = await verifyTemplateOwnership(
     scopedDb,
     templateId,

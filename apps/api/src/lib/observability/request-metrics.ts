@@ -198,3 +198,40 @@ export const emitChatRunLogMetric = (metric: ChatRunLogMetric): void => {
     ...payload.values,
   });
 };
+
+export const emitActionCostDropMetric = (dropped: number): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [[]],
+          Metrics: [{ Name: "ActionCostObservationsDropped", Unit: "Count" }],
+        },
+      ],
+    },
+    ActionCostObservationsDropped: dropped,
+  });
+};
+
+const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";
+
+export const emitActionResponseOversizeMetric = (
+  transport: "http" | "mcp",
+): void => {
+  writeMetricLine({
+    _aws: {
+      Timestamp: Temporal.Now.instant().epochMilliseconds,
+      CloudWatchMetrics: [
+        {
+          Namespace: METRIC_NAMESPACE,
+          Dimensions: [["transport"]],
+          Metrics: [{ Name: ACTION_RESPONSE_OVERSIZE_METRIC, Unit: "Count" }],
+        },
+      ],
+    },
+    transport,
+    [ACTION_RESPONSE_OVERSIZE_METRIC]: 1,
+  });
+};

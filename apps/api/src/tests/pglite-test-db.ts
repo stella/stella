@@ -17,6 +17,7 @@ import {
 } from "@/api/lib/public-law-relations";
 import {
   createSchemaPglite,
+  installPgliteDecisionAliases,
   installPgliteChatRunLogRls,
   installPgliteChatTurnRunIdLookup,
   installPgliteAgentSkillRevisionTrigger,
@@ -264,12 +265,19 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
 export const ROLE_GRANT_STATEMENTS = [
+  `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `
     GRANT SELECT, INSERT, UPDATE, DELETE
       ON ALL TABLES IN SCHEMA public TO stella
   `,
   `
     REVOKE ALL PRIVILEGES ON TABLE "case_law_search_backfill_failures"
+      FROM stella
+  `,
+  `
+    REVOKE ALL PRIVILEGES ON TABLE
+      ${quoteSqlIdentifier(getTableName(schema.actionCostRecords))},
+      ${quoteSqlIdentifier(getTableName(schema.actionCostCalls))}
       FROM stella
   `,
   `
@@ -437,6 +445,7 @@ export const ROLE_GRANT_STATEMENTS = [
       "case_law_corpus_upload_intents",
       "case_law_corpus_pack_refs",
       "case_law_decision_source_identities",
+      "case_law_decision_aliases",
       "case_law_raw_sweeps",
       "case_law_decision_supplements",
       "case_law_citation_reviews"
@@ -599,13 +608,18 @@ export const ROLE_GRANT_STATEMENTS = [
   `
     GRANT USAGE ON SCHEMA public TO stella_public_law_reader
   `,
-  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION).map(
-    ([relation, columns]) => `
+  // Alias reader grants land only after the release declaring them optional.
+  ...Object.entries(PUBLIC_LAW_COLUMN_GRANTS_BY_RELATION)
+    .filter(
+      ([relation]) => relation !== getTableName(schema.caseLawDecisionAliases),
+    )
+    .map(
+      ([relation, columns]) => `
       GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,
-  ),
+    ),
   // Operator role for pre-computed decision analyses: a narrow read plus the
   // single writable column.
   `
@@ -681,6 +695,7 @@ export const buildFullTestPglite = async (): Promise<PGlite> => {
   }
   await installPgliteWorkspaceAccessObjects(db);
   await installPgliteAgentSkillRevisionTrigger(db);
+  await installPgliteDecisionAliases(db);
   await installPgliteCorpusProjectionRevisionFence(db);
   await installPgliteStatuteCitationCounts(db);
   await installPgliteLegislationPayloadRevision(db);

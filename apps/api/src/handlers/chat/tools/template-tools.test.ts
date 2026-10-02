@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { describe, expect, test } from "bun:test";
 
 import { CHAT_SEND_MODE } from "@stll/anonymize-chat";
@@ -55,6 +56,7 @@ describe("createTemplateTools", () => {
   test("registers list, describe and fill template tools", () => {
     const tools = createTemplateTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
@@ -72,6 +74,7 @@ describe("createTemplateTools", () => {
   test("does not register the authoring-only suggest tool", () => {
     const tools = createTemplateTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       scopedDb: stubScopedDb([]),
       safeDb: stubSafeDb,
       organizationId: orgId,
@@ -89,6 +92,7 @@ describe("createTemplateTools", () => {
     let findManyOptions: unknown;
     const tools = createTemplateTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       scopedDb: stubScopedDb(rows, (options) => {
         findManyOptions = options;
       }),
@@ -116,6 +120,7 @@ describe("createTemplateAuthoringTools", () => {
   test("registers the suggest-fields authoring tool", () => {
     const tools = createTemplateAuthoringTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,
@@ -134,11 +139,11 @@ describe("createTemplateAuthoringTools", () => {
         redactionMap.set("[PERSON_1]", "Dana Novotná");
         return field.replaceAll("Dana Novotná", "[PERSON_1]");
       });
-      return {
+      return Result.ok({
         entityCount: redactionMap.size,
         fields: anonymized,
         redactionMap,
-      };
+      });
     };
     const thirdPartyBoundary = createChatThirdPartyBoundary({
       anonymizeFields,
@@ -151,6 +156,7 @@ describe("createTemplateAuthoringTools", () => {
     const sentTexts: string[] = [];
     const tools = createTemplateAuthoringTools({
       orgAIConfig: null,
+      managedAIResidency: "eu" as const,
       safeDb: stubSafeDb,
       organizationId: orgId,
       userId,

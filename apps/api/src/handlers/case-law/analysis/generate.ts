@@ -79,6 +79,7 @@ const runGeneration = async ({
 }: RunGenerationOptions) => {
   // audit: skip — background AI analysis output
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "public_corpus",
     feature: "case-law.analysis",
     modelRole: "fast",
     organizationId,
@@ -95,9 +96,11 @@ const runGeneration = async ({
 
   try {
     const { modelId } = getTanStackTextModelForRole("fast", orgAIConfig, {
+      dataClass: "public_corpus",
       organizationId,
     });
     const result = await generateTanStackObjectForRole({
+      dataClass: "public_corpus",
       role: "fast",
       serviceTier: "standard",
       orgAIConfig,
@@ -239,6 +242,7 @@ export const generateAnalysis = async (
   // the fast role is unavailable (a pre-existing bug ran this check before
   // them, locking finished analyses behind AI configuration).
   const available = requireTanStackAIAvailableForRole({
+    dataClass: "public_corpus",
     configStatus: orgAIConfigStatus,
     orgConfig: orgAIConfig,
     role: "fast",

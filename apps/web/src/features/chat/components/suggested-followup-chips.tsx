@@ -3,14 +3,9 @@ import { useTranslations } from "use-intl";
 import { cn } from "@stll/ui/utils";
 
 import {
-  ConversationScrollButton,
-  isScrollActionVisible,
-} from "@/components/ai-elements/conversation";
-import {
   SuggestedActions,
   type SuggestedActionSurfaceName,
 } from "@/components/suggested-actions";
-import { useMaybeStickToBottomContext } from "@/hooks/use-stick-to-bottom";
 
 type SuggestedFollowupChipsProps = {
   className?: string;
@@ -40,9 +35,8 @@ type SuggestedFollowupChipsProps = {
  * behind the row, or `surface="plain"` when rendered inside the thread card so
  * the chips sit within the chat window.
  *
- * The scroll action overlays the row's trailing end (over the chips'
- * fade-out) rather than taking a leading slot, and shows only where a
- * stick-to-bottom context surrounds the row.
+ * The scroll-to-bottom action is not part of this row: it sits in the
+ * composer's status row (`ChatComposerDock`).
  */
 export const SuggestedFollowupChips = ({
   className,
@@ -51,36 +45,20 @@ export const SuggestedFollowupChips = ({
   surface,
 }: SuggestedFollowupChipsProps) => {
   const t = useTranslations();
-  const stickToBottom = useMaybeStickToBottomContext();
 
   if (prompts.length === 0) {
     return null;
   }
 
-  const resolvedSurface = surface ?? "overlay";
-  // While the action overlays the row's inline end, the row reserves that
-  // footprint so the last chip can scroll clear of it. `pe-11` covers the
-  // action's 44px coarse-pointer hit area, not only its 28px circle.
-  const reserveScrollAction =
-    stickToBottom !== null && isScrollActionVisible(stickToBottom);
-
   return (
-    <div className={cn("relative max-w-full pb-2", className)}>
+    <div className={cn("max-w-full pb-2", className)}>
       <SuggestedActions
         actions={prompts.map((prompt) => ({ id: prompt, label: prompt }))}
-        className={cn(reserveScrollAction && "pe-11")}
         label={t("chat.suggestedFollowupsLabel")}
         onSelect={onSelect}
         orientation="horizontal"
-        surface={resolvedSurface}
+        surface={surface ?? "overlay"}
       />
-      {stickToBottom !== null && (
-        <ConversationScrollButton
-          className="absolute end-0 top-0"
-          placement="inline"
-          surface={resolvedSurface}
-        />
-      )}
     </div>
   );
 };

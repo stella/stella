@@ -198,6 +198,7 @@ export const probeNativeImage = async ({
     rotatedModelId: modelId,
   });
   const model = resolveTanStackTextModel({
+    dataClass: "public_corpus",
     role: "chat",
     orgAIConfig,
     organizationId: null,
@@ -208,6 +209,7 @@ export const probeNativeImage = async ({
     });
   }
   const output = await generateTanStackObjectForRole({
+    dataClass: "public_corpus",
     role: "chat",
     orgAIConfig,
     organizationId: null,

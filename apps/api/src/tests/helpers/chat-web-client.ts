@@ -98,7 +98,7 @@ type WebChatModules = {
   isOpaquePersistedChatToolCallPart: (part: unknown) => boolean;
   createChatRuntime: (props: {
     activeTurnId: SafeId<"chatTurn"> | null;
-    context: undefined;
+    context: WebChatContext | undefined;
     initialMessages: UIMessage[];
     key: { scope: "global"; threadId: string };
     onError: (error: Error) => void;
@@ -309,6 +309,12 @@ export type WebChatClient = {
   takeErrors: () => Error[];
 };
 
+/** What the page's composer adds to every request: the skill it has
+ *  active (`chat-query-contract.ts`). */
+export type WebChatContext = {
+  getActiveSkill: () => { skillId?: string; skillName: string } | undefined;
+};
+
 /** What a page load seeds the runtime with. */
 type WebChatPage = {
   activeTurnId: SafeId<"chatTurn"> | null;
@@ -323,11 +329,14 @@ type WebChatPage = {
  * thread query does when the runtime asks it to refetch.
  */
 export const createWebChatClient = async ({
+  context,
   inFlight,
   page,
   reload,
   threadId,
 }: {
+  /** What the composer adds to every request; none by default. */
+  context?: WebChatContext | undefined;
   inFlight: () => number;
   page: WebChatPage;
   reload: () => Promise<WebChatPage>;
@@ -342,7 +351,7 @@ export const createWebChatClient = async ({
   const createRuntime = (seed: WebChatPage): WebChatRuntime =>
     web.createChatRuntime({
       activeTurnId: seed.activeTurnId,
-      context: undefined,
+      context,
       initialMessages: [...seed.messages],
       key: { scope: "global", threadId },
       onError: (error) => {

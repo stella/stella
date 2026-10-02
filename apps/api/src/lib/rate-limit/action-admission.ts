@@ -1,15 +1,14 @@
-import { Result, TaggedError } from "better-result";
+import { Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
-import {
-  ACTION_ADMISSION_CODES,
-  ACTION_ADMISSION_REFUSALS,
-  type ActionAdmissionCode,
-} from "@stll/api-contract/action-admission";
 import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
 import type { SafeId } from "@/api/lib/branded-types";
+import {
+  ActionAdmissionError,
+  actionAdmissionRefusal as configuredActionAdmissionRefusal,
+} from "@/api/lib/errors/action-admission-error";
 import { failureSink } from "@/api/lib/observability/failure";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import type { AdmittedActionIdentity } from "@/api/lib/rate-limit/action-kinds";
@@ -27,6 +26,14 @@ import {
   createRedisClient,
 } from "@/api/lib/redis-client";
 import { coordinationKey, type CoordinationKey } from "@/api/lib/redis-keys";
+import {
+  runObservedAction,
+  type ActionCostRecorder,
+} from "@/api/lib/usage/action-costs/context";
+import {
+  getActionCostRecorder,
+  reportMissingActionCostIdentity,
+} from "@/api/lib/usage/action-costs/recorder";
 
 type RedisCommands = {
   send: (command: string, args: string[]) => Promise<unknown>;
@@ -50,43 +57,10 @@ const admissionRedis = createLazyRedisClient(() =>
 
 export const closeActionAdmissionRedis = () => admissionRedis.close();
 
-export class ActionAdmissionError extends TaggedError("ActionAdmissionError")<{
-  message: string;
-  reason: "busy" | "period_exhausted" | "not_enabled" | "unavailable";
-  cause?: unknown;
-}> {
-  get code() {
-    return ADMISSION_REASON_CODES[this.reason];
-  }
-}
+export { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 
-const ADMISSION_REASON_CODES = {
-  busy: ACTION_ADMISSION_CODES.concurrencyBusy,
-  period_exhausted: ACTION_ADMISSION_CODES.periodExhausted,
-  not_enabled: ACTION_ADMISSION_CODES.notEnabled,
-  unavailable: ACTION_ADMISSION_CODES.admissionUnavailable,
-} as const satisfies Record<
-  ActionAdmissionError["reason"],
-  ActionAdmissionCode
->;
-
-export const actionAdmissionRefusal = (error: ActionAdmissionError) => {
-  const refusal = ACTION_ADMISSION_REFUSALS[error.code];
-  const contactUrl =
-    error.code === ACTION_ADMISSION_CODES.periodExhausted ||
-    error.code === ACTION_ADMISSION_CODES.notEnabled
-      ? env.ACTION_LIMIT_CONTACT_URL
-      : undefined;
-  return {
-    ...refusal,
-    code: error.code,
-    hint:
-      contactUrl === undefined
-        ? refusal.hint
-        : `${refusal.hint} Contact: ${contactUrl}`,
-    ...(contactUrl === undefined ? {} : { contactUrl }),
-  };
-};
+export const actionAdmissionRefusal = (error: ActionAdmissionError) =>
+  configuredActionAdmissionRefusal(error, env.ACTION_LIMIT_CONTACT_URL);
 
 type ActionAdmissionPolicy = {
   organizationConcurrency: number;
@@ -181,10 +155,10 @@ const configuredPolicy = (): Result<
   return Result.ok({ organizationConcurrency, userConcurrency, leaseMs });
 };
 
-type ActionAdmissionOptions = {
+type ActionAdmissionOptions<T = unknown> = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
-  run: (signal: AbortSignal) => Promise<unknown>;
+  run: (signal: AbortSignal) => Promise<T>;
   enabled?: boolean;
   scope?: "inherit" | "independent";
   policy?: ActionAdmissionPolicy;
@@ -194,6 +168,7 @@ type ActionAdmissionOptions = {
   redisReady?: () => Promise<RedisCommands>;
   createId?: () => string;
   timing?: AdmissionTiming;
+  costRecorder?: ActionCostRecorder | null;
 };
 
 type AdmissionTiming = {
@@ -348,6 +323,47 @@ const validateAdmissionReply = (
   return Result.ok(undefined);
 };
 
+type ObservedAdmissionRunOptions<T> = Pick<
+  ActionAdmissionOptions,
+  "organizationId" | "userId"
+> & {
+  periodIdentity: ActionAdmissionOptions["periodIdentity"];
+  costRecorder: ActionAdmissionOptions["costRecorder"];
+  run: (signal: AbortSignal) => Promise<T>;
+};
+
+const createObservedAdmissionRun = <T>({
+  organizationId,
+  userId,
+  periodIdentity,
+  costRecorder,
+  run,
+}: ObservedAdmissionRunOptions<T>) => {
+  const recorder =
+    costRecorder === null
+      ? undefined
+      : (costRecorder ?? getActionCostRecorder());
+  return async (signal: AbortSignal): Promise<T> => {
+    const executeRun = async () => {
+      signal.throwIfAborted();
+      return await run(signal);
+    };
+    if (recorder === undefined) {
+      return await executeRun();
+    }
+    if (periodIdentity === undefined) {
+      reportMissingActionCostIdentity();
+      return await executeRun();
+    }
+    return await runObservedAction({
+      identity: { organizationId, ...periodIdentity },
+      userId,
+      recorder,
+      run: executeRun,
+    });
+  };
+};
+
 /**
  * The disabled branch never opens Valkey or reads admission configuration.
  * Nested admission must be awaited: same-caller work shares the parent's lease
@@ -366,12 +382,18 @@ export const withActionAdmission = async <T>({
   redisReady = admissionRedis.ready,
   createId = () => Bun.randomUUIDv7(),
   timing = defaultTiming,
-}: Omit<ActionAdmissionOptions, "run"> & {
-  run: (signal: AbortSignal) => Promise<T>;
-}): Promise<Result<T, unknown>> => {
+  costRecorder,
+}: ActionAdmissionOptions<T>): Promise<Result<T, unknown>> => {
+  const observedRun = createObservedAdmissionRun({
+    organizationId,
+    userId,
+    periodIdentity,
+    costRecorder,
+    run,
+  });
   if (!enabled) {
     return await Result.tryPromise({
-      try: async () => await run(new AbortController().signal),
+      try: async () => await observedRun(new AbortController().signal),
       catch: (error: unknown) => error,
     });
   }
@@ -403,7 +425,7 @@ export const withActionAdmission = async <T>({
     return await Result.tryPromise({
       try: async () => {
         inherited.signal.throwIfAborted();
-        const value = await run(inherited.signal);
+        const value = await observedRun(inherited.signal);
         return value;
       },
       catch: (error: unknown) => error,
@@ -524,10 +546,10 @@ export const withActionAdmission = async <T>({
   try {
     outcome = await Result.tryPromise({
       try: async () =>
-        await admissionScope.run(executionScope, async () => {
-          controller.signal.throwIfAborted();
-          return await run(controller.signal);
-        }),
+        await admissionScope.run(
+          executionScope,
+          async () => await observedRun(controller.signal),
+        ),
       catch: (error: unknown) => error,
     });
   } finally {
