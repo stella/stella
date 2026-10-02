@@ -1164,6 +1164,9 @@ describe("native interrupt boundary persistence", () => {
       for (const chunk of visible) {
         processor.processChunk(chunk);
       }
+      if (finish === undefined || finish === null) {
+        throw new Error("Expected the real engine to finish the turn");
+      }
       expect(
         processor
           .getMessages()
@@ -1171,9 +1174,9 @@ describe("native interrupt boundary persistence", () => {
       ).toEqual([
         user,
         {
-          id: finish?.responseMessage.id,
+          id: finish.responseMessage.id,
           role: "assistant",
-          parts: finish?.responseMessage.parts,
+          parts: finish.responseMessage.parts,
         },
       ]);
       // Presentation must not mutate the history the model and persistence read.
