@@ -1102,6 +1102,10 @@
     "greeting": "Nad czym chcesz pracować?",
     "greetingSubtitle": "Zacznij od sprawy, dokumentu albo prostego pytania.",
     "hideThread": "Ukryj konwersację",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, one {i # więcej} few {i # więcej} many {i # więcej} other {i # więcej}}"
+    },
     "improvePrompt": "Ulepsz prompt",
     "improvePromptDraftChanged": "Wersja robocza się zmieniła, więc ulepszenie nie zostało zastosowane.",
     "improvePromptPlainTextOnly": "Ulepszanie promptu jest dostępne tylko dla zwykłego tekstu.",
@@ -1606,6 +1610,7 @@
     },
     "fact": "Fakt",
     "failed": "Niepowodzenie",
+    "files": "Pliki",
     "filter": "Filtr",
     "filters": "Filtry",
     "find": "Znajdź",
@@ -3270,7 +3275,6 @@
       "editSkill": "Edytuj umiejętność",
       "enableSkill": "Włącz umiejętność",
       "fileExists": "Plik o tej ścieżce już istnieje",
-      "filesHeading": "Pliki",
       "howItRuns": "Jak działa",
       "importFailureFetch": "Nie udało się wczytać źródła umiejętności.",
       "importFailureIntegrity": "Źródło umiejętności zmieniło się po jego wykryciu. Przejrzyj je ponownie.",

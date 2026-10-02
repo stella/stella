@@ -11,6 +11,7 @@ import {
   type BBoxItem,
 } from "@/api/lib/bbox/ai-prompts";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { WorkflowIntegrationError } from "@/api/lib/errors/tagged-errors";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
@@ -26,6 +27,7 @@ type GenerateBBoxDataProps = {
   pageNumber: number;
   workspaceId: SafeId<"workspace">;
   orgAIConfig?: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   /** External model-dispatch boundary; supplied by focused integration tests. */
   generateObjectForRole?: typeof generateTanStackObjectForRole | undefined;
@@ -42,6 +44,7 @@ export const generateBBoxData = async ({
   pageNumber,
   workspaceId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   generateObjectForRole = generateTanStackObjectForRole,
 }: GenerateBBoxDataProps): Promise<
@@ -53,6 +56,7 @@ export const generateBBoxData = async ({
     scopeKey: justificationId,
   });
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "bbox.generate",
     modelRole: "pdf",
     organizationId,
@@ -78,9 +82,11 @@ export const generateBBoxData = async ({
         },
       };
       const result = await generateObjectForRole({
+        dataClass: "customer",
         role: "pdf",
         serviceTier: "standard",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: [workspaceId],
         analytics: aiAnalytics,

@@ -2,7 +2,34 @@ import * as v from "valibot";
 
 import { SIGNAL_SEVERITY } from "@stll/api-contract/signals";
 import type { SignalSeverity } from "@stll/api-contract/signals";
+import { failureGradeOf } from "@stll/errors";
 import { DAY_IN_MS, parsePlainDate, Temporal } from "@stll/time";
+
+import {
+  AI_ERROR_KIND_FAILURE_REASON,
+  classifyAIError,
+} from "@/api/lib/ai-error";
+
+export const DEADLINE_SCOUT_MAX_ATTEMPTS = 5;
+
+export const deadlineScoutFailureStatus = (
+  attemptCount: number,
+  error: unknown,
+) => {
+  const kind = classifyAIError(error);
+  const grade =
+    kind === "unknown"
+      ? "unknown"
+      : failureGradeOf(AI_ERROR_KIND_FAILURE_REASON[kind]);
+  if (
+    grade === "anticipated" ||
+    grade === "client" ||
+    attemptCount >= DEADLINE_SCOUT_MAX_ATTEMPTS
+  ) {
+    return "failed";
+  }
+  return "pending";
+};
 
 export const DEADLINE_TEXT_CAP_CHARS = 60_000;
 export const DEADLINE_TEXT_MIN_CHARS = 200;

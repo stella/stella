@@ -24,6 +24,7 @@ import {
 } from "@/api/lib/db-pagination";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 
 const config = {
   permissions: WORKSPACE_ACTIVITY_PERMISSIONS,
@@ -94,7 +95,9 @@ type WorkspaceActivity =
 const readWorkspaceActivity = createSafeHandler(
   config,
   async function* ({ memberRole, query, safeDb, session, user, workspaceId }) {
-    const limit = query.limit ?? LIMITS.workspaceActivityPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.workspaceActivityPageSizeDefault,
+    );
     const cursor = decodeWorkspaceActivityCursor(query.cursor);
     if (query.cursor !== undefined && cursor === null) {
       return Result.err(
