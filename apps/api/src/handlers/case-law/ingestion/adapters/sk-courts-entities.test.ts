@@ -109,7 +109,7 @@ describe("Slovak court display text decodes publisher entities once", () => {
     });
     expect(skCourtsListingIdentity(parts.item)).toEqual({
       type: "document",
-      sourceDocumentId: decision.sourceDocumentId,
+      sourceDocumentId: "source&amp;key",
     });
     expect(skCourtsListingIdentity({ ...parts.item, guid: null })).toEqual({
       type: "case-number",
@@ -310,6 +310,28 @@ describe("Slovak court display text decodes publisher entities once", () => {
       referencedLegislation: null,
     });
     expect(assembleSkCourtsDecision({ item: {}, detail: null })).toBeNull();
+    // A registry that states a name as null keeps saying so.
+    const registered = assembleSkCourtsDecision({
+      item: {
+        spisovaZnacka: "1C/2/2024",
+        sud: { nazov: "Okresný súd Žilina" },
+      },
+      detail: null,
+      courtRegistry: {
+        status: "available",
+        record: {
+          registreGuid: "sud_102",
+          nazov: "Okresn&#253; s&#250;d &#381;ilina",
+          typSudu: null,
+          skratka_string: null,
+        },
+      },
+    });
+    expect(registered?.metadata?.["courtRegistry"]).toMatchObject({
+      nazov: "Okresný súd Žilina",
+      typSudu: null,
+      skratka_string: null,
+    });
   });
 
   test("Slovak court entity round trips preserve Unicode without residue", () => {

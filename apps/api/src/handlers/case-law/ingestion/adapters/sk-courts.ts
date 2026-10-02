@@ -58,6 +58,7 @@ import {
 import type {
   SkCourtRegistryReader,
   SkCourtRegistryObservation,
+  SkCourtRegistryRecord,
 } from "@/api/handlers/case-law/ingestion/adapters/sk-court-directory";
 import {
   INGESTION_USER_AGENT,
@@ -429,6 +430,20 @@ const decodeSkCourtTextList = (values: string[] | null | undefined) => {
   return values.map((value) => decodeHTMLStrict(value));
 };
 
+/** The registry's display names decoded; a stated null or absence stays as stated. */
+const decodeSkCourtRegistryRecord = (
+  record: SkCourtRegistryRecord,
+): SkCourtRegistryRecord => ({
+  ...record,
+  nazov: decodeHTMLStrict(record.nazov),
+  ...(typeof record.typSudu === "string"
+    ? { typSudu: decodeHTMLStrict(record.typSudu) }
+    : {}),
+  ...(typeof record.skratka_string === "string"
+    ? { skratka_string: decodeHTMLStrict(record.skratka_string) }
+    : {}),
+});
+
 /**
  * The docket and the court an item must state for this adapter to keep it.
  *
@@ -578,27 +593,19 @@ export const assembleSkCourtsDecision = ({
 
   // Registry changes must reach already stored decisions; detail failures
   // still do not change the listing observation.
-  const directoryMetadata =
+  const registryRecord =
     courtRegistry?.status === "available"
-      ? skCourtDirectoryMetadata(
-          {
-            ...courtRegistry.record,
-            nazov: decodeHTMLStrict(courtRegistry.record.nazov),
-            typSudu: decodeSkCourtText(courtRegistry.record.typSudu),
-            skratka_string: decodeSkCourtText(
-              courtRegistry.record.skratka_string,
-            ),
-          },
-          court,
-        )
+      ? decodeSkCourtRegistryRecord(courtRegistry.record)
       : undefined;
+  const directoryMetadata =
+    registryRecord === undefined
+      ? undefined
+      : skCourtDirectoryMetadata(registryRecord, court);
   const registryUnavailable =
     courtRegistry?.status === "unavailable" ? courtRegistry : undefined;
   const courtSuccession = skCourtSuccessionReferences(
     court,
-    courtRegistry?.status === "available"
-      ? decodeHTMLStrict(courtRegistry.record.nazov)
-      : undefined,
+    registryRecord?.nazov,
   );
   const rawJson = JSON.stringify({
     item,
