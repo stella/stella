@@ -29,7 +29,8 @@ application requires source, configuration, or schema changes beyond dependency
 manifests and lockfiles.
 
 "Separate" means its own batch and commit, not its own pull request and not
-omitted. An applied sweep covers every applicable update within the requested
+omitted. The anonymizer packages are the exception: they always get their own
+pull request (see Anonymizer Packages below). An applied sweep covers every applicable update within the requested
 scope and each dependency's intended registry channel. Keep stable dependencies
 on stable releases. Include prerelease updates only within an explicitly selected
 prerelease channel. The only reason to leave a version behind is a mechanical
@@ -41,6 +42,38 @@ and "risky major" are not blocks.
 For every major and heavy minor, read the official release notes for capabilities
 worth adopting, not only for breakage. Report the relevant migration details and
 capabilities adopted or identified with the version moves.
+
+### Anonymizer Packages
+
+`@stll/anonymize`, `@stll/anonymize-wasm`, and `@stll/anonymize-data` decide
+what leaves the workspace in anonymized chat, so any version move of them, patch
+included, follows these rules:
+
+1. **Its own pull request.** Move them together, in one pull request that
+   changes nothing else: no other dependency, lockfile entry beyond theirs, or
+   source change except what their migration needs. A sweep that finds one of
+   them outdated leaves it out and reports it as a separate pull request to
+   open; that is not a block.
+2. **The name-matching gates run before merge.** From `apps/api`, run the
+   corpus gate and the real-anonymizer suites against the new version:
+
+   ```bash
+   bun run test src/mcp/name-matching-corpus.test.ts \
+     src/mcp/anonymization.test.ts \
+     src/handlers/chat/stored-parts-send-mode.integration.test.ts \
+     src/handlers/chat/provider-request-schemas.integration.test.ts \
+     src/handlers/chat/provider-request-roles.integration.test.ts
+   bun run test:property src/mcp/anonymization.property.test.ts
+   ```
+
+   and, from `packages/anonymize-chat`, `bun run test:property`. Report the
+   per-class corpus tallies of the old and the new version in the pull request.
+3. **Bounds only tighten.** Never lower a recall floor or raise a
+   false-positive ceiling in `name-matching-corpus.test.ts` (or relax a property
+   test) to make the update pass, unless the pull request states the reason,
+   the classes and cases affected, and the before and after tallies, and that
+   justification is reviewed and approved before merge. Raise a floor or lower
+   a ceiling when the new version does better.
 
 ## 2. Inventory the Full Requested Surface
 
