@@ -12,7 +12,7 @@ import {
 describe("membership role control policy", () => {
   for (const actorRole of ORGANIZATION_ROLE_NAMES) {
     test(`${actorRole} sees and submits exactly the shared assignable roles`, () => {
-      const expected = assignableRoles(actorRole);
+      const expected = [...assignableRoles(actorRole)];
       const options = roleAssignmentOptions(actorRole);
       expect(options.map(({ value }) => value)).toEqual(expected);
       expect(new Set(options.map(({ value }) => value)).size).toBe(

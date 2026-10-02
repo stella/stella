@@ -21,6 +21,7 @@ import {
   initAgentAuthTestDb,
   releaseAgentAuthTestDb,
 } from "@/api/tests/helpers/mock-agent-auth-db";
+import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
 setDefaultTimeout(120_000);
@@ -75,11 +76,23 @@ describe("single membership roles", () => {
         .select()
         .from(member)
         .where(eq(member.id, added.id));
-      const update = await auth.api.updateMemberRole({
-        body: { organizationId: organization.id, memberId: added.id, role },
-        headers: owner.headers(),
-        asResponse: true,
-      });
+      const mutationHeaders = owner.headers();
+      mutationHeaders.set("content-type", "application/json");
+      mutationHeaders.set("origin", "http://localhost:3001");
+      const update = await auth.handler(
+        new Request(
+          "http://localhost:3001/api/auth/organization/update-member-role",
+          {
+            method: "POST",
+            headers: mutationHeaders,
+            body: JSON.stringify({
+              organizationId: organization.id,
+              memberId: added.id,
+              role,
+            }),
+          },
+        ),
+      );
       expect(update.status).toBe(400);
       if (role !== "unrecognized-role") {
         expect(await update.json()).toMatchObject({
@@ -97,11 +110,11 @@ describe("single membership roles", () => {
         `role-new-${Bun.randomUUIDv7()}@stella.dev`,
       );
       const add = await auth.api.addMember({
-        body: {
+        body: asTestRaw<Parameters<typeof auth.api.addMember>[0]["body"]>({
           organizationId: organization.id,
           userId: newcomer.userId,
           role,
-        },
+        }),
         headers: owner.headers(),
         asResponse: true,
       });
@@ -120,11 +133,20 @@ describe("single membership roles", () => {
       ).toEqual([]);
 
       const email = `role-invite-${Bun.randomUUIDv7()}@stella.dev`;
-      const invite = await auth.api.createInvitation({
-        body: { organizationId: organization.id, email, role },
-        headers: owner.headers(),
-        asResponse: true,
-      });
+      const invite = await auth.handler(
+        new Request(
+          "http://localhost:3001/api/auth/organization/invite-member",
+          {
+            method: "POST",
+            headers: mutationHeaders,
+            body: JSON.stringify({
+              organizationId: organization.id,
+              email,
+              role,
+            }),
+          },
+        ),
+      );
       expect(invite.status).toBe(400);
       if (role !== "unrecognized-role") {
         expect(await invite.json()).toMatchObject({
@@ -573,9 +595,9 @@ describe("membership assignment policy", () => {
           expect(invitations).toEqual([]);
         }
       }
-      expect(acceptedAdds).toEqual(expected);
-      expect(acceptedInvites).toEqual(expected);
-      expect(acceptedUpdates).toEqual(expected);
+      expect(acceptedAdds).toEqual([...expected]);
+      expect(acceptedInvites).toEqual([...expected]);
+      expect(acceptedUpdates).toEqual([...expected]);
     });
   }
 

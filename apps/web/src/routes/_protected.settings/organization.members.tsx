@@ -33,7 +33,6 @@ import {
 import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
-import { RoleCell } from "@/components/organization/member-role-cell";
 import Tooltip from "@/components/tooltip";
 import { UserIdentity } from "@/components/user-avatar";
 import { useLocale } from "@/i18n/formatting-context";
@@ -48,6 +47,7 @@ import { formatMemberDate } from "@/lib/organization/utils";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/-components/organization/list-toolbar";
+import { RoleCell } from "@/routes/_protected.settings/-components/organization/member-role-cell";
 import { OrganizationProfileCard } from "@/routes/_protected.settings/-components/organization/profile-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
 

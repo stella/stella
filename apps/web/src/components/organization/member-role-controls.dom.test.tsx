@@ -43,7 +43,8 @@ const { QueryClient, QueryClientProvider } =
 const { IntlProvider } = await import("use-intl");
 const { roleOptions } = await import("@/lib/auth-queries");
 const { InviteMemberDialog } = await import("./invite-member-dialog");
-const { RoleCell } = await import("./member-role-cell");
+const { RoleCell } =
+  await import("@/routes/_protected.settings/-components/organization/member-role-cell");
 
 const clients: InstanceType<typeof QueryClient>[] = [];
 afterEach(async () => {
@@ -140,7 +141,7 @@ const submitInvitation = async () => {
 describe("mounted membership role controls", () => {
   for (const actorRole of ORGANIZATION_ROLE_NAMES) {
     test(`${actorRole} sees invitation options equal to the accepted form roles`, async () => {
-      const expected = assignableRoles(actorRole);
+      const expected = [...assignableRoles(actorRole)];
       const schema = inviteMemberSchema(actorRole);
       expect(
         ORGANIZATION_ROLE_NAMES.filter(
@@ -224,7 +225,7 @@ describe("mounted membership role controls", () => {
 
     for (const memberRole of ORGANIZATION_ROLE_NAMES) {
       test(`${actorRole} edits ${memberRole} only within its assignment policy`, async () => {
-        const expected = assignableRoles(actorRole);
+        const expected = [...assignableRoles(actorRole)];
         const view = mount(
           actorRole,
           <RoleCell

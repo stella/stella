@@ -59,7 +59,7 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     owners.map(({ userId }) => ({
       id: userId,
       name: "Membership",
-      email: `${userId}@membership.test`,
+      email: `${userId.toLowerCase()}@membership.test`,
     })),
   );
   await db.insert(organization).values({
@@ -78,33 +78,39 @@ const fixture = async (db: GatedTestDb, ownerCount: number) => {
     })),
   );
   await db.insert(timeEntries).values(
-    owners.map(({ userId, entryId }) => ({
-      id: entryId,
-      userId,
-      organizationId,
-      activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
-      dateWorked: startedAt.toISOString().slice(0, 10),
-      timezoneId: "UTC",
-      durationMinutes: 0,
-      billedMinutes: 0,
-      rateAtEntry: cents(0),
-      currency: UNPRICED_TIME_ENTRY_CURRENCY,
-      billable: false,
-      narrative: "",
-      source: "timer",
-      timerStartedAt: startedAt,
-    })),
+    owners.map(
+      ({ userId, entryId }) =>
+        ({
+          id: entryId,
+          userId,
+          organizationId,
+          activityGroup: TIME_ENTRY_ACTIVITY_GROUP.INTERNAL,
+          dateWorked: startedAt.toISOString().slice(0, 10),
+          timezoneId: "UTC",
+          durationMinutes: 0,
+          billedMinutes: 0,
+          rateAtEntry: cents(0),
+          currency: UNPRICED_TIME_ENTRY_CURRENCY,
+          billable: false,
+          narrative: "",
+          source: "timer",
+          timerStartedAt: startedAt,
+        }) satisfies typeof timeEntries.$inferInsert,
+    ),
   );
   await db.insert(timeTimers).values(
-    owners.map(({ userId, entryId, timerId }) => ({
-      id: timerId,
-      userId,
-      organizationId,
-      legacyTimeEntryId: entryId,
-      state: "running",
-      startedAt,
-      lastResumedAt: startedAt,
-    })),
+    owners.map(
+      ({ userId, entryId, timerId }) =>
+        ({
+          id: timerId,
+          userId,
+          organizationId,
+          legacyTimeEntryId: entryId,
+          state: "running",
+          startedAt,
+          lastResumedAt: startedAt,
+        }) satisfies typeof timeTimers.$inferInsert,
+    ),
   );
   return {
     organizationId,
@@ -401,7 +407,7 @@ if (!databaseUrl || !runPostgresTests) {
           let secondChange: Promise<Response> | undefined;
           try {
             const secondBrowser = await signInHuman(
-              `${secondTarget.userId}@membership.test`,
+              `${secondTarget.userId.toLowerCase()}@membership.test`,
             );
             await secondBrowser.setActiveOrganization(data.organizationId);
             expect(secondBrowser.userId).toBe(secondTarget.userId);
@@ -506,7 +512,7 @@ if (!databaseUrl || !runPostgresTests) {
           if (!owner) {
             throw new Error("Membership fixture requires an owner");
           }
-          const email = `${owner.userId}@membership.test`;
+          const email = `${owner.userId.toLowerCase()}@membership.test`;
           const otp = await createConfirmationOtp({
             purpose: "delete-account",
             email,

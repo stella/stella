@@ -125,7 +125,9 @@ import {
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
+import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 import {
   enrichRequestContext,
   getRequestContext,
@@ -550,6 +552,14 @@ const requireTwoFactorManageOtp = async ({
 
 /** TOTP issuer label shown in authenticator apps (e.g. "Stella (user@example.com)"). */
 const TWO_FACTOR_ISSUER = "Stella";
+const MEMBERSHIP_UPDATE_FAILED = failureSink({
+  event: "auth.membership_update_failed",
+  expected: [],
+});
+const MEMBERSHIP_REMOVAL_FAILED = failureSink({
+  event: "auth.membership_removal_failed",
+  expected: [],
+});
 
 /** Session lifetime in seconds (7 days). */
 const SESSION_LIFETIME_SECONDS = 60 * 60 * 24 * 7;
@@ -943,10 +953,14 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
         message: "Select one product membership role.",
       });
     }
-    if (!endpoint) {
+    const headers = endpoint?.headers ?? endpoint?.request?.headers;
+    if (!headers) {
       throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
     }
-    const session = await getAuthoritativeSessionFromCtx(endpoint);
+    const session = await getAuth().api.getSession({
+      headers,
+      query: { disableCookieCache: true, disableRefresh: true },
+    });
     if (!session) {
       throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
     }
@@ -1007,7 +1021,10 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
             !(update.error instanceof APIError) ||
             update.error.statusCode >= 500
           ) {
-            captureError(update.error, { model: args.model });
+            observeFailure(update.error, {
+              sink: MEMBERSHIP_UPDATE_FAILED,
+              ctx: { operation: args.model },
+            });
           }
           throw update.error;
         }
@@ -1595,7 +1612,10 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
                 !(removal.error instanceof APIError) ||
                 removal.error.statusCode >= 500
               ) {
-                captureError(removal.error, { organizationId });
+                observeFailure(removal.error, {
+                  sink: MEMBERSHIP_REMOVAL_FAILED,
+                  ctx: { organizationId },
+                });
               }
               throw removal.error;
             }
