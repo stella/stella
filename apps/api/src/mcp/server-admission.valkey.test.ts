@@ -6,21 +6,141 @@ import { Temporal } from "@stll/time";
 
 import { env } from "@/api/env";
 import { toSafeId } from "@/api/lib/branded-types";
-import { closeActionAdmissionRedis } from "@/api/lib/rate-limit/action-admission";
+import {
+  closeActionAdmissionRedis,
+  withActionAdmission,
+} from "@/api/lib/rate-limit/action-admission";
 import { resolveActionPeriodBudget } from "@/api/lib/rate-limit/action-period-budget";
+import type { ActionSizePolicy } from "@/api/lib/rate-limit/action-size-limits";
 import { createRedisClient } from "@/api/lib/redis-client";
+import { coordinationKey } from "@/api/lib/redis-keys";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { createMcpHttpRequestHandler } from "@/api/mcp/server-core";
 import { listStaticMcpToolDefinitions } from "@/api/mcp/static-tool-definitions";
 import { asTestRaw, readTestJson } from "@/api/tests/helpers/test-tool-set";
 
 const runValkeyTests = process.env["STELLA_RUN_VALKEY_TESTS"] === "true";
+const actionSizePolicy = {
+  requestBytes: 2048,
+  responseBytes: 2048,
+  pageSize: 7,
+} as const satisfies ActionSizePolicy;
 if (!runValkeyTests || !process.env["REDIS_URL"]) {
   describe.skip("MCP action admission (valkey)", () => {
     test("requires Valkey", () => {});
   });
 } else {
   describe("MCP action admission (valkey)", () => {
+    test("returns a completed nested tool result after late admission loss", async () => {
+      const previous = {
+        FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
+        ACTION_ADMISSION_ORG_CONCURRENCY: env.ACTION_ADMISSION_ORG_CONCURRENCY,
+        ACTION_ADMISSION_USER_CONCURRENCY:
+          env.ACTION_ADMISSION_USER_CONCURRENCY,
+        ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
+        ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
+        ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
+      };
+      const organizationId = toSafeId<"organization">(
+        `mcp_completed_${Bun.randomUUIDv7()}`,
+      );
+      const userId = toSafeId<"user">("mcp_completed_user");
+      const client = createRedisClient();
+      const errors: unknown[] = [];
+      const tool =
+        listStaticMcpToolDefinitions().find(
+          ({ name }) => name === "list_matters",
+        ) ?? panic("Missing list_matters tool definition");
+      const accepted = {
+        content: [{ type: "text", text: "accepted" }],
+      } as const satisfies CallToolResult;
+      const handleRequest = createMcpHttpRequestHandler({
+        actionSizePolicy: () => Result.ok(actionSizePolicy),
+        authenticateMcpRequest: async () =>
+          Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
+        captureError: (error) => {
+          errors.push(error);
+        },
+        getMcpToolDefinition: async () => tool,
+        getMcpToolRequiredScopesHint: () => ["stella:read"],
+        handleMcpToolCall: async () =>
+          (
+            await withActionAdmission({
+              enabled: true,
+              organizationId,
+              userId,
+              periodIdentity: {
+                actionKind: "mcp.data/call",
+                logicalPhaseId: "nested-completed",
+              },
+              run: async (signal) => {
+                const lost = new Promise<void>((resolve) => {
+                  signal.addEventListener("abort", () => resolve(), {
+                    once: true,
+                  });
+                });
+                await client.send("DEL", [
+                  coordinationKey({
+                    scope: "action-admission",
+                    slot: organizationId,
+                    suffix: "organization",
+                  }),
+                  coordinationKey({
+                    scope: "action-admission",
+                    slot: organizationId,
+                    suffix: `user:${userId}`,
+                  }),
+                ]);
+                await lost;
+                expect(signal.aborted).toBe(true);
+                return accepted;
+              },
+            })
+          ).unwrap(),
+        listMcpTools: async () => [],
+        listMcpResources: () => [],
+        readMcpResource: () => ({ contents: [] }),
+        recordMcpSessionInitialized: () => undefined,
+        resolveMcpSessionContext: async () =>
+          asTestRaw<McpRequestContext>({ organizationId, userId }),
+      });
+      closeActionAdmissionRedis();
+      Object.assign(env, {
+        FEATURE_ACTION_ADMISSION: true,
+        ACTION_ADMISSION_ORG_CONCURRENCY: 1,
+        ACTION_ADMISSION_USER_CONCURRENCY: 1,
+        ACTION_ADMISSION_LEASE_MS: 1000,
+        ACTION_ADMISSION_PERIOD_MS: 86_400_000,
+        ACTION_ADMISSION_PERIOD_ACTIONS: 10,
+      });
+      try {
+        await client.connect();
+        const response = await handleRequest(
+          new Request("http://localhost/mcp", {
+            method: "POST",
+            headers: {
+              accept: "application/json, text/event-stream",
+              authorization: "Bearer token",
+              "content-type": "application/json",
+            },
+            body: JSON.stringify({
+              id: 8,
+              jsonrpc: "2.0",
+              method: "tools/call",
+              params: { name: "list_matters", arguments: {} },
+            }),
+          }),
+        );
+        expect(response.status).toBe(200);
+        const body = await readTestJson<{ result: CallToolResult }>(response);
+        expect(body.result).toEqual(accepted);
+        expect(errors).toHaveLength(0);
+      } finally {
+        client.close();
+        closeActionAdmissionRedis();
+        Object.assign(env, previous);
+      }
+    });
     test("tools/call dispatches sharing a client RPC id consume distinct actions", async () => {
       const previous = {
         FEATURE_ACTION_ADMISSION: env.FEATURE_ACTION_ADMISSION,
@@ -30,9 +150,6 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         ACTION_ADMISSION_LEASE_MS: env.ACTION_ADMISSION_LEASE_MS,
         ACTION_ADMISSION_PERIOD_MS: env.ACTION_ADMISSION_PERIOD_MS,
         ACTION_ADMISSION_PERIOD_ACTIONS: env.ACTION_ADMISSION_PERIOD_ACTIONS,
-        ACTION_REQUEST_MAX_BYTES: env.ACTION_REQUEST_MAX_BYTES,
-        ACTION_RESPONSE_MAX_BYTES: env.ACTION_RESPONSE_MAX_BYTES,
-        ACTION_PAGE_SIZE_MAX: env.ACTION_PAGE_SIZE_MAX,
       };
       const organizationId = toSafeId<"organization">(
         `mcp_period_${Bun.randomUUIDv7()}`,
@@ -48,6 +165,7 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         panic("Missing list_matters tool definition");
       }
       const handleRequest = createMcpHttpRequestHandler({
+        actionSizePolicy: () => Result.ok(actionSizePolicy),
         authenticateMcpRequest: async () =>
           Result.ok({ organizationId, userId, scopes: ["stella:read"] }),
         captureError: (error) => {
@@ -74,9 +192,6 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
         ACTION_ADMISSION_LEASE_MS: 120_000,
         ACTION_ADMISSION_PERIOD_MS: 86_400_000,
         ACTION_ADMISSION_PERIOD_ACTIONS: 2,
-        ACTION_REQUEST_MAX_BYTES: 2048,
-        ACTION_RESPONSE_MAX_BYTES: 2048,
-        ACTION_PAGE_SIZE_MAX: 7,
       });
       try {
         await client.connect();

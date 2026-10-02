@@ -60,6 +60,7 @@ import type {
   BusinessRegistrySlug,
   executeRegistryLookup,
 } from "@/api/lib/business-registries/dispatch";
+import type { runSanctionsCheck } from "@/api/lib/business-registries/sanctions-check";
 import type { loadLatestApprovedVersion } from "@/api/lib/document-review/approved-playbook-versions";
 import type { createPlaybookTableRuns } from "@/api/lib/document-review/table-run-create";
 import type { readVersionBlocks } from "@/api/lib/legal-search/legislation-version-blocks";
@@ -163,6 +164,7 @@ export type McpRequestContext = {
     describeStoredTemplate?: typeof describeStoredTemplate;
     executeRegistryLookup?: typeof executeRegistryLookup;
     runEntityCheck?: typeof runEntityCheck;
+    runSanctionsCheck?: typeof runSanctionsCheck;
     searchConsolidatedLegislation?: typeof searchConsolidatedLegislation;
     getLawTextBlock?: typeof getLawTextBlock;
     withTimeout?: typeof withTimeout;
