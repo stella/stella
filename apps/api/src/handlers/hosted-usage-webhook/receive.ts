@@ -376,11 +376,16 @@ const dispatchEvent = async (
         reason: "provider_migration",
       });
     case "entitlement.paused":
-      return await handleUsageEntitlementStatusChange({
+      // A pause can introduce a replacement generation before its creation
+      // arrives; the upsert's generation clock must retain that denial.
+      return await handleHostedEntitlementUpsert({
         tx,
-        payload: event.data,
+        payload: {
+          ...event.data,
+          status: "paused",
+          cancel_at_period_end: false,
+        },
         eventId,
-        eventKind: "paused",
       });
     case "entitlement.canceled":
       return await handleUsageEntitlementStatusChange({

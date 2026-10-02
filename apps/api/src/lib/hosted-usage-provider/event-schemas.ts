@@ -67,7 +67,7 @@ const providerEntitlementSchema = v.object({
   account_ref: v.string(),
   policy_ref: v.string(),
   current_period_start: v.string(),
-  current_period_end: v.nullable(v.string()),
+  current_period_end: v.string(),
   /**
    * True when the provider entitlement has been cancelled but is
    * still active until the end of the current entitlement period. Provider
@@ -88,6 +88,23 @@ const providerEntitlementSchema = v.object({
   created_at: v.optional(v.pipe(v.string(), v.isoTimestamp())),
 });
 
+// Suspension and closure snapshots can have a null end bound; dispatch uses
+// the start as an equal bound without opening access or allocating capacity.
+const providerClosedEntitlementSchema = v.object({
+  ...providerEntitlementSchema.entries,
+  current_period_end: v.nullable(v.string()),
+});
+
+// Updated events also carry closed snapshots. Keep their nullable period
+// exclusive to closed statuses so live updates fail at the ingest boundary.
+const providerUpdatedEntitlementSchema = v.union([
+  providerEntitlementSchema,
+  v.object({
+    ...providerClosedEntitlementSchema.entries,
+    status: v.picklist(["paused", "canceled", "incomplete_expired"]),
+  }),
+]);
+
 const providerAllocationSchema = v.object({
   id: v.string(),
   account_ref: v.string(),
@@ -105,7 +122,7 @@ export const entitlementCreatedEventSchema = v.looseObject({
 
 export const entitlementUpdatedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_UPDATED_EVENT_TYPE),
-  data: providerEntitlementSchema,
+  data: providerUpdatedEntitlementSchema,
 });
 
 export const entitlementActiveEventSchema = v.looseObject({
@@ -115,22 +132,24 @@ export const entitlementActiveEventSchema = v.looseObject({
 
 export const entitlementCanceledEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_CANCELED_EVENT_TYPE),
-  data: providerEntitlementSchema,
+  data: providerClosedEntitlementSchema,
 });
 
 export const entitlementRevokedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_REVOKED_EVENT_TYPE),
-  data: providerEntitlementSchema,
+  data: providerClosedEntitlementSchema,
 });
 
 const entitlementReconciliationEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_RECONCILIATION_EVENT_TYPE),
-  data: providerEntitlementSchema,
+  // Imported snapshots, including unknown statuses, must reach the explicit
+  // reconciliation decision without opening access or mutating entitlements.
+  data: providerClosedEntitlementSchema,
 });
 
 const entitlementPausedEventSchema = v.looseObject({
   type: v.literal(ENTITLEMENT_PAUSED_EVENT_TYPE),
-  data: providerEntitlementSchema,
+  data: providerClosedEntitlementSchema,
 });
 
 export const allocationCreatedEventSchema = v.looseObject({
@@ -152,9 +171,10 @@ export const hostedUsageWebhookEventSchema = v.variant("type", [
 export type HostedUsageWebhookEvent = v.InferOutput<
   typeof hostedUsageWebhookEventSchema
 >;
-export type HostedUsageEntitlementPayload = v.InferOutput<
-  typeof providerEntitlementSchema
->;
+export type HostedUsageEntitlementPayload = Exclude<
+  HostedUsageWebhookEvent,
+  { type: typeof ALLOCATION_CREATED_EVENT_TYPE }
+>["data"];
 export type HostedUsageAllocationPayload = v.InferOutput<
   typeof providerAllocationSchema
 >;

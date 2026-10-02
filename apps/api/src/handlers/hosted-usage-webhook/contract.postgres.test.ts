@@ -126,7 +126,7 @@ type DeliveryOptions = {
   version?: string | null;
   headerVersion?: string;
   runTransaction?: WebhookTransactionRunner;
-  expectedStatus?: 200 | 500;
+  expectedStatus?: 200 | 400 | 500;
 };
 const deliver = async ({
   tx,
@@ -200,6 +200,95 @@ const statusExpectations = {
 
 // CI runs this through test:postgres against committed migrations.
 describe.skipIf(!runPostgresTests)("provider contract on Postgres", () => {
+  for (const type of [
+    "subscription.created",
+    "subscription.active",
+    "subscription.updated",
+    "subscription.past_due",
+    "subscription.uncanceled",
+    "subscription.cycled",
+    "subscription.resumed",
+  ]) {
+    test(`null end rejects non-closed ${type} before recording a receipt`, async () => {
+      await withFixture(async (tx, fixture) => {
+        const eventId = await deliver({
+          tx,
+          type,
+          data: { ...fixture.data, current_period_end: null },
+          expectedStatus: 400,
+        });
+        expect(
+          await tx
+            .select()
+            .from(hostedUsageWebhookEvents)
+            .where(eq(hostedUsageWebhookEvents.eventId, eventId)),
+        ).toHaveLength(0);
+        expect(
+          (await readState(tx, fixture.organizationId)).entitlements,
+        ).toHaveLength(0);
+        await deliver({ tx, type, data: fixture.data, eventId });
+        expect(
+          (await readState(tx, fixture.organizationId)).entitlements.at(0)
+            ?.status,
+        ).toBe("active");
+      });
+    });
+  }
+
+  for (const order of [
+    ["subscription.paused", "subscription.created"],
+    ["subscription.created", "subscription.paused"],
+  ]) {
+    test(`replacement pause respects generation in order ${order.join(", ")}`, async () => {
+      await withFixture(async (tx, fixture) => {
+        await deliver({
+          tx,
+          type: "subscription.created",
+          data: { ...fixture.data, modified_at: "2026-06-03T00:00:00Z" },
+        });
+        const replacement = {
+          ...fixture.data,
+          id: `entitlement_${Bun.randomUUIDv7()}`,
+          created_at: "2026-06-02T00:00:00Z",
+          modified_at: "2026-06-02T00:00:00Z",
+        };
+        let pauseId = "";
+        for (const type of order) {
+          const eventId = await deliver({
+            tx,
+            type,
+            data:
+              type === "subscription.paused"
+                ? { ...replacement, status: "paused", current_period_end: null }
+                : replacement,
+          });
+          if (type === "subscription.paused") {pauseId = eventId;}
+        }
+        const paused = await readState(tx, fixture.organizationId);
+        expect(paused.entitlements).toHaveLength(1);
+        expect(paused.entitlements.at(0)).toMatchObject({
+          hostedEntitlementExternalId: replacement.id,
+          hostedEntitlementCreatedAt: new Date(replacement.created_at),
+          status: "paused",
+        });
+        expect(
+          await tx
+            .select()
+            .from(hostedUsageWebhookEvents)
+            .where(eq(hostedUsageWebhookEvents.eventId, pauseId)),
+        ).toMatchObject([{ result: "ok" }]);
+        await deliver({ tx, type: "subscription.active", data: replacement });
+        await deliver({
+          tx,
+          type: "subscription.paused",
+          eventId: pauseId,
+          data: { ...replacement, status: "paused", current_period_end: null },
+        });
+        expect(await readState(tx, fixture.organizationId)).toEqual(paused);
+      });
+    });
+  }
+
   for (const status of POLAR_ENTITLEMENT_STATUSES) {
     test(`native status ${status} has an explicit state and replay is a fixed point`, async () => {
       await withFixture(async (tx, fixture) => {

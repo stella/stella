@@ -887,7 +887,7 @@ type UsageEntitlementStatusUpdateParams = {
    *  - revoked: set `status = "cancelled"` and
    *    `cancel_at_period_end = false`. Access is gone immediately.
    */
-  eventKind: "canceled" | "revoked" | "paused";
+  eventKind: "canceled" | "revoked";
 };
 
 export const handleUsageEntitlementStatusChange = async ({
@@ -914,11 +914,6 @@ export const handleUsageEntitlementStatusChange = async ({
     revoked: {
       status: "cancelled",
       providerStatus: "canceled",
-      cancelAtPeriodEnd: false,
-    },
-    paused: {
-      status: "paused",
-      providerStatus: "paused",
       cancelAtPeriodEnd: false,
     },
   } as const satisfies Record<
