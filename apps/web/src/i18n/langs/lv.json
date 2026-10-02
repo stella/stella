@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Nav pieejamas citas lietas",
       "operation": "Darbība",
       "rootFolder": "(Saknes mape)",
+      "sourceChanged": "Vienums pārvietošanas laikā tika mainīts. Mēģiniet vēlreiz.",
+      "sourceInUse": "Vienums pašlaik tiek izmantots. Pabeidziet apstrādi, rediģēšanu, sadarbību vai parakstīšanu un mēģiniet vēlreiz.",
+      "sourceReferenced": "Šis vienums ir saistīts ar laika ierakstiem vai izdevumiem, un to nevar pārvietot.",
+      "sourceVersionLimit": "Šim vienumam ir pārāk daudz versiju vai lauku vērtību, un to nevar pārvietot.",
       "targetFolder": "Mērķa mape (neobligāti)",
       "targetMatter": "Mērķa lieta",
       "title": "Kopēt uz lietu"

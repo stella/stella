@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Nenhum outro caso disponível",
       "operation": "Operação",
       "rootFolder": "(Pasta raiz)",
+      "sourceChanged": "O item foi alterado durante a movimentação. Tente novamente.",
+      "sourceInUse": "O item está em uso. Conclua o processamento, a edição, a colaboração ou a assinatura e tente novamente.",
+      "sourceReferenced": "Este item está vinculado a registros de tempo ou despesas e não pode ser movido.",
+      "sourceVersionLimit": "Este item tem versões ou valores de campos demais e não pode ser movido.",
       "targetFolder": "Pasta de destino (opcional)",
       "targetMatter": "Caso de destino",
       "title": "Copiar para caso"

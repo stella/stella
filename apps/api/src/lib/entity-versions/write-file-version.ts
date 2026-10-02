@@ -17,7 +17,6 @@ import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { liveDesktopEditSessionPredicates } from "@/api/lib/desktop-edit-session-predicates";
 import type { DocumentSource } from "@/api/lib/document-source";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import {
   lockDesktopEditTarget,
   lockDocxEditTarget,
@@ -274,9 +273,6 @@ export const writeFileVersion = async ({
   writePolicy,
   afterWrite,
 }: WriteFileVersionInput): Promise<WriteFileVersionResult> => {
-  // Transfers and version writes share workspace -> edit-state -> entity order.
-  // The workspace activity update below must never acquire it after the entity.
-  await lockWorkspacesForEntityCap(tx, [workspaceId]);
   switch (writePolicy.type) {
     case "replace-current-file": {
       break;

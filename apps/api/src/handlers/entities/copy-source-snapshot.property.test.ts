@@ -6,7 +6,7 @@ import { assertProperty } from "@stll/property-testing";
 import { toSafeId } from "@/api/lib/branded-types";
 
 import { sourceSnapshotsMatch } from "./copy-utils";
-import type { EntitySnapshot } from "./copy-utils";
+import type { EntitySnapshot, EntityVersionSnapshot } from "./copy-utils";
 
 const snapshots = fc
   .array(
@@ -80,17 +80,51 @@ test("entity-transfer.carried-state-invariance", () => {
     "entity-transfer.carried-state-invariance",
     fc.property(snapshots, (source) => {
       for (const entity of source) {
-        const renamed = source.map((row) =>
-          row.id === entity.id ? { ...row, name: `${row.name} changed` } : row,
-        );
-        expect(sourceSnapshotsMatch(source, renamed)).toBe(false);
+        const entityEdits = {
+          id: { id: toSafeId<"entity">(`${entity.id}_changed`) },
+          kind: { kind: "folder" },
+          name: { name: `${entity.name} changed` },
+          parentId: { parentId: toSafeId<"entity">("another_parent") },
+          readOnly: { readOnly: !entity.readOnly },
+          currentVersionId: { currentVersionId: null },
+          versions: { versions: [] },
+        } satisfies {
+          [Key in keyof EntitySnapshot]-?: Pick<EntitySnapshot, Key>;
+        };
+        for (const edit of Object.values(entityEdits)) {
+          const changed = source.map((row) =>
+            row.id === entity.id ? { ...row, ...edit } : row,
+          );
+          expect(sourceSnapshotsMatch(source, changed)).toBe(false);
+        }
         for (const version of entity.versions) {
-          for (const edit of [
-            { label: `${version.label ?? ""} changed` },
-            { description: `${version.description ?? ""} changed` },
-            { createdAt: new Date(version.createdAt.getTime() + 1) },
-            { versionNumber: version.versionNumber + 1 },
-          ]) {
+          const versionEdits = {
+            id: { id: toSafeId<"entityVersion">(`${version.id}_changed`) },
+            label: { label: `${version.label ?? ""} changed` },
+            description: {
+              description: `${version.description ?? ""} changed`,
+            },
+            createdAt: { createdAt: new Date(version.createdAt.getTime() + 1) },
+            versionNumber: { versionNumber: version.versionNumber + 1 },
+            stamp: { stamp: "2026/001/001.v1" },
+            diffWordsAdded: { diffWordsAdded: 1 },
+            diffWordsRemoved: { diffWordsRemoved: 1 },
+            createdBy: { createdBy: toSafeId<"user">("changed_author") },
+            source: { source: { kind: "upload" } },
+            collaborationContributorUserIds: {
+              collaborationContributorUserIds: [
+                toSafeId<"user">("contributor"),
+              ],
+            },
+            detectedLanguage: { detectedLanguage: "cs" },
+            fields: { fields: [] },
+          } satisfies {
+            [Key in keyof EntityVersionSnapshot]: Pick<
+              EntityVersionSnapshot,
+              Key
+            >;
+          };
+          for (const edit of Object.values(versionEdits)) {
             const changedVersions = source.map((row) => ({
               ...row,
               versions: row.versions.map((carried) =>

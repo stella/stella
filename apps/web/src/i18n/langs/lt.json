@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Nėra kitų bylų",
       "operation": "Veiksmas",
       "rootFolder": "(Šakninis aplankas)",
+      "sourceChanged": "Perkeliant elementas buvo pakeistas. Bandykite dar kartą.",
+      "sourceInUse": "Elementas šiuo metu naudojamas. Užbaikite apdorojimą, redagavimą, bendradarbiavimą ar pasirašymą ir bandykite dar kartą.",
+      "sourceReferenced": "Šis elementas susietas su laiko įrašais arba išlaidomis, todėl jo negalima perkelti.",
+      "sourceVersionLimit": "Šis elementas turi per daug versijų arba laukų reikšmių, todėl jo negalima perkelti.",
       "targetFolder": "Paskirties aplankas (neprivaloma)",
       "targetMatter": "Paskirties byla",
       "title": "Kopijuoti į bylą"

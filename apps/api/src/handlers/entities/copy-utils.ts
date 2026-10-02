@@ -1,6 +1,6 @@
 import { panic, Result, TaggedError } from "better-result";
 import { deepEquals } from "bun";
-import { and, asc, eq, inArray, isNull, like } from "drizzle-orm";
+import { and, asc, count, eq, inArray, isNull, like, sql } from "drizzle-orm";
 
 import { ENTITY_NAME_MAX_LENGTH, truncateEntityName } from "@stll/api-contract";
 
@@ -15,6 +15,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import type { EntityStamp } from "@/api/lib/document-counter";
+import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import {
   lockWorkspacesForEntityCap,
   lockWorkspacesForEntityTransfer,
@@ -39,6 +40,7 @@ import { thumbnailDerivativeStateForFile } from "@/api/lib/files/image-derivativ
 import type { OrganizationFileUsageError } from "@/api/lib/files/organization-file-usage";
 import { createFileKey } from "@/api/lib/files/utils";
 import { LIMITS } from "@/api/lib/limits";
+import { getPgErrorCode, PG_ERROR } from "@/api/lib/pg-error";
 import { copyObject, headObject } from "@/api/lib/s3-presign";
 import type { S3PresignError } from "@/api/lib/s3-presign";
 import { sanitizeFilename } from "@/api/lib/sanitize-filename";
@@ -958,8 +960,92 @@ type ValidateMoveSourceOptions = {
   sourceSnapshot: EntitySnapshot[];
 };
 
+export const validateMoveSourceReadLimits = async ({
+  tx,
+  sourceWorkspaceId,
+  sourceSnapshot,
+}: Omit<ValidateMoveSourceOptions, "sourceEntityId">): Promise<
+  Result<void, HandlerError>
+> => {
+  const sourceIds = sourceSnapshot.map(({ id }) => id);
+  const overVersionLimit = await tx
+    .select({ entityId: entityVersions.entityId })
+    .from(entityVersions)
+    .where(
+      and(
+        eq(entityVersions.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .groupBy(entityVersions.entityId)
+    .having(sql`${count()} > ${LIMITS.versionsPerEntity}`)
+    .limit(1);
+  const overFieldLimit = await tx
+    .select({ entityVersionId: fields.entityVersionId })
+    .from(fields)
+    .innerJoin(entityVersions, eq(fields.entityVersionId, entityVersions.id))
+    .where(
+      and(
+        eq(fields.workspaceId, sourceWorkspaceId),
+        inArray(entityVersions.entityId, sourceIds),
+        isNull(entityVersions.deletedAt),
+      ),
+    )
+    .groupBy(fields.entityVersionId)
+    .having(sql`${count()} > ${LIMITS.propertiesCount}`)
+    .limit(1);
+  if (overVersionLimit.length === 0 && overFieldLimit.length === 0) {
+    return Result.ok();
+  }
+  return Result.err(
+    new HandlerError({
+      status: 409,
+      code: "entity_transfer_source_limit",
+      retryable: false,
+      message: "The source has too many versions or fields to move.",
+    }),
+  );
+};
+
+/** A failed NOWAIT must roll back its savepoint before returning a refusal. */
+const validateMoveSource = async (
+  options: ValidateMoveSourceOptions,
+): Promise<Result<void, HandlerError>> => {
+  const checked = await Result.tryPromise(
+    async () =>
+      await options.tx.transaction(
+        async (tx) => await validateMoveSourceRows({ ...options, tx }),
+      ),
+  );
+  if (Result.isOk(checked)) {
+    return checked.value;
+  }
+  if (getPgErrorCode(checked.error) !== PG_ERROR.LOCK_NOT_AVAILABLE) {
+    captureError(checked.error, {
+      source: "entity-transfer-source-validation",
+    });
+    return Result.err(
+      new HandlerError({
+        cause: checked.error,
+        status: 500,
+        message: "Failed to validate the entity transfer source",
+      }),
+    );
+  }
+  return Result.err(
+    new HandlerError({
+      cause: checked.error,
+      status: 409,
+      code: "entity_transfer_source_changed",
+      retryable: true,
+      message: "The source changed or is busy. Try moving it again.",
+    }),
+  );
+};
+
 /** The unremapped snapshot is the exact state a move is allowed to remove. */
-const validateMoveSource = async ({
+const validateMoveSourceRows = async ({
   tx,
   sourceEntityId,
   sourceWorkspaceId,
@@ -987,7 +1073,7 @@ const validateMoveSource = async ({
     )
     .orderBy(asc(entities.id))
     .limit(sourceIds.length)
-    .for("update");
+    .for("update", { noWait: true });
   // Annotations and derived field content can change without an entity write.
   // Lock those owners as well before reading the full carried state.
   const liveVersions = await tx
@@ -1002,7 +1088,7 @@ const validateMoveSource = async ({
     )
     .orderBy(asc(entityVersions.id))
     .limit(expectedVersionIds.size + 1)
-    .for("update");
+    .for("update", { noWait: true });
   const liveFields = await tx
     .select({ id: fields.id })
     .from(fields)
@@ -1016,7 +1102,27 @@ const validateMoveSource = async ({
     )
     .orderBy(asc(fields.id))
     .limit(expectedFieldIds.size + 1)
-    .for("update", { of: fields });
+    .for("update", { of: fields, noWait: true });
+
+  // Activity may have started during the object copy. Source locks keep new
+  // dependent inserts from passing their foreign-key checks before deletion.
+  const removal = await validateEntityRemovalState({
+    tx,
+    workspaceId: sourceWorkspaceId,
+    entityIds: sourceIds,
+    operation: "move",
+  });
+  if (Result.isError(removal)) {
+    return removal;
+  }
+  const limits = await validateMoveSourceReadLimits({
+    tx,
+    sourceWorkspaceId,
+    sourceSnapshot,
+  });
+  if (Result.isError(limits)) {
+    return limits;
+  }
 
   // Read full history only for the source set, never for the entire matter.
   const currentEntities = await tx.query.entities.findMany({
@@ -1058,6 +1164,7 @@ const validateMoveSource = async ({
       new HandlerError({
         status: 409,
         code: "entity_transfer_source_changed",
+        retryable: true,
         message: "The source changed. Try moving it again.",
       }),
     );

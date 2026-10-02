@@ -1284,6 +1284,14 @@ describe("copy-to-workspace", () => {
       select: (selection: unknown) => {
         if (
           isRecord(selection) &&
+          ("entityId" in selection || "entityVersionId" in selection)
+        ) {
+          const grouped = { having: () => ({ limit: async () => [] }) };
+          const where = () => ({ groupBy: () => grouped });
+          return { from: () => ({ where, innerJoin: () => ({ where }) }) };
+        }
+        if (
+          isRecord(selection) &&
           Object.keys(selection).length === 1 &&
           "id" in selection
         ) {
@@ -1291,13 +1299,22 @@ describe("copy-to-workspace", () => {
             from: (table: unknown) => {
               const versionOrEntityId =
                 table === entityVersions ? sourceVersionId : documentId;
-              const lockedRows = [
-                {
-                  id: table === fields ? moveSourceFieldId : versionOrEntityId,
-                },
-              ];
+              const lockedRows =
+                table === entities ||
+                table === entityVersions ||
+                table === fields
+                  ? [
+                      {
+                        id:
+                          table === fields
+                            ? moveSourceFieldId
+                            : versionOrEntityId,
+                      },
+                    ]
+                  : [];
               const lock = { for: async () => lockedRows };
               const where = () => ({
+                limit: async () => [],
                 orderBy: () => ({ ...lock, limit: () => lock }),
               });
               return { where, innerJoin: () => ({ where }) };
@@ -1381,7 +1398,12 @@ describe("copy-to-workspace", () => {
       }),
     };
 
-    const { safeDb } = createScopedDbMock(tx);
+    const transactionFixture = Object.assign(tx, {
+      transaction: async (
+        callback: (transaction: typeof tx) => Promise<unknown>,
+      ) => await callback(tx),
+    });
+    const { safeDb } = createScopedDbMock(transactionFixture);
     const result = await copyToWorkspace.handler(
       createContext({
         safeDb,

@@ -20,6 +20,7 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { createSafeId, type SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
+import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import { handoffCommittedEntityDeletionCleanupBatch } from "@/api/lib/entity-deletion-cleanup-handoff";
 import { enqueueEntityDeletionCleanup } from "@/api/lib/entity-deletion-cleanup-queue";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -144,24 +145,16 @@ export const deleteEntitiesHandler = async function* ({
         };
       }
 
-      const runningOcrRuns = await tx
-        .select({ id: documentProcessingRuns.id })
-        .from(documentProcessingRuns)
-        .where(
-          and(
-            eq(documentProcessingRuns.workspaceId, workspaceId),
-            inArray(documentProcessingRuns.entityId, body.entityIds),
-            eq(documentProcessingRuns.status, "running"),
-          ),
-        )
-        .limit(1);
-      if (runningOcrRuns.at(0)) {
+      const removalState = await validateEntityRemovalState({
+        tx,
+        workspaceId,
+        entityIds: body.entityIds,
+        operation: "delete",
+      });
+      if (removalState.isErr()) {
         return {
           status: "rejected" as const,
-          error: new HandlerError({
-            status: 409,
-            message: "Wait for document processing to finish before deleting",
-          }),
+          error: removalState.error,
         };
       }
 

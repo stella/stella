@@ -5266,6 +5266,10 @@ type Messages = {
       "noOtherMatters": "No other Matters available";
       "operation": "Operation";
       "rootFolder": "(Root folder)";
+      "sourceChanged": "The item changed while it was being moved. Try again.";
+      "sourceInUse": "The item is currently in use. Finish processing, editing, collaboration, or signing, then try again.";
+      "sourceReferenced": "This item is linked to time entries or expenses and cannot be moved.";
+      "sourceVersionLimit": "This item has too many versions or field values to move.";
       "targetFolder": "Target folder (optional)";
       "targetMatter": "Target Matter";
       "title": "Copy to Matter";

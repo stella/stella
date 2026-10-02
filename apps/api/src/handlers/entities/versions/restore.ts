@@ -10,7 +10,6 @@ import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { tSafeId, workspaceParams } from "@/api/lib/custom-schema";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { insertEntityVersion } from "@/api/lib/entity-versions/insert-entity-version";
 import {
   buildVersionStamp,
@@ -103,7 +102,6 @@ export default createSafeHandler(
     // Create a new version (copy-to-top) with all fields from the source version
     const restoreOutcome = yield* Result.await(
       safeDb(async (tx) => {
-        await lockWorkspacesForEntityCap(tx, [workspaceId]);
         // Serialize with delete-version (which tombstones under the same entity
         // FOR UPDATE) and re-verify the source version is still live before
         // cloning its content into a new version. The pre-read liveness check

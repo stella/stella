@@ -23,6 +23,7 @@ import {
   remapFileIds,
   rollbackS3Copies,
   snapshotOfCurrentVersion,
+  validateMoveSourceReadLimits,
 } from "@/api/handlers/entities/copy-utils";
 import { captureError } from "@/api/lib/analytics/capture";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -33,6 +34,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
+import { validateEntityRemovalState } from "@/api/lib/entities/entity-removal-state";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import {
   enqueueImageThumbnailOrMarkFailed,
@@ -428,6 +430,30 @@ const copyToWorkspaceHandler = async function* ({
     }
 
     sourceEntities = subtree;
+  }
+
+  if (transfer.type === "move") {
+    const preflight = yield* Result.await(
+      safeDb(async (tx) => {
+        const removal = await validateEntityRemovalState({
+          tx,
+          workspaceId: sourceWorkspaceId,
+          entityIds: sourceEntities.map(({ id }) => id),
+          operation: "move",
+        });
+        if (Result.isError(removal)) {
+          return removal;
+        }
+        return await validateMoveSourceReadLimits({
+          tx,
+          sourceWorkspaceId,
+          sourceSnapshot: sourceEntities,
+        });
+      }),
+    );
+    if (Result.isError(preflight)) {
+      return preflight;
+    }
   }
 
   // Build property map before copying S3 objects. Fields whose

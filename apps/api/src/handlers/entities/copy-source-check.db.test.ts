@@ -5,10 +5,16 @@ import { eq, inArray } from "drizzle-orm";
 import { organization, user } from "@/api/db/auth-schema";
 import type { SafeDb } from "@/api/db/safe-db";
 import {
+  desktopEditSessions,
+  documentProcessingRuns,
   entities,
   entityVersions,
+  expenses,
   fields,
+  folioCollabRooms,
+  pdfSigningSessions,
   properties,
+  timeEntries,
   workspaces,
 } from "@/api/db/schema";
 import { createSafeDb } from "@/api/db/scoped";
@@ -18,6 +24,7 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { writeFileVersion } from "@/api/lib/entity-versions/write-file-version";
 import { createFileKey } from "@/api/lib/file-key";
 import { allocateFileObject } from "@/api/lib/files/file-object-ids";
+import { LIMITS } from "@/api/lib/limits";
 import { mintAuthProviderId } from "@/api/tests/helpers/auth-provider-id";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -241,6 +248,199 @@ const seed = async (folder: boolean) => {
   };
 };
 type Fixture = Awaited<ReturnType<typeof seed>>;
+
+const removalBlockers = {
+  processing: async (f: Fixture) => {
+    const id = createSafeId<"documentProcessingRun">();
+    await db.insert(documentProcessingRuns).values({
+      id,
+      organizationId: f.organizationId,
+      workspaceId: f.sourceWorkspaceId,
+      entityId: f.documentId,
+      entityVersionId: f.currentVersionId,
+      fieldId: f.fieldId,
+      sourceFileId: f.fileId,
+      sourceSha256Hex: f.content.sha256Hex,
+      kind: "ocr",
+      requestSource: "manual",
+      status: "running",
+    });
+    return async () => {
+      await db
+        .delete(documentProcessingRuns)
+        .where(eq(documentProcessingRuns.id, id));
+    };
+  },
+  desktop: async (f: Fixture) => {
+    const id = createSafeId<"desktopEditSession">();
+    await db.insert(desktopEditSessions).values({
+      id,
+      workspaceId: f.sourceWorkspaceId,
+      entityId: f.documentId,
+      propertyId: f.propertyId,
+      baseVersionId: f.currentVersionId,
+      createdBy: f.userId,
+      fileType: "docx",
+      fileName: "Source.docx",
+      checkpointFileId: createSafeId<"userFile">(),
+      sessionTokenHash: "b".repeat(64),
+      tokenExpiresAt: new Date(Date.now() + 60_000),
+      status: "open",
+    });
+    return async () => {
+      await db
+        .delete(desktopEditSessions)
+        .where(eq(desktopEditSessions.id, id));
+    };
+  },
+  collaboration: async (f: Fixture) => {
+    const id = createSafeId<"folioCollabRoom">();
+    await db.insert(folioCollabRooms).values({
+      id,
+      workspaceId: f.sourceWorkspaceId,
+      entityId: f.documentId,
+      propertyId: f.propertyId,
+      baseVersionId: f.currentVersionId,
+      sourceVersionId: f.currentVersionId,
+      fileName: "Source.docx",
+      yjsSnapshotFileId: createSafeId<"userFile">(),
+      docxCheckpointFileId: createSafeId<"userFile">(),
+      lastActivityAt: new Date(),
+    });
+    return async () => {
+      await db.delete(folioCollabRooms).where(eq(folioCollabRooms.id, id));
+    };
+  },
+  signing: async (f: Fixture) => {
+    const id = createSafeId<"pdfSigningSession">();
+    await db.insert(pdfSigningSessions).values({
+      id,
+      workspaceId: f.sourceWorkspaceId,
+      entityId: f.documentId,
+      propertyId: f.propertyId,
+      baseVersionId: f.currentVersionId,
+      createdBy: f.userId,
+      handoffTokenHash: "c".repeat(64),
+      handoffExpiresAt: new Date(Date.now() + 60_000),
+      tokenExpiresAt: new Date(Date.now() + 60_000),
+      status: "open",
+    });
+    return async () => {
+      await db.delete(pdfSigningSessions).where(eq(pdfSigningSessions.id, id));
+    };
+  },
+  time: async (f: Fixture) => {
+    const id = createSafeId<"timeEntry">();
+    await db.insert(timeEntries).values({
+      id,
+      organizationId: f.organizationId,
+      workspaceId: f.sourceWorkspaceId,
+      workItemId: f.documentId,
+      dateWorked: "2026-10-02",
+      timezoneId: "UTC",
+      durationMinutes: 1,
+      billedMinutes: 1,
+      rateAtEntry: 0,
+      currency: "EUR",
+      narrative: "Source",
+      source: "manual",
+    });
+    return async () => {
+      await db.delete(timeEntries).where(eq(timeEntries.id, id));
+    };
+  },
+  expense: async (f: Fixture) => {
+    const id = createSafeId<"expense">();
+    await db.insert(expenses).values({
+      id,
+      organizationId: f.organizationId,
+      workspaceId: f.sourceWorkspaceId,
+      matterId: f.documentId,
+      dateIncurred: "2026-10-02",
+      amount: 1,
+      currency: "EUR",
+      category: "other",
+      description: "Source",
+    });
+    return async () => {
+      await db.delete(expenses).where(eq(expenses.id, id));
+    };
+  },
+};
+
+test.each(Object.entries(removalBlockers))(
+  "folder move refuses %s state on a child before copying any object",
+  async (kind, addBlocker) => {
+    const f = await seed(true);
+    const clearBlocker = await addBlocker(f);
+    try {
+      const before = await sourceState(f);
+      const beforeObjects = [...f.fake.objects.entries()];
+      const referenced = kind === "time" || kind === "expense";
+      expect(await f.run(true)).toMatchObject({
+        code: 409,
+        value: {
+          code: referenced
+            ? "entity_transfer_source_referenced"
+            : "entity_transfer_source_in_use",
+          retryable: !referenced,
+        },
+      });
+      expect(f.fake.requests.filter(({ method }) => method === "COPY")).toEqual(
+        [],
+      );
+      expect([...f.fake.objects.entries()]).toEqual(beforeObjects);
+      expect(await sourceState(f)).toEqual(before);
+      expect(
+        await db.$count(
+          entities,
+          eq(entities.workspaceId, f.targetWorkspaceId),
+        ),
+      ).toBe(0);
+      // The removal gate applies only to moving; copying carries its ordinary snapshot.
+      expect(await f.run(false)).toHaveProperty("entityId");
+    } finally {
+      await clearBlocker();
+      f.fake.stop();
+    }
+  },
+  30_000,
+);
+
+test("move refuses a source beyond the live-version read limit without suggesting retry or copying objects", async () => {
+  const f = await seed(false);
+  try {
+    await db.insert(entityVersions).values(
+      Array.from({ length: LIMITS.versionsPerEntity - 1 }, (_, index) => ({
+        id: createSafeId<"entityVersion">(),
+        entityId: f.documentId,
+        workspaceId: f.sourceWorkspaceId,
+        versionNumber: index + 3,
+      })),
+    );
+    const objects = [...f.fake.objects.entries()];
+    expect(await f.run(true)).toMatchObject({
+      code: 409,
+      value: { code: "entity_transfer_source_limit", retryable: false },
+    });
+    expect(f.fake.requests.filter(({ method }) => method === "COPY")).toEqual(
+      [],
+    );
+    expect([...f.fake.objects.entries()]).toEqual(objects);
+    expect(
+      await db.$count(
+        entityVersions,
+        eq(entityVersions.workspaceId, f.sourceWorkspaceId),
+      ),
+    ).toBe(LIMITS.versionsPerEntity + 1);
+    expect(
+      await db.$count(entities, eq(entities.workspaceId, f.targetWorkspaceId)),
+    ).toBe(0);
+  } finally {
+    f.fake.stop();
+  }
+}, 30_000);
+
 const sourceState = async ({ sourceWorkspaceId }: Fixture) => ({
   entities: await db.query.entities.findMany({
     where: { workspaceId: { eq: sourceWorkspaceId } },

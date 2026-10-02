@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Keine anderen Akten verfügbar",
       "operation": "Vorgang",
       "rootFolder": "(Stammordner)",
+      "sourceChanged": "Das Element wurde während des Verschiebens geändert. Versuchen Sie es erneut.",
+      "sourceInUse": "Das Element wird gerade verwendet. Schließen Sie die Verarbeitung, Bearbeitung, Zusammenarbeit oder Unterzeichnung ab und versuchen Sie es erneut.",
+      "sourceReferenced": "Dieses Element ist mit Zeiteinträgen oder Ausgaben verknüpft und kann nicht verschoben werden.",
+      "sourceVersionLimit": "Dieses Element hat zu viele Versionen oder Feldwerte und kann nicht verschoben werden.",
       "targetFolder": "Zielordner (optional)",
       "targetMatter": "Zielakte",
       "title": "In Akte kopieren"

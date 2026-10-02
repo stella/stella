@@ -14,7 +14,6 @@ import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
 import { tSafeId } from "@/api/lib/custom-schema";
-import { lockWorkspacesForEntityCap } from "@/api/lib/entity-cap-lock";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { LIMITS } from "@/api/lib/limits";
 import { syncWorkspaceSearchActivity } from "@/api/lib/search/index-global";
@@ -170,7 +169,6 @@ export const moveEntityHandler = async function* ({
 }: MoveEntityHandlerProps) {
   const moved = yield* Result.await(
     safeDb(async (tx) => {
-      await lockWorkspacesForEntityCap(tx, [workspaceId]);
       const locked = await lockMove({ tx, workspaceId, body });
       if (Result.isError(locked)) {
         return locked;

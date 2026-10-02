@@ -5263,6 +5263,10 @@
       "noOtherMatters": "Teisi toimikuid pole saadaval",
       "operation": "Toiming",
       "rootFolder": "(Juurkaust)",
+      "sourceChanged": "Üksust muudeti teisaldamise ajal. Proovige uuesti.",
+      "sourceInUse": "Üksus on praegu kasutusel. Lõpetage töötlemine, muutmine, koostöö või allkirjastamine ja proovige uuesti.",
+      "sourceReferenced": "See üksus on seotud ajakirjete või kuludega ning seda ei saa teisaldada.",
+      "sourceVersionLimit": "Sellel üksusel on teisaldamiseks liiga palju versioone või väljaväärtusi.",
       "targetFolder": "Sihtkaust (valikuline)",
       "targetMatter": "Sihttoimik",
       "title": "Kopeeri toimikusse"

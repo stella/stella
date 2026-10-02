@@ -5263,6 +5263,10 @@
       "noOtherMatters": "No hay otros asuntos disponibles",
       "operation": "Operación",
       "rootFolder": "(Carpeta raíz)",
+      "sourceChanged": "El elemento cambió mientras se movía. Inténtalo de nuevo.",
+      "sourceInUse": "El elemento está en uso. Finaliza el procesamiento, la edición, la colaboración o la firma e inténtalo de nuevo.",
+      "sourceReferenced": "Este elemento está vinculado a registros de tiempo o gastos y no se puede mover.",
+      "sourceVersionLimit": "Este elemento tiene demasiadas versiones o valores de campos y no se puede mover.",
       "targetFolder": "Carpeta de destino (opcional)",
       "targetMatter": "Asunto de destino",
       "title": "Copiar a asunto"
