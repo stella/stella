@@ -899,7 +899,7 @@ const PlaybookEditorForm = ({
     >
       <div className="mx-auto flex w-full max-w-5xl gap-8 p-6">
         <div className="min-w-0 flex-1 space-y-6">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center justify-between gap-2">
             <Button
               onClick={requestBack}
               size="sm"
@@ -911,7 +911,7 @@ const PlaybookEditorForm = ({
               <ArrowLeftIcon />
               {t("common.back")}
             </Button>
-            <div className="flex items-center gap-2">
+            <div className="ms-auto flex flex-wrap items-center justify-end gap-2">
               {isEdit && (
                 <PlaybookStatusBadge approvedAt={approvedAt} status={status} />
               )}
