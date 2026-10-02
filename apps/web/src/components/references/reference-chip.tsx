@@ -410,6 +410,9 @@ export const ReferenceIcon = ({ reference }: { reference: ChatReference }) => {
   ) : null;
 };
 
+const isReactNodeArray = (node: ReactNode): node is readonly ReactNode[] =>
+  Array.isArray(node);
+
 const plainText = (node: ReactNode): string | null => {
   if (node === null || node === undefined || typeof node === "boolean") {
     return "";
@@ -417,7 +420,7 @@ const plainText = (node: ReactNode): string | null => {
   if (typeof node === "string" || typeof node === "number") {
     return String(node);
   }
-  if (Array.isArray(node)) {
+  if (isReactNodeArray(node)) {
     const parts: string[] = [];
     for (const child of node) {
       const text = plainText(child);

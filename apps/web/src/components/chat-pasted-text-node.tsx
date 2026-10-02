@@ -130,11 +130,7 @@ export const ChatPastedTextNode = (props: NodeViewProps) => {
           // reference: it draws the very chip the sent message shows.
           <PopoverTrigger
             aria-label={t("chat.pastedText.expand")}
-            className={cn(
-              "inline-flex max-w-full rounded align-middle",
-              "focus-visible:ring-ring focus-visible:ring-2 focus-visible:outline-none",
-              "cursor-pointer select-none",
-            )}
+            className="inline-flex max-w-full cursor-pointer align-middle select-none"
             contentEditable={false}
             type="button"
           >
