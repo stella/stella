@@ -1101,7 +1101,7 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun --bun turbo run format "${args[@]}" -- --check
 
-      - name: Select measured ratchet base
+      - name: Select measured ratchet base from the target branch
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         env:
           MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}

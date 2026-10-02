@@ -3734,7 +3734,10 @@ export const scanAll = (
   { metrics = RATCHET_METRICS, role = "head", trackedFiles }: ScanOptions = {},
 ): Baseline =>
   scanTree({
-    tree: openSourceTree(root, { role, trackedFiles }),
+    tree: openSourceTree(root, {
+      role,
+      ...(trackedFiles === undefined ? {} : { trackedFiles }),
+    }),
     metrics,
   }).snapshot;
 

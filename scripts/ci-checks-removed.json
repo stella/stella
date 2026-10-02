@@ -18,5 +18,9 @@
   {
     "name": "Web API types drift guard",
     "reason": "Replaced by the determinism guard; the generated API types file is no longer committed"
+  },
+  {
+    "name": "Select measured ratchet base",
+    "reason": "Renamed to Select measured ratchet base from the target branch; it now measures from the pull request's base branch instead of main"
   }
 ]
