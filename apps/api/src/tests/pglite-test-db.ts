@@ -265,6 +265,14 @@ const CORPUS_PROJECTION_REVISION_TABLE_SQL = quoteSqlIdentifier(
 // The snapshot bakes in the superset every suite needs: RLS roles, schema,
 // workspace-access objects, and the role grants. Suites that never SET ROLE
 // simply ignore the grants.
+/**
+ * Reader columns this release declares `permitted` but no migration grants
+ * yet: the grant lands in a later release, so running readers accept it. The
+ * harness mirrors the migrations, so it leaves them ungranted too.
+ */
+const PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE: ReadonlySet<string> =
+  new Set(["case_law_decisions.docket_family_key"]);
+
 export const ROLE_GRANT_STATEMENTS = [
   `GRANT SELECT, INSERT, UPDATE ON TABLE "case_law_decision_aliases" TO stella_ingestion`,
   `
@@ -616,7 +624,15 @@ export const ROLE_GRANT_STATEMENTS = [
     )
     .map(
       ([relation, columns]) => `
-      GRANT SELECT (${Object.keys(columns).map(quoteSqlIdentifier).join(", ")})
+      GRANT SELECT (${Object.keys(columns)
+        .filter(
+          (column) =>
+            !PUBLIC_LAW_COLUMNS_GRANTED_IN_A_LATER_RELEASE.has(
+              `${relation}.${column}`,
+            ),
+        )
+        .map(quoteSqlIdentifier)
+        .join(", ")})
         ON TABLE ${quoteSqlIdentifier(relation)}
         TO stella_public_law_reader
     `,

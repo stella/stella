@@ -19,8 +19,8 @@ import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import {
   HistoryIcon,
-  MessageSquareIcon,
   Minimize2Icon,
+  NewChatIcon,
   PinIcon,
   PlusIcon,
   SkillIcon,
@@ -36,10 +36,12 @@ import {
   LandingSection,
 } from "@stll/ui/landing";
 import { stellaToast } from "@stll/ui/toast";
+import { cn } from "@stll/ui/utils";
 
 import {
   ChatSubmitPreservedError,
   useChatEditor,
+  useChatEditorManager,
 } from "@/components/chat-editor-provider";
 import type { ChatInputDraft } from "@/components/chat-editor-provider";
 import {
@@ -71,6 +73,7 @@ import {
   listChatHistoryItems,
   mergeGroupedChatThreadPages,
 } from "@/features/chat/queries";
+import { TeamAvatars } from "@/features/workspaces/team-avatars";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { useLatestCallback } from "@/hooks/use-latest-callback";
 import { usePermissions } from "@/hooks/use-permissions";
@@ -101,6 +104,8 @@ import { runReservedChatCommand } from "@/lib/reserved-chat-commands";
 import { toSafeId } from "@/lib/safe-id";
 import { useCreateMatterStore } from "@/lib/workspaces/create-matter-store";
 import { workspacesNavigationOptions } from "@/lib/workspaces/queries";
+import type { WorkspaceMemberPreview } from "@/lib/workspaces/queries/workspace-member-previews";
+import { workspaceMemberPreviewsOptions } from "@/lib/workspaces/queries/workspace-member-previews";
 import { ThreadsSheet } from "@/routes/_protected.chat/-components/threads-sheet";
 
 export const Route = createFileRoute("/_protected/chat/")({
@@ -139,8 +144,49 @@ export const Route = createFileRoute("/_protected/chat/")({
 
 const protectedRouteApi = getRouteApi("/_protected");
 
+/** Who else works on a matter, as a compact avatar stack on its row. */
+const MatterColleagues = ({
+  currentUserId,
+  preview,
+}: {
+  currentUserId: string;
+  preview: WorkspaceMemberPreview | undefined;
+}) => {
+  if (!preview) {
+    return null;
+  }
+  const colleagues = preview.members.flatMap(
+    ({ email, userId, image, name }) =>
+      userId === currentUserId
+        ? []
+        : [
+            {
+              userEmail: email,
+              userId,
+              userImage: image,
+              userName: name,
+            },
+          ],
+  );
+  const viewerCount = preview.members.some(
+    (member) => member.userId === currentUserId,
+  )
+    ? 1
+    : 0;
+  return (
+    <TeamAvatars
+      emptyFallback={null}
+      leadUserId={null}
+      members={colleagues}
+      totalCount={preview.total - viewerCount}
+      size="size-6"
+    />
+  );
+};
+
 function ChatIndex() {
   const t = useTranslations();
+  const { focusThread } = useChatEditorManager();
   const { ensureAIAvailable } = useAIKeyGate();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -327,6 +373,13 @@ function ChatIndex() {
 
   const visibleMatters =
     pinnedMatters.length > 0 ? pinnedMatters : lastAccessedMatters;
+  const { data: memberPreviews } = useQuery(
+    workspaceMemberPreviewsOptions({
+      organizationId: activeOrganizationId,
+      userId,
+      workspaceIds: visibleMatters.map((matter) => matter.id),
+    }),
+  );
   const mattersHeading =
     pinnedMatters.length > 0
       ? t("chat.landing.pinnedMatters")
@@ -612,20 +665,28 @@ function ChatIndex() {
               }}
             >
               <Link
-                className={LANDING_ROW_CLASS}
+                className={cn(LANDING_ROW_CLASS, "flex items-center gap-3")}
                 params={{ workspaceId: matter.id }}
                 to="/workspaces/$workspaceId"
               >
-                <LandingItemText
-                  icon={
-                    <MatterIcon
-                      className="size-4"
-                      matter={{ id: matter.id, color: matter.color }}
-                    />
-                  }
-                  iconTone="matter"
-                  meta={formatRelativeTime(matter.lastActivityAt)}
-                  title={matter.name}
+                <span className="min-w-0 flex-1">
+                  <LandingItemText
+                    icon={
+                      <MatterIcon
+                        className="size-4"
+                        matter={{ id: matter.id, color: matter.color }}
+                      />
+                    }
+                    iconTone="matter"
+                    meta={formatRelativeTime(matter.lastActivityAt)}
+                    title={matter.name}
+                  />
+                </span>
+                <MatterColleagues
+                  currentUserId={userId}
+                  preview={memberPreviews?.previews.find(
+                    (preview) => preview.workspaceId === matter.id,
+                  )}
                 />
               </Link>
             </MatterContextMenu>
@@ -663,7 +724,6 @@ function ChatIndex() {
         {suggestedSkills.length > 0 ? (
           suggestedSkills.map((prompt) => (
             <LandingButton
-              icon={<SkillIcon className="size-4" />}
               key={prompt.id}
               meta={prompt.body}
               onClick={() => selectPrompt(prompt)}
@@ -696,7 +756,6 @@ function ChatIndex() {
                 to="/chat/workspaces/$workspaceId/$threadId"
               >
                 <LandingItemText
-                  icon={<MessageSquareIcon className="size-4" />}
                   meta={
                     <>
                       <ChatThreadOriginPrefix origin={chat.origin} />
@@ -720,7 +779,6 @@ function ChatIndex() {
                 to="/chat/$threadId"
               >
                 <LandingItemText
-                  icon={<MessageSquareIcon className="size-4" />}
                   meta={
                     <>
                       <ChatThreadOriginPrefix origin={chat.origin} />
@@ -737,7 +795,19 @@ function ChatIndex() {
             ),
           )
         ) : (
-          <LandingEmpty>{t("chat.landing.noRecentChats")}</LandingEmpty>
+          <LandingEmpty>
+            <div className="flex flex-col items-start gap-2.5">
+              {t("chat.landing.noRecentChats")}
+              <Button
+                onClick={() => focusThread(threadRef)}
+                size="sm"
+                variant="outline"
+              >
+                <NewChatIcon className="size-4" />
+                {t("chat.newChat")}
+              </Button>
+            </div>
+          </LandingEmpty>
         )}
       </LandingSection>
     </LandingLayout>
