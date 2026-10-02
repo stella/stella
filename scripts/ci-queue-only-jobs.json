@@ -1,0 +1,12 @@
+{
+  "docker-checks": "queue-only because sandbox and dependency-image integration retain the merged-tree runner tier",
+  "ci-browser": "queue-only because the desktop, UI and extension browser matrix retains the merged-tree runner tier",
+  "migration-upgrade-rehearsal": "queue-only because the rehearsal resolves the promoted release and validates the final queued migrations against it",
+  "mobile-build": "queue-only because the complete Expo bundle and doctor retain the merged-tree build tier",
+  "stack-redaction-browsers": "queue-only because the Firefox and WebKit redaction matrix retains the merged-tree browser tier",
+  "e2e-vite-canary": "queue-only because the development-server canary supplements production PR coverage in the merged-tree tier",
+  "e2e-landing": "queue-only because the production-preview landing browser suite retains the merged-tree browser tier",
+  "legal-atlas-image": "queue-only because the complete runner image retains the merged-tree packaging tier",
+  "windows-scripts": "queue-only because native Windows script execution retains the merged-tree platform tier",
+  "desktop-clippy": "queue-only because the native desktop Rust matrix retains the merged-tree platform tier"
+}
