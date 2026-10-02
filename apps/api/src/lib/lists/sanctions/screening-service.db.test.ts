@@ -275,6 +275,49 @@ describe("sanctions screening service", () => {
   );
 
   test(
+    "returns control to the event loop between warm list screenings",
+    async () => {
+      let turns = 0;
+      const observedTurns: number[] = [];
+      const result = await screenSanctionsSubject({
+        db: requestDb,
+        subject: {
+          type: "organization",
+          name: "Blue Meadow Bakery",
+          identifiers: [],
+        },
+        practiceJurisdictions: [],
+        now: FRESH_NOW,
+        indexCache: {
+          get: async ({ source, edition }) => {
+            observedTurns.push(turns);
+            setImmediate(() => {
+              turns += 1;
+            });
+            return Result.ok(
+              buildScreeningIndex([
+                {
+                  entries: entriesFor(source),
+                  version: {
+                    source,
+                    publishedAt: edition.publishedAt,
+                    fileId: edition.fileId,
+                  },
+                },
+              ]),
+            );
+          },
+          refresh: async () => undefined,
+        },
+      });
+      expect(result.unwrap().status).toBe("clear");
+      expect(observedTurns).toHaveLength(sanctionsSourceIds().length);
+      expect(observedTurns).toEqual(observedTurns.map((_, index) => index));
+    },
+    DB_TEST_TIMEOUT_MS,
+  );
+
+  test(
     "reports a strong name with a conflicting birth date as a possible match",
     async () => {
       const result = await screenSanctionsSubject({

@@ -84,7 +84,7 @@ const withCorpusBundle = async (work: (folder: string) => Promise<void>) => {
       mkdirSync(target);
       writeFileSync(nodePath.join(target, "migration.sql"), testSql);
     }
-    expect(guardedRoleCreations).toBe(6);
+    expect(guardedRoleCreations).toBe(7);
     await work(folder);
   } finally {
     rmSync(folder, { recursive: true, force: true });

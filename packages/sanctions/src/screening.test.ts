@@ -5,6 +5,12 @@ import path from "node:path";
 import { parseCzList } from "./cz";
 import type { EntityType, ParsedList, SanctionsEntry } from "./entry";
 import { parseEuList } from "./eu";
+import { MAX_SCREENING_WORK } from "./name-match";
+import {
+  MAX_QUERY_TOKENS,
+  hasExcessQueryTokens,
+  nameReading,
+} from "./normalise";
 import { DEFAULT_CUTOFF, buildScreeningIndex, screen } from "./screening";
 import type { ScreeningQuery } from "./screening";
 import { parseUnList } from "./un";
@@ -528,4 +534,199 @@ describe("name screening", () => {
       screen(index, { name: "Vladimir Putin" }, { cutoff: 1.5 }),
     ).toThrow(Panic);
   });
+});
+
+test("warm screening work stays bounded for repeated common query tokens", () => {
+  const realistic = buildScreeningIndex([
+    {
+      version: EXTRA_VERSION,
+      entries: Array.from({ length: 20_000 }, (_, n) =>
+        listed({
+          sourceId: String(n),
+          entityType: "organisation",
+          name: `Registered Entity ${n} Holdings`,
+        }),
+      ),
+    },
+  ]);
+  const measured = [];
+  for (const name of [
+    `Registered ${"r ".repeat(249)}`.slice(0, 512),
+    "Registered ".repeat(46),
+  ]) {
+    const started = performance.now();
+    const result = screen(
+      realistic,
+      { name, entityType: "organisation" },
+      { cutoff: DEFAULT_CUTOFF },
+    );
+    const milliseconds = performance.now() - started;
+    console.log(
+      JSON.stringify({
+        tokens: name.split(/\s+/u).filter(Boolean).length,
+        milliseconds,
+      }),
+    );
+    measured.push({ milliseconds, result });
+  }
+  for (const { milliseconds, result } of measured) {
+    expect(milliseconds).toBeLessThan(50);
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error.code).toBe("excess-query-tokens");
+    }
+  }
+  for (const name of [
+    "Registered Entity Holdings",
+    "Registered a b c d e f g h i j k l m n o p q r s t u v z",
+  ]) {
+    const query = { name, entityType: "organisation" } as const;
+    screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
+    const started = performance.now();
+    const result = screen(realistic, query, { cutoff: DEFAULT_CUTOFF });
+    const milliseconds = performance.now() - started;
+    console.info(
+      JSON.stringify({
+        adversarial: name,
+        milliseconds,
+        result: result.isErr() ? result.error.code : "ok",
+      }),
+    );
+    if (result.isErr()) {
+      expect(result.error.code).toBe("work-limit");
+    }
+  }
+  // Valid names retain an answer after the revised ranking bounds.
+  for (const name of ["Registered", "Registered Entity 42 Holdings"]) {
+    for (const entityType of ["organisation", undefined] as const) {
+      screen(
+        realistic,
+        entityType === undefined ? { name } : { name, entityType },
+        { cutoff: DEFAULT_CUTOFF },
+      );
+      const result = screen(
+        realistic,
+        entityType === undefined ? { name } : { name, entityType },
+        { cutoff: DEFAULT_CUTOFF, maxWork: MAX_SCREENING_WORK / 2 },
+      );
+      expect(result.isOk()).toBe(true);
+      if (result.isOk() && name !== "Registered") {
+        expect(
+          result.value.possibleMatches.some(
+            ({ entry }) => entry.sourceId === "42",
+          ),
+        ).toBe(true);
+      }
+    }
+  }
+});
+
+test("repeated normalized query tokens keep exact-name equality", () => {
+  for (const [entityType, name] of [
+    ["person", "Mohammed Mohammed"],
+    ["organisation", "Baden Baden"],
+  ] as const) {
+    const exactIndex = buildScreeningIndex([
+      {
+        version: EXTRA_VERSION,
+        entries: [listed({ sourceId: name, entityType, name })],
+      },
+    ]);
+    const result = screen(
+      exactIndex,
+      { name, entityType },
+      { cutoff: DEFAULT_CUTOFF },
+    ).unwrap();
+    expect(result.possibleMatches.at(0)?.evidence.nameScore).toBe(1);
+    expect(result.totalMatches).toBe(1);
+    expect(nameReading(name, entityType).tokens).toHaveLength(1);
+  }
+});
+
+test("query token bounds use normalized input order and count before deduplication", () => {
+  const names = Array.from(
+    { length: MAX_QUERY_TOKENS + 2 },
+    (_, n) => `Token${n}`,
+  );
+  for (const entityType of ["person", "organisation", undefined] as const) {
+    const rejected = screen(
+      index,
+      entityType === undefined
+        ? { name: names.join(" ") }
+        : { name: names.join(" "), entityType },
+      { cutoff: DEFAULT_CUTOFF },
+    );
+    expect(rejected.isErr() && rejected.error.code).toBe("excess-query-tokens");
+  }
+  expect(
+    nameReading("Émile EMILE Emile Antoine", "person").tokens.map(
+      (token) => token.raw,
+    ),
+  ).toEqual(["emile", "antoine"]);
+  expect(
+    hasExcessQueryTokens(
+      "Registered ".repeat(MAX_QUERY_TOKENS),
+      "organisation",
+    ),
+  ).toBe(false);
+  expect(
+    hasExcessQueryTokens(
+      "Registered ".repeat(MAX_QUERY_TOKENS + 1),
+      "organisation",
+    ),
+  ).toBe(true);
+  expect(nameReading("Émile EMILE Emile", "person").tokens).toHaveLength(1);
+});
+
+test("identifier traversal shares the screening budget and cannot report clear on exhaustion", () => {
+  const entry = listed({
+    sourceId: "one",
+    entityType: "organisation",
+    name: "Unique",
+  });
+  const oneIndex = buildScreeningIndex([
+    { version: EXTRA_VERSION, entries: [entry] },
+  ]);
+  const broadIdentifierIndex = {
+    ...oneIndex,
+    identifierEntries: new Map([
+      ["12345", Array.from({ length: MAX_SCREENING_WORK + 1 }, () => 0)],
+    ]),
+  };
+  const result = screen(
+    broadIdentifierIndex,
+    { name: "", identifiers: ["12345"] },
+    { cutoff: DEFAULT_CUTOFF },
+  );
+  expect(result.isErr() && result.error.code).toBe("work-limit");
+});
+
+test("callers may tighten but cannot raise the screening work bound", () => {
+  const boundedIndex = buildScreeningIndex([
+    {
+      version: EXTRA_VERSION,
+      entries: [
+        listed({
+          sourceId: "one",
+          entityType: "person",
+          name: "Vladimir Putin",
+        }),
+      ],
+    },
+  ]);
+  for (const maxWork of [0, -1, 1.5, MAX_SCREENING_WORK + 1]) {
+    expect(() =>
+      screen(
+        boundedIndex,
+        { name: "Vladimir Putin" },
+        { cutoff: DEFAULT_CUTOFF, maxWork },
+      ),
+    ).toThrow(Panic);
+  }
+  const result = screen(
+    boundedIndex,
+    { name: "Vladimir Putin" },
+    { cutoff: DEFAULT_CUTOFF, maxWork: 1 },
+  );
+  expect(result.isErr() && result.error.code).toBe("work-limit");
 });
