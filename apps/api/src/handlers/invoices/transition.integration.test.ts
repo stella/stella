@@ -30,6 +30,7 @@ import {
 import type { TestIds } from "@/api/tests/security/rls-helpers";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
 
+import deleteInvoice from "./delete";
 import transitionInvoice from "./transition";
 import updateInvoice from "./update";
 
@@ -159,6 +160,38 @@ describe("invoice transition integration", () => {
       where: { id: { eq: invoiceId } },
     });
     expect(invoice?.invoiceNumber).toBe("MANUAL-001");
+  });
+
+  test("a draft that was never finalized can still change, clear and lose its number", async () => {
+    const invoiceId = await seedInvoice({
+      status: INVOICE_STATUS.DRAFT,
+      invoiceNumber: "DRAFT-001",
+    });
+    const context = createContext({
+      invoiceId,
+      action: "finalize",
+      auditEvents: [],
+    });
+    for (const invoiceNumber of ["DRAFT-002", null, "DRAFT-003"]) {
+      expect(
+        await updateInvoice.handler({ ...context, body: { invoiceNumber } }),
+      ).toEqual({ id: invoiceId });
+      const row = await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+        columns: { invoiceNumber: true },
+      });
+      expect(row?.invoiceNumber).toBe(invoiceNumber);
+    }
+    expect(
+      await deleteInvoice.handler(
+        asTestRaw<Parameters<typeof deleteInvoice.handler>[0]>(context),
+      ),
+    ).toEqual({ deleted: true });
+    expect(
+      await testDb.query.invoices.findFirst({
+        where: { id: { eq: invoiceId } },
+      }),
+    ).toBeUndefined();
   });
 
   test("requires a default series for an unnumbered invoice but preserves a manual number", async () => {
