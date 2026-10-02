@@ -349,8 +349,9 @@ describe("property-test convention", () => {
       ] of await collectPropertyScriptCommands()) {
         if (workspace === "apps/api") {
           if (
-            // The API generates the CLI runtime modules it imports first.
-            !/^(?:bun --cwd=\.\.\/\.\.\/packages\/cli run codegen:runtime && )?bun scripts\/run-tests\.ts\s+--property(?:\s|$)/u.test(
+            // The API generates the CLI and capability runtime modules it
+            // imports first.
+            !/^(?:bun --cwd=\.\.\/\.\.\/packages\/cli run codegen:runtime && )?(?:bun run generate:capability-runtime && )?bun scripts\/run-tests\.ts\s+--property(?:\s|$)/u.test(
               command,
             )
           ) {

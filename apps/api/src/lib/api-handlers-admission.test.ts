@@ -492,7 +492,7 @@ describe("finite HTTP action admission", () => {
     });
   });
 
-  test.each([400, 408, 409])(
+  test.each([400, 409, 429] as const)(
     "an already disconnected request preserves status %s when signal composition loses its reason",
     async (status) => {
       await withFeature(true, async () => {
