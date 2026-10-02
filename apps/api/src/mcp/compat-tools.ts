@@ -7,6 +7,7 @@ import { readEntityByIdHandler } from "@/api/handlers/entities/get";
 import type { SafeId } from "@/api/lib/branded-types";
 import { decryptContent } from "@/api/lib/content-encryption";
 import { LIMITS } from "@/api/lib/limits";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedWorkspaceId,
@@ -32,6 +33,7 @@ import {
 import {
   compatCorpusFetchResponse,
   compatSearchCursorError,
+  compatSearchPageLimitResult,
   decodeCompatSearchCursor,
   encodeCompatSearchCursor,
   invalidCompatIdResult,
@@ -404,7 +406,7 @@ const searchMatterKnowledge = async ({
     query,
     organizationId: context.organizationId,
     workspaceIds: context.accessibleWorkspaceIds,
-    limit: DEFAULT_COMPAT_SEARCH_LIMIT,
+    limit: normalizeTenantPageLimit(DEFAULT_COMPAT_SEARCH_LIMIT),
     ...(cursor === undefined ? {} : { cursor }),
   });
 
@@ -441,6 +443,13 @@ const handleCompatSearchTool: McpToolHandler<
     : matterOnlyPosition(cursor);
   if (position === null) {
     return compatSearchCursorError(cursor ?? "");
+  }
+
+  const pageLimitResult = corpusEnabled
+    ? compatSearchPageLimitResult("tenant")
+    : null;
+  if (pageLimitResult !== null) {
+    return pageLimitResult;
   }
 
   const matter =

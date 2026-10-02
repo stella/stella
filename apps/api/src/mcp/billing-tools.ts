@@ -40,6 +40,7 @@ import {
   isDateOnlyPaginationCursorPart,
   isUuidPaginationCursorPart,
 } from "@/api/lib/pagination";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import {
   brandPersistedEntityId,
   brandPersistedInvoiceId,
@@ -646,7 +647,7 @@ const handleListTimeEntriesTool: TypedMcpToolHandler<
       return invalidCursorResult({ cursor: input.cursor });
     }
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
   const canReview = hasEffectiveAuthority(context, {
     timeEntry: ["approve"],
   });
@@ -1399,7 +1400,7 @@ const handleListInvoicesTool: TypedMcpToolHandler<
   if (input.cursor !== undefined && cursor === null) {
     return invalidCursorResult({ cursor: input.cursor });
   }
-  const limit = input.limit ?? DEFAULT_LIST_LIMIT;
+  const limit = normalizeTenantPageLimit(input.limit ?? DEFAULT_LIST_LIMIT);
 
   const rows = await context.scopedDb((tx) =>
     tx

@@ -18,6 +18,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedPlaybookDefinitionId } from "@/api/lib/safe-id-boundaries";
 
 type PlaybookDefinitionRow = typeof playbookDefinitions.$inferSelect;
@@ -131,7 +132,9 @@ export const listPlaybookDefinitionsHandler = async function* ({
   organizationId,
   query,
 }: ListPlaybookDefinitionsProps) {
-  const limit = query.limit ?? LIMITS.playbookDefinitionsPageSizeDefault;
+  const limit = normalizeTenantPageLimit(
+    query.limit ?? LIMITS.playbookDefinitionsPageSizeDefault,
+  );
   const conditions = [eq(playbookDefinitions.organizationId, organizationId)];
 
   if (query.cursor) {
