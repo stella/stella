@@ -134,7 +134,7 @@ export const readStoredAgentClientCredential = async (
   });
 
 const previousFormat = sql`${agentRegistration.clientSecretSink} ~ '^[a-f0-9]{64}$'`;
-export const AGENT_CLIENT_BATCH_SIZE = 25;
+export const AGENT_CLIENT_BATCH_SIZE = 16;
 export const AGENT_CLIENT_STATEMENT_BUDGET_MS = 2000;
 export const AGENT_CLIENT_LOCK_BUDGET_MS = 500;
 
@@ -200,7 +200,11 @@ export const runAgentClientCredentialBatch = async ({
               .limit(AGENT_CLIENT_BATCH_SIZE),
         );
         let updatedCount = 0;
-        for (const registration of rows) {
+        for (let index = 0; index < AGENT_CLIENT_BATCH_SIZE; index += 1) {
+          const registration = rows.at(index);
+          if (!registration) {
+            break;
+          }
           signal.throwIfAborted();
           if (Temporal.Now.instant().epochMilliseconds >= deadline) {
             break;

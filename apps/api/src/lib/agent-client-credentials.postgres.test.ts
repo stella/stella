@@ -107,10 +107,11 @@ if (!databaseUrl || !runPostgresTests) {
                 .from(agentRegistration)
                 .where(eq(agentRegistration.id, id));
               const storedCredential = rows.at(0)?.storedCredential;
-              expect(credential).toBe(storedCredential);
+              expect(storedCredential).toBeDefined();
               if (storedCredential === undefined) {
                 throw new Error("registration fixture was not persisted");
               }
+              expect(credential).toBe(storedCredential);
               expect(
                 (
                   await readAgentClientCredential({
