@@ -15,6 +15,7 @@ const TEST_USER_AGENT = "stella stella@example.com";
 
 type FetchCapture = {
   url: string;
+  observer: "unobserved";
   userAgent: string;
 };
 
@@ -28,7 +29,11 @@ const captureRequest = (
   body: BodyInit | null,
   contentType = "application/json",
 ): StubResult => {
-  const captured: FetchCapture = { url: "", userAgent: "" };
+  const captured: FetchCapture = {
+    url: "",
+    observer: "unobserved",
+    userAgent: "",
+  };
   const originalFetch = globalThis.fetch;
   const readUrl = (input: URL | RequestInfo): string => {
     if (typeof input === "string") {
@@ -70,7 +75,10 @@ const captureThrown = async (promise: Promise<unknown>): Promise<unknown> => {
 };
 
 describe("lookupByCik validation", () => {
-  const config = { userAgent: TEST_USER_AGENT };
+  const config = {
+    observer: "unobserved",
+    userAgent: TEST_USER_AGENT,
+  } as const;
 
   test("rejects empty CIK", async () => {
     const error = await captureThrown(lookupByCik("", config));
@@ -88,10 +96,12 @@ describe("lookupByCik validation", () => {
   });
 
   test("rejects empty User-Agent", async () => {
-    const empty = await captureThrown(lookupByCik("320193", { userAgent: "" }));
+    const empty = await captureThrown(
+      lookupByCik("320193", { observer: "unobserved", userAgent: "" }),
+    );
     expect(empty).toBeInstanceOf(EdgarValidationError);
     const whitespace = await captureThrown(
-      lookupByCik("320193", { userAgent: "   " }),
+      lookupByCik("320193", { observer: "unobserved", userAgent: "   " }),
     );
     expect(whitespace).toBeInstanceOf(EdgarValidationError);
   });
@@ -107,7 +117,10 @@ describe("lookupByCik mocked", () => {
     const ctx = captureRequest(200, JSON.stringify(appleFixture));
     restore = ctx.restore;
 
-    const result = await lookupByCik("320193", { userAgent: TEST_USER_AGENT });
+    const result = await lookupByCik("320193", {
+      observer: "unobserved",
+      userAgent: TEST_USER_AGENT,
+    });
     expect(result).not.toBeNull();
     expect(result?.cik).toBe("0000320193");
     expect(result?.name).toBe("Apple Inc.");
@@ -124,6 +137,7 @@ describe("lookupByCik mocked", () => {
     restore = ctx.restore;
 
     const result = await lookupByCik("9999999999", {
+      observer: "unobserved",
       userAgent: TEST_USER_AGENT,
     });
     expect(result).toBeNull();
@@ -134,7 +148,10 @@ describe("lookupByCik mocked", () => {
     restore = ctx.restore;
 
     const error = await captureThrown(
-      lookupByCik("320193", { userAgent: TEST_USER_AGENT }),
+      lookupByCik("320193", {
+        observer: "unobserved",
+        userAgent: TEST_USER_AGENT,
+      }),
     );
     expect(error).toBeInstanceOf(EdgarAPIError);
     expect(error).toMatchObject({ httpStatus: 403 });
@@ -145,7 +162,10 @@ describe("lookupByCik mocked", () => {
     restore = ctx.restore;
 
     const error = await captureThrown(
-      lookupByCik("320193", { userAgent: TEST_USER_AGENT }),
+      lookupByCik("320193", {
+        observer: "unobserved",
+        userAgent: TEST_USER_AGENT,
+      }),
     );
     expect(error).toBeInstanceOf(EdgarAPIError);
     expect(error).toMatchObject({ httpStatus: 502 });
