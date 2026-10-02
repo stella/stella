@@ -250,10 +250,15 @@ const tokenScope = async (
  * next use. `afterConsume` runs just before commit; a throw there undoes
  * the whole redemption (tests use it to prove that).
  */
+type RedeemPdfSigningHandoffOptions = {
+  identity: { userId: SafeId<"user">; organizationId: SafeId<"organization"> };
+  afterConsume?: () => Promise<void>;
+};
+
 export const redeemPdfSigningHandoff = async (
   handoffToken: string,
   db: TokenScopedDatabase,
-  { afterConsume }: { afterConsume?: () => Promise<void> } = {},
+  { identity, afterConsume }: RedeemPdfSigningHandoffOptions,
 ): Promise<RedeemedPdfSigningSession | null> => {
   if (!isPdfSigningTokenShape(handoffToken)) {
     return null;
@@ -298,6 +303,8 @@ export const redeemPdfSigningHandoff = async (
     const session = sessions.at(0);
     if (
       !session ||
+      session.createdBy !== identity.userId ||
+      session.organizationId !== identity.organizationId ||
       session.status !== "open" ||
       session.handoffConsumedAt !== null ||
       session.handoffExpiresAt <= now
