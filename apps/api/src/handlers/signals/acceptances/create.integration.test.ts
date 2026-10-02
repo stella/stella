@@ -88,6 +88,7 @@ const accept = async (signalId: SafeId<"signal">) => {
       memberRole: { role: "owner" },
       orgAIConfig: null,
       orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+      managedAIResidency: "eu" as const,
       params: { signalId },
       promptCachingEnabled: false,
       recordAuditEvent,

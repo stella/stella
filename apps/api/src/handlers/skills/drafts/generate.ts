@@ -100,6 +100,7 @@ const generateSkillDraft = createSafeRootHandler(
   async function* ({
     body,
     orgAIConfig,
+    managedAIResidency,
     orgAIConfigStatus,
     promptCachingEnabled,
     safeDb,
@@ -107,12 +108,14 @@ const generateSkillDraft = createSafeRootHandler(
     user,
   }) {
     yield* requireTanStackAIAvailableForRole({
+      dataClass: "customer",
       configStatus: orgAIConfigStatus,
       orgConfig: orgAIConfig,
       role: "fast",
     });
 
     const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+      dataClass: "customer",
       usageMetering: {
         actionType: "chat",
         organizationId: session.activeOrganizationId,
@@ -132,11 +135,13 @@ const generateSkillDraft = createSafeRootHandler(
     const generation = await Result.tryPromise({
       try: async () =>
         await generateTanStackObjectForRole({
+          dataClass: "customer",
           abortSignal: AbortSignal.timeout(GENERATION_TIMEOUT_MS),
           maxOutputTokens: GENERATION_MAX_OUTPUT_TOKENS,
           role: "fast",
           serviceTier: "flex",
           orgAIConfig,
+          managedAIResidency,
           organizationId: session.activeOrganizationId,
           // Root-scoped handler: no workspace id is available here.
           tenantWorkspaceIds: [],

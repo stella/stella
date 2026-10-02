@@ -26,6 +26,7 @@ import type { AuditExecutionContext, AuditRecorder } from "@/api/lib/audit-log";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import type { CapabilityTransport } from "@/api/lib/capability-transport";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import type { WorkspaceParamsSchema } from "@/api/lib/custom-schema";
 import type { ActionAdmissionError } from "@/api/lib/errors/action-admission-error";
 import { resolveHandlerError } from "@/api/lib/errors/handler-error-resolution";
@@ -457,6 +458,7 @@ type BaseHandlerContext<TConfig extends HandlerConfig = HandlerConfig> =
      * `false` regardless of what call sites set.
      */
     promptCachingEnabled: boolean;
+    managedAIResidency: ManagedAIResidency;
     /**
      * Records an audit row in the supplied transaction. Identity
      * fields (org/user/IP/UA) are bound from the request context;
@@ -1031,6 +1033,7 @@ export const resolveMeteringContext = ({
 }): ResolvedMeteringContext => {
   const modelRole = metering.modelRole ?? "chat";
   const modelInfo = getTanStackTextModelInfoForRole(modelRole, orgAIConfig, {
+    dataClass: "customer",
     organizationId,
   });
   const isByok = modelInfo.keySource === "byok";

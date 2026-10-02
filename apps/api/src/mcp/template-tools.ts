@@ -7,7 +7,10 @@ import { entities, templates } from "@/api/db/schema";
 import type { TemplatePersistenceResult } from "@/api/db/schema";
 import { configureTemplateFields } from "@/api/handlers/templates/configure-template-fields-service";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
-import { loadOrgAIConfig } from "@/api/lib/ai-config-loader";
+import {
+  loadManagedAIResidency,
+  loadOrgAIConfig,
+} from "@/api/lib/ai-config-loader";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import { assertUsageAvailableForHandler } from "@/api/lib/api-handlers";
@@ -1309,8 +1312,17 @@ const handleFillTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency:
+        await (context.testDependencies?.loadManagedAIResidency?.(
+          context.organizationId,
+        ) ??
+          context.scopedDb(
+            async (tx) =>
+              await loadManagedAIResidency(tx, context.organizationId),
+          )),
       organizationId: context.organizationId,
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,
@@ -1752,6 +1764,14 @@ const handleSaveFilledTemplateTool: McpToolHandler<
     const orgAIConfig = await readConfigPastPreflight(readOrgAIConfig);
     const shared = {
       orgAIConfig,
+      managedAIResidency:
+        await (context.testDependencies?.loadManagedAIResidency?.(
+          context.organizationId,
+        ) ??
+          context.scopedDb(
+            async (tx) =>
+              await loadManagedAIResidency(tx, context.organizationId),
+          )),
       organizationId: context.organizationId,
       skillContext: {
         organizationId: context.organizationId,
@@ -1759,6 +1779,7 @@ const handleSaveFilledTemplateTool: McpToolHandler<
         userId: context.userId,
       },
       aiAnalytics: createTanStackAIAnalyticsCallbacks({
+        dataClass: "customer",
         usageMetering: {
           actionType: "chat",
           organizationId: context.organizationId,

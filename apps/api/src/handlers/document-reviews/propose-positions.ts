@@ -38,6 +38,7 @@ export const createProposePositions = ({
       body,
       session,
       orgAIConfig,
+      managedAIResidency,
       orgAIConfigStatus,
       promptCachingEnabled,
       user,
@@ -64,6 +65,7 @@ export const createProposePositions = ({
         organizationId,
         workspaceId,
         orgAIConfig,
+        managedAIResidency,
         promptCachingEnabled,
         serviceTier,
         usageMetering: {
