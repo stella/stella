@@ -81,16 +81,12 @@ export const shouldDrainSkillPages = ({
   open && query.trim() !== "" && hasNextPage && !isFetchingNextPage;
 
 type ResolveComposerMenuShortcutOptions = {
-  altKey: boolean;
   /** From {@link charBeforeCaret}. */
   charBeforeCaret: string | null;
-  ctrlKey: boolean;
+  /** The keystroke's `typedCharacter` (`@stll/ui/typed-character`). */
+  character: string | null;
   hasContext: boolean;
   hasSkills: boolean;
-  isAltGraph: boolean;
-  isComposing: boolean;
-  key: string;
-  metaKey: boolean;
 };
 
 /** A trigger starts a word at the start of a block or after whitespace, so
@@ -99,31 +95,18 @@ const startsWord = (charBefore: string | null): boolean =>
   charBefore === null || /^\s$/u.test(charBefore);
 
 export const resolveComposerMenuShortcut = ({
-  altKey,
   charBeforeCaret: charBefore,
-  ctrlKey,
+  character,
   hasContext,
   hasSkills,
-  isAltGraph,
-  isComposing,
-  key,
-  metaKey,
 }: ResolveComposerMenuShortcutOptions): ComposerMenuShortcut | null => {
-  // `key` is the character the layout produced, so only command modifiers
-  // block. Alt alone is text input: macOS layouts type "@" with Option (Czech,
-  // Slovak, German) and Chrome on macOS never reports AltGraph. Ctrl is a
-  // command unless it is half of Windows' AltGr (Ctrl+Alt).
-  const isCommandChord = metaKey || (ctrlKey && !altKey && !isAltGraph);
-  if (isComposing || isCommandChord) {
-    return null;
-  }
   if (!startsWord(charBefore)) {
     return null;
   }
-  if (hasSkills && key === COMPOSER_MENU_SHORTCUT_CHAR.skills) {
+  if (hasSkills && character === COMPOSER_MENU_SHORTCUT_CHAR.skills) {
     return COMPOSER_MENU_SHORTCUT.skills;
   }
-  if (hasContext && key === COMPOSER_MENU_SHORTCUT_CHAR.context) {
+  if (hasContext && character === COMPOSER_MENU_SHORTCUT_CHAR.context) {
     return COMPOSER_MENU_SHORTCUT.context;
   }
   return null;

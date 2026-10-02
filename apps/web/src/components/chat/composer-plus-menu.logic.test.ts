@@ -1,6 +1,8 @@
 import { Schema } from "@tiptap/pm/model";
 import { describe, expect, test } from "bun:test";
 
+import { typedCharacter } from "@stll/ui/typed-character";
+
 import {
   charBeforeCaret,
   COMPOSER_MENU_SHORTCUT,
@@ -10,14 +12,9 @@ import {
 } from "@/components/chat/composer-plus-menu.logic";
 
 const baseOptions = {
-  altKey: false,
   charBeforeCaret: null,
-  ctrlKey: false,
   hasContext: true,
   hasSkills: true,
-  isAltGraph: false,
-  isComposing: false,
-  metaKey: false,
 };
 
 const schema = new Schema({
@@ -42,13 +39,13 @@ const caretAfter = (children: Parameters<typeof schema.node>[2]) => {
   return doc.resolve(1 + paragraph.content.size);
 };
 
-const resolveAfterText = (text: string, key: string) =>
+const resolveAfterText = (text: string, character: string) =>
   resolveComposerMenuShortcut({
     ...baseOptions,
     charBeforeCaret: charBeforeCaret(
       caretAfter(text ? [schema.text(text)] : []),
     ),
-    key,
+    character,
   });
 
 describe("resolveComposerMenuShortcut", () => {
@@ -113,7 +110,7 @@ describe("resolveComposerMenuShortcut", () => {
       resolveComposerMenuShortcut({
         ...baseOptions,
         charBeforeCaret: afterBreak,
-        key: "/",
+        character: "/",
       }),
     ).toBe(COMPOSER_MENU_SHORTCUT.skills);
 
@@ -122,7 +119,7 @@ describe("resolveComposerMenuShortcut", () => {
       resolveComposerMenuShortcut({
         ...baseOptions,
         charBeforeCaret: afterChip,
-        key: "@",
+        character: "@",
       }),
     ).toBeNull();
   });
@@ -132,82 +129,42 @@ describe("resolveComposerMenuShortcut", () => {
       resolveComposerMenuShortcut({
         ...baseOptions,
         hasSkills: false,
-        key: "/",
+        character: "/",
       }),
     ).toBeNull();
     expect(
       resolveComposerMenuShortcut({
         ...baseOptions,
         hasContext: false,
-        key: "@",
+        character: "@",
       }),
     ).toBeNull();
   });
 
-  test("preserves IME composition", () => {
+  // Which keystrokes type a character is typedCharacter's contract, pinned
+  // per layout next to it; this checks the composer consumes it.
+  test("opens for an Option-typed trigger and keeps Cmd shortcuts", () => {
+    const keystroke = (modifiers: { altKey: boolean; metaKey: boolean }) =>
+      typedCharacter({
+        ...modifiers,
+        ctrlKey: false,
+        getModifierState: () => false,
+        isComposing: false,
+        key: "@",
+      });
+
     expect(
       resolveComposerMenuShortcut({
         ...baseOptions,
-        isComposing: true,
-        key: "/",
+        character: keystroke({ altKey: true, metaKey: false }),
+      }),
+    ).toBe(COMPOSER_MENU_SHORTCUT.context);
+    expect(
+      resolveComposerMenuShortcut({
+        ...baseOptions,
+        character: keystroke({ altKey: false, metaKey: true }),
       }),
     ).toBeNull();
-  });
-
-  // Every modifier combination a layout can type the trigger with: Option on
-  // macOS (Czech, Slovak, German "@"), AltGr on Windows (Ctrl+Alt, with or
-  // without the AltGraph state), and Shift folded into `key` everywhere. Only
-  // Cmd, or Ctrl without Alt, is a command chord.
-  describe("modifier chords", () => {
-    const flags = [false, true];
-    const chords = flags.flatMap((altKey) =>
-      flags.flatMap((ctrlKey) =>
-        flags.flatMap((metaKey) =>
-          flags.map((isAltGraph) => ({ altKey, ctrlKey, isAltGraph, metaKey })),
-        ),
-      ),
-    );
-
-    test.each(chords)(
-      "alt=$altKey ctrl=$ctrlKey meta=$metaKey altGraph=$isAltGraph",
-      (chord) => {
-        const isCommandChord =
-          chord.metaKey ||
-          (chord.ctrlKey && !chord.altKey && !chord.isAltGraph);
-        const expected = isCommandChord ? null : COMPOSER_MENU_SHORTCUT.context;
-
-        expect(
-          resolveComposerMenuShortcut({ ...baseOptions, ...chord, key: "@" }),
-        ).toBe(expected);
-      },
-    );
-
-    test("opens for Option-typed characters on macOS", () => {
-      expect(
-        resolveComposerMenuShortcut({
-          ...baseOptions,
-          altKey: true,
-          key: "@",
-        }),
-      ).toBe(COMPOSER_MENU_SHORTCUT.context);
-    });
-
-    test("keeps Ctrl and Cmd shortcuts", () => {
-      expect(
-        resolveComposerMenuShortcut({
-          ...baseOptions,
-          ctrlKey: true,
-          key: "/",
-        }),
-      ).toBeNull();
-      expect(
-        resolveComposerMenuShortcut({
-          ...baseOptions,
-          metaKey: true,
-          key: "/",
-        }),
-      ).toBeNull();
-    });
   });
 });
 
