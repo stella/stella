@@ -20,6 +20,8 @@ import { listingIdentityKey } from "@/api/lib/legal-search/ingestion-types";
 import { fingerprintReconciliationPayload } from "@/api/lib/legal-search/reconciliation-payload";
 import {
   parkReconciliationItem,
+  RECONCILIATION_RETRY_DELAYS_MS,
+  RECONCILIATION_TERMINAL_ATTEMPTS,
   refreshTrackedReconciliationItems,
   retireReconciliationItem,
 } from "@/api/lib/legal-search/reconciliation-store";
@@ -60,6 +62,120 @@ const readItem = async (
   );
 };
 
+type RevisionSequenceOptions = {
+  sourceId: SafeId<"caseLawSource">;
+  leaseToken: SafeId<"caseLawSourceIngestionLease">;
+  identityKey: string;
+  slice: string;
+  now: Date;
+  payload: { publisherValue: unknown; language: string; revision: number };
+  actions: readonly ("miss" | "corrected" | "unchanged")[];
+};
+
+const assertRevisionSequence = async ({
+  sourceId,
+  leaseToken,
+  identityKey,
+  slice,
+  now,
+  payload,
+  actions,
+}: RevisionSequenceOptions) => {
+  let currentPayload = payload;
+  let attempts = 1;
+  let previous = await readItem(sourceId, identityKey);
+  for (const action of actions) {
+    switch (action) {
+      case "miss": {
+        const result = await parkReconciliationItem(scopedDb, {
+          sourceId,
+          leaseToken,
+          identityKey,
+          slice,
+          now,
+          payload: currentPayload,
+          errorTag: "detail-unavailable",
+        });
+        if (result.outcome !== "recorded") {
+          panic("The revision property fixture must retain its source lease");
+        }
+        attempts += 1;
+        expect(result.attempts).toBe(attempts);
+        break;
+      }
+      case "corrected":
+      case "unchanged": {
+        if (action === "corrected") {
+          currentPayload = {
+            publisherValue: currentPayload.publisherValue,
+            language: currentPayload.language,
+            revision: currentPayload.revision + 1,
+          };
+          attempts = 0;
+        }
+        const result = await refreshTrackedReconciliationItems(scopedDb, {
+          sourceId,
+          leaseToken,
+          now,
+          items: [{ slice, identityKey, payload: currentPayload }],
+        });
+        if (result.outcome !== "refreshed") {
+          panic("The revision property fixture must retain its source lease");
+        }
+        expect(result.trackedIdentityKeys.has(identityKey)).toBe(true);
+        expect(result.refreshedIdentityKeys.has(identityKey)).toBe(
+          action === "corrected",
+        );
+        break;
+      }
+      default: {
+        const exhaustive: never = action;
+        panic(`Unknown generated revision action: ${exhaustive}`);
+      }
+    }
+    const row = await readItem(sourceId, identityKey);
+    const serializedPayload = JSON.stringify(currentPayload);
+    const persistedPayload: unknown = JSON.parse(serializedPayload);
+    expect(row.payload).toEqual(persistedPayload);
+    expect(row.payloadHash).toBe(
+      fingerprintReconciliationPayload(currentPayload),
+    );
+    expect(row.attempts).toBe(attempts);
+    expect(row.status).toBe(
+      attempts >= RECONCILIATION_TERMINAL_ATTEMPTS
+        ? RECONCILIATION_ITEM_STATUS.TERMINAL
+        : RECONCILIATION_ITEM_STATUS.PARKED,
+    );
+    if (action === "unchanged") {
+      expect(row).toEqual(previous);
+    } else if (action === "corrected") {
+      expect(row.lastError).toBeNull();
+      expect(row.lastAttemptAt).toBeNull();
+      expect(row.nextAttemptAt).toEqual(now);
+    } else {
+      expect(row.lastError).toBe("detail-unavailable");
+      expect(row.lastAttemptAt).toEqual(now);
+      if (attempts >= RECONCILIATION_TERMINAL_ATTEMPTS) {
+        expect(row.nextAttemptAt).toBeNull();
+      } else {
+        const delay =
+          (
+            row.nextAttemptAt ?? panic("A retryable miss must remain scheduled")
+          ).getTime() - now.getTime();
+        expect(delay).toBeGreaterThanOrEqual(RECONCILIATION_RETRY_DELAYS_MS[0]);
+        expect(delay).toBeLessThanOrEqual(
+          RECONCILIATION_RETRY_DELAYS_MS.at(-1) ??
+            panic("A retry schedule needs an upper bound"),
+        );
+        expect(row.nextAttemptAt?.getTime()).toBeGreaterThanOrEqual(
+          previous.nextAttemptAt?.getTime() ?? now.getTime(),
+        );
+      }
+    }
+    previous = row;
+  }
+};
+
 test(
   "missed listings reopen on corrected input and unchanged input preserves their retry state",
   async () => {
@@ -71,8 +187,18 @@ test(
           language: fc.string({ minLength: 1, maxLength: 20 }),
           terminal: fc.boolean(),
           identityKind: fc.constantFrom("document", "case-number"),
+          actions: fc.array(fc.constantFrom("miss", "corrected", "unchanged"), {
+            minLength: 1,
+            maxLength: 8,
+          }),
         }),
-        async ({ publisherValue, language, terminal, identityKind }) => {
+        async ({
+          publisherValue,
+          language,
+          terminal,
+          identityKind,
+          actions,
+        }) => {
           const sourceId = createSafeId<"caseLawSource">();
           const leaseToken = createSafeId<"caseLawSourceIngestionLease">();
           const identityKey =
@@ -91,15 +217,13 @@ test(
           const correctedPayload = { publisherValue, language, revision: 2 };
           const serializedCorrection = JSON.stringify(correctedPayload);
           const persistedCorrection: unknown = JSON.parse(serializedCorrection);
-          await db
-            .insert(caseLawSources)
-            .values({
-              id: sourceId,
-              adapterKey: `revision-property-${sourceId}`,
-              name: "Listing revision property fixture",
-              ingestionLeaseToken: leaseToken,
-              ingestionLeaseExpiresAt: new Date("2100-01-01T00:00:00Z"),
-            });
+          await db.insert(caseLawSources).values({
+            id: sourceId,
+            adapterKey: `revision-property-${sourceId}`,
+            name: "Listing revision property fixture",
+            ingestionLeaseToken: leaseToken,
+            ingestionLeaseExpiresAt: new Date("2100-01-01T00:00:00Z"),
+          });
           try {
             const miss = {
               sourceId,
@@ -196,6 +320,15 @@ test(
             }
             expect(repeated.refreshedIdentityKeys.has(identityKey)).toBe(false);
             expect(await readItem(sourceId, identityKey)).toEqual(retried);
+            await assertRevisionSequence({
+              sourceId,
+              leaseToken,
+              identityKey,
+              slice,
+              now,
+              payload: correctedPayload,
+              actions,
+            });
           } finally {
             await db
               .delete(caseLawSources)
