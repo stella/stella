@@ -228,11 +228,12 @@ export const runEuCompletionControl = async ({
           command satisfies never;
           return panic("Unexpected completion operator command");
       }
+      return 0;
     },
     catch: (error) => error,
   });
   if (attempted.isOk()) {
-    return attempted.value ?? 0;
+    return attempted.value;
   }
   write({
     event: "case_law.eu_completion.control_failed",

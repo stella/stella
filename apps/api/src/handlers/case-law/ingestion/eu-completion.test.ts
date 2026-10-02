@@ -85,6 +85,7 @@ const fixture = () => {
       },
       releaseBenign: async (id: string) => {
         events.push(`refund:${id}`);
+        return null;
       },
       recordTick: async ({
         mode,

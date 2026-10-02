@@ -149,7 +149,8 @@ describe("completion preserves stated values", () => {
       return expect.unreachable();
     }
     expect(outcome.candidate.ecli).toBe(existing.ecli);
-    expect(outcome.candidate.fulltext).toBe(existing.fulltext);
+    expect(existing.fulltext).not.toBeNull();
+    expect(outcome.candidate.fulltext ?? null).toBe(existing.fulltext);
     expect(outcome.candidate.textFields.headnote).toEqual(
       presentTextField("Stored headnote"),
     );

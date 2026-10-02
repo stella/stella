@@ -101,6 +101,7 @@ type CompletionQueueMetricOptions = {
   timestamp: number;
   probe: {
     hasQueuedWork: boolean;
+    mirrorRepairRequired: boolean;
     oldestRetryAgeMs: number | null;
     lastCompletedAt: Date | null;
   };
@@ -112,6 +113,9 @@ export const euCompletionQueueMetricRecord = ({
 }: CompletionQueueMetricOptions) => {
   const values = {
     "case_law.eu_completion.queued_work_present": Number(probe.hasQueuedWork),
+    "case_law.eu_completion.mirror_repair_required_present": Number(
+      probe.mirrorRepairRequired,
+    ),
     ...(probe.oldestRetryAgeMs === null
       ? {}
       : {
@@ -350,7 +354,9 @@ const runCompletionSession = async (
     ingestionDb: handles.ingestionDb,
     store,
     sourceLease: resources.getLease,
-    beforeWriteFence: fixture.beforeWriteFence,
+    ...(fixture.beforeWriteFence
+      ? { beforeWriteFence: fixture.beforeWriteFence }
+      : {}),
     signal,
     check: async () =>
       await Result.tryPromise({

@@ -8,6 +8,7 @@ import { Temporal } from "@stll/time";
 import type { Transaction } from "@/api/db/root";
 import {
   caseLawDecisions,
+  caseLawIndexJobs,
   caseLawSources,
   databaseBackfillStates,
   euCompletionApprovals,
@@ -31,6 +32,7 @@ import {
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import { ecjCompletionFingerprint } from "@/api/handlers/case-law/ingestion/eu-completion-protection";
 import { createEuCompletionStore } from "@/api/handlers/case-law/ingestion/eu-completion-store";
+import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { processDecision } from "@/api/handlers/case-law/ingestion/pipeline/decision";
 import { allocateSourceObservationOrder } from "@/api/handlers/case-law/ingestion/pipeline/source-observation";
@@ -202,7 +204,10 @@ if (!databaseUrl || !enabled) {
         ecli: "ECLI:EU:C:2024:49",
         decisionDate: "2024-01-18",
       };
-      const parsed = euEcjAdapter.reparseStoredRaw({
+      if (euEcjAdapter.reparseStoredRaw === undefined) {
+        panic("EU adapter has no stored-raw parser");
+      }
+      const parsed = await euEcjAdapter.reparseStoredRaw({
         raw: new TextEncoder().encode(payload),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         caseNumber: "C-128/21",
@@ -292,7 +297,16 @@ if (!databaseUrl || !enabled) {
         if (fetched.value === null) {
           panic("Missing fetched completion fixture");
         }
-        return fetched.value;
+        // Recovery starts after the previous pickup lease has expired.
+        await db
+          .update(euCompletionReceipts)
+          .set({ retryAt: new Date(0) })
+          .where(eq(euCompletionReceipts.id, fetched.value.id));
+        const recovered = await store.getReceipt(fetched.value.id);
+        if (recovered === null) {
+          panic("Missing expired recovery fixture receipt");
+        }
+        return recovered;
       };
       const dry = await reserveFetched("dry-run");
       await store.finish({ id: dry.id, status: "dry-run" });
@@ -322,6 +336,15 @@ if (!databaseUrl || !enabled) {
       const receipt = await reserveFetched("apply");
       return { store, receipt, row, candidate };
     };
+
+    const healthyPublisherRows = async (sourceId: SafeId<"caseLawSource">) =>
+      (
+        await db
+          .select({ healthyRows: euCompletionControls.healthyRows })
+          .from(euCompletionControls)
+          .where(eq(euCompletionControls.sourceId, sourceId))
+          .limit(1)
+      ).at(0)?.healthyRows;
 
     const fixtureGate = (
       options: { clock?: () => number; sleep?: typeof abortableSleep } = {},
@@ -432,8 +455,10 @@ if (!databaseUrl || !enabled) {
         );
       }
       if (url.endsWith("/DOC_1")) {
-        return new Response(
-          new TextDecoder().decode(
+        // The recorded Formex belongs to C-128/22; this synthetic publisher
+        // response must match the notice/listing fixture for C-128/21.
+        const formex = new TextDecoder()
+          .decode(
             Bun.gunzipSync(
               await Bun.file(
                 new URL(
@@ -442,9 +467,19 @@ if (!databaseUrl || !enabled) {
                 ),
               ).bytes(),
             ),
-          ),
-          { headers: { "Content-Type": "application/xml" } },
-        );
+          )
+          .replaceAll("62022CJ0128", "62021CJ0128")
+          .replaceAll("128/22", "128/21")
+          .replaceAll("EU:C:2023:951", "EU:C:2024:49")
+          .replaceAll('ISO="20231205"', 'ISO="20240118"');
+        expect(parseFormexBibliography(formex)).toMatchObject({
+          caseNumber: ["C-128/21"],
+          celex: ["62021CJ0128"],
+          ecli: ["EU:C:2024:49"],
+        });
+        return new Response(formex, {
+          headers: { "Content-Type": "application/xml" },
+        });
       }
       if (url.includes("/resource/cellar/")) {
         return new Response(
@@ -517,6 +552,7 @@ if (!databaseUrl || !enabled) {
               status: "dry-run",
               attempts: 1,
             });
+            expect(await healthyPublisherRows(sourceId)).toBe(1);
             expect(sent).toHaveLength(4);
             expect(
               sent.some((request) => request.url.includes("/resource/celex/")),
@@ -554,6 +590,7 @@ if (!databaseUrl || !enabled) {
                 attempted: 1,
                 applied: 0,
               });
+              expect(await healthyPublisherRows(sourceId)).toBe(0);
               expect(sent).toHaveLength(1);
               expect((await store.getReceipt(receipt.id))?.status).toBe(
                 "publisher-refused",
@@ -673,6 +710,7 @@ if (!databaseUrl || !enabled) {
               expect(sent).toHaveLength(surface === "notice" ? 3 : 4);
               expect(sent.at(-1)?.url).toBe(stoppedUrl);
               expect(report.requests).toBe(sent.length);
+              expect(await healthyPublisherRows(sourceId)).toBe(0);
               expect(
                 (await store.loadSourceGateState(sourceId)).holdUntil,
               ).toBeGreaterThan(Temporal.Now.instant().epochMilliseconds);
@@ -1149,7 +1187,11 @@ if (!databaseUrl || !enabled) {
       await withSource(async (sourceId) => {
         const storage = startCompletionFixtureStorage();
         try {
-          const { store, row } = await fetchedApprovedFixture(sourceId, {
+          const {
+            store,
+            row,
+            receipt: firstReceipt,
+          } = await fetchedApprovedFixture(sourceId, {
             receiptStage: "pending",
           });
           if (
@@ -1178,6 +1220,11 @@ if (!databaseUrl || !enabled) {
               decisionDate: "2024-01-18",
             },
           });
+          // Hold the first reservation while independently reserving its neighbour.
+          await db
+            .update(euCompletionReceipts)
+            .set({ retryAt: new Date(Date.now() + 60_000) })
+            .where(eq(euCompletionReceipts.id, firstReceipt.id));
           const secondReceipt = (
             await store.reserve({
               sourceId,
@@ -1189,6 +1236,10 @@ if (!databaseUrl || !enabled) {
           if (secondReceipt === undefined) {
             panic("Missing adjacent completion fixture receipt");
           }
+          await db
+            .update(euCompletionReceipts)
+            .set({ retryAt: null })
+            .where(eq(euCompletionReceipts.id, firstReceipt.id));
           process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] = "2";
           let clock = 1000;
           const gate = fixtureGate({
@@ -1215,9 +1266,16 @@ if (!databaseUrl || !enabled) {
                         if (completedDocuments !== 1) {
                           return;
                         }
+                        const receipts = await Promise.all([
+                          store.getReceipt(firstReceipt.id),
+                          store.getReceipt(secondReceipt.id),
+                        ]);
                         expect(
-                          (await store.getReceipt(secondReceipt.id))?.writtenAt,
-                        ).toBeNull();
+                          receipts.filter(
+                            (receipt) =>
+                              receipt !== null && receipt.writtenAt !== null,
+                          ),
+                        ).toHaveLength(1);
                         const crawl = await acquireCaseLawSourceIngestionLease({
                           scopedDb: createIngestionDb(markRlsDatabase(db)),
                           sourceId,
@@ -1247,6 +1305,100 @@ if (!databaseUrl || !enabled) {
           });
           expect(crawlTokens).toHaveLength(1);
           expect(completedDocuments).toBe(2);
+        } finally {
+          storage.stop();
+        }
+      });
+    }, 30_000);
+
+    test("a withdrawal committed during the write-fence lock wait excludes an already empty decision", async () => {
+      await withSource(async (sourceId) => {
+        const storage = startCompletionFixtureStorage();
+        try {
+          const { row, receipt, store } =
+            await fetchedApprovedFixture(sourceId);
+          expect(row.fulltext).toBeNull();
+          expect(row.documentAst).toBeNull();
+          expect(row.contentHash).toBeNull();
+          expect(row.textS3Key).toBeNull();
+          await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+            const blocker = openClient();
+            const observer = openClient();
+            const locked = Promise.withResolvers<undefined>();
+            let injected = false;
+            const running = runEuCompletionTickFixture(
+              AbortSignal.timeout(20_000),
+              {
+                healthConfig: { busyWindows: [] },
+                beforeWriteFence: async () => {
+                  if (injected) {
+                    return;
+                  }
+                  injected = true;
+                  await blocker.sql.unsafe("BEGIN");
+                  // Preserve the fingerprint; the marker alone must fence this write.
+                  await blocker.db
+                    .update(caseLawDecisions)
+                    .set({ fulltext: null, updatedAt: row.updatedAt })
+                    .where(eq(caseLawDecisions.id, row.id));
+                  await blocker.db.insert(caseLawIndexJobs).values({
+                    id: createSafeId<"caseLawIndexJob">(),
+                    decisionId: row.id,
+                    operation: "withdraw",
+                    status: "succeeded",
+                    detail: "fixture concurrent withdrawal",
+                  });
+                  locked.resolve(undefined);
+                },
+              },
+            );
+            try {
+              await Promise.race([
+                locked.promise,
+                running.then(() => panic("Fixture never reached write fence")),
+              ]);
+              const blockerPid = (
+                await blocker.sql.unsafe<{ pid: number }[]>(
+                  "SELECT pg_backend_pid() AS pid",
+                )
+              ).at(0)?.pid;
+              if (blockerPid === undefined) {
+                panic("Missing withdrawal backend pid");
+              }
+              let blocked = false;
+              for (let probe = 0; probe < 300; probe++) {
+                const activity = await observer.sql.unsafe<
+                  { blocked: boolean }[]
+                >(
+                  "SELECT EXISTS (SELECT 1 FROM pg_stat_activity WHERE datname = current_database() AND $1::int = ANY(pg_blocking_pids(pid))) AS blocked",
+                  [blockerPid],
+                );
+                if (activity.at(0)?.blocked === true) {
+                  blocked = true;
+                  break;
+                }
+                await Bun.sleep(10);
+              }
+              expect(blocked).toBe(true);
+              await blocker.sql.unsafe("COMMIT");
+              const report = await running;
+              expect(report).toMatchObject({ attempted: 1, applied: 0 });
+              expect((await store.getReceipt(receipt.id))?.status).toBe(
+                "withdrawn",
+              );
+              expect(
+                (
+                  await db
+                    .select()
+                    .from(caseLawDecisions)
+                    .where(eq(caseLawDecisions.id, row.id))
+                ).at(0),
+              ).toEqual(row);
+            } finally {
+              await blocker.sql.unsafe("ROLLBACK");
+              await running;
+            }
+          });
         } finally {
           storage.stop();
         }
@@ -1400,7 +1552,8 @@ if (!databaseUrl || !enabled) {
                       .where(eq(caseLawDecisions.id, row.id))
                   ).at(0);
                   if (
-                    written?.hash !== candidate.rawHash ||
+                    written === undefined ||
+                    written.hash !== candidate.rawHash ||
                     written.order !== observationOrder
                   ) {
                     return;
@@ -1417,7 +1570,6 @@ if (!databaseUrl || !enabled) {
               input: candidate,
               sourceId,
               scopedDb: writer,
-              sourceLease: lease,
               signal,
               s3Policy: { mode: "replay-strict", signal },
               observedAt: new Date(),

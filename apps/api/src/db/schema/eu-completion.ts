@@ -55,7 +55,7 @@ export const euCompletionReceipts = p.pgTable.withRLS(
       mode: "bigint",
     }),
     claimedFingerprint: p.text("claimed_fingerprint"),
-    payload: jsonb().$type<string>(),
+    payload: p.text(),
     payloadHash: p.text("payload_hash"),
     provenance: jsonb().$type<EuCompletionProvenance>(),
     detail: p.text(),
@@ -151,7 +151,7 @@ export const euCompletionReceipts = p.pgTable.withRLS(
     ),
     p.check(
       "eu_completion_receipts_payload_check",
-      sql`${t.payload} IS NULL OR (jsonb_typeof(${t.payload}) = 'string' AND octet_length(${t.payload} #>> '{}') <= ${EU_COMPLETION_PAYLOAD_MAX_BYTES})`,
+      sql`${t.payload} IS NULL OR octet_length(${t.payload}) <= ${EU_COMPLETION_PAYLOAD_MAX_BYTES}`,
     ),
     p.check(
       "eu_completion_receipts_provenance_check",
@@ -188,7 +188,7 @@ export const euCompletionReceipts = p.pgTable.withRLS(
 export const euCompletionRequestHours = p.pgTable.withRLS(
   "eu_completion_request_hours",
   {
-    hour: timestamptz().notNull(),
+    hour: timestamptz("hour").notNull(),
     requests: p.integer().notNull(),
   },
   (t) => [

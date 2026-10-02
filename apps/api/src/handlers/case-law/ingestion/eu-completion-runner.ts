@@ -1,5 +1,6 @@
 import { panic, Result, TaggedError, type InferOk } from "better-result";
 import { and, asc, eq } from "drizzle-orm";
+import { TransformStream } from "node:stream/web";
 
 import { Temporal } from "@stll/time";
 
@@ -94,14 +95,11 @@ const legacyOperation = <T>(operation: () => Promise<T>) =>
 
 const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
   Result.gen(async function* () {
-    const selected = (yield* Result.await(
+    const row = (yield* Result.await(
       legacyOperation(
         async () =>
           await tx
-            .select({
-              row: caseLawDecisions,
-              notWithdrawn: euCompletionDecisionNotWithdrawn(),
-            })
+            .select()
             .from(caseLawDecisions)
             .where(
               and(
@@ -113,7 +111,6 @@ const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
             .limit(1),
       ),
     )).at(0);
-    const row = selected?.row;
     if (row === undefined || row.redactedAt !== null) {
       return Result.err(
         new CompletionReviewRequired({
@@ -121,7 +118,20 @@ const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
         }),
       );
     }
-    if (selected?.notWithdrawn === false) {
+    // A withdrawal may commit while the lock waits. Read its marker with the
+    // next statement snapshot after acquiring the decision lock.
+    const withdrawal =
+      (yield* Result.await(
+        legacyOperation(
+          async () =>
+            await tx
+              .select({ notWithdrawn: euCompletionDecisionNotWithdrawn() })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, row.id))
+              .limit(1),
+        ),
+      )).at(0) ?? panic("Locked completion decision disappeared");
+    if (withdrawal.notWithdrawn === false) {
       return Result.err(
         new CompletionWithdrawn({ message: "Decision has been withdrawn" }),
       );
@@ -180,6 +190,7 @@ type CompletionRunnerOptions = {
 };
 type CompletionPublisherState = {
   requests: number;
+  publisherSuccess: boolean;
   bytes: number;
   refusal: number | null;
   publisherFailure: { error: unknown } | null;
@@ -440,7 +451,10 @@ const fetchCompletionCandidate = (
     }
   });
 
-const recoverCompletionCandidate = ({ row, receipt }: CandidateContext) => {
+const recoverCompletionCandidate = async ({
+  row,
+  receipt,
+}: CandidateContext) => {
   const payload =
     receipt.payload ?? panic("Completion recovery has no payload");
   if (digest(payload) !== receipt.payloadHash) {
@@ -450,9 +464,12 @@ const recoverCompletionCandidate = ({ row, receipt }: CandidateContext) => {
       }),
     );
   }
-  const parsed = Result.try({
-    try: () =>
-      euEcjAdapter.reparseStoredRaw({
+  const reparse =
+    euEcjAdapter.reparseStoredRaw ??
+    panic("ECJ completion requires stored raw reparsing");
+  const parsed = await Result.tryPromise({
+    try: async () =>
+      await reparse({
         ...storedInput(row),
         raw: new TextEncoder().encode(payload),
         contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -482,7 +499,9 @@ const prepareCompletionCandidate = (
   Result.gen(async function* () {
     const { row, receipt, ensure, store } = context;
     if (receipt.payload !== null) {
-      const candidate = yield* recoverCompletionCandidate(context);
+      const candidate = yield* Result.await(
+        recoverCompletionCandidate(context),
+      );
       return Result.ok({
         type: "candidate",
         candidate,
@@ -506,7 +525,11 @@ const prepareCompletionCandidate = (
       yield* Result.await(
         legacyOperation(
           async () =>
-            await store.finish({ id: receipt.id, status: "unchanged" }),
+            await store.finish({
+              id: receipt.id,
+              status: "unchanged",
+              publisherSuccess: context.state.publisherSuccess,
+            }),
         ),
       );
       return Result.ok(fetched);
@@ -784,17 +807,19 @@ const applyCompletionCandidate = (
     yield* Result.await(
       legacyOperation(
         async () =>
-          await processDecision({
-            input: candidate,
-            sourceId: receipt.sourceId,
-            scopedDb,
-            sourceLease: guardedLease,
-            signal,
-            s3Policy: { mode: "replay-strict", signal },
-            observedAt: new Date(),
-            observationOrder,
-            refresh: DECISION_REFRESH.ALWAYS,
-          }),
+          await guardedLease.beforeRemoteEffect(
+            async () =>
+              await processDecision({
+                input: candidate,
+                sourceId: receipt.sourceId,
+                scopedDb,
+                signal,
+                s3Policy: { mode: "replay-strict", signal },
+                observedAt: new Date(),
+                observationOrder,
+                refresh: DECISION_REFRESH.ALWAYS,
+              }),
+          ),
       ),
     );
     yield* Result.await(ensure());
@@ -886,7 +911,11 @@ const finalizeWrittenCompletion = (
     yield* Result.await(context.ensure());
     const settled = yield* Result.await(
       legacyOperation(
-        async () => await context.store.finalize(context.receipt.id),
+        async () =>
+          await context.store.finalize(
+            context.receipt.id,
+            context.state.publisherSuccess,
+          ),
       ),
     );
     if (settled === "retryable") {
@@ -988,6 +1017,7 @@ const executeCompletionRow = (context: CompletionContext): Promise<RowResult> =>
             await store.finish({
               id: receipt.id,
               status: "review-required",
+              publisherSuccess: context.state.publisherSuccess,
               detail: protectedResult.fields.join(",").slice(0, 512),
             }),
         ),
@@ -1000,7 +1030,12 @@ const executeCompletionRow = (context: CompletionContext): Promise<RowResult> =>
       yield* Result.await(ensure());
       yield* Result.await(
         legacyOperation(
-          async () => await store.finish({ id: receipt.id, status: "dry-run" }),
+          async () =>
+            await store.finish({
+              id: receipt.id,
+              status: "dry-run",
+              publisherSuccess: context.state.publisherSuccess,
+            }),
         ),
       );
       return Result.ok({ type: "dry-run" } satisfies EuCompletionRowOutcome);
@@ -1014,6 +1049,7 @@ const executeCompletionRow = (context: CompletionContext): Promise<RowResult> =>
 const completionResponseLimiter =
   (state: CompletionPublisherState) =>
   (response: Response): Response => {
+    state.publisherSuccess ||= response.ok;
     if (response.body === null) {
       return response;
     }
@@ -1112,6 +1148,14 @@ const runControlledCompletionRow = (
 ): Promise<RowResult> =>
   Result.gen(async function* () {
     const { ensure, state } = context;
+    // Adapter boundaries may wrap request errors. Keep benign stops available
+    // to settlement before that conversion so they never become source failures.
+    const rememberStop = (result: Result<void, unknown>) => {
+      if (result.isErr() && result.error instanceof EuCompletionStop) {
+        state.publisherFailure = { error: result.error };
+      }
+      return result;
+    };
     const result = yield* Result.await(
       legacyOperation(
         async () =>
@@ -1122,9 +1166,11 @@ const runControlledCompletionRow = (
             controls: {
               retry: "durable",
               raiseFailure: context.raiseFailure,
-              check: ensure,
-              checkBeforeSend: () => checkCompletionBeforeSend(context),
-              chargeRequest: async () => await chargeCompletionRequest(context),
+              check: async () => rememberStop(await ensure()),
+              checkBeforeSend: () =>
+                rememberStop(checkCompletionBeforeSend(context)),
+              chargeRequest: async () =>
+                rememberStop(await chargeCompletionRequest(context)),
               onRefusal: (deadline) => {
                 state.refusal = deadline;
               },
@@ -1168,7 +1214,11 @@ const settleCompletionFailure = ({
       yield* Result.await(
         legacyOperation(
           async () =>
-            await store.finish({ id: receipt.id, status: "publisher-gone" }),
+            await store.finish({
+              id: receipt.id,
+              status: "publisher-gone",
+              publisherSuccess: state.publisherSuccess,
+            }),
         ),
       );
       return Result.ok({
@@ -1179,7 +1229,11 @@ const settleCompletionFailure = ({
       yield* Result.await(
         legacyOperation(
           async () =>
-            await store.finish({ id: receipt.id, status: "too-large" }),
+            await store.finish({
+              id: receipt.id,
+              status: "too-large",
+              publisherSuccess: state.publisherSuccess,
+            }),
         ),
       );
       return Result.ok({ type: "too-large" } satisfies EuCompletionRowOutcome);
@@ -1208,6 +1262,7 @@ const settleCompletionFailure = ({
             await store.finish({
               id: receipt.id,
               status: "review-required",
+              publisherSuccess: state.publisherSuccess,
               detail: error.message,
             }),
         ),
@@ -1246,10 +1301,17 @@ const settleCompletionFailure = ({
     return Result.ok({ type } satisfies EuCompletionRowOutcome);
   });
 
+const resetCompletionPublisherRow = (state: CompletionPublisherState) => {
+  state.publisherFailure = null;
+  state.bytes = 0;
+  state.publisherSuccess = false;
+};
+
 /** Network results are durable raw envelopes; retries reparse stored bytes canonically. */
 export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
   const state: CompletionPublisherState = {
     requests: 0,
+    publisherSuccess: false,
     bytes: 0,
     refusal: null,
     publisherFailure: null,
@@ -1259,8 +1321,7 @@ export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
     rowOptions: EuCompletionRowOptions,
   ): Promise<RowResult> =>
     Result.gen(async function* () {
-      state.publisherFailure = null;
-      state.bytes = 0;
+      resetCompletionPublisherRow(state);
       const receipt = yield* Result.await(
         legacyOperation(
           async () => await options.store.getReceipt(reserved.id),

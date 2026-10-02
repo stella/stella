@@ -165,12 +165,14 @@ describe("scheduled EU completion", () => {
       timestamp: 1000,
       probe: {
         hasQueuedWork: true,
+        mirrorRepairRequired: true,
         oldestRetryAgeMs: 20,
         lastCompletedAt: new Date(900),
       },
     });
     expect(record).toMatchObject({
       "case_law.eu_completion.queued_work_present": 1,
+      "case_law.eu_completion.mirror_repair_required_present": 1,
       "case_law.eu_completion.oldest_retry_age_ms": 20,
       "case_law.eu_completion.last_success_age_ms": 100,
     });
@@ -179,6 +181,7 @@ describe("scheduled EU completion", () => {
       timestamp: 1000,
       probe: {
         hasQueuedWork: false,
+        mirrorRepairRequired: false,
         oldestRetryAgeMs: null,
         lastCompletedAt: null,
       },

@@ -106,9 +106,10 @@ export class CompletionApprovalError extends TaggedError(
   cause?: unknown;
 }> {}
 export const euCompletionDecisionNotWithdrawn = (
-  decisionId: SQLWrapper = caseLawDecisions.id,
+  decisionId: SQLWrapper = sql`${caseLawDecisions}.${sql.identifier("id")}`,
 ) =>
   sql<boolean>`NOT EXISTS (SELECT 1 FROM ${caseLawIndexJobs} withdrawal JOIN ${caseLawDecisions} document ON document.id = withdrawal.decision_id WHERE withdrawal.decision_id = ${decisionId} AND withdrawal.operation = 'withdraw' AND withdrawal.status = 'succeeded' AND document.fulltext IS NULL AND document.document_ast IS NULL AND document.content_hash IS NULL AND document.text_s3_key IS NULL LIMIT 1)`;
+const MIRROR_REPAIR_REQUIRED = "canonical mirror repair required";
 const GLOBAL_CONTROL = "global";
 const sourceControl = (sourceId: EuCompletionReceipt["sourceId"]) =>
   `source:${sourceId}`;
@@ -163,6 +164,7 @@ type FinishOptions = {
   retryAt?: Date;
   detail?: string;
   healthyEvidence?: EuCompletionFailure["healthyEvidence"];
+  publisherSuccess?: boolean;
 };
 export type EuCompletionFailure = {
   scope: "row" | "systemic";
@@ -358,7 +360,9 @@ const recordCompletionProgressTx = async (
     status,
     now,
     mirrorWait,
+    publisherSuccess,
   }: {
+    publisherSuccess: boolean;
     status: SettleOptions["status"];
     now: () => number;
     mirrorWait?: SettleOptions["mirrorWait"];
@@ -381,7 +385,7 @@ const recordCompletionProgressTx = async (
       sourceId: receipt.sourceId,
       cursor: receipt.decisionId,
       completedRows: Number(applied),
-      healthyRows: Number(healthy),
+      healthyRows: Number(healthy && publisherSuccess),
       lastCompletedAt: applied ? new Date(now()) : null,
     })
     .onConflictDoUpdate({
@@ -389,7 +393,7 @@ const recordCompletionProgressTx = async (
       set: {
         cursor: receipt.decisionId,
         completedRows: sql`${euCompletionControls.completedRows} + ${Number(applied)}`,
-        healthyRows: sql`${euCompletionControls.healthyRows} + ${Number(healthy)}`,
+        healthyRows: sql`${euCompletionControls.healthyRows} + ${Number(healthy && publisherSuccess)}`,
         ...(healthy
           ? { batch: initialBatchState(), ticksWithoutProgress: 0 }
           : {}),
@@ -490,12 +494,11 @@ type PublisherRefusalState = {
 type RefusalOptions = {
   receipt: EuCompletionReceipt;
   retryAt: Date;
-  healthyEvidence: EuCompletionFailure["healthyEvidence"];
   now: () => number;
 };
 const preparePublisherRefusalTx = async (
   tx: Transaction,
-  { receipt, retryAt, healthyEvidence, now }: RefusalOptions,
+  { receipt, retryAt, now }: RefusalOptions,
 ): Promise<PublisherRefusalState> => {
   const control = (
     await tx
@@ -511,10 +514,8 @@ const preparePublisherRefusalTx = async (
       : decodeCheckpoint({ cursor: control.cursor, batch: control.batch })
           .batch;
   const progress = control?.healthyRows ?? 0;
-  const baseline =
-    receipt.refusalCount === 0
-      ? Math.max(0, progress - Number(healthyEvidence === "adjacent-row"))
-      : receipt.refusalProgress;
+  // Only publisher success after the latest refusal can isolate this document.
+  const baseline = receipt.refusalProgress;
   const count = receipt.refusalCount + 1;
   const delay = Math.min(
     EU_COMPLETION_STORE_LIMITS.refusalMaxHoldMs,
@@ -523,12 +524,13 @@ const preparePublisherRefusalTx = async (
   );
   return {
     disposition:
+      receipt.refusalCount > 0 &&
       count >= EU_COMPLETION_STORE_LIMITS.maxDocumentRefusals &&
       progress > baseline
         ? "terminal"
         : "backoff",
     count,
-    progress: baseline,
+    progress,
     until: new Date(
       Math.max(now() + delay, retryAt.getTime(), batch.holdUntil ?? 0),
     ),
@@ -698,7 +700,7 @@ const createSettlementOperations = ({
       status,
       retryAt: requestedRetryAt,
       detail,
-      healthyEvidence = "none",
+      publisherSuccess = false,
       mirrorWait,
     }: SettleOptions,
   ) => {
@@ -731,7 +733,6 @@ const createSettlementOperations = ({
         ? await preparePublisherRefusalTx(tx, {
             receipt,
             retryAt: requestedRetryAt,
-            healthyEvidence,
             now,
           })
         : undefined;
@@ -763,8 +764,8 @@ const createSettlementOperations = ({
               settlement: {
                 id,
                 status,
-                retryAt,
-                detail,
+                ...(retryAt === undefined ? {} : { retryAt }),
+                ...(detail === undefined ? {} : { detail }),
                 ...(mirrorWait === undefined ? {} : { mirrorWait }),
                 ...(refusal === undefined ? {} : { refusal }),
               },
@@ -787,11 +788,12 @@ const createSettlementOperations = ({
     await recordCompletionProgressTx(tx, receipt, {
       status,
       now,
+      publisherSuccess,
       ...(mirrorWait === undefined ? {} : { mirrorWait }),
     });
     return settled;
   };
-  const finalize = async (id: string) =>
+  const finalize = async (id: string, publisherSuccess = false) =>
     await transaction(async (tx) => {
       const receipt = await receiptTx(tx, id);
       if (
@@ -802,7 +804,7 @@ const createSettlementOperations = ({
       }
       const disposition = await verifyWrittenTx(tx, receipt);
       if (disposition !== "retryable") {
-        await finishTx(tx, { id, status: disposition });
+        await finishTx(tx, { id, status: disposition, publisherSuccess });
       }
       return disposition;
     });
@@ -840,7 +842,7 @@ const createSettlementOperations = ({
         id,
         status: exhausted ? "review-required" : "fetched",
         detail: exhausted
-          ? "canonical mirror repair required"
+          ? MIRROR_REPAIR_REQUIRED
           : "waiting for canonical mirror settlement",
         ...(exhausted
           ? {}
@@ -938,6 +940,111 @@ export const buildEuCompletionPageQuery = (
     .limit(limit);
 };
 
+type ReadmitSettledMirrorOptions = Pick<
+  EuCompletionReserveOptions,
+  "sourceId" | "mode" | "parserVersion" | "limit"
+> & {
+  decisionIds: EuCompletionReceipt["decisionId"][];
+  now: () => number;
+};
+const readmitSettledMirrorsTx = async (
+  tx: Transaction,
+  {
+    sourceId,
+    mode,
+    parserVersion,
+    limit,
+    decisionIds,
+    now,
+  }: ReadmitSettledMirrorOptions,
+) => {
+  const repaired = await tx
+    .select({
+      receipt: euCompletionReceipts,
+      sourceHash: caseLawDecisions.sourceHash,
+      observationOrder: caseLawDecisions.sourceObservationOrder,
+      documentParserVersion: caseLawDecisions.parserVersion,
+    })
+    .from(euCompletionReceipts)
+    .innerJoin(
+      caseLawDecisions,
+      eq(caseLawDecisions.id, euCompletionReceipts.decisionId),
+    )
+    .where(
+      and(
+        eq(euCompletionReceipts.sourceId, sourceId),
+        eq(euCompletionReceipts.mode, mode),
+        eq(euCompletionReceipts.parserVersion, parserVersion),
+        inArray(euCompletionReceipts.decisionId, decisionIds),
+        eq(euCompletionReceipts.status, "review-required"),
+        eq(euCompletionReceipts.detail, MIRROR_REPAIR_REQUIRED),
+        isNotNull(euCompletionReceipts.writtenAt),
+        isNull(euCompletionReceipts.supersededAt),
+        isNull(caseLawDecisions.redactedAt),
+        euCompletionDecisionNotWithdrawn(),
+        eq(
+          caseLawDecisions.corpusMirrorStatus,
+          CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED,
+        ),
+        eq(
+          caseLawDecisions.sourceHash,
+          euCompletionReceipts.completionSourceHash,
+        ),
+      ),
+    )
+    .orderBy(asc(euCompletionReceipts.id))
+    .limit(limit)
+    .for("update", { of: euCompletionReceipts });
+  const readmitted: EuCompletionReceipt[] = [];
+  for (const {
+    receipt,
+    sourceHash,
+    observationOrder,
+    documentParserVersion,
+  } of repaired) {
+    const markerCurrent =
+      observationOrder === receipt.writtenObservationOrder &&
+      documentParserVersion === receipt.writtenParserVersion &&
+      sourceHash === receipt.writtenSourceHash;
+    // A canonical repair may advance observation order without changing bytes.
+    // Reclassify against its current claim, rather than replaying the old write.
+    // audit: skip — public case-law corpus bookkeeping, no workspace data
+    readmitted.push(
+      ...(await tx
+        .update(euCompletionReceipts)
+        .set({
+          status: markerCurrent ? "fetched" : "pending",
+          detail: null,
+          attemptState: "idle",
+          completedAt: null,
+          completionSourceHash: null,
+          retryAt: null,
+          ...(markerCurrent
+            ? {}
+            : {
+                claimedSourceHash: sourceHash,
+                claimedObservationOrder: observationOrder,
+                claimedFingerprint: null,
+                payload: null,
+                payloadHash: null,
+                provenance: null,
+                target: null,
+                writtenAt: null,
+                writtenSourceHash: null,
+                writtenObservationOrder: null,
+                writtenParserVersion: null,
+                attempts: 0,
+                mirrorWaits: 0,
+              }),
+          updatedAt: new Date(now()),
+        })
+        .where(eq(euCompletionReceipts.id, receipt.id))
+        .returning()),
+    );
+  }
+  return readmitted;
+};
+
 const createReservationOperations = ({ transaction, now }: StoreContext) => {
   const reserve = async (options: EuCompletionReserveOptions) => {
     const { sourceId, mode, parserVersion, limit } = options;
@@ -1015,6 +1122,14 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
       if (page.length === 0) {
         return due;
       }
+      const readmitted = await readmitSettledMirrorsTx(tx, {
+        sourceId,
+        mode,
+        parserVersion,
+        limit,
+        decisionIds: page.map((row) => row.id),
+        now,
+      });
       // Event identity remains stable across recovery; distinct target attempts
       // retain distinct identities even before their target can be classified.
       const eligible = page.filter((row) => row.eligible);
@@ -1058,6 +1173,9 @@ const createReservationOperations = ({ transaction, now }: StoreContext) => {
         .returning();
       if (advanced.length !== 1) {
         panic("Completion checkpoint CAS failed under lock");
+      }
+      if (readmitted.length > 0) {
+        return readmitted;
       }
       return rows.length === 0 ? due : rows;
     });
@@ -1657,6 +1775,24 @@ const createProbeOperations = ({ transaction, now }: StoreContext) => {
                 eq(euCompletionReceipts.mode, mode),
                 eq(euCompletionReceipts.parserVersion, parserVersion),
                 inArray(euCompletionReceipts.status, [...ACTIVE, "failed"]),
+                sql`(${euCompletionReceipts.status} <> 'publisher-refused' OR ${euCompletionReceipts.completedAt} IS NULL)`,
+              ),
+            )
+            .limit(1)
+        ).length > 0;
+      const mirrorRepairRequired =
+        (
+          await tx
+            .select({ id: euCompletionReceipts.id })
+            .from(euCompletionReceipts)
+            .where(
+              and(
+                eq(euCompletionReceipts.sourceId, sourceId),
+                eq(euCompletionReceipts.mode, mode),
+                eq(euCompletionReceipts.parserVersion, parserVersion),
+                eq(euCompletionReceipts.status, "review-required"),
+                eq(euCompletionReceipts.detail, MIRROR_REPAIR_REQUIRED),
+                isNull(euCompletionReceipts.supersededAt),
               ),
             )
             .limit(1)
@@ -1677,6 +1813,7 @@ const createProbeOperations = ({ transaction, now }: StoreContext) => {
                 eq(euCompletionReceipts.mode, mode),
                 eq(euCompletionReceipts.parserVersion, parserVersion),
                 eq(euCompletionReceipts.status, status),
+                sql`(${euCompletionReceipts.status} <> 'publisher-refused' OR ${euCompletionReceipts.completedAt} IS NULL)`,
               ),
             )
             .orderBy(asc(euCompletionReceipts.retryAt))
@@ -1707,6 +1844,7 @@ const createProbeOperations = ({ transaction, now }: StoreContext) => {
               .batch;
       return {
         hasQueuedWork: queued,
+        mirrorRepairRequired,
         sourceBackoffAgeMs:
           sourceBatch === null || sourceBatch.heldSince === null
             ? null
