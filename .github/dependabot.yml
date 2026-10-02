@@ -209,17 +209,9 @@ updates:
       minor-and-patch:
         patterns:
           - "*"
-        exclude-patterns:
-          - "@stll/anonymize*"
         update-types:
           - "minor"
           - "patch"
-      # The anonymizer decides what anonymized chat sends to providers, so
-      # every update of it, patch included, gets its own pull request and runs
-      # the name-matching gates (.ai/local-skills/update-deps/SKILL.md).
-      stll-anonymize:
-        patterns:
-          - "@stll/anonymize*"
       turbo:
         patterns:
           - "turbo"

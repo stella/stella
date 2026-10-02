@@ -25,7 +25,7 @@ const readStringArray = (value: unknown, field: string) => {
   return strings;
 };
 
-const parseBunGroup = (source: string, name: string) => {
+const parseElysiaGroup = (source: string) => {
   const dependabot: unknown = Bun.YAML.parse(source);
   if (!isRecord(dependabot) || !Array.isArray(dependabot["updates"])) {
     throw new TypeError("Dependabot config must contain an updates array");
@@ -36,28 +36,22 @@ const parseBunGroup = (source: string, name: string) => {
   if (!isRecord(bunUpdate) || !isRecord(bunUpdate["groups"])) {
     throw new TypeError("Dependabot config must contain Bun dependency groups");
   }
-  const group = bunUpdate["groups"][name];
-  if (!isRecord(group)) {
-    throw new TypeError(`Dependabot config must contain the ${name} group`);
+  const elysiaGroup = bunUpdate["groups"]["elysia"];
+  if (!isRecord(elysiaGroup)) {
+    throw new TypeError("Dependabot config must contain the Elysia group");
   }
 
   return {
     excludePatterns:
-      group["exclude-patterns"] === undefined
+      elysiaGroup["exclude-patterns"] === undefined
         ? []
         : readStringArray(
-            group["exclude-patterns"],
-            `${name} exclude-patterns`,
+            elysiaGroup["exclude-patterns"],
+            "Elysia exclude-patterns",
           ),
-    patterns: readStringArray(group["patterns"], `${name} patterns`),
-    updateTypes:
-      group["update-types"] === undefined
-        ? undefined
-        : readStringArray(group["update-types"], `${name} update-types`),
+    patterns: readStringArray(elysiaGroup["patterns"], "Elysia patterns"),
   };
 };
-
-const parseElysiaGroup = (source: string) => parseBunGroup(source, "elysia");
 
 const parseBunIgnores = (source: string) => {
   const dependabot: unknown = Bun.YAML.parse(source);
@@ -73,24 +67,19 @@ const parseBunIgnores = (source: string) => {
   return bunUpdate["ignore"];
 };
 
-const readDependabotConfig = () =>
-  Bun.file(new URL("../.github/dependabot.yml", import.meta.url)).text();
-
 const readElysiaGroup = async () =>
-  parseElysiaGroup(await readDependabotConfig());
-
-const ANONYMIZER_PACKAGES = [
-  "@stll/anonymize",
-  "@stll/anonymize-wasm",
-  "@stll/anonymize-data",
-] as const;
+  parseElysiaGroup(
+    await Bun.file(
+      new URL("../.github/dependabot.yml", import.meta.url),
+    ).text(),
+  );
 
 const matchesDependabotPattern = (dependency: string, pattern: string) => {
   const escaped = pattern.replace(/[.+?^${}()|[\]\\]/gu, "\\$&");
   return new RegExp(`^${escaped.replaceAll("*", ".*")}$`, "u").test(dependency);
 };
 
-type DependabotGroup = ReturnType<typeof parseBunGroup>;
+type DependabotGroup = ReturnType<typeof parseElysiaGroup>;
 
 const isDependencyInGroup = (
   dependency: string,
@@ -212,23 +201,5 @@ updates:
 
     expect(isDependencyInGroup("@elysia/cors", group)).toBe(true);
     expect(isDependencyInGroup("@elysia/eden", group)).toBe(false);
-  });
-
-  test("updates the anonymizer packages on their own", async () => {
-    const source = await readDependabotConfig();
-    const sweep = parseBunGroup(source, "minor-and-patch");
-    const anonymizer = parseBunGroup(source, "stll-anonymize");
-
-    for (const dependency of ANONYMIZER_PACKAGES) {
-      expect(isDependencyInGroup(dependency, sweep)).toBe(false);
-      expect(isDependencyInGroup(dependency, anonymizer)).toBe(true);
-    }
-    // Every update type, so a patch is never folded into the sweep instead.
-    expect(anonymizer.updateTypes).toBeUndefined();
-    // Nothing else rides in the anonymizer pull request.
-    expect(isDependencyInGroup("@stll/property-testing", anonymizer)).toBe(
-      false,
-    );
-    expect(isDependencyInGroup("zod", sweep)).toBe(true);
   });
 });

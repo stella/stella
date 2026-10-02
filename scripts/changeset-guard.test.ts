@@ -14,7 +14,6 @@ import path from "node:path";
 import { propertyConfig } from "@stll/property-testing";
 
 import {
-  checkAnonymizerIsolation,
   checkChangesetPackages,
   decideChangesetGate,
   findCatalogInputs,
@@ -889,115 +888,5 @@ describe("workflow and pre-push read the same policy", () => {
 
   test("pre-push runs the guard", () => {
     expect(readFile("lefthook.yml")).toContain("scripts/changeset-guard.ts");
-  });
-});
-
-describe("anonymizer updates land on their own", () => {
-  const rootManifest = (catalog: Record<string, string>) =>
-    JSON.stringify({ name: "root", workspaces: { catalog } });
-  const apiManifest = (dependencies: Record<string, string>) =>
-    JSON.stringify({ name: "@stll/api", dependencies });
-  const before = rootManifest({
-    "@stll/anonymize": "3.0.2",
-    "@stll/anonymize-wasm": "3.0.2",
-    zod: "4.1.0",
-  });
-
-  test("passes an anonymizer-only bump", () => {
-    expect(
-      checkAnonymizerIsolation({
-        changedFiles: ["package.json", "bun.lock"],
-        manifests: [
-          {
-            file: "package.json",
-            before,
-            after: rootManifest({
-              "@stll/anonymize": "3.0.3",
-              "@stll/anonymize-wasm": "3.0.3",
-              zod: "4.1.0",
-            }),
-          },
-        ],
-      }),
-    ).toEqual({ status: "isolated" });
-  });
-
-  test("fails an anonymizer bump that carries another dependency", () => {
-    expect(
-      checkAnonymizerIsolation({
-        changedFiles: ["package.json", "bun.lock"],
-        manifests: [
-          {
-            file: "package.json",
-            before,
-            after: rootManifest({
-              "@stll/anonymize": "3.0.3",
-              "@stll/anonymize-wasm": "3.0.2",
-              zod: "4.2.0",
-            }),
-          },
-        ],
-      }),
-    ).toEqual({
-      status: "mixed",
-      anonymizer: ["package.json: @stll/anonymize"],
-      others: ["package.json: zod"],
-    });
-  });
-
-  test("fails when the other change is in a workspace manifest or another lockfile", () => {
-    const anonymizerBump = {
-      file: "package.json",
-      before,
-      after: rootManifest({
-        "@stll/anonymize": "3.0.3",
-        "@stll/anonymize-wasm": "3.0.2",
-        zod: "4.1.0",
-      }),
-    };
-    expect(
-      checkAnonymizerIsolation({
-        changedFiles: ["package.json", "apps/api/package.json"],
-        manifests: [
-          anonymizerBump,
-          {
-            file: "apps/api/package.json",
-            before: apiManifest({ "@stll/anonymize": "catalog:" }),
-            after: apiManifest({
-              "@stll/anonymize": "catalog:",
-              "left-pad": "1.3.0",
-            }),
-          },
-        ],
-      }),
-    ).toMatchObject({
-      status: "mixed",
-      others: ["apps/api/package.json: left-pad"],
-    });
-    expect(
-      checkAnonymizerIsolation({
-        changedFiles: ["package.json", "bun.lock", ".claude/mcp/bun.lock"],
-        manifests: [anonymizerBump],
-      }),
-    ).toMatchObject({ status: "mixed", others: [".claude/mcp/bun.lock"] });
-  });
-
-  test("passes dependency changes that leave the anonymizer alone", () => {
-    expect(
-      checkAnonymizerIsolation({
-        changedFiles: ["package.json", "bun.lock", "Cargo.lock"],
-        manifests: [
-          {
-            file: "package.json",
-            before,
-            after: rootManifest({
-              "@stll/anonymize": "3.0.2",
-              "@stll/anonymize-wasm": "3.0.2",
-              zod: "4.2.0",
-            }),
-          },
-        ],
-      }),
-    ).toEqual({ status: "isolated" });
   });
 });

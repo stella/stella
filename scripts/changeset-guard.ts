@@ -21,9 +21,6 @@
 // CI runs that same relevance check; empty entries remain valid no-release
 // intent.
 //
-// It also keeps anonymizer updates on their own: a diff that changes an
-// `@stll/anonymize*` version may not change any other dependency.
-//
 //   bun scripts/changeset-guard.ts [--base origin/main] [--packages-only]
 
 import { readFileSync } from "node:fs";
@@ -511,152 +508,6 @@ export const report = (verdict: ChangesetVerdict): number => {
   }
 };
 
-// ── Anonymizer updates land on their own ─────────────────────────────────────
-
-/**
- * The anonymizer packages, matched as Dependabot's `stll-anonymize` group
- * matches them. They decide what anonymized chat sends to providers, so a
- * change to their versions lands in a pull request that changes no other
- * dependency and runs the name-matching gates
- * (.ai/local-skills/update-deps/SKILL.md).
- */
-const ANONYMIZER_PREFIX = "@stll/anonymize";
-/** Manifest sections whose entries pick a dependency version. */
-const DEPENDENCY_SECTIONS = [
-  "dependencies",
-  "devDependencies",
-  "optionalDependencies",
-  "peerDependencies",
-  "overrides",
-  "resolutions",
-] as const;
-const CATALOG_SECTION = "catalog";
-const CATALOG_SPECIFIER = `@${CATALOG_PROTOCOL}`;
-/** Every bump moves the root `bun.lock`; any other lockfile is another dependency change. */
-const OTHER_LOCKFILE = /(?:^|\/)(?:Cargo\.lock|uv\.lock|bun\.lock)$/u;
-const ROOT_LOCKFILE = "bun.lock";
-
-const isManifest = (file: string): boolean =>
-  file === ROOT_MANIFEST || file.endsWith(`/${ROOT_MANIFEST}`);
-
-export const isAnonymizerPackage = (name: string): boolean =>
-  name.startsWith(ANONYMIZER_PREFIX);
-
-export type ManifestRevision = {
-  readonly file: string;
-  /** The manifest at the merge base, or null when the diff adds it. */
-  readonly before: string | null;
-  /** The manifest at HEAD, or null when the diff deletes it. */
-  readonly after: string | null;
-};
-
-type DependencyEntry = { readonly name: string; readonly version: string };
-
-/** Dependency entries a manifest declares, keyed by section and name. */
-const dependencyEntries = (
-  file: string,
-  text: string | null,
-): ReadonlyMap<string, DependencyEntry> => {
-  const entries = new Map<string, DependencyEntry>();
-  if (text === null) {
-    return entries;
-  }
-  const manifest = parseJsonObject(text, file);
-  for (const section of DEPENDENCY_SECTIONS) {
-    const dependencies = manifest[section];
-    if (!isJsonObject(dependencies)) {
-      continue;
-    }
-    for (const [name, version] of Object.entries(dependencies)) {
-      entries.set(`${section} ${name}`, {
-        name,
-        version: JSON.stringify(version),
-      });
-    }
-  }
-  if (file === ROOT_MANIFEST) {
-    for (const [specifier, version] of parseWorkspaceCatalogs(text)) {
-      const name = specifier.slice(0, specifier.lastIndexOf(CATALOG_SPECIFIER));
-      entries.set(`${CATALOG_SECTION} ${specifier}`, { name, version });
-    }
-  }
-  return entries;
-};
-
-/** `file: name` for every dependency entry added, removed, or re-versioned. */
-const changedDependencies = ({
-  file,
-  before,
-  after,
-}: ManifestRevision): { readonly name: string; readonly label: string }[] => {
-  const old = dependencyEntries(file, before);
-  const next = dependencyEntries(file, after);
-  return [...new Set([...old.keys(), ...next.keys()])].flatMap((key) => {
-    const was = old.get(key);
-    const now = next.get(key);
-    const entry = now ?? was;
-    return entry === undefined || was?.version === now?.version
-      ? []
-      : [{ name: entry.name, label: `${file}: ${entry.name}` }];
-  });
-};
-
-export type AnonymizerIsolation =
-  | { readonly status: "isolated" }
-  | {
-      readonly status: "mixed";
-      readonly anonymizer: readonly string[];
-      readonly others: readonly string[];
-    };
-
-/**
- * Whether a diff that changes an anonymizer version changes nothing else
- * that picks a dependency version: no other manifest entry, root catalog
- * entry, or lockfile besides the root `bun.lock`.
- */
-export const checkAnonymizerIsolation = ({
-  changedFiles,
-  manifests,
-}: {
-  readonly changedFiles: readonly string[];
-  readonly manifests: readonly ManifestRevision[];
-}): AnonymizerIsolation => {
-  const changes = manifests.flatMap(changedDependencies);
-  const anonymizer = changes
-    .filter(({ name }) => isAnonymizerPackage(name))
-    .map(({ label }) => label);
-  if (anonymizer.length === 0) {
-    return { status: "isolated" };
-  }
-  const others = [
-    ...changes
-      .filter(({ name }) => !isAnonymizerPackage(name))
-      .map(({ label }) => label),
-    ...changedFiles.filter(
-      (file) => file !== ROOT_LOCKFILE && OTHER_LOCKFILE.test(file),
-    ),
-  ];
-  return others.length === 0
-    ? { status: "isolated" }
-    : { status: "mixed", anonymizer, others };
-};
-
-export const reportAnonymizerIsolation = (
-  isolation: AnonymizerIsolation,
-): number => {
-  if (isolation.status === "isolated") {
-    return 0;
-  }
-  const lines = [
-    "changeset-guard: anonymizer updates land on their own; this diff also changes other dependencies.",
-    `  anonymizer: ${preview(isolation.anonymizer)}`,
-    `  other: ${preview(isolation.others)}`,
-    "  fix: move the other dependency changes to a separate pull request (.ai/local-skills/update-deps/SKILL.md)",
-  ];
-  process.stderr.write(`${lines.join("\n")}\n`);
-  return 1;
-};
-
 type GitRun = { readonly ok: boolean; readonly stdout: string };
 
 const git = (args: readonly string[], cwd = REPO_ROOT): GitRun => {
@@ -946,17 +797,6 @@ const main = (args: readonly string[]): number => {
   });
   for (const note of notes) {
     process.stdout.write(`changeset-guard: ${note}\n`);
-  }
-  const isolation = checkAnonymizerIsolation({
-    changedFiles: diff.changedFiles,
-    manifests: diff.changedFiles.filter(isManifest).map((file) => ({
-      file,
-      before: readAt(mergeBase, file),
-      after: readAt("HEAD", file),
-    })),
-  });
-  if (reportAnonymizerIsolation(isolation) !== 0) {
-    return 1;
   }
   // CI leaves generated version-PR exemptions to the shared presence gate.
   if (check === "packages") {
