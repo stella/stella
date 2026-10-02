@@ -20,12 +20,12 @@ import {
   twoFactor,
 } from "better-auth/plugins";
 import { panic, Result } from "better-result";
-import { and, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
+import { and, count, eq, exists, inArray, isNotNull, or } from "drizzle-orm";
 import type { InferSelectModel } from "drizzle-orm";
 import Elysia, { t } from "elysia";
 
 import { BETTER_AUTH_ORGANIZATION_OPTIONS } from "@stll/auth-model";
-import { ac, roles } from "@stll/permissions";
+import { ac, assignableRoles, roles } from "@stll/permissions";
 import type { PermissionInput } from "@stll/permissions";
 import { RUNTIME_MODE, type RuntimeMode } from "@stll/runtime-mode";
 import { parseUserAgent, type ParsedUserAgent } from "@stll/user-agent";
@@ -118,6 +118,10 @@ import {
 } from "@/api/lib/limits";
 import { extractLangFromRequest } from "@/api/lib/locale";
 import { isMemberRole } from "@/api/lib/member-roles";
+import {
+  mapMembershipInvariantError,
+  ownerRequiredError,
+} from "@/api/lib/membership-role-invariants";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
 import { getBetterAuthOAuthResources } from "@/api/lib/oauth-resource-policy";
 import { bridgeOauthUiInteraction } from "@/api/lib/oauth-ui-fragment";
@@ -920,6 +924,93 @@ const createAuth = () => {
     }
   };
 
+  const requireAssignableMemberRole = async (
+    organizationId: SafeId<"organization">,
+    role: string,
+  ) => {
+    const endpoint = tryGetCurrentAuthEndpointContext();
+    // Inspect the original input as well: the plugin normalizes comma lists
+    // before invoking organization hooks.
+    const input =
+      endpoint && isRecord(endpoint.body) ? endpoint.body["role"] : role;
+    if (
+      typeof input !== "string" ||
+      !isMemberRole(input) ||
+      !isMemberRole(role)
+    ) {
+      throw new APIError("BAD_REQUEST", {
+        code: "invalid_member_role",
+        message: "Select one product membership role.",
+      });
+    }
+    if (!endpoint) {
+      throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+    }
+    const session = await getAuthoritativeSessionFromCtx(endpoint);
+    if (!session) {
+      throw new APIError("UNAUTHORIZED", { message: "Unauthorized" });
+    }
+    const actor = await rootDb.query.member.findFirst({
+      columns: { role: true },
+      where: and(
+        eq(member.organizationId, organizationId),
+        eq(member.userId, session.user.id),
+      ),
+    });
+    if (
+      !actor ||
+      !isMemberRole(actor.role) ||
+      !assignableRoles(actor.role).includes(role)
+    ) {
+      throw new APIError("FORBIDDEN", {
+        code: "member_role_not_assignable",
+        message: "You cannot assign this membership role.",
+      });
+    }
+  };
+
+  const refuseLastOwnerChange = async (
+    organizationId: SafeId<"organization">,
+    role: string,
+  ) => {
+    if (role !== "owner") {
+      return;
+    }
+    const [owners] = await rootDb
+      .select({ count: count() })
+      .from(member)
+      .where(
+        and(
+          eq(member.organizationId, organizationId),
+          eq(member.role, "owner"),
+        ),
+      );
+    if (!owners || owners.count <= 1) {
+      throw ownerRequiredError();
+    }
+  };
+
+  const rawAuthAdapter = drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS);
+  const membershipAuthAdapter: typeof rawAuthAdapter = (options) => {
+    const adapter = rawAuthAdapter(options);
+    return {
+      ...adapter,
+      // The hook's preflight cannot hold a lock across this plugin write.
+      // Translate the database's final refusal at the adapter boundary.
+      update: async <T>(args: Parameters<typeof adapter.update>[0]) => {
+        const update = await Result.tryPromise({
+          try: () => adapter.update<T>(args),
+          catch: mapMembershipInvariantError,
+        });
+        if (Result.isError(update)) {
+          captureError(update.error, { model: args.model });
+          throw update.error;
+        }
+        return update.value;
+      },
+    };
+  };
+
   const organizationLifecycleHooks = createOrganizationLifecycleHooks({
     analytics: getServerAnalytics(),
     // Insert-once on the owner connection, like the seeds below.
@@ -1141,7 +1232,7 @@ const createAuth = () => {
         },
       },
     },
-    database: drizzleAdapter(rootDb, AUTH_DATABASE_ADAPTER_OPTIONS),
+    database: membershipAuthAdapter,
     socialProviders: {
       ...(env.GOOGLE_AUTH_CLIENT_ID && env.GOOGLE_AUTH_CLIENT_SECRET
         ? {
@@ -1352,6 +1443,10 @@ const createAuth = () => {
             invitation,
             inviter,
           }) {
+            await requireAssignableMemberRole(
+              brandPersistedOrganizationId(org.id),
+              invitation.role,
+            );
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: inviter.email,
@@ -1381,7 +1476,15 @@ const createAuth = () => {
               "membership",
             );
           },
-          async beforeAddMember({ organization: org, user }) {
+          async beforeAddMember({
+            organization: org,
+            user,
+            member: addedMember,
+          }) {
+            await requireAssignableMemberRole(
+              brandPersistedOrganizationId(org.id),
+              addedMember.role,
+            );
             requireDemoAccountAccess(
               checkConfiguredDemoAccountAccess({
                 email: user.email,
@@ -1392,6 +1495,22 @@ const createAuth = () => {
               brandPersistedOrganizationId(org.id),
               "membership",
             );
+          },
+          async beforeUpdateMemberRole({
+            member: updatedMember,
+            newRole,
+            organization: org,
+          }) {
+            await requireAssignableMemberRole(
+              brandPersistedOrganizationId(org.id),
+              newRole,
+            );
+            if (newRole !== "owner") {
+              await refuseLastOwnerChange(
+                brandPersistedOrganizationId(org.id),
+                updatedMember.role,
+              );
+            }
           },
           async afterRemoveMember({
             member: removedMember,
@@ -1424,28 +1543,37 @@ const createAuth = () => {
             // ids for the tenant predicates the helper applies.
             const organizationId = brandPersistedOrganizationId(org.id);
             const userId = brandPersistedUserId(removedMember.userId);
-            await rootDb.transaction(async (tx) => {
-              const timerClose = await closeRemovedMemberActiveTimer({
-                organizationId,
-                tx,
-                userId,
-              });
-              if (Result.isError(timerClose)) {
-                throw timerClose.error;
-              }
-              // Better Auth deletes the member after this hook, outside this
-              // transaction. Remove the exact row here so a timer cannot start
-              // between the timer check and membership removal.
-              await tx
-                .delete(member)
-                .where(
-                  and(
-                    eq(member.id, removedMember.id),
-                    eq(member.organizationId, organizationId),
-                    eq(member.userId, userId),
-                  ),
-                );
+            await refuseLastOwnerChange(organizationId, removedMember.role);
+            const removal = await Result.tryPromise({
+              try: () =>
+                rootDb.transaction(async (tx) => {
+                  const timerClose = await closeRemovedMemberActiveTimer({
+                    organizationId,
+                    tx,
+                    userId,
+                  });
+                  if (Result.isError(timerClose)) {
+                    throw timerClose.error;
+                  }
+                  // Better Auth deletes the member after this hook, outside this
+                  // transaction. Remove the exact row here so a timer cannot start
+                  // between the timer check and membership removal.
+                  await tx
+                    .delete(member)
+                    .where(
+                      and(
+                        eq(member.id, removedMember.id),
+                        eq(member.organizationId, organizationId),
+                        eq(member.userId, userId),
+                      ),
+                    );
+                }),
+              catch: mapMembershipInvariantError,
             });
+            if (Result.isError(removal)) {
+              captureError(removal.error, { organizationId });
+              throw removal.error;
+            }
           },
         },
         async sendInvitationEmail(data, request) {

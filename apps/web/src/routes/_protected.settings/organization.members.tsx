@@ -8,7 +8,9 @@ import {
 import { createFileRoute, useSearch } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { ORGANIZATION_ROLE_NAMES } from "@stll/auth-model";
 import { compareByLocale } from "@stll/collation";
+import { assignableRoles } from "@stll/permissions";
 import { BidiText } from "@stll/ui/bidi-text";
 import { Button } from "@stll/ui/button";
 import { DestructiveConfirmDialog } from "@stll/ui/destructive-confirm-dialog";
@@ -53,7 +55,7 @@ import type { Role } from "@/lib/auth-client";
 import { roleOptions } from "@/lib/auth-queries";
 import { toAuthClientError } from "@/lib/errors/auth";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import { rolePriority, roleTranslationKeys } from "@/lib/organization/consts";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 import {
   useCancelInvitation,
   useInviteMember,
@@ -63,18 +65,13 @@ import {
   organizationKeys,
   organizationOptions,
 } from "@/lib/organization/queries";
+import { roleAssignmentOptions } from "@/lib/organization/role-assignment.logic";
 import { formatMemberDate } from "@/lib/organization/utils";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { OrganizationJurisdictionsCard } from "@/routes/_protected.settings/-components/organization/jurisdictions-card";
 import { OrganizationListToolbar } from "@/routes/_protected.settings/-components/organization/list-toolbar";
 import { OrganizationProfileCard } from "@/routes/_protected.settings/-components/organization/profile-card";
 import { SettingsPageHeader } from "@/routes/_protected.settings/-components/settings-page-header";
-
-const ASSIGNABLE_ROLES = ["owner", "admin", "member"] as const;
-type AssignableRole = (typeof ASSIGNABLE_ROLES)[number];
-
-const isAssignableRole = (role: Role): role is AssignableRole =>
-  ASSIGNABLE_ROLES.some((assignableRole) => assignableRole === role);
 
 type SortKey = "name" | "role" | "joined";
 type SortDir = "asc" | "desc";
@@ -191,7 +188,9 @@ function Members() {
       if (sort.key === "name") {
         cmp = compareName(a.user.name, b.user.name);
       } else if (sort.key === "role") {
-        cmp = rolePriority[a.role] - rolePriority[b.role];
+        cmp =
+          ORGANIZATION_ROLE_NAMES.indexOf(a.role) -
+          ORGANIZATION_ROLE_NAMES.indexOf(b.role);
       } else {
         cmp = new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
       }
@@ -439,18 +438,13 @@ const RoleCell = ({
   const t = useTranslations();
   const analytics = useAnalytics();
   const queryClient = useQueryClient();
-  const [pendingRole, setPendingRole] = useState<AssignableRole | null>(null);
+  const [pendingRole, setPendingRole] = useState<Role | null>(null);
 
-  const outranks = rolePriority[memberRole] < rolePriority[currentUserRole];
-  // editable gates the SOURCE side: the current user can edit
-  // anyone they don't outrank (and not themselves). The dropdown
-  // lists only the TARGET roles in ASSIGNABLE_ROLES, so an admin
-  // can promote an intern/external to member/admin/owner even
-  // though those source roles aren't in the picklist.
-  const editable = !isSelf && !outranks;
+  const offeredRoles = assignableRoles(currentUserRole);
+  const editable = !isSelf && offeredRoles.includes(memberRole);
 
   const updateRole = useMutation({
-    mutationFn: async (role: AssignableRole) => {
+    mutationFn: async (role: Role) => {
       const result = await authClient.organization.updateMemberRole({
         memberId,
         role,
@@ -482,13 +476,11 @@ const RoleCell = ({
     );
   }
 
-  const roleData = roleTranslationKeys.map(
-    ({ descriptionKey, labelKey, value }) => ({
-      description: t(descriptionKey),
-      label: t(labelKey),
-      value,
-    }),
-  );
+  const roleData = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
+    description: t(roleTranslationKeys[value].descriptionKey),
+    label: t(roleTranslationKeys[value].labelKey),
+    value,
+  }));
 
   const handleConfirm = async () => {
     if (pendingRole) {
@@ -502,7 +494,7 @@ const RoleCell = ({
       <Select
         disabled={updateRole.isPending}
         onValueChange={(value) => {
-          if (value && isAssignableRole(value) && value !== memberRole) {
+          if (value && offeredRoles.includes(value) && value !== memberRole) {
             setPendingRole(value);
           }
         }}
@@ -518,22 +510,16 @@ const RoleCell = ({
           <SelectValue>{t(`organization.roles.${memberRole}`)}</SelectValue>
         </SelectTrigger>
         <SelectPopup alignItemWithTrigger={false} className="min-w-72">
-          {ASSIGNABLE_ROLES.map((role) => {
-            const item = roleData.find((r) => r.value === role);
-            if (!item) {
-              return null;
-            }
-            return (
-              <SelectItem key={role} label={item.label} value={role}>
-                <div className="flex flex-col gap-0.5 py-0.5">
-                  <span>{item.label}</span>
-                  <span className="text-muted-foreground text-xs leading-tight">
-                    {item.description}
-                  </span>
-                </div>
-              </SelectItem>
-            );
-          })}
+          {roleData.map((item) => (
+            <SelectItem key={item.value} label={item.label} value={item.value}>
+              <div className="flex flex-col gap-0.5 py-0.5">
+                <span>{item.label}</span>
+                <span className="text-muted-foreground text-xs leading-tight">
+                  {item.description}
+                </span>
+              </div>
+            </SelectItem>
+          ))}
         </SelectPopup>
       </Select>
 

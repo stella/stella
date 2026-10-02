@@ -5,8 +5,9 @@ import { useForm, useSelector } from "@tanstack/react-form";
 import { useQuery } from "@tanstack/react-query";
 import { Result } from "better-result";
 import { useTranslations } from "use-intl";
-import * as v from "valibot";
+import type * as v from "valibot";
 
+import { assignableRoles } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import {
   Dialog,
@@ -35,13 +36,13 @@ import { stellaToast } from "@stll/ui/toast";
 import { roleOptions } from "@/lib/auth-queries";
 import { detached } from "@/lib/detached";
 import { userErrorFromThrown } from "@/lib/errors/user-safe";
-import {
-  managementRoles,
-  rolePriority,
-  roleTranslationKeys,
-} from "@/lib/organization/consts";
+import { roleTranslationKeys } from "@/lib/organization/consts";
 import { useInviteMember } from "@/lib/organization/mutations";
-import { schemaFormOptions, emailSchema, toFormErrors } from "@/lib/schema";
+import {
+  inviteMemberSchema,
+  roleAssignmentOptions,
+} from "@/lib/organization/role-assignment.logic";
+import { schemaFormOptions, toFormErrors } from "@/lib/schema";
 
 type InviteMemberDialogProps = {
   buttonLabel?: string;
@@ -52,12 +53,7 @@ type InviteMemberDialogProps = {
   showIcon?: boolean;
 };
 
-const inviteSchema = v.strictObject({
-  email: emailSchema(),
-  role: v.picklist(["owner", "admin", "member"]),
-});
-
-const defaultValues: v.InferInput<typeof inviteSchema> = {
+const defaultValues: v.InferInput<ReturnType<typeof inviteMemberSchema>> = {
   email: "",
   role: "member",
 };
@@ -68,7 +64,7 @@ export const useCanInviteMembers = () => {
     staleTime: Number.POSITIVE_INFINITY,
   });
 
-  return currentUserRole ? managementRoles.includes(currentUserRole) : false;
+  return currentUserRole ? assignableRoles(currentUserRole).length > 0 : false;
 };
 
 export const InviteMemberDialog = ({
@@ -86,17 +82,15 @@ export const InviteMemberDialog = ({
     ...roleOptions,
     staleTime: Number.POSITIVE_INFINITY,
   });
-  const roles = roleTranslationKeys.map(
-    ({ descriptionKey, labelKey, value }) => ({
-      description: t(descriptionKey),
-      label: t(labelKey),
-      value,
-    }),
-  );
+  const roles = roleAssignmentOptions(currentUserRole).map(({ value }) => ({
+    description: t(roleTranslationKeys[value].descriptionKey),
+    label: t(roleTranslationKeys[value].labelKey),
+    value,
+  }));
 
   const form = useForm(
     schemaFormOptions({
-      schema: inviteSchema,
+      schema: inviteMemberSchema(currentUserRole),
       defaultValues,
       submitValues: "schema-output",
       onSubmit: async ({ value, formApi }) => {
@@ -133,7 +127,7 @@ export const InviteMemberDialog = ({
 
   if (
     currentUserRole === undefined ||
-    !managementRoles.includes(currentUserRole)
+    assignableRoles(currentUserRole).length === 0
   ) {
     return null;
   }
@@ -213,14 +207,7 @@ export const InviteMemberDialog = ({
                     </SelectTrigger>
                     <SelectPopup alignItemWithTrigger={false}>
                       {roles.map((item) => (
-                        <SelectItem
-                          disabled={
-                            rolePriority[item.value] <
-                            rolePriority[currentUserRole]
-                          }
-                          key={item.value}
-                          value={item.value}
-                        >
+                        <SelectItem key={item.value} value={item.value}>
                           {item.label}
                         </SelectItem>
                       ))}

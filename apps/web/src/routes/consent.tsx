@@ -9,6 +9,7 @@ import {
 } from "@tanstack/react-router";
 import { useTranslations } from "use-intl";
 
+import { isOrganizationManagementRole } from "@stll/permissions";
 import { Button } from "@stll/ui/button";
 import {
   Frame,
@@ -38,7 +39,6 @@ import {
   toOAuthScopeDisplayEntries,
   translateOAuthScopeEntry,
 } from "@/lib/oauth-scopes";
-import { managementRoles } from "@/lib/organization/consts";
 import { organizationListOptions } from "@/lib/organization/queries";
 import { pageTitle } from "@/lib/page-title";
 import { loadAuthContext } from "@/routes/-auth-context";
@@ -94,7 +94,8 @@ function ConsentPage() {
     staleTime: Number.POSITIVE_INFINITY,
   });
   const canManageOrganization =
-    currentUserRole !== undefined && managementRoles.includes(currentUserRole);
+    currentUserRole !== undefined &&
+    isOrganizationManagementRole(currentUserRole);
 
   const clientQuery = useQuery({
     enabled: clientId !== null,

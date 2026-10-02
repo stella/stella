@@ -1,8 +1,9 @@
 import { createFileRoute, Outlet, redirect } from "@tanstack/react-router";
 import * as v from "valibot";
 
+import { isOrganizationManagementRole } from "@stll/permissions";
+
 import { roleOptions } from "@/lib/auth-queries";
-import { managementRoles } from "@/lib/organization/consts";
 import { ensureRouteQueryData } from "@/lib/react-query";
 import { optionalSearchStringSchema } from "@/lib/schema";
 
@@ -15,7 +16,7 @@ export const Route = createFileRoute("/_protected/settings/organization")({
   beforeLoad: async ({ context }) => {
     const role = await ensureRouteQueryData(context.queryClient, roleOptions);
 
-    if (!managementRoles.includes(role)) {
+    if (!isOrganizationManagementRole(role)) {
       throw redirect({ to: "/settings/account/profile", replace: true });
     }
   },
