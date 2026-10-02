@@ -5,7 +5,11 @@ import type { ReasoningEffort } from "@stll/ai-catalog";
 
 import type { SafeDb, SafeDbError } from "@/api/db/safe-db";
 import { chatThreads } from "@/api/db/schema";
-import { loadWindowedThreadMessages } from "@/api/handlers/chat/history-window";
+import {
+  EMPTY_CHAT_HISTORY_SNAPSHOT,
+  loadWindowedThreadHistory,
+} from "@/api/handlers/chat/history-window";
+import type { ChatHistorySnapshot } from "@/api/handlers/chat/history-window";
 import { shouldRefreshEmptyThreadTitle } from "@/api/handlers/chat/thread-title";
 import type {
   ChatMessage,
@@ -126,6 +130,8 @@ type ChatThreadRecord = {
     role: ChatMessage["role"];
     content: PersistedChatMessageContent;
   }[];
+  /** The rows `messages` was read from; see `ChatHistorySnapshot`. */
+  historySnapshot: ChatHistorySnapshot;
 };
 
 type LoadThreadProps = {
@@ -252,6 +258,7 @@ const loadThreadAttempt = async ({
           chatModel: existing.chatModel,
           chatReasoningEffort: existing.chatReasoningEffort,
           messages: [],
+          historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
         },
       });
     };
@@ -330,16 +337,17 @@ const loadThreadAttempt = async ({
         const retried = yield* Result.await(retryAfterClaimRace());
         return Result.ok(retried);
       }
-      const windowedMessages = yield* Result.await(
-        loadWindowedThreadMessages({ safeDb, threadId }),
+      const history = yield* Result.await(
+        loadWindowedThreadHistory({ safeDb, threadId }),
       );
-      existingResult.value.data.messages = windowedMessages;
+      existingResult.value.data.messages = history.messages;
+      existingResult.value.data.historySnapshot = history.snapshot;
       if (
         shouldRefreshEmptyThreadTitle({
           // A non-empty thread always includes at least its first-kept
           // message in the window, so window length === 0 iff the thread is
           // empty — the only thing this check needs to know.
-          messageCount: windowedMessages.length,
+          messageCount: history.messages.length,
           title: thread.title,
         })
       ) {
@@ -439,10 +447,11 @@ const loadThreadAttempt = async ({
           const retried = yield* Result.await(retryAfterClaimRace());
           return Result.ok(retried);
         }
-        const recoveredMessages = yield* Result.await(
-          loadWindowedThreadMessages({ safeDb, threadId }),
+        const recoveredHistory = yield* Result.await(
+          loadWindowedThreadHistory({ safeDb, threadId }),
         );
-        recoveredResult.value.data.messages = recoveredMessages;
+        recoveredResult.value.data.messages = recoveredHistory.messages;
+        recoveredResult.value.data.historySnapshot = recoveredHistory.snapshot;
         return Result.ok(recoveredResult.value);
       }
       return Result.err(
@@ -465,6 +474,7 @@ const loadThreadAttempt = async ({
         chatModel: null,
         chatReasoningEffort: null,
         messages: [],
+        historySnapshot: EMPTY_CHAT_HISTORY_SNAPSHOT,
       },
     });
   });
