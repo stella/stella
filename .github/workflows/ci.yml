@@ -1010,6 +1010,12 @@ jobs:
           cd ../web
           cp .env.example .env
 
+      - name: Generate web route tree
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        # The scriptless install does not create the derived route tree, and
+        # both knip checks resolve the router through it.
+        run: bun --filter @stll/web generate:route-tree
+
       - name: Compute affected flag
         if: needs.ci-plan.outputs.package_checks_required == 'true'
         id: affected
@@ -1089,9 +1095,6 @@ jobs:
         # entry). New runtimes are enrolled here deliberately, alongside a
         # boot/compile smoke.
         run: |
-          # The web router imports its derived route tree, which a scriptless
-          # install does not create.
-          bun --filter @stll/web generate:route-tree
           for workspace in apps/api apps/legal-atlas-runner apps/web; do
             DATABASE_URL=postgresql://invalid bun --no-env-file run knip --production --strict --no-progress --include unlisted,unresolved --workspace "$workspace"
           done
