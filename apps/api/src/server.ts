@@ -129,6 +129,7 @@ import {
   isAllowedBrowserOrigin,
   shouldRejectBrowserMutation,
 } from "@/api/lib/browser-origin-guard";
+import { startManagedProviderChecks } from "@/api/lib/chat/managed-provider-checks";
 import {
   resolveClientAddress,
   resolveSignupRateLimitClientIp,
@@ -715,6 +716,7 @@ const startServer = async (): Promise<void> => {
   // REPORT_SPECS_S3_PREFIX read uses resolved credentials.
   await initBuiltinReportTemplates();
 
+  const closeManagedProviderChecks = await startManagedProviderChecks();
   const backgroundWorkers = initApiBackgroundWorkers();
 
   // Every process outside local development starts it. Same URL as the pools
@@ -761,6 +763,7 @@ const startServer = async (): Promise<void> => {
     }
     shuttingDown = true;
     logger.info("api.shutdown_started", { signal });
+    await closeManagedProviderChecks();
     const outcome = await shutdownApiServices({
       closeBackgroundWorkers: backgroundWorkers.close,
       closeDatabaseLoginProbe,

@@ -648,12 +648,13 @@ describe("provider request policy", () => {
               model: scenario.strict
                 ? "google/gemini-2.5-flash"
                 : `${model}:online`,
-              models: [scenario.strict ? "google/gemini-2.5-flash" : model],
             });
             if (scenario.strict) {
+              expect(requests.at(0)?.body).not.toHaveProperty("models");
               expect(requests.at(0)?.body).not.toHaveProperty("plugins");
             } else {
               expect(requests.at(0)?.body).toMatchObject({
+                models: [model],
                 plugins: [{ id: "web" }],
               });
             }

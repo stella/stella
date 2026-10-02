@@ -5,9 +5,11 @@ import type {
   createOpenRouterText,
   OpenRouterConfig,
 } from "@tanstack/ai-openrouter";
+import { resolveDebugOption } from "@tanstack/ai/adapter-internals";
 import { Result } from "better-result";
 
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { checkManagedOpenRouterModel } from "@/api/lib/chat/managed-provider-checks";
 import {
   managedProviderUnavailable,
   MANAGED_PROVIDER_UNAVAILABLE_CODE,
@@ -154,17 +156,46 @@ const withoutModelVariant = (model: string): string => {
 };
 
 class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
+  private readonly residency: ManagedAIResidency;
+
+  constructor(
+    config: OpenRouterConfig,
+    {
+      model,
+      managedAIResidency,
+    }: Pick<ManagedOpenRouterTextOptions, "model" | "managedAIResidency">,
+  ) {
+    super(config, model);
+    this.residency = managedAIResidency;
+  }
   override chatStream(options: OpenRouterTextOptions) {
-    return withManagedRoutingErrors(super.chatStream(options));
+    return withManagedRoutingErrors(
+      super.chatStream({ ...options, logger: resolveDebugOption(false) }),
+    );
   }
 
   override structuredOutputStream(options: OpenRouterStructuredOptions) {
-    return withManagedRoutingErrors(super.structuredOutputStream(options));
+    return withManagedRoutingErrors(
+      super.structuredOutputStream({
+        ...options,
+        chatOptions: {
+          ...options.chatOptions,
+          logger: resolveDebugOption(false),
+        },
+      }),
+    );
   }
 
   override async structuredOutput(options: OpenRouterStructuredOptions) {
     const result = await Result.tryPromise({
-      try: async () => await super.structuredOutput(options),
+      try: async () =>
+        await super.structuredOutput({
+          ...options,
+          chatOptions: {
+            ...options.chatOptions,
+            logger: resolveDebugOption(false),
+          },
+        }),
       catch: (error) =>
         isManagedRoutingRefusal(error)
           ? managedProviderUnavailable("openrouter")
@@ -177,23 +208,24 @@ class ManagedOpenRouterTextAdapter extends StellaOpenRouterTextAdapter {
   }
 
   protected override mapOptionsToRequest(options: OpenRouterTextOptions) {
+    const model = withoutModelVariant(options.model);
+    const availability = checkManagedOpenRouterModel(model, this.residency);
+    if (Result.isError(availability)) {
+      throw availability.error;
+    }
     const {
       plugins: _plugins,
       variant: _variant,
+      models: _models,
       ...modelOptions
     } = options.modelOptions ?? {};
     const request = super.mapOptionsToRequest({
       ...options,
-      model: withoutModelVariant(options.model),
+      model,
       modelOptions,
     });
     return {
       ...request,
-      ...(request.models === undefined
-        ? {}
-        : {
-            models: request.models.map((model) => withoutModelVariant(model)),
-          }),
       provider: {
         ...request.provider,
         ...PROVIDER_DATA_POLICY.customer.openrouter.provider,
@@ -217,10 +249,16 @@ export const createManagedOpenRouterText = ({
     {
       apiKey,
       retryConfig: OPENROUTER_RETRY,
+      // A truthy logger also prevents OPENROUTER_DEBUG from enabling SDK logs.
+      debugLogger: {
+        group: () => undefined,
+        groupEnd: () => undefined,
+        log: () => undefined,
+      },
       serverURL:
         PROVIDER_DATA_POLICY.customer.openrouter.serverURLs[managedAIResidency],
     },
-    model,
+    { model, managedAIResidency },
   );
 
 export const createStellaOpenRouterText = (
