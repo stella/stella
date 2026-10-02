@@ -12,7 +12,6 @@
 import { count, desc, gte, sql } from "drizzle-orm";
 
 import {
-  caseLawDecisions,
   caseLawIngestionEvents,
   caseLawIngestionFailures,
   caseLawSources,
@@ -34,6 +33,8 @@ const sources = await db.transaction(
         syncCursor: caseLawSources.syncCursor,
         lastSyncAt: caseLawSources.lastSyncAt,
         enabled: caseLawSources.enabled,
+        storedTotal: caseLawSources.storedTotal,
+        storedTotalAsOf: caseLawSources.storedTotalAsOf,
       })
       .from(caseLawSources)
       .orderBy(caseLawSources.adapterKey),
@@ -45,19 +46,6 @@ if (sources.length === 0) {
 }
 
 console.log("\n=== Case Law Ingestion Status ===\n");
-
-// Each figure is one grouped query over every source, not one per source.
-const totalBySource = new Map(
-  (
-    await db.transaction(
-      async (tx) =>
-        await tx
-          .select({ sourceId: caseLawDecisions.sourceId, total: count() })
-          .from(caseLawDecisions)
-          .groupBy(caseLawDecisions.sourceId),
-    )
-  ).map((row) => [row.sourceId, row.total]),
-);
 
 const insertedBySource = new Map(
   (
@@ -145,7 +133,7 @@ for (const row of failureTypeCounts) {
 }
 
 for (const source of sources) {
-  const total = totalBySource.get(source.id) ?? 0;
+  const total = source.storedTotal?.toLocaleString() ?? "unknown";
   const lastHour = insertedBySource.get(source.id)?.lastHour ?? 0;
   const last24h = insertedBySource.get(source.id)?.lastDay ?? 0;
   const failCount = failureCountBySource.get(source.id) ?? 0;
@@ -162,7 +150,7 @@ for (const source of sources) {
     : "no events";
 
   console.log(`${source.name} (${source.adapterKey})${enabledStr}`);
-  console.log(`  Total:    ${total.toLocaleString()} decisions`);
+  console.log(`  Total:    ${total} decisions`);
   console.log(`  Last 1h:  +${lastHour.toLocaleString()}`);
   console.log(`  Last 24h: +${last24h.toLocaleString()}`);
   console.log(`  Failures: ${failCount} (24h)`);

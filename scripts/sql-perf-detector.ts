@@ -10,6 +10,7 @@
 // Analysis follows same-file const bindings; imported or runtime-built SQL is
 // opaque. This detector is shared by oxlint and the baseline counter.
 
+import { panic } from "better-result";
 import ts from "typescript";
 
 import { HIGH_VOLUME_TABLES } from "../apps/api/src/db/high-volume-tables.ts";
@@ -535,34 +536,109 @@ const isCorpusColumn = (column: string, bindings: ConstBindings): boolean => {
   );
 };
 
-const FULL_COUNT = /\bcount\s*\([^)]*\)/iu;
+const FULL_COUNT = /\bcount\s*\([^)]*\)|\bsum\s*\(\s*\+?1(?:\.0+)?\s*\)/iu;
 const SOURCE_COLUMN = /\bsource_id\b|\bsourceId\b/iu;
+const SOURCE_RELATION =
+  /\b(?:case_law_sources|legislation_sources|caseLawSources|legislationSources)\b/u;
 
 const CORPUS_COUNT_TABLE = new RegExp(
   `\\b(?:${[...REPORT_CORPUS_TABLES].join("|")})\\b`,
   "iu",
 );
 
-const sourceFilteredSql = (statement: string): boolean => {
-  const clauses =
-    /\b(?:WHERE|GROUP\s+BY)\b([\s\S]*?)(?=\b(?:FROM|JOIN|ON|WHERE|GROUP\s+BY|HAVING|ORDER\s+BY|LIMIT|UNION|RETURNING)\b|$)/giu;
-  if (
-    [...statement.matchAll(clauses)].some((match) =>
-      SOURCE_COLUMN.test(match[1] ?? ""),
-    )
-  ) {
-    return true;
+type SqlSourceClause = { kind: "where" | "group" | "on" | null; text: string };
+
+/** Keep outer predicates when a nested SELECT introduces its own FROM. */
+const sourceClauses = (statement: string): SqlSourceClause[] => {
+  const clauses: SqlSourceClause[] = [];
+  const scopes: (SqlSourceClause & { subquery: boolean })[] = [
+    { kind: null, text: "", subquery: false },
+  ];
+  const tokens =
+    /\b(?:SELECT|WHERE|GROUP\s+BY|FROM|JOIN|ON|HAVING|ORDER\s+BY|LIMIT|OFFSET|UNION|RETURNING)\b|[()]/giu;
+  let cursor = 0;
+  const flush = (scope: SqlSourceClause) => {
+    if (scope.kind !== null) {
+      clauses.push({ kind: scope.kind, text: scope.text });
+    }
+    scope.text = "";
+  };
+  for (const token of statement.matchAll(tokens)) {
+    const scope =
+      scopes.at(-1) ?? panic("SQL predicate scanner lost its scope");
+    scope.text += statement.slice(cursor, token.index);
+    cursor = token.index + token[0].length;
+    if (token[0] === "(") {
+      scopes.push({ kind: scope.kind, text: "", subquery: false });
+      continue;
+    }
+    if (token[0] === ")") {
+      const text = scope.text;
+      flush(scope);
+      if (scopes.length > 1) {
+        scopes.pop();
+        const parent =
+          scopes.at(-1) ?? panic("SQL predicate scanner lost its parent scope");
+        if (!scope.subquery) {
+          parent.text += `(${text})`;
+        }
+      }
+      continue;
+    }
+    flush(scope);
+    const kind = token[0].toLowerCase();
+    if (kind === "select") {
+      scope.subquery = true;
+    }
+    if (kind === "where") {scope.kind = "where";}
+    else if (kind.startsWith("group")) {scope.kind = "group";}
+    else if (kind === "on") {scope.kind = "on";}
+    else {scope.kind = null;}
   }
-  // A source restriction may live in JOIN ... ON; a column-to-column join
-  // alone does not restrict the aggregation to one source.
-  return (
-    /\bON\b[\s\S]*?\bsource_id\b\s*=\s*(?:\$\d+|__SQL_EXPR_\d+__)/iu.test(
-      statement,
-    ) ||
-    /\bON\b[\s\S]*?(?:\$\d+|__SQL_EXPR_\d+__)\s*=\s*(?:[a-z_]\w*\.)?source_id\b/iu.test(
-      statement,
-    )
-  );
+  const scope =
+    scopes.at(-1) ?? panic("SQL predicate scanner lost its final scope");
+  scope.text += statement.slice(cursor);
+  for (const remaining of scopes) {
+    flush(remaining);
+  }
+  return clauses;
+};
+
+const sourceFilteredSql = (statement: string): boolean => {
+  const sourceAliases = new Set(["case_law_sources", "legislation_sources"]);
+  for (const match of statement.matchAll(
+    /\b(?:FROM|JOIN)\s+(?:[a-z_]\w*\.)?(?:case_law_sources|legislation_sources)\s+(?:AS\s+)?([a-z_]\w*)/giu,
+  )) {
+    if (match[1] !== undefined) {
+      sourceAliases.add(match[1]);
+    }
+  }
+  return sourceClauses(statement).some(({ kind, text }) => {
+    const sourceSelector = [...sourceAliases].some((alias) =>
+      new RegExp(`\\b${alias}\\.(?:adapter_key|id)\\b`, "iu").test(text),
+    );
+    if (kind === "where" || kind === "group") {
+      return SOURCE_COLUMN.test(text) || sourceSelector;
+    }
+    const restrictedSourceJoin = [...sourceAliases].some(
+      (alias) =>
+        new RegExp(
+          `\\b${alias}\\.(?:adapter_key|id)\\s*=\\s*\\(*\\s*(?:\\$\\d+|__SQL_EXPR_\\d+__)`,
+          "iu",
+        ).test(text) ||
+        new RegExp(
+          `(?:\\$\\d+|__SQL_EXPR_\\d+__)\\s*=\\s*${alias}\\.(?:adapter_key|id)\\b`,
+          "iu",
+        ).test(text),
+    );
+    return (
+      restrictedSourceJoin ||
+      /\bsource_id\b\s*=\s*\(*\s*(?:\$\d+|__SQL_EXPR_\d+__)/iu.test(text) ||
+      /(?:\$\d+|__SQL_EXPR_\d+__)\s*=\s*(?:[a-z_]\w*\.)?source_id\b/iu.test(
+        text,
+      )
+    );
+  });
 };
 
 const fullSourceCount = (text: string): boolean =>
@@ -574,6 +650,23 @@ const fullSourceCount = (text: string): boolean =>
         sourceFilteredSql(sqlTableName(statement.replaceAll('"', ""))) &&
         CORPUS_COUNT_TABLE.test(sqlTableName(statement.replaceAll('"', ""))),
     );
+
+const isSourceRestrictionColumn = (
+  column: ts.PropertyAccessExpression,
+  { bindings, file }: SubqueryOperandContext,
+): boolean => {
+  const owner = resolve(column.expression, bindings).getText(file);
+  if (column.name.text === "sourceId") {
+    return (
+      isCorpusColumn(column.getText(file), bindings) ||
+      isCorpusColumn(`${owner}.sourceId`, bindings)
+    );
+  }
+  return (
+    (column.name.text === "adapterKey" || column.name.text === "id") &&
+    SOURCE_RELATION.test(owner)
+  );
+};
 
 const drizzleSourceCount = (
   node: ts.CallExpression,
@@ -589,13 +682,22 @@ const drizzleSourceCount = (
       "leftJoin",
       "rightJoin",
       "fullJoin",
+      "$count",
     ].includes(node.expression.name.text)
   ) {
     return false;
   }
   const joining = node.expression.name.text.endsWith("Join");
-  let corpus = false;
-  let count = false;
+  const dollarCount = node.expression.name.text === "$count";
+  const countTable = dollarCount ? node.arguments.at(0) : undefined;
+  let corpus =
+    countTable !== undefined &&
+    (isCorpusColumn(`${countTable.getText(file)}.sourceId`, bindings) ||
+      isCorpusColumn(
+        `${resolve(countTable, bindings).getText(file)}.sourceId`,
+        bindings,
+      ));
+  let count = dollarCount;
   let source = false;
   const inspect = (child: ts.Node) => {
     if (ts.isExpression(child)) {
@@ -604,6 +706,18 @@ const drizzleSourceCount = (
         const name = drizzleCallName(value, imports);
         if (name === "count") {
           count = true;
+        }
+        const argument = value.arguments.at(0);
+        const operand =
+          argument === undefined ? undefined : resolve(argument, bindings);
+        if (name === "sum" && operand !== undefined) {
+          count ||=
+            (ts.isNumericLiteral(operand) && operand.text === "1") ||
+            (ts.isTaggedTemplateExpression(operand) &&
+              isSqlTag(operand) &&
+              /^\+?1(?:\.0+)?$/u.test(
+                sqlParts(file, operand.template).sql.trim(),
+              ));
         }
         if (
           ts.isPropertyAccessExpression(value.expression) &&
@@ -622,7 +736,9 @@ const drizzleSourceCount = (
       }
       if (ts.isTaggedTemplateExpression(value) && isSqlTag(value)) {
         count ||= FULL_COUNT.test(
-          sqlWithoutLiterals(sqlParts(file, value.template).sql),
+          sqlWithoutLiterals(
+            expandedSql({ ...sqlParts(file, value.template), bindings, file }),
+          ),
         );
       }
       if (value !== child) {
@@ -645,30 +761,24 @@ const drizzleSourceCount = (
           const other = value.arguments.at(index === 0 ? 1 : 0);
           if (
             ts.isPropertyAccessExpression(column) &&
-            column.name.text === "sourceId" &&
+            (column.name.text === "sourceId" ||
+              column.name.text === "adapterKey" ||
+              column.name.text === "id") &&
             other !== undefined &&
             !ts.isPropertyAccessExpression(resolve(other, bindings))
           ) {
-            source ||=
-              isCorpusColumn(column.getText(file), bindings) ||
-              isCorpusColumn(
-                `${resolve(column.expression, bindings).getText(file)}.sourceId`,
-                bindings,
-              );
+            source ||= isSourceRestrictionColumn(column, context);
           }
         }
       }
       if (
         !joining &&
         ts.isPropertyAccessExpression(value) &&
-        value.name.text === "sourceId"
+        (value.name.text === "sourceId" ||
+          value.name.text === "adapterKey" ||
+          value.name.text === "id")
       ) {
-        source ||=
-          isCorpusColumn(value.getText(file), bindings) ||
-          isCorpusColumn(
-            `${resolve(value.expression, bindings).getText(file)}.sourceId`,
-            bindings,
-          );
+        source ||= isSourceRestrictionColumn(value, context);
       }
       if (value !== child) {
         ts.forEachChild(value, inspectSource);
@@ -1204,8 +1314,11 @@ const expandedSql = ({
     const value = resolve(expression, bindings);
     const text = value.getText(file);
     return ts.isTaggedTemplateExpression(value) ||
-      (ts.isPropertyAccessExpression(value) && SOURCE_COLUMN.test(text)) ||
-      CORPUS_COUNT_TABLE.test(sqlTableName(text))
+      (ts.isPropertyAccessExpression(value) &&
+        (SOURCE_COLUMN.test(text) || value.name.text === "adapterKey")) ||
+      (ts.isNumericLiteral(value) && value.text === "1") ||
+      CORPUS_COUNT_TABLE.test(sqlTableName(text)) ||
+      SOURCE_RELATION.test(text)
       ? text
       : marker;
   });

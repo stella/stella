@@ -365,8 +365,8 @@ export const caseLawSources = p.pgTable(
       .varchar("reported_total_origin", { length: 16 })
       .$type<SourceTotalOrigin>(),
     /**
-     * Persisted planner estimate and when it was observed. Refreshing never
-     * executes the source-filtered SELECT; public requests read this pair.
+     * Persisted exact count and when it was observed. One gated daily
+     * snapshot refreshes it; public requests read this pair.
      *
      * Zero is a real answer here, unlike `reported_total`: a source can be
      * registered and hold nothing yet. The pair is one fact and moves together.

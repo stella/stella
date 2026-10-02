@@ -69,6 +69,9 @@ type PipelineInput = {
   source: typeof caseLawSources.$inferSelect;
   sourceLease: CaseLawSourceIngestionLease;
   scopedDb: ScopedDb;
+  countStoredTotalSource?: (
+    sourceId: typeof caseLawSources.$inferSelect.id,
+  ) => Promise<number>;
   acquireStoredTotalAdmission: (options: {
     deadline: CycleDeadline | undefined;
   }) => Promise<"granted" | "held">;
@@ -210,6 +213,7 @@ export const runIngestionPipeline = async ({
   sourceLease,
   scopedDb,
   acquireStoredTotalAdmission,
+  countStoredTotalSource,
   cycle,
   maxPages: maxPagesOverride,
   maxDecisions,
@@ -674,10 +678,12 @@ export const runIngestionPipeline = async ({
   cursor = checkpoint.cursor;
 
   // Outside the checkpoint transaction: a durable refresh claim bounds
-  // planning attempts, including failures, without counting corpus rows.
+  // daily counts, including failed attempts, through separate admission.
   await refreshNextSourceStoredTotal({
     scopedDb,
-    now: new Date(),
+    ...(countStoredTotalSource === undefined
+      ? {}
+      : { countSource: countStoredTotalSource }),
     acquireAdmission: async () =>
       await acquireStoredTotalAdmission({ deadline }),
   });

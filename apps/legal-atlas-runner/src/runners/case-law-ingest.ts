@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 /**
  * Continuous case law ingestion daemon.
  *
@@ -16,8 +17,6 @@
  * Without arguments, runs all sources in independent loops.
  * With an adapter key, runs only that source once and exits.
  */
-
-import { panic } from "better-result";
 
 import { Temporal } from "@stll/time";
 

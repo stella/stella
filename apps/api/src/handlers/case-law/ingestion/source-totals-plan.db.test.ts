@@ -5,7 +5,7 @@ import { sql } from "drizzle-orm";
 import type { Transaction } from "@/api/db/root";
 import { caseLawSources } from "@/api/db/schema";
 import {
-  explainSourceStoredTotalQuery,
+  sourceStoredTotalCountQuery,
   sourceStoredTotalRefreshClaim,
 } from "@/api/handlers/case-law/ingestion/source-totals";
 import { createSafeId } from "@/api/lib/branded-types";
@@ -28,7 +28,7 @@ const assertNotExecuted = (node: Record<string, unknown>) => {
     return;
   }
   if (!Array.isArray(children) || !children.every(isRecord)) {
-    panic("Malformed estimate child plans");
+    panic("Malformed count child plans");
   }
   for (const child of children) {
     assertNotExecuted(child);
@@ -93,20 +93,15 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       await db.execute(sql`ANALYZE case_law_decisions`);
     });
 
-    test("the production estimate is source-specific and never executes its planned scan", async () => {
-      const large = explainRoot(
-        await db.execute(explainSourceStoredTotalQuery(first)),
+    test("the production exact count sees source-specific rows including an empty source", async () => {
+      const large = await db.execute(sourceStoredTotalCountQuery(first));
+      const small = await db.execute(sourceStoredTotalCountQuery(second));
+      const empty = await db.execute(
+        sourceStoredTotalCountQuery(createSafeId<"caseLawSource">()),
       );
-      const small = explainRoot(
-        await db.execute(explainSourceStoredTotalQuery(second)),
-      );
-      assertNotExecuted(large);
-      assertNotExecuted(small);
-      expect(large["Node Type"]).not.toBe("Aggregate");
-      expect(large["Plan Rows"]).toBeGreaterThan(600);
-      expect(large["Plan Rows"]).toBeLessThan(800);
-      expect(small["Plan Rows"]).toBeGreaterThan(200);
-      expect(small["Plan Rows"]).toBeLessThan(400);
+      expect(large.at(0)?.["total"]).toBe(700);
+      expect(small.at(0)?.["total"]).toBe(300);
+      expect(empty.at(0)?.["total"]).toBe(0);
     });
 
     test("the production refresh claim uses the source primary key with one bounded row", async () => {
@@ -133,23 +128,28 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("synthetic corpus scale changes estimates without executing corpus work", async () => {
-      // Only this isolated fixture's catalog estimate changes; the physical rows stay at 1000.
+    test("the admitted exact count uses a bounded index-only source scan at synthetic scale", async () => {
+      await db.execute(sql`VACUUM (ANALYZE) case_law_decisions`);
       await db.execute(
         sql`UPDATE pg_class SET reltuples = 1000000 WHERE oid = 'case_law_decisions'::regclass`,
       );
-      const firstPlan = explainRoot(
-        await db.execute(explainSourceStoredTotalQuery(first)),
+      const root = explainRoot(
+        await db.execute(
+          sql`EXPLAIN (FORMAT JSON) ${sourceStoredTotalCountQuery(second)}`,
+        ),
       );
-      const secondPlan = explainRoot(
-        await db.execute(explainSourceStoredTotalQuery(second)),
+      assertNotExecuted(root);
+      expect(root["Node Type"]).toBe("Aggregate");
+      expect(root["Total Cost"]).toBeLessThan(50_000);
+      const corpus = scanOccurrences(root).filter(
+        ({ relation }) => relation === "case_law_decisions",
       );
-      assertNotExecuted(firstPlan);
-      assertNotExecuted(secondPlan);
-      expect(firstPlan["Plan Rows"]).toBeGreaterThan(600_000);
-      expect(firstPlan["Plan Rows"]).toBeLessThan(800_000);
-      expect(secondPlan["Plan Rows"]).toBeGreaterThan(200_000);
-      expect(secondPlan["Plan Rows"]).toBeLessThan(400_000);
+      expect(corpus).toHaveLength(1);
+      expect(corpus.at(0)?.nodeType).toBe("Index Only Scan");
+      expect(corpus.at(0)?.indexCond).toContain("source_id");
+      expect(corpus.at(0)?.index).toBeDefined();
+      expect(corpus.at(0)?.rows).toBeGreaterThan(200_000);
+      expect(corpus.at(0)?.rows).toBeLessThan(400_000);
     });
   },
 );

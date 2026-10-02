@@ -34,7 +34,7 @@ export default eslintCompatPlugin({
             "An optional keyset bound (<param> IS NULL OR <column> > <param>)",
           ),
           "per-source-full-count": message(
-            "Per-source full COUNT aggregation over a corpus table",
+            "Per-source full COUNT or SUM(1) aggregation over a corpus table",
           ),
           comment: "{{reason}}",
         },

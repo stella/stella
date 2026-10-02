@@ -349,7 +349,7 @@ type CountReplayabilityOptions = {
   scope: CaseLawReplayScope;
 };
 
-const REPLAY_PREFLIGHT_STATEMENT_TIMEOUT_MS = 5000;
+const REPLAY_PREFLIGHT_STATEMENT_TIMEOUT_MS = 120_000;
 
 /**
  * How much of a scope can be replayed without the publisher. Redacted rows
@@ -366,7 +366,7 @@ export const countReplayability = async ({
         tx,
         REPLAY_PREFLIGHT_STATEMENT_TIMEOUT_MS,
         async () =>
-          // sql-perf-allow: bounded by one operator preflight and a 5s statement timeout
+          // sql-perf-allow: bounded by one operator preflight and a 120s statement timeout
           await tx
             .select({
               storedLocally: sql<string>`count(*) filter (where ${caseLawDecisions.sourceRawS3Key} is not null)`,

@@ -2,13 +2,16 @@ import { expect, spyOn, test } from "bun:test";
 
 import { remainingCycleMs } from "@/api/lib/legal-search/cycle-deadline";
 
-import { createSourceStoredTotalAdmission } from "./source-total-admission";
+import {
+  createSourceStoredTotalAdmission,
+  SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS,
+} from "./source-total-admission";
 
-test("one cycle admits at most one planner unit even when three units fit its budget", async () => {
+test("one cycle admits at most one long-read unit even when three units fit its budget", async () => {
   const clock = spyOn(performance, "now").mockReturnValue(0);
   try {
     const deadline = {
-      expiresAt: 30_000,
+      expiresAt: 3 * SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS,
       signal: new AbortController().signal,
     };
     let reads = 0;
@@ -19,10 +22,14 @@ test("one cycle admits at most one planner unit even when three units fit its bu
       },
     });
     expect(await admit({ deadline })).toBe("granted");
-    expect(remainingCycleMs(deadline)).toBe(20_000);
+    expect(remainingCycleMs(deadline)).toBe(
+      2 * SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS,
+    );
     expect(await admit({ deadline })).toBe("held");
     expect(await admit({ deadline })).toBe("held");
-    expect(remainingCycleMs(deadline)).toBe(20_000);
+    expect(remainingCycleMs(deadline)).toBe(
+      2 * SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS,
+    );
     expect(reads).toBe(1);
   } finally {
     clock.mockRestore();
@@ -30,11 +37,11 @@ test("one cycle admits at most one planner unit even when three units fit its bu
 });
 
 for (const kind of ["stop", "unknown", "degraded"] as const) {
-  test(`fresh ${kind} load verdict controls planning admission`, async () => {
+  test(`fresh ${kind} load verdict controls count admission`, async () => {
     const clock = spyOn(performance, "now").mockReturnValue(0);
     try {
       const deadline = {
-        expiresAt: 15_000,
+        expiresAt: SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS + 5000,
         signal: new AbortController().signal,
       };
       const admit = createSourceStoredTotalAdmission({
@@ -44,7 +51,9 @@ for (const kind of ["stop", "unknown", "degraded"] as const) {
         kind === "degraded" ? "granted" : "held",
       );
       expect(remainingCycleMs(deadline)).toBe(
-        kind === "degraded" ? 5000 : 15_000,
+        kind === "degraded"
+          ? 5000
+          : SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS + 5000,
       );
     } finally {
       clock.mockRestore();
@@ -66,8 +75,14 @@ test("an absent, exhausted or aborted cycle cannot read load or admit housekeepi
     aborted.abort();
     for (const deadline of [
       undefined,
-      { expiresAt: 9999, signal: new AbortController().signal },
-      { expiresAt: 15_000, signal: aborted.signal },
+      {
+        expiresAt: SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS - 1,
+        signal: new AbortController().signal,
+      },
+      {
+        expiresAt: SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS + 5000,
+        signal: aborted.signal,
+      },
     ]) {
       expect(await admit({ deadline })).toBe("held");
     }
@@ -84,7 +99,10 @@ test.each(["abort", "elapsed"] as const)(
     const clock = spyOn(performance, "now").mockImplementation(() => now);
     try {
       const controller = new AbortController();
-      const deadline = { expiresAt: 15_000, signal: controller.signal };
+      const deadline = {
+        expiresAt: SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS + 5000,
+        signal: controller.signal,
+      };
       const admit = createSourceStoredTotalAdmission({
         readVerdict: async () => {
           if (condition === "abort") {
@@ -97,7 +115,9 @@ test.each(["abort", "elapsed"] as const)(
       });
       expect(await admit({ deadline })).toBe("held");
       expect(remainingCycleMs(deadline)).toBe(
-        condition === "abort" ? 15_000 : 9000,
+        condition === "abort"
+          ? SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS + 5000
+          : SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS - 1000,
       );
     } finally {
       clock.mockRestore();
@@ -109,7 +129,7 @@ test("concurrent admissions cannot reserve the same remaining operation budget",
   const clock = spyOn(performance, "now").mockReturnValue(0);
   try {
     const deadline = {
-      expiresAt: 30_000,
+      expiresAt: 3 * SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS,
       signal: new AbortController().signal,
     };
     const release = Promise.withResolvers<undefined>();
@@ -126,7 +146,26 @@ test("concurrent admissions cannot reserve the same remaining operation budget",
     expect(reads).toBe(2);
     release.resolve(undefined);
     expect(await Promise.all([first, second])).toEqual(["granted", "held"]);
-    expect(remainingCycleMs(deadline)).toBe(20_000);
+    expect(remainingCycleMs(deadline)).toBe(
+      2 * SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS,
+    );
+  } finally {
+    clock.mockRestore();
+  }
+});
+
+test("a long-read admission reserves 130 seconds rather than a planner-sized charge", async () => {
+  const clock = spyOn(performance, "now").mockReturnValue(0);
+  try {
+    const deadline = {
+      expiresAt: 200_000,
+      signal: new AbortController().signal,
+    };
+    const admit = createSourceStoredTotalAdmission({
+      readVerdict: async () => ({ kind: "normal", signals: [] }),
+    });
+    expect(await admit({ deadline })).toBe("granted");
+    expect(remainingCycleMs(deadline)).toBe(70_000);
   } finally {
     clock.mockRestore();
   }

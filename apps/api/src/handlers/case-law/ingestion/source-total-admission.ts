@@ -7,7 +7,8 @@ import {
 } from "@/api/lib/legal-search/cycle-deadline";
 import type { CycleDeadline } from "@/api/lib/legal-search/cycle-deadline";
 
-export const SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS = 10_000;
+/** 120 seconds of statement time plus 10 seconds for cancellation and settlement. */
+export const SOURCE_STORED_TOTAL_OPERATION_BUDGET_MS = 130_000;
 
 type SourceStoredTotalAdmissionOptions = {
   readVerdict: () => Promise<Verdict>;
@@ -16,7 +17,7 @@ type SourceStoredTotalAdmissionRequest = {
   deadline: CycleDeadline | undefined;
 };
 
-/** Recheck load and commit the operation's full budget before planning. */
+/** Recheck load and commit the operation's full budget before the exact count. */
 export const createSourceStoredTotalAdmission = ({
   readVerdict,
 }: SourceStoredTotalAdmissionOptions) => {

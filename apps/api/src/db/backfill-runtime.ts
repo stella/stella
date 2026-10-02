@@ -326,7 +326,29 @@ export const createDatabaseLoadVerdictReader = (
     config: defaultConfig,
   });
   return async () => {
-    const result = await Result.tryPromise(read);
+    const result = await Result.tryPromise(async () => {
+      const visibility = (
+        await indicators.query(
+          "SELECT pg_has_role(current_user, 'pg_read_all_stats', 'USAGE') OR EXISTS (SELECT 1 FROM pg_roles WHERE rolname = current_user AND rolsuper) AS visible",
+        )
+      ).at(0);
+      if (!isRecord(visibility) || visibility["visible"] !== true) {
+        return {
+          kind: "unknown",
+          signals: [
+            {
+              indicator: "long_transaction",
+              kind: "unknown",
+              value: null,
+              threshold: null,
+              observedAt: null,
+              reason: "Statistics visibility is unavailable",
+            },
+          ],
+        } as const satisfies Verdict;
+      }
+      return await read();
+    });
     await indicators.settle();
     if (Result.isError(result)) {
       throw result.error;

@@ -757,3 +757,116 @@ test("a Drizzle join source restriction is guarded while a source correlation is
     ),
   ).toContain("per-source-full-count");
 });
+
+test.each([
+  [
+    "Drizzle dollar count",
+    'import { eq } from "drizzle-orm"; db.$count(caseLawDecisions, eq(caseLawDecisions.sourceId, sourceId));',
+  ],
+  [
+    "dollar count predicate binding",
+    'import { eq } from "drizzle-orm"; const predicate = eq(caseLawDecisions.sourceId, sourceId); db.$count(caseLawDecisions, predicate);',
+  ],
+  [
+    "source adapter restriction",
+    "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON s.id = d.source_id WHERE s.adapter_key = $1`",
+  ],
+  [
+    "source restriction inside join",
+    "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON s.id = d.source_id AND s.adapter_key = $1`",
+  ],
+  [
+    "tagged source table join",
+    "sql`SELECT count(*) FROM ${caseLawDecisions} d JOIN ${caseLawSources} s ON s.id = d.source_id WHERE s.adapter_key = ${adapterKey}`",
+  ],
+  [
+    "Drizzle adapter join",
+    'import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).innerJoin(caseLawSources, eq(caseLawSources.id, caseLawDecisions.sourceId)).where(eq(caseLawSources.adapterKey, key));',
+  ],
+  [
+    "sum one",
+    "sql`SELECT sum(1) FROM case_law_decisions WHERE source_id = $1`",
+  ],
+  [
+    "Drizzle sum one",
+    'import { sql, eq } from "drizzle-orm"; db.select({ total: sql<number>`sum(1)` }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, sourceId));',
+  ],
+  [
+    "sum a constant binding",
+    'import { sql, eq } from "drizzle-orm"; const one = 1; db.select({ total: sql<number>`sum(${one})` }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, sourceId));',
+  ],
+  [
+    "filter after a subquery FROM",
+    "sql`SELECT count(*) FROM case_law_decisions d WHERE EXISTS (SELECT 1 FROM flags f) AND d.source_id = $1`",
+  ],
+  [
+    "filter after a nested WHERE",
+    "sql`SELECT count(*) FROM case_law_decisions d WHERE EXISTS (SELECT 1 FROM flags f WHERE f.enabled = true) AND d.source_id = $1`",
+  ],
+  [
+    "parenthesized join restriction",
+    "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON d.source_id = (${sourceId}) AND s.id = d.source_id`",
+  ],
+])("equivalent source scan remains guarded: %s", (_, source) => {
+  expect(kinds(source)).toContain("per-source-full-count");
+});
+
+test.each([
+  'import { eq } from "drizzle-orm"; db.$count(smallSettings, eq(smallSettings.sourceId, sourceId));',
+  'import { eq } from "drizzle-orm"; db.$count(caseLawDecisions, eq(caseLawDecisions.country, country));',
+  "sql`SELECT sum(1) FROM small_settings WHERE source_id = $1`",
+  "sql`SELECT sum(1) FROM case_law_decisions WHERE country = $1`",
+  "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON s.id = d.source_id WHERE d.country = $1`",
+  "sql`SELECT count(*) FROM case_law_citations c JOIN case_law_decisions d ON d.id = c.citing_decision_id JOIN case_law_sources s ON s.id = d.source_id WHERE c.cited_decision_id = $1`",
+  "sql`SELECT count(*) FROM case_law_decisions d WHERE EXISTS (SELECT f.source_id FROM flags f WHERE f.id = d.id) AND d.country = $1`",
+  'import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(legislationDocuments).innerJoin(legislationSources, eq(legislationSources.id, legislationDocuments.sourceId)).where(eq(legislationDocuments.country, country)).groupBy(legislationDocuments.documentType);',
+])("unrelated aggregate remains outside the per-source guard: %s", (source) => {
+  expect(kinds(source)).not.toContain("per-source-full-count");
+});
+
+test("the scheduled exact source snapshot exemption remains visible and concrete", () => {
+  const source =
+    "// sql-perf-allow: bounded by an index-served exact source snapshot, one source/day and one per cycle, 120s\nconst total = sql`SELECT count(*) FROM case_law_decisions WHERE source_id = ${sourceId}`;";
+  expect(
+    analyzeSqlPerf(source, "apps/api/src/handlers/example.ts"),
+  ).toMatchObject({ hits: [], commentErrors: [] });
+});
+
+test("counting one corpus row by primary key is outside the source-total guard", () => {
+  expect(
+    kinds(
+      'import { count, eq } from "drizzle-orm"; db.select({ total: count() }).from(caseLawDecisions).where(eq(caseLawDecisions.id, decisionId));',
+    ),
+  ).not.toContain("per-source-full-count");
+  expect(
+    kinds(
+      'import { eq } from "drizzle-orm"; db.$count(caseLawDecisions, eq(caseLawDecisions.id, decisionId));',
+    ),
+  ).not.toContain("per-source-full-count");
+});
+
+test("Drizzle sum of a literal unit has the same source scan cost as count", () => {
+  expect(
+    kinds(
+      'import { sum, sql, eq } from "drizzle-orm"; db.select({ total: sum(sql<number>`1`) }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, sourceId));',
+    ),
+  ).toContain("per-source-full-count");
+  expect(
+    kinds(
+      'import { sum, eq } from "drizzle-orm"; db.select({ total: sum(caseLawDecisions.pageCount) }).from(caseLawDecisions).where(eq(caseLawDecisions.sourceId, sourceId));',
+    ),
+  ).not.toContain("per-source-full-count");
+});
+
+test("source relation aliases and reversed adapter restrictions remain guarded", () => {
+  expect(
+    kinds(
+      "sql`SELECT count(*) FROM case_law_decisions d JOIN case_law_sources s ON $1 = s.adapter_key AND s.id = d.source_id`",
+    ),
+  ).toContain("per-source-full-count");
+  expect(
+    kinds(
+      'import { count, eq, alias } from "drizzle-orm"; const sources = alias(caseLawSources, "s"); db.select({ total: count() }).from(caseLawDecisions).innerJoin(sources, eq(sources.id, caseLawDecisions.sourceId)).where(eq(sources.adapterKey, key));',
+    ),
+  ).toContain("per-source-full-count");
+});

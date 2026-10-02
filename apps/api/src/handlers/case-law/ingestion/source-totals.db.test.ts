@@ -1,4 +1,13 @@
-import { beforeAll, describe, expect, spyOn, test } from "bun:test";
+import { panic } from "better-result";
+import type { ReservedSQL } from "bun";
+import {
+  beforeAll,
+  describe,
+  expect,
+  setSystemTime,
+  spyOn,
+  test,
+} from "bun:test";
 import { eq, inArray, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
@@ -12,8 +21,8 @@ import type { SourceTotalOrigin } from "@/api/db/schema";
 import { markRlsDatabase } from "@/api/db/scoped";
 import type { TransactionOf } from "@/api/db/scoped";
 import {
-  estimateSourceThroughIngestionRole,
-  explainSourceStoredTotalQuery,
+  countSourceThroughIngestionRole,
+  countSourceOnDedicatedConnection,
   readSourceReportedTotals,
   refreshSourceStoredTotal,
   refreshNextSourceStoredTotal,
@@ -30,7 +39,6 @@ import {
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
-import { explainRoot } from "@/api/tests/query-plans/plan-walker";
 
 // The trio is nullable in the schema and only this module keeps it whole, so
 // what is asserted here is the writer's invariant rather than the columns:
@@ -435,7 +443,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         .where(eq(caseLawSources.id, sourceId));
     };
 
-    const estimateInTest = async (sourceId: SafeId<"caseLawSource">) =>
+    const countInTest = async (sourceId: SafeId<"caseLawSource">) =>
       (
         await db
           .select({ id: caseLawDecisions.id })
@@ -444,19 +452,20 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           .limit(100)
       ).length;
 
-    const refreshForTest = async (
-      options: Omit<
-        Parameters<typeof refreshSourceStoredTotal>[0],
-        "acquireAdmission"
-      > & { acquireAdmission?: () => Promise<"granted" | "held"> },
-    ) =>
+    const refreshForTest = async ({
+      now,
+      ...options
+    }: Omit<
+      Parameters<typeof refreshSourceStoredTotal>[0],
+      "acquireAdmission" | "readDatabaseNow"
+    > & { now: Date; acquireAdmission?: () => Promise<"granted" | "held"> }) =>
       await refreshSourceStoredTotal({
         ...options,
+        readDatabaseNow: async () => now,
         acquireAdmission: options.acquireAdmission ?? (async () => "granted"),
-        estimateSource: options.estimateSource ?? estimateInTest,
+        countSource: options.countSource ?? countInTest,
       });
-
-    test("an explicitly due cycle estimates the source and stamps the pair", async () => {
+    test("an explicitly due cycle counts the source and stamps the pair", async () => {
       const sourceId = await seedCountedSource(3);
 
       expect(await refreshForTest({ scopedDb, sourceId, now: NOW })).toBe(
@@ -537,7 +546,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             scopedDb,
             sourceId,
             now: past,
-            estimateSource: async () => {
+            countSource: async () => {
               throw Object.assign(
                 new Error("canceling statement due to statement timeout"),
                 { code: "57014" },
@@ -584,7 +593,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb: ingestionScopedDb,
           sourceId,
           now: countedAt,
-          estimateSource: async (id) =>
+          countSource: async (id) =>
             await ingestionScopedDb(
               async (tx) =>
                 (
@@ -605,7 +614,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("the planner estimate bridge reads under the ingestion role", async () => {
+    test("the exact count bridge reads under the ingestion role", async () => {
       const sourceId = await seedCountedSource(3);
       const observedRoles: string[] = [];
       const dedicatedDb = markRlsDatabase({
@@ -624,12 +633,11 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           }),
       });
 
-      const estimate = await estimateSourceThroughIngestionRole(
+      const total = await countSourceThroughIngestionRole(
         dedicatedDb,
         sourceId,
       );
-      expect(Number.isSafeInteger(estimate)).toBe(true);
-      expect(estimate).toBeGreaterThanOrEqual(0);
+      expect(total).toBe(3);
       expect(observedRoles).toEqual(["stella_ingestion"]);
     });
 
@@ -712,7 +720,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         scopedDb,
         sourceId,
         now: NOW,
-        estimateSource: async (id) => {
+        countSource: async (id) => {
           timestamp.later = await readEligibleDue(id);
           await refreshForTest({
             scopedDb,
@@ -733,12 +741,12 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
     test("a failed attempt backs off at just under the interval and retries at its boundary", async () => {
       const sourceId = await seedCountedSource(0);
       let calls = 0;
-      const estimateSource = async () => {
+      const countSource = async () => {
         calls += 1;
         throw Object.assign(new Error("statement timeout"), { code: "57014" });
       };
       expect(
-        await refreshForTest({ scopedDb, sourceId, now: NOW, estimateSource }),
+        await refreshForTest({ scopedDb, sourceId, now: NOW, countSource }),
       ).toBe("unavailable");
       const attempted = (
         await db
@@ -758,7 +766,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId,
           now: new Date(due.getTime() - 1),
-          estimateSource,
+          countSource,
         }),
       ).toBe("fresh");
       expect(calls).toBe(1);
@@ -767,7 +775,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId,
           now: new Date(due),
-          estimateSource,
+          countSource,
         }),
       ).toBe("unavailable");
       expect(calls).toBe(2);
@@ -776,7 +784,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId,
           now: new Date(due.getTime() + 1),
-          estimateSource,
+          countSource,
         }),
       ).toBe("fresh");
       expect(calls).toBe(2);
@@ -830,7 +838,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           [sourceId],
         );
         let calls = 0;
-        const estimateSource = async () => {
+        const countSource = async () => {
           calls += 1;
           return 7;
         };
@@ -838,13 +846,13 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb: firstScope,
           sourceId,
           now: NOW,
-          estimateSource,
+          countSource,
         });
         const second = refreshForTest({
           scopedDb: secondScope,
           sourceId,
           now: NOW,
-          estimateSource,
+          countSource,
         });
         try {
           await Promise.all([firstEntered.promise, secondEntered.promise]);
@@ -884,7 +892,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("a stale provider result cannot overwrite a newer attempt's estimate", async () => {
+    test("a stale provider result cannot overwrite a newer attempt's count", async () => {
       const sourceId = await seedCountedSource(0);
       const barrier = Promise.withResolvers<undefined>();
       const started = Promise.withResolvers<undefined>();
@@ -892,7 +900,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         scopedDb,
         sourceId,
         now: NOW,
-        estimateSource: async () => {
+        countSource: async () => {
           started.resolve(undefined);
           await barrier.promise;
           return 11;
@@ -907,7 +915,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             scopedDb,
             sourceId,
             now: later,
-            estimateSource: async () => 22,
+            countSource: async () => 22,
           }),
         ).toBe("refreshed");
       } finally {
@@ -939,7 +947,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         .set({ storedTotal: 8, storedTotalAsOf: old })
         .where(eq(caseLawSources.id, second));
       let calls = 0;
-      const estimateSource = async () => {
+      const countSource = async () => {
         calls += 1;
         return 20;
       };
@@ -948,7 +956,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId: first,
           now: new Date(NOW.getTime() + 1),
-          estimateSource,
+          countSource,
         }),
       ).toBe("fresh");
       expect(calls).toBe(0);
@@ -976,7 +984,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId: second,
           now: new Date(NOW.getTime() + 1),
-          estimateSource,
+          countSource,
         }),
       ).toBe("refreshed");
       expect(calls).toBe(1);
@@ -991,7 +999,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
     });
 
     test.each([-1, 1.5, Number.NaN, Number.POSITIVE_INFINITY, 2_147_483_648])(
-      "invalid estimate %s preserves the last pair and durable backoff",
+      "invalid count %s preserves the last pair and durable backoff",
       async (value) => {
         const sourceId = await seedCountedSource(0);
         await db
@@ -1003,7 +1011,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         );
         await setDue(sourceId, attemptedAt);
         let calls = 0;
-        const estimateSource = async () => {
+        const countSource = async () => {
           calls += 1;
           return value;
         };
@@ -1012,7 +1020,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             scopedDb,
             sourceId,
             now: attemptedAt,
-            estimateSource,
+            countSource,
           }),
         ).toBe("unavailable");
         expect(
@@ -1020,7 +1028,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             scopedDb,
             sourceId,
             now: new Date(attemptedAt.getTime() + 1),
-            estimateSource,
+            countSource,
           }),
         ).toBe("fresh");
         expect(calls).toBe(1);
@@ -1040,7 +1048,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       },
     );
 
-    test("production estimates track insert, delete, source reassignment and replay after ANALYZE", async () => {
+    test("exact counts track insert, delete, source reassignment and replay", async () => {
       const first = await seedCountedSource(600);
       const second = await seedCountedSource(200);
       const ingestionDb = markRlsDatabase({
@@ -1049,27 +1057,20 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         ): Promise<T> => await db.transaction(fn),
       });
       let calls = 0;
-      const estimateSource = async (sourceId: SafeId<"caseLawSource">) => {
+      const countSource = async (sourceId: SafeId<"caseLawSource">) => {
         calls += 1;
-        const estimate = await estimateSourceThroughIngestionRole(
+        const total = await countSourceThroughIngestionRole(
           ingestionDb,
           sourceId,
         );
-        const producer = await ingestionScopedDb(async (tx) =>
-          explainRoot(
-            await tx.execute(explainSourceStoredTotalQuery(sourceId)),
-          ),
-        );
-        expect(estimate).toBe(producer["Plan Rows"]);
-        return estimate;
+        return total;
       };
-      const assertEstimate = async (
+      const assertCount = async (
         sourceId: SafeId<"caseLawSource">,
         expected: number,
       ) => {
         const row = await readStoredPair(sourceId);
-        expect(row?.storedTotal).toBeGreaterThan(expected - 20);
-        expect(row?.storedTotal).toBeLessThan(expected + 20);
+        expect(row?.storedTotal).toBe(expected);
       };
       await db.execute(sql`ANALYZE case_law_decisions`);
       expect(
@@ -1077,7 +1078,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId: first,
           now: NOW,
-          estimateSource,
+          countSource,
         }),
       ).toBe("refreshed");
       expect(
@@ -1085,11 +1086,11 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId: second,
           now: NOW,
-          estimateSource,
+          countSource,
         }),
       ).toBe("refreshed");
-      await assertEstimate(first, 600);
-      await assertEstimate(second, 200);
+      await assertCount(first, 600);
+      await assertCount(second, 200);
       const deleted = await db
         .select({ id: caseLawDecisions.id })
         .from(caseLawDecisions)
@@ -1122,7 +1123,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId: first,
           now: later,
-          estimateSource,
+          countSource,
         }),
       ).toBe("refreshed");
       expect(
@@ -1130,23 +1131,23 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           scopedDb,
           sourceId: second,
           now: await readEligibleDue(second),
-          estimateSource,
+          countSource,
         }),
       ).toBe("refreshed");
-      await assertEstimate(first, 400);
-      await assertEstimate(second, 300);
+      await assertCount(first, 400);
+      await assertCount(second, 300);
       expect(
         await refreshForTest({
           scopedDb,
           sourceId: first,
           now: later,
-          estimateSource,
+          countSource,
         }),
       ).toBe("fresh");
       expect(calls).toBe(4);
-      await assertEstimate(first, 400);
+      await assertCount(first, 400);
     });
-    test("an old successful estimate cannot write after a newer failed attempt", async () => {
+    test("an old successful count cannot write after a newer failed attempt", async () => {
       const sourceId = await seedCountedSource(0);
       const originalAsOf = new Date(
         NOW.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
@@ -1161,7 +1162,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         scopedDb,
         sourceId,
         now: NOW,
-        estimateSource: async () => {
+        countSource: async () => {
           started.resolve(undefined);
           await barrier.promise;
           return 11;
@@ -1176,7 +1177,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             scopedDb,
             sourceId,
             now: newer,
-            estimateSource: async () => {
+            countSource: async () => {
               throw Object.assign(new Error("new attempt timed out"), {
                 code: "57014",
               });
@@ -1209,7 +1210,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         .set({ storedTotalNextRefreshAt: null })
         .where(eq(caseLawSources.id, sourceId));
       let admissions = 0;
-      let estimates = 0;
+      let counts = 0;
       expect(
         await refreshForTest({
           scopedDb,
@@ -1217,29 +1218,18 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           now: NOW,
           acquireAdmission: async () => {
             admissions += 1;
-            expect(await readScheduledDue(sourceId)).toEqual(
-              sourceStoredTotalNextRefreshAt(
-                sourceId,
-                new Date(
-                  NOW.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS + 1,
-                ),
-              ),
-            );
             return "granted";
           },
-          estimateSource: async () => {
-            estimates += 1;
+          countSource: async () => {
+            counts += 1;
             return 9;
           },
         }),
       ).toBe("refreshed");
       expect(admissions).toBe(1);
-      expect(estimates).toBe(1);
+      expect(counts).toBe(1);
       expect(await readScheduledDue(sourceId)).toEqual(
-        sourceStoredTotalNextRefreshAt(
-          sourceId,
-          new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-        ),
+        sourceStoredTotalNextRefreshAt(sourceId, new Date(NOW.getTime() + 1)),
       );
       expect(await readStoredPair(sourceId)).toEqual({
         storedTotal: 9,
@@ -1247,11 +1237,11 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
       });
     });
 
-    test("due work commits its attempt before admission and estimates only after grant", async () => {
+    test("due work admits before claiming and counts only after grant", async () => {
       const sourceId = await seedCountedSource(0);
       const admission = Promise.withResolvers<"granted" | "held">();
       const entered = Promise.withResolvers<undefined>();
-      let estimates = 0;
+      let counts = 0;
       const refresh = refreshForTest({
         scopedDb,
         sourceId,
@@ -1260,14 +1250,14 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           entered.resolve(undefined);
           return await admission.promise;
         },
-        estimateSource: async () => {
-          estimates += 1;
+        countSource: async () => {
+          counts += 1;
           return 9;
         },
       });
       try {
         await entered.promise;
-        expect(estimates).toBe(0);
+        expect(counts).toBe(0);
         await withGatedTestClients(databaseUrl, async ({ openClient }) => {
           const observer = openClient().db;
           await observer.execute(
@@ -1283,19 +1273,16 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
               .where(eq(caseLawSources.id, sourceId))
               .limit(1)
           ).at(0);
-          expect(observed?.attempted).toEqual(NOW);
+          expect(observed?.attempted).toBeNull();
           expect(observed?.due).toEqual(NOW);
         });
       } finally {
         admission.resolve("granted");
       }
       expect(await refresh).toBe("refreshed");
-      expect(estimates).toBe(1);
+      expect(counts).toBe(1);
       expect(await readScheduledDue(sourceId)).toEqual(
-        sourceStoredTotalNextRefreshAt(
-          sourceId,
-          new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-        ),
+        sourceStoredTotalNextRefreshAt(sourceId, new Date(NOW.getTime() + 1)),
       );
     });
 
@@ -1312,15 +1299,15 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           storedTotalAttemptedAt: previous,
         })
         .where(eq(caseLawSources.id, sourceId));
-      let estimates = 0;
+      let counts = 0;
       expect(
         await refreshForTest({
           scopedDb,
           sourceId,
           now: NOW,
           acquireAdmission: async () => "held",
-          estimateSource: async () => {
-            estimates += 1;
+          countSource: async () => {
+            counts += 1;
             return 9;
           },
         }),
@@ -1339,7 +1326,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             .limit(1)
         ).at(0)?.at,
       ).toEqual(previous);
-      expect(estimates).toBe(0);
+      expect(counts).toBe(0);
       const reopened = new Date(NOW.getTime() + 1);
       expect(
         await refreshForTest({
@@ -1347,13 +1334,13 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           sourceId,
           now: reopened,
           acquireAdmission: async () => "granted",
-          estimateSource: async () => {
-            estimates += 1;
+          countSource: async () => {
+            counts += 1;
             return 9;
           },
         }),
       ).toBe("refreshed");
-      expect(estimates).toBe(1);
+      expect(counts).toBe(1);
       expect(await readStoredPair(sourceId)).toEqual({
         storedTotal: 9,
         storedTotalAsOf: reopened,
@@ -1375,7 +1362,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
             admissions += 1;
             return "granted";
           },
-          estimateSource: async () => 9,
+          countSource: async () => 9,
         }),
       ).toBe("refreshed");
       expect(admissions).toBe(1);
@@ -1384,10 +1371,7 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         storedTotalAsOf: late,
       });
       expect(await readScheduledDue(sourceId)).toEqual(
-        sourceStoredTotalNextRefreshAt(
-          sourceId,
-          new Date(late.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-        ),
+        sourceStoredTotalNextRefreshAt(sourceId, new Date(late.getTime() + 1)),
       );
     });
 
@@ -1450,24 +1434,24 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
         })),
       );
       const oldest = entries.at(0) ?? panic("Missing oldest source");
-      const estimated: SafeId<"caseLawSource">[] = [];
+      const counted: SafeId<"caseLawSource">[] = [];
       let admissions = 0;
-      const estimateSource = async (sourceId: SafeId<"caseLawSource">) => {
-        estimated.push(sourceId);
+      const countSource = async (sourceId: SafeId<"caseLawSource">) => {
+        counted.push(sourceId);
         return 9;
       };
       expect(
         await refreshNextSourceStoredTotal({
           scopedDb,
-          now: NOW,
+          readDatabaseNow: async () => NOW,
           acquireAdmission: async () => {
             admissions += 1;
             return "held";
           },
-          estimateSource,
+          countSource,
         }),
       ).toBe("held");
-      expect(estimated).toEqual([]);
+      expect(counted).toEqual([]);
       expect(await readScheduledDue(oldest.id)).toEqual(oldest.due);
       expect(
         (
@@ -1492,60 +1476,64 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           return "granted" as const;
         };
         for (const expected of entries) {
-          const before = estimated.length;
+          const before = counted.length;
           // db-await-in-loop: a bounded 24-source matrix proves each cycle drains exactly one durable overdue source.
           expect(
             await refreshNextSourceStoredTotal({
               scopedDb: restartScope,
-              now: NOW,
+              readDatabaseNow: async () => NOW,
               acquireAdmission,
-              estimateSource,
+              countSource,
             }),
           ).toBe("refreshed");
-          expect(estimated.length).toBe(before + 1);
-          expect(estimated.at(-1)).toBe(expected.id);
+          expect(counted.length).toBe(before + 1);
+          expect(counted.at(-1)).toBe(expected.id);
           // db-await-in-loop: verify each processed source advances only its own durable fixed phase.
           expect(await readScheduledDue(expected.id)).toEqual(
             sourceStoredTotalNextRefreshAt(
               expected.id,
-              new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
+              new Date(NOW.getTime() + 1),
             ),
           );
         }
         expect(
           await refreshNextSourceStoredTotal({
             scopedDb: restartScope,
-            now: NOW,
+            readDatabaseNow: async () => NOW,
             acquireAdmission: async () => {
               admissions += 1;
               return "granted";
             },
-            estimateSource,
+            countSource,
           }),
         ).toBe("fresh");
       });
-      expect(estimated).toEqual(entries.map(({ id }) => id));
+      expect(counted).toEqual(entries.map(({ id }) => id));
       expect(admissions).toBe(entries.length + 1);
     });
-    test("an admission exception preserves the pair and backs off without estimating", async () => {
+    test("an admission exception preserves the due pair and attempt because no count started", async () => {
       const sourceId = await seedCountedSource(0);
       const previous = new Date(
         NOW.getTime() - SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS,
       );
       await db
         .update(caseLawSources)
-        .set({ storedTotal: 3, storedTotalAsOf: previous })
+        .set({
+          storedTotal: 3,
+          storedTotalAsOf: previous,
+          storedTotalAttemptedAt: previous,
+        })
         .where(eq(caseLawSources.id, sourceId));
       let admissions = 0;
-      let estimates = 0;
+      let counts = 0;
       const acquireAdmission = async () => {
         admissions += 1;
         throw Object.assign(new Error("budget admission failed"), {
           code: "57014",
         });
       };
-      const estimateSource = async () => {
-        estimates += 1;
+      const countSource = async () => {
+        counts += 1;
         return 9;
       };
       expect(
@@ -1554,36 +1542,119 @@ describe.skipIf(!enabled || databaseUrl === undefined)(
           sourceId,
           now: NOW,
           acquireAdmission,
-          estimateSource,
+          countSource,
         }),
       ).toBe("unavailable");
       expect(await readStoredPair(sourceId)).toEqual({
         storedTotal: 3,
         storedTotalAsOf: previous,
       });
-      expect(await readScheduledDue(sourceId)).toEqual(
-        sourceStoredTotalNextRefreshAt(
-          sourceId,
-          new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-        ),
-      );
-      expect(await readEligibleDue(sourceId)).toEqual(
-        sourceStoredTotalNextRefreshAt(
-          sourceId,
-          new Date(NOW.getTime() + SOURCE_STORED_TOTAL_REFRESH_INTERVAL_MS),
-        ),
-      );
+      expect(await readScheduledDue(sourceId)).toEqual(NOW);
+      expect(
+        (
+          await db
+            .select({ at: caseLawSources.storedTotalAttemptedAt })
+            .from(caseLawSources)
+            .where(eq(caseLawSources.id, sourceId))
+            .limit(1)
+        ).at(0)?.at,
+      ).toEqual(previous);
       expect(
         await refreshForTest({
           scopedDb,
           sourceId,
           now: new Date(NOW.getTime() + 1),
           acquireAdmission,
-          estimateSource,
+          countSource,
         }),
-      ).toBe("fresh");
-      expect(admissions).toBe(1);
-      expect(estimates).toBe(0);
+      ).toBe("unavailable");
+      expect(admissions).toBe(2);
+      expect(counts).toBe(0);
+    });
+
+    test("the production dedicated count executes under its 120-second statement budget and stores exact zero", async () => {
+      const populated = await seedCountedSource(3);
+      const empty = await seedCountedSource(0);
+      const budgets: number[] = [];
+      const pids: number[] = [];
+      const prepareConnection = async (connection: ReservedSQL) => {
+        await connection.unsafe(`SET search_path TO ${schema}, public`);
+        const settings = (
+          await connection.unsafe<{ budget: number; pid: number }[]>(
+            "SELECT (extract(epoch FROM current_setting('statement_timeout')::interval) * 1000)::int AS budget, pg_backend_pid() AS pid",
+          )
+        ).at(0);
+        if (settings === undefined) {
+          return panic("Missing dedicated count settings");
+        }
+        budgets.push(settings.budget);
+        pids.push(settings.pid);
+      };
+      expect(
+        await countSourceOnDedicatedConnection(populated, {
+          prepareConnection,
+        }),
+      ).toBe(3);
+      expect(
+        await refreshForTest({
+          scopedDb,
+          sourceId: empty,
+          now: NOW,
+          countSource: async (sourceId) =>
+            await countSourceOnDedicatedConnection(sourceId, {
+              prepareConnection,
+            }),
+        }),
+      ).toBe("refreshed");
+      expect(await readStoredPair(empty)).toEqual({
+        storedTotal: 0,
+        storedTotalAsOf: NOW,
+      });
+      expect(budgets).toEqual([120_000, 120_000]);
+      const fixturePid = (
+        await db.execute(sql`SELECT pg_backend_pid() AS pid`)
+      ).at(0)?.["pid"];
+      for (const pid of pids) {
+        expect(pid).not.toBe(fixturePid);
+      }
+    });
+
+    test("the production database clock ignores a worker wall clock that is a month ahead", async () => {
+      const sourceId = await seedCountedSource(0);
+      const before = (
+        await db.execute(sql`SELECT clock_timestamp() AS now`)
+      ).at(0)?.["now"];
+      if (!(before instanceof Date)) {
+        return panic("Expected PostgreSQL database clock Date");
+      }
+      await setDue(sourceId, new Date(before.getTime() - 1));
+      setSystemTime(new Date(before.getTime() + 30 * 24 * 60 * 60_000));
+      try {
+        expect(
+          await refreshSourceStoredTotal({
+            scopedDb,
+            sourceId,
+            acquireAdmission: async () => "granted",
+            countSource: async () => 0,
+          }),
+        ).toBe("refreshed");
+      } finally {
+        setSystemTime();
+      }
+      const after = (await db.execute(sql`SELECT clock_timestamp() AS now`)).at(
+        0,
+      )?.["now"];
+      if (!(after instanceof Date)) {
+        return panic("Expected PostgreSQL database clock Date");
+      }
+      const row = await readStoredPair(sourceId);
+      expect(row?.storedTotalAsOf?.getTime()).toBeGreaterThanOrEqual(
+        before.getTime(),
+      );
+      expect(row?.storedTotalAsOf?.getTime()).toBeLessThanOrEqual(
+        after.getTime(),
+      );
+      expect(row?.storedTotal).toBe(0);
     });
   },
 );
