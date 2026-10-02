@@ -64,7 +64,6 @@ import {
 import { corpusTombstoneReaderForTx } from "@/api/lib/legal-search/corpus-tombstones";
 import { decisionLanguageGroupKey } from "@/api/lib/legal-search/decision-language-identity";
 import { parsePrimaryReferenceType } from "@/api/lib/legal-search/decision-primary-reference";
-import { preserveMetadataUrlDeclarations } from "@/api/lib/legal-search/metadata-urls";
 import { markupResidueIn } from "@/api/lib/legal-search/parsers/markup-residue";
 import {
   TEXT_ENCODING_INCOMPLETE,
@@ -463,6 +462,7 @@ const planCorpusPayload = ({
 };
 
 type PlanDecisionWriteOptions = {
+  metadataUrlSchema?: unknown;
   result: IngestionResult;
   existing: ExistingDecision | undefined;
   decisionId: SafeId<"caseLawDecision">;
@@ -479,6 +479,7 @@ type PlanDecisionWriteOptions = {
  * read out of the document.
  */
 export const planDecisionWrite = async ({
+  metadataUrlSchema,
   result,
   existing,
   decisionId,
@@ -564,8 +565,10 @@ export const planDecisionWrite = async ({
           ),
         }
       : ordinaryMetadata;
-  preserveMetadataUrlDeclarations(result.metadata, preparedMetadata);
-  const plainMetadata = toPlainTextMetadataObject(preparedMetadata);
+  const plainMetadata = toPlainTextMetadataObject(
+    preparedMetadata,
+    metadataUrlSchema,
+  );
   if (plainMetadata.isErr()) {
     return Result.err(plainMetadata.error);
   }

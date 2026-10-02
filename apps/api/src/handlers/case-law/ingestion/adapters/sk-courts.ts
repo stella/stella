@@ -82,13 +82,14 @@ import { toPlainText } from "@/api/lib/case-law/plain-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DOCUMENT_DELIVERY } from "@/api/lib/legal-search/ingestion-types";
-import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { restrictSkCourtDocumentUrl } from "@/api/lib/legal-search/sk-court-document-url";
 import type { SkDocumentFetch } from "@/api/lib/legal-search/sk-document-backfill";
 import { logger } from "@/api/lib/observability/logger";
 import { sanitizeUrl, toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
 
 /**
  * Slovak Courts adapter.
@@ -534,18 +535,13 @@ const fetchDetailForItem = async (
   return detail === null ? { type: "unavailable" } : { type: "detail", detail };
 };
 
-export const SK_COURTS_METADATA_URL_SCHEMA = {
-  referencedLegislation: { items: { url: "url" } },
-  statedSourceUrl: "url",
-} as const;
-
 type SkCourtsMetadata = Record<string, unknown> & {
   updateDate: string | undefined;
   updateDateIso: string | undefined;
   updateDateDefect:
     | { type: "invalid-publisher-date"; value: string }
     | undefined;
-  statedSourceUrl: ReturnType<typeof toMetadataUrl>;
+  statedSourceUrl: string | undefined;
   sourceUrlStatus: "published" | "not-published-by-source" | "rejected-url";
 };
 
@@ -665,23 +661,23 @@ export const assembleSkCourtsDecision = ({
     return sourceUrl === undefined ? "rejected-url" : "published";
   })();
 
-  return plainTextIngestionResult({
-    caseNumber,
-    ecli,
-    court,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
-    language: SK_COURTS_LANGUAGE,
-    decisionDate,
-    decisionType,
-    sourceDocumentId: skCourtsSourceDocumentId(item.guid),
-    sourceUrl,
-    documentUrl:
-      restrictSkCourtDocumentUrl(
-        toOptionalValue(detail?.dokument?.url) ?? "",
-      )?.toString() ?? undefined,
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata(
-      approveMetadataUrls(
+  return plainTextIngestionResult(
+    {
+      caseNumber,
+      ecli,
+      court,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.SK_COURTS].country,
+      language: SK_COURTS_LANGUAGE,
+      decisionDate,
+      decisionType,
+      sourceDocumentId: skCourtsSourceDocumentId(item.guid),
+      sourceUrl,
+      documentUrl:
+        restrictSkCourtDocumentUrl(
+          toOptionalValue(detail?.dokument?.url) ?? "",
+        )?.toString() ?? undefined,
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      metadata: checkedDecisionMetadata(
         {
           ...directoryMetadata,
           courtSuccession,
@@ -725,10 +721,7 @@ export const assembleSkCourtsDecision = ({
             updateDate !== undefined && updateDateIso === undefined
               ? { type: "invalid-publisher-date", value: updateDate }
               : undefined,
-          statedSourceUrl: toMetadataUrl(
-            detail?.dokument?.url,
-            "transport-json",
-          ),
+          statedSourceUrl,
           sourceUrlStatus,
           originCourt: decodeSkCourtText(detail?.povodnySud?.nazov),
           originCourtRegistreGuid: toOptionalValue(
@@ -738,13 +731,14 @@ export const assembleSkCourtsDecision = ({
         } satisfies SkCourtsMetadata,
         SK_COURTS_METADATA_URL_SCHEMA,
       ),
-    ),
-    rawHash,
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
-    documentAst: EMPTY_AST,
-    documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
-    ...skCourtsSourceRaw({ item, detail, courtRegistry }),
-  });
+      rawHash,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.SK_COURTS],
+      documentAst: EMPTY_AST,
+      documentDelivery: DOCUMENT_DELIVERY.DEFERRED,
+      ...skCourtsSourceRaw({ item, detail, courtRegistry }),
+    },
+    SK_COURTS_METADATA_URL_SCHEMA,
+  );
 };
 
 /**

@@ -33,6 +33,7 @@ import {
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import type { SourceAdapter } from "@/api/handlers/case-law/ingestion/adapter";
+import { EU_ECJ_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj.metadata-urls";
 import {
   assembleSkCourtsDecision,
   skCourtsAdapter,
@@ -63,7 +64,9 @@ import {
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
+import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
@@ -1182,4 +1185,73 @@ test("a row stored under an encoded docket replays to the decoded docket in plac
   expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
   expect(second.report.rejections["identity-mismatch"]).toBe(1);
   await lease.release();
+});
+
+test("registered replay and its pipeline write preserve URLs and cloned diagnostic snapshots", async () => {
+  const fixture = await replayConvergenceFixture("Replay URL schema fixture.");
+  const href = "https://example.test/?stated=&amp;amp;&other=&#x26;";
+  const approved = approveMetadataUrls(
+    {
+      celex: "62026CJ0010",
+      manifestationUri: toMetadataUrl(href, "transport-json"),
+      languageUri: toMetadataUrl("ftp://example.test/private", "decoded"),
+      manifestations: [{ uri: toMetadataUrl(href, "decoded") }],
+    },
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
+  const result = plainTextIngestionResult(
+    {
+      ...fixture.result,
+      rawHash: "replay-url-schema-source-hash",
+      metadata: structuredClone(approved),
+    },
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
+  const sourceLease = await acquireCaseLawSourceIngestionLease({
+    scopedDb,
+    sourceId: fixture.sourceId,
+  });
+  if (sourceLease === null) {
+    return panic("Expected free replay source lease");
+  }
+  const replay = async () =>
+    await replayCaseLawSource({
+      adapter: stubAdapter(() => ({ type: "parsed", result })),
+      scopedDb,
+      sourceId: fixture.sourceId,
+      sourceLease,
+      scope: CASE_LAW_REPLAY_SCOPE.SOURCE,
+      readStoredRaw: async () => new TextEncoder().encode(STORED_PAYLOAD),
+      bound: { type: "at-most", limit: 10 },
+      pageSize: 10,
+    });
+  try {
+    const first = await replay();
+    if (first.type !== "ran") {
+      return panic("Expected registered replay to run");
+    }
+    expect(first.report.outcomes[REPLAY_ROW_OUTCOME.APPLIED]).toBe(1);
+    const row = (
+      await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.id, fixture.id))
+        .limit(1)
+    ).at(0);
+    expect(row?.metadata).toMatchObject({
+      manifestationUri: href,
+      manifestations: [{ uri: href }],
+      metadataUrlDiagnostics: [
+        { address: "languageUri", reason: "unsafe-protocol" },
+      ],
+    });
+    expect(row?.metadata).not.toHaveProperty("languageUri");
+    const second = await replay();
+    if (second.type !== "ran") {
+      return panic("Expected repeated replay to run");
+    }
+    expect(second.report.outcomes[REPLAY_ROW_OUTCOME.UNCHANGED]).toBe(1);
+  } finally {
+    await sourceLease.release();
+  }
 });

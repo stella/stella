@@ -3,6 +3,7 @@ import { Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { hasUsableAst } from "@/api/handlers/case-law/document-ast";
+import { encodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import {
   buildListingQuery,
   celexToCaseNumber,
@@ -1599,6 +1600,88 @@ describe("euEcjAdapter.reparseStoredRaw", () => {
       rejection: STORED_RAW_REPARSE_REJECTION.NO_DOCUMENT,
       detail: "no fulltext parsed from the stored payload for 62013TO0488",
     });
+  });
+
+  test("reparse recomputes diagnostics when a stored URL is now valid", async () => {
+    const outcome = await reparse({
+      ...storedPayload(fulltextHtml),
+      metadata: {
+        celex: "62013TO0488",
+        manifestationUri:
+          "https://publications.europa.eu/resource/item?a=1&amp;amp;b=2",
+        metadataUrlDiagnostics: [
+          { address: "manifestationUri", reason: "invalid-url" },
+        ],
+      },
+    });
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type === "parsed") {
+      expect(outcome.result.metadata).toHaveProperty(
+        "manifestationUri",
+        "https://publications.europa.eu/resource/item?a=1&amp;amp;b=2",
+      );
+      expect(outcome.result.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+    }
+  });
+
+  for (const current of [
+    "ftp://example.org/new-type",
+    "https://example.org/new-type?a=1&amp;amp;b=2",
+  ]) {
+    test(`raw listing replaces older stored root URL and diagnostic: ${current}`, async () => {
+      const envelope = encodeSourceRawEnvelope({
+        listing: JSON.stringify({
+          ...firstFixtureBinding,
+          type: { type: "uri", value: current },
+        }),
+        document: fulltextHtml,
+      });
+      const outcome = await reparse({
+        ...storedPayload(fulltextHtml),
+        raw: new TextEncoder().encode(envelope),
+        contentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+        metadata: {
+          celex: "62013TO0488",
+          cdmType: "https://example.org/old-type",
+          metadataUrlDiagnostics: [
+            { address: "cdmType", reason: "invalid-url" },
+          ],
+        },
+      });
+      expect(outcome.type).toBe("parsed");
+      if (outcome.type === "parsed") {
+        if (current.startsWith("ftp:")) {
+          expect(outcome.result.metadata).not.toHaveProperty("cdmType");
+          expect(outcome.result.metadata).toHaveProperty(
+            "metadataUrlDiagnostics",
+            [{ address: "cdmType", reason: "unsafe-protocol" }],
+          );
+        } else {
+          expect(outcome.result.metadata).toHaveProperty("cdmType", current);
+          expect(
+            outcome.result.metadata["metadataUrlDiagnostics"],
+          ).toBeUndefined();
+        }
+      }
+    });
+  }
+
+  test("malformed stored URL shapes produce exact defects without rejecting replay", async () => {
+    const outcome = await reparse({
+      ...storedPayload(fulltextHtml),
+      metadata: {
+        celex: "62013TO0488",
+        manifestationUri: "ftp://example.org/item",
+        manifestations: "not an array",
+      },
+    });
+    expect(outcome.type).toBe("parsed");
+    if (outcome.type === "parsed") {
+      expect(outcome.result.metadata).toHaveProperty("metadataUrlDiagnostics", [
+        { address: "manifestationUri", reason: "unsafe-protocol" },
+        { address: "manifestations", reason: "unsupported-url-value" },
+      ]);
+    }
   });
 
   test("re-parses a stored manifestation", async () => {

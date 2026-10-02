@@ -1,3 +1,5 @@
+import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
+import { AT_RIS_APPLICATIONS } from "@/api/handlers/case-law/ingestion/adapters/at-ris-fields";
 /**
  * What the display-text residue census does with every metadata key an
  * enrolled adapter's fixture emits.
@@ -13,6 +15,8 @@
  */
 import {
   metadataUrlKeys,
+  metadataUrlChildSchema,
+  metadataUrlItemSchema,
   META_URL_DIAGNOSTICS,
 } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord } from "@/api/lib/type-guards";
@@ -53,7 +57,9 @@ export const METADATA_TEXT_DISPOSITIONS = {
   appealWatch: INSPECTED,
   archivePath: INSPECTED,
   area: INSPECTED,
-  attachments: INSPECTED,
+  attachments: excluded(
+    "publisher FileType descriptors (fileName, fileType, bytes, status, access code); captured attachments state no URL address",
+  ),
   attorneys: INSPECTED,
   author: INSPECTED,
   authorities: INSPECTED,
@@ -192,6 +198,7 @@ export const METADATA_TEXT_DISPOSITIONS = {
   documentName: INSPECTED,
   documentNumberKind: INSPECTED,
   documentParts: INSPECTED,
+  documentSupplements: INSPECTED,
   documentSize: INSPECTED,
   documentStatus: INSPECTED,
   documentTitle: INSPECTED,
@@ -461,24 +468,40 @@ export const isClassifiedMetadataKey = (
 
 type DisplayText = { field: string; value: string };
 
-const stringLeavesOf = (field: string, value: unknown): DisplayText[] => {
+type MetadataStringLeavesOptions = {
+  field: string;
+  value: unknown;
+  schema?: unknown;
+};
+const stringLeavesOf = ({
+  field,
+  value,
+  schema,
+}: MetadataStringLeavesOptions): DisplayText[] => {
+  if (schema === "url") {
+    return [];
+  }
   if (typeof value === "string") {
     return [{ field, value }];
   }
   if (Array.isArray(value)) {
     return value.flatMap((item, index) =>
-      metadataUrlKeys(value).has(String(index))
-        ? []
-        : stringLeavesOf(`${field}.${index}`, item),
+      stringLeavesOf({
+        field: `${field}.${index}`,
+        value: item,
+        schema: metadataUrlItemSchema(schema),
+      }),
     );
   }
   if (!isRecord(value)) {
     return [];
   }
   return Object.entries(value).flatMap(([property, item]) =>
-    metadataUrlKeys(value).has(property)
-      ? []
-      : stringLeavesOf(`${field}.${property}`, item),
+    stringLeavesOf({
+      field: `${field}.${property}`,
+      value: item,
+      schema: metadataUrlChildSchema(schema, property),
+    }),
   );
 };
 
@@ -486,44 +509,162 @@ const stringLeavesOf = (field: string, value: unknown): DisplayText[] => {
 export const metadataDisplayTextOf = (
   key: keyof typeof METADATA_TEXT_DISPOSITIONS | typeof META_URL_DIAGNOSTICS,
   value: unknown,
-  metadata: Record<string, unknown> = {},
+  schema?: unknown,
 ): DisplayText[] => {
-  if (key === META_URL_DIAGNOSTICS || metadataUrlKeys(metadata).has(key)) {
+  if (key === META_URL_DIAGNOSTICS || metadataUrlKeys(schema).has(key)) {
     return [];
   }
   const disposition: MetadataTextDisposition = METADATA_TEXT_DISPOSITIONS[key];
   return disposition.type === "excluded"
     ? []
-    : stringLeavesOf(`metadata.${key}`, value);
+    : stringLeavesOf({
+        field: `metadata.${key}`,
+        value,
+        schema: metadataUrlChildSchema(schema, key),
+      });
 };
 
-/** Discover address fields by name; declarations are exact container keys, never value sniffing. */
+type MetadataTextAddressDisposition = { address: string; reason: string };
+
+export const metadataTextAddressDispositionsForAdapter = (
+  adapterKey: string,
+): readonly MetadataTextAddressDisposition[] => {
+  if (Object.hasOwn(AT_RIS_APPLICATIONS, adapterKey)) {
+    return [
+      {
+        address: "metadata.relatedDecisions",
+        reason:
+          "RIS document Bezug is textual citation content, including URL-looking strings",
+      },
+      {
+        address: "metadata.relatedDecisions[*]",
+        reason:
+          "RIS Bezug states textual citations, including URL-looking citation strings",
+      },
+      {
+        address: "metadata.publications",
+        reason:
+          "RIS document Veroeffentlichungen is bibliographic text, including URL-looking references",
+      },
+      {
+        address: "metadata.publications[*]",
+        reason:
+          "RIS Veroeffentlichungen mixes bibliographic text and stated URL-looking references",
+      },
+    ];
+  }
+  if (adapterKey === ADAPTER_KEYS.SK_COURTS) {
+    return [
+      {
+        address: "metadata.statedSourceUrl",
+        reason:
+          "the publisher's original stated source value remains plain provenance text, including rejected links",
+      },
+    ];
+  }
+  return [];
+};
+
+/** A captured absent field is not a declared URL or an arbitrary text exemption. */
+export const metadataNullOnlyAddressesForAdapter = (
+  adapterKey: string,
+): readonly string[] =>
+  adapterKey === ADAPTER_KEYS.CZ_REGIONAL
+    ? ["metadata.affectedDocs[*].url"]
+    : [];
+
+type UnclassifiedMetadataAddressesOptions = {
+  schema?: unknown;
+  textAddresses?: readonly MetadataTextAddressDisposition[];
+  nullOnlyAddresses?: readonly string[];
+};
+type MetadataAddressVisit = {
+  value: unknown;
+  address: string;
+  textAddress: string;
+  node?: unknown;
+};
+
+/** The test census discovers URL-shaped names and values; production schemas alone control projection. */
 export const unclassifiedMetadataAddresses = (
   metadata: Record<string, unknown>,
+  {
+    schema,
+    textAddresses = [],
+    nullOnlyAddresses = [],
+  }: UnclassifiedMetadataAddressesOptions = {},
 ): string[] => {
   const missing: string[] = [];
-  const visit = (value: unknown, address: string) => {
+  const nullOnlyPaths = new Set(nullOnlyAddresses);
+  const textPaths = new Set(
+    textAddresses
+      .filter(({ reason }) => reason.trim().length > 0)
+      .map(({ address }) => address),
+  );
+  const visit = ({
+    value,
+    address,
+    textAddress,
+    node,
+  }: MetadataAddressVisit) => {
+    if (nullOnlyPaths.has(textAddress)) {
+      if (value !== null) {
+        missing.push(address);
+      }
+      return;
+    }
+    if (node === "url") {
+      return;
+    }
+    const classifiedText = textPaths.has(textAddress);
+    if (typeof value === "string") {
+      if (/^https?:\/\//iu.test(value.trim()) && !classifiedText) {
+        missing.push(address);
+      }
+      return;
+    }
     if (Array.isArray(value)) {
       for (const [index, item] of value.entries()) {
-        visit(item, `${address}.${index}`);
+        visit({
+          value: item,
+          address: `${address}.${index}`,
+          textAddress: `${textAddress}[*]`,
+          node: metadataUrlItemSchema(node),
+        });
       }
       return;
     }
     if (!isRecord(value)) {
       return;
     }
-    const declared = metadataUrlKeys(value);
     for (const [key, item] of Object.entries(value)) {
       if (key === META_URL_DIAGNOSTICS) {
         continue;
       }
       const path = `${address}.${key}`;
-      if (/(?:url|href|uri|link)$/iu.test(key) && !declared.has(key)) {
+      const textPath = `${textAddress}.${key}`;
+      const childSchema = metadataUrlChildSchema(node, key);
+      if (
+        /(?:url|href|uri|link)$/iu.test(key) &&
+        childSchema !== "url" &&
+        !textPaths.has(textPath) &&
+        !(item === null && nullOnlyPaths.has(textPath))
+      ) {
         missing.push(path);
       }
-      visit(item, path);
+      visit({
+        value: item,
+        address: path,
+        textAddress: textPath,
+        node: childSchema,
+      });
     }
   };
-  visit(metadata, "metadata");
-  return missing;
+  visit({
+    value: metadata,
+    address: "metadata",
+    textAddress: "metadata",
+    node: schema,
+  });
+  return [...new Set(missing)];
 };

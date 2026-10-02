@@ -108,12 +108,13 @@ import type { TextField } from "@/api/lib/case-law/decision-text";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
-import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 // ── Publisher boundary ───────────────────────────────────
 
@@ -1068,11 +1069,6 @@ const statedDay = (
 ): string | undefined =>
   plKisDay(optionalString(row[key])) ?? plKisDay(detailString(detail, key));
 
-export const PL_KIS_METADATA_URL_SCHEMA = {
-  otherSourceUrl: "url",
-  relatedDocuments: { items: { sourceUrl: "url" } },
-} as const;
-
 /**
  * What the categories other than an interpretation state: a ruling's validity
  * and classification, a general interpretation's place of publication.
@@ -1264,32 +1260,32 @@ export const assemblePlKisDecision = async ({
   const sourceRaw = encodeSourceRawEnvelope(rawParts);
   const listingOnly = parsed === undefined;
 
-  const decision: IngestionResult = plainTextIngestionResult({
-    caseNumber,
-    ...(signature === undefined
-      ? { caseNumberIsPlaceholder: true }
-      : { identifiers: [{ type: "case-number", value: signature }] }),
-    sourceDocumentId: id,
-    // The quarantine key keeps meeting the row stored while the id was
-    // missing, so the observation that recovers it enriches that row.
-    ...(publisherId === undefined
-      ? {}
-      : { sourceDocumentIdRepairAliases: [quarantineId] }),
-    court,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIS].country,
-    language: LANGUAGE,
-    ...(decisionDate === undefined ? {} : { decisionDate }),
-    ...(decisionType === undefined ? {} : { decisionType }),
-    ...(parsed === undefined ? {} : { fulltext: parsed.output.fulltext }),
-    ...(listingOnly ? { isListingOnly: true } : {}),
-    ...(sourceUrl === undefined ? {} : { sourceUrl }),
-    ...(documentUrl === undefined ? {} : { documentUrl }),
-    textFields: {
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      headnote: thesisField(statedString(row, detail, "TEZA")),
-    },
-    metadata: checkedDecisionMetadata(
-      approveMetadataUrls(
+  const decision: IngestionResult = plainTextIngestionResult(
+    {
+      caseNumber,
+      ...(signature === undefined
+        ? { caseNumberIsPlaceholder: true }
+        : { identifiers: [{ type: "case-number", value: signature }] }),
+      sourceDocumentId: id,
+      // The quarantine key keeps meeting the row stored while the id was
+      // missing, so the observation that recovers it enriches that row.
+      ...(publisherId === undefined
+        ? {}
+        : { sourceDocumentIdRepairAliases: [quarantineId] }),
+      court,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_KIS].country,
+      language: LANGUAGE,
+      ...(decisionDate === undefined ? {} : { decisionDate }),
+      ...(decisionType === undefined ? {} : { decisionType }),
+      ...(parsed === undefined ? {} : { fulltext: parsed.output.fulltext }),
+      ...(listingOnly ? { isListingOnly: true } : {}),
+      ...(sourceUrl === undefined ? {} : { sourceUrl }),
+      ...(documentUrl === undefined ? {} : { documentUrl }),
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        headnote: thesisField(statedString(row, detail, "TEZA")),
+      },
+      metadata: checkedDecisionMetadata(
         {
           eurekaId: id,
           caseNumber,
@@ -1337,27 +1333,28 @@ export const assemblePlKisDecision = async ({
         },
         PL_KIS_METADATA_URL_SCHEMA,
       ),
-    ),
-    // The PDF is stored beside the envelope rather than in it, so a corrected
-    // rendition under an unchanged detail has to change the hash too.
-    rawHash:
-      parsed?.from === "pdf" && pdfBytes !== undefined
-        ? hashContent(
-            `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
-          )
-        : hashContent(sourceRaw),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
-    documentAst,
-    sourceRaw,
-    ...(parsed?.from === "pdf" && pdfBytes !== undefined
-      ? {
-          sourceRawObjects: {
-            [PDF_OBJECT]: { bytes: pdfBytes, contentType: "application/pdf" },
-          },
-        }
-      : {}),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+      // The PDF is stored beside the envelope rather than in it, so a corrected
+      // rendition under an unchanged detail has to change the hash too.
+      rawHash:
+        parsed?.from === "pdf" && pdfBytes !== undefined
+          ? hashContent(
+              `${sourceRaw}\n${new Bun.CryptoHasher("sha256").update(pdfBytes).digest("hex")}`,
+            )
+          : hashContent(sourceRaw),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_KIS],
+      documentAst,
+      sourceRaw,
+      ...(parsed?.from === "pdf" && pdfBytes !== undefined
+        ? {
+            sourceRawObjects: {
+              [PDF_OBJECT]: { bytes: pdfBytes, contentType: "application/pdf" },
+            },
+          }
+        : {}),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_KIS_METADATA_URL_SCHEMA,
+  );
   return listingOnly
     ? { type: "detail-unavailable", decision }
     : { type: "built", decision };

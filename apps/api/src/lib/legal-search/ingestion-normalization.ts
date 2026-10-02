@@ -46,7 +46,6 @@ import {
   type IngestionResult,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
-import { preserveMetadataUrlDeclarations } from "@/api/lib/legal-search/metadata-urls";
 import {
   PARTIAL_OBSERVATION_FIELD,
   PARTIAL_OBSERVATION_KEY,
@@ -213,7 +212,10 @@ export const storedCaseNumberOf = (
  * same reason (`observedDocketOf`). The adapter's metadata keeps the docket
  * as the publisher wrote it.
  */
-export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
+export const sanitizeResult = (
+  result: RawIngestionResult,
+  metadataUrlSchema?: unknown,
+): IngestionResult => {
   const strip = (value: string | undefined): string | undefined =>
     value ? stripDangerousChars(value) : undefined;
 
@@ -353,45 +355,51 @@ export const sanitizeResult = (result: RawIngestionResult): IngestionResult => {
 
   assertDecisionLanguageIdentity({ country: result.country, sourceDocumentId });
 
-  preserveMetadataUrlDeclarations(result.metadata, metadata);
-  return plainTextIngestionResult({
-    ...result,
-    caseNumber: storedCaseNumberOf(result),
-    caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
-    identifiers,
-    sourceDocumentId,
-    sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
-      (identity): identity is string =>
-        strip(identity) === identity && isPersistableSourceDocumentId(identity),
-    ),
-    sourceDocumentIdRepairAliases: result.sourceDocumentIdRepairAliases?.filter(
-      (identity): identity is string =>
-        strip(identity) === identity && isPersistableSourceDocumentId(identity),
-    ),
-    legacySourceUrls: result.legacySourceUrls
-      ?.map((url) => strip(url))
-      .filter((url): url is string => url !== undefined),
-    legacyEcli: strip(result.legacyEcli),
-    sheetNumber: strip(result.sheetNumber),
-    fulltext: result.fulltext
-      ? collapseSpacedLetters(strip(result.fulltext) ?? "")
-      : undefined,
-    ecli: strip(result.ecli),
-    decisionDate: boundDecisionDate(result.decisionDate),
-    decisionType: normalizeDecisionType(strip(result.decisionType)),
-    sourceUrl: strip(result.sourceUrl),
-    documentUrl: strip(result.documentUrl),
-    metadata,
-    textFields,
-    publisherCitedCases: result.publisherCitedCases?.map((cited) =>
-      stripDangerousChars(cited),
-    ),
-    sections: result.sections?.map((section) => ({
-      ...section,
-      title: section.title === null ? null : stripDangerousChars(section.title),
-      text: collapseSpacedLetters(strip(section.text) ?? ""),
-    })),
-    documentAst,
-    sourceRaw: strip(result.sourceRaw),
-  });
+  return plainTextIngestionResult(
+    {
+      ...result,
+      caseNumber: storedCaseNumberOf(result),
+      caseNumberType: parsePrimaryReferenceType(result.caseNumberType),
+      identifiers,
+      sourceDocumentId,
+      sourceDocumentIdAliases: result.sourceDocumentIdAliases?.filter(
+        (identity): identity is string =>
+          strip(identity) === identity &&
+          isPersistableSourceDocumentId(identity),
+      ),
+      sourceDocumentIdRepairAliases:
+        result.sourceDocumentIdRepairAliases?.filter(
+          (identity): identity is string =>
+            strip(identity) === identity &&
+            isPersistableSourceDocumentId(identity),
+        ),
+      legacySourceUrls: result.legacySourceUrls
+        ?.map((url) => strip(url))
+        .filter((url): url is string => url !== undefined),
+      legacyEcli: strip(result.legacyEcli),
+      sheetNumber: strip(result.sheetNumber),
+      fulltext: result.fulltext
+        ? collapseSpacedLetters(strip(result.fulltext) ?? "")
+        : undefined,
+      ecli: strip(result.ecli),
+      decisionDate: boundDecisionDate(result.decisionDate),
+      decisionType: normalizeDecisionType(strip(result.decisionType)),
+      sourceUrl: strip(result.sourceUrl),
+      documentUrl: strip(result.documentUrl),
+      metadata,
+      textFields,
+      publisherCitedCases: result.publisherCitedCases?.map((cited) =>
+        stripDangerousChars(cited),
+      ),
+      sections: result.sections?.map((section) => ({
+        ...section,
+        title:
+          section.title === null ? null : stripDangerousChars(section.title),
+        text: collapseSpacedLetters(strip(section.text) ?? ""),
+      })),
+      documentAst,
+      sourceRaw: strip(result.sourceRaw),
+    },
+    metadataUrlSchema,
+  );
 };

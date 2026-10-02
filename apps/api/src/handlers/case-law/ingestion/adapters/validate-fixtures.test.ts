@@ -18,6 +18,7 @@ import {
   toPlainTextIngestionResult,
   type RawIngestionResult,
 } from "@/api/lib/legal-search/ingestion-types";
+import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -61,7 +62,10 @@ const validateDecision = (
   adapter: string,
 ): void => {
   const prefix = `${adapter}[${index}]`;
-  const d = toPlainTextIngestionResult(raw).unwrap(prefix);
+  const d = toPlainTextIngestionResult(
+    raw,
+    metadataUrlSchemaForAdapter(adapter),
+  ).unwrap(prefix);
 
   // Required fields
   expect(d.caseNumber, `${prefix}.caseNumber`).toBeTruthy();

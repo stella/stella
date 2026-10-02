@@ -2,6 +2,11 @@ import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-grammar";
+
+import {
+  decodeSourceRawEnvelope,
+  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+} from "@/api/handlers/case-law/ingestion/adapter";
 /**
  * pl-kis against payloads eureka.mf.gov.pl served.
  *
@@ -9,14 +14,8 @@ import { DECISION_DOCKET_GRAMMARS } from "@stll/api-contract/decision-docket-gra
  * with provenance sidecars. Paging, resuming and the tip are driven through a
  * stubbed transport, because the behaviour under test is the cursor's.
  */
-
-import {
-  decodeSourceRawEnvelope,
-  SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-} from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  PL_KIS_METADATA_URL_SCHEMA,
   assemblePlKisDecision,
   encodePlKisCursor,
   parsePlKisCursor,
@@ -47,6 +46,8 @@ import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { validateAst } from "@/api/lib/legal-search/parsers/validate-ast";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { PL_KIS_METADATA_URL_SCHEMA } from "./pl-kis.metadata-urls";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 
@@ -408,13 +409,17 @@ describe("every ingested category, as the service served it", () => {
       ? decision.metadata["relatedDocuments"]
       : [];
     expect(relation).toMatchObject({ relation: "amends" });
-    const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+    const repeated = toPlainTextIngestionResult(
+      decision,
+      PL_KIS_METADATA_URL_SCHEMA,
+    ).unwrap().metadata;
     const serializedMetadata = JSON.stringify(decision.metadata);
     const restored = toPlainTextMetadataObject(
       rehydrateMetadataUrls(
         JSON.parse(serializedMetadata),
         PL_KIS_METADATA_URL_SCHEMA,
       ),
+      PL_KIS_METADATA_URL_SCHEMA,
     ).unwrap();
     expect(repeated["relatedDocuments"]).toEqual(
       decision.metadata["relatedDocuments"],
@@ -1339,13 +1344,17 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
         built.type === "built"
           ? built.decision
           : panic("URL regression payload built no decision");
-      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        PL_KIS_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
       const serializedMetadata = JSON.stringify(decision.metadata);
       const restored = toPlainTextMetadataObject(
         rehydrateMetadataUrls(
           JSON.parse(serializedMetadata),
           PL_KIS_METADATA_URL_SCHEMA,
         ),
+        PL_KIS_METADATA_URL_SCHEMA,
       ).unwrap();
       const addresses = ["otherSourceUrl"];
       for (const metadata of [decision.metadata, repeated, restored]) {

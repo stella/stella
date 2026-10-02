@@ -1332,7 +1332,7 @@ test("constructed decision and appeal addresses survive metadata projection as s
   for (const [label, key] of [
     [PL_UOKIK_LABEL.DECISION_FILES, "decisionFiles"],
     [PL_UOKIK_LABEL.RULINGS, "appealRulings"],
-  ]) {
+  ] as const) {
     const declared = decision.metadata[key];
     const expected =
       statedDetail.fields.find((field) => field.label === label)?.files ?? [];
@@ -1383,10 +1383,14 @@ for (const name of [
     for (const [label, key] of [
       [PL_UOKIK_LABEL.DECISION_FILES, "decisionFiles"],
       [PL_UOKIK_LABEL.RULINGS, "appealRulings"],
-    ]) {
+    ] as const) {
       const files =
         detail.fields.find((field) => field.label === label)?.files ?? [];
-      expect(files.length).toBeGreaterThan(0);
+      if (name.includes("\\")) {
+        expect(files).toEqual([]);
+      } else {
+        expect(files.length).toBeGreaterThan(0);
+      }
       const stored = decision.metadata[key];
       expect(Array.isArray(stored) ? stored.length : 0).toBe(files.length);
       for (const index of files.keys()) {
@@ -1408,7 +1412,14 @@ for (const name of [
     }
     if (expectedUrl === null) {
       expect(decision.documentUrl).toBeUndefined();
-      expect(decision.metadata["metadataUrlDiagnostics"]).toEqual(diagnostics);
+      if (diagnostics.length === 0) {
+        expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+      } else {
+        expect(decision.metadata).toHaveProperty(
+          "metadataUrlDiagnostics",
+          diagnostics,
+        );
+      }
     } else {
       expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
     }

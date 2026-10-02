@@ -94,14 +94,15 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { DecisionSection } from "@/api/lib/legal-search/document-types";
 import {
-  approveMetadataUrls,
+  META_URL_DIAGNOSTICS,
   rehydrateMetadataUrls,
-  preserveMetadataUrlDeclarations,
 } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { logger } from "@/api/lib/observability/logger";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { EU_ECJ_METADATA_URL_SCHEMA } from "./eu-ecj.metadata-urls";
 
 /**
  * European Court of Justice (CJEU) adapter.
@@ -1364,55 +1365,80 @@ const presentEntries = (
   );
 
 /** What the notice states about this variant, as the row keeps it. */
-export const EU_ECJ_METADATA_URL_SCHEMA = {
-  manifestationUri: "url",
-  languageUri: "url",
-  cdmType: "url",
-  manifestations: { items: { uri: "url" } },
-} as const;
+const noticeMetadata = (facts: EcjNoticeFacts) => ({
+  noticeCelex: facts.celex,
+  noticeEcli: facts.ecli,
+  noticeDecisionDates: facts.decisionDate,
+  noticeCourtCodes: facts.courtCode,
+  lodgedOn: facts.lodgedOn,
+  form: facts.form,
+  celexType: facts.celexType,
+  recordVersion: facts.recordVersion,
+  referringCountry: facts.referringCountry,
+  procedureLanguage: facts.procedureLanguage,
+  procedureType: facts.procedureType,
+  observations: facts.observations,
+  nationalJudgment: facts.nationalJudgment,
+  interprets: facts.interprets,
+  doctrine: facts.doctrine,
+  subjectMatter: facts.subjectMatter,
+  caseLawSubjectMatter: facts.caseLawSubjectMatter,
+  caseLawDirectory: facts.caseLawDirectory,
+  caseLawDirectoryNew: facts.caseLawDirectoryNew,
+  publishedInReports: facts.publishedInReports,
+  reportsReference: facts.reportsReference,
+  ojNotice: facts.ojNotice,
+  dossier: facts.dossier,
+  caseEventWorks: facts.caseEventWorks,
+  abstractCelex: facts.abstractCelex,
+  title: facts.title,
+  caseIdentifier: facts.caseIdentifier,
+  manifestations: facts.manifestations.map((manifestation) => ({
+    ...manifestation,
+    uri: toMetadataUrl(manifestation.uri, "decoded"),
+  })),
+});
 
-const EU_ECJ_NOTICE_URL_SCHEMA = {
-  manifestations: EU_ECJ_METADATA_URL_SCHEMA.manifestations,
-} as const;
-
-const noticeMetadata = (facts: EcjNoticeFacts): Record<string, unknown> => {
-  const approved = approveMetadataUrls(
-    {
-      noticeCelex: facts.celex,
-      noticeEcli: facts.ecli,
-      noticeDecisionDates: facts.decisionDate,
-      noticeCourtCodes: facts.courtCode,
-      lodgedOn: facts.lodgedOn,
-      form: facts.form,
-      celexType: facts.celexType,
-      recordVersion: facts.recordVersion,
-      referringCountry: facts.referringCountry,
-      procedureLanguage: facts.procedureLanguage,
-      procedureType: facts.procedureType,
-      observations: facts.observations,
-      nationalJudgment: facts.nationalJudgment,
-      interprets: facts.interprets,
-      doctrine: facts.doctrine,
-      subjectMatter: facts.subjectMatter,
-      caseLawSubjectMatter: facts.caseLawSubjectMatter,
-      caseLawDirectory: facts.caseLawDirectory,
-      caseLawDirectoryNew: facts.caseLawDirectoryNew,
-      publishedInReports: facts.publishedInReports,
-      reportsReference: facts.reportsReference,
-      ojNotice: facts.ojNotice,
-      dossier: facts.dossier,
-      caseEventWorks: facts.caseEventWorks,
-      abstractCelex: facts.abstractCelex,
-      title: facts.title,
-      caseIdentifier: facts.caseIdentifier,
-      manifestations: facts.manifestations.map((manifestation) => ({
-        ...manifestation,
-        uri: toMetadataUrl(manifestation.uri, "decoded"),
-      })),
-    },
-    EU_ECJ_NOTICE_URL_SCHEMA,
-  );
-  return preserveMetadataUrlDeclarations(approved, presentEntries(approved));
+/** Rebuild URL diagnostics from this envelope, without carrying a saved sidecar. */
+const ecjPublisherMetadata = (
+  parts: SourceRawParts,
+  facts: EcjNoticeFacts | undefined,
+) => {
+  const rawBinding = parts[RAW_PART.LISTING];
+  const parsedBinding =
+    rawBinding === undefined
+      ? undefined
+      : Result.try({
+          try: (): unknown => JSON.parse(rawBinding),
+          catch: () => undefined,
+        }).unwrapOr(undefined);
+  const binding = isSparqlResult(parsedBinding)
+    ? {
+        manifestationUri: toMetadataUrl(
+          parsedBinding.manifestation.value,
+          "transport-json",
+        ),
+        languageUri: toMetadataUrl(
+          parsedBinding.language.value,
+          "transport-json",
+        ),
+        cdmType: toMetadataUrl(parsedBinding.type.value, "transport-json"),
+      }
+    : {};
+  const source = checkedDecisionMetadata({
+    ...binding,
+    ...(facts === undefined ? {} : noticeMetadata(facts)),
+  });
+  return {
+    metadata: presentEntries(
+      checkedDecisionMetadata(source, EU_ECJ_METADATA_URL_SCHEMA),
+    ),
+    ownedUrlKeys: new Set(
+      Object.keys(source).filter((key) =>
+        Object.hasOwn(EU_ECJ_METADATA_URL_SCHEMA, key),
+      ),
+    ),
+  };
 };
 
 /**
@@ -1473,40 +1499,53 @@ const ecjDecisionFromParts = ({
   const judges = facts === undefined ? [] : noticeJudges(facts);
   const converterVersion = ecjConverterVersion(html);
 
-  const notice = facts === undefined ? {} : noticeMetadata(facts);
-  return plainTextIngestionResult({
-    caseNumber,
-    sourceDocumentId: ecjSourceDocumentId(celex, language),
-    // What every row this adapter wrote before it stated an id was stored
-    // under: one row per docket and language, carrying the EUR-Lex URL of
-    // whichever of the docket's documents was written last. That URL names one
-    // CELEX in one language exactly, so it re-keys that row to the document it
-    // was built from rather than inserting a second one beside it; the
-    // docket's other documents find no null-id row and are inserted, which is
-    // the collapse being undone.
-    ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
-    ecli,
-    court: statedCourt,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
-    language,
-    decisionDate,
-    decisionType,
-    fulltext,
-    sourceUrl,
-    documentUrl,
-    // Absent, not empty, where no notice was read: an empty list is a
-    // publisher saying the decision names nobody, and a row stored before the
-    // notice was fetched would have its bench replaced by that statement.
-    ...(judges.length === 0 ? {} : { judges }),
-    ...(facts === undefined || facts.citedWorks.length === 0
-      ? {}
-      : { publisherCitedCases: facts.citedWorks }),
-    metadata: checkedDecisionMetadata(
-      preserveMetadataUrlDeclarations(
-        metadata,
-        preserveMetadataUrlDeclarations(notice, {
-          ...metadata,
-          ...notice,
+  const publisherMetadata = ecjPublisherMetadata(parts, facts);
+  // HTML-only legacy payloads have no publisher URL source to rebuild; their
+  // bounded stored projection keeps omitted-address diagnostics across replay.
+  const replayMetadata =
+    publisherMetadata.ownedUrlKeys.size === 0
+      ? rehydrateMetadataUrls(metadata, EU_ECJ_METADATA_URL_SCHEMA)
+      : checkedDecisionMetadata(
+          Object.fromEntries(
+            Object.entries(metadata).filter(
+              ([key]) =>
+                key !== META_URL_DIAGNOSTICS &&
+                !publisherMetadata.ownedUrlKeys.has(key),
+            ),
+          ),
+        );
+  return plainTextIngestionResult(
+    {
+      caseNumber,
+      sourceDocumentId: ecjSourceDocumentId(celex, language),
+      // What every row this adapter wrote before it stated an id was stored
+      // under: one row per docket and language, carrying the EUR-Lex URL of
+      // whichever of the docket's documents was written last. That URL names one
+      // CELEX in one language exactly, so it re-keys that row to the document it
+      // was built from rather than inserting a second one beside it; the
+      // docket's other documents find no null-id row and are inserted, which is
+      // the collapse being undone.
+      ...(sourceUrl === undefined ? {} : { legacySourceUrls: [sourceUrl] }),
+      ecli,
+      court: statedCourt,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.EU_ECJ].country,
+      language,
+      decisionDate,
+      decisionType,
+      fulltext,
+      sourceUrl,
+      documentUrl,
+      // Absent, not empty, where no notice was read: an empty list is a
+      // publisher saying the decision names nobody, and a row stored before the
+      // notice was fetched would have its bench replaced by that statement.
+      ...(judges.length === 0 ? {} : { judges }),
+      ...(facts === undefined || facts.citedWorks.length === 0
+        ? {}
+        : { publisherCitedCases: facts.citedWorks }),
+      metadata: checkedDecisionMetadata(
+        {
+          ...replayMetadata,
+          ...publisherMetadata.metadata,
           ...presentEntries({ publisherCaseNumber: bibliography?.caseNumber }),
           ...(bibliography === undefined
             ? {}
@@ -1523,22 +1562,24 @@ const ecjDecisionFromParts = ({
           decisionType,
           keywords,
           ...presentEntries({ converterVersion }),
-        }),
+        },
+        { type: "stored", schema: EU_ECJ_METADATA_URL_SCHEMA },
       ),
-    ),
-    textFields,
-    rawHash: hashContent(
-      `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
-    ),
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
-    documentAst,
-    sections,
-    // The envelope, not the manifestation alone: the query binding that named
-    // the row and the notice that states its bench are responses no address
-    // in the row would lead a replay back to.
-    sourceRaw: encodeSourceRawEnvelope(parts),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+      textFields,
+      rawHash: hashContent(
+        `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
+      ),
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+      documentAst,
+      sections,
+      // The envelope, not the manifestation alone: the query binding that named
+      // the row and the notice that states its bench are responses no address
+      // in the row would lead a replay back to.
+      sourceRaw: encodeSourceRawEnvelope(parts),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    EU_ECJ_METADATA_URL_SCHEMA,
+  );
 };
 
 /**
@@ -1672,9 +1713,10 @@ const reparseStoredRaw = (
       (publishedLanguage && eurLexSourceUrl(publishedLanguage, celex)),
     documentUrl: stored.documentUrl ?? undefined,
     parts,
-    metadata: checkedDecisionMetadata(
-      rehydrateMetadataUrls(metadata, EU_ECJ_METADATA_URL_SCHEMA),
-    ),
+    metadata: checkedDecisionMetadata(metadata, {
+      type: "stored",
+      schema: EU_ECJ_METADATA_URL_SCHEMA,
+    }),
     textFields,
   });
 
@@ -1878,20 +1920,7 @@ export const buildDecision = async (
     documentUrl: served.url,
     parts,
     textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    metadata: checkedDecisionMetadata(
-      approveMetadataUrls(
-        {
-          manifestationUri: toMetadataUrl(
-            binding.manifestation.value,
-            "transport-json",
-          ),
-          languageUri: toMetadataUrl(binding.language.value, "transport-json"),
-          cdmType: toMetadataUrl(binding.type.value, "transport-json"),
-          manifestations: undefined,
-        },
-        EU_ECJ_METADATA_URL_SCHEMA,
-      ),
-    ),
+    metadata: {},
   });
 };
 

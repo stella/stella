@@ -265,22 +265,28 @@ test("SPARQL transport JSON URL scalars preserve entity spelling through the rea
   if (decision === undefined) {
     throw new TypeError("Expected the fixture manifestation to parse");
   }
-  expect(decision.metadata["cdmType"]).toBe(cdmType);
-  expect(decision.metadata["manifestationUri"]).toBe(
+  expect(decision.metadata).toHaveProperty("cdmType", cdmType);
+  expect(decision.metadata).toHaveProperty(
+    "manifestationUri",
     enBinding.manifestation.value,
   );
-  expect(decision.metadata["languageUri"]).toBe(enBinding.language.value);
+  expect(decision.metadata).toHaveProperty(
+    "languageUri",
+    enBinding.language.value,
+  );
   const replayed = await reparse(storedFrom(decision));
   if (replayed.type !== "parsed") {
     throw new TypeError(`Expected parsed, got ${replayed.type}`);
   }
-  expect(replayed.result.metadata["cdmType"]).toBe(cdmType);
+  expect(replayed.result.metadata).toHaveProperty("cdmType", cdmType);
 });
 
 test("legacy persisted URI fields reject unsafe values without losing or multiplying diagnostics on replay", async () => {
   const decision = await crawlDecision();
   const replayed = await reparse(
     storedFrom(decision, {
+      raw: new TextEncoder().encode(fulltextHtml),
+      contentType: "text/html",
       metadata: {
         ...decision.metadata,
         manifestationUri: "/relative",
@@ -295,16 +301,17 @@ test("legacy persisted URI fields reject unsafe values without losing or multipl
   for (const key of ["manifestationUri", "languageUri", "cdmType"]) {
     expect(Object.hasOwn(replayed.result.metadata, key)).toBe(false);
   }
-  expect(replayed.result.metadata["metadataUrlDiagnostics"]).toEqual([
-    { address: "manifestationUri", reason: expect.any(String) },
-    { address: "languageUri", reason: expect.any(String) },
-    { address: "cdmType", reason: expect.any(String) },
+  expect(replayed.result.metadata).toHaveProperty("metadataUrlDiagnostics", [
+    { address: "manifestationUri", reason: "invalid-url" },
+    { address: "languageUri", reason: "unsafe-protocol" },
+    { address: "cdmType", reason: "unsafe-protocol" },
   ]);
   const second = await reparse(storedFrom(replayed.result));
   if (second.type !== "parsed") {
     throw new TypeError(`Expected parsed, got ${second.type}`);
   }
-  expect(second.result.metadata["metadataUrlDiagnostics"]).toEqual(
+  expect(second.result.metadata).toHaveProperty(
+    "metadataUrlDiagnostics",
     replayed.result.metadata["metadataUrlDiagnostics"],
   );
 });

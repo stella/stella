@@ -25,7 +25,6 @@ import {
 import type { StoredRawReparseOutcome } from "@/api/handlers/case-law/ingestion/adapter";
 import { PublisherPageError } from "@/api/handlers/case-law/ingestion/adapters/publisher-page";
 import {
-  SK_COURTS_METADATA_URL_SCHEMA,
   assembleSkCourtsDecision,
   skCourtsAdapter,
   SK_COURTS_SOURCE_FIELD_PATHS,
@@ -36,6 +35,8 @@ import { toPlainTextIngestionResult } from "@/api/lib/legal-search/ingestion-typ
 import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { isRecord, isUnknownArray } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { SK_COURTS_METADATA_URL_SCHEMA } from "./sk-courts.metadata-urls";
 
 describe("Slovak court backfill rejects unreadable publisher listings", () => {
   afterEach(() => mock.restore());
@@ -426,7 +427,7 @@ describe("a stored record reaches the targets the inventory declares", () => {
     );
     expect(metadata["documentName"] === "Rozsudok_7C-221-1991.pdf").toBe(true);
     expect(metadata["documentExtension"] === "PDF").toBe(true);
-    expect(metadata["documentSize"]).toBe(95_553);
+    expect(metadata).toHaveProperty("documentSize", 95_553);
     expect(metadata["updateDate"] === "26.09.2023").toBe(true);
     expect(metadata["updateDateIso"] === "2023-09-26").toBe(true);
     // The name is the judge's or a senior court officer's and the record says
@@ -575,31 +576,27 @@ describe("derived general-court metadata", () => {
   });
 });
 
-test("rejected source links omit the address and retain a diagnostic", () => {
-  for (const { url, reason } of [
-    { url: "data:text/plain,blocked", reason: "unsafe-protocol" },
-    { url: "not a URL", reason: "invalid-url" },
-    { url: "", reason: "empty-url" },
-    { url: "   ", reason: "empty-url" },
-  ]) {
+test("rejected source links retain plain publisher-stated text", () => {
+  for (const url of ["data:text/plain,blocked", "not a URL", "", "   "]) {
     const decision = assembleSkCourtsDecision({
       item: { spisovaZnacka: "1C/1/2024", sud: { nazov: "Okresný súd" } },
       detail: { dokument: { url } },
     });
     expect(decision?.sourceUrl).toBeUndefined();
-    expect(decision?.metadata["sourceUrlStatus"] === "rejected-url").toBe(true);
-    expect(decision?.metadata["statedSourceUrl"]).toBeUndefined();
-    expect(decision?.metadata["metadataUrlDiagnostics"]).toEqual([
-      {
-        address: "statedSourceUrl",
-        reason,
-      },
-    ]);
+    expect(decision?.metadata).toHaveProperty(
+      "sourceUrlStatus",
+      "rejected-url",
+    );
+    expect(decision?.metadata).toHaveProperty("statedSourceUrl", url.trim());
+    expect(decision?.metadata["metadataUrlDiagnostics"]).toBeUndefined();
   }
 });
 
 describe("declared metadata URLs remain scalar across projection and reload", () => {
   for (const entry of [
+    { input: null, expected: null },
+    { input: "", empty: true },
+    { input: "   ", empty: true },
     {
       input: "https://publisher.example/item?a=1&amp;b=2",
       expected: "https://publisher.example/item?a=1&amp;b=2",
@@ -623,7 +620,7 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       reason: "invalid-url",
     },
   ]) {
-    test(entry.input, async () => {
+    test(String(entry.input), async () => {
       const { input } = entry;
       const decision =
         assembleSkCourtsDecision({
@@ -637,15 +634,19 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
             odkazovanePredpisy: [{ nazov: "Zákon", url: input }],
           },
         }) ?? panic("URL regression payload built no decision");
-      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        SK_COURTS_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
       const serializedMetadata = JSON.stringify(decision.metadata);
       const restored = toPlainTextMetadataObject(
         rehydrateMetadataUrls(
           JSON.parse(serializedMetadata),
           SK_COURTS_METADATA_URL_SCHEMA,
         ),
+        SK_COURTS_METADATA_URL_SCHEMA,
       ).unwrap();
-      const addresses = ["referencedLegislation[0].url", "statedSourceUrl"];
+      const addresses = ["referencedLegislation[0].url"];
       for (const metadata of [decision.metadata, repeated, restored]) {
         for (const address of addresses) {
           if ("expected" in entry) {
@@ -654,8 +655,12 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
             expect(metadata).not.toHaveProperty(address);
           }
         }
+        if ("empty" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+        }
         if ("reason" in entry) {
-          expect(metadata["metadataUrlDiagnostics"]).toEqual(
+          expect(metadata).toHaveProperty(
+            "metadataUrlDiagnostics",
             expect.arrayContaining(
               addresses.map((address) => ({ address, reason: entry.reason })),
             ),

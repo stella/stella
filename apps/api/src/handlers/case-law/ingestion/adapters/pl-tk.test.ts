@@ -678,7 +678,7 @@ describe("a ruling built from its case page", () => {
       metadata: decision.metadata,
     });
     expect(replayed).toEqual({ type: "parsed", result: decision });
-    expect(decision.metadata["footnotes"]).toEqual([
+    expect(decision.metadata).toHaveProperty("footnotes", [
       expect.stringContaining("Rozstrzygnięcie wydane z naruszeniem przepisów"),
       expect.stringContaining("Powołane orzeczenia TK"),
     ]);
@@ -1162,6 +1162,13 @@ for (const candidate of [
   "ftp://example.org/document",
   "data:text/plain,document",
   "mailto:publisher@example.org",
+  "/ipo/dok?dok=F 1.pdf",
+  "/ipo/dok?dok=F:1.pdf",
+  "/ipo/dok?dok=F\n1.pdf",
+  "/ipo/dok?dok=F\u200b1.pdf",
+  "",
+  "   ",
+  `java${"script"}:alert(1)`,
 ]) {
   test(`all tribunal metadata URL paths use parser-decoded addresses: ${candidate}`, async () => {
     const $ = cheerio.load(await caseFixture("pl-tk-case-k-2-26.html.gz"));
@@ -1185,27 +1192,38 @@ for (const candidate of [
       : undefined;
     const links = isRecord(publication) ? publication["links"] : undefined;
     const link = Array.isArray(links) ? links.at(0) : undefined;
-    if (candidate.trim().startsWith("https://") || candidate.startsWith("/")) {
-      const expected = candidate.trim().startsWith("https://")
-        ? candidate.trim()
-        : new URL(candidate, "https://ipo.trybunal.gov.pl/ipo/").href;
+    if (candidate.includes("\n") || candidate.includes("\u200b")) {
+      expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", [
+        { address: "caseDocuments[0].url", reason: "control-character" },
+        {
+          address: "publications[0].links[0].url",
+          reason: "control-character",
+        },
+        { address: "wordDocumentUrl", reason: "control-character" },
+      ]);
+      expect(decision.documentUrl).toBeUndefined();
+      return;
+    }
+    if (
+      URL.canParse(candidate, "https://ipo.trybunal.gov.pl/ipo/") &&
+      candidate.trim().length > 0 &&
+      ["http:", "https:"].includes(
+        new URL(candidate, "https://ipo.trybunal.gov.pl/ipo/").protocol,
+      )
+    ) {
+      const expected = new URL(candidate, "https://ipo.trybunal.gov.pl/ipo/")
+        .href;
       expect(isRecord(document) ? document["url"] : undefined).toBe(expected);
       expect(isRecord(link) ? link["url"] : undefined).toBe(expected);
-      expect(decision.metadata["wordDocumentUrl"]).toBe(expected);
+      expect(decision.metadata).toHaveProperty("wordDocumentUrl", expected);
     } else {
       expect(isRecord(document) && Object.hasOwn(document, "url")).toBe(false);
       expect(isRecord(link) && Object.hasOwn(link, "url")).toBe(false);
       expect(Object.hasOwn(decision.metadata, "wordDocumentUrl")).toBe(false);
-    }
-    if (candidate.trim().startsWith("https://") || candidate.startsWith("/")) {
-      expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
-    } else {
       expect(decision.documentUrl).toBeUndefined();
-      expect(decision.metadata["metadataUrlDiagnostics"]).toEqual([
-        { address: "caseDocuments[0].url", reason: expect.any(String) },
-        { address: "publications[0].links[0].url", reason: expect.any(String) },
-        { address: "wordDocumentUrl", reason: expect.any(String) },
-      ]);
+      expect(caseDocuments).toEqual([]);
+      expect(links).toEqual([]);
     }
+    expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
   });
 }

@@ -621,63 +621,75 @@ describe("processDecision — canonical storage mode", () => {
   test.each(["&amp;", "&amp;amp;", "%26"])(
     "keeps declared URL scalars through normalization and the row write (%s)",
     async (queryEncoding) => {
-      const stated = `https://example.org/?a=1${queryEncoding}b=2`;
-      const schema = {
-        href: "url",
-        referencedLegislation: { items: { url: "url" } },
-      } as const;
-      const input = plainTextIngestionResult({
-        ...decision,
-        fulltext: undefined,
-        sourceRaw: JSON.stringify({ url: stated, invalid: "/relative" }),
-        metadata: approveMetadataUrls(
+      const fake = startFakeS3();
+      try {
+        const stated = `https://example.org/?a=1${queryEncoding}b=2`;
+        const schema = {
+          href: "url",
+          referencedLegislation: { items: { url: "url" } },
+        } as const;
+        const input = plainTextIngestionResult(
           {
-            href: toMetadataUrl(stated, "transport-json"),
-            referencedLegislation: [
+            ...decision,
+            fulltext: undefined,
+            sourceRaw: JSON.stringify({ url: stated, invalid: "/relative" }),
+            metadata: approveMetadataUrls(
               {
-                url: toMetadataUrl(stated, "transport-json"),
-                nazov: "Law &amp; order",
+                href: toMetadataUrl(stated, "transport-json"),
+                referencedLegislation: [
+                  {
+                    url: toMetadataUrl(stated, "transport-json"),
+                    nazov: "Law &amp; order",
+                  },
+                  {
+                    url: toMetadataUrl("/relative", "transport-json"),
+                    nazov: "Invalid link",
+                  },
+                ],
+                ordinaryText: stated,
               },
-              {
-                url: toMetadataUrl("/relative", "transport-json"),
-                nazov: "Invalid link",
-              },
-            ],
-            ordinaryText: stated,
+              schema,
+            ),
           },
           schema,
-        ),
-      });
-      const normalized = sanitizeResult(input);
-      expect(sanitizeResult(normalized).metadata).toEqual(normalized.metadata);
-      const outcome = await processDecision({
-        input,
-        observationOrder: 1n,
-        sourceId: createSafeId<"caseLawSource">(),
-        scopedDb,
-        observedAt: new Date("2026-07-31T12:00:00.000Z"),
-      });
-      expect(outcome.status).toBe("complete");
-      const metadata = insertedRows.at(0)?.["metadata"];
-      expect(metadata).toMatchObject({
-        href: stated,
-        ordinaryText:
-          queryEncoding === "%26" ? stated : "https://example.org/?a=1&b=2",
-        referencedLegislation: [
-          { url: stated, nazov: "Law & order" },
-          { nazov: "Invalid link" },
-        ],
-        metadataUrlDiagnostics: [
-          { address: "referencedLegislation[1].url", reason: "invalid-url" },
-        ],
-      });
-      const serialized = JSON.stringify(metadata);
-      const reloaded = rehydrateMetadataUrls(JSON.parse(serialized), schema);
-      expect(
-        sanitizeResult(
-          plainTextIngestionResult({ ...input, metadata: reloaded }),
-        ).metadata,
-      ).toEqual(metadata);
+        );
+        const normalized = sanitizeResult(input, schema);
+        expect(sanitizeResult(normalized, schema).metadata).toEqual(
+          normalized.metadata,
+        );
+        const outcome = await processDecision({
+          metadataUrlSchema: schema,
+          input,
+          observationOrder: 1n,
+          sourceId: createSafeId<"caseLawSource">(),
+          scopedDb,
+          observedAt: new Date("2026-07-31T12:00:00.000Z"),
+        });
+        expect(outcome.status).toBe("complete");
+        const metadata = insertedRows.at(0)?.["metadata"];
+        expect(metadata).toMatchObject({
+          href: stated,
+          ordinaryText:
+            queryEncoding === "%26" ? stated : "https://example.org/?a=1&b=2",
+          referencedLegislation: [
+            { url: stated, nazov: "Law & order" },
+            { nazov: "Invalid link" },
+          ],
+          metadataUrlDiagnostics: [
+            { address: "referencedLegislation[1].url", reason: "invalid-url" },
+          ],
+        });
+        const serialized = JSON.stringify(metadata);
+        const reloaded = rehydrateMetadataUrls(JSON.parse(serialized), schema);
+        expect(
+          sanitizeResult(
+            plainTextIngestionResult({ ...input, metadata: reloaded }, schema),
+            schema,
+          ).metadata,
+        ).toEqual(metadata);
+      } finally {
+        fake.stop();
+      }
     },
   );
 

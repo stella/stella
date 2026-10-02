@@ -423,10 +423,11 @@ for (const candidate of [
             (item: unknown) => isRecord(item) && !Object.hasOwn(item, "uri"),
           ),
       ).toBe(true);
-      expect(decision.metadata["metadataUrlDiagnostics"]).toEqual(
+      expect(decision.metadata).toHaveProperty(
+        "metadataUrlDiagnostics",
         Array.from({ length: manifestations.length }, (_, index) => ({
           address: `manifestations[${index}].uri`,
-          reason: expect.any(String),
+          reason: candidate.startsWith("/") ? "invalid-url" : "unsafe-protocol",
         })),
       );
     }

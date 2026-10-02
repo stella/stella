@@ -57,10 +57,14 @@ import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { AdapterKey } from "@/api/lib/legal-search/ingestion-constants";
-import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import {
+  AT_RIS_METADATA_URL_SCHEMA,
+  AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+} from "./at-courts.metadata-urls";
 
 const API_URL = "https://data.bka.gv.at/ris/api/v2.6/Judikatur";
 const LANGUAGE = "de";
@@ -721,16 +725,6 @@ type RisListingMetadata = ReturnType<typeof readDecisionMetadata>;
  * dispositions, so a field declared stored at a metadata key is written to
  * that key by construction rather than by a second hand-kept list.
  */
-export const AT_RIS_METADATA_URL_SCHEMA = {
-  decisionTextDocument: "url",
-  documentParts: { items: { formats: { items: { url: "url" } } } },
-} as const;
-
-export const AT_RIS_HEADNOTE_METADATA_URL_SCHEMA = {
-  ...AT_RIS_METADATA_URL_SCHEMA,
-  headnotes: { items: { documentUrl: "url" } },
-} as const;
-
 const decisionMetadata = (
   source: AtRisSourceDefinition,
   data: RisListingMetadata,
@@ -1037,31 +1031,33 @@ const buildListingOnly = ({
   const caseNumber = data.caseNumber ?? `RIS ${sourceDocumentId}`;
   const court = data.court ?? `RIS ${source.application}`;
   const raw = storedRaw({ item, documentXml: rawDetail });
-  return plainTextIngestionResult({
-    sourceDocumentId,
-    sourceDocumentIdRepairAliases,
-    caseNumber,
-    ...(data.caseNumber === undefined ? { caseNumberIsPlaceholder: true } : {}),
-    isListingOnly: true,
-    ecli: data.ecli,
-    court,
-    country: ADAPTER_MANIFESTS[source.key].country,
-    language: LANGUAGE,
-    decisionDate: data.decisionDate,
-    decisionType: data.decisionType,
-    sourceUrl: data.sourceUrl,
-    documentUrl: listedDocumentUrl(
-      source,
-      item,
+  return plainTextIngestionResult(
+    {
       sourceDocumentId,
-      "Html",
-      "html",
-    ),
-    // The listing states a text of its own for some applications, so a row
-    // without its document is still not a row whose publisher wrote nothing.
-    textFields: decisionTextFields(source, data, NO_SECTIONS),
-    metadata: checkedDecisionMetadata(
-      approveMetadataUrls(
+      sourceDocumentIdRepairAliases,
+      caseNumber,
+      ...(data.caseNumber === undefined
+        ? { caseNumberIsPlaceholder: true }
+        : {}),
+      isListingOnly: true,
+      ecli: data.ecli,
+      court,
+      country: ADAPTER_MANIFESTS[source.key].country,
+      language: LANGUAGE,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      sourceUrl: data.sourceUrl,
+      documentUrl: listedDocumentUrl(
+        source,
+        item,
+        sourceDocumentId,
+        "Html",
+        "html",
+      ),
+      // The listing states a text of its own for some applications, so a row
+      // without its document is still not a row whose publisher wrote nothing.
+      textFields: decisionTextFields(source, data, NO_SECTIONS),
+      metadata: checkedDecisionMetadata(
         {
           ...decisionMetadata(source, data, NO_SECTIONS),
           court,
@@ -1069,12 +1065,13 @@ const buildListingOnly = ({
         },
         AT_RIS_METADATA_URL_SCHEMA,
       ),
-    ),
-    rawHash: hashContent(raw.sourceRaw),
-    documentAst: EMPTY_AST,
-    parserVersion: PARSER_VERSIONS[source.key],
-    ...raw,
-  });
+      rawHash: hashContent(raw.sourceRaw),
+      documentAst: EMPTY_AST,
+      parserVersion: PARSER_VERSIONS[source.key],
+      ...raw,
+    },
+    AT_RIS_METADATA_URL_SCHEMA,
+  );
 };
 
 type BuildDecisionOptions = {
@@ -1242,41 +1239,42 @@ export const assembleAtRisDecision = (
   const parsed = parseResult.value;
 
   const raw = storedRaw({ item, documentXml, headnoteListing });
-  return plainTextIngestionResult({
-    sourceDocumentId,
-    sourceDocumentIdRepairAliases,
-    caseNumber: data.caseNumber,
-    ecli: data.ecli,
-    court: data.court,
-    country: ADAPTER_MANIFESTS[source.key].country,
-    language: LANGUAGE,
-    decisionDate: data.decisionDate,
-    decisionType: data.decisionType,
-    fulltext: parsed.fulltext,
-    sourceUrl: data.sourceUrl,
-    documentUrl: listedDocumentUrl(
-      source,
-      item,
+  return plainTextIngestionResult(
+    {
       sourceDocumentId,
-      "Html",
-      "html",
-    ),
-    textFields: decisionTextFields(source, data, parsed.sections),
-    metadata: checkedDecisionMetadata(
-      approveMetadataUrls(
+      sourceDocumentIdRepairAliases,
+      caseNumber: data.caseNumber,
+      ecli: data.ecli,
+      court: data.court,
+      country: ADAPTER_MANIFESTS[source.key].country,
+      language: LANGUAGE,
+      decisionDate: data.decisionDate,
+      decisionType: data.decisionType,
+      fulltext: parsed.fulltext,
+      sourceUrl: data.sourceUrl,
+      documentUrl: listedDocumentUrl(
+        source,
+        item,
+        sourceDocumentId,
+        "Html",
+        "html",
+      ),
+      textFields: decisionTextFields(source, data, parsed.sections),
+      metadata: checkedDecisionMetadata(
         {
           ...decisionMetadata(source, data, parsed.sections),
           headnotes: headnotesOf(source, headnoteListing, sourceDocumentId),
         },
         AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
       ),
-    ),
-    rawHash: hashContent(raw.sourceRaw),
-    documentAst: parsed.documentAst,
-    sections: sectionsFromAst(parsed.documentAst.blocks),
-    parserVersion: PARSER_VERSIONS[source.key],
-    ...raw,
-  });
+      rawHash: hashContent(raw.sourceRaw),
+      documentAst: parsed.documentAst,
+      sections: sectionsFromAst(parsed.documentAst.blocks),
+      parserVersion: PARSER_VERSIONS[source.key],
+      ...raw,
+    },
+    AT_RIS_HEADNOTE_METADATA_URL_SCHEMA,
+  );
 };
 
 type FetchListingOptions = {

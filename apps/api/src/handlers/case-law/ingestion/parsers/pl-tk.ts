@@ -34,7 +34,7 @@ import {
 } from "@/api/lib/legal-search/parsers/validate-ast";
 import {
   toMetadataUrl,
-  type MetadataUrlDefect,
+  MetadataUrlDefect,
   type SafeHref,
   sanitizeUrl,
 } from "@/api/lib/sanitize-url";
@@ -104,19 +104,17 @@ const absoluteUrl = (href: string | undefined): string | undefined => {
 
 const metadataUrlOf = (href: string | undefined) => {
   const stated = toMetadataUrl(href, "decoded");
-  if (typeof stated === "string" || stated === undefined) {
-    return stated;
-  }
-  const relative = href?.trim();
   if (
-    stated.reason !== "invalid-url" ||
-    relative === undefined ||
-    !/^[^\s<>:]+$/u.test(relative)
+    stated === undefined ||
+    (stated instanceof MetadataUrlDefect &&
+      stated.reason === "control-character")
   ) {
     return stated;
   }
-  // The portal's relative download links retain their existing base resolution.
-  return toMetadataUrl(absoluteUrl(relative) ?? relative, "decoded");
+  const resolved = absoluteUrl(href);
+  return resolved === undefined
+    ? undefined
+    : toMetadataUrl(resolved, "constructed");
 };
 
 // ── Page structure ───────────────────────────────────────

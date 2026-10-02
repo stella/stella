@@ -358,6 +358,7 @@ const optionalPlainText = (raw: string | undefined) =>
 /** Source identifiers, URLs, sourceRaw and AST structure retain their separate contracts. */
 export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
   raw: T,
+  metadataUrlSchema?: unknown,
 ): Result<
   IngestionResult & Omit<T, keyof PlainTextResultFields | "plainTextOutcome">,
   PlainTextError
@@ -397,7 +398,10 @@ export const toPlainTextIngestionResult = <T extends RawIngestionResult>(
       legacyEcli: yield* optionalPlainText(raw.legacyEcli),
       court: yield* requiredLabel(raw.court),
       decisionType: yield* optionalPlainText(raw.decisionType),
-      metadata: yield* toPlainTextMetadataObject(raw.metadata),
+      metadata: yield* toPlainTextMetadataObject(
+        raw.metadata,
+        metadataUrlSchema,
+      ),
       judges:
         raw.judges === undefined
           ? undefined

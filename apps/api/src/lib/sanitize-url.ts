@@ -1,6 +1,5 @@
 // parser-output-unchanged: adds a typed constructor; existing callers are unaffected
-import { Result, TaggedError } from "better-result";
-import { decodeHTMLAttribute } from "entities";
+import { TaggedError } from "better-result";
 import * as v from "valibot";
 
 import { stripDangerousChars } from "@stll/legal-ast/text-sanitize";
@@ -19,18 +18,12 @@ const safeHrefSchema = v.pipe(v.string(), v.brand(safeHrefBrand));
 
 export type SafeHref = v.InferOutput<typeof safeHrefSchema>;
 
-export type MetadataUrlEncoding =
-  | "transport-json"
-  | "decoded"
-  | "constructed"
-  | "raw-html";
+export type MetadataUrlEncoding = "transport-json" | "decoded" | "constructed";
 
 export const METADATA_URL_DEFECT_REASONS = [
-  "empty-url",
   "control-character",
   "invalid-url",
   "unsafe-protocol",
-  "entity-decode-failed",
   "unsupported-url-value",
 ] as const;
 
@@ -39,40 +32,35 @@ export class MetadataUrlDefect extends TaggedError("MetadataUrlDefect")<{
   reason: (typeof METADATA_URL_DEFECT_REASONS)[number];
 }> {}
 
-/** Decode only a literal HTML attribute; all other producers already own decoding. */
-export const toMetadataUrl = (
+/** Metadata transports already own decoding; preserve their scalar URL spelling. */
+export function toMetadataUrl(
+  raw: string,
+  encoding: MetadataUrlEncoding,
+): SafeHref | MetadataUrlDefect | undefined;
+export function toMetadataUrl(raw: null, encoding: MetadataUrlEncoding): null;
+export function toMetadataUrl(
+  raw: undefined,
+  encoding: MetadataUrlEncoding,
+): undefined;
+export function toMetadataUrl(
   raw: string | null | undefined,
   encoding: MetadataUrlEncoding,
-): SafeHref | MetadataUrlDefect | undefined => {
+): SafeHref | MetadataUrlDefect | null | undefined;
+export function toMetadataUrl(
+  raw: string | null | undefined,
+  _encoding: MetadataUrlEncoding,
+): SafeHref | MetadataUrlDefect | null | undefined {
   if (raw === null || raw === undefined) {
+    return raw;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.length === 0) {
     return undefined;
   }
-  let value = raw;
-  if (encoding === "raw-html") {
-    const decoded = Result.try({
-      try: () => decodeHTMLAttribute(raw),
-      catch: () =>
-        new MetadataUrlDefect({
-          message: "Metadata URL entity decoding failed",
-          reason: "entity-decode-failed",
-        }),
-    });
-    if (decoded.isErr()) {
-      return decoded.error;
-    }
-    value = decoded.value;
-  }
-  const trimmed = value.trim();
   if (/\p{Cc}/u.test(trimmed) || stripDangerousChars(trimmed) !== trimmed) {
     return new MetadataUrlDefect({
       message: "Metadata URL contains a dangerous character",
       reason: "control-character",
-    });
-  }
-  if (trimmed.length === 0) {
-    return new MetadataUrlDefect({
-      message: "Metadata URL is empty",
-      reason: "empty-url",
     });
   }
   if (!URL.canParse(trimmed)) {
@@ -89,7 +77,7 @@ export const toMetadataUrl = (
     });
   }
   return v.parse(safeHrefSchema, trimmed);
-};
+}
 
 export const sanitizeUrl = (
   url: string | null | undefined,

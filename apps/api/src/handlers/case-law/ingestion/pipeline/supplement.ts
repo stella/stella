@@ -90,6 +90,7 @@ const leaveFormerHolder = async (
     };
   }
   const rewritten = await processDecision({
+    metadataUrlSchema: placement.metadataUrlSchema,
     input: rebuiltFormer.result,
     sourceId,
     scopedDb,
@@ -162,6 +163,7 @@ const leaveFormerHolder = async (
  * document.
  */
 export const processSupplement = async ({
+  metadataUrlSchema,
   supplement,
   sourceId,
   scopedDb,
@@ -183,7 +185,7 @@ export const processSupplement = async ({
   }
   // The internal supplement kind does not establish a publisher role when
   // the adapter could not classify every component of the source enum.
-  const document = sanitizeResult(supplement.document);
+  const document = sanitizeResult(supplement.document, metadataUrlSchema);
   assertDocketKeyedSupplementAllowed(document.country);
   const key: SupplementTargetKey = {
     sourceId,
@@ -223,6 +225,7 @@ export const processSupplement = async ({
   const { row, selection, leavesHolder, judgment } = placed;
 
   const placement: SupplementPlacement = {
+    metadataUrlSchema,
     supplement,
     sourceId,
     scopedDb,
@@ -306,6 +309,7 @@ export const processSupplement = async ({
     );
   }
   const written = await processDecision({
+    metadataUrlSchema: placement.metadataUrlSchema,
     input: rebuilt.result,
     sourceId,
     scopedDb,

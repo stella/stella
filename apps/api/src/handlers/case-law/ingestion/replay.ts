@@ -51,6 +51,7 @@ import {
   sanitizeResult,
   storedCaseNumberOf,
 } from "@/api/lib/legal-search/ingestion-normalization";
+import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 
 /**
  * Re-parse decisions a source already ingested, from the raw payload stored
@@ -494,6 +495,7 @@ const storedInputFor = (
 });
 
 type ReplayRowOptions = {
+  metadataUrlSchema?: unknown;
   row: ReplayDecisionRow;
   /** The payload this replay read, as stored. */
   raw: Uint8Array;
@@ -727,15 +729,17 @@ const describedColumnsChanged = ({
  *   comparison alone would report as unchanged and never apply;
  */
 const replayWouldChangeRow = async ({
+  metadataUrlSchema,
   row,
   result: input,
   scopedDb,
 }: {
+  metadataUrlSchema?: unknown;
   row: ReplayDecisionRow;
   result: IngestionResult;
   scopedDb: ScopedDb;
 }): Promise<boolean> => {
-  const result = sanitizeResult(input);
+  const result = sanitizeResult(input, metadataUrlSchema);
   if (row.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.PENDING) {
     return true;
   }
@@ -777,6 +781,7 @@ const replayWouldChangeRow = async ({
  * did not: the payload the parser derives from it did.
  */
 const replayRow = async ({
+  metadataUrlSchema,
   row,
   raw,
   reparsed,
@@ -839,10 +844,12 @@ const replayRow = async ({
   }
 
   const changed = await replayWouldChangeRow({
+    metadataUrlSchema,
     row,
     // The row holds the document its supplements were composed into, which
     // is what the write would store again.
     result: await composeWithStoredSupplements({
+      metadataUrlSchema,
       scopedDb,
       sourceId,
       decisionId: row.id,
@@ -913,6 +920,7 @@ const replayRow = async ({
   });
 
   const processed = await processDecision({
+    metadataUrlSchema,
     // The payload travels with the result, always, whatever the adapter put
     // in it. The pipeline writes the row's raw-payload pointer from the
     // result it is handed, so a result that carried no payload would clear
@@ -954,6 +962,7 @@ const replayRow = async ({
 };
 
 type ReplayOneRowOptions = {
+  metadataUrlSchema?: unknown;
   capability: Extract<ReplayCapability, { type: "supported" }>;
   readStoredRaw: StoredRawReader;
   row: ReplayDecisionRow;
@@ -974,6 +983,7 @@ type ReplayOneRowOptions = {
  * as one.
  */
 const replayOneRow = async ({
+  metadataUrlSchema,
   capability,
   readStoredRaw,
   row,
@@ -994,6 +1004,7 @@ const replayOneRow = async ({
     };
   }
   return await replayRow({
+    metadataUrlSchema,
     row,
     raw,
     reparsed: await capability.reparse(storedInputFor(row, raw)),
@@ -1224,6 +1235,7 @@ export const replayCaseLawSource = async ({
     const attempt = await Result.tryPromise({
       try: async () =>
         await replayOneRow({
+          metadataUrlSchema: metadataUrlSchemaForAdapter(adapter.key),
           capability,
           readStoredRaw,
           row,

@@ -27,7 +27,10 @@ import { panic } from "better-result";
 import { afterEach, describe, expect, test } from "bun:test";
 
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
-import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
+import {
+  decodeSourceRawEnvelope,
+  EMPTY_AST,
+} from "@/api/handlers/case-law/ingestion/adapter";
 import type {
   IngestionResult,
   SourceFieldDisposition,
@@ -39,11 +42,17 @@ import {
   listSourceRegistrations,
   type SourceRegistrationKey,
 } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import { composeDecisionWithSupplements } from "@/api/handlers/case-law/ingestion/supplement-composition";
 import { storeTextField } from "@/api/lib/case-law/decision-text";
+import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import {
   PLAIN_TEXT_FIELD_DEBT,
   PLAIN_TEXT_RESULT_FIELDS,
 } from "@/api/lib/legal-search/ingestion-types";
+import {
+  composedMetadataUrlSchema,
+  metadataUrlSchemaForAdapter,
+} from "@/api/lib/legal-search/metadata-url-schemas";
 import {
   approveMetadataUrls,
   metadataUrlAddresses,
@@ -78,6 +87,8 @@ import {
   isClassifiedMetadataKey,
   METADATA_TEXT_DISPOSITIONS,
   metadataDisplayTextOf,
+  metadataTextAddressDispositionsForAdapter,
+  metadataNullOnlyAddressesForAdapter,
   unclassifiedMetadataAddresses,
 } from "@/api/tests/helpers/case-law-metadata-text-census";
 
@@ -242,14 +253,17 @@ const storedPartsOf = (
  * disposition map: the display strings of the classified keys, and the keys
  * nothing classified yet.
  */
-const metadataDisplayTextCensus = (metadata: Record<string, unknown>) => {
+const metadataDisplayTextCensus = (
+  metadata: Record<string, unknown>,
+  schema?: unknown,
+) => {
   const unclassified: string[] = [];
   const texts = Object.entries(metadata).flatMap(([key, value]) => {
     if (!isClassifiedMetadataKey(key)) {
       unclassified.push(key);
       return [];
     }
-    return metadataDisplayTextOf(key, value, metadata);
+    return metadataDisplayTextOf(key, value, schema);
   });
   return { texts, unclassified };
 };
@@ -264,8 +278,9 @@ describe("every adapter accounts for the fields its source states", () => {
       const { sourceFields } = adapterFor(key);
       const evidence = fixture();
       const decision = await evidence.buildDecision();
+      const schema = metadataUrlSchemaForAdapter(key);
       // The branded contract covers every registered source with no field debt.
-      const normalized = plainTextIngestionResult(decision);
+      const normalized = plainTextIngestionResult(decision, schema);
       for (const field of Object.keys(PLAIN_TEXT_RESULT_FIELDS)) {
         expect(Reflect.get(normalized, field), `${key}.${field}`).toEqual(
           Reflect.get(decision, field),
@@ -274,10 +289,17 @@ describe("every adapter accounts for the fields its source states", () => {
       const parts = storedPartsOf(key, decision);
 
       expect(
-        unclassifiedMetadataAddresses(decision.metadata),
+        unclassifiedMetadataAddresses(decision.metadata, {
+          schema,
+          textAddresses: metadataTextAddressDispositionsForAdapter(key),
+          nullOnlyAddresses: metadataNullOnlyAddressesForAdapter(key),
+        }),
         `${key}: address fields require exact producer declarations`,
       ).toEqual([]);
-      const metadataCensus = metadataDisplayTextCensus(decision.metadata);
+      const metadataCensus = metadataDisplayTextCensus(
+        decision.metadata,
+        schema,
+      );
       expect(
         metadataCensus.unclassified,
         `${key}: metadata keys the display-text census does not classify: ${metadataCensus.unclassified.join(", ")}. Add each to METADATA_TEXT_DISPOSITIONS as inspected, or excluded with the reason.`,
@@ -415,6 +437,45 @@ describe("the display-text census classifies exactly the metadata adapters emit"
         emitted.add(metadataKey);
       }
     }
+    const judgment = await plCourtsFixture().buildDecision();
+    const composed = composeDecisionWithSupplements({
+      judgment,
+      metadataUrlSchema: metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS),
+      supplements: [
+        {
+          kind: DECISION_SUPPLEMENT_KIND.REASONS,
+          sourceDocumentId: "census-supplement",
+          sourceUrl: "https://example.test/?stated=&amp;amp;",
+          sourceHash: "fixture-hash",
+          fulltext: null,
+          documentAst: EMPTY_AST,
+        },
+      ],
+    });
+    const composedSchema = composedMetadataUrlSchema(
+      metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS),
+    );
+    expect(
+      unclassifiedMetadataAddresses(composed.metadata, {
+        schema: composedSchema,
+      }),
+    ).toEqual([]);
+    expect(
+      metadataDisplayTextOf(
+        "documentSupplements",
+        composed.metadata["documentSupplements"],
+        composedSchema,
+      ),
+    ).toEqual([
+      { field: "metadata.documentSupplements.0.kind", value: "reasons" },
+      {
+        field: "metadata.documentSupplements.0.sourceDocumentId",
+        value: "census-supplement",
+      },
+    ]);
+    for (const metadataKey of Object.keys(composed.metadata)) {
+      emitted.add(metadataKey);
+    }
     const unclassified = [...emitted].filter(
       (metadataKey) => !isClassifiedMetadataKey(metadataKey),
     );
@@ -432,6 +493,9 @@ describe("the display-text census classifies exactly the metadata adapters emit"
   });
 
   test("display text is inspected while exactly declared nested URLs are excluded", () => {
+    const schema = {
+      referencedLegislation: { items: { url: "url" } },
+    } as const;
     const metadata = approveMetadataUrls(
       {
         referencedLegislation: [
@@ -444,31 +508,34 @@ describe("the display-text census classifies exactly the metadata adapters emit"
           },
         ],
       },
-      { referencedLegislation: { items: { url: "url" } } },
+      schema,
     );
     const texts = metadataDisplayTextOf(
       "referencedLegislation",
-      metadata.referencedLegislation,
-      metadata,
+      metadata["referencedLegislation"],
+      schema,
     );
-    expect(unclassifiedMetadataAddresses(metadata)).toEqual([]);
-    expect(metadataUrlAddresses(metadata)).toEqual([
+    expect(unclassifiedMetadataAddresses(metadata, { schema })).toEqual([]);
+    expect(metadataUrlAddresses(schema)).toEqual([
       "referencedLegislation[*].url",
     ]);
-    const scalarArray = approveMetadataUrls(
+    const objectArray = approveMetadataUrls(
       {
         publications: [
-          toMetadataUrl("https://example.org/?a=&amp;", "transport-json"),
+          {
+            url: toMetadataUrl(
+              "https://example.org/?a=&amp;",
+              "transport-json",
+            ),
+          },
         ],
       },
-      { publications: { items: "url" } },
+      { publications: { items: { url: "url" } } },
     );
     expect(
-      metadataDisplayTextOf(
-        "publications",
-        scalarArray.publications,
-        scalarArray,
-      ),
+      metadataDisplayTextOf("publications", objectArray["publications"], {
+        publications: { items: { url: "url" } },
+      }),
     ).toEqual([]);
     expect(
       unclassifiedMetadataAddresses({
@@ -494,5 +561,133 @@ describe("the display-text census classifies exactly the metadata adapters emit"
       },
     ]);
     expect(metadataDisplayTextOf("guid", "source&amp;key")).toEqual([]);
+  });
+
+  test("undeclared URI and link suffixes and HTTP values under other keys fail the census", () => {
+    for (const key of ["sourceUri", "referenceLink", "publisherAddress"]) {
+      expect(
+        unclassifiedMetadataAddresses({
+          nested: [{ [key]: "https://example.test/?a=&amp;" }],
+        }),
+      ).toEqual([`metadata.nested.0.${key}`]);
+    }
+    expect(
+      unclassifiedMetadataAddresses({
+        nested: [{ sourceUri: null, referenceLink: null }],
+      }),
+    ).toEqual([
+      "metadata.nested.0.sourceUri",
+      "metadata.nested.0.referenceLink",
+    ]);
+    const schema = {
+      nested: { items: { sourceUri: "url", referenceLink: "url" } },
+    } as const;
+    expect(
+      unclassifiedMetadataAddresses(
+        { nested: [{ sourceUri: null, referenceLink: null }] },
+        { schema },
+      ),
+    ).toEqual([]);
+  });
+
+  test("the captured regional affected-document address permits only null", () => {
+    const nullOnlyAddresses = metadataNullOnlyAddressesForAdapter(
+      ADAPTER_KEYS.CZ_REGIONAL,
+    );
+    expect(
+      unclassifiedMetadataAddresses(
+        { affectedDocs: [{ url: null }] },
+        { nullOnlyAddresses },
+      ),
+    ).toEqual([]);
+    for (const value of [
+      undefined,
+      "",
+      "opaque",
+      "https://example.test/?a=&amp;",
+      "ftp://example.test/",
+      0,
+      false,
+      {},
+      [],
+    ]) {
+      expect(
+        unclassifiedMetadataAddresses(
+          { affectedDocs: [{ url: value }] },
+          { nullOnlyAddresses },
+        ),
+      ).toEqual(["metadata.affectedDocs.0.url"]);
+    }
+    expect(
+      unclassifiedMetadataAddresses(
+        { affectedDocs: { "0": { url: null } } },
+        { nullOnlyAddresses },
+      ),
+    ).toEqual(["metadata.affectedDocs.0.url"]);
+    expect(
+      unclassifiedMetadataAddresses(
+        { affectedDocs: [{ otherUrl: null }] },
+        { nullOnlyAddresses },
+      ),
+    ).toEqual(["metadata.affectedDocs.0.otherUrl"]);
+    expect(
+      unclassifiedMetadataAddresses({ affectedDocs: [{ url: null }] }),
+    ).toEqual(["metadata.affectedDocs.0.url"]);
+  });
+
+  test("URL-looking publisher citations need an explicit textual address disposition", () => {
+    const metadata = {
+      relatedDecisions: ["https://example.test/?citation=&amp;"],
+    };
+    expect(unclassifiedMetadataAddresses(metadata)).toEqual([
+      "metadata.relatedDecisions.0",
+    ]);
+    expect(
+      unclassifiedMetadataAddresses(metadata, {
+        textAddresses: metadataTextAddressDispositionsForAdapter(
+          ADAPTER_KEYS.AT_COURTS,
+        ),
+      }),
+    ).toEqual([]);
+    expect(
+      unclassifiedMetadataAddresses(
+        { relatedDecisions: "https://example.test/?citation=&amp;" },
+        {
+          textAddresses: metadataTextAddressDispositionsForAdapter(
+            ADAPTER_KEYS.AT_COURTS,
+          ),
+        },
+      ),
+    ).toEqual([]);
+    expect(
+      unclassifiedMetadataAddresses(
+        { statedSourceUrl: "https://example.test/?stated=&amp;" },
+        {
+          textAddresses: metadataTextAddressDispositionsForAdapter(
+            ADAPTER_KEYS.SK_COURTS,
+          ),
+        },
+      ),
+    ).toEqual([]);
+    expect(
+      unclassifiedMetadataAddresses(
+        { relatedDecisions: [{ publisherAddress: "https://example.test/" }] },
+        {
+          textAddresses: metadataTextAddressDispositionsForAdapter(
+            ADAPTER_KEYS.AT_COURTS,
+          ),
+        },
+      ),
+    ).toEqual(["metadata.relatedDecisions.0.publisherAddress"]);
+    expect(
+      unclassifiedMetadataAddresses(
+        { relatedDecisions: { "0": "https://example.test/" } },
+        {
+          textAddresses: metadataTextAddressDispositionsForAdapter(
+            ADAPTER_KEYS.AT_COURTS,
+          ),
+        },
+      ),
+    ).toEqual(["metadata.relatedDecisions.0"]);
   });
 });

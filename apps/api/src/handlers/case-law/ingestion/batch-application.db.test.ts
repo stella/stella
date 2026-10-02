@@ -26,6 +26,7 @@ import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import { SOURCE_DOCUMENT_ID_MAX_LENGTH } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import { czNsAdapter } from "@/api/handlers/case-law/ingestion/adapters/cz-ns";
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { runIngestionPipeline } from "@/api/handlers/case-law/ingestion/pipeline";
 import {
   applyCaseLawIngestionBatch,
@@ -54,11 +55,20 @@ import type { SafeId } from "@/api/lib/branded-types";
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { toPlainTextMetadataObject } from "@/api/lib/case-law/plain-text";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import {
+  approveMetadataUrls,
+  META_URL_DIAGNOSTICS,
+} from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
+import { plCourtsFixture } from "@/api/tests/helpers/case-law-enrolled-fixtures";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -371,6 +381,95 @@ const prepared = (
   const batch = prepareCaseLawIngestionBatch({ decisions });
   return Result.isOk(batch) ? batch.value : panic(batch.error.message);
 };
+
+test("the registered batch clones and persists declared URL scalars and diagnostics without display-text decoding", async () => {
+  const rootUrl = "https://example.test/?root=&amp;amp;&encoded=%26";
+  const nestedUrl = "https://example.test/?nested=&amp;lt;b&amp;gt;";
+  const fixtureDecision = await plCourtsFixture().buildDecision();
+  const metadata = approveMetadataUrls(
+    checkedDecisionMetadata({
+      ...fixtureDecision.metadata,
+      href: toMetadataUrl(rootUrl, "transport-json"),
+      division: {
+        href: toMetadataUrl(nestedUrl, "transport-json"),
+        court: { href: toMetadataUrl(null, "transport-json") },
+        chamber: undefined,
+      },
+      chambers: [{ href: toMetadataUrl(null, "transport-json") }],
+      source: {
+        judgmentUrl: toMetadataUrl(
+          "ftp://example.test/rejected",
+          "transport-json",
+        ),
+      },
+    }),
+    PL_COURTS_METADATA_URL_SCHEMA,
+  );
+  const decision = {
+    ...fixtureDecision,
+    metadata: toPlainTextMetadataObject(
+      metadata,
+      PL_COURTS_METADATA_URL_SCHEMA,
+    ).unwrap(),
+  };
+  const sourceId = createSafeId<"caseLawSource">();
+  await db
+    .update(caseLawSources)
+    .set({ adapterKey: sql`'retired-' || ${caseLawSources.id}` })
+    .where(eq(caseLawSources.adapterKey, ADAPTER_KEYS.PL_COURTS));
+  await db.insert(caseLawSources).values({
+    id: sourceId,
+    adapterKey: ADAPTER_KEYS.PL_COURTS,
+    name: "Declared URL batch fixture",
+  });
+  const batch = prepared([decision]);
+  const originalBatch = structuredClone(batch);
+  const transfer = landingTransfer();
+  const fakeS3 = startFakeS3();
+  try {
+    const applied = await applyPrepared({
+      sourceId,
+      batch,
+      corpus: transfer.corpus,
+    });
+    expect(applied.isOk()).toBe(true);
+    const row = (
+      await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId))
+    ).at(0);
+    expect(row?.metadata).toMatchObject({
+      href: rootUrl,
+      division: { href: nestedUrl, court: { href: null } },
+      chambers: [{ href: null }],
+      source: {},
+      [META_URL_DIAGNOSTICS]: [
+        { address: "source.judgmentUrl", reason: "unsafe-protocol" },
+      ],
+    });
+    expect(row?.metadata?.["source"]).toEqual({});
+    expect(row?.metadata?.[META_URL_DIAGNOSTICS]).toEqual([
+      { address: "source.judgmentUrl", reason: "unsafe-protocol" },
+    ]);
+    const replayed = await applyPrepared({
+      sourceId,
+      batch,
+      corpus: transfer.corpus,
+    });
+    expect(replayed.isOk()).toBe(true);
+    const afterReplay = (
+      await db
+        .select({ metadata: caseLawDecisions.metadata })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId))
+    ).at(0);
+    expect(afterReplay?.metadata).toEqual(row?.metadata);
+    expect(batch).toEqual(originalBatch);
+  } finally {
+    fakeS3.stop();
+  }
+});
 
 /** Certified by the receipt. */
 const directCaller: Caller = {

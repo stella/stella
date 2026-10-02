@@ -17,7 +17,6 @@ import nodePath from "node:path";
 import { decodeSourceRawEnvelope } from "@/api/handlers/case-law/ingestion/adapter";
 import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  PL_NSA_METADATA_URL_SCHEMA,
   assemblePlNsaDecision,
   composePlNsaFullText,
   createPlNsaCrawler,
@@ -60,6 +59,8 @@ import { rehydrateMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
 import { logger } from "@/api/lib/observability/logger";
 import { isRecord } from "@/api/lib/type-guards";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
+
+import { PL_NSA_METADATA_URL_SCHEMA } from "./pl-nsa.metadata-urls";
 
 const FIXTURES_DIR = new URL("__fixtures__/", import.meta.url);
 const ROWS_JSON = new URL("pl-nsa-rows.json", FIXTURES_DIR);
@@ -403,13 +404,17 @@ describe("the recorded dataset rows", () => {
   test("related decisions link the court's own pages", async () => {
     const decision = await byCase("multiple-related");
     const related = decision.metadata["relatedDecisions"];
-    const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+    const repeated = toPlainTextIngestionResult(
+      decision,
+      PL_NSA_METADATA_URL_SCHEMA,
+    ).unwrap().metadata;
     const serializedMetadata = JSON.stringify(decision.metadata);
     const restored = toPlainTextMetadataObject(
       rehydrateMetadataUrls(
         JSON.parse(serializedMetadata),
         PL_NSA_METADATA_URL_SCHEMA,
       ),
+      PL_NSA_METADATA_URL_SCHEMA,
     ).unwrap();
     expect(repeated["relatedDecisions"]).toEqual(
       decision.metadata["relatedDecisions"],
@@ -1470,6 +1475,9 @@ describe("unreadable timestamps", () => {
 
 describe("declared metadata URLs remain scalar across projection and reload", () => {
   for (const entry of [
+    { input: null, expected: null },
+    { input: "", empty: true },
+    { input: "   ", empty: true },
     {
       input: "https://publisher.example/item?a=1&amp;b=2",
       expected: "https://publisher.example/item?a=1&amp;b=2",
@@ -1493,7 +1501,7 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       reason: "invalid-url",
     },
   ]) {
-    test(entry.input, async () => {
+    test(String(entry.input), async () => {
       const { input } = entry;
       const recorded =
         (await recordedRows()).at(0) ?? panic("No recorded NSA row");
@@ -1506,13 +1514,17 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
           ],
         },
       });
-      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        PL_NSA_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
       const serializedMetadata = JSON.stringify(decision.metadata);
       const restored = toPlainTextMetadataObject(
         rehydrateMetadataUrls(
           JSON.parse(serializedMetadata),
           PL_NSA_METADATA_URL_SCHEMA,
         ),
+        PL_NSA_METADATA_URL_SCHEMA,
       ).unwrap();
       const addresses = ["citedProvisions[0].link"];
       for (const metadata of [decision.metadata, repeated, restored]) {
@@ -1522,6 +1534,9 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
           } else {
             expect(metadata).not.toHaveProperty(address);
           }
+        }
+        if ("empty" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
         }
         if ("reason" in entry) {
           expect(metadata["metadataUrlDiagnostics"]).toEqual(
@@ -1533,4 +1548,27 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       }
     });
   }
+});
+
+test("unresolvable related decisions preserve a null source URL", async () => {
+  const recorded = (await recordedRows()).at(0) ?? panic("No recorded NSA row");
+  const decision = build({
+    ...recorded,
+    values: {
+      ...recorded.values,
+      related_docket_numbers: [
+        {
+          judgment_id: null,
+          docket_number: "I SA 1/24",
+          judgment_date: null,
+          judgment_type: null,
+        },
+      ],
+    },
+  });
+  expect(decision.metadata).toHaveProperty(
+    "relatedDecisions[0].sourceUrl",
+    null,
+  );
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
 });

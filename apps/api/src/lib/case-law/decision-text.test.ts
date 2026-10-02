@@ -12,6 +12,7 @@ import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
   absentTextField,
+  checkedDecisionMetadata,
   presentTextField,
   preserveStoredTextAfterParseFailure,
   readDecisionHeadnote,
@@ -22,6 +23,95 @@ import {
   storeDecisionTextFields,
   storeTextField,
 } from "@/api/lib/case-law/decision-text";
+import {
+  MAX_METADATA_URL_DIAGNOSTICS,
+  META_URL_DIAGNOSTICS,
+} from "@/api/lib/legal-search/metadata-urls";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
+
+test("publisher metadata cannot collide with generated URL diagnostics", () => {
+  for (const value of [
+    undefined,
+    null,
+    [],
+    { entries: [], overflow: 0 },
+    "publisher value",
+  ]) {
+    expect(() =>
+      checkedDecisionMetadata({ [META_URL_DIAGNOSTICS]: value }),
+    ).toThrow(
+      `Publisher metadata cannot use the reserved key: ${META_URL_DIAGNOSTICS}`,
+    );
+  }
+  expect(checkedDecisionMetadata({ publisher: "Source" })).toEqual({
+    publisher: "Source",
+  });
+});
+
+test("URL metadata provenance is explicit at the checked boundary", () => {
+  const schema = { url: "url" } as const;
+  expect(() =>
+    checkedDecisionMetadata(
+      {
+        url: toMetadataUrl("https://example.test/", "decoded"),
+        [META_URL_DIAGNOSTICS]: [],
+      },
+      schema,
+    ),
+  ).toThrow(
+    `Publisher metadata cannot use the reserved key: ${META_URL_DIAGNOSTICS}`,
+  );
+  const generated = checkedDecisionMetadata(
+    { url: toMetadataUrl("ftp://example.test/", "decoded") },
+    schema,
+  );
+  expect(
+    checkedDecisionMetadata(generated, { type: "stored", schema }),
+  ).toEqual(generated);
+  const current = checkedDecisionMetadata(
+    {
+      url: "https://example.test/?stated=&amp;",
+      [META_URL_DIAGNOSTICS]: [
+        { address: "url", reason: "unsafe-protocol" },
+        ...Array.from(
+          { length: MAX_METADATA_URL_DIAGNOSTICS + 3 },
+          (_, index) => ({
+            address: `missing[${index}]`,
+            reason: "invalid-url",
+          }),
+        ),
+      ],
+    },
+    { type: "stored", schema },
+  );
+  expect(current.url).toBe("https://example.test/?stated=&amp;");
+  const diagnostics = current[META_URL_DIAGNOSTICS];
+  expect(Array.isArray(diagnostics)).toBe(true);
+  if (!Array.isArray(diagnostics)) {
+    throw new TypeError("Expected validated diagnostics");
+  }
+  expect(diagnostics.length).toBeLessThanOrEqual(MAX_METADATA_URL_DIAGNOSTICS);
+  expect(diagnostics.some((entry) => entry.address === "url")).toBe(false);
+});
+
+test("generated URL diagnostics survive internal storage and replay but are absent from public metadata", () => {
+  const diagnostics = [
+    { address: "source.href", reason: "invalid-url" },
+    { overflowCount: 3 },
+  ];
+  const stored = storeDecisionTextFields({
+    metadata: { publisher: "Source", [META_URL_DIAGNOSTICS]: diagnostics },
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+  });
+  expect(stored[META_URL_DIAGNOSTICS]).toEqual(diagnostics);
+  expect(
+    splitStoredDecisionTextMetadata(stored).metadata[META_URL_DIAGNOSTICS],
+  ).toEqual(diagnostics);
+  expect(readDecisionTextMetadata(stored).metadata).toEqual({
+    publisher: "Source",
+  });
+  expect(stored[META_URL_DIAGNOSTICS]).toEqual(diagnostics);
+});
 
 describe("decision text fields", () => {
   test("preserve published text through storage and reads", () => {

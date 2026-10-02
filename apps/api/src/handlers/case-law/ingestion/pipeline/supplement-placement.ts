@@ -432,6 +432,7 @@ export const keepSupplementStandalone = async (
     )
   ).at(0);
   const written = await processDecision({
+    metadataUrlSchema: placement.metadataUrlSchema,
     input: supplement.document,
     sourceId,
     scopedDb,

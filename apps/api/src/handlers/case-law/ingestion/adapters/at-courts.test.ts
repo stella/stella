@@ -795,7 +795,8 @@ describe("RIS metadata URL provenance", () => {
       const headnotes = decision.metadata["headnotes"];
       const summary = Array.isArray(headnotes) ? headnotes.at(0) : undefined;
       if (candidate.trim().startsWith("https://")) {
-        expect(decision.metadata["decisionTextDocument"]).toBe(
+        expect(decision.metadata).toHaveProperty(
+          "decisionTextDocument",
           candidate.trim(),
         );
         expect(isRecord(format) ? format["url"] : undefined).toBe(
@@ -813,19 +814,47 @@ describe("RIS metadata URL provenance", () => {
         expect(isRecord(summary) && Object.hasOwn(summary, "documentUrl")).toBe(
           false,
         );
-        expect(decision.metadata["metadataUrlDiagnostics"]).toEqual([
-          { address: "decisionTextDocument", reason: expect.any(String) },
+        expect(decision.metadata).toHaveProperty("metadataUrlDiagnostics", [
+          {
+            address: "decisionTextDocument",
+            reason: candidate.startsWith("/")
+              ? "invalid-url"
+              : "unsafe-protocol",
+          },
           {
             address: "documentParts[0].formats[0].url",
-            reason: expect.any(String),
+            reason: candidate.startsWith("/")
+              ? "invalid-url"
+              : "unsafe-protocol",
           },
           {
             address: "documentParts[0].formats[1].url",
-            reason: expect.any(String),
+            reason: candidate.startsWith("/")
+              ? "invalid-url"
+              : "unsafe-protocol",
           },
-          { address: "headnotes[0].documentUrl", reason: expect.any(String) },
+          {
+            address: "headnotes[0].documentUrl",
+            reason: candidate.startsWith("/")
+              ? "invalid-url"
+              : "unsafe-protocol",
+          },
         ]);
       }
     });
   }
+});
+
+test("RIS related decisions remain display text even when they resemble a URL", async () => {
+  const item = listingItem();
+  nestedValue(item, ["Data", "Metadaten", "Judikatur", "Justiz"])["Bezug"] =
+    "https://example.org/item?a=1&amp;b=2";
+  const decision = assembleAtRisDecision(AT_COURTS_SOURCE, item, {
+    documentXml: await fixtureXml(),
+  });
+  expect(decision.metadata).toHaveProperty(
+    "relatedDecisions",
+    "https://example.org/item?a=1&b=2",
+  );
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
 });

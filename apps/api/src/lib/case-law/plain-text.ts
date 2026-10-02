@@ -8,10 +8,15 @@ import {
   TAG_LIKE_MARKUP_SOURCE,
 } from "@/api/lib/case-law/plain-text-markup";
 import {
-  approvedMetadataUrl,
-  preserveMetadataUrlDeclarations,
+  metadataUrlChildSchema,
+  metadataUrlItemSchema,
+  rehydrateMetadataUrls,
 } from "@/api/lib/legal-search/metadata-urls";
-import type { SafeHref } from "@/api/lib/sanitize-url";
+import {
+  MetadataUrlDefect,
+  toMetadataUrl,
+  type SafeHref,
+} from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
 
 const plainTextBrand = Symbol("PlainText");
@@ -95,7 +100,19 @@ export const toPlainText = (raw: string): Result<PlainText, PlainTextError> => {
 
 export const toPlainTextMetadata = (
   value: unknown,
+  schema?: unknown,
 ): Result<PlainTextMetadataValue, PlainTextError> => {
+  if (schema === "url") {
+    if (value === null || value === undefined) {
+      return Result.ok(value);
+    }
+    if (typeof value === "string") {
+      const approved = toMetadataUrl(value, "decoded");
+      return Result.ok(
+        approved instanceof MetadataUrlDefect ? undefined : approved,
+      );
+    }
+  }
   if (typeof value === "string") {
     return toPlainText(value);
   }
@@ -109,16 +126,13 @@ export const toPlainTextMetadata = (
   }
   if (Array.isArray(value)) {
     return Result.all(
-      value.map((entry: unknown, index) => {
-        const approved = approvedMetadataUrl(value, String(index));
-        return approved === undefined
-          ? toPlainTextMetadata(entry)
-          : Result.ok(approved);
-      }),
-    ).map((plain) => preserveMetadataUrlDeclarations(value, plain));
+      value.map((entry: unknown) =>
+        toPlainTextMetadata(entry, metadataUrlItemSchema(schema)),
+      ),
+    );
   }
   if (isRecord(value) && Object.getPrototypeOf(value) === Object.prototype) {
-    return toPlainTextMetadataObject(value);
+    return projectPlainMetadataObject(value, schema);
   }
   return Result.err(
     new PlainTextError({
@@ -128,19 +142,24 @@ export const toPlainTextMetadata = (
   );
 };
 
-/** Project the container as a whole so exact URL declarations remain attached. */
-export const toPlainTextMetadataObject = (
+const projectPlainMetadataObject = (
   value: Record<string, unknown>,
+  schema?: unknown,
 ): Result<Record<string, PlainTextMetadataValue>, PlainTextError> =>
   Result.all(
-    Object.entries(value).map(([key, entry]) => {
-      const approved = approvedMetadataUrl(value, key);
-      const projected =
-        approved === undefined
-          ? toPlainTextMetadata(entry)
-          : Result.ok(approved);
-      return projected.map((plain) => [key, plain] as const);
-    }),
-  ).map((entries) =>
-    preserveMetadataUrlDeclarations(value, Object.fromEntries(entries)),
+    Object.entries(value).map(([key, entry]) =>
+      toPlainTextMetadata(entry, metadataUrlChildSchema(schema, key)).map(
+        (plain) => [key, plain] as const,
+      ),
+    ),
+  ).map((entries) => Object.fromEntries(entries));
+
+/** Static schemas survive copies, clones, and persisted JSON round trips. */
+export const toPlainTextMetadataObject = (
+  value: Record<string, unknown>,
+  schema?: unknown,
+): Result<Record<string, PlainTextMetadataValue>, PlainTextError> =>
+  projectPlainMetadataObject(
+    schema === undefined ? value : rehydrateMetadataUrls(value, schema),
+    schema,
   );

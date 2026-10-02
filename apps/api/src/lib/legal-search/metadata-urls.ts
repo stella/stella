@@ -10,36 +10,109 @@ import {
 import { includes, isRecord } from "@/api/lib/type-guards";
 
 export const META_URL_DIAGNOSTICS = "metadataUrlDiagnostics";
+export const MAX_METADATA_URL_DIAGNOSTICS = 64;
+const MAX_DIAGNOSTIC_ADDRESS_LENGTH = 256;
 
-type SourceUrl = SafeHref | MetadataUrlDefect | undefined;
+type ConstructedUrl = SafeHref | MetadataUrlDefect;
+
+/** An explicit transient source branch preserves publisher JSON outside the validated object shape. */
+export const opaqueMetadataValue = (value: unknown) =>
+  ({ type: "metadata-url-opaque", value }) as const;
+type OpaqueMetadataValue = ReturnType<typeof opaqueMetadataValue>;
+type UrlBranches<Value> = Value extends ConstructedUrl
+  ? true
+  : Value extends OpaqueMetadataValue
+    ? false
+    : Value extends readonly (infer Item)[]
+      ? ContainsUrls<Item>
+      : Value extends object
+        ? true extends {
+            [Key in keyof Value]: ContainsUrls<Value[Key]>;
+          }[keyof Value]
+          ? true
+          : false
+        : false;
+type ContainsUrls<Value> = unknown extends Value
+  ? false
+  : true extends UrlBranches<NonNullable<Value>>
+    ? true
+    : false;
+type ObjectUrlSchema<Value> = {
+  readonly [
+    Key in keyof Value as ContainsUrls<Value[Key]> extends true ? Key : never
+  ]-?: MetadataUrlSchema<Value[Key]>;
+} & {
+  readonly [
+    Key in keyof Value as ContainsUrls<Value[Key]> extends true ? never : Key
+  ]?: MetadataUrlSchema<Value[Key]>;
+};
+
+/** Constructed URL branches require a declaration; display strings never imply one. */
 export type MetadataUrlSchema<Value> = unknown extends Value
   ? never
   : [NonNullable<Value>] extends [never]
     ? unknown
-    : [NonNullable<Value>] extends [SourceUrl]
+    : [NonNullable<Value>] extends [ConstructedUrl]
       ? "url"
-      : NonNullable<Value> extends readonly (infer Item)[]
-        ? { readonly items: MetadataUrlSchema<Item> }
-        : NonNullable<Value> extends object
-          ? keyof NonNullable<Value> extends never
+      : [Extract<NonNullable<Value>, OpaqueMetadataValue>] extends [never]
+        ? NonNullable<Value> extends readonly (infer Item)[]
+          ? [NonNullable<Item>] extends [never]
+            ? { readonly items: unknown }
+            : [NonNullable<Item>] extends [ConstructedUrl]
+              ? never
+              : { readonly items: MetadataUrlSchema<Item> }
+          : [Extract<NonNullable<Value>, object>] extends [never]
             ? never
-            : {
-                readonly [Key in keyof NonNullable<Value>]?: MetadataUrlSchema<
-                  NonNullable<Value>[Key]
-                >;
-              }
-          : never;
+            : [Extract<NonNullable<Value>, string>] extends [never]
+              ? ObjectUrlSchema<Extract<NonNullable<Value>, object>>
+              : {
+                  readonly object: ObjectUrlSchema<
+                    Extract<NonNullable<Value>, object>
+                  >;
+                  readonly preserve: "string";
+                }
+        : {
+            readonly object: MetadataUrlSchema<
+              Exclude<NonNullable<Value>, OpaqueMetadataValue>
+            >;
+            readonly preserve: "opaque";
+          };
 
 type UrlDiagnostic = { address: string; reason: MetadataUrlDefect["reason"] };
+type DiagnosticState = {
+  entries: UrlDiagnostic[];
+  overflow: number;
+  present: Set<string>;
+};
+const recordDefect = (state: DiagnosticState, diagnostic: UrlDiagnostic) => {
+  if (
+    state.entries.some(
+      (entry) =>
+        entry.address === diagnostic.address &&
+        entry.reason === diagnostic.reason,
+    )
+  ) {
+    return;
+  }
+  if (state.entries.length < MAX_METADATA_URL_DIAGNOSTICS) {
+    state.entries.push(diagnostic);
+  } else {
+    state.overflow += 1;
+  }
+};
 const readDiagnostics = (value: unknown): UrlDiagnostic[] => {
   if (!Array.isArray(value)) {
     return [];
   }
   const diagnostics: UrlDiagnostic[] = [];
   for (const entry of value) {
+    if (diagnostics.length === MAX_METADATA_URL_DIAGNOSTICS) {
+      break;
+    }
     if (
       isRecord(entry) &&
       typeof entry["address"] === "string" &&
+      entry["address"].length <= MAX_DIAGNOSTIC_ADDRESS_LENGTH &&
       typeof entry["reason"] === "string" &&
       includes(METADATA_URL_DEFECT_REASONS, entry["reason"])
     ) {
@@ -48,167 +121,105 @@ const readDiagnostics = (value: unknown): UrlDiagnostic[] => {
   }
   return diagnostics;
 };
-const mergeDiagnostics = (first: unknown, second: unknown) => {
-  const entries = new Map<string, UrlDiagnostic>();
-  for (const diagnostic of [
-    ...readDiagnostics(first),
-    ...readDiagnostics(second),
-  ]) {
-    entries.set(JSON.stringify(diagnostic), diagnostic);
-  }
-  return [...entries.values()];
-};
 
-const declarationSymbol = Symbol("MetadataUrlDeclaration");
-class MetadataUrlDeclaration {
-  readonly keys: ReadonlySet<string>;
-  readonly schema: unknown;
+/** Schema introspection is independent of object identity, copies, and storage. */
+export const metadataUrlKeys = (schema: unknown): ReadonlySet<string> =>
+  new Set(
+    isRecord(schema)
+      ? Object.entries(schema)
+          .filter(([, child]) => child === "url")
+          .map(([key]) => key)
+      : [],
+  );
 
-  constructor(keys: ReadonlySet<string>, schema: unknown) {
-    this.keys = keys;
-    this.schema = schema;
-  }
-}
-
-const declarationOf = (container: unknown) => {
-  if (typeof container !== "object" || container === null) {
-    return undefined;
-  }
-  const declaration: unknown = Object.getOwnPropertyDescriptor(
-    container,
-    declarationSymbol,
-  )?.value;
-  return declaration instanceof MetadataUrlDeclaration
-    ? declaration
-    : undefined;
-};
-
-/** Only explicit producer declarations authorize a scalar URL to bypass display-text projection. */
-export const metadataUrlKeys = (container: unknown): ReadonlySet<string> =>
-  declarationOf(container)?.keys ?? new Set<string>();
-
-export const approvedMetadataUrl = (
-  container: unknown,
-  key: string,
-): SafeHref | undefined => {
-  if (
-    !metadataUrlKeys(container).has(key) ||
-    typeof container !== "object" ||
-    container === null
-  ) {
-    return undefined;
-  }
-  const value: unknown = Reflect.get(container, key);
-  if (typeof value !== "string") {
-    return panic("Declared metadata URL must remain a scalar string");
-  }
-  const approved = toMetadataUrl(value, "decoded");
-  if (approved === undefined || approved instanceof MetadataUrlDefect) {
-    return panic("Declared metadata URL changed after approval");
-  }
-  return approved;
-};
-
-const mark = <Container extends object>(
-  container: Container,
-  keys: ReadonlySet<string>,
+export const metadataUrlChildSchema = (
   schema: unknown,
-) => {
-  Object.defineProperty(container, declarationSymbol, {
-    value: new MetadataUrlDeclaration(keys, schema),
-    configurable: true,
-    enumerable: false,
-  });
-  return container;
+  key: string,
+): unknown => {
+  if (!isRecord(schema)) {
+    return undefined;
+  }
+  if (
+    (schema["preserve"] === "string" || schema["preserve"] === "opaque") &&
+    isRecord(schema["object"])
+  ) {
+    return schema["object"][key];
+  }
+  return schema[key];
 };
+export const metadataUrlItemSchema = (schema: unknown): unknown =>
+  isRecord(schema) ? schema["items"] : undefined;
 
-/** Storage clones retain exact declarations only while every approved scalar is unchanged. */
-export const preserveMetadataUrlDeclarations = <Container extends object>(
-  source: unknown,
-  target: Container,
-) => {
-  const declaration = declarationOf(source);
-  if (declaration === undefined) {
-    return target;
-  }
-  const keys = new Set(metadataUrlKeys(target));
-  for (const key of declaration.keys) {
-    if (typeof source !== "object" || source === null) {
-      return panic("Metadata declaration lost its container");
+/** Contract addresses also cover absent leaves and empty arrays. */
+export const metadataUrlAddresses = (schema: unknown): readonly string[] => {
+  const addresses: string[] = [];
+  const visit = (node: unknown, address: string) => {
+    if (node === "url") {
+      addresses.push(address);
+      return;
     }
-    if (Reflect.get(source, key) !== Reflect.get(target, key)) {
-      // A fresh producer may intentionally replace a replayed subtree, but
-      // its independently approved target declaration must own that scalar.
-      if (keys.has(key) && approvedMetadataUrl(target, key) !== undefined) {
-        continue;
-      }
-      return panic("Approved metadata URL changed during metadata copying");
+    if (!isRecord(node)) {
+      return;
     }
-    keys.add(key);
-  }
-  if (typeof source === "object" && source !== null) {
-    for (const key of Object.keys(source)) {
-      const sourceChild: unknown = Reflect.get(source, key);
-      const targetChild: unknown = Reflect.get(target, key);
-      if (
-        typeof sourceChild === "object" &&
-        sourceChild !== null &&
-        typeof targetChild === "object" &&
-        targetChild !== null
-      ) {
-        preserveMetadataUrlDeclarations(sourceChild, targetChild);
-      }
+    if (Object.hasOwn(node, "items")) {
+      visit(node["items"], `${address}[*]`);
+      return;
     }
-  }
-  const targetDeclaration = declarationOf(target);
-  const schema =
-    isRecord(declaration.schema) && isRecord(targetDeclaration?.schema)
-      ? { ...declaration.schema, ...targetDeclaration.schema }
-      : declaration.schema;
-  if (isRecord(source)) {
-    const diagnostics = mergeDiagnostics(
-      source[META_URL_DIAGNOSTICS],
-      Reflect.get(target, META_URL_DIAGNOSTICS),
-    );
-    if (diagnostics.length > 0) {
-      Reflect.set(target, META_URL_DIAGNOSTICS, diagnostics);
+    if (node["preserve"] === "string" || node["preserve"] === "opaque") {
+      visit(node["object"], address);
+      return;
     }
-  }
-  return mark(target, keys, schema);
+    for (const [key, child] of Object.entries(node)) {
+      visit(child, address === "" ? key : `${address}.${key}`);
+    }
+  };
+  visit(schema, "");
+  return addresses;
 };
 
 type ProjectionOptions = {
   value: unknown;
   schema: unknown;
   address: string;
-  diagnostics: UrlDiagnostic[];
+  diagnostics: DiagnosticState;
+  mode: "source" | "stored";
 };
+type UrlProjectionOptions = Pick<
+  ProjectionOptions,
+  "value" | "address" | "diagnostics"
+>;
+
+const projectUrl = ({ value, address, diagnostics }: UrlProjectionOptions) => {
+  if (value !== undefined) {
+    diagnostics.present.add(address);
+  }
+  if (value === undefined || value === null) {
+    return value;
+  }
+  if (typeof value !== "string" && !(value instanceof MetadataUrlDefect)) {
+    recordDefect(diagnostics, { address, reason: "unsupported-url-value" });
+    return undefined;
+  }
+  const url =
+    value instanceof MetadataUrlDefect
+      ? value
+      : toMetadataUrl(value, "decoded");
+  if (url instanceof MetadataUrlDefect) {
+    recordDefect(diagnostics, { address, reason: url.reason });
+    return undefined;
+  }
+  return url;
+};
+
 const project = ({
   value,
   schema,
   address,
   diagnostics,
+  mode,
 }: ProjectionOptions): unknown => {
   if (schema === "url") {
-    if (value === undefined || value === null) {
-      return undefined;
-    }
-    let url: SourceUrl;
-    if (value instanceof MetadataUrlDefect) {
-      url = value;
-    } else if (typeof value === "string") {
-      url = toMetadataUrl(value, "decoded");
-    } else {
-      url = new MetadataUrlDefect({
-        message: "Metadata URL must be a scalar string",
-        reason: "unsupported-url-value",
-      });
-    }
-    if (url instanceof MetadataUrlDefect) {
-      diagnostics.push({ address, reason: url.reason });
-      return undefined;
-    }
-    return url;
+    return projectUrl({ value, address, diagnostics });
   }
   if (value === undefined || value === null) {
     return value;
@@ -216,32 +227,63 @@ const project = ({
   if (!isRecord(schema)) {
     return panic("Metadata URL declaration must be an explicit schema");
   }
-  if (Object.keys(schema).length === 1 && Object.hasOwn(schema, "items")) {
-    if (!Array.isArray(value)) {
-      return panic(
-        "Metadata URL array declaration does not match its producer",
-      );
+  if (schema["preserve"] === "opaque") {
+    const unwrapped =
+      mode === "source" &&
+      isRecord(value) &&
+      value["type"] === "metadata-url-opaque" &&
+      Object.hasOwn(value, "value")
+        ? value["value"]
+        : value;
+    if (!isRecord(unwrapped)) {
+      return unwrapped;
     }
-    const keys = new Set<string>();
-    const projected = value.map((entry: unknown, index) => {
+    return project({
+      value: unwrapped,
+      schema: schema["object"],
+      address,
+      diagnostics,
+      mode,
+    });
+  }
+  if (schema["preserve"] === "string" && typeof value === "string") {
+    return value;
+  }
+  if (schema["preserve"] === "string") {
+    return project({
+      value,
+      schema: schema["object"],
+      address,
+      diagnostics,
+      mode,
+    });
+  }
+  if (Object.hasOwn(schema, "items")) {
+    if (schema["items"] === "url") {
+      return panic("Scalar URL arrays have no metadata schema contract");
+    }
+    if (!Array.isArray(value)) {
+      recordDefect(diagnostics, { address, reason: "unsupported-url-value" });
+      return undefined;
+    }
+    const projected: unknown[] = [];
+    for (const [index, entry] of value.entries()) {
       const item = project({
         value: entry,
         schema: schema["items"],
         address: `${address}[${index}]`,
         diagnostics,
+        mode,
       });
-      if (schema["items"] === "url" && typeof item === "string") {
-        keys.add(String(index));
-      }
-      return item === undefined ? null : item;
-    });
-    return mark(projected, keys, schema);
+      projected.push(item === undefined ? null : item);
+    }
+    return projected;
   }
   if (!isRecord(value)) {
-    return panic("Metadata URL object declaration does not match its producer");
+    recordDefect(diagnostics, { address, reason: "unsupported-url-value" });
+    return undefined;
   }
   const projected = new Map(Object.entries(value));
-  const keys = new Set<string>();
   for (const [key, childSchema] of Object.entries(schema)) {
     if (childSchema === undefined) {
       continue;
@@ -251,68 +293,84 @@ const project = ({
       schema: childSchema,
       address: address === "" ? key : `${address}.${key}`,
       diagnostics,
+      mode,
     });
     if (child === undefined) {
       projected.delete(key);
     } else {
       projected.set(key, child);
-      if (childSchema === "url" && typeof child === "string") {
-        keys.add(key);
-      }
     }
   }
-  return mark(Object.fromEntries(projected), keys, schema);
+  return Object.fromEntries(projected);
 };
 
-const projectMetadata = (metadata: unknown, schema: unknown) => {
-  const diagnostics: UrlDiagnostic[] = [];
+const projectMetadata = (
+  metadata: unknown,
+  schema: unknown,
+  mode: "source" | "stored",
+) => {
+  const diagnostics: DiagnosticState = {
+    entries: [],
+    overflow: 0,
+    present: new Set(),
+  };
   const projected = project({
     value: metadata,
     schema,
     address: "",
     diagnostics,
+    mode,
   });
   if (!isRecord(projected)) {
-    return panic("Metadata URL contract requires an object root");
+    return {
+      [META_URL_DIAGNOSTICS]: [
+        { address: "", reason: "unsupported-url-value" },
+      ],
+    };
   }
-  if (diagnostics.length > 0) {
-    projected[META_URL_DIAGNOSTICS] = mergeDiagnostics(
-      projected[META_URL_DIAGNOSTICS],
-      diagnostics,
+  const previous =
+    mode === "stored" ? readDiagnostics(projected[META_URL_DIAGNOSTICS]) : [];
+  delete projected.metadataUrlDiagnostics;
+  const storedSidecar =
+    mode === "stored" && isRecord(metadata)
+      ? metadata[META_URL_DIAGNOSTICS]
+      : undefined;
+  const tail = Array.isArray(storedSidecar) ? storedSidecar.at(-1) : undefined;
+  const priorOverflow: unknown = isRecord(tail)
+    ? tail["overflowCount"]
+    : undefined;
+  // Persisted omissions retain their bounded diagnostic snapshot; a current value supersedes it.
+  for (const diagnostic of previous) {
+    if (!diagnostics.present.has(diagnostic.address)) {
+      recordDefect(diagnostics, diagnostic);
+    }
+  }
+  if (
+    mode === "stored" &&
+    typeof priorOverflow === "number" &&
+    Number.isSafeInteger(priorOverflow) &&
+    priorOverflow > 0
+  ) {
+    diagnostics.overflow = Math.min(
+      Number.MAX_SAFE_INTEGER,
+      diagnostics.overflow + priorOverflow,
     );
+  }
+  if (diagnostics.entries.length > 0 || diagnostics.overflow > 0) {
+    projected[META_URL_DIAGNOSTICS] =
+      diagnostics.overflow > 0
+        ? [...diagnostics.entries, { overflowCount: diagnostics.overflow }]
+        : diagnostics.entries;
   }
   return projected;
 };
 
-/** Source producers must construct every declared leaf before this boundary. */
+/** Fresh producers derive diagnostics from their current constructed leaves only. */
 export const approveMetadataUrls = <Metadata extends Record<string, unknown>>(
   metadata: Metadata,
-  schema: MetadataUrlSchema<NoInfer<Metadata>>,
-) => projectMetadata(metadata, schema);
+  schema: NoInfer<MetadataUrlSchema<Metadata>>,
+) => projectMetadata(metadata, schema, "source");
 
-/** Reload uses the producer's contract, validating persisted scalars without decoding entities again. */
+/** Stored URL strings are validated without entity decoding or dependence on hidden state. */
 export const rehydrateMetadataUrls = (metadata: unknown, schema: unknown) =>
-  projectMetadata(metadata, schema);
-
-/** Contract addresses remain available for empty arrays and absent optional leaves. */
-export const metadataUrlAddresses = (metadata: unknown): readonly string[] => {
-  const addresses: string[] = [];
-  const visit = (schema: unknown, address: string) => {
-    if (schema === "url") {
-      addresses.push(address);
-      return;
-    }
-    if (!isRecord(schema)) {
-      return;
-    }
-    if (Object.keys(schema).length === 1 && Object.hasOwn(schema, "items")) {
-      visit(schema["items"], `${address}[*]`);
-      return;
-    }
-    for (const [key, child] of Object.entries(schema)) {
-      visit(child, address === "" ? key : `${address}.${key}`);
-    }
-  };
-  visit(declarationOf(metadata)?.schema, "");
-  return addresses;
-};
+  projectMetadata(metadata, schema, "stored");

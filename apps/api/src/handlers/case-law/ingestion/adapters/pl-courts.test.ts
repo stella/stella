@@ -20,7 +20,6 @@ import type {
   SourceRawParts,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import {
-  PL_COURTS_METADATA_URL_SCHEMA,
   buildPlDecision,
   normalizeSaosDumpItem,
   plCourtsAdapter,
@@ -35,6 +34,8 @@ import {
   installRecordingAnalytics,
   installRecordingLogger,
 } from "@/api/tests/helpers/recording-telemetry";
+
+import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
 
 const FIXTURES = new URL("__fixtures__/", import.meta.url);
 
@@ -402,6 +403,9 @@ describe("pl-courts replays a stored row", () => {
 
 describe("declared metadata URLs remain scalar across projection and reload", () => {
   for (const entry of [
+    { input: null, expected: null },
+    { input: "", empty: true },
+    { input: "   ", empty: true },
     {
       input: "https://publisher.example/item?a=1&amp;b=2",
       expected: "https://publisher.example/item?a=1&amp;b=2",
@@ -425,7 +429,7 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       reason: "invalid-url",
     },
   ]) {
-    test(entry.input, async () => {
+    test(String(entry.input), async () => {
       const { input } = entry;
       const recorded = await detailRecord(CHAMBER_DETAIL);
       const division = isRecord(recorded["division"])
@@ -448,13 +452,17 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
           source: { ...source, judgmentUrl: input },
         },
       });
-      const repeated = toPlainTextIngestionResult(decision).unwrap().metadata;
+      const repeated = toPlainTextIngestionResult(
+        decision,
+        PL_COURTS_METADATA_URL_SCHEMA,
+      ).unwrap().metadata;
       const serializedMetadata = JSON.stringify(decision.metadata);
       const restored = toPlainTextMetadataObject(
         rehydrateMetadataUrls(
           JSON.parse(serializedMetadata),
           PL_COURTS_METADATA_URL_SCHEMA,
         ),
+        PL_COURTS_METADATA_URL_SCHEMA,
       ).unwrap();
       const addresses = [
         "href",
@@ -472,8 +480,12 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
             expect(metadata).not.toHaveProperty(address);
           }
         }
+        if ("empty" in entry) {
+          expect(metadata["metadataUrlDiagnostics"]).toBeUndefined();
+        }
         if ("reason" in entry) {
-          expect(metadata["metadataUrlDiagnostics"]).toEqual(
+          expect(metadata).toHaveProperty(
+            "metadataUrlDiagnostics",
             expect.arrayContaining(
               addresses.map((address) => ({ address, reason: entry.reason })),
             ),
@@ -482,4 +494,37 @@ describe("declared metadata URLs remain scalar across projection and reload", ()
       }
     });
   }
+});
+
+test("SAOS preserves publisher nulls and an opaque string division chamber", async () => {
+  const recorded = await detailRecord(CHAMBER_DETAIL);
+  const decision = decisionFrom({
+    listingRow: { ...recorded, href: null, chambers: null },
+    detail: {
+      ...recorded,
+      href: null,
+      division: { id: 1, name: "Division", href: null, chamber: "Izba" },
+      chambers: null,
+    },
+  });
+  expect(decision.metadata).toHaveProperty("href", null);
+  expect(decision.metadata).toHaveProperty("division.href", null);
+  expect(decision.metadata).toHaveProperty("division.chamber", "Izba");
+  expect(decision.metadata).toHaveProperty("chambers", null);
+  expect(decision.metadata["metadataUrlDiagnostics"]).toBeUndefined();
+});
+
+test("SAOS detail-only null URL and chambers override an omitted listing value", async () => {
+  const recorded = await detailRecord(CHAMBER_DETAIL);
+  const listing = Object.fromEntries(
+    Object.entries(recorded).filter(
+      ([key]) => key !== "href" && key !== "chambers",
+    ),
+  );
+  const decision = decisionFrom({
+    listingRow: listing,
+    detail: { ...recorded, href: null, chambers: null },
+  });
+  expect(decision.metadata).toHaveProperty("href", null);
+  expect(decision.metadata).toHaveProperty("chambers", null);
 });

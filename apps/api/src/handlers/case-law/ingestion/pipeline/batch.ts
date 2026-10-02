@@ -42,6 +42,7 @@ import type {
   CorpusPackBatch,
   CorpusPackBatchOutcomes,
 } from "@/api/lib/legal-search/corpus-pack-batch";
+import { metadataUrlSchemaForAdapter } from "@/api/lib/legal-search/metadata-url-schemas";
 import { failureSink, gradeFailure } from "@/api/lib/observability/failure";
 import { readEvidence } from "@/api/lib/observability/failure-evidence";
 import { logger } from "@/api/lib/observability/logger";
@@ -587,6 +588,7 @@ export const applyDecisionBatch = async ({
         try: async () =>
           // db-await-in-loop: per-decision ingest pipeline: identity locks, corpus write, upsert, citations, ordered per observation
           await processDecision({
+            metadataUrlSchema: metadataUrlSchemaForAdapter(context.adapterKey),
             input,
             sourceId,
             scopedDb,

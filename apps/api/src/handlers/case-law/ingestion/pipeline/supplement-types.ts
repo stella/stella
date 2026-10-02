@@ -71,6 +71,7 @@ export type ProcessSupplementResult =
     };
 
 export type ProcessSupplementOptions = {
+  metadataUrlSchema?: unknown;
   supplement: DecisionSupplement;
   sourceId: SafeId<"caseLawSource">;
   scopedDb: ScopedDb;

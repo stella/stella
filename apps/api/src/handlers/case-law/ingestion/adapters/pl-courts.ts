@@ -78,13 +78,15 @@ import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
 import { DOCUMENT_ROLE_UNMAPPED } from "@/api/lib/legal-search/document-role-diagnostics";
-import { approveMetadataUrls } from "@/api/lib/legal-search/metadata-urls";
+import { opaqueMetadataValue } from "@/api/lib/legal-search/metadata-urls";
 import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
 import { toMetadataUrl } from "@/api/lib/sanitize-url";
 import { isRecord } from "@/api/lib/type-guards";
+
+import { PL_COURTS_METADATA_URL_SCHEMA } from "./pl-courts.metadata-urls";
 
 /**
  * Polish Courts adapter (SAOS).
@@ -458,13 +460,6 @@ type SaosJudge = {
   specialRoles?: string[] | null;
 };
 
-export const PL_COURTS_METADATA_URL_SCHEMA = {
-  href: "url",
-  division: { href: "url", court: { href: "url" }, chamber: { href: "url" } },
-  chambers: { items: { href: "url" } },
-  source: { judgmentUrl: "url" },
-} as const;
-
 type SaosCourtCase = {
   caseNumber?: string | null;
 };
@@ -484,7 +479,7 @@ type SaosDivision = {
   code?: string | null;
   type?: string | null;
   court?: SaosCourt | null;
-  chamber?: SaosChamber | null;
+  chamber?: unknown;
 };
 
 type SaosSource = {
@@ -626,8 +621,7 @@ const isSaosDivision = (value: unknown): value is SaosDivision =>
   isNullishString(value["name"]) &&
   isNullishString(value["code"]) &&
   isNullishString(value["type"]) &&
-  isNullishValue(value["court"], isSaosCourt) &&
-  isNullishValue(value["chamber"], isSaosChamber);
+  isNullishValue(value["court"], isSaosCourt);
 
 const isSaosSource = (value: unknown): value is SaosSource =>
   isRecord(value) &&
@@ -1460,7 +1454,20 @@ export const buildPlDecision = ({
   const effectiveCourtCases = item.courtCases ?? dumpItem.courtCases;
   const effectiveJudges = item.judges ?? dumpItem.judges;
   const effectiveDivision = item.division ?? dumpItem.division;
-  const effectiveChambers = item.chambers ?? dumpItem.chambers;
+  const effectiveChambers =
+    item.chambers === undefined ? dumpItem.chambers : item.chambers;
+  const metadataChambers = (() => {
+    if (effectiveChambers === null || effectiveChambers === undefined)
+      {return effectiveChambers;}
+    const chambers = [];
+    for (const chamber of effectiveChambers) {
+      chambers.push({
+        ...chamber,
+        href: toMetadataUrl(chamber.href, "transport-json"),
+      });
+    }
+    return chambers;
+  })();
   const effectiveSource = item.source ?? dumpItem.source;
   const dissentingOpinions = normalizeDissentingOpinions(
     normalizeOptionalArray(
@@ -1552,34 +1559,37 @@ export const buildPlDecision = ({
     .map((referenced) => referenced.caseNumber?.trim() ?? "")
     .filter((caseNo) => caseNo.length > 0);
 
-  return plainTextIngestionResult({
-    caseNumber,
-    ...(firstPublisherIdentifier === undefined
-      ? {}
-      : {
-          identifiers: [firstPublisherIdentifier, ...otherPublisherIdentifiers],
-        }),
-    court: courtName,
-    country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].country,
-    language: "pl",
-    decisionDate,
-    decisionType: storedDecisionType,
-    documentRole,
-    fulltext,
-    sourceDocumentId: plCourtsSourceDocumentId(saosId),
-    sourceUrl: publicSourceUrl(saosId),
-    documentUrl,
-    publisherCitedCases,
-    judges,
-    textFields: {
-      ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-      summary: sourceTextField(
-        ADAPTER_KEYS.PL_COURTS,
-        detailOrListing(item.summary, dumpItem.summary),
-      ),
-    },
-    metadata: checkedDecisionMetadata(
-      approveMetadataUrls(
+  return plainTextIngestionResult(
+    {
+      caseNumber,
+      ...(firstPublisherIdentifier === undefined
+        ? {}
+        : {
+            identifiers: [
+              firstPublisherIdentifier,
+              ...otherPublisherIdentifiers,
+            ],
+          }),
+      court: courtName,
+      country: ADAPTER_MANIFESTS[ADAPTER_KEYS.PL_COURTS].country,
+      language: "pl",
+      decisionDate,
+      decisionType: storedDecisionType,
+      documentRole,
+      fulltext,
+      sourceDocumentId: plCourtsSourceDocumentId(saosId),
+      sourceUrl: publicSourceUrl(saosId),
+      documentUrl,
+      publisherCitedCases,
+      judges,
+      textFields: {
+        ...absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        summary: sourceTextField(
+          ADAPTER_KEYS.PL_COURTS,
+          detailOrListing(item.summary, dumpItem.summary),
+        ),
+      },
+      metadata: checkedDecisionMetadata(
         {
           caseNumber,
           court: courtName,
@@ -1587,7 +1597,7 @@ export const buildPlDecision = ({
           decisionType: storedDecisionType,
           saosId,
           href: toMetadataUrl(
-            detailOrListing(item.href, dumpItem.href),
+            item.href === undefined ? dumpItem.href : item.href,
             "transport-json",
           ),
           courtType: detailOrListing(item.courtType, dumpItem.courtType),
@@ -1615,22 +1625,17 @@ export const buildPlDecision = ({
                             "transport-json",
                           ),
                         },
-                  chamber:
-                    effectiveDivision.chamber === null ||
-                    effectiveDivision.chamber === undefined
-                      ? effectiveDivision.chamber
-                      : {
-                          ...effectiveDivision.chamber,
-                          href: toMetadataUrl(
-                            effectiveDivision.chamber.href,
-                            "transport-json",
-                          ),
-                        },
+                  chamber: !isSaosChamber(effectiveDivision.chamber)
+                    ? opaqueMetadataValue(effectiveDivision.chamber)
+                    : {
+                        ...effectiveDivision.chamber,
+                        href: toMetadataUrl(
+                          effectiveDivision.chamber.href,
+                          "transport-json",
+                        ),
+                      },
                 },
-          chambers: effectiveChambers?.map((chamber) => ({
-            ...chamber,
-            href: toMetadataUrl(chamber.href, "transport-json"),
-          })),
+          chambers: metadataChambers,
           personnelType: detailOrListing(
             item.personnelType,
             dumpItem.personnelType,
@@ -1688,13 +1693,14 @@ export const buildPlDecision = ({
         },
         PL_COURTS_METADATA_URL_SCHEMA,
       ),
-    ),
-    rawHash,
-    parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],
-    documentAst,
-    sourceRaw: encodeSourceRawEnvelope(rawParts),
-    sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
-  });
+      rawHash,
+      parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.PL_COURTS],
+      documentAst,
+      sourceRaw: encodeSourceRawEnvelope(rawParts),
+      sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
+    },
+    PL_COURTS_METADATA_URL_SCHEMA,
+  );
 };
 
 /**

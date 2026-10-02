@@ -6,6 +6,7 @@
  */
 
 import { describe, expect, test } from "bun:test";
+import * as cheerio from "cheerio";
 
 import {
   listPlTkPageFields,
@@ -68,8 +69,10 @@ describe("the case record", () => {
       "art. 111 par. 4",
     );
     expect(page?.record.constitutionalStandards[0]?.provisions).toHaveLength(7);
-    expect(page?.record.caseDocuments.map(({ url }) => url)).toContain(
-      "https://ipo.trybunal.gov.pl/ipo/dok?dok=a6aff75e-4944-4044-9015-b6af062d09c2%2FK_2_26_2026_06_25_transkrypcja.pdf",
+    expect(page?.record.caseDocuments.map(({ url }) => url)).toEqual(
+      expect.arrayContaining([
+        "https://ipo.trybunal.gov.pl/ipo/dok?dok=a6aff75e-4944-4044-9015-b6af062d09c2%2FK_2_26_2026_06_25_transkrypcja.pdf",
+      ]),
     );
   });
 
@@ -126,7 +129,8 @@ describe("one ruling's tab", () => {
       { name: "Wojciech Sych", judgeId: "630", functions: ["sprawozdawca"] },
       { name: "Andrzej Zielonacki", judgeId: "570", functions: [] },
     ]);
-    expect(ruling.wordDocumentUrl).toBe(
+    expect(ruling).toHaveProperty(
+      "wordDocumentUrl",
       "https://ipo.trybunal.gov.pl/ipo/downloadOrzeczenieDoc?dok=124529",
     );
   });
@@ -146,7 +150,7 @@ describe("one ruling's tab", () => {
     const ruling = await rulingOf("pl-tk-case-k-44-16.html.gz", "16940");
 
     expect(ruling.decisionForm).toBe("Rozstrzygnięcie");
-    expect(ruling.publications).toEqual([
+    expect(ruling).toHaveProperty("publications", [
       {
         text: "OTK ZU A/2018, poz. 33",
         links: [
@@ -413,3 +417,31 @@ describe("the court a ruling names", () => {
     expect(court).toBeUndefined();
   });
 });
+
+for (const href of [
+  "/ipo/dok?dok=F 1.pdf",
+  "/ipo/dok?dok=F:1.pdf",
+  "",
+  "   ",
+  `java${"script"}:alert(1)`,
+]) {
+  test(`portal document links retain known-base resolution or whole-entry omission: ${href}`, async () => {
+    const $ = cheerio.load(await casePage("pl-tk-case-k-2-26.html.gz"));
+    const documents = $('[id="sprawaForm:tabView:dokumentyWSprawie"]');
+    documents.empty().append("<ul><li><a>Document</a></li></ul>");
+    documents.find("a").attr("href", href);
+    const page = readPlTkCasePage($.html());
+    expect(page).not.toBeNull();
+    expect(page?.record).toHaveProperty(
+      "caseDocuments",
+      href.startsWith("/")
+        ? [
+            {
+              text: "Document",
+              url: new URL(href, "https://ipo.trybunal.gov.pl/ipo/").href,
+            },
+          ]
+        : [],
+    );
+  });
+}

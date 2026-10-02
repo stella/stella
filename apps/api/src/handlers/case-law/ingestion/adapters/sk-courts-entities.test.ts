@@ -101,7 +101,7 @@ describe("Slovak court display text decodes publisher entities to stable text", 
         originCourt: "Okresný súd Žilina",
         originCaseNumber: "1C/2/2024",
         referencedLegislation: [
-          { nazov: "Zákon & predpis", url: "https://example.org/?a=1&b=2" },
+          { nazov: "Zákon & predpis", url: "https://example.org/?a=1&amp;b=2" },
         ],
         courtRegistry: {
           nazov: "Okresný súd Bratislava I",

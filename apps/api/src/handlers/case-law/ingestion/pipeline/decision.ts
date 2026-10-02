@@ -132,6 +132,7 @@ const settleRowWriteStatus = async ({
  * contention the caller reconciles by running the attempt again.
  */
 const runDecisionAttempt = async ({
+  metadataUrlSchema,
   input,
   judges,
   sourceId,
@@ -143,7 +144,7 @@ const runDecisionAttempt = async ({
   corpusBatch,
   polarityRules,
 }: ProcessDecisionAttemptOptions): Promise<AttemptStep> => {
-  const observation = observeDecision({ input, sourceId });
+  const observation = observeDecision({ input, sourceId, metadataUrlSchema });
   const proposedDecisionId = createSafeId<"caseLawDecision">();
 
   // Opened before the read below that proves the decision is not erased, so
@@ -174,10 +175,11 @@ const runDecisionAttempt = async ({
 
   const composedSupplements =
     composition === null ? [] : composition.supplements;
-  const result = composeDecisionWithSupplements(
-    observation.observed,
-    composedSupplements,
-  );
+  const result = composeDecisionWithSupplements({
+    judgment: observation.observed,
+    supplements: composedSupplements,
+    metadataUrlSchema,
+  });
   const shape = classifyObservation({ result, existing });
 
   const existingPolicyOutcome = await resolveExistingDecisionPolicy({
@@ -216,6 +218,7 @@ const runDecisionAttempt = async ({
   const attempted = await Result.tryPromise({
     try: async () => {
       const planned = await planDecisionWrite({
+        metadataUrlSchema,
         result,
         existing,
         decisionId,
