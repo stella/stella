@@ -1457,8 +1457,9 @@ export const buildPlDecision = ({
   const effectiveChambers =
     item.chambers === undefined ? dumpItem.chambers : item.chambers;
   const metadataChambers = (() => {
-    if (effectiveChambers === null || effectiveChambers === undefined)
-      {return effectiveChambers;}
+    if (effectiveChambers === null || effectiveChambers === undefined) {
+      return effectiveChambers;
+    }
     const chambers = [];
     for (const chamber of effectiveChambers) {
       chambers.push({
