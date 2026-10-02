@@ -230,9 +230,9 @@ describe("accepted extraction kickoff", () => {
                 return () => undefined;
               },
             },
-            run: async (signal) => {
+            run: async (signal, control) => {
               leaseSignal = signal;
-              return await options.run(signal);
+              return await options.run(signal, control);
             },
           });
         const kickoff: typeof runQueuedKickoff = async (options) =>

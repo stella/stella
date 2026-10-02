@@ -73,7 +73,7 @@ export type StartFlowRunResult = {
 };
 
 /** Snapshot fields a run freezes from its definition at start. */
-export type FlowRunDefinitionSnapshotInput = {
+type FlowRunDefinitionSnapshotInput = {
   name: string;
   steps: FlowStep[];
 };

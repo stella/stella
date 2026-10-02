@@ -137,7 +137,10 @@ describe("queued action admission", () => {
         expect(actionKind).toBe(BACKGROUND_ACTION_KIND.flow);
         expect(periodIdentity).toBeUndefined();
         return await Result.tryPromise({
-          try: async () => await run(lease.signal),
+          try: async () =>
+            await run(lease.signal, {
+              reservePeriod: async () => Result.ok(undefined),
+            }),
           catch: (error: unknown) => error,
         });
       };

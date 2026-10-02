@@ -60,7 +60,7 @@ export const runQueuedKickoff = async <T>({
   const result = await admission({
     organizationId,
     userId,
-    organizationStateDb,
+    ...(organizationStateDb !== undefined && { organizationStateDb }),
     execution: "queued-kickoff",
     periodIdentity: { actionKind, logicalPhaseId },
     periodReservation,

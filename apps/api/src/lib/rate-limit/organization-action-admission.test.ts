@@ -17,7 +17,11 @@ import type { OrganizationActionState } from "@/api/lib/usage/organization-actio
 import { mcpActionPeriodIdentity } from "@/api/mcp/action-admission-identity";
 
 import { withActionAdmission } from "./action-admission";
-import { ACTION_KINDS, type AdmittedActionIdentity } from "./action-kinds";
+import {
+  ACTION_KINDS,
+  type AdmittedActionIdentity,
+  type PeriodActionKind,
+} from "./action-kinds";
 import {
   ACTION_SERVICE_DEADLINE_EXPIRED,
   ACTION_SERVICE_DEADLINE_SCRIPT,
@@ -370,10 +374,12 @@ describe("organization budgets at action admission", () => {
       (kind): kind is keyof typeof ACTION_KINDS =>
         Object.hasOwn(ACTION_KINDS, kind),
     );
-    for (const actionKind of actionKinds) {
-      if (!ACTION_KINDS[actionKind].consumesServices) {
-        continue;
-      }
+    const periodKinds = actionKinds.filter(
+      (kind): kind is PeriodActionKind =>
+        ACTION_KINDS[kind].admission === "period" &&
+        ACTION_KINDS[kind].consumesServices,
+    );
+    for (const actionKind of periodKinds) {
       for (const { state, limit } of stateCases) {
         const redis = recordingRedis();
         const reads: unknown[] = [];
