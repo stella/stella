@@ -53,6 +53,7 @@ import { RECONCILE_STYLE_SET_PACKAGE_CLEANUPS_TASK } from "@/api/lib/scheduler/t
 import { CLEAN_TEMPLATE_DELETION_OBJECTS_TASK } from "@/api/lib/scheduler/tasks/template-deletion-cleanup";
 import { WORK_ATTENTION_SCOUT_TASK } from "@/api/lib/scheduler/tasks/work-attention-scout";
 import { BACKFILL_WORK_OBLIGATIONS_TASK } from "@/api/lib/scheduler/tasks/work-obligation-backfill";
+import type { SchedulerDb } from "@/api/lib/scheduler/types";
 
 type SchedulerJobDefinition = {
   id: string;
@@ -64,17 +65,26 @@ type SchedulerJobDefinition = {
   enabled?: boolean;
 };
 
-export const ensureSchedulerJob = async ({
-  description,
-  enabled = true,
-  id,
-  payload = null,
-  payloadUpdate = "replace",
-  schedule,
-  task,
-}: SchedulerJobDefinition): Promise<void> => {
+export const ensureSchedulerJob = async (
+  definition: SchedulerJobDefinition,
+): Promise<void> => {
+  await upsertSchedulerJob(definition, rootDb);
+};
+
+export const upsertSchedulerJob = async (
+  {
+    description,
+    enabled = true,
+    id,
+    payload = null,
+    payloadUpdate = "replace",
+    schedule,
+    task,
+  }: SchedulerJobDefinition,
+  db: SchedulerDb,
+): Promise<void> => {
   const nextRunAt = computeNextRunAt(schedule);
-  const [existingJob] = await rootDb
+  const [existingJob] = await db
     .select({
       schedule: schedulerJobs.schedule,
       task: schedulerJobs.task,
@@ -87,7 +97,7 @@ export const ensureSchedulerJob = async ({
     existingJob.task !== task ||
     !sameSchedule(existingJob.schedule, schedule);
 
-  await rootDb
+  await db
     .insert(schedulerJobs)
     .values({
       description,
@@ -542,7 +552,7 @@ export const ensureDefaultSchedulerJobs = async (): Promise<void> => {
   // declared. The registry is the discriminator, not the declared list, so
   // dynamically registered jobs (scheduled flows) are untouched. Disable
   // rather than delete: the row remains as an audit record, and a
-  // rollback's own registration re-enables it (the upsert sets `enabled`).
+  // rollback requires an explicit operator re-enable.
   // One guarded update, so a concurrent change to a row's task or enabled
   // state cannot be overwritten from a stale read; only rows the update
   // actually changed are logged.
