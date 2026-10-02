@@ -110,7 +110,9 @@ describe("single membership roles", () => {
         `role-new-${Bun.randomUUIDv7()}@stella.dev`,
       );
       const add = await auth.api.addMember({
-        body: asTestRaw<Parameters<typeof auth.api.addMember>[0]["body"]>({
+        body: asTestRaw<
+          NonNullable<Parameters<typeof auth.api.addMember>[0]>["body"]
+        >({
           organizationId: organization.id,
           userId: newcomer.userId,
           role,
