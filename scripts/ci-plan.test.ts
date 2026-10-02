@@ -13,7 +13,7 @@ import { availableParallelism, tmpdir } from "node:os";
 import nodePath from "node:path";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
@@ -284,10 +284,7 @@ const runSelector = (
   ).plan;
 
 // Property samples are drawn up front and evaluated as one batch, since each
-// evaluation runs bash. fc.sample draws exactly the inputs fc.assert would
-// run under the same parameters; a test below pins that.
-const drawSamples = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) =>
-  fc.sample(arbitrary, propertyConfig({ numRuns }));
+// evaluation runs bash. Each sample's label carries its replay seed and index.
 
 const IMAGE_SMOKE_OUTPUTS = [
   "api_image_smoke_required",
@@ -300,15 +297,24 @@ const imageSmokePlan = (files: readonly string[]) =>
 const releaseExtraFiles = fc.array(fc.string(), { maxLength: 8 });
 
 test("every release requires both final image smokes regardless of other changed paths", () => {
-  const cases = drawSamples(releaseExtraFiles, 30).flatMap((files) => {
-    const safeFiles = files.filter((file) => !file.includes("\0"));
-    return [
-      ["VERSION", ...safeFiles],
-      [...safeFiles, "VERSION"],
-    ].map((changed) => ({ files: changed, outputs: IMAGE_SMOKE_OUTPUTS }));
-  });
+  const cases = drawPropertySamples(releaseExtraFiles, { numRuns: 30 }).flatMap(
+    ({ value: files, label }) => {
+      const safeFiles = files.filter((file) => !file.includes("\0"));
+      return [
+        ["VERSION", ...safeFiles],
+        [...safeFiles, "VERSION"],
+      ].map((changed) => ({
+        files: changed,
+        outputs: IMAGE_SMOKE_OUTPUTS,
+        label,
+      }));
+    },
+  );
   for (const { item, plan } of planSelector(cases)) {
-    expect(plan, JSON.stringify(item.files)).toEqual(["true", "true"]);
+    expect(plan, `${item.label} ${JSON.stringify(item.files)}`).toEqual([
+      "true",
+      "true",
+    ]);
   }
 });
 
@@ -349,12 +355,18 @@ const unrelatedDocNames = fc.array(fc.uuid(), { maxLength: 8 });
 
 test("unrelated paths do not schedule final image smokes", () => {
   expect(imageSmokePlan([])).toEqual(["false", "false"]);
-  const cases = drawSamples(unrelatedDocNames, 30).map((names) => ({
-    files: names.map((name) => `docs/${name}.md`),
-    outputs: IMAGE_SMOKE_OUTPUTS,
-  }));
+  const cases = drawPropertySamples(unrelatedDocNames, { numRuns: 30 }).map(
+    ({ value: names, label }) => ({
+      files: names.map((name) => `docs/${name}.md`),
+      outputs: IMAGE_SMOKE_OUTPUTS,
+      label,
+    }),
+  );
   for (const { item, plan } of planSelector(cases)) {
-    expect(plan, JSON.stringify(item.files)).toEqual(["false", "false"]);
+    expect(plan, `${item.label} ${JSON.stringify(item.files)}`).toEqual([
+      "false",
+      "false",
+    ]);
   }
 });
 
@@ -542,31 +554,36 @@ const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
 
 test("a pull request builds the API image for arm64 unless it releases", () => {
   const outputs = ["api_image_platforms"];
-  const expectations = drawSamples(apiSourceSiblings, 10).flatMap((names) => {
+  const expectations = drawPropertySamples(apiSourceSiblings, {
+    numRuns: 10,
+  }).flatMap(({ value: names, label }) => {
     const files = ["apps/api/src/server.ts", ...names.map((n) => `${n}.ts`)];
     return [
-      { files, outputs, suiteDepth: "fast", platforms: ["linux/arm64"] },
+      { files, outputs, suiteDepth: "fast", platforms: ["linux/arm64"], label },
       {
         files: [...files, "VERSION"],
         outputs,
         suiteDepth: "fast",
         platforms: ["linux/amd64", "linux/arm64"],
+        label,
       },
       {
         files,
         outputs,
         suiteDepth: "full",
         platforms: ["linux/amd64", "linux/arm64"],
+        label,
       },
     ];
   });
   for (const {
-    item: { files, suiteDepth, platforms },
+    item: { files, suiteDepth, platforms, label },
     plan,
   } of planSelector(expectations)) {
-    expect(platformsOf(plan), `${suiteDepth} ${JSON.stringify(files)}`).toEqual(
-      platforms,
-    );
+    expect(
+      platformsOf(plan),
+      `${label} ${suiteDepth} ${JSON.stringify(files)}`,
+    ).toEqual(platforms);
   }
 });
 
@@ -1144,13 +1161,16 @@ test("the result gate evaluates every job in the workflow", () => {
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
   for (const {
-    item: [job, result, event],
+    item: { label },
     exitCode,
-  } of evaluateResults(drawSamples(failedGatedJobs, 100), ([j, r, e]) => ({
-    event: e,
-    results: { [j]: r },
-  }))) {
-    expect(exitCode, `${event} ${job} ${result}`).toBe(1);
+  } of evaluateResults(
+    drawPropertySamples(failedGatedJobs, { numRuns: 100 }),
+    ({ value: [job, result, event] }) => ({
+      event,
+      results: { [job]: result },
+    }),
+  )) {
+    expect(exitCode, label).toBe(1);
   }
 });
 
@@ -1179,17 +1199,17 @@ const unsuccessfulFullDepthJobs = fc.tuple(
 
 test("a full-depth run fails every planned job that did not succeed", () => {
   for (const {
-    item: [job, result, event],
+    item: { label },
     exitCode,
   } of evaluateResults(
-    drawSamples(unsuccessfulFullDepthJobs, 100),
-    ([j, r, e]) => ({
-      event: e,
-      results: { [j]: r },
+    drawPropertySamples(unsuccessfulFullDepthJobs, { numRuns: 100 }),
+    ({ value: [job, result, event] }) => ({
+      event,
+      results: { [job]: result },
       suiteDepth: SUITE_DEPTH.full,
     }),
   )) {
-    expect(exitCode, `${event} ${job} ${result}`).toBe(1);
+    expect(exitCode, label).toBe(1);
   }
 });
 
@@ -3276,13 +3296,18 @@ test("the selector plans the same with its detector CLIs spawned as served in pr
 }, 30_000);
 
 test("drawn property samples are the inputs fc.assert would run", () => {
+  // Both sides share one explicit seed: the exploratory tier leaves the
+  // default seed unset, which would give each draw an independent one.
+  const seed = 20_261_003;
+  const drawSamples = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) =>
+    drawPropertySamples(arbitrary, { numRuns, seed }).map(({ value }) => value);
   const draws = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) => {
     const asserted: T[] = [];
     fc.assert(
       fc.property(arbitrary, (value) => {
         asserted.push(value);
       }),
-      propertyConfig({ numRuns }),
+      propertyConfig({ numRuns, seed }),
     );
     return asserted;
   };
@@ -3312,7 +3337,7 @@ test("drawn property samples are the inputs fc.assert would run", () => {
         separate.push([job, result, event]);
       },
     ),
-    propertyConfig({ numRuns: 100 }),
+    propertyConfig({ numRuns: 100, seed }),
   );
   expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
 });

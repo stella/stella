@@ -4,7 +4,7 @@ import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 
-import { propertyConfig } from "@stll/property-testing";
+import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import { checkMigrationSources } from "./check-migration-safety";
 
@@ -686,16 +686,23 @@ describe("check-migration-safety", () => {
     // assert: no finding exactly when it prints no error and exits 0. Ten
     // spawns measure ~1 s; 30 s leaves a cold runner a margin above 20x.
     it("the CLI reports exactly the in-process findings for drawn samples", () => {
-      for (const sql of [
-        ...fc.sample(maskedSql, propertyConfig({ numRuns: 5 })),
-        ...fc.sample(executedSql, propertyConfig({ numRuns: 5 })),
+      for (const { value: sql, label } of [
+        ...drawPropertySamples(maskedSql, { numRuns: 5 }).map(
+          ({ value, label: drawn }) => ({ value, label: `maskedSql ${drawn}` }),
+        ),
+        ...drawPropertySamples(executedSql, { numRuns: 5 }).map(
+          ({ value, label: drawn }) => ({
+            value,
+            label: `executedSql ${drawn}`,
+          }),
+        ),
       ]) {
         const findings = findingsIn(sql);
         const result = runChecker(sql);
-        expect(result.exitCode, sql).toBe(findings.length > 0 ? 1 : 0);
-        expect(result.stderr === "", sql).toBe(findings.length === 0);
+        expect(result.exitCode, label).toBe(findings.length > 0 ? 1 : 0);
+        expect(result.stderr === "", label).toBe(findings.length === 0);
         for (const { ruleId } of findings) {
-          expect(result.stderr, sql).toContain(`[${ruleId}]`);
+          expect(result.stderr, label).toContain(`[${ruleId}]`);
         }
       }
     }, 30_000);
