@@ -127,7 +127,8 @@ const directlyRequired = (file: string, suite: ServiceSuite) => {
 
 // A derived module is never committed: it exists only once its generator runs,
 // so the generator's declared inputs stand in for it in the import graph.
-const DERIVED_OUTPUT_INPUTS = new Map(
+// Keyed by plain paths: lookups come from arbitrary import specifiers.
+const DERIVED_OUTPUT_INPUTS: ReadonlyMap<string, readonly string[]> = new Map(
   GENERATORS.filter(({ outputKind }) => outputKind === "derived").flatMap(
     ({ outputs, inputs }) => outputs.map((output) => [output, inputs] as const),
   ),
