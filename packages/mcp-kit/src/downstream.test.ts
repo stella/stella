@@ -17,9 +17,9 @@ const DOWNSTREAM_OPTIONS = {
 type Context = { calls: { name: string; args: Record<string, unknown> }[] };
 
 const record =
-  (name: string) => (args: Record<string, unknown>, context: Context) => {
+  (name: string) => async (args: Record<string, unknown>, context: Context) => {
     context.calls.push({ name, args });
-    return Promise.resolve(jsonSuccess({ tool: name, args }));
+    return jsonSuccess({ tool: name, args });
   };
 
 const SEARCH: ToolDefinition<Context> = {
@@ -70,10 +70,8 @@ const STATS: ToolDefinition<Context> = {
   access: "read",
   domain: "items",
   inputSchema: { type: "object", properties: {} },
-  run: () =>
-    Promise.resolve(
-      failure({ code: "stale", message: "Out of date.", retryable: true }),
-    ),
+  run: async () =>
+    failure({ code: "stale", message: "Out of date.", retryable: true }),
 };
 
 const THROWS: ToolDefinition<Context> = {
@@ -82,7 +80,9 @@ const THROWS: ToolDefinition<Context> = {
   access: "read",
   domain: "misc",
   inputSchema: { type: "object", properties: {} },
-  run: () => Promise.reject(new Error("boom")),
+  run: async () => {
+    throw new Error("boom");
+  },
 };
 
 const surface = createToolSurface({
