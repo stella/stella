@@ -43,6 +43,7 @@ const deps = {
   organizationId: toSafeId<"organization">("org_1"),
   orgAIConfig: null,
   orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+  managedAIResidency: "eu" as const,
   promptCachingEnabled: false,
 };
 

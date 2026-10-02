@@ -1102,6 +1102,10 @@
     "greeting": "Pie kā vēlaties strādāt?",
     "greetingSubtitle": "Sāciet ar lietu, dokumentu vai vienkāršu jautājumu.",
     "hideThread": "Paslēpt sarunu",
+    "historyContext": {
+      "overflow": "+{count, number}",
+      "unnamed": "{count, plural, zero {un vēl #} one {un vēl #} other {un vēl #}}"
+    },
     "improvePrompt": "Uzlabot uzvedni",
     "improvePromptDraftChanged": "Melnraksts mainījās, tāpēc uzlabojums netika lietots.",
     "improvePromptPlainTextOnly": "Uzvedni var uzlabot tikai vienkārša teksta formā.",
@@ -1606,6 +1610,7 @@
     },
     "fact": "Fakts",
     "failed": "Neizdevās",
+    "files": "Faili",
     "filter": "Filtrs",
     "filters": "Filtri",
     "find": "Meklēt",
@@ -3270,7 +3275,6 @@
       "editSkill": "Rediģēt prasmi",
       "enableSkill": "Iespējot prasmi",
       "fileExists": "Fails ar šādu ceļu jau pastāv",
-      "filesHeading": "Faili",
       "howItRuns": "Kā tā darbojas",
       "importFailureFetch": "Prasmes avotu neizdevās ielādēt.",
       "importFailureIntegrity": "Prasmes avots pēc atrašanas ir mainījies. Pārskatiet to vēlreiz.",

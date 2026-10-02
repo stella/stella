@@ -5,6 +5,8 @@ import path from "node:path";
 
 import {
   checkStandaloneLockfiles,
+  isTrackedLockfile,
+  requiresMalwareScan,
   parseInstallCommands,
 } from "./check-standalone-lockfiles";
 
@@ -329,4 +331,30 @@ describe("install command parsing", () => {
       parseInstallCommands("bun --cwd tools/docs test && bun run build", "x"),
     ).toEqual([]);
   });
+});
+
+test("all guarded lock formats and manifests select the malware gate at every depth", () => {
+  for (const directory of ["", "tools/docs/", ".claude/mcp/"]) {
+    for (const base of [
+      "bun.lock",
+      "bun.lockb",
+      "package-lock.json",
+      "npm-shrinkwrap.json",
+      "pnpm-lock.yaml",
+      "yarn.lock",
+    ]) {
+      expect(isTrackedLockfile(`${directory}${base}`)).toBe(true);
+      expect(requiresMalwareScan([`${directory}${base}`])).toBe(true);
+    }
+    expect(requiresMalwareScan([`${directory}package.json`])).toBe(true);
+  }
+  for (const file of [
+    "docs/a.md",
+    "apps/web/src/page.tsx",
+    "scripts/__fixtures__/malicious.bun-lock.txt",
+  ]) {
+    expect(isTrackedLockfile(file)).toBe(false);
+    expect(requiresMalwareScan([file])).toBe(false);
+  }
+  expect(requiresMalwareScan([])).toBe(false);
 });

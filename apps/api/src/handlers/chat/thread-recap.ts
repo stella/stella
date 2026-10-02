@@ -9,6 +9,7 @@ import { isUnanticipatedAIFailure } from "@/api/lib/ai-error";
 import { captureError } from "@/api/lib/analytics/capture";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
 /**
@@ -80,6 +81,7 @@ type GenerateThreadRecapTextArgs = {
   messages: readonly RecapMessage[];
   organizationId: SafeId<"organization">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   threadId: SafeId<"chatThread">;
   workspaceId: SafeId<"workspace"> | null;
@@ -95,6 +97,7 @@ export const generateThreadRecapText = async ({
   messages,
   organizationId,
   orgAIConfig,
+  managedAIResidency,
   promptCachingEnabled,
   threadId,
   workspaceId,
@@ -105,6 +108,7 @@ export const generateThreadRecapText = async ({
   }
 
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature: "chat.thread_recap",
     modelRole: "fast",
     orgAIConfig,
@@ -114,12 +118,14 @@ export const generateThreadRecapText = async ({
 
   try {
     const text = await generateTanStackTextForRole({
+      dataClass: "customer",
       abortSignal: AbortSignal.timeout(RECAP_GENERATION_TIMEOUT_MS),
       finishPolicy: "allow-incomplete",
       maxOutputTokens: RECAP_MAX_OUTPUT_TOKENS,
       role: "fast",
       serviceTier: "standard",
       orgAIConfig,
+      managedAIResidency,
       organizationId,
       analytics: aiAnalytics,
       caching: resolveCaching({

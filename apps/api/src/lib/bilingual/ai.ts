@@ -1,8 +1,7 @@
+import type { ModelMessage, TextPart } from "@tanstack/ai";
 // Model calls of the bilingual pipeline. Every call takes the compact row
 // manifest (never the DOCX), addresses rows by ordinal, and is validated
 // against the known ordinals before anything is trusted.
-
-import type { ModelMessage, TextPart } from "@tanstack/ai";
 import type { AnthropicTextMetadata } from "@tanstack/ai-anthropic";
 import { panic, Result, TaggedError } from "better-result";
 import * as v from "valibot";
@@ -32,6 +31,7 @@ import type {
   DispositionedUnit,
 } from "@/api/lib/bilingual/rows";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { markTanStackCacheBreakpoint } from "@/api/lib/tanstack-ai-caching";
 import { generateTanStackObjectForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -56,6 +56,7 @@ export type BilingualAIContext = {
   organizationId: SafeId<"organization">;
   workspaceId: SafeId<"workspace">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   usageMetering: AIUsageMetering;
   abortSignal: AbortSignal;
@@ -97,6 +98,7 @@ const analyticsFor = (
   modelRole: ModelRole,
 ) =>
   createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     feature,
     modelRole,
     orgAIConfig: context.orgAIConfig,
@@ -248,8 +250,10 @@ export const decideDispositions = async (
         const output = await (
           context.generateObjectForRole ?? generateTanStackObjectForRole
         )({
+          dataClass: "customer",
           role: DISPOSITION_ROLE,
           orgAIConfig: context.orgAIConfig,
+          managedAIResidency: context.managedAIResidency,
           organizationId: context.organizationId,
           analytics,
           caching: request.caching,
@@ -359,8 +363,10 @@ export const proposeGlossary = async (
   const output = await (
     context.generateObjectForRole ?? generateTanStackObjectForRole
   )({
+    dataClass: "customer",
     role: GLOSSARY_ROLE,
     orgAIConfig: context.orgAIConfig,
+    managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
     analytics,
     caching: request.caching,
@@ -479,8 +485,10 @@ export const translateBatch = async (
   const output = await (
     context.generateObjectForRole ?? generateTanStackObjectForRole
   )({
+    dataClass: "customer",
     role: TRANSLATION_ROLE,
     orgAIConfig: context.orgAIConfig,
+    managedAIResidency: context.managedAIResidency,
     organizationId: context.organizationId,
     analytics,
     caching: request.caching,
@@ -632,8 +640,10 @@ export const translateFormattedBatch = async (
     const output = await (
       context.generateObjectForRole ?? generateTanStackObjectForRole
     )({
+      dataClass: "customer",
       role: TRANSLATION_ROLE,
       orgAIConfig: context.orgAIConfig,
+      managedAIResidency: context.managedAIResidency,
       organizationId: context.organizationId,
       analytics,
       caching: request.caching,
