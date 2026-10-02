@@ -143,7 +143,7 @@ describe("shared ratchet scan", () => {
         description: "Fixture occurrence count",
         include: ["*.ts"],
         exclude: () => false,
-        count: (content) => {
+        count: (content: string) => {
           fileCalls += 1;
           return content.length;
         },

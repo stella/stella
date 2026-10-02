@@ -281,6 +281,7 @@ test("CI selects the merge base on PRs and the event base on merge groups", () =
           ...process.env,
           GITHUB_ENV: output,
           MERGE_GROUP_BASE_SHA: eventBase,
+          BASE_REF: "main",
         },
         stdout: "pipe",
         stderr: "pipe",
