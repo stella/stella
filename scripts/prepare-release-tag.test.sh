@@ -15,8 +15,21 @@ else
   printf '%s\n' "$TEST_STATUSES"
 fi
 STUB
-chmod +x "$fixture/bin/gh"
+cat > "$fixture/bin/bun" <<'STUB'
+#!/usr/bin/env bash
+set -euo pipefail
+if [[ "$#" != 5 || "$1" != "$TEST_HEALTH_SCRIPT" || "$2" != --release-guard || "$3" != "$TEST_CANDIDATE" || "$4" != --repo || "$5" != stella/stella ]]; then
+  echo 'Unexpected main-health release guard arguments' >&2
+  exit 1
+fi
+if [[ "$TEST_HEALTH_OK" != true ]]; then
+  echo 'main-health release guard refused' >&2
+  exit 1
+fi
+STUB
+chmod +x "$fixture/bin/gh" "$fixture/bin/bun"
 export PATH="$fixture/bin:$PATH"
+export TEST_HEALTH_SCRIPT="$script_dir/main-health.ts" TEST_HEALTH_OK=true
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
 git init -q "$fixture/repo"
 cd "$fixture/repo"
@@ -50,6 +63,9 @@ done
 export TEST_STATUSES='[[{"context":"staging/verified","state":"failure"}],[{"context":"staging/verified","state":"success"}]]'
 expect_failure 'new failure invalidates old success' 'staging/verified = failure' "$TEST_CANDIDATE"
 export TEST_STATUSES='[[{"context":"staging/verified","state":"success"}]]'
+export TEST_HEALTH_OK=false
+expect_failure 'main health refusal' 'main-health release guard refused' "$TEST_CANDIDATE"
+export TEST_HEALTH_OK=true
 git tag v1.2.3 "$TEST_CANDIDATE"
 expect_failure 'existing tag' 'already exists' "$TEST_CANDIDATE"
 git tag -d v1.2.3 >/dev/null

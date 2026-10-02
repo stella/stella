@@ -30,6 +30,7 @@ type MigrationGatewayOptions = {
   changedFiles?: number;
   repo?: string;
   detailsUrl?: string;
+  expectedHead?: string;
 };
 
 const runMigrationGateway = (
@@ -38,6 +39,7 @@ const runMigrationGateway = (
     changedFiles = files.length,
     repo = "stella/stella",
     detailsUrl = "https://github.com/stella/stella/actions/runs/1",
+    expectedHead,
   }: MigrationGatewayOptions = {},
 ) => {
   const directory = mkdtempSync(path.join(tmpdir(), "merge-bar-files-"));
@@ -90,6 +92,9 @@ esac
         "--dry-run",
         "--repo",
         repo,
+        ...(expectedHead === undefined
+          ? []
+          : ["--expected-head", expectedHead]),
       ],
       env: {
         ...process.env,
@@ -1695,4 +1700,10 @@ describe("workflow run URL repository identity", () => {
       "ci-result check does not link to a workflow run in this repository",
     );
   });
+});
+
+test("the CLI refuses a head other than the externally verified revert", () => {
+  const result = runMigrationGateway([], { expectedHead: OTHER_SHA });
+  expect(result.exitCode).toBe(1);
+  expect(result.stderr).toContain("REVERT_HEAD_CHANGED");
 });
