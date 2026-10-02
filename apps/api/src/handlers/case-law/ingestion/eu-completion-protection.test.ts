@@ -571,3 +571,88 @@ describe("legacy full-refetch preservation", () => {
     ).toEqual({ type: "review-required", fields: ["sourceRaw"] });
   });
 });
+
+describe("full-refetch preserves every stored envelope part", () => {
+  const parts = {
+    listing: "original binding",
+    document: "<p>Č\r\nJudgment</p>",
+    unknown: "",
+    formex: "original Formex",
+  };
+  const storedRaw = new TextEncoder().encode(encodeSourceRawEnvelope(parts));
+  test("permits new notice and other surfaces without revising old parts", () => {
+    expect(
+      protectEcjLegacyDocument({
+        storedRaw,
+        candidate: {
+          sourceRaw: encodeSourceRawEnvelope({
+            ...parts,
+            notice: "new notice",
+            added: "new part",
+          }),
+        },
+      }),
+    ).toEqual({ type: "accepted" });
+  });
+  test.each(Object.keys(parts))(
+    "rejects changed or missing stored %s even without a notice",
+    (part) => {
+      const changed = { ...parts, [part]: "changed" };
+      expect(
+        protectEcjLegacyDocument({
+          storedRaw,
+          candidate: { sourceRaw: encodeSourceRawEnvelope(changed) },
+        }),
+      ).toEqual({
+        type: "review-required",
+        fields: [`sourceRaw.parts.${part}`],
+      });
+      const missing = Object.fromEntries(
+        Object.entries(parts).filter(([key]) => key !== part),
+      );
+      expect(
+        protectEcjLegacyDocument({
+          storedRaw,
+          candidate: { sourceRaw: encodeSourceRawEnvelope(missing) },
+        }),
+      ).toEqual({
+        type: "review-required",
+        fields: [`sourceRaw.parts.${part}`],
+      });
+    },
+  );
+  test("rejects invalid replacement envelope and missing binary source reference", () => {
+    expect(
+      protectEcjLegacyDocument({
+        storedRaw,
+        candidate: { sourceRaw: "not an envelope" },
+      }),
+    ).toEqual({ type: "review-required", fields: ["sourceRaw"] });
+    const objects = {
+      attachment: {
+        location: "s3://fixture/original",
+        sha256: "abc",
+        contentType: "application/pdf",
+        byteLength: 3,
+      },
+    };
+    const withObject = new TextEncoder().encode(
+      encodeSourceRawEnvelope(parts, objects),
+    );
+    expect(
+      protectEcjLegacyDocument({
+        storedRaw: withObject,
+        candidate: { sourceRaw: encodeSourceRawEnvelope(parts) },
+      }),
+    ).toEqual({
+      type: "review-required",
+      fields: ["sourceRaw.objects.attachment"],
+    });
+    expect(
+      protectEcjLegacyDocument({
+        storedRaw: withObject,
+        candidate: { sourceRaw: encodeSourceRawEnvelope(parts, objects) },
+      }),
+    ).toEqual({ type: "accepted" });
+  });
+});

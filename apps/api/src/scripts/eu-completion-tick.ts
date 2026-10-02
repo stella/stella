@@ -212,6 +212,7 @@ type CompletionRuntime = Awaited<ReturnType<typeof loadRuntime>>;
 type CompletionFixtureOptions = {
   healthConfig?: Pick<HealthConfig, "busyWindows">;
   afterDocument?: () => Promise<void>;
+  beforeWriteFence?: () => Promise<void>;
 };
 type CompletionFenceOptions = {
   runtime: CompletionRuntime;
@@ -349,6 +350,7 @@ const runCompletionSession = async (
     ingestionDb: handles.ingestionDb,
     store,
     sourceLease: resources.getLease,
+    beforeWriteFence: fixture.beforeWriteFence,
     signal,
     check: async () =>
       await Result.tryPromise({

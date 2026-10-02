@@ -73,6 +73,9 @@ class CompletionSupersededByCrawl extends TaggedError(
 class CompletionPublisherGone extends TaggedError("CompletionPublisherGone")<{
   message: string;
 }> {}
+class CompletionWithdrawn extends TaggedError("CompletionWithdrawn")<{
+  message: string;
+}> {}
 class CompletionStageFailure extends TaggedError("CompletionStageFailure")<{
   message: string;
   code: EuCompletionFailure["code"];
@@ -91,28 +94,36 @@ const legacyOperation = <T>(operation: () => Promise<T>) =>
 
 const loadDecisionTx = (tx: Transaction, receipt: EuCompletionReceipt) =>
   Result.gen(async function* () {
-    const row = (yield* Result.await(
+    const selected = (yield* Result.await(
       legacyOperation(
         async () =>
           await tx
-            .select()
+            .select({
+              row: caseLawDecisions,
+              notWithdrawn: euCompletionDecisionNotWithdrawn(),
+            })
             .from(caseLawDecisions)
             .where(
               and(
                 eq(caseLawDecisions.id, receipt.decisionId),
                 eq(caseLawDecisions.sourceId, receipt.sourceId),
-                euCompletionDecisionNotWithdrawn(),
               ),
             )
             .for("update")
             .limit(1),
       ),
     )).at(0);
+    const row = selected?.row;
     if (row === undefined || row.redactedAt !== null) {
       return Result.err(
         new CompletionReviewRequired({
           message: "Decision missing or redacted",
         }),
+      );
+    }
+    if (selected?.notWithdrawn === false) {
+      return Result.err(
+        new CompletionWithdrawn({ message: "Decision has been withdrawn" }),
       );
     }
     const judges = yield* Result.await(
@@ -165,6 +176,7 @@ type CompletionRunnerOptions = {
   raiseFailure: (error: unknown) => never;
   onRequest: () => void;
   isEnabled: () => boolean;
+  beforeWriteFence?: () => Promise<void>;
 };
 type CompletionPublisherState = {
   requests: number;
@@ -688,6 +700,7 @@ const createCompletionWriteDb = (context: CompletionWriteContext) =>
       laneWaitMs: 0,
       maintenance: {
         before: async (tx) => {
+          await context.beforeWriteFence?.();
           const checked = await checkCompletionWriteTx(tx, context);
           if (checked.isErr()) {
             context.raiseFailure(checked.error);
@@ -877,20 +890,28 @@ const finalizeWrittenCompletion = (
       ),
     );
     if (settled === "retryable") {
-      yield* Result.await(
+      const waiting = yield* Result.await(
         legacyOperation(
-          async () =>
-            await context.store.releaseBenign(
-              context.receipt.id,
-              new Date(
-                Temporal.Now.instant().epochMilliseconds + COMPLETION_DEFER_MS,
-              ),
-            ),
+          async () => await context.store.waitForMirror(context.receipt.id),
         ),
       );
-      return Result.ok({
-        type: "waiting-for-mirror",
-      } satisfies EuCompletionRowOutcome);
+      switch (waiting) {
+        case "waiting":
+          return Result.ok({
+            type: "waiting-for-mirror",
+          } satisfies EuCompletionRowOutcome);
+        case "review-required":
+          return Result.ok({
+            type: "mirror-repair-required",
+          } satisfies EuCompletionRowOutcome);
+        case "applied":
+          return Result.ok({
+            type: "applied",
+          } satisfies EuCompletionRowOutcome);
+        default:
+          waiting satisfies never;
+          return panic("Unexpected completion mirror disposition");
+      }
     }
     return Result.ok({ type: settled } satisfies EuCompletionRowOutcome);
   });
@@ -1134,6 +1155,15 @@ const settleCompletionFailure = ({
   error,
 }: FailureContext): Promise<RowResult> =>
   Result.gen(async function* () {
+    if (error instanceof CompletionWithdrawn) {
+      yield* Result.await(
+        legacyOperation(
+          async () =>
+            await store.finish({ id: receipt.id, status: "withdrawn" }),
+        ),
+      );
+      return Result.ok({ type: "withdrawn" } satisfies EuCompletionRowOutcome);
+    }
     if (error instanceof CompletionPublisherGone) {
       yield* Result.await(
         legacyOperation(
@@ -1264,22 +1294,19 @@ export const createEuCompletionRunner = (options: CompletionRunnerOptions) => {
       const context = { ...options, ...rowOptions, receipt, state, ensure };
       const attempted = await runControlledCompletionRow(context);
       if (state.refusal !== null) {
-        const retryAt = new Date(
-          Math.max(
-            state.refusal,
-            Temporal.Now.instant().epochMilliseconds + 1000,
-          ),
-        );
-        yield* Result.await(
+        const refusalDeadline = new Date(state.refusal);
+        const settled = yield* Result.await(
           legacyOperation(
             async () =>
               await options.store.finish({
                 id: receipt.id,
                 status: "publisher-refused",
-                retryAt,
+                retryAt: refusalDeadline,
+                healthyEvidence: rowOptions.healthyEvidence,
               }),
           ),
         );
+        const retryAt = settled?.refusalHoldUntil ?? refusalDeadline;
         return Result.ok({
           type: "publisher-refused",
           retryAt,

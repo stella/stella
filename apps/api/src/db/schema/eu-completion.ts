@@ -16,6 +16,7 @@ export const EU_COMPLETION_STATUSES = [
   "too-large",
   "publisher-gone",
   "superseded-by-crawl",
+  "withdrawn",
 ] as const;
 export const EU_COMPLETION_MODES = ["dry-run", "apply"] as const;
 export const EU_COMPLETION_TARGETS = ["formex", "full"] as const;
@@ -23,7 +24,6 @@ export const EU_COMPLETION_CONTROL_STATES = ["off", "on"] as const;
 const RETRY_STATUSES = [
   "failed-backoff",
   "failed",
-  "publisher-refused",
   "superseded-by-crawl",
 ] as const satisfies readonly (typeof EU_COMPLETION_STATUSES)[number][];
 const ATTEMPT_STATES = ["idle", "picked-up", "repair"] as const;
@@ -69,6 +69,13 @@ export const euCompletionReceipts = p.pgTable.withRLS(
       .bigint("systemic_progress", { mode: "number" })
       .default(0)
       .notNull(),
+    refusalCount: p.integer("refusal_count").default(0).notNull(),
+    refusalProgress: p
+      .bigint("refusal_progress", { mode: "number" })
+      .default(0)
+      .notNull(),
+    refusalHoldUntil: timestamptz("refusal_hold_until"),
+    mirrorWaits: p.integer("mirror_waits").default(0).notNull(),
     retryAt: timestamptz("retry_at"),
     writtenAt: timestamptz("written_at"),
     writtenSourceHash: p.text("written_source_hash"),
@@ -140,7 +147,7 @@ export const euCompletionReceipts = p.pgTable.withRLS(
     ),
     p.check(
       "eu_completion_receipts_attempts_check",
-      sql`${t.attempts} >= 0 AND ${t.parserVersion} >= 0 AND ${t.systemicFailures} >= 0 AND ${t.systemicProgress} >= 0`,
+      sql`${t.attempts} >= 0 AND ${t.parserVersion} >= 0 AND ${t.systemicFailures} >= 0 AND ${t.systemicProgress} >= 0 AND ${t.refusalCount} >= 0 AND ${t.refusalProgress} >= 0 AND ${t.mirrorWaits} >= 0`,
     ),
     p.check(
       "eu_completion_receipts_payload_check",
@@ -160,6 +167,10 @@ export const euCompletionReceipts = p.pgTable.withRLS(
         RETRY_STATUSES.map((value) => sql.raw(`'${value}'`)),
         sql`, `,
       )}) OR ${t.retryAt} IS NOT NULL`,
+    ),
+    p.check(
+      "eu_completion_receipts_refusal_check",
+      sql`${t.status} <> 'publisher-refused' OR (${t.completedAt} IS NULL AND ${t.retryAt} IS NOT NULL) OR (${t.completedAt} IS NOT NULL AND ${t.retryAt} IS NULL)`,
     ),
     p.check(
       "eu_completion_receipts_written_check",
@@ -288,6 +299,10 @@ export const euCompletionControls = p.pgTable.withRLS(
       .bigint("completed_rows", { mode: "number" })
       .default(0)
       .notNull(),
+    healthyRows: p
+      .bigint("healthy_rows", { mode: "number" })
+      .default(0)
+      .notNull(),
     ticksWithoutProgress: p
       .integer("ticks_without_progress")
       .default(0)
@@ -318,7 +333,7 @@ export const euCompletionControls = p.pgTable.withRLS(
     ),
     p.check(
       "eu_completion_controls_counts_check",
-      sql`${t.completedRows} >= 0 AND ${t.ticksWithoutProgress} >= 0`,
+      sql`${t.completedRows} >= 0 AND ${t.healthyRows} >= 0 AND ${t.ticksWithoutProgress} >= 0`,
     ),
     p.pgPolicy("eu_completion_controls_owner_access", {
       for: "all",

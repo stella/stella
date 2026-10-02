@@ -35,6 +35,10 @@ const receipt = (id: string): EuCompletionReceipt => ({
   attemptState: "idle",
   systemicFailures: 0,
   systemicProgress: 0,
+  refusalCount: 0,
+  refusalProgress: 0,
+  refusalHoldUntil: null,
+  mirrorWaits: 0,
   retryAt: null,
   writtenAt: null,
   writtenSourceHash: null,
@@ -263,6 +267,24 @@ describe("bounded EU completion orchestration", () => {
       const report = await state.run();
       expect(report.status).toBe(type === "retryable" ? "failed" : type);
       expect(state.events).toEqual(["reserve", "pickup:first"]);
+    },
+  );
+  test.each(["mirror-repair-required", "withdrawn"] as const)(
+    "%s cannot supply healthy evidence for isolating the adjacent document",
+    async (type) => {
+      const state = fixture();
+      const evidence: EuCompletionRowOptions["healthyEvidence"][] = [];
+      state.dependencies.runRow = async (row, options) => {
+        if (row.id === "first") {
+          return Result.ok({ type });
+        }
+        evidence.push(options.healthyEvidence);
+        return Result.ok({ type: "dry-run" });
+      };
+      const report = await state.run();
+      expect(evidence).toEqual(["none"]);
+      expect(report.status).toBe("completed");
+      expect(report.noProgress).toBe(0);
     },
   );
   test("returned Err from a check after pickup stops effects, refunds its attempt and leaves following receipts untouched", async () => {

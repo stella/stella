@@ -346,7 +346,7 @@ export const protectEcjFormexParts = ({
 
 type EcjCompletionLegacyDocumentOptions = EcjCompletionFormexPartsOptions;
 
-/** A full fetch may add surfaces, but cannot revise an existing bare document. */
+/** A full fetch may add surfaces, but cannot revise any stored source part. */
 export const protectEcjLegacyDocument = ({
   storedRaw,
   storedRawContentType,
@@ -369,16 +369,35 @@ export const protectEcjLegacyDocument = ({
   if (decoded === null) {
     return { type: "review-required", fields: ["sourceRaw"] };
   }
-  if (decodeSourceRawEnvelope(decoded.before) !== null) {
-    return { type: "accepted" };
-  }
-  if (
-    storedRawContentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE ||
-    decoded.after === undefined
-  ) {
+  if (decoded.after === undefined) {
     return { type: "review-required", fields: ["sourceRaw"] };
   }
+  const stored = decodeSourceRawEnvelope(decoded.before);
   const incoming = decodeSourceRawEnvelope(decoded.after);
+  if (stored !== null) {
+    if (incoming === null) {
+      return { type: "review-required", fields: ["sourceRaw"] };
+    }
+    const fields: string[] = [];
+    for (const [part, original] of Object.entries(stored)) {
+      if (incoming[part] !== original) {
+        fields.push(`sourceRaw.parts.${part}`);
+      }
+    }
+    const storedObjects = decodeSourceRawEnvelopeObjects(decoded.before);
+    const incomingObjects = decodeSourceRawEnvelopeObjects(decoded.after);
+    for (const [part, original] of Object.entries(storedObjects)) {
+      if (!sameValue(incomingObjects[part], original)) {
+        fields.push(`sourceRaw.objects.${part}`);
+      }
+    }
+    return fields.length > 0
+      ? { type: "review-required", fields }
+      : { type: "accepted" };
+  }
+  if (storedRawContentType === SOURCE_RAW_ENVELOPE_CONTENT_TYPE) {
+    return { type: "review-required", fields: ["sourceRaw"] };
+  }
   return incoming?.["document"] === decoded.before
     ? { type: "accepted" }
     : { type: "review-required", fields: ["sourceRaw.parts.document"] };

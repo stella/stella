@@ -42,7 +42,9 @@ export type EuCompletionRowOutcome =
         | "isolated"
         | "too-large"
         | "publisher-gone"
+        | "withdrawn"
         | "superseded-by-crawl"
+        | "mirror-repair-required"
         | "waiting-for-mirror";
     }
   | { type: "publisher-refused"; retryAt: Date }
@@ -115,12 +117,14 @@ const recordOutcome = (
       report.applied++;
       break;
     case "publisher-gone":
+    case "withdrawn":
     case "unchanged":
       report.unchanged++;
       break;
     case "dry-run":
       break;
     case "review-required":
+    case "mirror-repair-required":
       report.reviewRequired++;
       break;
     case "too-large":
@@ -390,6 +394,8 @@ export const runEuCompletionTick = async ({
     }
     if (
       outcome.type !== "waiting-for-mirror" &&
+      outcome.type !== "mirror-repair-required" &&
+      outcome.type !== "withdrawn" &&
       outcome.type !== "superseded-by-crawl"
     ) {
       eligibleAttempts++;

@@ -21,6 +21,10 @@ CREATE TABLE "eu_completion_receipts" (
   "attempt_state" text DEFAULT 'idle' NOT NULL,
   "systemic_failures" integer DEFAULT 0 NOT NULL,
   "systemic_progress" bigint DEFAULT 0 NOT NULL,
+  "refusal_count" integer DEFAULT 0 NOT NULL,
+  "refusal_progress" bigint DEFAULT 0 NOT NULL,
+  "refusal_hold_until" timestamptz,
+  "mirror_waits" integer DEFAULT 0 NOT NULL,
   "retry_at" timestamptz,
   "written_at" timestamptz,
   "written_source_hash" text,
@@ -36,13 +40,14 @@ CREATE TABLE "eu_completion_receipts" (
   CONSTRAINT "eu_completion_receipts_mode_check" CHECK ("mode" IN ('dry-run', 'apply')),
   CONSTRAINT "eu_completion_receipts_target_check" CHECK ("target" IS NULL OR "target" IN ('formex', 'full')),
   CONSTRAINT "eu_completion_receipts_attempt_state_check" CHECK ("attempt_state" IN ('idle', 'picked-up', 'repair')),
-  CONSTRAINT "eu_completion_receipts_attempts_check" CHECK ("attempts" >= 0 AND "parser_version" >= 0 AND "systemic_failures" >= 0 AND "systemic_progress" >= 0),
+  CONSTRAINT "eu_completion_receipts_attempts_check" CHECK ("attempts" >= 0 AND "parser_version" >= 0 AND "systemic_failures" >= 0 AND "systemic_progress" >= 0 AND "refusal_count" >= 0 AND "refusal_progress" >= 0 AND "mirror_waits" >= 0),
   CONSTRAINT "eu_completion_receipts_payload_check" CHECK ("payload" IS NULL OR (jsonb_typeof("payload") = 'string' AND octet_length("payload" #>> '{}') <= 16777216)),
   CONSTRAINT "eu_completion_receipts_provenance_check" CHECK ("provenance" IS NULL OR (jsonb_typeof("provenance") = 'object' AND octet_length("provenance"::text) <= 32768)),
   CONSTRAINT "eu_completion_receipts_fetched_check" CHECK ("status" <> 'fetched' OR ("payload" IS NOT NULL AND "payload_hash" IS NOT NULL AND "claimed_fingerprint" IS NOT NULL AND "target" IS NOT NULL)),
-  CONSTRAINT "eu_completion_receipts_retry_check" CHECK ("status" NOT IN ('failed-backoff', 'failed', 'publisher-refused', 'superseded-by-crawl') OR "retry_at" IS NOT NULL),
+  CONSTRAINT "eu_completion_receipts_retry_check" CHECK ("status" NOT IN ('failed-backoff', 'failed', 'superseded-by-crawl') OR "retry_at" IS NOT NULL),
+  CONSTRAINT "eu_completion_receipts_refusal_check" CHECK ("status" <> 'publisher-refused' OR ("completed_at" IS NULL AND "retry_at" IS NOT NULL) OR ("completed_at" IS NOT NULL AND "retry_at" IS NULL)),
   CONSTRAINT "eu_completion_receipts_written_check" CHECK ("written_at" IS NULL OR ("mode" = 'apply' AND "written_parser_version" IS NOT NULL AND "written_source_hash" IS NOT NULL AND "written_observation_order" IS NOT NULL)),
-  CONSTRAINT "eu_completion_receipts_status_check" CHECK ("status" IN ('pending', 'fetched', 'applied', 'unchanged', 'review-required', 'publisher-refused', 'failed-backoff', 'failed', 'dry-run', 'too-large', 'publisher-gone', 'superseded-by-crawl'))
+  CONSTRAINT "eu_completion_receipts_status_check" CHECK ("status" IN ('pending', 'fetched', 'applied', 'unchanged', 'review-required', 'publisher-refused', 'failed-backoff', 'failed', 'dry-run', 'too-large', 'publisher-gone', 'superseded-by-crawl', 'withdrawn'))
 );--> statement-breakpoint
 ALTER TABLE "eu_completion_receipts" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "eu_completion_receipts" FORCE ROW LEVEL SECURITY;--> statement-breakpoint
@@ -95,6 +100,7 @@ CREATE TABLE "eu_completion_controls" (
   "batch" jsonb,
   "cursor" uuid,
   "completed_rows" bigint DEFAULT 0 NOT NULL,
+  "healthy_rows" bigint DEFAULT 0 NOT NULL,
   "ticks_without_progress" integer DEFAULT 0 NOT NULL,
   "last_completed_at" timestamptz,
   "changed_by" text,
@@ -103,7 +109,7 @@ CREATE TABLE "eu_completion_controls" (
   CONSTRAINT "eu_completion_controls_source_fk" FOREIGN KEY ("source_id") REFERENCES "public"."case_law_sources"("id") ON DELETE RESTRICT,
   CONSTRAINT "eu_completion_controls_state_check" CHECK ("state" IN ('off', 'on')),
   CONSTRAINT "eu_completion_controls_operator_check" CHECK ("state" <> 'on' OR ("changed_by" IS NOT NULL AND length(trim("changed_by")) BETWEEN 1 AND 128 AND "changed_at" IS NOT NULL)),
-  CONSTRAINT "eu_completion_controls_counts_check" CHECK ("completed_rows" >= 0 AND "ticks_without_progress" >= 0)
+  CONSTRAINT "eu_completion_controls_counts_check" CHECK ("completed_rows" >= 0 AND "healthy_rows" >= 0 AND "ticks_without_progress" >= 0)
 );--> statement-breakpoint
 ALTER TABLE "eu_completion_controls" ENABLE ROW LEVEL SECURITY;--> statement-breakpoint
 ALTER TABLE "eu_completion_controls" FORCE ROW LEVEL SECURITY;--> statement-breakpoint

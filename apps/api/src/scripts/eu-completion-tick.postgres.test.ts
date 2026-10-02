@@ -181,12 +181,9 @@ if (!databaseUrl || !enabled) {
       return startFakeS3();
     };
 
-    const fetchedApprovedFixture = async (
+    const createCompletionDecisionFixture = async (
       sourceId: SafeId<"caseLawSource">,
-      options: {
-        offloaded?: { textS3Key?: string; astS3Key?: string };
-        receiptStage?: "fetched" | "pending";
-      } = {},
+      options: { offloaded?: { textS3Key?: string; astS3Key?: string } } = {},
     ) => {
       const store = createEuCompletionStore({
         db,
@@ -250,6 +247,17 @@ if (!databaseUrl || !enabled) {
       if (row === undefined) {
         panic("Missing completion fixture decision");
       }
+      return { store, row, candidate, payload };
+    };
+    const fetchedApprovedFixture = async (
+      sourceId: SafeId<"caseLawSource">,
+      options: {
+        offloaded?: { textS3Key?: string; astS3Key?: string };
+        receiptStage?: "fetched" | "pending";
+      } = {},
+    ) => {
+      const { store, row, candidate, payload } =
+        await createCompletionDecisionFixture(sourceId, options);
       const claimedFingerprint = ecjCompletionFingerprint({
         existing: row,
         judges: [],
@@ -300,7 +308,9 @@ if (!databaseUrl || !enabled) {
         approvedBy: "fixture-approver",
         approvedAt,
       });
-      if (approval.isErr()) {throw approval.error;}
+      if (approval.isErr()) {
+        throw approval.error;
+      }
       for (const controlSource of [null, sourceId]) {
         await store.setControl({
           sourceId: controlSource,
@@ -313,14 +323,18 @@ if (!databaseUrl || !enabled) {
       return { store, receipt, row, candidate };
     };
 
-    const fixtureGate = () => {
+    const fixtureGate = (
+      options: { clock?: () => number; sleep?: typeof abortableSleep } = {},
+    ) => {
+      const readClock =
+        options.clock ?? (() => Temporal.Now.instant().epochMilliseconds);
       let nextSendAt = 0;
       let cooldownUntil = 0;
       const reservations: number[] = [];
       const dependencies = {
         redis: () => ({
           send: (_command: string, args: string[]) => {
-            const clock = Temporal.Now.instant().epochMilliseconds;
+            const clock = readClock();
             if (args.at(2)?.endsWith(":cooldown")) {
               const delay = args.at(3);
               if (delay !== undefined) {
@@ -338,12 +352,13 @@ if (!databaseUrl || !enabled) {
             return slot - clock;
           },
         }),
-        sleep: abortableSleep,
+        sleep: options.sleep ?? abortableSleep,
       };
       return { dependencies, reservations, cooldownUntil: () => cooldownUntil };
     };
     const withPublisher = async (options: {
       respond: (url: string, init?: RequestInit) => Promise<Response>;
+      clock?: () => number;
       run: (sent: { url: string; at: number }[]) => Promise<void>;
     }) => {
       const original = globalThis.fetch;
@@ -355,7 +370,10 @@ if (!databaseUrl || !enabled) {
           if (!["publications.europa.eu", "eur-lex.europa.eu"].includes(host)) {
             panic("Completion publisher fixture refuses an unrelated host");
           }
-          sent.push({ url, at: Temporal.Now.instant().epochMilliseconds });
+          sent.push({
+            url,
+            at: options.clock?.() ?? Temporal.Now.instant().epochMilliseconds,
+          });
           return await options.respond(url, init);
         }),
       );
@@ -398,6 +416,36 @@ if (!databaseUrl || !enabled) {
           { headers: { "Content-Type": "application/sparql-results+json" } },
         );
       }
+      if (url.includes("/resource/celex/")) {
+        return new Response(
+          new TextDecoder().decode(
+            Bun.gunzipSync(
+              await Bun.file(
+                new URL(
+                  "../handlers/case-law/ingestion/adapters/__fixtures__/eu-ecj-notice-en.xml.gz",
+                  import.meta.url,
+                ),
+              ).bytes(),
+            ),
+          ),
+          { headers: { "Content-Type": "application/xml" } },
+        );
+      }
+      if (url.endsWith("/DOC_1")) {
+        return new Response(
+          new TextDecoder().decode(
+            Bun.gunzipSync(
+              await Bun.file(
+                new URL(
+                  "../handlers/case-law/ingestion/parsers/__fixtures__/eu-ecj/62022CJ0128.en.fmx.xml.gz",
+                  import.meta.url,
+                ),
+              ).bytes(),
+            ),
+          ),
+          { headers: { "Content-Type": "application/xml" } },
+        );
+      }
       if (url.includes("/resource/cellar/")) {
         return new Response(
           await Bun.file(
@@ -414,9 +462,27 @@ if (!databaseUrl || !enabled) {
 
     test("actual dry-run fetches through its gate while preserving every decision byte", async () => {
       await withSource(async (sourceId) => {
-        const { row } = await fetchedApprovedFixture(sourceId, {
-          receiptStage: "pending",
-        });
+        const { row, store } = await createCompletionDecisionFixture(sourceId);
+        for (const controlSource of [null, sourceId]) {
+          await store.setControl({
+            sourceId: controlSource,
+            state: "on",
+            changedBy: "fixture",
+            changedAt: new Date(),
+          });
+        }
+        const receipt = (
+          await store.reserve({
+            sourceId,
+            mode: "dry-run",
+            parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
+            limit: 1,
+          })
+        ).at(0);
+        if (receipt === undefined) {
+          panic("Missing NEW dry-run fixture receipt");
+        }
+        expect(receipt.status).toBe("pending");
         process.env["CASE_LAW_EU_COMPLETION_MODE"] = "dry-run";
         const gate = fixtureGate();
         await withPublisher({
@@ -446,19 +512,16 @@ if (!databaseUrl || !enabled) {
                   .where(eq(caseLawDecisions.id, row.id))
               ).at(0),
             ).toEqual(row);
+            expect(await store.getReceipt(receipt.id)).toMatchObject({
+              id: receipt.id,
+              status: "dry-run",
+              attempts: 1,
+            });
+            expect(sent).toHaveLength(4);
             expect(
-              (
-                await db
-                  .select()
-                  .from(euCompletionReceipts)
-                  .where(
-                    and(
-                      eq(euCompletionReceipts.sourceId, sourceId),
-                      eq(euCompletionReceipts.mode, "dry-run"),
-                    ),
-                  )
-              ).some((receipt) => receipt.status === "dry-run"),
+              sent.some((request) => request.url.includes("/resource/celex/")),
             ).toBe(true);
+            expect(sent.at(-1)?.url.endsWith("/DOC_1")).toBe(true);
           },
         });
       });
@@ -529,12 +592,25 @@ if (!databaseUrl || !enabled) {
             sourceId,
             { receiptStage: "pending" },
           );
+          if (
+            row.sourceUrl === null ||
+            !row.sourceUrl.includes("62021CJ0128")
+          ) {
+            panic(
+              "Adjacent document fixture needs the first document source URL",
+            );
+          }
+          const secondSourceUrl = row.sourceUrl.replace(
+            "62021CJ0128",
+            "62021CJ0367",
+          );
           const secondId = createSafeId<"caseLawDecision">();
           await db.insert(caseLawDecisions).values({
             ...row,
             id: secondId,
             caseNumber: "C-367/21",
             sourceDocumentId: "62021CJ0367:en",
+            sourceUrl: secondSourceUrl,
             ecli: "ECLI:EU:C:2024:61",
             metadata: {
               celex: "62021CJ0367",
@@ -888,11 +964,27 @@ if (!databaseUrl || !enabled) {
 
     test("the job run slot shares send spacing with an ordinary crawl request", async () => {
       await withSource(async (sourceId) => {
-        await fetchedApprovedFixture(sourceId, { receiptStage: "pending" });
+        const { store } = await createCompletionDecisionFixture(sourceId);
+        for (const controlSource of [null, sourceId]) {
+          await store.setControl({
+            sourceId: controlSource,
+            state: "on",
+            changedBy: "fixture",
+            changedAt: new Date(),
+          });
+        }
         process.env["CASE_LAW_EU_COMPLETION_MODE"] = "dry-run";
-        const gate = fixtureGate();
+        let clock = 1000;
+        const readClock = () => clock;
+        const gate = fixtureGate({
+          clock: readClock,
+          sleep: async (delay) => {
+            clock += delay;
+          },
+        });
         await withPublisher({
           respond: successfulPublisher,
+          clock: readClock,
           run: async (sent) => {
             await withPublisherGateFixture(gate.dependencies, async () => {
               await fetchPublisher(
@@ -912,7 +1004,19 @@ if (!databaseUrl || !enabled) {
               if (previous === undefined || current === undefined) {
                 panic("Missing paced fixture send");
               }
-              expect(current.at - previous.at).toBeGreaterThanOrEqual(1000);
+              const currentReservation = gate.reservations.at(index);
+              const previousReservation = gate.reservations.at(index - 1);
+              if (
+                currentReservation === undefined ||
+                previousReservation === undefined
+              ) {
+                panic("Missing shared gate reservation");
+              }
+              expect(
+                currentReservation - previousReservation,
+              ).toBeGreaterThanOrEqual(1000);
+              expect(current.at).toBeGreaterThanOrEqual(currentReservation);
+              expect(previous.at).toBeGreaterThanOrEqual(previousReservation);
             }
           },
         });
@@ -1045,14 +1149,28 @@ if (!databaseUrl || !enabled) {
       await withSource(async (sourceId) => {
         const storage = startCompletionFixtureStorage();
         try {
-          const { store, row, candidate } =
-            await fetchedApprovedFixture(sourceId);
+          const { store, row } = await fetchedApprovedFixture(sourceId, {
+            receiptStage: "pending",
+          });
+          if (
+            row.sourceUrl === null ||
+            !row.sourceUrl.includes("62021CJ0128")
+          ) {
+            panic(
+              "Adjacent document fixture needs the first document source URL",
+            );
+          }
+          const secondSourceUrl = row.sourceUrl.replace(
+            "62021CJ0128",
+            "62021CJ0367",
+          );
           const secondId = createSafeId<"caseLawDecision">();
           await db.insert(caseLawDecisions).values({
             ...row,
             id: secondId,
             caseNumber: "C-367/21",
             sourceDocumentId: "62021CJ0367:en",
+            sourceUrl: secondSourceUrl,
             ecli: "ECLI:EU:C:2024:61",
             metadata: {
               celex: "62021CJ0367",
@@ -1060,15 +1178,6 @@ if (!databaseUrl || !enabled) {
               decisionDate: "2024-01-18",
             },
           });
-          const secondRow = (
-            await db
-              .select()
-              .from(caseLawDecisions)
-              .where(eq(caseLawDecisions.id, secondId))
-          ).at(0);
-          if (secondRow === undefined) {
-            panic("Missing adjacent completion fixture row");
-          }
           const secondReceipt = (
             await store.reserve({
               sourceId,
@@ -1080,66 +1189,60 @@ if (!databaseUrl || !enabled) {
           if (secondReceipt === undefined) {
             panic("Missing adjacent completion fixture receipt");
           }
-          expect(await store.pickup(secondReceipt.id)).toBe("ready");
-          const payload = candidate.sourceRaw;
-          if (payload === undefined) {
-            panic("Canonical fixture has no raw envelope");
-          }
-          await store.markFetched({
-            id: secondReceipt.id,
-            payload,
-            payloadHash: new Bun.CryptoHasher("sha256")
-              .update(payload)
-              .digest("hex"),
-            claimedFingerprint: ecjCompletionFingerprint({
-              existing: secondRow,
-              judges: [],
-            }),
-            target: "full",
-            provenance: { requestHashes: [], requestedSurfaces: [] },
-          });
           process.env["CASE_LAW_EU_COMPLETION_MAX_ROWS"] = "2";
+          let clock = 1000;
+          const gate = fixtureGate({
+            clock: () => clock,
+            sleep: async (delay) => {
+              clock += delay;
+            },
+          });
           const crawlTokens: string[] = [];
           let completedDocuments = 0;
           await withPublisher({
             respond: successfulPublisher,
+            clock: () => clock,
             run: async (sent) => {
-              const report = await runEuCompletionTickFixture(
-                AbortSignal.timeout(20_000),
-                {
-                  healthConfig: { busyWindows: [] },
-                  afterDocument: async () => {
-                    completedDocuments++;
-                    if (completedDocuments !== 1) {
-                      return;
-                    }
-                    expect(
-                      (await store.getReceipt(secondReceipt.id))?.writtenAt,
-                    ).toBeNull();
-                    const crawl = await acquireCaseLawSourceIngestionLease({
-                      scopedDb: createIngestionDb(markRlsDatabase(db)),
-                      sourceId,
-                    });
-                    if (crawl === null) {
-                      panic(
-                        "Completion retained the source lease between documents",
-                      );
-                    }
-                    try {
-                      crawlTokens.push(crawl.leaseToken);
-                    } finally {
-                      await crawl.release();
-                    }
-                  },
-                },
+              const report = await withPublisherGateFixture(
+                gate.dependencies,
+                async () =>
+                  await runEuCompletionTickFixture(
+                    AbortSignal.timeout(20_000),
+                    {
+                      healthConfig: { busyWindows: [] },
+                      afterDocument: async () => {
+                        completedDocuments++;
+                        if (completedDocuments !== 1) {
+                          return;
+                        }
+                        expect(
+                          (await store.getReceipt(secondReceipt.id))?.writtenAt,
+                        ).toBeNull();
+                        const crawl = await acquireCaseLawSourceIngestionLease({
+                          scopedDb: createIngestionDb(markRlsDatabase(db)),
+                          sourceId,
+                        });
+                        if (crawl === null) {
+                          panic(
+                            "Completion retained the source lease between documents",
+                          );
+                        }
+                        try {
+                          crawlTokens.push(crawl.leaseToken);
+                        } finally {
+                          await crawl.release();
+                        }
+                      },
+                    },
+                  ),
               );
               expect(report).toMatchObject({
                 status: "completed",
                 attempted: 2,
                 applied: 2,
-                requests: 0,
+                requests: 8,
               });
-              expect(sent).toHaveLength(0);
+              expect(sent).toHaveLength(8);
             },
           });
           expect(crawlTokens).toHaveLength(1);
@@ -1149,6 +1252,113 @@ if (!databaseUrl || !enabled) {
         }
       });
     }, 30_000);
+
+    test.each([
+      "approval",
+      "global-control",
+      "source-control",
+      "fingerprint",
+      "observation-order",
+    ] as const)(
+      "the owner write-transaction fence refuses a mid-tick %s mutation",
+      async (mutation) => {
+        await withSource(async (sourceId) => {
+          const storage = startCompletionFixtureStorage();
+          try {
+            const { row, receipt, store } =
+              await fetchedApprovedFixture(sourceId);
+            const mutations: string[] = [];
+            let expected = row;
+            const report = await runEuCompletionTickFixture(
+              AbortSignal.timeout(20_000),
+              {
+                healthConfig: { busyWindows: [] },
+                beforeWriteFence: async () => {
+                  if (mutations.length > 0) {
+                    return;
+                  }
+                  mutations.push(mutation);
+                  switch (mutation) {
+                    case "approval":
+                      await db
+                        .delete(euCompletionApprovals)
+                        .where(eq(euCompletionApprovals.sourceId, sourceId));
+                      break;
+                    case "global-control":
+                      await store.setControl({
+                        sourceId: null,
+                        state: "off",
+                        changedBy: "fixture-mid-tick",
+                        changedAt: new Date(),
+                      });
+                      break;
+                    case "source-control":
+                      await store.setControl({
+                        sourceId,
+                        state: "off",
+                        changedBy: "fixture-mid-tick",
+                        changedAt: new Date(),
+                      });
+                      break;
+                    case "fingerprint":
+                      await db
+                        .update(caseLawDecisions)
+                        .set({
+                          metadata: {
+                            ...row.metadata,
+                            publisherStatement: "fixture-live-change",
+                          },
+                        })
+                        .where(eq(caseLawDecisions.id, row.id));
+                      break;
+                    case "observation-order":
+                      await db
+                        .update(caseLawDecisions)
+                        .set({ sourceObservationOrder: 0n })
+                        .where(eq(caseLawDecisions.id, row.id));
+                      break;
+                  }
+                  const changed = (
+                    await db
+                      .select()
+                      .from(caseLawDecisions)
+                      .where(eq(caseLawDecisions.id, row.id))
+                  ).at(0);
+                  if (changed === undefined) {
+                    panic("Write-fence fixture lost its row");
+                  }
+                  expected = changed;
+                },
+              },
+            );
+            expect(mutations).toEqual([mutation]);
+            expect(report.applied).toBe(0);
+            expect(
+              (
+                await db
+                  .select()
+                  .from(caseLawDecisions)
+                  .where(eq(caseLawDecisions.id, row.id))
+              ).at(0),
+            ).toEqual(expected);
+            expect((await store.getReceipt(receipt.id))?.writtenAt).toBeNull();
+            if (
+              mutation === "fingerprint" ||
+              mutation === "observation-order"
+            ) {
+              expect((await store.getReceipt(receipt.id))?.status).toBe(
+                "superseded-by-crawl",
+              );
+            } else {
+              expect(report.status).toBe("off");
+            }
+          } finally {
+            storage.stop();
+          }
+        });
+      },
+      30_000,
+    );
 
     test("restart finalizes a committed canonical write after switch-off without applying it again", async () => {
       await withSource(async (sourceId) => {

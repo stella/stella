@@ -21,8 +21,13 @@ import {
   openGatedTestDatabase,
   withGatedTestClients,
 } from "@/api/tests/gated-test-database";
+import {
+  explainRoot,
+  scanOccurrences,
+} from "@/api/tests/query-plans/plan-walker";
 
 import {
+  buildEuCompletionPageQuery,
   createEuCompletionStore,
   CompletionPayloadTooLarge,
   EU_COMPLETION_STORE_LIMITS,
@@ -161,7 +166,9 @@ if (!databaseUrl || !enabled) {
         approvedAt: new Date(fixtureState.currentTime()),
         reviewedCounts: { reviewed: 1, accepted: 1, requiresReview: 0 },
       });
-      if (approval.isErr()) {throw new TypeError(approval.error.message);}
+      if (approval.isErr()) {
+        throw new TypeError(approval.error.message);
+      }
       return approval.value;
     };
     test("reservation/CAS recovery is idempotent and durable before the cursor moves", async () => {
@@ -268,7 +275,9 @@ if (!databaseUrl || !enabled) {
       for (const item of cases) {
         const result = await state.store.approveSupervisedDryRun(item.input);
         expect(result.isErr()).toBe(true);
-        if (result.isErr()) {expect(result.error.code).toBe(item.code);}
+        if (result.isErr()) {
+          expect(result.error.code).toBe(item.code);
+        }
       }
     });
     test("canonical marker is atomic, pending mirrors cannot settle, and completion is exactly once", async () => {
@@ -334,6 +343,66 @@ if (!databaseUrl || !enabled) {
         (await state.store.getReceipt(receipt.id)).supersededAt,
       ).toBeNull();
     });
+    test("three mirror waits require repair without claiming healthy publisher progress", async () => {
+      const state = await fixture();
+      await approve(state);
+      for (const sourceId of [null, state.sourceId]) {
+        await state.store.setControl({
+          sourceId,
+          state: "on",
+          changedBy: "fixture",
+          changedAt: new Date(state.currentTime()),
+        });
+      }
+      const receipt = (
+        await state.store.reserve({ ...state.options, mode: "apply" })
+      ).at(0);
+      if (receipt === undefined) {
+        throw new TypeError("Expected apply receipt");
+      }
+      await fetched(state.store, receipt);
+      await db.transaction(async (tx) => {
+        await tx
+          .update(caseLawDecisions)
+          .set({
+            sourceHash: "written",
+            parserVersion: 2,
+            sourceObservationOrder: 42n,
+            corpusMirrorStatus: CASE_LAW_CORPUS_MIRROR_STATUS.PENDING,
+          })
+          .where(eq(caseLawDecisions.id, receipt.decisionId));
+        await state.store.markWrittenTx(tx, {
+          id: receipt.id,
+          decisionId: receipt.decisionId,
+        });
+      });
+      const before = (
+        await db
+          .select()
+          .from(euCompletionControls)
+          .where(eq(euCompletionControls.sourceId, state.sourceId))
+      ).at(0)?.healthyRows;
+      for (const outcome of ["waiting", "waiting", "review-required"]) {
+        expect(await state.store.waitForMirror(receipt.id)).toBe(outcome);
+        state.advance(EU_COMPLETION_STORE_LIMITS.mirrorWaitMs);
+        if (outcome === "waiting") {
+          expect(await state.store.pickup(receipt.id)).toBe("ready");
+        }
+      }
+      const terminal = await state.store.getReceipt(receipt.id);
+      expect(terminal.mirrorWaits).toBe(3);
+      expect(terminal.payload).not.toBeNull();
+      expect(terminal.writtenObservationOrder).toBe(42n);
+      expect(terminal.detail).toBe("canonical mirror repair required");
+      expect(
+        (
+          await db
+            .select()
+            .from(euCompletionControls)
+            .where(eq(euCompletionControls.sourceId, state.sourceId))
+        ).at(0)?.healthyRows,
+      ).toBe(before);
+    });
     test("an unrelated observation with the same semantic hash requires review", async () => {
       const state = await fixture();
       await approve(state);
@@ -397,25 +466,112 @@ if (!databaseUrl || !enabled) {
       expect(paused.completedAt).toBeNull();
       expect(await state.store.pickup(state.receipt.id)).toBe("waiting");
       state.advance(EU_COMPLETION_STORE_LIMITS.retryMaxMs);
+      for (let index = 1; index < state.ids.length; index++) {
+        const fresh = (await state.store.reserve(state.options)).at(0);
+        if (fresh === undefined) {
+          throw new TypeError("Expected fair fresh reservation");
+        }
+        expect(fresh.id).not.toBe(state.receipt.id);
+        await state.store.finish({ id: fresh.id, status: "unchanged" });
+      }
       const resumed = (await state.store.reserve(state.options)).at(0);
       expect(resumed?.id).toBe(state.receipt.id);
       expect(await state.store.pickup(state.receipt.id)).toBe("ready");
       expect((await state.store.getReceipt(state.receipt.id)).attempts).toBe(1);
       await state.store.finish({ id: state.receipt.id, status: "unchanged" });
-      const next = (await state.store.reserve(state.options)).at(0);
-      if (!next) {
-        throw new TypeError("Expected next durable identity");
+      expect(await state.store.reserve(state.options)).toEqual([]);
+      expect((await state.store.getReceipt(state.receipt.id)).status).toBe(
+        "unchanged",
+      );
+    });
+    test("publisher refusal without Retry-After escalates to a day without exhausting systemic attempts", async () => {
+      const state = await fixture();
+      for (const hours of [1, 2, 4, 8, 16, 24, 24]) {
+        expect(await state.store.pickup(state.receipt.id)).toBe("ready");
+        const settled = await state.store.finish({
+          id: state.receipt.id,
+          status: "publisher-refused",
+          retryAt: new Date(state.currentTime() + 1000),
+          healthyEvidence: "adjacent-row",
+        });
+        expect(settled?.refusalHoldUntil?.getTime()).toBe(
+          state.currentTime() + hours * 3_600_000,
+        );
+        expect(settled?.completedAt).toBeNull();
+        expect(settled?.attempts).toBe(0);
+        state.advance(hours * 3_600_000);
       }
-      await state.store.finish({ id: next.id, status: "unchanged" });
-      expect((await state.store.getReceipt(next.id)).status).toBe("unchanged");
+    });
+    test("healthy documents progress ahead of a repeatedly refusing document which then quiesces", async () => {
+      const state = await fixture();
+      for (let count = 1; count <= 3; count++) {
+        expect(await state.store.pickup(state.receipt.id)).toBe("ready");
+        const settled = await state.store.finish({
+          id: state.receipt.id,
+          status: "publisher-refused",
+          retryAt: new Date(state.currentTime() + 1000),
+        });
+        if (settled === null) {
+          throw new TypeError("Expected refusal settlement");
+        }
+        if (count === 1) {
+          const fresh = (await state.store.reserve(state.options)).at(0);
+          if (fresh === undefined) {
+            throw new TypeError("Expected healthy adjacent document");
+          }
+          expect(fresh.id).not.toBe(state.receipt.id);
+          await state.store.finish({ id: fresh.id, status: "unchanged" });
+          expect(
+            (await state.store.loadSourceGateState(state.sourceId)).holdCount,
+          ).toBe(0);
+        }
+        if (count < 3) {
+          state.advance(
+            (settled.retryAt?.getTime() ?? state.currentTime()) -
+              state.currentTime(),
+          );
+        } else {
+          expect(settled.completedAt).not.toBeNull();
+          expect(settled.retryAt).toBeNull();
+          expect(settled.attempts).toBe(0);
+          expect(await state.store.pickup(settled.id)).toBe("waiting");
+        }
+      }
+      for (let page = 0; page < 4; page++) {
+        for (const receipt of await state.store.reserve(state.options)) {
+          expect(receipt.id).not.toBe(state.receipt.id);
+          await state.store.finish({ id: receipt.id, status: "unchanged" });
+        }
+      }
+      await db
+        .update(caseLawDecisions)
+        .set({ sourceHash: "changed refusal document" })
+        .where(eq(caseLawDecisions.id, state.receipt.decisionId));
+      let admitted: EuCompletionReceipt | undefined;
+      for (let page = 0; page < 4 && admitted === undefined; page++) {
+        admitted = (await state.store.reserve(state.options)).at(0);
+      }
+      expect(admitted?.decisionId).toBe(state.receipt.decisionId);
+      expect(admitted?.id).not.toBe(state.receipt.id);
+    });
+    test("completed dry runs quiesce within their mode and generation", async () => {
+      const state = await fixture();
+      let receipt: EuCompletionReceipt | undefined = state.receipt;
+      for (let index = 0; index < 3; index++) {
+        if (receipt === undefined) {
+          throw new TypeError("Expected dry receipt");
+        }
+        await fetched(state.store, receipt);
+        await state.store.finish({ id: receipt.id, status: "dry-run" });
+        receipt = (await state.store.reserve(state.options)).at(0);
+      }
+      for (let page = 0; page < 4; page++) {
+        expect(await state.store.reserve(state.options)).toEqual([]);
+      }
       expect(
-        (
-          await db
-            .select()
-            .from(caseLawDecisions)
-            .where(eq(caseLawDecisions.id, next.decisionId))
-        ).at(0)?.sourceHash,
-      ).toBe("before");
+        (await state.store.reserve({ ...state.options, parserVersion: 3 }))
+          .length,
+      ).toBe(1);
     });
     test("fetched retry payload survives cancellation and duplicate failures never refund old attempts", async () => {
       const state = await fixture();
@@ -601,10 +757,27 @@ if (!databaseUrl || !enabled) {
           detail: "fixture withdrawal",
         })),
       );
+      expect((await state.store.reserve(state.options)).at(0)?.id).toBe(
+        state.receipt.id,
+      );
+      expect(await state.store.pickup(state.receipt.id)).toBe("waiting");
+      expect((await state.store.getReceipt(state.receipt.id)).status).toBe(
+        "withdrawn",
+      );
       expect(await state.store.reserve(state.options)).toEqual([]);
       expect(
         await state.store.reserve({ ...state.options, parserVersion: 3 }),
       ).toEqual([]);
+      await db
+        .update(caseLawDecisions)
+        .set({ fulltext: "restored document" })
+        .where(eq(caseLawDecisions.id, state.receipt.decisionId));
+      let restored: EuCompletionReceipt | undefined;
+      for (let page = 0; page < 4 && restored === undefined; page++) {
+        restored = (await state.store.reserve(state.options)).at(0);
+      }
+      expect(restored?.decisionId).toBe(state.receipt.decisionId);
+      expect(restored?.id).not.toBe(state.receipt.id);
     });
     test("oversize recovery envelopes are typed and leave the receipt unchanged", async () => {
       const state = await fixture();
@@ -752,6 +925,56 @@ if (!databaseUrl || !enabled) {
       expect(await state.store.getReceipt(newer.id)).not.toBeNull();
       expect(await state.store.compact({ limit: 100 })).toBe(0);
     });
+    test("finished 100000-row source bounds dry-run selection before receipt filtering", async () => {
+      const state = await fixture();
+      await db.execute(sql`
+        INSERT INTO case_law_decisions (id, source_id, case_number, country, court, language, parser_version, source_hash)
+        SELECT md5(${state.sourceId}::text || '-' || n::text)::uuid, ${state.sourceId}::uuid, 'completion-scale-' || n::text, 'EUR', 'fixture', 'en', 2, 'finished'
+        FROM generate_series(1, 100000) AS n
+      `);
+      await db.execute(sql`
+        INSERT INTO eu_completion_receipts (id, source_id, decision_id, mode, parser_version, status, completion_source_hash, completed_at)
+        SELECT 'finished-' || id::text, source_id, id, 'dry-run', 2, 'dry-run', source_hash, now()
+        FROM case_law_decisions WHERE source_id = ${state.sourceId}::uuid
+      `);
+      await db.execute(sql`ANALYZE case_law_decisions`);
+      await db.execute(sql`ANALYZE eu_completion_receipts`);
+      await db.transaction(async (tx) => {
+        const query = buildEuCompletionPageQuery(tx, {
+          ...state.options,
+          after: null,
+          limit: 100,
+        });
+        const page = await query;
+        expect(page).toHaveLength(100);
+        expect(page.every((row) => !row.eligible)).toBe(true);
+        const plan = explainRoot(
+          await tx.execute(
+            sql`EXPLAIN (ANALYZE, BUFFERS, FORMAT JSON) ${query.getSQL()}`,
+          ),
+        );
+        expect(plan["Actual Rows"]).toBe(100);
+        const scans = scanOccurrences(plan).filter(
+          ({ relation }) =>
+            relation === "case_law_decisions" ||
+            relation === "eu_completion_receipts",
+        );
+        expect(scans.length).toBeGreaterThan(0);
+        expect(scans.every(({ nodeType }) => nodeType.includes("Index"))).toBe(
+          true,
+        );
+        expect(
+          scans.some(
+            ({ index }) => index === "case_law_decisions_source_id_page_idx",
+          ),
+        ).toBe(true);
+        const blocks = plan["Shared Hit Blocks"];
+        if (typeof blocks !== "number") {
+          throw new TypeError("Expected EXPLAIN buffer count");
+        }
+        expect(blocks).toBeLessThan(5000);
+      });
+    }, 60_000);
     test("compaction preserves latest and approval evidence forever", async () => {
       const state = await fixture();
       await approve(state);
