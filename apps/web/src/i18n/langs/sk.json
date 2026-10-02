@@ -869,6 +869,7 @@
     },
     "viewer": {
       "abstract": "Abstrakt",
+      "caseFileMayHoldOthers": "Tento spis môže obsahovať aj ďalšie rozhodnutia.",
       "citedBy": "Citované v",
       "cites": "Cituje",
       "dissentByline": "Odlišné stanovisko: <bdi>{names}</bdi>",
