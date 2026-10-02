@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
 import fc from "fast-check";
 
@@ -7,6 +7,7 @@ import { assertProperty } from "@stll/property-testing";
 
 import { envBase } from "@/api/env-base";
 import { toSafeId } from "@/api/lib/branded-types";
+import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { withCaseLawDatedDecisions } from "@/api/lib/legal-search/case-law-dated-decisions";
 import {
   type CorpusIndexHit,
@@ -60,10 +61,12 @@ const runEngineTests = process.env["STELLA_RUN_CORPUS_ENGINE_TESTS"] === "true";
 
 const MANIFEST = CORPUS_INDEX_MANIFESTS.case_law_v7;
 const INDEX_ID = `case_law_v7_contract_${Date.now().toString(36)}`;
+const TIED_INDEX_ID = `${INDEX_ID}_tied`;
 const REVISION = toSafeId<"corpusIndexProjectionIntent">(
   "0198e331-e578-7000-8000-000000000001",
 );
 const SOURCE_ID = "0198e331-e578-7000-8000-000000000002";
+const SMALL_TIED_SOURCE_ID = "0198e331-e578-7000-8000-000000000003";
 const ENGINE_TIMEOUT_MS = 120_000;
 
 /**
@@ -225,11 +228,23 @@ const readNative = async (query: string, from: number, size: number) => {
   return result.value;
 };
 
+type ReadScoredOptions = {
+  query: string;
+  from: number;
+  size: number;
+  indexId?: string;
+};
+
 /** The same page through the scored endpoint, with the scan's projection. */
-const readScored = async (query: string, from: number, size: number) => {
+const readScored = async ({
+  query,
+  from,
+  size,
+  indexId = INDEX_ID,
+}: ReadScoredOptions) => {
   const result = await client.scoredSearch({
     observer: "unobserved",
-    indexId: INDEX_ID,
+    indexId,
     query,
     from,
     size,
@@ -248,6 +263,7 @@ type ReadScanPageOptions = {
   scanTransport: CorpusIndexScanTransport;
   rankingMode?: CorpusIndexRankingMode;
   limit?: number;
+  indexId?: string;
 };
 
 const readScanPage = async ({
@@ -256,11 +272,12 @@ const readScanPage = async ({
   scanTransport,
   rankingMode = "off",
   limit = 20,
+  indexId = INDEX_ID,
 }: ReadScanPageOptions) =>
   await readCorpusIndexSearchPage({
     observer: "unobserved",
     cluster: "q09",
-    indexId: INDEX_ID,
+    indexId,
     query,
     limit,
     order: RELEVANCE_ORDER,
@@ -325,50 +342,65 @@ describe.skipIf(!runEngineTests)(
       if (template === undefined) {
         panic("Expected a projection fixture");
       }
-      const tiedBatchSize = Math.ceil(TIED_DOCUMENT_COUNT / BATCHES);
-      for (let batch = 0; batch < BATCHES; batch += 1) {
-        const start = batch * tiedBatchSize;
-        const count = Math.min(tiedBatchSize, TIED_DOCUMENT_COUNT - start);
-        const ndjson = Array.from({ length: count }, (_, slot) => {
-          const serial = start + slot;
-          return JSON.stringify({
+      const tiedCreated = await client.createIndex(
+        corpusIndexConfigFromManifest(MANIFEST, TIED_INDEX_ID),
+        "unobserved",
+      );
+      if (tiedCreated.isErr()) {
+        throw tiedCreated.error;
+      }
+      // One isolated split gives every identical passage the same BM25 term
+      // statistics; the ordinary multi-split fixtures must not affect them.
+      const tiedNdjson = Array.from(
+        { length: TIED_DOCUMENT_COUNT },
+        (_, serial) =>
+          JSON.stringify({
             ...template,
             document_id: tiedDocumentId(serial),
             jurisdiction: "CZE",
             text: "tie",
-            decision_year: serial < SMALL_TIED_DOCUMENT_COUNT ? 2020 : 2021,
-          });
-        }).join("\n");
-        const tiedResponse = await fetch(
-          `${String(mutationBase)}/api/v1/${INDEX_ID}/ingest?commit=force`,
-          {
-            method: "POST",
-            headers: { "content-type": "application/x-ndjson" },
-            body: `${ndjson}\n`,
-          },
-        );
-        if (!tiedResponse.ok) {
-          throw new Error(`ingest ${String(tiedResponse.status)}`);
-        }
+            source:
+              serial < SMALL_TIED_DOCUMENT_COUNT
+                ? SMALL_TIED_SOURCE_ID
+                : SOURCE_ID,
+          }),
+      ).join("\n");
+      const tiedResponse = await fetch(
+        `${String(mutationBase)}/api/v1/${TIED_INDEX_ID}/ingest?commit=force`,
+        {
+          method: "POST",
+          headers: { "content-type": "application/x-ndjson" },
+          body: `${tiedNdjson}\n`,
+        },
+      );
+      if (!tiedResponse.ok) {
+        throw new Error(`ingest ${String(tiedResponse.status)}`);
       }
     }, ENGINE_TIMEOUT_MS);
 
     afterAll(async () => {
-      await client.deleteIndex(INDEX_ID, "unobserved");
+      for (const indexId of [INDEX_ID, TIED_INDEX_ID]) {
+        const deleted = await client.deleteIndex(indexId, "unobserved");
+        if (deleted.isErr()) {
+          throw deleted.error;
+        }
+      }
     }, ENGINE_TIMEOUT_MS);
 
     test(
       "all-tied scores past the cutoff fall back and visit every document once",
       async () => {
         const query = "jurisdiction:CZE AND text:tie";
-        const universe = await readScored(
+        const universe = await readScored({
           query,
-          0,
-          CORPUS_BM25_PASSAGE_LIMIT + 1,
-        );
+          from: 0,
+          size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+          indexId: TIED_INDEX_ID,
+        });
         expect(universe.numHits).toBe(TIED_DOCUMENT_COUNT);
         expect(universe.hits).toHaveLength(CORPUS_BM25_PASSAGE_LIMIT + 1);
         expect(new Set(universe.hits.map(({ score }) => score)).size).toBe(1);
+        expect(universe.hits.at(0)?.score).toBeGreaterThan(0);
         await assertProperty(
           "all-tied scores past the cutoff fall back and visit every document once",
           fc.asyncProperty(
@@ -383,6 +415,7 @@ describe.skipIf(!runEngineTests)(
               ) {
                 const read = await readScanPage({
                   query,
+                  indexId: TIED_INDEX_ID,
                   limit,
                   parsedCursor: cursor,
                   rankingMode: "bm25-ratio",
@@ -426,14 +459,16 @@ describe.skipIf(!runEngineTests)(
     test(
       "ties below the cutoff preserve every document and the cursor mode",
       async () => {
-        const query = "jurisdiction:CZE AND text:tie AND decision_year:2020";
-        const universe = await readScored(
+        const query = `jurisdiction:CZE AND text:tie AND source:${SMALL_TIED_SOURCE_ID}`;
+        const universe = await readScored({
           query,
-          0,
-          CORPUS_BM25_PASSAGE_LIMIT + 1,
-        );
+          from: 0,
+          size: CORPUS_BM25_PASSAGE_LIMIT + 1,
+          indexId: TIED_INDEX_ID,
+        });
         expect(universe.numHits).toBe(SMALL_TIED_DOCUMENT_COUNT);
         expect(new Set(universe.hits.map(({ score }) => score)).size).toBe(1);
+        expect(universe.hits.at(0)?.score).toBeGreaterThan(0);
         await assertProperty(
           "ties below the cutoff preserve every document and the cursor mode",
           fc.asyncProperty(fc.integer({ min: 7, max: 25 }), async (limit) => {
@@ -446,9 +481,10 @@ describe.skipIf(!runEngineTests)(
             ) {
               const read = await readScanPage({
                 query,
+                indexId: TIED_INDEX_ID,
                 limit,
                 parsedCursor: cursor,
-                rankingMode: page % 2 === 0 ? "bm25-ratio" : "off",
+                rankingMode: "bm25-ratio",
                 scanTransport: { type: "scored", fields: ["document_id"] },
               });
               seen.push(...read.pageRanked.map(({ id }) => id));
@@ -468,6 +504,30 @@ describe.skipIf(!runEngineTests)(
                 panic("Expected an encoded mode cursor");
               }
               cursor = decoded;
+              if (page === 0) {
+                const rejected = await Result.tryPromise(
+                  async () =>
+                    await readScanPage({
+                      query,
+                      indexId: TIED_INDEX_ID,
+                      limit,
+                      parsedCursor: decoded,
+                      rankingMode: "off",
+                      scanTransport: {
+                        type: "scored",
+                        fields: ["document_id"],
+                      },
+                    }),
+                );
+                expect(rejected.isErr()).toBe(true);
+                if (rejected.isErr()) {
+                  expect(rejected.error.cause).toBeInstanceOf(HandlerError);
+                  expect(rejected.error.cause).toMatchObject({
+                    status: 400,
+                    message: "Invalid cursor",
+                  });
+                }
+              }
             }
             expect(cursor).toBeNull();
             expect(new Set(seen)).toEqual(
@@ -509,7 +569,7 @@ describe.skipIf(!runEngineTests)(
         for (let from = 0; from < total; from += PAGE_SIZE) {
           const [nativePage, scoredPage] = await Promise.all([
             readNative(query, from, PAGE_SIZE),
-            readScored(query, from, PAGE_SIZE),
+            readScored({ query, from, size: PAGE_SIZE }),
           ]);
           expect(scoredPage.numHits).toBe(nativePage.numHits);
           total = nativePage.numHits;
@@ -534,7 +594,11 @@ describe.skipIf(!runEngineTests)(
       "a %s entry replays BM25 pages from the real scored universe",
       async (_kind, entry) => {
         const query = handlerQuery(entry);
-        const universe = await readScored(query, 0, CORPUS_BM25_PASSAGE_LIMIT);
+        const universe = await readScored({
+          query,
+          from: 0,
+          size: CORPUS_BM25_PASSAGE_LIMIT,
+        });
         expect(universe.hits.length).toBeGreaterThan(20);
         const top = universe.hits.at(0)?.score;
         if (top === undefined || top <= 0) {
