@@ -1,3 +1,5 @@
+import { PUBLIC_COUNTRIES } from "./public-country-capability";
+
 /**
  * The jurisdictions the corpus holds decisions for, and the union every
  * per-jurisdiction decision in the case-law slice is total over.
@@ -18,15 +20,7 @@
  * "which decisions may a citation from here reach" a per-jurisdiction
  * declaration instead of a special case in the resolver.
  */
-export const CASE_LAW_JURISDICTIONS = [
-  "AUT",
-  "CZE",
-  "EU",
-  "HUN",
-  "POL",
-  "SVK",
-  "USA",
-] as const;
+export const CASE_LAW_JURISDICTIONS = PUBLIC_COUNTRIES;
 
 export type CaseLawJurisdiction = (typeof CASE_LAW_JURISDICTIONS)[number];
 

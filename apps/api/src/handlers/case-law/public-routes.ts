@@ -194,7 +194,7 @@ const readDecisionBySlug = createSafePublicSubjectFollowUpHandler({
     const countryRead = readPublicLawCountry(country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
     });
-    return countryRead.kind === "unreadable"
+    return countryRead.kind !== "read"
       ? countryRead
       : { kind: "slug", country: countryRead.country, slug, language };
   },

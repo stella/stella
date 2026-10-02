@@ -1479,6 +1479,14 @@ describe("batched point-in-time statute resolve", () => {
       null,
       null,
     ]);
+    expect(items.at(3)).toMatchObject({
+      unresolvedReason: "pending_public",
+      availability: {
+        status: "unavailable",
+        country: "SVK",
+        reason: "pending_public",
+      },
+    });
   });
 
   test("answers an act cited after it ended with its last consolidation", async () => {

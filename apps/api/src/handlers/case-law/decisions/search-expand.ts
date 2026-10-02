@@ -1,5 +1,5 @@
 import { Result } from "better-result";
-import { t } from "elysia";
+import { status, t } from "elysia";
 import * as v from "valibot";
 
 import {
@@ -173,6 +173,9 @@ const expandCaseLawSearch = createSafeRootHandler(
     const countryRead = readPublicLawCountry(body.country, {
       admitted: PUBLIC_CASE_LAW_COUNTRIES,
     });
+    if (countryRead.kind === "unavailable") {
+      return Result.ok(status(503, countryRead.response));
+    }
     if (countryRead.kind === "unreadable") {
       return yield* Result.err(
         new HandlerError({ status: 400, message: countryRead.message }),
