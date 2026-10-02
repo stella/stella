@@ -1,7 +1,6 @@
 -- requires: 20261003122100_number_series
 SET LOCAL lock_timeout = '5s';--> statement-breakpoint
 SET LOCAL statement_timeout = '30s';--> statement-breakpoint
--- stella-migration-safety: reviewed drop-object - Replace the default constraint atomically with seller-scoped constraints; no rows are removed.
 -- squawk-ignore require-concurrent-index-deletion -- Small organization settings table; atomic replacement preserves uniqueness throughout.
 DROP INDEX "number_series_org_type_default_uidx";--> statement-breakpoint
 -- squawk-ignore require-concurrent-index-creation -- Small organization settings table; bounded transactional build preserves atomic replacement.
