@@ -457,8 +457,8 @@ if (!runValkeyTests || !process.env["REDIS_URL"]) {
               if (typeof ttl !== "number") {
                 throw new TypeError("Redis PTTL did not return a number");
               }
-              // A read-only cooldown check may name a key already expired.
-              expect(ttl === -2 || ttl > 0).toBe(true);
+              // PTTL may be zero in the final millisecond or -2 after expiry.
+              expect(ttl === -2 || ttl >= 0).toBe(true);
               checkedKeys.add(scriptKey);
             }
             return response;
