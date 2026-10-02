@@ -1507,6 +1507,11 @@ export const createApprovalHarness = ({
     streamWhole: (threadId: SafeId<"chatThread">) => {
       liveThreads.delete(threadId);
     },
+    /** A compaction checkpoint landed on `threadId`: its next model call
+     *  starts from the summary rather than extending the calls before it. */
+    compacted: (threadId: SafeId<"chatThread">) => {
+      provider.promptLedgerOf(threadId).compacted();
+    },
     /** The provider options of `threadId`'s model calls so far. */
     modelOptionsOf: (threadId: SafeId<"chatThread">) =>
       provider.modelOptionsOf(threadId),
