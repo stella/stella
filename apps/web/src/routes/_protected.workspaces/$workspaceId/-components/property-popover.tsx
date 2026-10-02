@@ -172,12 +172,8 @@ export const PropertyPopover = ({
     },
   });
 
-  // The composer's CreatableContentType union excludes "file" by
-  // design — file columns are created by upload, not by user choice,
-  // and the composer has no UI for them. Hiding the entry here keeps
-  // a save from silently rewriting the file column as text/manual.
-  // Verdict columns are system-computed (read-only), so they are not
-  // editable via the composer either.
+  // The composer supports custom content types; file and computed verdict
+  // columns retain their dedicated editing controls.
   const canEditViaComposer = canEditPropertyViaComposer(
     property.content,
     isPlaybookVerdictProperty(property),

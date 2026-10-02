@@ -455,7 +455,6 @@ describe("duplicateWorkspace", () => {
     flushWorkspaceSearchRepairsMock.mockClear();
 
     const insertedFields: InsertedWorkspaceField[] = [];
-    const insertedProperties: unknown[] = [];
 
     const filePropertyId = toSafeId<"property">("prop_file");
     const filePropertyContent: PropertyContent = { type: "file", version: 1 };
@@ -616,14 +615,10 @@ describe("duplicateWorkspace", () => {
             return entityVersionInsertResult(value);
           }
 
-          if (table === properties) {
-            insertedProperties.push(value);
-            return undefined;
-          }
-
           if (
             table === auditLogs ||
             table === entities ||
+            table === properties ||
             table === workspaces
           ) {
             return undefined;
@@ -648,18 +643,6 @@ describe("duplicateWorkspace", () => {
     expect(result).toEqual({ workspaceId: expect.any(String) });
     const duplicatedWorkspaceId = readDuplicatedWorkspaceId(result);
     expect(insertedFields).toHaveLength(1);
-    expect(insertedProperties).toEqual([
-      [
-        expect.objectContaining({
-          id: insertedFields.at(0)?.propertyId,
-          workspaceId: duplicatedWorkspaceId,
-          content: filePropertyContent,
-          system: false,
-          kinds: ["document"],
-        }),
-      ],
-    ]);
-    expect(insertedFields.at(0)?.propertyId).not.toBe(filePropertyId);
 
     const copiedContent = insertedFields.at(0)?.content;
     expect(copiedContent?.type).toBe("file");

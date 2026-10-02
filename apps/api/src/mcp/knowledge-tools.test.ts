@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, mock, test } from "bun:test";
 
+import { FILE_PROPERTY_TYPE_IMMUTABLE_CODE } from "@stll/api-contract/property-policy";
+
 import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
+import type { MaterializePlaybookRunResult } from "@/api/lib/workflow/materialize-playbook-run";
 import type { McpRequestContext } from "@/api/mcp/context";
 import { isMcpEgressPlan } from "@/api/mcp/tool-types";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -803,6 +806,46 @@ describe("MCP knowledge tools", () => {
       propertyIds: [toSafeId<"property">("p1"), toSafeId<"property">("p2")],
       workspaceId: MATTER_ID,
     });
+  });
+
+  test("run_playbook preserves a materialization refusal and its corrective action", async () => {
+    loadLatestApprovedVersionMock.mockResolvedValue(null);
+    const refusal = {
+      ok: false,
+      status: 422,
+      code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+      retryable: false,
+      message:
+        "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+      hint: "Keep the existing ASK content.type, or add a new playbook position for values of another type.",
+    } as const satisfies MaterializePlaybookRunResult;
+    materializePlaybookRunMock.mockResolvedValue(refusal);
+
+    const result = await handleMcpToolCall({
+      args: { matter_id: MATTER_ID, playbook_id: PLAYBOOK_ID },
+      context: createContext({
+        scopedDb: createPlaybookScopedDb({
+          id: PLAYBOOK_ID,
+          name: "Playbook",
+          positions: positionsSaying("File content"),
+          scope: null,
+        }),
+      }),
+      toolName: "run_playbook",
+    });
+
+    expect(materializePlaybookRunMock).toHaveBeenCalledTimes(1);
+    expect(result.isError).toBe(true);
+    expect(parseToolPayload(result)).toMatchObject({
+      error: {
+        code: "validation_error",
+        message: refusal.message,
+        hint: refusal.hint,
+        retryable: false,
+      },
+    });
+    expect(createPlaybookTableRunsMock).not.toHaveBeenCalled();
+    expect(startWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("run_playbook reports a workflow that never started instead of a run count", async () => {

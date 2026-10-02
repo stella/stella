@@ -1,6 +1,10 @@
 import { panic } from "better-result";
 import { and, eq, inArray, isNull, or, sql } from "drizzle-orm";
 
+import {
+  FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+  isFileProperty,
+} from "@stll/api-contract/property-policy";
 import type { ConditionNode } from "@stll/conditions";
 
 import type { Transaction } from "@/api/db/root";
@@ -233,7 +237,15 @@ export const resolveScopedGate = async ({
 
 export type MaterializePlaybookRunResult =
   | { ok: true; materializedPropertyIds: SafeId<"property">[] }
-  | { ok: false; status: 400; message: string };
+  | { ok: false; status: 400; message: string }
+  | {
+      ok: false;
+      status: 422;
+      code: typeof FILE_PROPERTY_TYPE_IMMUTABLE_CODE;
+      retryable: false;
+      message: string;
+      hint: string;
+    };
 
 type MaterializePlaybookRunArgs = {
   tx: Transaction;
@@ -328,6 +340,7 @@ export const materializePlaybookRun = async ({
       id: properties.id,
       playbookSourceId: properties.playbookSourceId,
       tool: properties.tool,
+      content: properties.content,
     })
     .from(properties)
     .where(
@@ -341,11 +354,16 @@ export const materializePlaybookRun = async ({
           ),
         ),
       ),
-    );
+    )
+    .for("update");
 
   // ASK vs verdict materialized columns share a position's sourceId; the tool
   // type disambiguates which existing row to update in place.
   const askIdBySourceId = new Map<string, SafeId<"property">>();
+  const askContentBySourceId = new Map<
+    string,
+    (typeof owned)[number]["content"]
+  >();
   const verdictIdBySourceId = new Map<string, SafeId<"property">>();
   for (const row of owned) {
     if (row.playbookSourceId === null) {
@@ -355,6 +373,7 @@ export const materializePlaybookRun = async ({
       verdictIdBySourceId.set(row.playbookSourceId, row.id);
     } else {
       askIdBySourceId.set(row.playbookSourceId, row.id);
+      askContentBySourceId.set(row.playbookSourceId, row.content);
     }
   }
 
@@ -372,6 +391,21 @@ export const materializePlaybookRun = async ({
 
   for (const position of enabledPositions) {
     const ask = resolveEffectiveAsk(position);
+    const storedContent = askContentBySourceId.get(position.sourceId);
+    if (
+      storedContent &&
+      isFileProperty(storedContent) !== isFileProperty(ask.content)
+    ) {
+      return {
+        ok: false,
+        status: 422,
+        code: FILE_PROPERTY_TYPE_IMMUTABLE_CODE,
+        retryable: false,
+        message:
+          "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
+        hint: "Keep the existing ASK content.type, or add a new playbook position for values of another type.",
+      };
+    }
     const askTool = buildAskTool(ask);
     const askId =
       askIdBySourceId.get(position.sourceId) ?? createSafeId<"property">();

@@ -164,6 +164,54 @@ test.each(customContents)(
   },
 );
 
+test("non-system file columns retain their type", async () => {
+  await db
+    .update(properties)
+    .set({ system: false })
+    .where(eq(properties.id, ids.filePropertyA1));
+  const before = await db.query.properties.findFirst({
+    where: { id: { eq: ids.filePropertyA1 } },
+  });
+  expect(
+    await runUpdate({
+      content: contents.text,
+      name: "Custom documents",
+      file: true,
+      ai: false,
+    }),
+  ).toMatchObject({
+    code: 422,
+    response: { code: "file_property_type_immutable", retryable: false },
+  });
+  expect(
+    await db.query.properties.findFirst({
+      where: { id: { eq: ids.filePropertyA1 } },
+    }),
+  ).toEqual(before);
+  await db
+    .update(properties)
+    .set({ system: true })
+    .where(eq(properties.id, ids.filePropertyA1));
+});
+
+test("file type refusal precedes AI tool validation", async () => {
+  expect(
+    await runUpdate({
+      content: contents.file,
+      name: "Converted",
+      file: false,
+      ai: true,
+    }),
+  ).toMatchObject({
+    code: 422,
+    response: {
+      code: "file_property_type_immutable",
+      retryable: false,
+      hint: expect.stringContaining("properties.update"),
+    },
+  });
+});
+
 test("file column updates preserve document references", async () => {
   await assertProperty(
     "file column updates preserve document references",
@@ -190,6 +238,14 @@ test("file column updates preserve document references", async () => {
           (content.type === "file" && ai)
         ) {
           expect(response).toMatchObject({ code: 422 });
+          if (file !== (content.type === "file")) {
+            expect(response).toMatchObject({
+              response: {
+                code: "file_property_type_immutable",
+                retryable: false,
+              },
+            });
+          }
           expect(after).toEqual(before);
         } else {
           expect(response).toEqual({});
@@ -259,7 +315,9 @@ test("renaming a file column retains its scope and generated document creation",
       },
     });
     expect(created.isOk()).toBe(true);
-    if (created.isErr()) {throw created.error;}
+    if (created.isErr()) {
+      throw created.error;
+    }
     const field = await db.query.fields.findFirst({
       where: { id: { eq: created.value.fieldId } },
     });

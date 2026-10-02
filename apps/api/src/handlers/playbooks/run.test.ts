@@ -1,3 +1,4 @@
+import { panic } from "better-result";
 import { afterAll, beforeEach, describe, expect, mock, test } from "bun:test";
 
 import { toSafeId } from "@/api/lib/branded-types";
@@ -88,6 +89,29 @@ describe("run playbook handler", () => {
 
   afterAll(() => {
     mock.restore();
+  });
+
+  test("preserves a materialized column's typed refusal without starting extraction", async () => {
+    const refusal = {
+      ok: false,
+      status: 422,
+      code: "file_property_type_immutable",
+      retryable: false,
+      message: "File property types cannot be changed.",
+      hint: "Keep the existing ASK content.type or add a new playbook position.",
+    } as const satisfies Extract<OpenPlaybookRunResult, { ok: false }>;
+    openPlaybookRunMock.mockResolvedValue(refusal);
+    const result = await runColumnsProjection();
+    if (!("code" in result))
+      {panic("Expected the materialization refusal status");}
+    expect(result.code).toBe(422);
+    expect(result.response).toMatchObject({
+      code: refusal.code,
+      message: refusal.message,
+      hint: refusal.hint,
+      retryable: false,
+    });
+    expect(startWorkflowMock).not.toHaveBeenCalled();
   });
 
   test("a failed enqueue is answered as a failure, not as an opened run", async () => {

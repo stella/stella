@@ -1968,7 +1968,19 @@ const handleRunPlaybookTool: TypedMcpToolHandler<
   }
   const outcome = txResult.value;
   if (!outcome.ok) {
-    return errorResult(outcome.message);
+    return internalFailureResult(
+      new HandlerError({
+        status: outcome.status,
+        message: outcome.message,
+        ...(outcome.status === 422
+          ? {
+              code: outcome.code,
+              hint: outcome.hint,
+              retryable: outcome.retryable,
+            }
+          : {}),
+      }),
+    );
   }
 
   if (outcome.materializedPropertyIds.length === 0) {

@@ -730,9 +730,9 @@ export const internalFailureResult = (
         // rejection does instead of collapsing to one line of prose.
         issues: error.issues,
         // The handler's own next step for input it refused: authored text
-        // about the call, never internal detail. Other refusals keep the
-        // envelope's default hint.
-        ...(code === "validation_error" && { hint: error.hint }),
+        // about the call, never internal detail.
+        hint: error.hint,
+        retryable: error.retryable,
       });
     }
   }

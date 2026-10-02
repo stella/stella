@@ -284,15 +284,6 @@ const updateProperty = createSafeHandler(
     const tool =
       body.tool.type === "ai-model" ? serializeAITool(body.tool) : body.tool;
 
-    if (isFileProperty(content) && tool.type !== "manual-input") {
-      return Result.err(
-        new HandlerError({
-          status: 422,
-          message: "File properties must have a manual input tool",
-        }),
-      );
-    }
-
     const dependencies =
       body.tool.type === "ai-model" ? body.tool.dependencies : [];
 
@@ -314,7 +305,6 @@ const updateProperty = createSafeHandler(
             id: properties.id,
             name: properties.name,
             content: properties.content,
-            system: properties.system,
             tool: properties.tool,
             kinds: properties.kinds,
             role: properties.role,
@@ -348,6 +338,14 @@ const updateProperty = createSafeHandler(
             message:
               "File property types cannot be changed. Keep the existing type; create a custom property for other values.",
             hint: "Keep the existing content.type in properties.update, or use properties.create to add a custom property with another type.",
+          };
+        }
+
+        if (isFileProperty(content) && tool.type !== "manual-input") {
+          return {
+            ok: false as const,
+            status: 422 as const,
+            message: "File properties must have a manual input tool",
           };
         }
 

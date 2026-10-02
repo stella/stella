@@ -734,7 +734,18 @@ const mapStatusResponse = (
       hint: MCP_INTERNAL_ERROR_HINT,
     });
   }
-  return structuredErrorResult({ code, message });
+  return structuredErrorResult({
+    code,
+    message,
+    hint:
+      isRecord(responseBody) && typeof responseBody["hint"] === "string"
+        ? responseBody["hint"]
+        : undefined,
+    retryable:
+      isRecord(responseBody) && typeof responseBody["retryable"] === "boolean"
+        ? responseBody["retryable"]
+        : undefined,
+  });
 };
 
 /**
