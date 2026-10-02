@@ -27,11 +27,13 @@ jobs:
     permissions:
       actions: read
       contents: read
-      issues: write
       pull-requests: read
     outputs:
       pr: ${{ steps.pr.outputs.pr }}
+      head: ${{ steps.artifact.outputs.head }}
+      push-allowed: ${{ steps.pr.outputs.push-allowed }}
       committed: ${{ steps.commit.outputs.operation == 'committed' }}
+      commit-outcome: ${{ steps.commit.outcome }}
       commit-sha: ${{ steps.commit.outputs.commit-sha }}
       summary: ${{ steps.summary.outputs.summary }}
     steps:
@@ -266,19 +268,77 @@ jobs:
             values come from the pull request's own code; review them as a
             budget change.
 
+  # The deliver job has no write access to the pull request. Once the pull
+  # request is verified, this job removes the recording label and reports a
+  # delivery that never reached the branch (for example, a queued branch that
+  # refuses pushes) as a comment and a failing status on the recorded head.
+  report-delivery:
+    needs: deliver
+    if: always() && needs.deliver.outputs.pr != ''
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    permissions:
+      issues: write
+      pull-requests: write
+      statuses: write
+    steps:
       - name: Remove recording label
-        if: always() && steps.pr.outcome == 'success'
         env:
           GH_TOKEN: ${{ github.token }}
           REPOSITORY: ${{ github.repository }}
-          PR_NUMBER: ${{ steps.pr.outputs.pr }}
+          PR_NUMBER: ${{ needs.deliver.outputs.pr }}
         run: |
           set -euo pipefail
           if gh api "repos/$REPOSITORY/issues/$PR_NUMBER/labels" --jq '.[].name' | grep -Fxq 'baseline:record'; then
             gh api -X DELETE "repos/$REPOSITORY/issues/$PR_NUMBER/labels/baseline%3Arecord" --silent
           fi
 
-  # Only this job's token may write pull request review comments. An
+      - name: Report the delivery on the recorded head
+        if: always() && needs.deliver.outputs.push-allowed == 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REPOSITORY: ${{ github.repository }}
+          PR_NUMBER: ${{ needs.deliver.outputs.pr }}
+          HEAD_SHA: ${{ needs.deliver.outputs.head }}
+          DELIVERED: ${{ needs.deliver.result == 'success' || needs.deliver.outputs.committed == 'true' }}
+          COMMIT_FAILED: ${{ needs.deliver.outputs.commit-outcome == 'failure' }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$HEAD_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "::error::No recorded head to report on for #$PR_NUMBER"
+            exit 1
+          fi
+          if [[ "$DELIVERED" == true ]]; then
+            gh api -X POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
+              -f state=success \
+              -f context=network-baseline/deliver \
+              -f description="The recorded network baseline was delivered" \
+              -f target_url="$RUN_URL" --silent
+            exit 0
+          fi
+          gh api -X POST "repos/$REPOSITORY/statuses/$HEAD_SHA" \
+            -f state=failure \
+            -f context=network-baseline/deliver \
+            -f description="The recorded network baseline was not committed" \
+            -f target_url="$RUN_URL" --silent
+          body="The recorded network baseline was not committed to this branch. The delivery run has the failing step: $RUN_URL"
+          # A queued branch refuses pushes. Name that cause only when the
+          # commit itself failed and the pull request is still queued.
+          queued=false
+          if [[ "$COMMIT_FAILED" == true ]]; then
+            # shellcheck disable=SC2016 # GraphQL variables, not shell ones
+            queued=$(gh api graphql \
+              -f query='query($owner: String!, $name: String!, $number: Int!) { repository(owner: $owner, name: $name) { pullRequest(number: $number) { isInMergeQueue } } }' \
+              -f owner="${REPOSITORY%%/*}" -f name="${REPOSITORY#*/}" -F number="$PR_NUMBER" \
+              --jq '.data.repository.pullRequest.isInMergeQueue' || echo unknown)
+          fi
+          if [[ "$queued" == true ]]; then
+            body+=$'\n\n'"This pull request is in the merge queue, and a queued branch cannot be updated. Take it out of the queue, then record the baseline again."
+          fi
+          gh api -X POST "repos/$REPOSITORY/issues/$PR_NUMBER/comments" -f body="$body" --silent
+
+  # This job opens the review thread on a delivered commit. An
   # unresolved review thread blocks merging on main, so the recorded budgets
   # get a fresh review after every delivered commit.
   request-budget-review:
@@ -323,6 +383,7 @@ jobs:
     timeout-minutes: 3
     permissions:
       issues: write
+      pull-requests: write
     steps:
       - name: Remove recording label
         env:

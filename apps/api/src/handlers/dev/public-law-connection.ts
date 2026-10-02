@@ -95,7 +95,11 @@ const probeDatabase = async (): Promise<ProbeOutcome> => {
 const probeSearch = async (): Promise<ProbeOutcome> => {
   const result = await Result.tryPromise({
     try: async () =>
-      await probeCorpusIndexSearchLiveness(SEARCH_CLUSTER, PROBE_TIMEOUT_MS),
+      await probeCorpusIndexSearchLiveness(
+        SEARCH_CLUSTER,
+        PROBE_TIMEOUT_MS,
+        "unobserved",
+      ),
     catch: errorMessage,
   });
   if (result.isErr()) {

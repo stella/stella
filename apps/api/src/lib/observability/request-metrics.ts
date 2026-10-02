@@ -1,5 +1,6 @@
 import { panic } from "better-result";
 
+import type { AIProvider } from "@stll/ai-catalog";
 import { Temporal } from "@stll/time";
 
 import { isLocalDevOpen } from "@/api/runtime-mode";
@@ -213,6 +214,155 @@ export const emitActionCostDropMetric = (dropped: number): void => {
     },
     ActionCostObservationsDropped: dropped,
   });
+};
+
+const CHAT_TURN_SETTLEMENT_METRIC_NAME = "ChatTurnSettlements";
+
+/**
+ * The outcome and failure code are the chat slice's closed sets; they are type
+ * parameters so this shared module does not import the slice, and the caller's
+ * types keep them closed.
+ */
+type ChatTurnSettlementMetricInput<
+  TOutcome extends string,
+  TFailureCode extends string,
+> = {
+  /** The status the turn settled with. */
+  outcome: TOutcome;
+  /** The third-party boundary the turn's provider input crossed. */
+  mode: "anonymized" | "raw";
+  /** The turn's provider; `none` when it ended before a model was resolved. */
+  provider: AIProvider | "none";
+  failureCode: TFailureCode | null;
+};
+
+/**
+ * One settled chat turn, counted by outcome and boundary mode, and again by
+ * provider, so an alarm can divide failed by settled turns per mode (and per
+ * provider) instead of watching a raw failure count that moves with traffic.
+ * Every dimension is a closed set; the failure code rides along as a
+ * queryable property, never a thread, turn or tenant id.
+ */
+export const buildChatTurnSettlementRecord = <
+  TOutcome extends string,
+  TFailureCode extends string,
+>({
+  failureCode,
+  mode,
+  outcome,
+  provider,
+  timestamp,
+}: ChatTurnSettlementMetricInput<TOutcome, TFailureCode> & {
+  timestamp: number;
+}) => ({
+  _aws: {
+    Timestamp: timestamp,
+    CloudWatchMetrics: [
+      {
+        Namespace: METRIC_NAMESPACE,
+        Dimensions: [
+          ["outcome", "mode"],
+          ["outcome", "mode", "provider"],
+        ],
+        Metrics: [{ Name: CHAT_TURN_SETTLEMENT_METRIC_NAME, Unit: "Count" }],
+      },
+    ],
+  },
+  outcome,
+  mode,
+  provider,
+  failure_code: failureCode ?? "none",
+  [CHAT_TURN_SETTLEMENT_METRIC_NAME]: 1,
+});
+
+export const emitChatTurnSettlementMetric = <
+  TOutcome extends string,
+  TFailureCode extends string,
+>(
+  input: ChatTurnSettlementMetricInput<TOutcome, TFailureCode>,
+): void => {
+  writeMetricLine(
+    buildChatTurnSettlementRecord({
+      ...input,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
+};
+
+/**
+ * Where provider-bound content was refused for anonymization. Each refusal is
+ * built at exactly one of these, so every role that crosses the boundary
+ * (chat, subagents, compaction, template tools) is counted where it refuses.
+ */
+export const ANONYMIZATION_REFUSAL_SITES = [
+  // Any text batch the anonymizer prepares: prompts, history, tool output,
+  // connector metadata.
+  "text_batch",
+  "attachment",
+  "stored_part",
+  "rich_media",
+  "external_tool",
+  "agent_run",
+  "file_hydration",
+  "mcp_egress",
+] as const;
+export type AnonymizationRefusalSite =
+  (typeof ANONYMIZATION_REFUSAL_SITES)[number];
+
+export const ANONYMIZATION_REFUSAL_REASONS = [
+  // The anonymizer itself failed.
+  "pipeline_error",
+  // Anonymizing would change a value that must cross unchanged (a name, an
+  // id, a URL), or the field structure it was given did not survive it.
+  "field_boundary",
+  // Content the anonymizer cannot read or prepare.
+  "unsupported_content",
+  // The mode does not allow the capability at all.
+  "mode_policy",
+] as const;
+export type AnonymizationRefusalReason =
+  (typeof ANONYMIZATION_REFUSAL_REASONS)[number];
+
+const ANONYMIZATION_REFUSAL_METRIC_NAME = "AnonymizationRefusals";
+
+type AnonymizationRefusalMetricInput = {
+  reason: AnonymizationRefusalReason;
+  site: AnonymizationRefusalSite;
+};
+
+/**
+ * One refusal to send content across the anonymized boundary, dimensioned by
+ * site and reason, plus an undimensioned total an alarm can watch.
+ */
+export const buildAnonymizationRefusalRecord = ({
+  reason,
+  site,
+  timestamp,
+}: AnonymizationRefusalMetricInput & { timestamp: number }) => ({
+  _aws: {
+    Timestamp: timestamp,
+    CloudWatchMetrics: [
+      {
+        Namespace: METRIC_NAMESPACE,
+        Dimensions: [["site", "reason"], []],
+        Metrics: [{ Name: ANONYMIZATION_REFUSAL_METRIC_NAME, Unit: "Count" }],
+      },
+    ],
+  },
+  site,
+  reason,
+  [ANONYMIZATION_REFUSAL_METRIC_NAME]: 1,
+});
+
+export const emitAnonymizationRefusalMetric = (
+  input: AnonymizationRefusalMetricInput,
+): void => {
+  writeMetricLine(
+    buildAnonymizationRefusalRecord({
+      ...input,
+      timestamp: Temporal.Now.instant().epochMilliseconds,
+    }),
+  );
 };
 
 const ACTION_RESPONSE_OVERSIZE_METRIC = "ActionResponseOversize";

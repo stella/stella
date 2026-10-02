@@ -39,7 +39,7 @@ const searchDependencies = {
       languages: [],
     },
   ],
-} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[2]>;
+} satisfies NonNullable<Parameters<typeof searchLegislationHandler>[3]>;
 
 let client: Awaited<ReturnType<typeof createTestPglite>> | undefined;
 let db: ReturnType<typeof drizzle>;
@@ -100,6 +100,7 @@ const search = async (query: string, limit: number, cursor?: string) => {
   const response = await searchLegislationHandler(
     { query, limit, ...(cursor === undefined ? {} : { cursor }) },
     legislationDb,
+    "unobserved",
     searchDependencies,
   );
   if (!("items" in response)) {
