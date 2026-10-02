@@ -199,7 +199,9 @@ if (!databaseUrl || !enabled) {
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        onLag: (source) => observations.push(source),
+        onLag: (source) => {
+          observations.push(source);
+        },
       });
       const first = await store.chooseSource();
       const second = await store.chooseSource();
@@ -226,7 +228,9 @@ if (!databaseUrl || !enabled) {
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        onHeld: (source) => held.push(source.id),
+        onHeld: (source) => {
+          held.push(source.id);
+        },
       });
       expect((await heldStore.chooseSource())?.id).toBe(eu.source.id);
       expect((await heldStore.chooseSource())?.id).toBe(eu.source.id);
@@ -467,7 +471,7 @@ if (!databaseUrl || !enabled) {
               },
             });
             activeStore = killedStore;
-            const result = await Result.tryPromise(() =>
+            const result = await Result.tryPromise(async () =>
               firstRunner.completeBatch(reserved.batch, {
                 report: first,
                 durationMs: 1,
@@ -689,7 +693,7 @@ if (!databaseUrl || !enabled) {
                 }
                 let reads = 0;
                 let fenceChecks = 0;
-                let killed = false;
+                const cleanupState = { killed: false };
                 try {
                   await expectAcquisition(firstSlot, true);
                   await expectAcquisition(rivalSlot, false);
@@ -707,7 +711,7 @@ if (!databaseUrl || !enabled) {
                           { terminated: boolean }[]
                         >`SELECT pg_terminate_backend(${pid}, 5000) AS terminated`;
                         expect(terminated.at(0)?.terminated).toBe(true);
-                        killed = true;
+                        cleanupState.killed = true;
                         await expectAcquisition(rivalSlot, true);
                       }
                       return raw;
@@ -760,7 +764,7 @@ if (!databaseUrl || !enabled) {
                   expect(checkpoint?.cursor).toBeNull();
                 } finally {
                   await rivalSlot.close();
-                  if (!killed) {
+                  if (!cleanupState.killed) {
                     await firstSlot.close();
                   }
                   first.release();
@@ -936,7 +940,7 @@ if (!databaseUrl || !enabled) {
               await admin`SELECT pg_terminate_backend(${backend.pid}, 5000)`;
             },
           });
-          const result = await Result.tryPromise(() =>
+          const result = await Result.tryPromise(async () =>
             killedStore.completeBatch(reserved.batch, completion),
           );
           expect(reachedCheckpoint).toBe(true);
@@ -1206,12 +1210,7 @@ if (!databaseUrl || !enabled) {
       await db
         .update(caseLawDecisions)
         .set({ parserVersion: 2 })
-        .where(
-          eq(
-            caseLawDecisions.id,
-            second.batch.decisionId ?? panic("Expected replay decision id"),
-          ),
-        );
+        .where(eq(caseLawDecisions.id, second.batch.decisionId));
       await store.completeBatch(second.batch, applied(second.batch));
       for (
         let attempt = 2;
@@ -1554,43 +1553,239 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("dry-run cursor resumes across fresh stores and reset changes no decision or receipt", async () => {
-      const { source } = await fixture(10);
-      const store = createBackgroundReplayStore({
-        db,
-        now: () => Date.UTC(2026, 9, 1),
-      });
+    test("dry-run cursor resumes across fresh stores while receipts never enter apply recovery", async () => {
+      const { source: enrolled, ids } = await fixture(10);
+      const source = { ...enrolled, mode: "dry-run" } as const;
+      let clock = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => clock });
       const before = await db
         .select()
         .from(caseLawDecisions)
         .where(eq(caseLawDecisions.sourceId, source.id));
       const first = await store.previewBatch(source, null);
-      if (!first) {
+      if (first.type !== "reserved") {
         throw new TypeError("Expected first preview");
       }
-      await store.advancePreview(first);
-      const restarted = createBackgroundReplayStore({
-        db,
-        now: () => Date.UTC(2026, 9, 1),
-      });
+      await store.advancePreview(first.batch);
+      const restarted = createBackgroundReplayStore({ db, now: () => clock });
       const second = await restarted.previewBatch(source, null);
-      expect(second?.decisionId).not.toBe(first.decisionId);
+      if (second.type !== "reserved") {
+        throw new TypeError("Expected second preview after restart");
+      }
+      expect(second.batch.decisionId).toBe(ids.at(1));
+      await restarted.advancePreview(second.batch);
       await restarted.resetDryRunCursor(source);
-      expect((await restarted.previewBatch(source, null))?.decisionId).toBe(
-        first.decisionId,
-      );
+      expect(await restarted.previewBatch(source, null)).toEqual({
+        type: "empty",
+      });
+      clock += DAY_IN_MS;
+      const reset = await restarted.previewBatch(source, null);
+      if (reset.type !== "reserved") {
+        throw new TypeError("Expected preview after reset and UTC rollover");
+      }
+      expect(reset.batch.decisionId).toBe(first.batch.decisionId);
+      expect(await restarted.pendingBatch(enrolled, "2026-10-02")).toEqual({
+        type: "empty",
+      });
       expect(
         await db
           .select()
           .from(caseLawDecisions)
           .where(eq(caseLawDecisions.sourceId, source.id)),
       ).toEqual(before);
+      const receipts = await db
+        .select()
+        .from(caseLawReplayBatches)
+        .where(eq(caseLawReplayBatches.sourceId, source.id));
+      expect(receipts).toHaveLength(2);
       expect(
+        receipts.every(
+          (row) =>
+            row.id.endsWith(":dry-run") &&
+            row.status === "completed" &&
+            row.applied === 0,
+        ),
+      ).toBe(true);
+      await restarted.advancePreview(reset.batch);
+      const apply = await restarted.reserveBatch(
+        enrolled,
+        "2026-10-02",
+        verdict(),
+      );
+      if (apply.type !== "reserved") {
+        throw new TypeError(
+          "Expected apply admission after successful preview",
+        );
+      }
+      expect(apply.batch.decisionId).toBe(first.batch.decisionId);
+      expect(apply.batch.id).not.toBe(first.batch.id);
+      expect(apply.batch.id.endsWith(":dry-run")).toBe(false);
+    });
+
+    test("dry-run daily budget survives restart and resumes at the UTC day boundary", async () => {
+      const { source: enrolled, ids } = await fixture(1);
+      const source = { ...enrolled, mode: "dry-run" } as const;
+      let clock = Date.UTC(2026, 9, 1, 23, 59, 59);
+      const store = createBackgroundReplayStore({ db, now: () => clock });
+      const first = await store.previewBatch(source, null);
+      if (first.type !== "reserved") {
+        throw new TypeError("Expected budgeted preview");
+      }
+      await store.advancePreview(first.batch);
+      const restarted = createBackgroundReplayStore({ db, now: () => clock });
+      expect(await restarted.previewBatch(source, null)).toEqual({
+        type: "budget-exhausted",
+      });
+      expect(
+        await restarted.reserveBatch(enrolled, "2026-10-01", verdict()),
+      ).toEqual({ type: "budget-exhausted" });
+      clock += 1000;
+      const next = await restarted.previewBatch(source, null);
+      if (next.type !== "reserved") {
+        throw new TypeError("Expected next UTC day's preview");
+      }
+      expect(next.batch.decisionId).toBe(ids.at(1));
+      const charges = await db
+        .select()
+        .from(caseLawReplayDailyRows)
+        .where(eq(caseLawReplayDailyRows.sourceId, source.id));
+      expect(charges.map((row) => row.budgetDay).toSorted()).toEqual([
+        "2026-10-01",
+        "2026-10-02",
+      ]);
+    });
+
+    test("concurrent preview and apply workers cannot exceed their shared daily allowance", async () => {
+      const { source } = await fixture(1);
+      await withGatedTestClients(databaseUrl, async ({ openClient }) => {
+        const preview = createBackgroundReplayStore({
+          db: openClient().db,
+          now: () => Date.UTC(2026, 9, 1),
+        });
+        const apply = createBackgroundReplayStore({
+          db: openClient().db,
+          now: () => Date.UTC(2026, 9, 1),
+        });
+        const results = await Promise.all([
+          preview.previewBatch({ ...source, mode: "dry-run" }, null),
+          apply.reserveBatch(source, "2026-10-01", verdict()),
+        ]);
+        expect(results.filter((row) => row.type === "reserved")).toHaveLength(
+          1,
+        );
+        expect(
+          results.filter((row) => row.type === "budget-exhausted"),
+        ).toHaveLength(1);
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayDailyRows)
+            .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+        ).toHaveLength(1);
+      });
+    });
+
+    test("failed previews retain the cursor, retry within one charge and re-admit after seven days", async () => {
+      const { source: enrolled, ids } = await fixture(1);
+      const source = { ...enrolled, mode: "dry-run" } as const;
+      let clock = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => clock });
+      const failure = {
+        ...replayFailure("adapter-exception"),
+        healthyEvidence: "none",
+        durationMs: 1,
+        verdict: verdict(),
+      } as const;
+      let receiptId = "";
+      const restart = () =>
+        createBackgroundReplayStore({ db, now: () => clock });
+      for (
+        let attempt = 1;
+        attempt <= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+        attempt++
+      ) {
+        const restarted = restart();
+        const preview = await restarted.previewBatch(source, null);
+        if (preview.type !== "reserved") {
+          throw new TypeError("Expected due failed preview");
+        }
+        receiptId = preview.batch.id;
+        expect(preview.batch.decisionId).toBe(ids.at(0));
+        expect(await restarted.recordFailure(preview.batch, failure)).toBe(
+          attempt === BACKGROUND_REPLAY_LIMITS.maxRowAttempts
+            ? "failed"
+            : "retryable",
+        );
+        expect(await restarted.previewBatch(source, null)).toEqual({
+          type: "waiting",
+        });
+        expect(
+          await db
+            .select()
+            .from(databaseBackfillStates)
+            .where(
+              eq(
+                databaseBackfillStates.name,
+                `case-law-replay:${source.id}:2:dry-run`,
+              ),
+            ),
+        ).toHaveLength(0);
+        if (attempt < BACKGROUND_REPLAY_LIMITS.maxRowAttempts) {
+          clock += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+        }
+      }
+      const receipt = (
         await db
           .select()
           .from(caseLawReplayBatches)
-          .where(eq(caseLawReplayBatches.sourceId, source.id)),
-      ).toHaveLength(0);
+          .where(eq(caseLawReplayBatches.id, receiptId))
+      ).at(0);
+      expect(receipt).toMatchObject({
+        failed: 1,
+        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
+        failureCode: "adapter-exception",
+        failureMessageClass: "adapter",
+        status: "completed",
+      });
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id)),
+      ).toHaveLength(1);
+      clock += 7 * DAY_IN_MS - 1;
+      expect(await store.previewBatch(source, null)).toEqual({
+        type: "waiting",
+      });
+      clock += 1;
+      const readmitted = await store.previewBatch(source, null);
+      if (readmitted.type !== "reserved") {
+        throw new TypeError("Expected preview after seven-day quarantine");
+      }
+      expect(readmitted.batch.id).toBe(receiptId);
+      expect(readmitted.batch.decisionId).toBe(ids.at(0));
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, receiptId))
+        ).at(0)?.attempts,
+      ).toBe(1);
+      await store.advancePreview(readmitted.batch);
+      expect(
+        (
+          await db
+            .select()
+            .from(databaseBackfillStates)
+            .where(
+              eq(
+                databaseBackfillStates.name,
+                `case-law-replay:${source.id}:2:dry-run`,
+              ),
+            )
+        ).at(0)?.cursor,
+      ).toBe(ids.at(0));
     });
 
     test("compaction generation retires never-reserved-again receipts while preserving the latest generation", async () => {
@@ -1743,7 +1938,9 @@ if (!databaseUrl || !enabled) {
         db,
         now: () => Date.UTC(2026, 9, 1),
         enrolment,
-        onHeld: (row) => held.push(row),
+        onHeld: (row) => {
+          held.push(row);
+        },
       });
       await store.saveGateState(actual, {
         ...(await store.loadGateState(actual)),
@@ -1879,9 +2076,11 @@ if (!databaseUrl || !enabled) {
       );
       expect(Result.isError(rolledBack)).toBe(true);
       if (Result.isError(rolledBack)) {
-        expect(String(rolledBack.error)).toContain(
-          "restore compaction statistics",
-        );
+        expect(
+          rolledBack.error instanceof Error
+            ? rolledBack.error.message
+            : JSON.stringify(rolledBack.error),
+        ).toContain("restore compaction statistics");
       }
     });
 
@@ -1995,9 +2194,11 @@ if (!databaseUrl || !enabled) {
       );
       expect(Result.isError(rolledBack)).toBe(true);
       if (Result.isError(rolledBack)) {
-        expect(String(rolledBack.error)).toContain(
-          "restore synthetic plan statistics",
-        );
+        expect(
+          rolledBack.error instanceof Error
+            ? rolledBack.error.message
+            : JSON.stringify(rolledBack.error),
+        ).toContain("restore synthetic plan statistics");
       }
     });
   });

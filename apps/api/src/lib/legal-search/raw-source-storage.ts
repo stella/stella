@@ -593,9 +593,7 @@ export const copyRawObject = async ({
     contentType: ref.contentType,
     data: bytes,
     key: location.key,
-    ...(s3Policy === undefined
-      ? {}
-      : { signal, ...(s3Policy === undefined ? {} : { s3Policy }) }),
+    ...(s3Policy === undefined ? {} : { signal, s3Policy }),
   });
   return Result.ok(undefined);
 };

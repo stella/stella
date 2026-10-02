@@ -1,4 +1,4 @@
-import { panic } from "better-result";
+import { panic, Result } from "better-result";
 import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import { envBase } from "@/api/env-base";
@@ -100,7 +100,7 @@ describe("resolveS3Credentials", () => {
       }), {status: 200}), {preconnect: originalFetch.preconnect});
       const { refreshS3, refreshCorpusS3, S3DeadlineCredentialsError } = await import("./src/lib/s3.ts");
       const results = [];
-      if (process.env.S3_CREDENTIALS_PROVIDER === "none") {
+      if (process.argv.at(1) === "none") {
         for (const refresh of [refreshS3, refreshCorpusS3]) {
           await refresh();
           results.push(true);
@@ -119,7 +119,7 @@ describe("resolveS3Credentials", () => {
     `;
     for (const provider of ["none", "aws-runtime"]) {
       const child = Bun.spawn({
-        cmd: [process.execPath, "--no-env-file", "-e", script],
+        cmd: [process.execPath, "--no-env-file", "-e", script, provider],
         cwd: new URL("../..", import.meta.url).pathname,
         env: {
           PATH: process.env["PATH"],
@@ -162,17 +162,36 @@ describe("resolveS3Credentials", () => {
         requests++;
         const signal = init?.signal;
         if (signal === undefined || signal === null) {
-          return expect.unreachable();
+          expect.unreachable();
         }
         return await new Promise<Response>((_resolve, reject) => {
-          signal.addEventListener("abort", () => reject(signal.reason), {
-            once: true,
-          });
+          signal.addEventListener(
+            "abort",
+            () =>
+              reject(
+                signal.reason instanceof Error
+                  ? signal.reason
+                  : new TypeError("Expected fixture abort error"),
+              ),
+            {
+              once: true,
+            },
+          );
           controller.abort(failure);
         });
       },
     });
-    await expect(resolved).rejects.toThrow("fixture tick expired");
+    const rejected1 = await Result.tryPromise({
+      try: async () => await resolved,
+      catch: (cause) => cause,
+    });
+    expect(rejected1.isErr()).toBe(true);
+    if (rejected1.isErr()) {
+      expect(rejected1.error).toBeInstanceOf(Error);
+      if (rejected1.error instanceof Error) {
+        expect(rejected1.error.message).toContain("fixture tick expired");
+      }
+    }
     expect(requests).toBe(1);
   });
   test("treats a lazily built fallback client as stale", () => {
@@ -386,12 +405,25 @@ describe("writeS3ObjectWithRetry", () => {
       expect(
         await corpusS3ObjectExists("fixture-existing-pack", controller.signal),
       ).toBe(true);
-      await expect(
-        corpusS3ObjectExists("fixture-existing-pack", controller.signal, {
-          mode: "replay-strict",
-          signal: controller.signal,
-        }),
-      ).rejects.toThrow("fixture canceled");
+      const rejected2 = await Result.tryPromise({
+        try: async () =>
+          await corpusS3ObjectExists(
+            "fixture-existing-pack",
+            controller.signal,
+            {
+              mode: "replay-strict",
+              signal: controller.signal,
+            },
+          ),
+        catch: (cause) => cause,
+      });
+      expect(rejected2.isErr()).toBe(true);
+      if (rejected2.isErr()) {
+        expect(rejected2.error).toBeInstanceOf(Error);
+        if (rejected2.error instanceof Error) {
+          expect(rejected2.error.message).toContain("fixture canceled");
+        }
+      }
       expect(
         store.requests.filter(({ method }) => method === "HEAD"),
       ).toHaveLength(1);
@@ -404,30 +436,43 @@ describe("writeS3ObjectWithRetry", () => {
     const controller = new AbortController();
     let attempts = 0;
     let canceled = false;
-    await expect(
-      writeS3ObjectWithRetry(
-        { ...object, signal: controller.signal },
-        async ({ signal }) => {
-          attempts++;
-          if (signal === undefined) {
-            return expect.unreachable();
-          }
-          return await new Promise<void>((_resolve, reject) => {
-            signal.addEventListener(
-              "abort",
-              () => {
-                canceled = true;
-                reject(signal.reason);
-              },
-              { once: true },
-            );
-            controller.abort(
-              new DOMException("fixture tick expired", "TimeoutError"),
-            );
-          });
-        },
-      ),
-    ).rejects.toThrow("fixture tick expired");
+    const rejected3 = await Result.tryPromise({
+      try: async () =>
+        await writeS3ObjectWithRetry(
+          { ...object, signal: controller.signal },
+          async ({ signal }) => {
+            attempts++;
+            if (signal === undefined) {
+              expect.unreachable();
+            }
+            await new Promise<void>((_resolve, reject) => {
+              signal.addEventListener(
+                "abort",
+                () => {
+                  canceled = true;
+                  reject(
+                    signal.reason instanceof Error
+                      ? signal.reason
+                      : new TypeError("Expected fixture abort error"),
+                  );
+                },
+                { once: true },
+              );
+              controller.abort(
+                new DOMException("fixture tick expired", "TimeoutError"),
+              );
+            });
+          },
+        ),
+      catch: (cause) => cause,
+    });
+    expect(rejected3.isErr()).toBe(true);
+    if (rejected3.isErr()) {
+      expect(rejected3.error).toBeInstanceOf(Error);
+      if (rejected3.error instanceof Error) {
+        expect(rejected3.error.message).toContain("fixture tick expired");
+      }
+    }
     expect(canceled).toBe(true);
     expect(attempts).toBe(1);
   });
@@ -436,14 +481,23 @@ describe("writeS3ObjectWithRetry", () => {
     const controller = new AbortController();
     controller.abort(new DOMException("fixture tick expired", "TimeoutError"));
     let attempts = 0;
-    await expect(
-      writeS3ObjectWithRetry(
-        { ...object, signal: controller.signal },
-        async () => {
-          attempts++;
-        },
-      ),
-    ).rejects.toThrow("fixture tick expired");
+    const rejected4 = await Result.tryPromise({
+      try: async () =>
+        await writeS3ObjectWithRetry(
+          { ...object, signal: controller.signal },
+          async () => {
+            attempts++;
+          },
+        ),
+      catch: (cause) => cause,
+    });
+    expect(rejected4.isErr()).toBe(true);
+    if (rejected4.isErr()) {
+      expect(rejected4.error).toBeInstanceOf(Error);
+      if (rejected4.error instanceof Error) {
+        expect(rejected4.error.message).toContain("fixture tick expired");
+      }
+    }
     expect(attempts).toBe(0);
   });
 
@@ -472,7 +526,17 @@ describe("writeS3ObjectWithRetry", () => {
           controller.abort(
             new DOMException("fixture tick expired", "TimeoutError"),
           );
-          await expect(pending).rejects.toThrow("fixture tick expired");
+          const rejected5 = await Result.tryPromise({
+            try: async () => await pending,
+            catch: (cause) => cause,
+          });
+          expect(rejected5.isErr()).toBe(true);
+          if (rejected5.isErr()) {
+            expect(rejected5.error).toBeInstanceOf(Error);
+            if (rejected5.error instanceof Error) {
+              expect(rejected5.error.message).toContain("fixture tick expired");
+            }
+          }
           expect(
             store.requests.filter(
               (request) => request.key === key && request.method === "PUT",

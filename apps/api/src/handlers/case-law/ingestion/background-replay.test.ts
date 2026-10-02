@@ -1,3 +1,4 @@
+import { Result } from "better-result";
 import { expect, test } from "bun:test";
 
 import { defaultConfig, initialBatchState } from "@stll/db-load-gate/health";
@@ -11,7 +12,11 @@ import {
 import type { ReplayRunReport } from "@/api/handlers/case-law/ingestion/replay";
 import { createSafeId } from "@/api/lib/branded-types";
 
-import { ReplayStageError, replayFailure } from "./replay-failure";
+import {
+  REPLAY_FAILURE_CODES,
+  ReplayStageError,
+  replayFailure,
+} from "./replay-failure";
 
 const fixture = (dailyBudget = 3) => {
   const source: BackgroundReplaySource = {
@@ -26,6 +31,7 @@ const fixture = (dailyBudget = 3) => {
   let spent = 0;
   let completed = 0;
   let pending: BackgroundReplayBatch | null = null;
+  let preview: BackgroundReplayBatch | null = null;
   let leased = false;
   let slotted = false;
   let writes = 0;
@@ -101,7 +107,17 @@ const fixture = (dailyBudget = 3) => {
       writes += 1;
       return { type: "reserved", batch: pending };
     },
-    previewBatch: async () => batch(),
+    previewBatch: async () => {
+      if (preview === null) {
+        if (spent >= source.dailyBudget) {
+          return { type: "budget-exhausted" };
+        }
+        spent += 1;
+        preview = batch();
+      }
+      writes += 1;
+      return { type: "reserved", batch: preview };
+    },
     replay: async (current, { apply }) => {
       if (apply) {
         expect(leased).toBe(true);
@@ -122,7 +138,10 @@ const fixture = (dailyBudget = 3) => {
     },
     pickUpBatch: async () => "ready",
     recordFailure: async () => "retryable",
-    advancePreview: async () => {},
+    advancePreview: async () => {
+      preview = null;
+      writes += 1;
+    },
     metric: () => {},
     now: () => clock,
     sleep: async (milliseconds) => {
@@ -179,14 +198,22 @@ test("invalid invocation bounds fail before reading or reserving a source", asyn
       selected = true;
       return state.source;
     };
-    await expect(
-      runBackgroundReplayTick({
-        dependencies: state.dependencies,
-        maxRows: 1,
-        maxDurationMs: 60_000,
-        ...bounds,
-      }),
-    ).rejects.toThrow("Replay tick bounds must be positive");
+    const result = await Result.tryPromise({
+      try: async () =>
+        await runBackgroundReplayTick({
+          dependencies: state.dependencies,
+          maxRows: 1,
+          maxDurationMs: 60_000,
+          ...bounds,
+        }),
+      catch: (cause) => cause,
+    });
+    expect(result.isErr()).toBe(true);
+    if (result.isErr()) {
+      expect(result.error).toMatchObject({
+        message: "Replay tick bounds must be positive",
+      });
+    }
     expect(selected).toBe(false);
     expect(state.counts().spent).toBe(0);
   }
@@ -245,16 +272,16 @@ test("kill switches at batch boundaries and during health I/O prevent new reserv
   expect(duringHealth.counts().spent).toBe(0);
 });
 
-test("dry runs never acquire writing ownership or mutate durable state", async () => {
+test("dry runs charge durable admission without acquiring apply ownership", async () => {
   const state = fixture();
   state.source.mode = "dry-run";
   const report = await state.run(4);
   expect(report.attempted).toBe(3);
   expect(report.applied).toBe(0);
   expect(state.counts()).toEqual({
-    spent: 0,
+    spent: 3,
     completed: 0,
-    writes: 0,
+    writes: 6,
     leased: false,
     slotted: false,
   });
@@ -468,12 +495,14 @@ test("a dry run records each preview cursor without completing an apply reservat
   const state = fixture(3);
   state.source.mode = "dry-run";
   const previews: string[] = [];
+  const advance = state.dependencies.advancePreview;
   state.dependencies.advancePreview = async (batch) => {
     previews.push(batch.decisionId);
+    await advance(batch);
   };
   expect((await state.run(3)).attempted).toBe(3);
-  expect(previews).toHaveLength(3);
-  expect(state.counts().spent).toBe(0);
+  expect(new Set(previews).size).toBe(3);
+  expect(state.counts().spent).toBe(3);
   expect(state.counts().completed).toBe(0);
 });
 
@@ -591,4 +620,166 @@ test("an isolated systemic row yields while a real outage stops without exhausti
         : { status: "failed", attempted: 1, applied: 0, failed: 0 },
     );
   }
+});
+
+test("dry-run failures preserve the cursor and retry the same charged row on the next tick", async () => {
+  for (const code of REPLAY_FAILURE_CODES) {
+    for (const outcome of ["report", "throw"] as const) {
+      const state = fixture(1);
+      state.source.mode = "dry-run";
+      const failure = replayFailure(code);
+      const seen: string[] = [];
+      const recorded: string[] = [];
+      const advanced: string[] = [];
+      const advance = state.dependencies.advancePreview;
+      state.dependencies.advancePreview = async (batch) => {
+        advanced.push(batch.decisionId);
+        await advance(batch);
+      };
+      state.dependencies.recordFailure = async (batch, recordedFailure) => {
+        expect(recordedFailure).toMatchObject(failure);
+        recorded.push(batch.decisionId);
+        return "retryable";
+      };
+      state.dependencies.replay = async (batch, { apply }) => {
+        expect(apply).toBe(false);
+        seen.push(batch.decisionId);
+        if (outcome === "throw") {
+          throw new ReplayStageError({
+            message: "fixture preview failure",
+            failure,
+          });
+        }
+        const report = state.success(batch);
+        report.outcomes.applied = 0;
+        report.outcomes.retryable = 1;
+        report.failure = failure;
+        return report;
+      };
+      const failed = await state.run(10);
+      const failureStatus = failure.scope === "row" ? "retryable" : "failed";
+      expect(failed).toMatchObject({
+        status: code === "tick-deadline" ? "time-limit" : failureStatus,
+        attempted: 1,
+        errors: 1,
+        applied: 0,
+      });
+      expect(recorded).toEqual(seen);
+      expect(recorded).toHaveLength(1);
+      expect(advanced).toEqual([]);
+      expect(state.counts().spent).toBe(1);
+      state.dependencies.replay = async (batch) => {
+        seen.push(batch.decisionId);
+        const report = state.success(batch);
+        report.outcomes.applied = 0;
+        report.outcomes["would-apply"] = 1;
+        return report;
+      };
+      expect((await state.run(1)).attempted).toBe(1);
+      expect(seen).toHaveLength(2);
+      expect(new Set(seen).size).toBe(1);
+      expect(advanced).toEqual(recorded);
+      expect(recorded).toHaveLength(1);
+      expect(state.counts().spent).toBe(1);
+      expect(state.counts().completed).toBe(0);
+    }
+  }
+});
+
+test("dry-run retryable or halted reports without failure metadata never advance the cursor", async () => {
+  for (const outcome of [
+    "retryable",
+    "withdraw-incomplete",
+    "halted",
+  ] as const) {
+    const state = fixture(1);
+    state.source.mode = "dry-run";
+    let recorded = 0;
+    let advanced = 0;
+    state.dependencies.recordFailure = async (_batch, failure) => {
+      expect(failure).toMatchObject({
+        code: "writer-retryable",
+        scope: "systemic",
+      });
+      recorded += 1;
+      return "retryable";
+    };
+    state.dependencies.advancePreview = async () => {
+      advanced += 1;
+    };
+    state.dependencies.replay = async (batch) => {
+      const report = state.success(batch);
+      report.outcomes.applied = 0;
+      if (outcome === "halted") {
+        report.visited = 0;
+        report.haltReason = "source lease lost";
+      } else {
+        report.outcomes[outcome] = 1;
+      }
+      return report;
+    };
+    expect(await state.run(10)).toMatchObject({
+      status: "failed",
+      attempted: 1,
+      errors: 1,
+    });
+    expect(recorded).toBe(1);
+    expect(advanced).toBe(0);
+  }
+});
+
+test("dry-run admission propagates exhaustion and deferred retries without using apply receipts", async () => {
+  for (const admission of ["budget-exhausted", "waiting", "empty"] as const) {
+    const state = fixture();
+    state.source.mode = "dry-run";
+    state.dependencies.previewBatch = async () => ({ type: admission });
+    state.dependencies.pendingBatch = async () => {
+      throw new TypeError("preview reached apply recovery");
+    };
+    state.dependencies.reserveBatch = async () => {
+      throw new TypeError("preview reached apply reservation");
+    };
+    state.dependencies.pickUpBatch = async () => {
+      throw new TypeError("preview reached apply pickup");
+    };
+    state.dependencies.completeBatch = async () => {
+      throw new TypeError("preview reached apply completion");
+    };
+    state.dependencies.replay = async () => {
+      throw new TypeError("unadmitted preview reached replay");
+    };
+    const statuses = {
+      "budget-exhausted": "budget-exhausted",
+      waiting: "retryable",
+      empty: "complete",
+    } as const;
+    expect(await state.run()).toMatchObject({
+      status: statuses[admission],
+      attempted: 0,
+      errors: 0,
+    });
+    expect(state.counts().spent).toBe(0);
+  }
+});
+
+test("dry-run ticks share a durable UTC-day budget with apply reservations", async () => {
+  const state = fixture(3);
+  state.source.mode = "dry-run";
+  expect((await state.run(2)).attempted).toBe(2);
+  expect(await state.run(2)).toMatchObject({
+    status: "budget-exhausted",
+    attempted: 1,
+  });
+  expect(await state.run(2)).toMatchObject({
+    status: "budget-exhausted",
+    attempted: 0,
+  });
+  state.source.mode = "enrolled";
+  expect(await state.run(2)).toMatchObject({
+    status: "budget-exhausted",
+    attempted: 0,
+  });
+  expect(state.counts().spent).toBe(3);
+  state.nextDay();
+  expect((await state.run(2)).applied).toBe(2);
 });

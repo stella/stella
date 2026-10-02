@@ -44,7 +44,10 @@ import {
   REPLAY_ROW_OUTCOME,
   type ReplayRunReport,
 } from "@/api/handlers/case-law/ingestion/replay";
-import { REPLAY_ENROLMENT } from "@/api/handlers/case-law/ingestion/replay-enrolment";
+import {
+  BACKGROUND_REPLAY_LIMITS,
+  REPLAY_ENROLMENT,
+} from "@/api/handlers/case-law/ingestion/replay-enrolment";
 import { createSafeId } from "@/api/lib/branded-types";
 import {
   absentDecisionTextFields,
@@ -77,7 +80,6 @@ const startReplayFixtureStorage = () => {
   const localCredentials =
     envBase.S3_CREDENTIALS_PROVIDER === "env" ||
     (envBase.S3_CREDENTIALS_PROVIDER === "auto" &&
-      endpoint !== undefined &&
       ["localhost", "127.0.0.1", "[::1]"].includes(new URL(endpoint).hostname));
   // Strict refresh must stay on static fixture credentials, never ECS/IMDS.
   expect(localCredentials).toBe(true);
@@ -198,6 +200,9 @@ if (!databaseUrl || !enabled) {
         store,
         metrics,
         now: () => clock,
+        advanceTime: (milliseconds: number) => {
+          clock += milliseconds;
+        },
         nextDay: () => {
           clock += 86_400_000;
         },
@@ -292,7 +297,7 @@ if (!databaseUrl || !enabled) {
           replay: async (batch) => {
             await beforeReplay?.();
             if (lease === null) {
-              return panic("Fixture replay requires an ingestion lease");
+              panic("Fixture replay requires an ingestion lease");
             }
             await lease.beforeDatabaseMark();
             await db
@@ -411,7 +416,7 @@ if (!databaseUrl || !enabled) {
       const state = await fixture(10);
       const firstId = state.ids.at(0);
       if (firstId === undefined) {
-        return panic("Expected first fixture decision");
+        panic("Expected first fixture decision");
       }
       await db
         .update(caseLawDecisions)
@@ -490,7 +495,7 @@ if (!databaseUrl || !enabled) {
         const state = await fixture(3);
         const id = state.ids.at(0);
         if (id === undefined) {
-          return panic("Expected first fixture decision");
+          panic("Expected first fixture decision");
         }
         const fake = startReplayFixtureStorage();
         try {
@@ -572,7 +577,7 @@ if (!databaseUrl || !enabled) {
         healthy(),
       );
       if (batch.type !== "reserved") {
-        return panic("Expected reserved replay receipt");
+        panic("Expected reserved replay receipt");
       }
       await db
         .update(caseLawDecisions)
@@ -600,7 +605,7 @@ if (!databaseUrl || !enabled) {
       });
     });
 
-    test("canonical dry-run persists its preview cursor while leaving decisions, receipts and budget rows untouched", async () => {
+    test("canonical dry-run persists budgeted preview receipts while leaving decisions untouched", async () => {
       const state = await fixture(3, "dry-run");
       const before = await db
         .select()
@@ -626,24 +631,127 @@ if (!databaseUrl || !enabled) {
                 .from(caseLawDecisions)
                 .where(eq(caseLawDecisions.sourceId, state.source.id)),
             ).toEqual(before);
+            const receipts = await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.sourceId, state.source.id));
+            expect(receipts).toHaveLength(2);
             expect(
-              await db
-                .select()
-                .from(caseLawReplayBatches)
-                .where(eq(caseLawReplayBatches.sourceId, state.source.id)),
-            ).toHaveLength(0);
+              receipts.every(
+                (row) =>
+                  row.id.endsWith(":dry-run") &&
+                  row.status === "completed" &&
+                  row.failed === 0 &&
+                  row.applied === 0,
+              ),
+            ).toBe(true);
             expect(
               await db
                 .select()
                 .from(caseLawReplayDailyRows)
                 .where(eq(caseLawReplayDailyRows.sourceId, state.source.id)),
-            ).toHaveLength(0);
+            ).toHaveLength(2);
             expect(fake.requests).toHaveLength(0);
           },
         });
       } finally {
         fake.stop();
       }
+    });
+
+    test("a failed dry-run tick leaves its cursor before the row and retries after durable backoff", async () => {
+      const state = await fixture(3, "dry-run");
+      const before = await db
+        .select()
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, state.source.id));
+      await withSlots({
+        run: async ([slot]) => {
+          const canonical = canonicalReplay();
+          let fail = true;
+          const inspected: string[] = [];
+          const adapter = {
+            ...canonical.adapter,
+            reparseStoredRaw: (stored) => {
+              inspected.push(stored.caseNumber);
+              if (fail) {
+                throw new TypeError("fixture adapter failure");
+              }
+              return canonical.adapter.reparseStoredRaw(stored);
+            },
+          } satisfies SourceAdapter;
+          expect(
+            (await tick({ fixture: state, slot, canonical: { adapter } }))
+              .status,
+          ).toBe("retryable");
+          expect(inspected).toEqual(["engine-0"]);
+          const cursor = async () =>
+            (
+              await db
+                .select()
+                .from(databaseBackfillStates)
+                .where(
+                  eq(
+                    databaseBackfillStates.name,
+                    `case-law-replay:${state.source.id}:2:dry-run`,
+                  ),
+                )
+            ).at(0)?.cursor;
+          expect(await cursor()).toBeUndefined();
+          const failed = (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.sourceId, state.source.id))
+          ).at(0);
+          expect(failed).toMatchObject({
+            failed: 1,
+            attempts: 1,
+            failureCode: "adapter-exception",
+          });
+          expect(failed?.retryAt).toEqual(
+            new Date(state.now() + BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs),
+          );
+          await tick({
+            fixture: state,
+            slot,
+            canonical: { adapter },
+            maxRows: 1,
+          });
+          expect(inspected).toHaveLength(1);
+          expect(await cursor()).toBeUndefined();
+          fail = false;
+          state.advanceTime(BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs);
+          await tick({
+            fixture: state,
+            slot,
+            canonical: { adapter },
+            maxRows: 1,
+          });
+          expect(inspected).toEqual(["engine-0", "engine-0"]);
+          expect(await cursor()).toBe(state.ids.at(0));
+          expect(
+            (
+              await db
+                .select()
+                .from(caseLawReplayBatches)
+                .where(eq(caseLawReplayBatches.sourceId, state.source.id))
+            ).at(0),
+          ).toMatchObject({ failed: 0, attempts: 2, retryAt: null });
+          expect(
+            await db
+              .select()
+              .from(caseLawReplayDailyRows)
+              .where(eq(caseLawReplayDailyRows.sourceId, state.source.id)),
+          ).toHaveLength(1);
+          expect(
+            await db
+              .select()
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.sourceId, state.source.id)),
+          ).toEqual(before);
+        },
+      });
     });
 
     test("lease cleanup uses a fresh schema-lane handle and survives a concurrent exclusive upgrade", async () => {
@@ -671,7 +779,7 @@ if (!databaseUrl || !enabled) {
           releaseDb,
         });
         if (lease === null) {
-          return panic("Expected available source lease");
+          panic("Expected available source lease");
         }
         await upgrade.sql.unsafe(CORPUS_SCHEMA_LANE_LOCK_SQL);
         const releasing = lease.release();
@@ -711,7 +819,7 @@ if (!databaseUrl || !enabled) {
       const state = await fixture(3);
       const id = state.ids.at(0);
       if (id === undefined) {
-        return panic("Expected first fixture decision");
+        panic("Expected first fixture decision");
       }
       const fake = startReplayFixtureStorage();
       fake.put(envBase.S3_BUCKET, `fixture/${id}`, "stored fixture bytes");
@@ -723,7 +831,7 @@ if (!databaseUrl || !enabled) {
       try {
         await withSlots({
           run: async ([slot, contender]) => {
-            const running = Result.tryPromise(() =>
+            const running = Result.tryPromise(async () =>
               tick({
                 fixture: state,
                 slot,
@@ -805,7 +913,7 @@ if (!databaseUrl || !enabled) {
       const state = await fixture(3);
       const id = state.ids.at(0);
       if (id === undefined) {
-        return panic("Expected first fixture decision");
+        panic("Expected first fixture decision");
       }
       await withGatedTestClients(databaseUrl, async ({ openClient }) => {
         const blocker = openClient();
@@ -817,7 +925,7 @@ if (!databaseUrl || !enabled) {
           "SELECT id FROM case_law_decisions WHERE id = $1 FOR UPDATE",
           [id],
         );
-        const running = Result.tryPromise(() =>
+        const running = Result.tryPromise(async () =>
           withLongRunningConnection(
             {
               statementTimeout: 10_000,
@@ -838,7 +946,7 @@ if (!databaseUrl || !enabled) {
                 )
               ).at(0)?.pid;
               if (pid === undefined) {
-                return panic("Expected dedicated replay backend");
+                panic("Expected dedicated replay backend");
               }
               backend.resolve(pid);
               await connection.unsafe(
@@ -874,7 +982,11 @@ if (!databaseUrl || !enabled) {
           const result = await running;
           expect(result.isErr()).toBe(true);
           if (result.isErr()) {
-            expect(String(result.error)).toMatch(/cancel|abort|deadline/u);
+            expect(
+              result.error instanceof Error
+                ? result.error.message
+                : JSON.stringify(result.error),
+            ).toMatch(/cancel|abort|deadline/u);
           }
           const acquired = await observer.sql.unsafe<{ acquired: boolean }[]>(
             "SELECT pg_try_advisory_lock(hashtext($1), hashtext($2)) AS acquired",
@@ -912,7 +1024,7 @@ if (!databaseUrl || !enabled) {
         const state = await fixture(3);
         const id = state.ids.at(0);
         if (id === undefined) {
-          return panic("Expected first fixture decision");
+          panic("Expected first fixture decision");
         }
         await db
           .update(caseLawSources)

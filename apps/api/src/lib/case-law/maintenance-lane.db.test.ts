@@ -110,7 +110,7 @@ if (!databaseUrl || !runPostgresTests) {
           ]),
       });
       if (roles === null) {
-        return panic("Expected uncontended bounded maintenance lane");
+        panic("Expected uncontended bounded maintenance lane");
       }
       expect(new Set(roles.map((row) => row?.pid)).size).toBe(1);
       expect(roles.at(0)?.role).not.toBe("stella_ingestion");

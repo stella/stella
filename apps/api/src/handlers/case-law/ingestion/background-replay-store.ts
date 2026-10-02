@@ -37,6 +37,7 @@ import {
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
+import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
 import {
   ADAPTER_KEYS,
@@ -48,10 +49,12 @@ import { getAdapter } from "./adapters/adapter-registry";
 import type {
   BackgroundReplayBatch,
   BackgroundReplaySource,
+  BackgroundReplayReservation,
   BackgroundReplayTickReport,
 } from "./background-replay";
 import {
   CASE_LAW_REPLAY_SCOPE,
+  BACKGROUND_REPLAY_PREVIEW_SUFFIX,
   buildBackgroundReplayProbe,
   REPLAY_ROW_OUTCOME,
   replayCapability,
@@ -159,7 +162,13 @@ const hasDailyAllowance = async ({
       .where(
         and(
           eq(caseLawReplayBatches.sourceId, source.id),
-          inArray(caseLawReplayBatches.status, ["reserved", "failed"]),
+          source.mode === "dry-run"
+            ? and(
+                eq(caseLawReplayBatches.status, "completed"),
+                eq(caseLawReplayBatches.failed, 1),
+                sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
+              )
+            : inArray(caseLawReplayBatches.status, ["reserved", "failed"]),
           or(
             isNull(caseLawReplayBatches.retryAt),
             lte(
@@ -287,7 +296,6 @@ const chooseSource = async (
       }
       onLag?.(candidate);
       if (
-        candidate.mode === "enrolled" &&
         !(await hasDailyAllowance({
           db,
           source: candidate,
@@ -378,22 +386,22 @@ type PreviewBatchOptions = {
 };
 
 const previewBatch = async (
-  { db }: ReplayStoreContext,
+  { db, now }: ReplayStoreContext,
   { source, after }: PreviewBatchOptions,
-) =>
+): Promise<BackgroundReplayReservation | { type: "waiting" }> =>
   await withReplayTransaction(db, async (tx) => {
+    // Preview and apply serialize their shared source/day allowance here.
+    await lockCheckpoint(tx, source);
     const persisted =
-      after === null
-        ? ((
-            await tx
-              .select({ cursor: databaseBackfillStates.cursor })
-              .from(databaseBackfillStates)
-              .where(
-                eq(databaseBackfillStates.name, previewCheckpointName(source)),
-              )
-              .limit(1)
-          ).at(0)?.cursor ?? null)
-        : after;
+      after ??
+      (
+        await tx
+          .select({ cursor: databaseBackfillStates.cursor })
+          .from(databaseBackfillStates)
+          .where(eq(databaseBackfillStates.name, previewCheckpointName(source)))
+          .limit(1)
+      ).at(0)?.cursor ??
+      null;
     const cursorRow =
       persisted === null
         ? null
@@ -408,15 +416,124 @@ const previewBatch = async (
     if (!row && after === null && cursorRow !== null) {
       row = await selectNext(tx, { source, after: null });
     }
-    return row === null
-      ? null
-      : {
-          id: `${source.id}:${source.currentParserVersion}:${row.id}`,
-          source,
-          decisionId: row.id,
-          parserVersionFrom: row.parserVersion,
-          targetParserVersion: source.currentParserVersion,
-        };
+    if (row === null) {
+      return { type: "empty" };
+    }
+    const utcDay = new Date(now()).toISOString().slice(0, 10);
+    const id = `${source.id}:${source.currentParserVersion}:${row.id}${BACKGROUND_REPLAY_PREVIEW_SUFFIX}`;
+    const receipt = (
+      await tx
+        .select()
+        .from(caseLawReplayBatches)
+        .where(eq(caseLawReplayBatches.id, id))
+        .for("update")
+        .limit(1)
+    ).at(0);
+    if (receipt?.retryAt && receipt.retryAt.getTime() > now()) {
+      return { type: "waiting" };
+    }
+    if (receipt?.failed === 0 && receipt.budgetDay === utcDay) {
+      // Wrapping or resetting the cursor cannot repeat successful inspection
+      // on an already charged row during the same UTC day.
+      return { type: "empty" };
+    }
+    const attempts =
+      receipt?.failed === 1 &&
+      receipt.attempts < BACKGROUND_REPLAY_LIMITS.maxRowAttempts
+        ? receipt.attempts + 1
+        : 1;
+    const retryDelay =
+      attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts
+        ? REPLAY_FAILED_READMISSION_DAYS * DAY_IN_MS
+        : Math.min(
+            BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+            BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs * 2 ** (attempts - 1),
+          );
+    const usage =
+      (
+        await tx
+          .select({ count: sql<number>`count(*)::int` })
+          .from(caseLawReplayDailyRows)
+          .where(
+            and(
+              eq(caseLawReplayDailyRows.sourceId, source.id),
+              eq(caseLawReplayDailyRows.budgetDay, utcDay),
+            ),
+          )
+      ).at(0)?.count ?? 0;
+    const charged =
+      (
+        await tx
+          .select({ id: caseLawReplayDailyRows.batchId })
+          .from(caseLawReplayDailyRows)
+          .where(
+            and(
+              eq(caseLawReplayDailyRows.batchId, id),
+              eq(caseLawReplayDailyRows.budgetDay, utcDay),
+            ),
+          )
+          .limit(1)
+      ).length > 0;
+    if (!charged && usage >= source.dailyBudget) {
+      return { type: "budget-exhausted" };
+    }
+    // Preview bookkeeping has a separate identity and stays terminal in the
+    // apply receipt lifecycle, including for workers deployed before this code.
+    // Its attempt/retry fields recover failed or interrupted inspections.
+    await tx
+      // audit: skip — public case-law corpus bookkeeping, no workspace data
+      .insert(caseLawReplayBatches)
+      .values({
+        id,
+        sourceId: source.id,
+        firstDecisionId: row.id,
+        lastDecisionId: row.id,
+        parserVersionFrom: row.parserVersion,
+        parserVersionTo: source.currentParserVersion,
+        budgetDay: utcDay,
+        status: "completed",
+        attempted: 1,
+        failed: 1,
+        attempts,
+        retryAt: new Date(now() + retryDelay),
+        failureCode: "tick-cancelled",
+        failureMessageClass: "cancelled",
+        gateVerdict: { kind: "normal", signals: [] },
+        completedAt: new Date(now()),
+      })
+      .onConflictDoUpdate({
+        target: caseLawReplayBatches.id,
+        set: {
+          budgetDay: utcDay,
+          failed: 1,
+          attempts,
+          retryAt: new Date(now() + retryDelay),
+          failureCode: "tick-cancelled",
+          failureMessageClass: "cancelled",
+          outcome: null,
+          completedAt: new Date(now()),
+        },
+      });
+    if (!(await admitDailyRow(tx, { source, batchId: id, utcDay }))) {
+      return panic("Preview budget changed under checkpoint lock");
+    }
+    await recordReplayMaintenanceAuditEvent(tx, {
+      sourceId: source.id,
+      action: "receipt-reserved",
+      resourceId: id,
+      details: { mode: "dry-run", attempts },
+      createdAt: new Date(now()),
+    });
+    return {
+      type: "reserved",
+      batch: {
+        id,
+        source,
+        decisionId: row.id,
+        parserVersionFrom: row.parserVersion,
+        targetParserVersion: source.currentParserVersion,
+      },
+    };
   });
 type AdmitDailyRowOptions = {
   source: BackgroundReplaySource;
@@ -953,6 +1070,59 @@ const classifyReplayFailure = ({
   };
 };
 
+const recordPreviewFailure = async (
+  { db, now }: ReplayStoreContext,
+  batch: BackgroundReplayBatch,
+  failure: ReplayFailureOptions,
+): Promise<"retryable" | "failed"> =>
+  await withReplayTransaction(db, async (tx) => {
+    await lockCheckpoint(tx, batch.source);
+    const receipt =
+      (
+        await tx
+          .select()
+          .from(caseLawReplayBatches)
+          .where(eq(caseLawReplayBatches.id, batch.id))
+          .for("update")
+          .limit(1)
+      ).at(0) ?? panic("Preview failure has no reservation");
+    const exhausted =
+      receipt.attempts >= BACKGROUND_REPLAY_LIMITS.maxRowAttempts;
+    const delay = exhausted
+      ? REPLAY_FAILED_READMISSION_DAYS * DAY_IN_MS
+      : Math.min(
+          BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs,
+          BACKGROUND_REPLAY_LIMITS.rowRetryBaseMs *
+            2 ** Math.max(0, receipt.attempts - 1),
+        );
+    await tx
+      // audit: skip — public case-law corpus bookkeeping, no workspace data
+      .update(caseLawReplayBatches)
+      .set({
+        failed: 1,
+        retryAt: new Date(now() + delay),
+        failureCode: failure.code,
+        failureMessageClass: failure.messageClass,
+        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
+        durationMs: Math.ceil(failure.durationMs),
+        gateVerdict: failure.verdict,
+        completedAt: new Date(now()),
+      })
+      .where(eq(caseLawReplayBatches.id, batch.id));
+    await recordReplayMaintenanceAuditEvent(tx, {
+      sourceId: batch.source.id,
+      action: "receipt-failed",
+      resourceId: batch.id,
+      details: {
+        mode: "dry-run",
+        attempts: receipt.attempts,
+        failureCode: failure.code,
+      },
+      createdAt: new Date(now()),
+    });
+    return exhausted ? "failed" : "retryable";
+  });
+
 const recordFailure = async (
   { db, now, beforeComplete }: ReplayStoreContext,
   batch: BackgroundReplayBatch,
@@ -1001,8 +1171,7 @@ const recordFailure = async (
         .limit(1)
     ).at(0);
     if (
-      decision !== undefined &&
-      decision.redactedAt === null &&
+      decision?.redactedAt === null &&
       decision.corpusMirrorStatus === CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED &&
       (decision.parserVersion ?? -1) >= batch.targetParserVersion
     ) {
@@ -1233,12 +1402,11 @@ const completeBatch = async (
         .limit(1)
     ).at(0);
     const moved =
-      decision !== undefined &&
-      decision.redactedAt === null &&
+      decision?.redactedAt === null &&
       (decision.parserVersion ?? -1) >= batch.targetParserVersion;
     if (
       moved &&
-      decision?.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
+      decision.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
     ) {
       return "mirror-pending";
     }
@@ -1322,6 +1490,19 @@ const advancePreview = async (
   batch: BackgroundReplayBatch,
 ) =>
   await withReplayTransaction(db, async (tx) => {
+    await lockCheckpoint(tx, batch.source);
+    await tx
+      // audit: skip — public case-law corpus bookkeeping, no workspace data
+      .update(caseLawReplayBatches)
+      .set({
+        failed: 0,
+        failureCode: null,
+        failureMessageClass: null,
+        outcome: null,
+        retryAt: null,
+        completedAt: new Date(now()),
+      })
+      .where(eq(caseLawReplayBatches.id, batch.id));
     // dry-run cursor is separate from apply and never mutates decisions
     await tx
       // audit: skip — public case-law corpus bookkeeping, no workspace data
@@ -1644,7 +1825,10 @@ export const createBackgroundReplayStore = ({
     recordFailure: async (
       batch: BackgroundReplayBatch,
       failure: ReplayFailureOptions,
-    ) => await recordFailure(context, batch, failure),
+    ) =>
+      batch.source.mode === "dry-run"
+        ? await recordPreviewFailure(context, batch, failure)
+        : await recordFailure(context, batch, failure),
     advancePreview: async (batch: BackgroundReplayBatch) =>
       await advancePreview(context, batch),
     resetDryRunCursor: async (source: BackgroundReplaySource) =>
