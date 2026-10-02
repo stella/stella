@@ -300,6 +300,130 @@ describe("image input preparation", () => {
     });
   });
 
+  test("Bedrock re-encodes each content identity once across adapter iterations and isolates turns", async () => {
+    const first = new Uint8Array(BEDROCK_IMAGE_MAX_BYTES + 1);
+    first.set(PNG);
+    const second = new Uint8Array(BEDROCK_IMAGE_MAX_BYTES + 1);
+    second.set(
+      await new Bun.Image(PNG).resize(2, 1, { fit: "fill" }).png().bytes(),
+    );
+    const sent: ModelMessage[][] = [];
+    const makeAdapter = () =>
+      withProviderImageInput(
+        asTestRaw<AnyTextAdapter>({
+          kind: "text",
+          name: "fixture",
+          model: "us.amazon.nova-lite-v1:0",
+          async *chatStream({ messages }) {
+            sent.push(messages);
+            yield* [];
+          },
+          structuredOutput: async ({ chatOptions }) => {
+            sent.push(chatOptions.messages);
+            return { data: {}, rawText: "{}" };
+          },
+        }),
+        "bedrock",
+      );
+    const encode = spyOn(Bun.Image.prototype, "bytes");
+    try {
+      const adapter = makeAdapter();
+      for (let iteration = 0; iteration < 5; iteration++) {
+        // Rehydrated objects still share an attachment's content identity.
+        for await (const _ of adapter.chatStream({
+          model: adapter.model,
+          messages: imageMessages(first),
+          logger: resolveDebugOption(false),
+        })) {
+          /* Consume the request. */
+        }
+      }
+      expect(encode).toHaveBeenCalledTimes(1);
+      for (const bytes of [second, first, second]) {
+        await adapter.structuredOutput({
+          chatOptions: {
+            model: adapter.model,
+            messages: imageMessages(bytes),
+            logger: resolveDebugOption(false),
+          },
+          outputSchema: { type: "object" },
+        });
+      }
+      expect(encode).toHaveBeenCalledTimes(2);
+      expect(sent.at(0)).toEqual(sent.at(4));
+      expect(sent.at(5)).not.toEqual(sent.at(0));
+      const nextTurn = makeAdapter();
+      for await (const _ of nextTurn.chatStream({
+        model: nextTurn.model,
+        messages: imageMessages(first),
+        logger: resolveDebugOption(false),
+      })) {
+        /* Consume the request. */
+      }
+      expect(encode).toHaveBeenCalledTimes(3);
+    } finally {
+      encode.mockRestore();
+    }
+  });
+
+  test("Bedrock prepared-image retention is bounded and evicts the least recently used source", async () => {
+    const wide = await new Bun.Image(PNG)
+      .resize(8001, 1, { fit: "fill" })
+      .png()
+      .bytes();
+    const originals = [0, 1, 2, 3].map((identity) => {
+      const bytes = new Uint8Array(wide.byteLength + 1);
+      bytes.set(wide);
+      bytes[wide.byteLength] = identity;
+      return bytes;
+    });
+    const adapter = withProviderImageInput(
+      asTestRaw<AnyTextAdapter>({
+        kind: "text",
+        name: "fixture",
+        model: "us.amazon.nova-lite-v1:0",
+        async *chatStream() {
+          yield* [];
+        },
+      }),
+      "bedrock",
+    );
+    // Worst-case permitted output exercises the byte budget, not just count.
+    const encode = spyOn(Bun.Image.prototype, "bytes").mockResolvedValue(
+      new Uint8Array(BEDROCK_IMAGE_MAX_BYTES),
+    );
+    const request = async (bytes: Uint8Array) => {
+      for await (const _ of adapter.chatStream({
+        model: adapter.model,
+        messages: imageMessages(bytes),
+        logger: resolveDebugOption(false),
+      })) {
+        /* Consume the request. */
+      }
+    };
+    try {
+      for (const original of originals.slice(0, 3)) {
+        await request(original);
+      }
+      expect(encode).toHaveBeenCalledTimes(3);
+      const first = originals.at(0);
+      const second = originals.at(1);
+      const fourth = originals.at(3);
+      if (first === undefined || second === undefined || fourth === undefined) {
+        throw new TypeError("Expected four image identities");
+      }
+      await request(first);
+      expect(encode).toHaveBeenCalledTimes(3);
+      await request(fourth);
+      await request(first);
+      expect(encode).toHaveBeenCalledTimes(4);
+      await request(second);
+      expect(encode).toHaveBeenCalledTimes(5);
+    } finally {
+      encode.mockRestore();
+    }
+  });
+
   test("all adapter request forms refuse unsupported images before dispatch and still send text", async () => {
     const sent: ModelMessage[][] = [];
     const raw = asTestRaw<AnyTextAdapter>({

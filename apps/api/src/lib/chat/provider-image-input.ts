@@ -19,6 +19,9 @@ export const IMAGE_INPUT_UNSUPPORTED_CODE = "image_input_unsupported";
 const BEDROCK_IMAGE_INVALID_CODE = "bedrock_image_invalid";
 const BEDROCK_IMAGE_MAX_EDGE = 8000;
 const REENCODE_MAX_EDGE = 2048;
+const REENCODE_WEBP_QUALITY = 85;
+const PREPARED_IMAGE_CACHE_MAX_BYTES = 32 * 1024 * 1024;
+const PREPARED_IMAGE_CACHE_MAX_ENTRIES = 64;
 const MAX_IMAGE_BASE64_LENGTH =
   4 * Math.ceil(FILE_SIZE_LIMIT_BYTES.chatContextFile / 3);
 
@@ -39,9 +42,16 @@ const invalidBedrockImage = (cause?: unknown) =>
     cause,
   });
 
+type ImagePart = Extract<ContentPart, { type: "image" }>;
+type PreparedBedrockImages = {
+  sources: Map<string, Extract<ImagePart["source"], { type: "data" }>>;
+  bytes: number;
+};
+
 const prepareBedrockImage = async (
-  part: Extract<ContentPart, { type: "image" }>,
-): Promise<ContentPart> => {
+  part: ImagePart,
+  preparedImages?: PreparedBedrockImages,
+): Promise<ImagePart> => {
   let payload: string;
   if (part.source.type === "url") {
     const inline = validateDataUrl({
@@ -60,6 +70,23 @@ const prepareBedrockImage = async (
   }
   if (payload.length > MAX_IMAGE_BASE64_LENGTH) {
     throw invalidBedrockImage();
+  }
+  // Inline URL and data sources share the same identity after validation.
+  // Hashes retain no original attachment bytes; target settings are part of it.
+  const cacheKey =
+    preparedImages === undefined
+      ? undefined
+      : `${BEDROCK_IMAGE_MAX_BYTES}:${BEDROCK_IMAGE_MAX_EDGE}:${REENCODE_MAX_EDGE}:${REENCODE_WEBP_QUALITY}:${payload.length}:${new Bun.CryptoHasher("sha256").update(payload).digest("hex")}`;
+  const cached =
+    cacheKey === undefined ? undefined : preparedImages?.sources.get(cacheKey);
+  if (
+    cached !== undefined &&
+    cacheKey !== undefined &&
+    preparedImages !== undefined
+  ) {
+    preparedImages.sources.delete(cacheKey);
+    preparedImages.sources.set(cacheKey, cached);
+    return { ...part, source: cached };
   }
   const source = Buffer.from(payload, "base64");
   if (source.byteLength > FILE_SIZE_LIMIT_BYTES.chatContextFile) {
@@ -88,7 +115,7 @@ const prepareBedrockImage = async (
               fit: "inside",
               withoutEnlargement: true,
             })
-            .webp({ quality: 85 })
+            .webp({ quality: REENCODE_WEBP_QUALITY })
             .bytes();
           if (bytes.byteLength > BEDROCK_IMAGE_MAX_BYTES) {
             throw invalidBedrockImage();
@@ -109,19 +136,44 @@ const prepareBedrockImage = async (
   if (Result.isError(prepared)) {
     throw prepared.error;
   }
-  return prepared.value;
+  const output = prepared.value;
+  if (
+    output !== part &&
+    output.source.type === "data" &&
+    preparedImages !== undefined &&
+    cacheKey !== undefined
+  ) {
+    // Count UTF-16 storage conservatively; retain only bounded transformed data.
+    const bytes = output.source.value.length * 2;
+    while (
+      preparedImages.sources.size >= PREPARED_IMAGE_CACHE_MAX_ENTRIES ||
+      preparedImages.bytes + bytes > PREPARED_IMAGE_CACHE_MAX_BYTES
+    ) {
+      const oldest = preparedImages.sources.entries().next().value;
+      if (oldest === undefined) {
+        break;
+      }
+      preparedImages.sources.delete(oldest[0]);
+      preparedImages.bytes -= oldest[1].value.length * 2;
+    }
+    preparedImages.sources.set(cacheKey, output.source);
+    preparedImages.bytes += bytes;
+  }
+  return output;
 };
 
 type PrepareProviderImageMessagesOptions = {
   messages: ModelMessage[];
   modelId: string;
   provider: TanStackAIProvider;
+  preparedImages?: PreparedBedrockImages;
 };
 
 export const prepareProviderImageMessages = async ({
   messages,
   modelId,
   provider,
+  preparedImages,
 }: PrepareProviderImageMessagesOptions): Promise<ModelMessage[]> => {
   const hasImages = messages.some(
     ({ content }) =>
@@ -160,7 +212,9 @@ export const prepareProviderImageMessages = async ({
     const content: ContentPart[] = [];
     for (const part of message.content) {
       content.push(
-        part.type === "image" ? await prepareBedrockImage(part) : part,
+        part.type === "image"
+          ? await prepareBedrockImage(part, preparedImages)
+          : part,
       );
     }
     prepared.push({ ...message, content });
@@ -173,11 +227,18 @@ export const withProviderImageInput = (
   adapter: AnyTextAdapter,
   provider: TanStackAIProvider,
 ): AnyTextAdapter => {
+  // Factories create fresh adapters per turn. Nothing is retained by the shared
+  // factory or across tenants; the bounded LRU dies with this adapter.
+  const preparedImages: PreparedBedrockImages = {
+    sources: new Map(),
+    bytes: 0,
+  };
   const prepare = (messages: ModelMessage[]) =>
     prepareProviderImageMessages({
       messages,
       modelId: adapter.model,
       provider,
+      preparedImages,
     });
   const chatStream: AnyTextAdapter["chatStream"] = async function* (options) {
     yield* adapter.chatStream({
