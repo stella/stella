@@ -973,7 +973,7 @@ const corpusIndexSearch = async ({
     const excludedWorkTokens = new Set(
       active.type === "relaxed" ? active.strictWorkTokens : [],
     );
-    if (cursor !== null && cursor.excludedGroups !== undefined) {
+    if (cursor?.excludedGroups !== undefined) {
       for (const token of cursor.excludedGroups) {
         excludedWorkTokens.add(token);
       }
@@ -1155,7 +1155,7 @@ export const searchLegislationHandler = async (
         dictionary: NO_EXPANSION_DICTIONARY_IDENTITY,
         target: null,
         sort: DEFAULT_SEARCH_SORT,
-        phase: parsedCursor?.phase,
+        phase: parsedCursor.phase,
       }))
   ) {
     return status(400, { message: "Invalid cursor" });

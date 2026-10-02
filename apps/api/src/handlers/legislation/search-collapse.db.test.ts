@@ -562,7 +562,7 @@ describe("the Postgres search path", () => {
         searchDependencies,
       );
       if (!("items" in response)) {
-        return panic("the search refused an embedded act abbreviation");
+        panic("the search refused an embedded act abbreviation");
       }
       const firstHit = response.items.at(0);
       expect(firstHit?.eli).toBe(
