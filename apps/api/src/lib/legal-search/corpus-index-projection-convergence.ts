@@ -1,5 +1,5 @@
 import { panic } from "better-result";
-import { and, eq, inArray, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 
 import type { Transaction } from "@/api/db/root";
 import {
@@ -8,6 +8,7 @@ import {
 } from "@/api/db/schema";
 import { executedRows } from "@/api/lib/db/executed-rows";
 import type { CorpusFamily } from "@/api/lib/legal-search/corpus-generation-contract";
+import type { CorpusIndexManifest } from "@/api/lib/legal-search/corpus-index-manifest";
 import { CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES } from "@/api/lib/legal-search/corpus-index-projection-contract";
 import { readRegisteredCorpusProjectionManifestForCleanup } from "@/api/lib/legal-search/corpus-index-projection-desired-state";
 import { corpusProjectionAppendIsPublished } from "@/api/lib/legal-search/corpus-index-projection-publish-fence";
@@ -58,14 +59,59 @@ const intentScope = ({
   );
 
 /**
+ * Every "is there one?" question here reads the first row of the index that
+ * answers it, never an `EXISTS`. PostgreSQL plans an `EXISTS` for an early
+ * hit and drops its ORDER BY and LIMIT, so when nothing matches it can read
+ * the whole table to prove so. Ordered by the index keys after the equality
+ * columns, any other path has to sort the generation first, so the index is
+ * the plan under custom and generic planning alike. A partial index's
+ * predicate is repeated through the helper that defines it, which is what
+ * lets the planner use the index at all.
+ */
+export const corpusProjectionStateQueueProbe = (
+  target: CorpusIndexProjectionConvergenceTarget,
+) => {
+  const states = corpusIndexProjectionStates;
+  const scope = stateScope(target);
+  return sql`
+    SELECT (
+      SELECT ${states.entityId}
+      FROM ${states}
+      WHERE ${scope}
+      ORDER BY ${states.entityId}
+      LIMIT 1
+    ) IS NOT NULL AS "hasState",
+    (
+      SELECT ${states.entityId}
+      FROM ${states}
+      WHERE ${scope}
+        AND ${corpusIndexProjectionIsBlocked(states.workStatus)}
+      ORDER BY ${states.entityId}
+      LIMIT 1
+    ) IS NOT NULL AS "hasBlockedState",
+    (
+      SELECT ${states.entityId}
+      FROM ${states}
+      WHERE ${scope}
+        AND ${corpusIndexProjectionNeedsWork(states)}
+      ORDER BY coalesce(${states.retryNotBefore}, ${states.updatedAt}),
+        ${states.entityId}
+      LIMIT 1
+    ) IS NOT NULL AS "hasPendingState"
+  `;
+};
+
+/**
  * Whether any revision of the generation can still change the engine, asked
  * only once the state queue is quiet.
  *
  * "Outstanding" is unchanged: a blocking revision, or an `applied` revision
- * that no state row names as authoritative. Read as an anti-join, the second
- * half probes the state index once per applied revision, so it grew with the
- * generation while holding the exclusive mutation fence. The same question is
- * a count identity, and two index-only scans answer it:
+ * that no state row names as authoritative. A blocking revision is the first
+ * row of one blocking status in work-index order, one probe per status, so
+ * the probe never walks applied or settled history. Read as an anti-join,
+ * the second half probes the state index once per applied revision, so it
+ * grew with the generation while holding the exclusive mutation fence. The
+ * same question is a count identity, and two index-only scans answer it:
  *
  * - `applied_revision` is a foreign key carrying family, generation, entity,
  *   epoch, fingerprint and index id, and the applied shape check makes those
@@ -82,25 +128,29 @@ const intentScope = ({
  *   a subset of the applied ones and the counts agree exactly when every
  *   applied revision is referenced.
  */
-const readOutstandingCorpusProjectionIntentTx = async (
-  tx: Transaction,
+export const corpusProjectionOutstandingIntentProbe = (
   target: CorpusIndexProjectionConvergenceTarget,
-): Promise<boolean> => {
-  // sql-perf-allow: index corpus_index_projection_intents_work_idx and corpus_index_projection_states_applied_census_idx for one family/generation
-  const result: unknown = await tx.execute(sql`
-    SELECT EXISTS (
-      SELECT 1
-      FROM ${corpusIndexProjectionIntents}
+) => {
+  const intents = corpusIndexProjectionIntents;
+  // COALESCE stops at the first status with a revision, so a generation with
+  // blocking work runs the probes up to that status and no count.
+  const blockingRevisions = CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES.map(
+    (status) => sql`(
+      SELECT ${intents.status}
+      FROM ${intents}
       WHERE ${intentScope(target)}
-        AND ${inArray(
-          corpusIndexProjectionIntents.status,
-          CORPUS_INDEX_LAUNCH_BLOCKING_INTENT_STATUSES,
-        )}
-    ) OR (
+        AND ${intents.status} = ${status}
+      ORDER BY ${intents.cleanupNotBefore}, ${intents.leaseExpiresAt},
+        ${intents.createdAt}
+      LIMIT 1
+    )`,
+  );
+  return sql`
+    SELECT COALESCE(${sql.join(blockingRevisions, sql`, `)}) IS NOT NULL OR (
       SELECT count(*)
-      FROM ${corpusIndexProjectionIntents}
+      FROM ${intents}
       WHERE ${intentScope(target)}
-        AND ${corpusIndexProjectionIntents.status} = 'applied'
+        AND ${intents.status} = 'applied'
     ) <> (
       SELECT count(*)
       FROM ${corpusIndexProjectionStates}
@@ -111,7 +161,39 @@ const readOutstandingCorpusProjectionIntentTx = async (
         AND ${corpusIndexProjectionStates.appliedAction} = 'upsert'
         AND ${corpusIndexProjectionStates.appliedRevision} IS NOT NULL
     ) AS "hasOutstandingIntent"
-  `);
+  `;
+};
+
+/**
+ * One applied revision the engine has not certainly published, if any. An
+ * applied revision carries no cleanup or lease timestamps, so the order is
+ * the work index's own: the probe reads the generation's applied revisions,
+ * never the table.
+ */
+export const corpusProjectionUnpublishedIntentProbe = (
+  target: CorpusIndexProjectionConvergenceTarget,
+  manifest: CorpusIndexManifest,
+) => {
+  const intents = corpusIndexProjectionIntents;
+  return sql`
+    SELECT ${intents.id}
+    FROM ${intents}
+    WHERE ${intentScope(target)}
+      AND ${intents.status} = 'applied'
+      AND NOT ${corpusProjectionAppendIsPublished(manifest)}
+    ORDER BY ${intents.cleanupNotBefore}, ${intents.leaseExpiresAt},
+      ${intents.createdAt}
+    LIMIT 1
+  `;
+};
+
+const readOutstandingCorpusProjectionIntentTx = async (
+  tx: Transaction,
+  target: CorpusIndexProjectionConvergenceTarget,
+): Promise<boolean> => {
+  const result: unknown = await tx.execute(
+    corpusProjectionOutstandingIntentProbe(target),
+  );
   const observation = executedRows(result).at(0);
   if (
     !isRecord(observation) ||
@@ -131,26 +213,9 @@ export const readCorpusIndexProjectionConvergenceTx = async (
   tx: Transaction,
   target: CorpusIndexProjectionConvergenceTarget,
 ): Promise<CorpusIndexProjectionConvergenceStatus> => {
-  const scope = stateScope(target);
-  const result: unknown = await tx.execute(sql`
-    SELECT EXISTS (
-      SELECT 1 FROM ${corpusIndexProjectionStates} WHERE ${scope}
-    ) AS "hasState",
-    EXISTS (
-      SELECT 1
-      FROM ${corpusIndexProjectionStates}
-      WHERE ${scope}
-        AND ${corpusIndexProjectionIsBlocked(
-          corpusIndexProjectionStates.workStatus,
-        )}
-    ) AS "hasBlockedState",
-    EXISTS (
-      SELECT 1
-      FROM ${corpusIndexProjectionStates}
-      WHERE ${scope}
-        AND ${corpusIndexProjectionNeedsWork(corpusIndexProjectionStates)}
-    ) AS "hasPendingState"
-  `);
+  const result: unknown = await tx.execute(
+    corpusProjectionStateQueueProbe(target),
+  );
   const observation = executedRows(result).at(0);
   if (
     !isRecord(observation) ||
@@ -177,17 +242,9 @@ export const readCorpusIndexProjectionConvergenceTx = async (
     target.family,
     target.generation,
   );
-  const unpublished = await tx
-    .select({ id: corpusIndexProjectionIntents.id })
-    .from(corpusIndexProjectionIntents)
-    .where(
-      and(
-        intentScope(target),
-        eq(corpusIndexProjectionIntents.status, "applied"),
-        sql`NOT ${corpusProjectionAppendIsPublished(manifest)}`,
-      ),
-    )
-    .limit(1);
+  const unpublished = executedRows(
+    await tx.execute(corpusProjectionUnpublishedIntentProbe(target, manifest)),
+  );
   return unpublished.length === 0
     ? CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.readyForCensus
     : CORPUS_INDEX_PROJECTION_CONVERGENCE_STATUS.publishPending;

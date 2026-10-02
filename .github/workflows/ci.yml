@@ -1101,16 +1101,21 @@ jobs:
           [[ -z "$AFFECTED_FLAG" ]] || args+=("$AFFECTED_FLAG")
           bun --bun turbo run format "${args[@]}" -- --check
 
+      - name: Select measured ratchet base
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        env:
+          MERGE_GROUP_BASE_SHA: ${{ github.event.merge_group.base_sha }}
+        run: |
+          base="${MERGE_GROUP_BASE_SHA:-$(git merge-base origin/main HEAD)}"
+          git cat-file -e "$base^{commit}"
+          echo "RATCHET_BASE_REF=$base" >> "$GITHUB_ENV"
+
       - name: Ratchet guard
         if: needs.ci-plan.outputs.package_checks_required == 'true'
-        # Whole-repo convention metrics (see RATCHET_METRICS in
-        # scripts/ratchet.ts) that may only ever
-        # decrease. Each metric's current count is compared to a committed
-        # baseline; a rise fails CI (a new violation), a fall just prompts a
-        # `--write` to lock in the improvement. Line-based counters, no AST —
-        # fast. The --self-test run first proves each counter counts what it
-        # claims and that a rise regresses, so a broken guard cannot pass
-        # silently. Regenerate: `bun scripts/ratchet.ts --write`.
+        # Whole-repo metrics compare to a measured export of RATCHET_BASE_REF.
+        # A rise fails; decreases require no committed baseline update. Both
+        # trees use the current registry, including per-file ceilings.
+        # The self-test proves counter and gate behavior before the comparison.
         run: |
           bun test scripts/ratchet-improvements.test.ts scripts/autofix-ratchet-boundary.test.ts scripts/ratchet-derived-totals.test.ts
           bun scripts/ratchet.ts --self-test
@@ -1215,6 +1220,10 @@ jobs:
         run: |
           bash scripts/check-ai-skill-sync.test.sh
           bash scripts/verify-step.test.sh
+
+      - name: Check local base selection
+        if: needs.ci-plan.outputs.package_checks_required == 'true'
+        run: bash scripts/canonical-base.test.sh
 
       - name: Check local skill overrides
         if: needs.ci-plan.outputs.package_checks_required == 'true'
