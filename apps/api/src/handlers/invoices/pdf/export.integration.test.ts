@@ -13,6 +13,7 @@ import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { S3_OBJECT_WRITE_CERTAINTY } from "@/api/lib/s3";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -100,7 +101,7 @@ const context = (
     body: {},
     createAuditRecorder: () => recordAuditEvent,
     recordAuditEvent,
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     orgAIConfig: null,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
     promptCachingEnabled: false,
