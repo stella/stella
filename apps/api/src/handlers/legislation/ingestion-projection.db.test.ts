@@ -256,25 +256,27 @@ test("a changed body is never read through the previous body's corpus pointers",
     fulltext: "§ 1 Nové znění chrání soukromí.",
     rawHash: "publisher-new-wording",
   };
-  let inFlight: Awaited<ReturnType<typeof bodyState>> = undefined;
+  const inFlight: Awaited<ReturnType<typeof bodyState>>[] = [];
   await processLegislationDocument(changed, scopedDb, {
     corpus: corpusWritingAfter(async () => {
-      inFlight = await bodyState(first.id);
+      inFlight.push(await bodyState(first.id));
     }),
   });
   const after = await bodyState(first.id);
 
   // While the new body is not yet in object storage, the row's own columns
   // carry it and no pointer names the old copy; search stops serving it.
-  expect(inFlight).toEqual({
-    title: changed.title,
-    fulltext: changed.fulltext,
-    textS3Key: null,
-    astS3Key: null,
-    normalizedS3Key: null,
-    contentHash: null,
-    action: "erase",
-  });
+  expect(inFlight).toEqual([
+    {
+      title: changed.title,
+      fulltext: changed.fulltext,
+      textS3Key: null,
+      astS3Key: null,
+      normalizedS3Key: null,
+      contentHash: null,
+      action: "erase",
+    },
+  ]);
   expect(after?.title).toBe(changed.title);
   expect(after?.textS3Key).not.toBeNull();
   expect(after?.textS3Key).not.toBe(settled?.textS3Key);
@@ -294,7 +296,7 @@ test("a metadata-only refresh keeps serving its unchanged body from the corpus",
   }
   const settled = await bodyState(first.id);
 
-  let inFlight: Awaited<ReturnType<typeof bodyState>> = undefined;
+  const inFlight: Awaited<ReturnType<typeof bodyState>>[] = [];
   await processLegislationDocument(
     {
       ...input("current"),
@@ -305,21 +307,23 @@ test("a metadata-only refresh keeps serving its unchanged body from the corpus",
     scopedDb,
     {
       corpus: corpusWritingAfter(async () => {
-        inFlight = await bodyState(first.id);
+        inFlight.push(await bodyState(first.id));
       }),
     },
   );
 
   // The same body: its pointers and hash stay, so nothing falls back to the
   // columns and the projection keeps its upsert.
-  expect(inFlight).toMatchObject({
-    title: "Občanský zákoník (opravený název)",
-    textS3Key: settled?.textS3Key,
-    astS3Key: settled?.astS3Key,
-    normalizedS3Key: settled?.normalizedS3Key,
-    contentHash: settled?.contentHash,
-    action: "upsert",
-  });
+  expect(inFlight).toMatchObject([
+    {
+      title: "Občanský zákoník (opravený název)",
+      textS3Key: settled?.textS3Key,
+      astS3Key: settled?.astS3Key,
+      normalizedS3Key: settled?.normalizedS3Key,
+      contentHash: settled?.contentHash,
+      action: "upsert",
+    },
+  ]);
 });
 
 const withdrawalState = async (documentId: SafeId<"legislationDocument">) =>
