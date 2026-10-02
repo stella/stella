@@ -402,6 +402,46 @@ test("multiple added allowances must sum to the actual increase", () => {
   });
 }, 30_000);
 
+test("an unmerged main improvement cannot change the PR funding requirement", () => {
+  withClone((root) => {
+    const fork = git(root, "rev-parse", "HEAD");
+    git(root, "checkout", "-b", "advance-main");
+    write({ root, relative: FIRST, contents: casts(1) });
+    commit(root, "main improvement after fork");
+    const main = git(root, "rev-parse", "HEAD");
+    git(root, "update-ref", "refs/remotes/origin/main", main);
+    git(root, "checkout", "-b", "feature", fork);
+    write({ root, relative: FIRST, contents: casts(3) });
+    fund(root, { metric: "as-casts", delta: 1, reason: "Fixture conversion" });
+    commit(root, "fund branch increase relative to fork");
+    expect(git(root, "merge-base", "origin/main", "HEAD")).toBe(fork);
+    expect(main).not.toBe(fork);
+    const result = check(root);
+    expect(result.code, result.output).toBe(0);
+    expect(result.output).toContain("ratchet --check: OK");
+    const againstTip = check(root, "--base", main);
+    expect(againstTip.code, againstTip.output).toBe(1);
+    expect(againstTip.output).toContain("actual increase 2, funded 1");
+  });
+}, 30_000);
+
+test("working tree allowance edits cannot fund a committed increase", () => {
+  withClone((root) => {
+    write({ root, relative: FIRST, contents: casts(4) });
+    fund(root, { metric: "as-casts", delta: 1, reason: "Fixture conversion" });
+    commit(root, "commit insufficient funding");
+    fund(root, {
+      metric: "as-casts",
+      delta: 2,
+      reason: "Uncommitted correction",
+    });
+    const result = check(root);
+    expect(result.code, result.output).toBe(1);
+    expect(result.output).toContain("actual increase 2, funded 1");
+    expect(result.output).toContain(ALLOWANCE);
+  });
+}, 30_000);
+
 test("base allowances stay inert even when edited; counting them kills the guard", () => {
   withClone((root) => {
     fund(root, {
