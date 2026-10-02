@@ -41,15 +41,6 @@ export const isNullishArrayOf = <T>(
 ): value is T[] | null | undefined =>
   value === undefined || value === null || isArrayOf(value, guard);
 
-export const isNullishOneOrArrayOf = <T>(
-  value: unknown,
-  guard: (item: unknown) => item is T,
-): value is T | T[] | null | undefined =>
-  value === undefined ||
-  value === null ||
-  guard(value) ||
-  isArrayOf(value, guard);
-
 export const toOptionalValue = <T>(
   value: T | null | undefined,
 ): T | undefined => value ?? undefined;
