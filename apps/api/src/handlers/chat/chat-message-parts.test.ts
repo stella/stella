@@ -31,7 +31,10 @@ import {
   getAwaitingUserInteractions,
   getResumedUserInteraction,
 } from "@/api/handlers/chat/chat-message-parts";
-import type { ChatPart } from "@/api/handlers/chat/types";
+import type {
+  ChatPart,
+  PersistableChatMessageCandidate,
+} from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
 import { CHAT_REF_ENCODING } from "@/api/lib/chat/ref-token";
 import { LIMITS } from "@/api/lib/limits";
@@ -52,6 +55,30 @@ const budgetPropertyPartFromKind = (kind: number): ChatPart => {
 };
 
 describe("persisted chat message parts", () => {
+  test.each(["", " ", "\n\t", "\u00a0\u2003"])(
+    "keeps invisible assistant text out of persistence: %j",
+    (blank) => {
+      const thinking: ChatPart = {
+        type: "thinking",
+        content: "Reviewing the clause.",
+      };
+      const answer = createChatTextPart(" \nAnswer.\t ");
+      const parts: ChatPart[] = [thinking, createChatTextPart(blank), answer];
+      const message: PersistableChatMessageCandidate = {
+        id: toSafeId<"chatMessage">("11111111-1111-4111-8111-111111111111"),
+        parts,
+        role: "assistant",
+      };
+      expect(toPersistableChatMessage(message).parts).toEqual([
+        thinking,
+        answer,
+      ]);
+      expect(
+        toPersistableChatMessage({ ...message, role: "user" }).parts,
+      ).toEqual(parts);
+    },
+  );
+
   test("gives a legacy file part a sanitized display name", () => {
     const attachment = (filename: string) =>
       legacyAiSdkFilePartToTanStack({

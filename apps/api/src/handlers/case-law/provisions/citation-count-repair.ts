@@ -25,7 +25,8 @@ type CitationCountRepairDatabase = {
 
 /** Create an operation that commits one bounded batch; invoke serially until ready. */
 export const createStatuteCitationCountRepair =
-  (db: CitationCountRepairDatabase) => async () =>
+  (db: CitationCountRepairDatabase) =>
+  async (size = BATCH_SIZE) =>
     await db.transaction(async (tx) => {
       // audit: skip — rebuilds a public-corpus projection with a durable maintenance checkpoint.
       const [state] = await tx
@@ -60,7 +61,7 @@ export const createStatuteCitationCountRepair =
             : gt(caseLawDecisions.id, state.cursorDecisionId),
         )
         .orderBy(asc(caseLawDecisions.id))
-        .limit(BATCH_SIZE)
+        .limit(size)
         .for("no key update");
 
       const lastDecisionId = decisionRows.at(-1)?.decisionId;
