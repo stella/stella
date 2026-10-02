@@ -137,8 +137,8 @@ const openPage = (): Page => {
   return { errors, heard, runtime, scheduler };
 };
 
-const send = (page: Page) =>
-  Result.tryPromise(
+const send = async (page: Page) =>
+  await Result.tryPromise(
     async () =>
       await sendThreadChatMessage(page.runtime, {
         content: "Draft the NDA",

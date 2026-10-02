@@ -18,8 +18,43 @@ import {
 
 const RULE_NAME = "no-swallowed-item-error";
 const MIN_REASON_LENGTH = 12;
-const PLACEHOLDER_REASON =
-  /^(?:todo|fixme|tbd)\b|^(?:placeholder(?:\s+reason)?|reason(?:\s+goes)?\s+here|explain\s+(?:why|here)|best[- ]effort(?:\s+cleanup)?|ignore(?:\s+(?:errors|failures))?|test(?:\s+only)?|cleanup)[.! ]*$/iu;
+const PLACEHOLDER_OPENERS = new Set(["todo", "fixme", "tbd"]);
+const PLACEHOLDER_PHRASES = new Set([
+  "placeholder",
+  "placeholder reason",
+  "reason here",
+  "reason goes here",
+  "explain why",
+  "explain here",
+  "best effort",
+  "best-effort",
+  "best effort cleanup",
+  "best-effort cleanup",
+  "ignore",
+  "ignore errors",
+  "ignore failures",
+  "test",
+  "test only",
+  "cleanup",
+]);
+const TRAILING_FILLER = new Set([".", "!", " "]);
+
+/** A reason that names no cause: an opener such as "todo", or a stock phrase. */
+const isPlaceholderReason = (reason: string): boolean => {
+  const words = reason
+    .toLowerCase()
+    .split(/\s/u)
+    .filter((word) => word !== "");
+  const opener = /^[a-z]+/u.exec(words[0] ?? "")?.[0];
+  if (opener !== undefined && PLACEHOLDER_OPENERS.has(opener)) {
+    return true;
+  }
+  let phrase = words.join(" ");
+  while (TRAILING_FILLER.has(phrase.at(-1) ?? "")) {
+    phrase = phrase.slice(0, -1);
+  }
+  return PLACEHOLDER_PHRASES.has(phrase);
+};
 const ITERATION_METHODS = new Set([
   "map",
   "flatMap",
@@ -200,7 +235,7 @@ export default eslintCompatPlugin({
               if (
                 reason !== undefined &&
                 reason.length >= MIN_REASON_LENGTH &&
-                !PLACEHOLDER_REASON.test(reason) &&
+                !isPlaceholderReason(reason) &&
                 /\p{L}/u.test(reason) &&
                 !/^(.)\1+$/u.test(reason)
               ) {

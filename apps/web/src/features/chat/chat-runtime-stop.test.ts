@@ -147,6 +147,8 @@ const openChatResponse = ({
         "abort",
         () => {
           aborted = true;
+          // An aborted stream is already settled; ending it again would throw.
+          end = () => {};
           log.push(`abort ${turnId}`);
           controller.error(new DOMException("The page aborted", "AbortError"));
         },
@@ -242,8 +244,8 @@ const openPage = (): Page => {
   return page;
 };
 
-const send = (page: Page, id: string) =>
-  Result.tryPromise(
+const send = async (page: Page, id: string) =>
+  await Result.tryPromise(
     async () =>
       await sendThreadChatMessage(page.runtime, {
         content: "Draft the NDA",
