@@ -1,0 +1,44 @@
+SET lock_timeout = '1s';--> statement-breakpoint
+SET statement_timeout = '5s';--> statement-breakpoint
+
+ALTER TABLE "scheduler_jobs"
+  ADD COLUMN "paused_by" text,
+  ADD COLUMN "paused_until" timestamp with time zone,
+  ADD COLUMN "pause_reason" text;
+--> statement-breakpoint
+
+-- Existing rows have NULL pause columns, so every one satisfies this check.
+-- NOT VALID avoids a scan under the additive DDL lock; writes enforce it immediately.
+ALTER TABLE "scheduler_jobs"
+  ADD CONSTRAINT "scheduler_jobs_pause_attribution_check" CHECK (
+    paused_until IS NULL OR (
+      paused_by IS NOT NULL AND length(btrim(paused_by)) > 0
+      AND pause_reason IS NOT NULL AND length(btrim(pause_reason)) >= 8
+    )
+  ) NOT VALID;
+--> statement-breakpoint
+
+CREATE FUNCTION public.scheduler_job_pause_log() RETURNS trigger
+LANGUAGE plpgsql AS $$
+BEGIN
+  RAISE LOG '%', json_build_object(
+    'event', CASE
+      WHEN NEW.paused_until > CURRENT_TIMESTAMP THEN 'scheduler.job.paused'
+      ELSE 'scheduler.job.resumed'
+    END,
+    'job', NEW.id,
+    'paused_by', NEW.paused_by,
+    'pause_reason', NEW.pause_reason,
+    'paused_until', NEW.paused_until,
+    'previous_paused_until', OLD.paused_until
+  )::text;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+
+CREATE TRIGGER scheduler_job_pause_log
+AFTER UPDATE OF paused_until ON "scheduler_jobs"
+FOR EACH ROW
+WHEN (OLD.paused_until IS DISTINCT FROM NEW.paused_until)
+EXECUTE FUNCTION public.scheduler_job_pause_log();

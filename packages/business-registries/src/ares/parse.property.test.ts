@@ -141,7 +141,7 @@ test(
         }
         const original = await expectRegistryResponses(
           (url) => (url.includes("ekonomicke-subjekty-vr") ? vr : base),
-          async () => lookupByIco("00006947"),
+          async () => lookupByIco("00006947", { observer: "unobserved" }),
         );
         expect(original?.vrEnrichmentStatus).toBe("complete");
         for (const mutateVr of [false, true]) {
@@ -155,7 +155,7 @@ test(
                   }
                   return mutateVr ? base : changed;
                 },
-                async () => lookupByIco("00006947"),
+                async () => lookupByIco("00006947", { observer: "unobserved" }),
               );
               if (!company) {
                 return;
@@ -252,7 +252,8 @@ test(
       fc.asyncProperty(record, async (raw) => {
         const searchEntry = { ...raw, ico: raw.ico || "00006947" };
         const payload = { pocetCelkem: 1, ekonomickeSubjekty: [searchEntry] };
-        const operation = async () => searchByName("company");
+        const operation = async () =>
+          searchByName("company", { observer: "unobserved" });
         expect(await expectRegistryResponse(payload, operation)).toMatchObject([
           { ico: searchEntry.ico, name: searchEntry.obchodniJmeno },
         ]);

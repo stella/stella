@@ -146,11 +146,14 @@ type SearchedQuery = {
 const searched: SearchedQuery[] = [];
 for (const query of queries.value) {
   const startedAt = performance.now();
-  const page = await provider.search({
-    query: query.text,
-    jurisdiction: query.country,
-    limit,
-  });
+  const page = await provider.search(
+    {
+      query: query.text,
+      jurisdiction: query.country,
+      limit,
+    },
+    "unobserved",
+  );
   const searchMs = performance.now() - startedAt;
   if (Result.isError(page)) {
     abort(`search for ${query.id} failed: ${page.error.message}`);
