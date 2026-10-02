@@ -294,8 +294,8 @@ describe("a history write's effect on the compaction chain", () => {
         (chainCase) => chainCase.write(messages).persistencePlan.type,
       ),
     );
-    expect([...exercised].toSorted()).toEqual(
-      Object.keys(PLAN_TYPES).toSorted(),
+    expect(Object.keys(PLAN_TYPES).toSorted()).toEqual(
+      [...exercised].toSorted(),
     );
   });
 
