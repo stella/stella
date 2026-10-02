@@ -339,8 +339,8 @@ describe("detect-e2e-changes", () => {
     expect(result).toContain("        network-baseline,\n");
     expect(baseline).toContain("needs: [ci-plan, web-build]");
     expect(baseline).not.toContain("suite_depth == 'full'");
-    expect(workflowStep(baseline, "Check route network baseline")).toContain(
-      "run: bun --filter @stll/web test:e2e -- route-smoke.spec.ts",
+    expect(workflowStepRun(baseline, "Check route network baseline")).toBe(
+      'bash "$GITHUB_WORKSPACE/.github/actions/setup-playwright/run-in-image.sh" bun --filter @stll/web test:e2e -- route-smoke.spec.ts',
     );
     for (const stepName of [
       "Run Playwright shard",
