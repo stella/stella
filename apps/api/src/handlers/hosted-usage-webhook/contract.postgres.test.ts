@@ -45,7 +45,7 @@ const withFixture = async (
   ) => Promise<void>,
 ) => {
   if (!databaseUrl) {
-    return panic("DATABASE_URL required");
+    panic("DATABASE_URL required");
   }
   const previous = {
     feature: env.FEATURE_USAGE,
