@@ -15,6 +15,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedVatRateId } from "@/api/lib/safe-id-boundaries";
 
 type VatRateRow = typeof vatRates.$inferSelect;
@@ -72,7 +73,9 @@ const cursorCodec = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ query, safeDb, session }) {
-    const limit = query.limit ?? LIMITS.vatRatesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.vatRatesPageSizeDefault,
+    );
     const conditions = [
       eq(vatRates.organizationId, session.activeOrganizationId),
       isNull(vatRates.archivedAt),

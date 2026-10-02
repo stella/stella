@@ -211,6 +211,7 @@ const createPlaybookWriteContext = (
       loadOrgSettingsForAuth: async () => ({
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+        managedAIResidency: "eu" as const,
         promptCachingEnabled: false,
       }),
     },

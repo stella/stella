@@ -470,7 +470,7 @@ test("route-tree CI scope covers every manifest input and output", () => {
 
 test("CI diff path guards stay pinned to manifest outputs", () => {
   const cli = ci.slice(
-    ci.indexOf("- name: CLI registry snapshot guard"),
+    ci.indexOf("- name: CLI sharded registry snapshot guard"),
     ci.indexOf("- name: MCP App bundle guard"),
   );
   const diff = cli.split("git diff --exit-code -- \\\n")[1];

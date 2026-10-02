@@ -224,6 +224,7 @@ const captureProviderRequest = async (
 ): Promise<CapturedProviderRequest> => {
   const requestIndex = transport.requests.length;
   const createAdapter = createTanStackTextAdapterFactory({
+    dataClass: "public_corpus",
     apiKey: "test-key",
     provider: options.provider,
   });

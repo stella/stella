@@ -14,6 +14,7 @@ import type {
   UnbackedProjectionKeys,
   UnprojectedColumns,
 } from "@/api/lib/projection-totality";
+import { normalizeTenantPageLimit } from "@/api/lib/rate-limit/action-size-limits";
 import { brandPersistedSellerProfileId } from "@/api/lib/safe-id-boundaries";
 
 type SellerProfileRow = typeof sellerProfiles.$inferSelect;
@@ -81,7 +82,9 @@ const cursorCodec = createTimestampIdCursorCodec({
 export default createSafeRootHandler(
   config,
   async function* ({ safeDb, session, query }) {
-    const limit = query.limit ?? LIMITS.sellerProfilesPageSizeDefault;
+    const limit = normalizeTenantPageLimit(
+      query.limit ?? LIMITS.sellerProfilesPageSizeDefault,
+    );
     const conditions = [
       eq(sellerProfiles.organizationId, session.activeOrganizationId),
       isNull(sellerProfiles.archivedAt),

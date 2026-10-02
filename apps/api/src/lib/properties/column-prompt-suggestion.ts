@@ -8,6 +8,7 @@ import type { OrgAIConfig } from "@/api/lib/ai-config";
 import { aiHandlerError } from "@/api/lib/ai-error";
 import { createTanStackAIAnalyticsCallbacks } from "@/api/lib/analytics/tanstack-ai";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { generateTanStackTextForRole } from "@/api/lib/tanstack-ai-generate";
 
@@ -311,6 +312,7 @@ type SuggestColumnPromptOptions = {
   organizationId: SafeId<"organization">;
   userId: SafeId<"user">;
   orgAIConfig: OrgAIConfig | null;
+  managedAIResidency: ManagedAIResidency;
   promptCachingEnabled: boolean;
   safeDb: SafeDb;
   abortSignal: AbortSignal;
@@ -325,6 +327,7 @@ export const suggestColumnPrompt = async ({
   context,
   draft,
   orgAIConfig,
+  managedAIResidency,
   organizationId,
   promptCachingEnabled,
   safeDb,
@@ -343,6 +346,7 @@ export const suggestColumnPrompt = async ({
 
   const scope = suggestionScope(context);
   const aiAnalytics = createTanStackAIAnalyticsCallbacks({
+    dataClass: "customer",
     usageMetering: {
       actionType: "chat",
       organizationId,
@@ -365,10 +369,12 @@ export const suggestColumnPrompt = async ({
   const generateResult = await Result.tryPromise({
     try: async () =>
       await generateTanStackTextForRole({
+        dataClass: "customer",
         finishPolicy: "require-complete",
         role: "fast",
         serviceTier: "standard",
         orgAIConfig,
+        managedAIResidency,
         organizationId,
         tenantWorkspaceIds: scope.tenantWorkspaceIds,
         analytics: aiAnalytics,

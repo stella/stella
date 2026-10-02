@@ -244,9 +244,16 @@ describe("detect-e2e-changes", () => {
       plan.indexOf("Check changed file scope"),
     );
     expect(plan).toContain("persist-credentials: false");
-    expect(
-      plan.match(/steps\.check\.outputs\.trusted == 'true'/gu),
-    ).toHaveLength(3);
+    for (const stepName of [
+      "Checkout",
+      "Resolve browser image",
+      "Setup Bun for dependency scope",
+      "Check changed file scope",
+    ]) {
+      expect(workflowStep(plan, stepName), stepName).toContain(
+        "steps.check.outputs.trusted == 'true'",
+      );
+    }
     expect(workflowStep(plan, "Resolve browser image")).toContain(
       "if: steps.check.outputs.trusted == 'true' || github.event_name == 'workflow_dispatch'",
     );
@@ -434,20 +441,22 @@ describe("detect-e2e-changes", () => {
 
   test("keeps full code quality for manual sweeps and scopes pull requests", () => {
     const plan = workflowJob("ci-plan");
-    const codeQuality = workflowJob("code-quality");
-    expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
-    expect(plan).toContain(".provenance.yml|provenance/*)");
-    expect(codeQuality).toContain(
-      `EVENT_NAME: ${githubExpression("github.event_name")}`,
-    );
-    expect(codeQuality).toContain(
-      'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
-    );
-    expect(codeQuality).toContain("bun run code-check\n");
-    expect(codeQuality).not.toContain("bun run typecheck\n");
-    expect(codeQuality).toContain(
-      'bun run code-check:affected -- --base "origin/$BASE_REF"',
-    );
+    for (const leg of ["api", "web", "rest"]) {
+      const codeQuality = workflowJob(`code-quality-${leg}`);
+      expect(plan).not.toContain(".github/*|.provenance.yml|provenance/*)");
+      expect(plan).toContain(".provenance.yml|provenance/*)");
+      expect(codeQuality).toContain(
+        `EVENT_NAME: ${githubExpression("github.event_name")}`,
+      );
+      expect(codeQuality).toContain(
+        'if [[ "$EVENT_NAME" == "workflow_dispatch" ]]',
+      );
+      expect(codeQuality).toContain(`bun run code-check -- --leg ${leg}\n`);
+      expect(codeQuality).not.toContain("bun run typecheck\n");
+      expect(codeQuality).toContain(
+        `bun run code-check:affected -- --leg ${leg} --base "origin/$BASE_REF"`,
+      );
+    }
   });
 
   test("runs the full native compiler only at the release boundary", () => {
@@ -473,7 +482,7 @@ describe("detect-e2e-changes", () => {
   });
 
   test("revalidates release invariants on the merge queue tree", () => {
-    const ciChecks = workflowJob("ci-checks");
+    const ciChecks = workflowJob("ci-checks-rest");
     for (const stepName of [
       "Release changelog guard",
       "Release CLI coupling guard",
@@ -514,7 +523,7 @@ describe("detect-e2e-changes", () => {
     );
 
     const driftGuard = workflowStep(
-      workflowJob("ci-checks"),
+      workflowJob("ci-checks-rest"),
       "Model catalog snapshot drift guard",
     );
     expect(driftGuard).toContain(
@@ -758,7 +767,6 @@ describe("detect-e2e-changes", () => {
     const scope = "Check UI browser test scope";
     const setupSteps = [
       "Setup Bun",
-      "Install Safe Chain",
       "Turbo remote cache",
       "Install dependencies",
       "Prepare environment",

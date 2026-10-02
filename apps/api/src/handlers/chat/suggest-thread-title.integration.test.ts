@@ -124,6 +124,7 @@ const createContext = ({
     memberRole: { role: "owner" },
     orgAIConfig,
     orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
+    managedAIResidency: "eu" as const,
     params: { threadId },
     promptCachingEnabled: false,
     query: workspaceId ? { workspaceId } : {},

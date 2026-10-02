@@ -149,10 +149,10 @@ const CHANGESET_GATE_FIRST_STEP = "Load release policy";
 const CHANGESET_GATE_LAST_STEP =
   "Changeset present for published package changes";
 
-/** The changeset gate's steps in the ci-checks job, first through last. */
+/** The changeset gate's steps in the ci-checks-rest job, first through last. */
 const changesetJob = (): string => {
   const lines = readFile(WORKFLOW_FILE).split("\n");
-  const job = lines.indexOf("  ci-checks:");
+  const job = lines.indexOf("  ci-checks-rest:");
   expect(job).toBeGreaterThanOrEqual(0);
   const jobLines = lines.slice(job + 1);
   const jobEnd = jobLines.findIndex((line) => /^ {2}\S/u.test(line));
@@ -876,7 +876,7 @@ describe("workflow and pre-push read the same policy", () => {
       gate.match(/^ {8}if: github\.event_name == 'pull_request'$/gmu),
     ).toHaveLength(stepCount);
     const workflow = readFile(WORKFLOW_FILE);
-    const job = workflow.indexOf("\n  ci-checks:\n");
+    const job = workflow.indexOf("\n  ci-checks-rest:\n");
     const gateStart = workflow.indexOf(gate, job);
     expect(gateStart).toBeGreaterThan(job);
     expect(gateStart).toBeLessThan(
