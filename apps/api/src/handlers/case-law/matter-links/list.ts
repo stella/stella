@@ -133,6 +133,7 @@ const config = {
   permissions: { workspace: ["read"] },
   mcp: {
     type: "capability",
+    readClass: "both",
     reason: "legal_corpus_admin",
     consumesServices: false,
   },
