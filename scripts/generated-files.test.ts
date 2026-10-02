@@ -381,7 +381,6 @@ test("manifest paths and named guards resolve against tracked files and CI", asy
 
 test("the plan alone never authorizes the ratchet baseline", () => {
   const selected = generatorsForFiles(["apps/web/src/example.ts"]);
-  expect(selected.some(({ id }) => id === "ratchet-improvements")).toBe(false);
   expect(allowedOutputs(selected)).not.toContain(
     "scripts/ratchet-baseline.json",
   );

@@ -3757,10 +3757,9 @@ type RatchetAllowance = {
   reason: string;
 };
 
-const allowanceKey = ({
-  metric,
-  file,
-}: Pick<RatchetAllowance, "metric" | "file">) =>
+type AllowanceKeyArgs = { metric: string; file: string | undefined };
+
+const allowanceKey = ({ metric, file }: AllowanceKeyArgs) =>
   JSON.stringify([metric, file ?? null]);
 
 const ALLOWANCE_FILENAME =
@@ -3884,7 +3883,10 @@ const checkAllowances = (
       continue;
     }
     const { allowance } = parsed;
-    const key = allowanceKey(allowance);
+    const key = allowanceKey({
+      metric: allowance.metric,
+      file: allowance.file,
+    });
     const previous = funding.get(key);
     if (previous === undefined) {
       funding.set(key, { delta: allowance.delta, paths: [filename] });
