@@ -450,8 +450,8 @@ const ROUTE_HOOK_WAIVERS: Record<string, string> = {};
  *    corpus decisions, ingestion admin) are corpus-backed.
  *  - FEATURE_USAGE gates only `get_usage` (tool disposition; inherited
  *    mechanically, no capability-disposition entries), so `usage` needs no row.
- * Web-only flags (FEATURE_CHAT, FEATURE_CONTACTS, FEATURE_TODOS, ...) gate UI
- * routes, not any API surface (their REST routes mount unconditionally), so
+ * Flags read only by the web build gate UI routes, not any API surface (their
+ * REST routes mount unconditionally), so
  * they are deliberately NOT applied here: invoke stays exactly as gated as the
  * REST + static-tool surface, no stricter.
  *
