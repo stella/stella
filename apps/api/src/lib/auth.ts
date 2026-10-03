@@ -133,6 +133,7 @@ import {
   getVerifiedOAuthOrigins,
 } from "@/api/lib/oauth-consent-info";
 import { resolveLoopbackClientRegistrationOverride } from "@/api/lib/oauth-loopback-registration";
+import { withOwnClientDocuments } from "@/api/lib/oauth-own-client-documents";
 import {
   createStellaOAuthProvider,
   OAUTH_DISABLED_PATHS,
@@ -1680,7 +1681,9 @@ export const createAuth = (roleAssignmentPolicy = assignableRoles) => {
           extensions: [
             {
               clientDiscovery: createCimdClientDiscovery({
-                fetchClientMetadataResource,
+                fetchClientMetadataResource: withOwnClientDocuments(
+                  fetchClientMetadataResource,
+                ),
               }),
             },
           ],
