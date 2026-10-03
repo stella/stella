@@ -112,6 +112,26 @@ export const TABLE_RETENTION = {
     boundedBy:
       "Derived document projection replaced or deleted with its source.",
   },
+  // A public decision read may fetch a deferred document itself, once per
+  // decision, and store it through the ingestion path.
+  case_law_search_documents: {
+    boundedBy:
+      "Derived document projection replaced or deleted with its source.",
+  },
+  case_law_search_document_preview_passages: {
+    boundedBy:
+      "Derived document projection replaced or deleted with its source.",
+  },
+  case_law_corpus_upload_intents: {
+    boundedBy:
+      "At most one active reservation per decision, deleted at settlement or by the upload cleanup task.",
+  },
+  case_law_corpus_pack_refs: {
+    boundedBy: "One row per decision pointer, rewritten with the pointer.",
+  },
+  corpus_index_projection_states: {
+    boundedBy: "One row per corpus entity and index generation.",
+  },
   user: { boundedBy: "Account lifecycle and authenticated account deletion." },
   session: {
     boundedBy: "Account lifecycle, session expiry, and session revocation.",

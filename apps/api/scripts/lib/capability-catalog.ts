@@ -26,7 +26,7 @@ import {
   transportAlternative,
   transportFileInput,
 } from "../../src/lib/capability-transport";
-import type { HandlerKind } from "./enumerate-safe-handlers";
+import type { HandlerKind } from "../../src/lib/safe-handler-factories";
 
 /** Handler-tree prefix stripped to turn a file path into a capability id. */
 export const HANDLERS_ROOT_PREFIX = "apps/api/src/handlers/";

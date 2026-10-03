@@ -8,6 +8,7 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -45,6 +46,16 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) => entry.enforcement.kind !== "none",
+);
+
+// Public route files may build handlers only from the factories whose context
+// is anonymous. The ban lists every other factory, so a new one is banned
+// until its scope says otherwise.
+const anonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context === "anonymous",
+);
+const nonAnonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context !== "anonymous",
 );
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
@@ -220,6 +231,9 @@ const fixtureRuleOverrides = [
     "require-tenant-page-limit/require-tenant-page-limit",
   ]),
   fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.impostor.ts", [
     "require-tenant-page-limit/require-tenant-page-limit",
   ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
@@ -4490,12 +4504,6 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
                 name: "@/api/lib/branded-types",
                 importNames: ["toSafeId"],
                 message:
@@ -4615,15 +4623,8 @@ export default defineConfig({
               ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createSafeHandler", "createSafeRootHandler"],
-                message:
-                  "Public route files must use createSafePublicHandler or createSafeBoundedPublicHandler and must not receive authenticated handler context.",
+                importNames: nonAnonymousHandlerFactories,
+                message: `Public route files may use only the anonymous handler factories (${anonymousHandlerFactories.join(", ")}) and must not receive authenticated handler context.`,
               },
               {
                 name: "@/api/lib/auth",

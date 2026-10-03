@@ -1928,6 +1928,11 @@ export const OWNERSHIP = [
           reason:
             "Builds gated subject handlers generically and guards both entry points.",
         },
+        {
+          path: "apps/api/src/lib/safe-handler-factories.type-test.ts",
+          reason:
+            "Reads the module's export names at type level to bind the factory map; calls nothing.",
+        },
       ],
     },
   },
