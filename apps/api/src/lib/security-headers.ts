@@ -50,8 +50,19 @@ export const applyResponseCachePolicy = ({
           ?.toString();
   const isEventStream =
     contentType?.split(";").at(0)?.trim().toLowerCase() === SSE_MEDIA_TYPE;
+  const setsCookie =
+    (response instanceof Response && response.headers.has("set-cookie")) ||
+    (set.headers instanceof Headers
+      ? set.headers.has("set-cookie")
+      : Object.entries(set.headers).some(
+          ([name, value]) =>
+            name.toLowerCase() === "set-cookie" &&
+            (Array.isArray(value) ? value.length > 0 : Boolean(value)),
+        )) ||
+    Object.keys(set.cookie ?? {}).length > 0;
   const cacheControl =
     cache.kind === "public" &&
+    !setsCookie &&
     !privateResponses.has(set) &&
     status >= 200 &&
     status < 300

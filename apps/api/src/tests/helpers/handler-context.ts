@@ -1,7 +1,5 @@
 import { panic } from "better-result";
 
-import type { roles } from "@stll/permissions";
-
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
 import type { OrgAIConfig } from "@/api/lib/ai-config";
 import {
@@ -13,6 +11,8 @@ import type { AccessibleWorkspace } from "@/api/lib/auth";
 import type { SafeId } from "@/api/lib/branded-types";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { ManagedAIResidency } from "@/api/lib/chat/ai-data-policy";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 
 /**
@@ -40,7 +40,7 @@ import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 /** The identity/capability fields the factory owns defaults for. */
 export type BaseTestHandlerContext = {
   workspaceId: SafeId<"workspace">;
-  memberRole: { role: keyof typeof roles };
+  memberRole: AuthorizedMemberRole;
   session: { activeOrganizationId: SafeId<"organization"> };
   user: { id: SafeId<"user">; email: string };
   safeDb: SafeDb;
@@ -91,7 +91,7 @@ const unconfiguredDb = (): never =>
 
 const createBaseContext = (): BaseTestHandlerContext => ({
   workspaceId: DEFAULT_WORKSPACE_ID,
-  memberRole: { role: "owner" },
+  memberRole: sessionMemberRole("owner"),
   session: { activeOrganizationId: DEFAULT_ORGANIZATION_ID },
   user: { id: DEFAULT_USER_ID, email: "standard@example.test" },
   safeDb: unconfiguredDb,

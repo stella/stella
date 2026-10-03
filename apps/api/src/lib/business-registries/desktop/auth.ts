@@ -18,7 +18,10 @@ import {
 } from "@/api/lib/business-registries/desktop/config";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
 import { isMemberRole } from "@/api/lib/member-roles";
-import { hasMemberPermission } from "@/api/lib/permission-authorization";
+import {
+  hasMemberPermission,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import { brandActorSessionIdentity } from "@/api/lib/safe-id-boundaries";
 
 const rejected = () =>
@@ -95,7 +98,8 @@ const authorizeDesktopCredential = async (
   if (
     !member.value ||
     !isMemberRole(member.value.role) ||
-    !hasMemberPermission({ role: member.value.role }, permission)
+    // The desktop account acts with the person's own live role.
+    !hasMemberPermission(sessionMemberRole(member.value.role), permission)
   ) {
     return Result.err(rejected());
   }

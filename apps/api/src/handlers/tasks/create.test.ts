@@ -7,6 +7,7 @@ import {
   workObligations,
 } from "@/api/db/schema";
 import { toSafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTaskEntityHandler } from "@/api/lib/tasks/create-task-entity";
 import { entityVersionInsertResult } from "@/api/tests/helpers/entity-version-insert-mock";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -62,7 +63,7 @@ const createHandlerContext = ({
     session: {
       activeOrganizationId: toSafeId<"organization">("org_test123"),
     },
-    memberRole: { role: "owner" },
+    memberRole: sessionMemberRole("owner"),
     body,
     request: new Request(`https://example.test/v1/tasks/${workspaceId}`, {
       method: "PUT",

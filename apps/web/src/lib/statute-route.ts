@@ -1,4 +1,5 @@
 import { isPublicLegislationCountry } from "@stll/api-contract/legislation-publication";
+import type { StatuteQueryCountry } from "@stll/api-contract/statute-aliases";
 import { createStatuteRouteParams } from "@stll/api-contract/statute-route";
 import type { StatuteRouteInput } from "@stll/api-contract/statute-route";
 
@@ -11,7 +12,7 @@ import type { useFormatter } from "@/i18n/formatting-context";
 export const STATUTE_COUNTRIES = {
   cze: { region: "CZ" },
   svk: { region: "SK" },
-} as const satisfies Record<string, { region: string }>;
+} as const satisfies Record<StatuteQueryCountry, { region: string }>;
 
 export type StatuteCountry = keyof typeof STATUTE_COUNTRIES;
 

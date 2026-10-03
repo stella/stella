@@ -6,7 +6,7 @@ Tauri 2 companion app for managed Office file editing from stella.
 
 ```bash
 bun --filter @stll/desktop dev
-bun --cwd apps/desktop run dev
+bun run --cwd apps/desktop dev
 bun run dev:desktop
 ```
 
@@ -113,7 +113,7 @@ Example:
 
 ```bash
 export STELLA_DESKTOP_RELEASE_BASE_URL="https://downloads.stll.app/desktop/prod"
-bun --cwd apps/desktop run build
+bun run --cwd apps/desktop build
 ```
 
 ### Notes

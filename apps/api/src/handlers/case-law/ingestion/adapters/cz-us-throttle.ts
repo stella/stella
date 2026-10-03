@@ -1,6 +1,13 @@
+// parser-output-unchanged: document-fetch observation preserves the response returned to the parser.
 import { panic, Result, TaggedError } from "better-result";
 
 import { fetchWithTimeout } from "@stll/fetch";
+import {
+  DOCUMENT_FETCH_EVENT,
+  DOCUMENT_FETCH_OUTCOME,
+  documentFetchResponseOutcome,
+} from "@stll/legal-atlas/document-fetch-diagnostics";
+import type { DocumentFetchStage } from "@stll/legal-atlas/document-fetch-diagnostics";
 
 import { ADAPTER_TIMEOUT } from "@/api/handlers/case-law/consts";
 import {
@@ -10,6 +17,7 @@ import {
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-policy";
 import type { PublisherRequestGateDependencies } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
 import { INGESTION_USER_AGENT } from "@/api/handlers/case-law/ingestion/adapters/utils";
+import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { restrictOutboundUrl } from "@/api/lib/restrict-outbound-url";
 
@@ -71,6 +79,7 @@ const isRateLimitRefusal = (response: Response): boolean => {
 };
 
 export type NalusRequestInit = {
+  fetchStage: DocumentFetchStage;
   body?: string | undefined;
   headers?: Record<string, string> | undefined;
   method?: "POST" | undefined;
@@ -79,7 +88,7 @@ export type NalusRequestInit = {
 
 type NalusFetch = (
   url: string,
-  init?: NalusRequestInit,
+  init: NalusRequestInit,
 ) => Promise<Result<Response, NalusRateLimitedError>>;
 
 /**
@@ -95,7 +104,7 @@ export const createNalusFetch = (
   dependencies?: PublisherRequestGateDependencies,
 ): NalusFetch => {
   const reserveSlot = createPublisherSlot(ADAPTER_KEYS.CZ_US, dependencies);
-  return async (url, init = {}) => {
+  return async (url, init) => {
     const target = restrictOutboundUrl({
       hostPolicy: NALUS_HOST_POLICY,
       pathPrefixes: NALUS_PATH_PREFIXES,
@@ -114,16 +123,33 @@ export const createNalusFetch = (
       NALUS_ORIGIN,
     );
     await reserveSlot(init.signal);
-    const response = await fetchWithTimeout(endpoint, {
-      ...(init.body === undefined ? {} : { body: init.body }),
-      headers: { "User-Agent": INGESTION_USER_AGENT, ...init.headers },
-      ...(init.method === undefined ? {} : { method: init.method }),
-      // Manual: the court states its refusal as a redirect, and a followed
-      // one would be parsed as a search answer.
-      redirect: "manual",
-      signal: init.signal,
-      timeoutMs: ADAPTER_TIMEOUT.REQUEST,
-    });
+    const request = async () =>
+      await fetchWithTimeout(endpoint, {
+        ...(init.body === undefined ? {} : { body: init.body }),
+        headers: { "User-Agent": INGESTION_USER_AGENT, ...init.headers },
+        ...(init.method === undefined ? {} : { method: init.method }),
+        // Manual: the court states its refusal as a redirect, and a followed
+        // one would be parsed as a search answer.
+        redirect: "manual",
+        signal: init.signal,
+        timeoutMs: ADAPTER_TIMEOUT.REQUEST,
+      });
+    const response =
+      init.fetchStage === "listing"
+        ? await request()
+        : await observePublisherDocumentFetch({
+            source: ADAPTER_KEYS.CZ_US,
+            fetch: request,
+            responseOutcome: (candidate) =>
+              isRateLimitRefusal(candidate)
+                ? {
+                    event: DOCUMENT_FETCH_EVENT.fetchOutcome,
+                    source: ADAPTER_KEYS.CZ_US,
+                    outcome: DOCUMENT_FETCH_OUTCOME.rateLimited,
+                    http_status: candidate.status,
+                  }
+                : documentFetchResponseOutcome(ADAPTER_KEYS.CZ_US, candidate),
+          });
     if (isRateLimitRefusal(response)) {
       return Result.err(
         new NalusRateLimitedError({

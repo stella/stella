@@ -12,7 +12,7 @@
 
 import { foldDecisionIdentifierInput } from "@stll/api-contract/decision-docket-grammar";
 
-import type { IngestionResult } from "@/api/handlers/case-law/ingestion/adapter";
+import type { RawIngestionResult } from "@/api/lib/legal-search/ingestion-types";
 
 /** The courts' portal id: `orzeczenia.nsa.gov.pl/doc/0A9A601038`. */
 const PORTAL_DOCUMENT_ID = /^[0-9A-F]{10}$/u;
@@ -26,7 +26,7 @@ const collapse = (text: string): string =>
   text.replace(/\s+/gu, " ").trim().toLocaleLowerCase("pl-PL");
 
 type AdministrativeCourtRulingKeyInput = Pick<
-  IngestionResult,
+  RawIngestionResult,
   "caseNumber" | "court" | "decisionDate" | "decisionType"
 > & {
   /** The courts' portal id of the ruling, where the row states one. */

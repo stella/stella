@@ -2038,8 +2038,10 @@ type FileCheckResult = {
   acknowledgementErrors: Finding[];
 };
 
-const checkFile = (file: string, indexFindings: Finding[]): FileCheckResult => {
-  const source = readFileSync(file, "utf-8");
+const checkSource = (
+  { file, source }: MigrationIndexSource,
+  indexFindings: Finding[],
+): FileCheckResult => {
   const lines = source.split("\n");
   const statements = parseStatements(source);
 
@@ -2216,33 +2218,35 @@ const normalizeInputFiles = (args: string[]): string[] => {
   });
 };
 
-const main = () => {
-  const files = normalizeInputFiles(Bun.argv.slice(2)).map(toRepoPath);
-  let violations = 0;
-  const selectedSources = files.map((file) => ({
-    file,
-    source: readFileSync(file, "utf-8"),
-  }));
+/**
+ * Every finding for the selected migrations, keyed by repo-relative path. The
+ * committed corpus is read only to resolve REINDEX owners.
+ */
+export const checkMigrationSources = (
+  selectedSources: readonly MigrationIndexSource[],
+): (FileCheckResult & { file: string })[] => {
   // The corpus is needed only for ownership resolution. A raw keyword check
   // may over-select literals, but never skips an executable REINDEX.
   const needsIndexOwners = selectedSources.some(({ source }) =>
     /\bREINDEX\b/iu.test(source),
   );
-  const corpusFiles = needsIndexOwners
-    ? [
-        ...new Set([
-          ...collectMigrationFiles(DEFAULT_MIGRATIONS_DIR),
-          ...files,
-        ]),
-      ].toSorted()
-    : files;
+  const selected = new Map(
+    selectedSources.map(({ file, source }) => [file, source]),
+  );
   const indexFindings = checkMigrationIndexBuilds(
     needsIndexOwners
-      ? corpusFiles.map((file) => ({
-          file,
-          source: readFileSync(file, "utf-8"),
-        }))
-      : selectedSources,
+      ? [
+          ...new Set([
+            ...collectMigrationFiles(DEFAULT_MIGRATIONS_DIR),
+            ...selected.keys(),
+          ]),
+        ]
+          .toSorted()
+          .map((file) => ({
+            file,
+            source: selected.get(file) ?? readFileSync(file, "utf-8"),
+          }))
+      : [...selectedSources],
   ).filter(
     (finding) =>
       !indexFindingsSnapshot.some(
@@ -2253,11 +2257,25 @@ const main = () => {
           entry.statementHash === finding.statementHash,
       ),
   );
+  return selectedSources.map((migration) => ({
+    file: migration.file,
+    ...checkSource(migration, indexFindings),
+  }));
+};
 
-  for (const file of files) {
-    const { invariantFindings, guardedFindings, acknowledgementErrors } =
-      checkFile(file, indexFindings);
+const main = () => {
+  const files = normalizeInputFiles(Bun.argv.slice(2)).map(toRepoPath);
+  let violations = 0;
+  const checks = checkMigrationSources(
+    files.map((file) => ({ file, source: readFileSync(file, "utf-8") })),
+  );
 
+  for (const {
+    file,
+    invariantFindings,
+    guardedFindings,
+    acknowledgementErrors,
+  } of checks) {
     if (invariantFindings.length > 0) {
       violations += invariantFindings.length;
       console.error(

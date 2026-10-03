@@ -22,6 +22,7 @@ import {
   lockAccountRow,
 } from "@/api/lib/db/account-row";
 import { createCorrespondence } from "@/api/lib/email/correspondence/create";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";
 import {
   mintAuthProviderId,
@@ -95,7 +96,7 @@ if (!databaseUrl || !runPostgresTests) {
               const result = await createAllowedSender.handler(
                 asTestRaw<Parameters<typeof createAllowedSender.handler>[0]>({
                   safeDb: database,
-                  memberRole: { role: "owner" },
+                  memberRole: sessionMemberRole("owner"),
                   session: { activeOrganizationId: organizationId },
                   user: { id: userId },
                   request: new Request(

@@ -14,6 +14,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import type { AuditEvent } from "@/api/lib/audit-log";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   createTestIds,
@@ -80,7 +81,7 @@ const runBatch = async (
       }),
       route: "/time-entries/batch",
       body,
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userAdmin },
       workspaceId: ids.wsA2,

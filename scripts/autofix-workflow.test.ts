@@ -245,7 +245,7 @@ describe("changed-file autofix boundary", () => {
     expect(job.slice(planStep, runStep)).not.toContain("GH_TOKEN:");
     expect(
       job.slice(restrictionStep, job.indexOf("- name: Push autofixes")),
-    ).toContain("--check-improvements-only");
+    ).toContain("Autofix cannot recreate the retired ratchet baseline.");
     expect(job).toContain(
       'if [[ "$(git rev-parse HEAD)" != "$HEAD_SHA" ]]; then',
     );
@@ -260,14 +260,17 @@ describe("changed-file autofix boundary", () => {
     );
     expect(
       ordered.findIndex(({ id }) => id === "capability-catalog"),
+    ).toBeLessThan(ordered.findIndex(({ id }) => id === "capability-runtime"));
+    expect(
+      ordered.findIndex(({ id }) => id === "capability-runtime"),
     ).toBeLessThan(ordered.findIndex(({ id }) => id === "cli-registry"));
     expect(ordered.findIndex(({ id }) => id === "cli-registry")).toBeLessThan(
       ordered.findIndex(({ id }) => id === "cli-runtime"),
     );
     expect(ordered.map(({ id }) => id).toSorted()).toEqual(
       [
-        "ratchet-improvements",
         "capability-catalog",
+        "capability-runtime",
         "cli-registry",
         "cli-runtime",
         "mcp-app-bundles",

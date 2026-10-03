@@ -121,9 +121,12 @@ export const claimPendingMentionSearch = <T>(
 
 export const buildEntityMentionOption = ({
   entity,
+  matterId,
   sourceWorkspaceId,
 }: {
   entity: WorkspaceEntity;
+  /** The matter the entity was listed from. */
+  matterId: string;
   sourceWorkspaceId?: string | undefined;
 }): ChatMentionOption => {
   const file = getFirstFile(entity);
@@ -136,6 +139,7 @@ export const buildEntityMentionOption = ({
     category: "entity",
     kind: entity.kind,
     mimeType: file?.mimeType ?? null,
+    matterId,
   };
   if (sourceWorkspaceId !== undefined) {
     option.sourceWorkspaceId = sourceWorkspaceId;

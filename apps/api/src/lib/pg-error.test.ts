@@ -25,6 +25,30 @@ const drizzleError = (cause: {
   );
 
 describe("getPgErrorCode", () => {
+  it("every predicate retains the SQLSTATE and constraint captured by telemetry", () => {
+    let reads = 0;
+    const driver = Object.assign(new Error("database failure"), {
+      code: "ERR_POSTGRES_SERVER_ERROR",
+      constraint: "case_law_decisions_source_document_idx",
+      severity: "ERROR",
+    });
+    Object.defineProperty(driver, "errno", {
+      get: () =>
+        ++reads === 1 ? PG_ERROR.UNIQUE_VIOLATION : PG_ERROR.QUERY_CANCELED,
+    });
+    const error = new DrizzleQueryError("query failed", [], driver);
+    expect(pgErrorFields(error)["error.cause.pg_code"]).toBe(
+      PG_ERROR.UNIQUE_VIOLATION,
+    );
+    expect(getPgErrorCode(error)).toBe(PG_ERROR.UNIQUE_VIOLATION);
+    expect(isPgError(error, PG_ERROR.UNIQUE_VIOLATION)).toBe(true);
+    expect(
+      isPgConstraintError(error, PG_ERROR.UNIQUE_VIOLATION, driver.constraint),
+    ).toBe(true);
+    expect(isTransientPgConnectionError(error)).toBe(false);
+    expect(reads).toBe(1);
+  });
+
   it("reads SQLSTATE from `errno` (Bun.sql convention)", () => {
     const cause = {
       errno: "23505",

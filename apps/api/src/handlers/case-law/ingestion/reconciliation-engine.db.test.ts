@@ -23,7 +23,10 @@ import {
   RECONCILIATION_ITEM_STATUS,
   relations,
 } from "@/api/db/schema";
+import { PL_COURTS_METADATA_URL_SCHEMA } from "@/api/handlers/case-law/ingestion/adapters/pl-courts.metadata-urls";
 import { plUodoHeldWithoutDetail } from "@/api/handlers/case-law/ingestion/adapters/pl-uodo";
+import { metadataUrlSchemaForAdapter } from "@/api/handlers/case-law/ingestion/metadata-url-schemas";
+import { resolveSourceMetadataUrlSchema } from "@/api/handlers/case-law/ingestion/pipeline/source-metadata-schema";
 import type { SliceRetrySchedule } from "@/api/handlers/case-law/ingestion/reconciliation-engine";
 import {
   MAX_SLICE_INGEST_BUDGET,
@@ -41,10 +44,12 @@ import { metadataWithDecisionAbsorption } from "@/api/lib/case-law/decision-abso
 import {
   TEXT_ABSENCE_REASON,
   absentDecisionTextFields,
+  checkedDecisionMetadata,
 } from "@/api/lib/case-law/decision-text";
 import { addUtcDays, toUtcDateString } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { DECISION_SUPPLEMENT_KIND } from "@/api/lib/legal-search/decision-supplement-kind";
+import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { sanitizeResult } from "@/api/lib/legal-search/ingestion-normalization";
 import {
   EMPTY_AST,
@@ -56,6 +61,9 @@ import type {
   ReconciliationSlicePageOptions,
   SourceReconciliation,
 } from "@/api/lib/legal-search/ingestion-types";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
+import { toMetadataUrl } from "@/api/lib/sanitize-url";
+import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import { installRecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 import type { RecordingLogger } from "@/api/tests/helpers/recording-telemetry";
 
@@ -171,6 +179,7 @@ afterEach(() => {
 });
 
 const stubReconciliation: SourceReconciliation = {
+  revisionOf: (payload) => payload,
   firstSlice: OWED_SLICE,
   sliceOf: toUtcDateString,
   nextSlice: (slice) => {
@@ -786,6 +795,7 @@ const seedItem = async (
     status: (typeof RECONCILIATION_ITEM_STATUS)[keyof typeof RECONCILIATION_ITEM_STATUS];
     attempts: number;
     nextAttemptAt: Date | null;
+    payload?: unknown;
   },
 ): Promise<void> => {
   await db.insert(caseLawReconciliationItems).values({
@@ -793,12 +803,12 @@ const seedItem = async (
     sourceId,
     slice: OWED_SLICE,
     identityKey,
-    payload: {},
     ...row,
+    payload: row.payload ?? {},
   });
 };
 
-test("a walk leaves already-tracked identities to the retry path", async () => {
+test("a walk leaves unchanged tracked payloads to the retry path", async () => {
   // The widening backoff is the whole reason a park exists. A tip slice is
   // re-walked daily, so a walk that re-fetched everything it found missing
   // would serve none of that schedule — and would drag terminal items back
@@ -820,11 +830,13 @@ test("a walk leaves already-tracked identities to the retry path", async () => {
   await seedItem(sourceId, parkedKey, {
     status: RECONCILIATION_ITEM_STATUS.PARKED,
     attempts: 2,
+    payload: LISTING_ITEMS[0],
     nextAttemptAt: new Date(NOW.getTime() + 60 * 60 * 1000),
   });
   await seedItem(sourceId, terminalKey, {
     status: RECONCILIATION_ITEM_STATUS.TERMINAL,
     attempts: 6,
+    payload: LISTING_ITEMS[1],
     nextAttemptAt: null,
   });
 
@@ -1418,17 +1430,19 @@ test("a settled slice inside the recheck window is left alone", async () => {
  * both disagreed with the column, and the test would prove nothing.
  */
 const storedMetadata = (isListingOnly: boolean): Record<string, unknown> =>
-  sanitizeResult({
-    caseNumber: FIXTURE_CASE_NUMBERS[0],
-    court: FIXTURE_COURT,
-    country: "CZE",
-    language: FIXTURE_LANGUAGE,
-    isListingOnly,
-    metadata: {},
-    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-    rawHash: "0".repeat(64),
-    documentAst: EMPTY_AST,
-  } satisfies IngestionResult).metadata;
+  sanitizeResult(
+    plainTextIngestionResult({
+      caseNumber: FIXTURE_CASE_NUMBERS[0],
+      court: FIXTURE_COURT,
+      country: "CZE",
+      language: FIXTURE_LANGUAGE,
+      isListingOnly,
+      metadata: {},
+      textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+      rawHash: "0".repeat(64),
+      documentAst: EMPTY_AST,
+    }) satisfies IngestionResult,
+  ).metadata;
 
 type SeedDecisionInput = {
   sourceId: SafeId<"caseLawSource">;
@@ -1506,6 +1520,45 @@ const seedDocumentIdentityRows = async (
     });
   }
 };
+
+test("due held identities resolve without fetching while listing-only identities retry", async () => {
+  const sourceId = await seedSource();
+  await seedFreshTip(sourceId);
+  await seedDocumentIdentityRows(sourceId);
+  for (const [index, identityKey] of DOCUMENT_KEYS.entries()) {
+    await seedItem(sourceId, identityKey, {
+      status: RECONCILIATION_ITEM_STATUS.PARKED,
+      attempts: 5,
+      nextAttemptAt: new Date(NOW.getTime() - 1),
+      payload: LISTING_ITEMS[index],
+    });
+  }
+  const outcome = await runUnit(sourceId, {
+    ...stubReconciliation,
+    heldRequiresDetail: true,
+  });
+  expect(outcome).toMatchObject({
+    type: "worked",
+    summary: { unit: "parked-retries", keyable: 2, heldBefore: 1, terminal: 1 },
+  });
+  expect(builds).toEqual([LISTING_ITEMS[0]]);
+  expect(listed).toEqual([]);
+  const remaining = await db
+    .select({
+      identityKey: caseLawReconciliationItems.identityKey,
+      status: caseLawReconciliationItems.status,
+      attempts: caseLawReconciliationItems.attempts,
+    })
+    .from(caseLawReconciliationItems)
+    .where(eq(caseLawReconciliationItems.sourceId, sourceId));
+  expect(remaining).toEqual([
+    {
+      identityKey: DOCUMENT_KEYS[0] ?? "",
+      status: RECONCILIATION_ITEM_STATUS.TERMINAL,
+      attempts: 6,
+    },
+  ]);
+});
 
 test("a listing-only row is not held where the source requires detail", async () => {
   // Such a row exists because a document fetch failed: the identity is stored
@@ -1977,17 +2030,18 @@ test("a row stating a declared reason for holding no document is held on that re
 });
 
 /** A decision with no document, as an adapter hands one over. */
-const plainDecision = (sourceDocumentId: string): IngestionResult => ({
-  caseNumber: sourceDocumentId,
-  sourceDocumentId,
-  court: FIXTURE_COURT,
-  country: "CZE",
-  language: FIXTURE_LANGUAGE,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
-  documentAst: EMPTY_AST,
-});
+const plainDecision = (sourceDocumentId: string): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: sourceDocumentId,
+    sourceDocumentId,
+    court: FIXTURE_COURT,
+    country: "CZE",
+    language: FIXTURE_LANGUAGE,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: sourceDocumentId.padEnd(64, "0").slice(0, 64),
+    documentAst: EMPTY_AST,
+  });
 
 test("a held row stating a recheck value is asked for again, and what its page adds is written beside it", async () => {
   // The competition authority attaches the court rulings on a decision's
@@ -2109,5 +2163,138 @@ test("a build that throws without a code reports the frame that threw", async ()
   for (const value of Object.values(failure ?? {})) {
     expect(String(value)).not.toContain("undefined is not an object");
     expect(String(value)).not.toContain("row.shape");
+  }
+});
+
+test("pipeline metadata classification follows the persisted source adapter", async () => {
+  const sourceId = await seedSource();
+  try {
+    expect(
+      await resolveSourceMetadataUrlSchema(sourceId, scopedDb),
+    ).toBeUndefined();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.CZ_NS })
+      .where(eq(caseLawSources.id, sourceId));
+    expect(
+      await resolveSourceMetadataUrlSchema(sourceId, scopedDb),
+    ).toBeUndefined();
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.PL_COURTS })
+      .where(eq(caseLawSources.id, sourceId));
+    expect(await resolveSourceMetadataUrlSchema(sourceId, scopedDb)).toEqual(
+      metadataUrlSchemaForAdapter(ADAPTER_KEYS.PL_COURTS),
+    );
+  } finally {
+    await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
+  }
+});
+
+test("metadata classification rejects a missing persisted source", () => {
+  const absentSourceId = createSafeId<"caseLawSource">();
+  expect(
+    resolveSourceMetadataUrlSchema(absentSourceId, scopedDb),
+  ).rejects.toThrow("is absent");
+});
+
+test("reconciliation persists registered root and nested URLs without caller schema overrides", async () => {
+  const fake = startFakeS3();
+  const sourceId = await seedSource();
+  const stated =
+    "https://example.test/?first=&amp;amp;&second=&#x26;&third=%26";
+  const sourceRaw = JSON.stringify({
+    href: stated,
+    division: { href: stated },
+    invalid: "ftp://example.test/private",
+  });
+  try {
+    await db
+      .update(caseLawSources)
+      .set({ adapterKey: ADAPTER_KEYS.PL_COURTS })
+      .where(eq(caseLawSources.id, sourceId));
+    await seedWalkableSlice(sourceId);
+    const decision = plainTextIngestionResult(
+      {
+        caseNumber: "II K 123/26",
+        sourceDocumentId: "registered-url-reconciliation",
+        court: "Sąd Rejonowy",
+        country: "POL",
+        language: "pl",
+        metadata: checkedDecisionMetadata(
+          {
+            href: toMetadataUrl(stated, "transport-json"),
+            division: { href: toMetadataUrl(stated, "transport-json") },
+            source: {
+              judgmentUrl: toMetadataUrl(
+                "ftp://example.test/private",
+                "transport-json",
+              ),
+            },
+          },
+          PL_COURTS_METADATA_URL_SCHEMA,
+        ),
+        textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+        rawHash: new Bun.CryptoHasher("sha256").update(sourceRaw).digest("hex"),
+        sourceRaw,
+        sourceRawContentType: "application/json",
+        documentAst: EMPTY_AST,
+      },
+      PL_COURTS_METADATA_URL_SCHEMA,
+    );
+    const outcome = await runUnit(sourceId, {
+      ...stubReconciliation,
+      listSlicePage: async () =>
+        await Promise.resolve({
+          items: [
+            {
+              identity: {
+                type: "document",
+                sourceDocumentId: "registered-url-reconciliation",
+              },
+              payload: { href: stated },
+            },
+          ],
+          totalPages: 1,
+        }),
+      buildDecision: async () =>
+        await Promise.resolve({ type: "built", decision, companions: [] }),
+    });
+    expect(outcome).toMatchObject({ type: "worked", summary: { written: 1 } });
+    const row = (
+      await db
+        .select({
+          metadata: caseLawDecisions.metadata,
+          sourceRawS3Key: caseLawDecisions.sourceRawS3Key,
+        })
+        .from(caseLawDecisions)
+        .where(eq(caseLawDecisions.sourceId, sourceId))
+        .limit(1)
+    ).at(0);
+    expect(row?.metadata).toMatchObject({
+      href: stated,
+      division: { href: stated },
+      metadataUrlDiagnostics: {
+        entries: [{ address: "source.judgmentUrl", reason: "unsafe-protocol" }],
+        overflowCount: 0,
+      },
+    });
+    expect(row?.sourceRawS3Key).toBeDefined();
+    const rawObject = [...fake.objects.entries()]
+      .find(
+        ([key]) =>
+          row?.sourceRawS3Key !== null &&
+          row?.sourceRawS3Key !== undefined &&
+          key.endsWith(`/${row.sourceRawS3Key}`),
+      )
+      ?.at(1);
+    expect(rawObject).toBeDefined();
+    expect({ value: rawObject }).toHaveProperty(
+      "value.bytes",
+      new TextEncoder().encode(sourceRaw),
+    );
+  } finally {
+    fake.stop();
+    await db.delete(caseLawSources).where(eq(caseLawSources.id, sourceId));
   }
 });
