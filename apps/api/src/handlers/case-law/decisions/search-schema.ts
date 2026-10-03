@@ -13,10 +13,7 @@ import {
   type DecisionIdentifiers,
 } from "@stll/legal-ast/decision-identifier";
 
-import {
-  safePublicHandlerErrorResponseSchema,
-  safePublicHandlerResponseSchemasWithStatusText,
-} from "@/api/lib/api-handlers";
+import { safePublicHandlerResponseSchemasWithStatusText } from "@/api/lib/api-handlers";
 import { decisionHeadnotePreviewSchema } from "@/api/lib/case-law/decision-headnote-schema";
 import type { PublicDecisionLanguageAlternate } from "@/api/lib/case-law/language-alternates";
 import { searchExcerptSchema } from "@/api/lib/case-law/search-excerpt-schema";
@@ -31,6 +28,7 @@ import { tLegalAlternatives } from "@/api/lib/legal-search/legal-alternatives";
 import { tPublicLawCountry } from "@/api/lib/legal-search/public-law-country";
 import { LIMITS } from "@/api/lib/limits";
 import { searchPaginationOutcomeSchema } from "@/api/lib/search/pagination-outcome-schema";
+import { safePublicHandlerErrorOrStatusTextResponseSchema } from "@/api/lib/search/public-error-response";
 import {
   boundedString,
   nullableBoundedString,
@@ -286,9 +284,9 @@ export const searchDecisionsResponseSchema = {
   ...safePublicHandlerResponseSchemasWithStatusText(
     searchDecisionsSuccessResponseSchema,
   ),
-  503: safePublicHandlerErrorResponseSchema,
+  503: safePublicHandlerErrorOrStatusTextResponseSchema,
   404: t.Union([
-    safePublicHandlerErrorResponseSchema,
+    safePublicHandlerErrorOrStatusTextResponseSchema,
     t.Object(
       { error: t.Literal("Not Found") },
       { additionalProperties: false },
