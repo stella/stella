@@ -5,6 +5,7 @@ import {
   FORCED_VALUE_KEEP_CLASSES,
   FORCED_VALUE_REDACT_CLASSES,
   NAME_MATCHING_CASES,
+  NAME_MATCHING_ENTRIES,
   NAME_MATCHING_KEEP_CLASSES,
   NAME_MATCHING_REDACT_CLASSES,
 } from "@/api/mcp/__fixtures__/name-matching-corpus";
@@ -17,6 +18,7 @@ import {
   measureNameMatchingCorpus,
   NAME_MATCHING_MATCHERS,
   nameMatchingCaseHeld,
+  redactNameMatchingCases,
 } from "@/api/tests/helpers/name-matching-corpus";
 
 /**
@@ -38,6 +40,11 @@ const RECALL_FLOORS = {
   "legal-form-variant": { held: 11, attributed: 2 },
   split: { held: 9, attributed: 4 },
   "common-word-person": { held: 5, attributed: 3 },
+  "exact-low-signal": { held: 6, attributed: 6 },
+  "surname-first": { held: 9, attributed: 8 },
+  "template-glued": { held: 11, attributed: 9 },
+  "uncased-script": { held: 7, attributed: 7 },
+  "multi-label": { held: 3, attributed: 3 },
   "forced-exact": { held: 2, attributed: 2 },
   "forced-case": { held: 1, attributed: 1 },
   "forced-embedded": { held: 2, attributed: 2 },
@@ -60,6 +67,9 @@ const FALSE_POSITIVE_CEILINGS = {
   marker: 0,
   "ordinary-word": 0,
   "adjacent-word": 0,
+  "template-field": 0,
+  "reordered-organization": 0,
+  "uncased-script-near-miss": 0,
   "forced-near-miss": 0,
   "forced-other-id": 0,
   "forced-adjacent-word": 0,
@@ -136,6 +146,15 @@ describe("name-matching corpus", () => {
       ),
     ).toBe(false);
   });
+
+  test("deny-list output does not depend on entry order", async () => {
+    const forward = await redactNameMatchingCases(NAME_MATCHING_ENTRIES);
+    const reversed = await redactNameMatchingCases(
+      NAME_MATCHING_ENTRIES.toReversed(),
+    );
+
+    expect(reversed).toEqual(forward);
+  }, 60_000);
 
   test("recall and false positives on the anonymized request path stay within each class bound", async () => {
     const report = await measureNameMatchingCorpus();

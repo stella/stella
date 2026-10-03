@@ -23,6 +23,11 @@ export const NAME_MATCHING_REDACT_CLASSES = [
   "legal-form-variant",
   "split",
   "common-word-person",
+  "exact-low-signal",
+  "surname-first",
+  "template-glued",
+  "uncased-script",
+  "multi-label",
 ] as const;
 
 export const NAME_MATCHING_KEEP_CLASSES = [
@@ -33,6 +38,9 @@ export const NAME_MATCHING_KEEP_CLASSES = [
   "marker",
   "ordinary-word",
   "adjacent-word",
+  "template-field",
+  "reordered-organization",
+  "uncased-script-near-miss",
 ] as const;
 
 export const FORCED_VALUE_REDACT_CLASSES = [
@@ -82,7 +90,10 @@ const entry = (
   source: "manual",
 });
 
-/** Deny-list entries: short and long, firms with legal forms, CZ/SK/EN people. */
+/**
+ * Deny-list entries: short and long, firms with legal forms, CZ/SK/EN people,
+ * and names in scripts without letter case.
+ */
 export const NAME_MATCHING_ENTRIES: readonly GazetteerEntry[] = [
   entry(1, "Acme A", "organization"),
   entry(2, "Zeta", "organization"),
@@ -103,6 +114,14 @@ export const NAME_MATCHING_ENTRIES: readonly GazetteerEntry[] = [
   entry(16, "Will", "person"),
   entry(17, "Grant", "person"),
   entry(18, "Malý", "person"),
+  entry(19, "Oxa", "organization"),
+  // One spelling under two labels, listed organization first.
+  entry(20, "Lindgarth", "organization"),
+  entry(21, "Lindgarth", "person"),
+  // Scripts without letter case: Georgian, Japanese, Thai.
+  entry(22, "ნინო ბერიძე", "person"),
+  entry(23, "紫苑工房", "organization"),
+  entry(24, "กมลวรรณ ศรีสุข", "person"),
 ];
 
 const redact = (
@@ -403,6 +422,100 @@ export const NAME_MATCHING_CASES: readonly NameMatchingCase[] = [
   redact("common-word-person", "Approved by Grant on Monday.", "Grant"),
   redact("common-word-person", "Za kupujícího jednal pan Malý.", "Malý"),
   redact("common-word-person", "Jednali jsme s panem Malým.", "Malým"),
+  // exact hits with little supporting signal: lowercase common words,
+  // sentence starts, quotes, a three-letter entry; no score threshold applies
+  redact("exact-low-signal", "please ask will, thanks.", "will"),
+  redact("exact-low-signal", "hello mark there.", "mark"),
+  redact("exact-low-signal", "grant signed the deal.", "grant"),
+  redact("exact-low-signal", "„Grant“ souhlasí.", "Grant"),
+  redact("exact-low-signal", "Za dodavatele jedná Oxa.", "Oxa"),
+  redact("exact-low-signal", "dodavatel oxa potvrdil", "oxa"),
+  // person names written surname first
+  redact("surname-first", "Za kupujícího Dvořáková Marie.", "Dvořáková Marie"),
+  redact("surname-first", "ŽALOVANÝ: KUBÍČEK Tomáš", "KUBÍČEK Tomáš"),
+  redact(
+    "surname-first",
+    "Witnessed by Wellbourne, Harriet.",
+    "Wellbourne, Harriet",
+  ),
+  redact(
+    "surname-first",
+    "Wellbourne Harriet signed the lease.",
+    "Wellbourne Harriet",
+  ),
+  redact(
+    "surname-first",
+    "Odvolanie podal ŠŤASTNÝ Ľubomír.",
+    "ŠŤASTNÝ Ľubomír",
+  ),
+  redact("surname-first", "Účastník: KOVÁČOVÁ, Zuzana", "KOVÁČOVÁ, Zuzana"),
+  redact(
+    "surname-first",
+    "Jednal jsem s Dvořákovou Marií.",
+    "Dvořákovou Marií",
+  ),
+  redact(
+    "surname-first",
+    "Plnou moc udělila Dvořákové Marii.",
+    "Dvořákové Marii",
+  ),
+  redact(
+    "surname-first",
+    "Doručeno: Kubíčkovi Tomášovi.",
+    "Kubíčkovi Tomášovi",
+  ),
+  // names glued to template brackets and markup punctuation
+  redact("template-glued", "Šablona [[Zeta2024]] je hotová.", "Zeta2024"),
+  redact("template-glued", "Šablona {{Zeta_01}} je hotová.", "Zeta_01"),
+  redact("template-glued", "Šablona <<Orbis7>> je hotová.", "Orbis7"),
+  redact("template-glued", "Šablona [[Orbis_v2]] je hotová.", "Orbis_v2"),
+  redact("template-glued", "Šablona {{Novák_2024}} je hotová.", "Novák"),
+  redact("template-glued", "Pole <<Acme A>> je vyplněno.", "Acme A"),
+  redact(
+    "template-glued",
+    "Vložte {{Marie Dvořáková}} do hlavičky.",
+    "Marie Dvořáková",
+  ),
+  redact(
+    "template-glued",
+    '{"name":"Tomáš Kubíček","role":"jednatel"}',
+    "Tomáš Kubíček",
+  ),
+  redact(
+    "template-glued",
+    "შაბლონი {{ნინო ბერიძე}} შევსებულია.",
+    "ნინო ბერიძე",
+  ),
+  redact(
+    "template-glued",
+    "შაბლონი [[ნინო ბერიძე2024]] შევსებულია.",
+    "ნინო ბერიძე2024",
+  ),
+  redact(
+    "template-glued",
+    "შაბლონი {{ნინო ბერიძე_01}} შევსებულია.",
+    "ნინო ბერიძე_01",
+  ),
+  // scripts without letter case
+  redact("uncased-script", "მოსარჩელე: ნინო ბერიძე", "ნინო ბერიძე"),
+  redact(
+    "uncased-script",
+    "ხელშეკრულებას ხელს აწერს ნინო ბერიძე, მყიდველი.",
+    "ნინო ბერიძე",
+  ),
+  redact(
+    "uncased-script",
+    "ხელშეკრულება გააფორმა ნინო ბერიძემ.",
+    "ნინო ბერიძემ",
+  ),
+  redact("uncased-script", "საქმე: ნინო ბერიძის სარჩელი", "ნინო ბერიძის"),
+  redact("uncased-script", "ბერიძე ნინო, მოსარჩელე", "ბერიძე ნინო"),
+  redact("uncased-script", "契約当事者：紫苑工房", "紫苑工房"),
+  redact("uncased-script", "ผู้ซื้อ กมลวรรณ ศรีสุข ลงนามแล้ว", "กมลวรรณ ศรีสุข"),
+  // one spelling listed under two labels
+  redact("multi-label", "Smlouvu uzavřela společnost Lindgarth.", "Lindgarth"),
+  redact("multi-label", "Lindgarth signed the lease.", "Lindgarth"),
+  redact("multi-label", "Podle smlouvy Lindgarth dodá zboží.", "Lindgarth"),
 
   // hex runs
   keep(
@@ -503,6 +616,36 @@ export const NAME_MATCHING_CASES: readonly NameMatchingCase[] = [
   keep("adjacent-word", "Ľubomír Šťastný uviedol dôvody.", "uviedol"),
   keep("adjacent-word", "Smlouvu uzavřela Acme A.", "uzavřela"),
   keep("adjacent-word", "Countersigned Zeta.", "Countersigned"),
+  // template fields built around an entry, not spelled as the entry
+  keep("template-field", "Šablona {{zeta_01}} je hotová.", "{{zeta_01}}"),
+  keep("template-field", "Šablona [[orbis2024]] je hotová.", "[[orbis2024]]"),
+  keep("template-field", "Šablona {{acme_a_01}} je hotová.", "{{acme_a_01}}"),
+  keep("template-field", "Pole <<zeta2024>> je prázdné.", "<<zeta2024>>"),
+  keep("template-field", "Šablona [[novák_2024]] je hotová.", "[[novák_2024]]"),
+  keep(
+    "template-field",
+    "Šablona <<token:orbis7>> je hotová.",
+    "<<token:orbis7>>",
+  ),
+  // organization words in another order: word orders are for people only
+  keep(
+    "reordered-organization",
+    "The Analytics Northfield team met on Monday.",
+    "Analytics Northfield",
+  ),
+  keep(
+    "reordered-organization",
+    "Ve verzi Trading Beta je chyba.",
+    "Trading Beta",
+  ),
+  // other names and words in a script without letter case
+  keep(
+    "uncased-script-near-miss",
+    "მოპასუხე: ნინო გელაშვილი",
+    "ნინო გელაშვილი",
+  ),
+  keep("uncased-script-near-miss", "მოსარჩელე: თამარ ბერიძე", "თამარ ბერიძე"),
+  keep("uncased-script-near-miss", "ბერი მონასტერში ცხოვრობს.", "ბერი"),
 ];
 
 /** Exact identifiers the chat boundary forces into redaction. */

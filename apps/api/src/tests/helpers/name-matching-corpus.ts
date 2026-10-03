@@ -213,6 +213,26 @@ const measureMatcher = async (
   return tallies;
 };
 
+/** Each deny-list case's output with `entries` as the deny-list, in order. */
+export const redactNameMatchingCases = async (
+  entries: readonly GazetteerEntry[],
+): Promise<{ text: string; output: string | null }[]> => {
+  const context = createPipelineContext();
+  const outputs: { text: string; output: string | null }[] = [];
+  for (const { text } of NAME_MATCHING_CASES) {
+    outputs.push({
+      text,
+      output: await anonymizeCaseField({
+        context,
+        fields: [text],
+        forcedSensitiveValues: [],
+        gazetteerEntries: [...entries],
+      }),
+    });
+  }
+  return outputs;
+};
+
 export const measureNameMatchingCorpus =
   async (): Promise<NameMatchingReport> => ({
     "deny-list": await measureMatcher("deny-list"),
