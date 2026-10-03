@@ -26,7 +26,6 @@ import {
   type DecisionQueryIntent,
   namedDecisionsOf,
 } from "@stll/api-contract/decision-query-intent";
-import { isSafeIdValue } from "@stll/api-contract/safe-id";
 import {
   DEFAULT_SEARCH_EXCERPT,
   SEARCH_SORTS,
@@ -151,6 +150,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { optionalUuidSearchSchema } from "@/lib/schema";
 import { ssrStatusHeaders } from "@/ssr-response-status";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
@@ -229,10 +229,7 @@ const searchSchema = v.object({
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
   sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
-  sourceId: v.fallback(
-    v.optional(v.pipe(v.string(), v.check(isSafeIdValue))),
-    undefined,
-  ),
+  sourceId: optionalUuidSearchSchema,
   strict: optionalStrictSchema,
   to: optionalDateSchema,
   type: optionalBrowseStringSchema(128),

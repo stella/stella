@@ -237,6 +237,37 @@ describe("a query edit", () => {
     expect(withQuery(previous, "nájem")).toBe(previous);
   });
 
+  test("leaving search clears every search-only facet and entering search keeps browse facets", () => {
+    const previous = {
+      q: "nájem",
+      court: "Nejvyšší soud",
+      from: "2024-01-01",
+      lang: "cs",
+      sourceId: "5a3e6f52-1f0b-4f7e-9a44-3f2c1d0e9b8a",
+      type: "rozsudek",
+    };
+    for (const query of ["", "  "]) {
+      const browse = withQuery(previous, query);
+      expect(browse.q).toBeUndefined();
+      expect(browse.lang).toBeUndefined();
+      expect(browse.sourceId).toBeUndefined();
+      expect(browse.type).toBeUndefined();
+      expect(browse.court).toBe(previous.court);
+      expect(browse.from).toBe(previous.from);
+      const search = withQuery(browse, "výpověď");
+      expect(search.q).toBe("výpověď");
+      expect(search.lang).toBeUndefined();
+      expect(search.sourceId).toBeUndefined();
+      expect(search.type).toBeUndefined();
+      expect(search.court).toBe(previous.court);
+      expect(search.from).toBe(previous.from);
+    }
+    const search = withQuery(previous, "výpověď");
+    expect(search.lang).toBe(previous.lang);
+    expect(search.sourceId).toBe(previous.sourceId);
+    expect(search.type).toBe(previous.type);
+  });
+
   test("keeps every other field of the URL", () => {
     expect(
       withQuery(

@@ -658,7 +658,7 @@ export const caseLawSearchPlan = ({
       ) capped_judgments
     ) bucket
     WHERE bucket.count > 0
-    ORDER BY bucket.count DESC, source.id
+    ORDER BY bucket.count DESC, source.name, source.id
     LIMIT ${LIMITS.caseLawFacetLimit}
   `;
 

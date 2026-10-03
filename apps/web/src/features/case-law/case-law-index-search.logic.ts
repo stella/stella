@@ -58,6 +58,13 @@ export const CASE_LAW_FILTER_KEYS = [
 
 export type CaseLawFilterKey = (typeof CASE_LAW_FILTER_KEYS)[number];
 
+const CASE_LAW_FILTER_MODES = {
+  court: "browse",
+  lang: "search",
+  sourceId: "search",
+  type: "search",
+} as const satisfies Record<CaseLawFilterKey, "browse" | "search">;
+
 /**
  * How the URL spells a search that requires every word it carries.
  *
@@ -190,7 +197,18 @@ export const withQuery = (
   if (q === previous.q) {
     return previous;
   }
-  return { ...previous, q, strict: undefined, questions: undefined };
+  const next = { ...previous, q, strict: undefined, questions: undefined };
+  if (q !== undefined) {
+    return next;
+  }
+  // Every facet has an explicit mode so adding one cannot silently leave a
+  // hidden filter on the browse shelf.
+  const clearedSearchOnlyFilters = Object.fromEntries(
+    CASE_LAW_FILTER_KEYS.filter(
+      (key) => CASE_LAW_FILTER_MODES[key] === "search",
+    ).map((key) => [key, undefined]),
+  );
+  return { ...next, ...clearedSearchOnlyFilters };
 };
 
 /**

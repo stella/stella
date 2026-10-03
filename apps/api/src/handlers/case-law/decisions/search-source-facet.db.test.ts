@@ -8,6 +8,7 @@ import {
   DEFAULT_SEARCH_EXCERPT,
   DEFAULT_SEARCH_SORT,
 } from "@stll/api-contract/search";
+import { compareCodeUnit } from "@stll/collation";
 
 import {
   caseLawDecisions,
@@ -33,6 +34,7 @@ const sources = [smallSource, belowSource, atSource, aboveSource];
 let client: PGlite;
 let readFacet: (
   language?: string,
+  query?: string,
 ) => Promise<{ value: string; count: number }[]>;
 let readExact: (
   language?: string,
@@ -121,12 +123,12 @@ beforeAll(
         })),
       );
     }
-    readFacet = async (language) =>
+    readFacet = async (language, query = "facetword") =>
       await withPublicLawReaderRole(db, async (tx) => {
         const plan = caseLawSearchPlan({
           body: {
             country: "CZE",
-            query: "facetword",
+            query,
             sourceId: smallSource,
             ...(language === undefined ? {} : { language }),
           },
@@ -142,7 +144,7 @@ beforeAll(
           excerpt: DEFAULT_SEARCH_EXCERPT,
           limit: 10,
           parsedCursor: null,
-          queryUsed: "facetword",
+          queryUsed: query,
           sort: DEFAULT_SEARCH_SORT,
         });
         const result = await tx.execute(plan.facets.source);
@@ -220,4 +222,64 @@ test.each([undefined, "cs", "en"])(
       projected.find(({ value }) => value === aboveSource)?.countType,
     ).toBe(FACET_COUNT_TYPE.AT_LEAST);
   },
+);
+
+test(
+  "more capped sources than visible buckets are selected by name then id",
+  async () => {
+    const db = drizzle({ client });
+    const sourceCount = LIMITS.caseLawFacetLimit + 3;
+    const orderedSources = Array.from({ length: sourceCount }, (_, index) =>
+      caseLawSourceRow({
+        id: createSafeId<"caseLawSource">(),
+        adapterKey: `cap-order-${index}`,
+        name: `Source ${String(sourceCount - Math.floor(index / 2)).padStart(2, "0")}`,
+      }),
+    );
+    await db.insert(caseLawSources).values(orderedSources);
+    const ids = sql.join(
+      orderedSources.map(({ id }) => sql`${id}::uuid`),
+      sql`, `,
+    );
+    // Generate the bounded fixture in the database, avoiding 20,000 JS objects
+    // and their per-row insert parameters.
+    await db.execute(sql`
+    INSERT INTO case_law_decisions (id, source_id, country, court, case_number, language)
+    SELECT md5(source.id::text || ':' || series.n::text)::uuid,
+      source.id, 'CZE', 'Synthetic court', series.n::text, 'cs'
+    FROM case_law_sources source
+    CROSS JOIN generate_series(1, ${LIMITS.caseLawSourceFacetCountCap + 1}) series(n)
+    WHERE source.id IN (${ids})
+  `);
+    await db.execute(sql`
+    INSERT INTO case_law_search_documents
+      (decision_id, language, regconfig, searchable_text, tsv)
+    SELECT id, 'cs', 'simple', 'caporderword', to_tsvector('simple', 'caporderword')
+    FROM case_law_decisions
+    WHERE source_id IN (${ids})
+  `);
+    await db.execute(sql`ANALYZE case_law_sources`);
+    await db.execute(sql`ANALYZE case_law_decisions`);
+    await db.execute(sql`ANALYZE case_law_search_documents`);
+    const expected = orderedSources.toSorted(
+      (left, right) =>
+        compareCodeUnit(left.name, right.name) ||
+        compareCodeUnit(left.id, right.id),
+    );
+    expect(expected.map(({ id }) => id)).not.toEqual(
+      orderedSources
+        .toSorted((left, right) => compareCodeUnit(left.id, right.id))
+        .map(({ id }) => id),
+    );
+    const buckets = await readFacet(undefined, "caporderword");
+    expect(buckets.map(({ value }) => value)).toEqual(
+      expected.slice(0, LIMITS.caseLawFacetLimit).map(({ id }) => id),
+    );
+    expect(
+      buckets.every(
+        ({ count }) => count === LIMITS.caseLawSourceFacetCountCap + 1,
+      ),
+    ).toBe(true);
+  },
+  { timeout: 120_000 },
 );
