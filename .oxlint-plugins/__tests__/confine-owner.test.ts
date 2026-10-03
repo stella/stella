@@ -1,5 +1,6 @@
 import { describe, expect, setDefaultTimeout, test } from "bun:test";
 
+import { OWNERSHIP } from "../../scripts/ownership.ts";
 import { lintSingleRule } from "./lint-single-rule.ts";
 
 setDefaultTimeout(20_000);
@@ -48,5 +49,41 @@ describe.serial("confine-owner member-call rows", () => {
 
   test("leaves files outside the scoped paths alone", async () => {
     expect(await lint("apps/web/src/store.ts")).toEqual([]);
+  });
+});
+
+describe.serial("legislation revision corpus ownership", () => {
+  const entry = OWNERSHIP.find(
+    ({ id }) => id === "legislation-revision-corpus-write",
+  );
+  const source = [
+    'import { writeCorpusDocument as write } from "@/api/lib/legal-search/corpus-storage";',
+    'import * as storage from "@/api/lib/legal-search/corpus-storage";',
+    'export { writeCorpusDocument } from "@/api/lib/legal-search/corpus-storage";',
+    'import { corpusMirrorColumns } from "@/api/lib/legal-search/corpus-storage";',
+    "",
+  ].join("\n");
+  const lintRevisionWrite = async (sourcePath: string) =>
+    await lintSingleRule("confine-owner", source, {
+      ruleOptions: { entries: [entry] },
+      sourcePath,
+    });
+
+  test("rejects writers and facades outside the revision owner", async () => {
+    expect(entry).toBeDefined();
+    expect(
+      await lintRevisionWrite("apps/api/src/handlers/legislation/ingestion.ts"),
+    ).toEqual([1, 2, 3]);
+  });
+
+  test("accepts the revision owner and shared corpus maintenance", async () => {
+    expect(
+      await lintRevisionWrite("apps/api/src/handlers/legislation/revision.ts"),
+    ).toEqual([]);
+    expect(
+      await lintRevisionWrite(
+        "apps/api/src/lib/legal-search/corpus-pack-batch.ts",
+      ),
+    ).toEqual([]);
   });
 });
