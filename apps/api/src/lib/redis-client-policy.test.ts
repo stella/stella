@@ -110,7 +110,9 @@ for (const failurePolicy of ["fail_open_local", "fail_closed"] as const) {
       const errors: unknown[] = [];
       const context = new RedisRateLimitContext({
         failurePolicy,
-        onRedisError: (error) => errors.push(error),
+        onRedisError: (error) => {
+          errors.push(error);
+        },
       });
       try {
         const counter = await context.increment("store-policy-test");

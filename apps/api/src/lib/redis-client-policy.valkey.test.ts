@@ -74,8 +74,12 @@ describe.skipIf(!enabled)("classified clients over Valkey", () => {
       { connection: workerConnection, autorun: false },
     );
     const errors: unknown[] = [];
-    queue.on("error", (error) => errors.push(error));
-    worker.on("error", (error) => errors.push(error));
+    queue.on("error", (error) => {
+      errors.push(error);
+    });
+    worker.on("error", (error) => {
+      errors.push(error);
+    });
     try {
       await cache.set(key, "cache");
       await expectStoreRefusal(refused.set(key, "refused"));
