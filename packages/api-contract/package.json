@@ -57,7 +57,10 @@
     "./sse-heartbeat": "./src/sse-heartbeat.ts",
     "./statute-route": "./src/statute-route.ts",
     "./workspace-contacts": "./src/workspace-contacts.ts",
-    "./workflow-status": "./src/workflow-status.ts"
+    "./workflow-status": "./src/workflow-status.ts",
+    "./statute-gazette": "./src/statute-gazette.ts",
+    "./statute-aliases": "./src/statute-aliases.ts",
+    "./statute-query-intent": "./src/statute-query-intent.ts"
   },
   "scripts": {
     "clean": "git clean -xdf .cache .turbo node_modules",

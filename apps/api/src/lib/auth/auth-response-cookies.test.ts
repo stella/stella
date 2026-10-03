@@ -64,7 +64,7 @@ describe("session cookie forwarding", () => {
           plugins: [createSessionBearer(), lifetime.plugin],
           hooks: {
             before: createAuthMiddleware(async (ctx) => {
-              lifetime.prepare(ctx.context.internalAdapter);
+              lifetime.prepare(ctx.context);
               await Promise.resolve();
             }),
           },

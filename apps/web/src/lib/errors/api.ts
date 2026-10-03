@@ -2,6 +2,7 @@ import { TaggedError } from "better-result";
 
 import {
   API_VERSION_CONFLICT_ERROR_CODE,
+  CLAUSE_VERSION_LIMIT_ERROR_CODE,
   normalizeApiError,
   parseApiErrorValue,
 } from "@stll/api-contract";
@@ -102,6 +103,7 @@ const CODE_ERROR_KEYS = {
     "errors.apiCodes.matterContactCapacityReached",
   [MATTER_CONTACT_CAPACITY_CODE.exceeded]:
     "errors.apiCodes.matterContactCapacityExceeded",
+  [CLAUSE_VERSION_LIMIT_ERROR_CODE]: "clauses.versionLimitReached",
   [PUBLIC_COUNTRY_UNAVAILABLE_CODE]: "errors.api.publicCountryUnavailable",
   access_denied: "errors.apiCodes.accessDenied",
   account_deletion_otp_expired: "errors.apiCodes.accountDeletionOtpExpired",

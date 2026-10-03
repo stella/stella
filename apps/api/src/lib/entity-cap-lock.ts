@@ -5,7 +5,7 @@ import { workspaces } from "@/api/db/schema";
 import type { SafeId } from "@/api/lib/branded-types";
 
 /**
- * Canonical lock order for every entity-creating path (issue #1139,
+ * Canonical lock order for entity creation and hierarchy mutations (issue #1139,
  * follow-up to #1126).
  *
  * All paths that insert rows counted against `LIMITS.entitiesCount`
@@ -41,6 +41,9 @@ import type { SafeId } from "@/api/lib/branded-types";
  *   - `checkEntityCreateCapacityForInsert` (`entity-create.ts`) —
  *     used by `entities/create.ts`, presigned `entity-create.ts`
  *     finalize, `entity-create-tree.ts`, `presign.ts`.
+ *   - `moveEntityHandler` (`entities/move.ts`) — locks the workspace
+ *     before source/target entity rows and ancestry validation, so two
+ *     moves cannot jointly create a cycle from disjoint locked rows.
  *   - `copyEntities` (`copy-utils.ts`) — used by `duplicate.ts`
  *     (same-workspace: locks target only) and `entities/copy.ts`
  *     (cross-workspace: locks {source, target} ascending whenever
@@ -67,10 +70,17 @@ import type { SafeId } from "@/api/lib/branded-types";
  * side needs, and the source side is a read-only snapshot, not an
  * insert counted against the source's cap.
  */
-export const lockWorkspacesForEntityCap = async (
-  tx: Transaction,
-  workspaceIds: readonly SafeId<"workspace">[],
-): Promise<void> => {
+type LockWorkspaceRowsOptions = {
+  tx: Transaction;
+  workspaceIds: readonly SafeId<"workspace">[];
+  mode: "update" | "no-key-update";
+};
+
+const lockWorkspaceRows = async ({
+  tx,
+  workspaceIds,
+  mode,
+}: LockWorkspaceRowsOptions): Promise<void> => {
   const orderedIds = [...new Set(workspaceIds)].toSorted();
 
   for (const id of orderedIds) {
@@ -85,7 +95,27 @@ export const lockWorkspacesForEntityCap = async (
     //
     // db-await-in-loop: sequential, ascending-id acquisition is the invariant this function exists to provide; see the module doc comment
     await tx.execute(
-      sql`SELECT id FROM ${workspaces} WHERE id = ${id} FOR UPDATE`,
+      mode === "update"
+        ? sql`SELECT id FROM ${workspaces} WHERE id = ${id} FOR UPDATE`
+        : sql`SELECT id FROM ${workspaces} WHERE id = ${id} FOR NO KEY UPDATE`,
     );
   }
 };
+
+export const lockWorkspacesForEntityCap = async (
+  tx: Transaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+): Promise<void> =>
+  await lockWorkspaceRows({ tx, workspaceIds, mode: "update" });
+
+/**
+ * Transfers wait on source entity/version/field locks. Existing writers may
+ * hold those locks while inserting workspace-owned rows, whose FK key-share
+ * locks must remain compatible. NO KEY UPDATE still excludes cap-changing
+ * inserts and workspace activity updates, without blocking those FK checks.
+ */
+export const lockWorkspacesForEntityTransfer = async (
+  tx: Transaction,
+  workspaceIds: readonly SafeId<"workspace">[],
+): Promise<void> =>
+  await lockWorkspaceRows({ tx, workspaceIds, mode: "no-key-update" });

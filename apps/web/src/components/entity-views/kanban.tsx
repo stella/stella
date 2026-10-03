@@ -297,10 +297,7 @@ export const EntityViewKanban = ({
             );
           }}
           onRename={(workspaceId, entityId, name) =>
-            rename.mutate(
-              { workspaceId, entityId, name },
-              { onSuccess: () => detached(onChanged(), "entity-view.rename") },
-            )
+            rename.mutate({ workspaceId, entityId, name })
           }
           onDrop={(id, sourceLane) =>
             detached(

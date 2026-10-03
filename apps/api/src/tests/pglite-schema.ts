@@ -578,7 +578,7 @@ export const installPgliteWorkspaceContactCapacity = async (
   const statements = readMigrationStatements(
     nodePath.join(
       DRIZZLE_DIR,
-      "20261003123700_workspace_contact_capacity",
+      "20261003124000_workspace_contact_capacity",
       "migration.sql",
     ),
   ).filter((statement) => !executableSql(statement).startsWith("SET "));
@@ -593,13 +593,20 @@ const ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES = [
   "CREATE TRIGGER",
 ] as const;
 
-/** Install the member capacity function and guard omitted by schema push. */
+/** Install membership capacity and ownership guards omitted by schema push. */
 export const installPgliteOrganizationMemberCapacity = async (
   db: PgliteSchemaDb,
 ): Promise<void> => {
-  const statements = readMigrationStatements(
-    ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH,
-  ).filter((statement) =>
+  const statements = [
+    ...readMigrationStatements(ORGANIZATION_MEMBER_CAPACITY_MIGRATION_PATH),
+    ...readMigrationStatements(
+      nodePath.join(
+        DRIZZLE_DIR,
+        "20261003123700_membership_role_invariants",
+        "migration.sql",
+      ),
+    ),
+  ].filter((statement) =>
     ORGANIZATION_MEMBER_CAPACITY_STATEMENT_PREFIXES.some((prefix) =>
       executableSql(statement).startsWith(prefix),
     ),

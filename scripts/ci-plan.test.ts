@@ -9,32 +9,258 @@ import {
   symlinkSync,
   writeFileSync,
 } from "node:fs";
-import { tmpdir } from "node:os";
+import { availableParallelism, tmpdir } from "node:os";
 import nodePath from "node:path";
 import * as v from "valibot";
 
-import { propertyConfig } from "@stll/property-testing";
+import { drawPropertySamples, propertyConfig } from "@stll/property-testing";
 
 import queuedJob from "./__fixtures__/ci-cancellation/queued-job.json";
 import supersessionAnnotations from "./__fixtures__/ci-cancellation/supersession.json";
 import timeoutAnnotations from "./__fixtures__/ci-cancellation/timeout.json";
+import { requiresMalwareScan } from "./check-standalone-lockfiles";
+import { extractPlanSelector } from "./ci-plan-selector";
 import queueOnlyReasons from "./ci-queue-only-jobs.json";
+import { routeSmokeAffected } from "./detect-route-smoke-changes";
+import { serviceSuiteCliOutput } from "./detect-service-suite-changes";
 import { GENERATORS } from "./generated-files";
 
 const workflow = readFileSync(
   new URL("../.github/workflows/ci.yml", import.meta.url),
   "utf-8",
 );
-const selectorStart = workflow.indexOf(
-  "          # Path scopes for the build/smoke jobs",
-);
-const selectorEnd = workflow.indexOf(
-  "          printf 'Changed files:",
-  selectorStart,
-);
-expect(selectorStart).toBeGreaterThan(-1);
-expect(selectorEnd).toBeGreaterThan(selectorStart);
-const selector = workflow.slice(selectorStart, selectorEnd);
+const selector = extractPlanSelector(workflow);
+const selectorStart = workflow.indexOf(selector);
+
+type BashCase = {
+  flags: readonly string[];
+  script: string;
+  args: readonly string[];
+  env: Readonly<Record<string, string>>;
+};
+
+type BashOutcome = { exitCode: number; stdout: string; stderr: string };
+
+// Reads each case as NUL-separated fields: flag count, flags, script, env
+// count, KEY=VALUE pairs, argument count, arguments. Every case runs in its
+// own bash process, exactly as a separate spawn would, with the driver's
+// PATH-only environment plus the case's variables. The test pays one spawn
+// per batch rather than one per property sample, and up to `jobs` cases run
+// at once.
+const BASH_BATCH_DRIVER = `directory=$1
+count=$2
+jobs=$3
+run_case() {
+  local index=$1 field position size script
+  local fields=() flags=() variables=() arguments=()
+  while IFS= read -r -d '' field; do fields+=("$field"); done < "$directory/$index.in"
+  position=0
+  size=\${fields[position]}
+  flags=("\${fields[@]:position+1:size}")
+  position=$((position + 1 + size))
+  script=\${fields[position]}
+  position=$((position + 1))
+  size=\${fields[position]}
+  variables=("\${fields[@]:position+1:size}")
+  position=$((position + 1 + size))
+  size=\${fields[position]}
+  arguments=("\${fields[@]:position+1:size}")
+  (
+    if ((\${#variables[@]} > 0)); then export "\${variables[@]}"; fi
+    exec "$BASH" "\${flags[@]}" -c "$script" ci-plan-test "\${arguments[@]}"
+  ) > "$directory/$index.out" 2> "$directory/$index.err"
+  printf '%s' "$?" > "$directory/$index.status"
+}
+for ((index = 0; index < count; index++)); do
+  run_case "$index" &
+  if (((index + 1) % jobs == 0)); then
+    wait
+  fi
+done
+wait`;
+
+// Cases are independent processes; a small pool keeps a batch well inside a
+// test's budget without crowding a shared runner.
+const BASH_BATCH_JOBS = Math.min(4, availableParallelism());
+
+const runBashBatch = <T>(
+  items: readonly T[],
+  toCase: (item: T) => BashCase,
+): (BashOutcome & { item: T })[] => {
+  const directory = mkdtempSync(nodePath.join(tmpdir(), "ci-plan-batch-"));
+  try {
+    for (const [index, item] of items.entries()) {
+      const { flags, script, args, env } = toCase(item);
+      const variables = Object.entries(env).map(
+        ([name, value]) => `${name}=${value}`,
+      );
+      const fields = [
+        String(flags.length),
+        ...flags,
+        script,
+        String(variables.length),
+        ...variables,
+        String(args.length),
+        ...args,
+      ];
+      if (fields.some((field) => field.includes("\0"))) {
+        throw new TypeError(`A bash case field contains NUL: ${script}`);
+      }
+      writeFileSync(
+        nodePath.join(directory, `${index}.in`),
+        fields.map((field) => `${field}\0`).join(""),
+      );
+    }
+    const driver = Bun.spawnSync({
+      cmd: [
+        "bash",
+        "-c",
+        BASH_BATCH_DRIVER,
+        "ci-plan-batch",
+        directory,
+        String(items.length),
+        String(BASH_BATCH_JOBS),
+      ],
+      env: { PATH: Bun.env["PATH"] ?? "" },
+      stdout: "pipe",
+      stderr: "pipe",
+    });
+    expect(driver.exitCode, driver.stderr.toString()).toBe(0);
+    return items.map((item, index) => {
+      const read = (extension: string) =>
+        readFileSync(
+          nodePath.join(directory, `${index}.${extension}`),
+          "utf-8",
+        );
+      return {
+        item,
+        exitCode: Number(read("status")),
+        stdout: read("out"),
+        stderr: read("err"),
+      };
+    });
+  } finally {
+    rmSync(directory, { recursive: true, force: true });
+  }
+};
+
+const onlyOutcome = <T>(outcomes: readonly T[]): T => {
+  const [outcome, ...rest] = outcomes;
+  if (outcome === undefined || rest.length > 0) {
+    throw new TypeError(`Expected one outcome, received ${outcomes.length}`);
+  }
+  return outcome;
+};
+
+// The selector's bun detectors, keyed by the script it invokes. Served in
+// process, each answer comes from the same function the CLI prints; a bun
+// call the selector adds without an entry here fails the plan.
+const SELECTOR_BUN_CLIS = {
+  "scripts/detect-service-suite-changes.ts": {
+    variable: "SERVED_SERVICE_SUITE_SCOPES",
+    flag: "--scopes",
+    output: (files: readonly string[]) =>
+      serviceSuiteCliOutput(["--scopes", ...files]),
+  },
+  "scripts/check-standalone-lockfiles.ts": {
+    variable: "SERVED_MALWARE_SCAN",
+    flag: "--requires-malware-scan",
+    output: (files: readonly string[]) => String(requiresMalwareScan(files)),
+  },
+  "scripts/detect-route-smoke-changes.ts": {
+    variable: "SERVED_ROUTE_SMOKE",
+    flag: "",
+    output: (files: readonly string[]) => String(routeSmokeAffected(files)),
+  },
+} as const;
+
+const SERVED_BUN_SHIM = `bun() {
+  local script=$1 flag served
+  shift
+  case "$script" in
+${Object.entries(SELECTOR_BUN_CLIS)
+  .map(
+    ([script, { variable, flag }]) =>
+      `    ${script}) flag='${flag}'; served=$${variable} ;;`,
+  )
+  .join("\n")}
+    *) printf 'unserved bun call: %s\\n' "$script" >&2; return 127 ;;
+  esac
+  if [[ -n "$flag" ]]; then
+    [[ "\${1-}" == "$flag" ]] || { printf 'unserved %s arguments\\n' "$script" >&2; return 127; }
+    shift
+  fi
+  [[ $# -eq \${#changed_files[@]} ]] || { printf 'unserved %s files\\n' "$script" >&2; return 127; }
+  local index=0 file
+  for file in "$@"; do
+    [[ "$file" == "\${changed_files[index]}" ]] || { printf 'unserved %s files\\n' "$script" >&2; return 127; }
+    index=$((index + 1))
+  done
+  printf '%s\\n' "$served"
+}
+`;
+
+const DETECTORS = { inProcess: "in-process", spawned: "spawned" } as const;
+type Detectors = (typeof DETECTORS)[keyof typeof DETECTORS];
+
+type SelectorCase = {
+  files: readonly string[];
+  outputs: readonly string[];
+  suiteDepth?: string;
+  e2eLandingRequired?: string;
+  event?: string;
+  title?: string;
+};
+
+const selectorCase = (
+  {
+    files,
+    outputs,
+    suiteDepth = "fast",
+    e2eLandingRequired = "false",
+    event = "pull_request",
+    title = "",
+  }: SelectorCase,
+  detectors: Detectors,
+): BashCase => {
+  const served =
+    detectors === DETECTORS.inProcess
+      ? Object.fromEntries(
+          Object.values(SELECTOR_BUN_CLIS).map(
+            ({ variable, output }) => [variable, output(files)] as const,
+          ),
+        )
+      : {};
+  return {
+    flags: ["-e"],
+    script: `${detectors === DETECTORS.inProcess ? SERVED_BUN_SHIM : ""}changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
+desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
+e2e_landing_required="$E2E_LANDING_REQUIRED"
+package_checks_required=true
+${selector}
+printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
+    args: files,
+    env: {
+      E2E_LANDING_REQUIRED: e2eLandingRequired,
+      EVENT_NAME: event,
+      PATH: Bun.env["PATH"] ?? "",
+      PR_TITLE: title,
+      SUITE_DEPTH: suiteDepth,
+      ...served,
+    },
+  };
+};
+
+const planSelector = <C extends SelectorCase>(
+  cases: readonly C[],
+  detectors: Detectors = DETECTORS.inProcess,
+) =>
+  runBashBatch(cases, (entry) => selectorCase(entry, detectors)).map(
+    ({ item, exitCode, stdout, stderr }) => {
+      expect(exitCode, stderr).toBe(0);
+      return { item, plan: stdout.trim().split("\n") };
+    },
+  );
 
 const runSelector = (
   files: readonly string[],
@@ -43,53 +269,46 @@ const runSelector = (
   e2eLandingRequired = "false",
   event = "pull_request",
   title = "",
-) => {
-  const process = Bun.spawnSync({
-    cmd: [
-      "bash",
-      "-e",
-      "-c",
-      `changed_files=("$@"); e2e_core_required=$(bash scripts/detect-e2e-changes.sh core "$@")
-desktop_rust_checks_required=$(bash scripts/detect-tauri-rust-changes.sh "$@")
-e2e_landing_required="$E2E_LANDING_REQUIRED"
-package_checks_required=true
-${selector}
-printf "%s\\n" ${outputs.map((output) => `"$${output}"`).join(" ")}`,
-      "ci-plan-test",
-      ...files,
-    ],
-    env: {
-      E2E_LANDING_REQUIRED: e2eLandingRequired,
-      EVENT_NAME: event,
-      PATH: Bun.env["PATH"] ?? "",
-      PR_TITLE: title,
-      SUITE_DEPTH: suiteDepth,
-    },
-    stdout: "pipe",
-    stderr: "pipe",
-  });
-  expect(process.exitCode, new TextDecoder().decode(process.stderr)).toBe(0);
-  return new TextDecoder().decode(process.stdout).trim().split("\n");
-};
+) =>
+  onlyOutcome(
+    planSelector([
+      { files, outputs, suiteDepth, e2eLandingRequired, event, title },
+    ]),
+  ).plan;
+
+// Property samples are drawn up front and evaluated as one batch, since each
+// evaluation runs bash. Each sample's label carries its replay seed and index.
+
+const IMAGE_SMOKE_OUTPUTS = [
+  "api_image_smoke_required",
+  "web_image_smoke_required",
+] as const;
 
 const imageSmokePlan = (files: readonly string[]) =>
-  runSelector(files, ["api_image_smoke_required", "web_image_smoke_required"]);
+  runSelector(files, IMAGE_SMOKE_OUTPUTS);
+
+const releaseExtraFiles = fc.array(fc.string(), { maxLength: 8 });
 
 test("every release requires both final image smokes regardless of other changed paths", () => {
-  fc.assert(
-    fc.property(fc.array(fc.string(), { maxLength: 8 }), (files) => {
+  const cases = drawPropertySamples(releaseExtraFiles, { numRuns: 30 }).flatMap(
+    ({ value: files, label }) => {
       const safeFiles = files.filter((file) => !file.includes("\0"));
-      expect(imageSmokePlan(["VERSION", ...safeFiles])).toEqual([
-        "true",
-        "true",
-      ]);
-      expect(imageSmokePlan([...safeFiles, "VERSION"])).toEqual([
-        "true",
-        "true",
-      ]);
-    }),
-    propertyConfig({ numRuns: 30 }),
+      return [
+        ["VERSION", ...safeFiles],
+        [...safeFiles, "VERSION"],
+      ].map((changed) => ({
+        files: changed,
+        outputs: IMAGE_SMOKE_OUTPUTS,
+        label,
+      }));
+    },
   );
+  for (const { item, plan } of planSelector(cases)) {
+    expect(plan, `${item.label} ${JSON.stringify(item.files)}`).toEqual([
+      "true",
+      "true",
+    ]);
+  }
 });
 
 test("API image construction and smoke orchestration changes require the final image", () => {
@@ -125,17 +344,23 @@ test("base image pull changes require every image build", () => {
   }
 });
 
+const unrelatedDocNames = fc.array(fc.uuid(), { maxLength: 8 });
+
 test("unrelated paths do not schedule final image smokes", () => {
   expect(imageSmokePlan([])).toEqual(["false", "false"]);
-  fc.assert(
-    fc.property(fc.array(fc.uuid(), { maxLength: 8 }), (names) => {
-      expect(imageSmokePlan(names.map((name) => `docs/${name}.md`))).toEqual([
-        "false",
-        "false",
-      ]);
+  const cases = drawPropertySamples(unrelatedDocNames, { numRuns: 30 }).map(
+    ({ value: names, label }) => ({
+      files: names.map((name) => `docs/${name}.md`),
+      outputs: IMAGE_SMOKE_OUTPUTS,
+      label,
     }),
-    propertyConfig({ numRuns: 30 }),
   );
+  for (const { item, plan } of planSelector(cases)) {
+    expect(plan, `${item.label} ${JSON.stringify(item.files)}`).toEqual([
+      "false",
+      "false",
+    ]);
+  }
 });
 
 test("everything the API image is built from requires the API image smoke", () => {
@@ -281,14 +506,9 @@ test("the lockfile release-age guard follows every tracked lockfile", () => {
 
 const MatrixEntry = v.object({ runner: v.string(), platform: v.string() });
 
-const apiImagePlatforms = (files: readonly string[], suiteDepth: string) =>
+const platformsOf = (plan: readonly string[]) =>
   v
-    .parse(
-      v.array(MatrixEntry),
-      JSON.parse(
-        runSelector(files, ["api_image_platforms"], suiteDepth).at(0) ?? "",
-      ),
-    )
+    .parse(v.array(MatrixEntry), JSON.parse(plan.at(0) ?? ""))
     .map(({ platform }) => platform)
     .toSorted();
 
@@ -323,23 +543,42 @@ test("a fix pull request that changes an API test plans the fix-tests-on-base ch
   ).toBe("false");
 });
 
+const apiSourceSiblings = fc.array(fc.uuid(), { maxLength: 4 });
+
 test("a pull request builds the API image for arm64 unless it releases", () => {
-  fc.assert(
-    fc.property(fc.array(fc.uuid(), { maxLength: 4 }), (names) => {
-      const files = ["apps/api/src/server.ts", ...names.map((n) => `${n}.ts`)];
-      expect(apiImagePlatforms(files, "fast")).toEqual(["linux/arm64"]);
-      expect(apiImagePlatforms([...files, "VERSION"], "fast")).toEqual([
-        "linux/amd64",
-        "linux/arm64",
-      ]);
-      expect(apiImagePlatforms(files, "full")).toEqual([
-        "linux/amd64",
-        "linux/arm64",
-      ]);
-    }),
-    propertyConfig({ numRuns: 10 }),
-  );
-}, 30_000);
+  const outputs = ["api_image_platforms"];
+  const expectations = drawPropertySamples(apiSourceSiblings, {
+    numRuns: 10,
+  }).flatMap(({ value: names, label }) => {
+    const files = ["apps/api/src/server.ts", ...names.map((n) => `${n}.ts`)];
+    return [
+      { files, outputs, suiteDepth: "fast", platforms: ["linux/arm64"], label },
+      {
+        files: [...files, "VERSION"],
+        outputs,
+        suiteDepth: "fast",
+        platforms: ["linux/amd64", "linux/arm64"],
+        label,
+      },
+      {
+        files,
+        outputs,
+        suiteDepth: "full",
+        platforms: ["linux/amd64", "linux/arm64"],
+        label,
+      },
+    ];
+  });
+  for (const {
+    item: { files, suiteDepth, platforms, label },
+    plan,
+  } of planSelector(expectations)) {
+    expect(
+      platformsOf(plan),
+      `${label} ${suiteDepth} ${JSON.stringify(files)}`,
+    ).toEqual(platforms);
+  }
+});
 
 const workflowJobs = (source: string) =>
   v.parse(
@@ -672,9 +911,9 @@ afterAll(() => {
   rmSync(fakeGhDirectory, { force: true, recursive: true });
 });
 
-// Runs the ci-result step as GitHub would, with every job succeeding and
+// The ci-result step as GitHub would run it, with every job succeeding and
 // every scope selected unless the options say otherwise.
-const evaluateResult = ({
+const resultGateCase = ({
   event,
   results,
   suiteDepth = event === EVENT.pullRequest
@@ -689,7 +928,7 @@ const evaluateResult = ({
   matrixTimeoutSibling = false,
   newerRun = "same-group",
   queuedCancellation,
-}: EvaluateResultOptions) => {
+}: EvaluateResultOptions): BashCase => {
   const plan = Object.fromEntries(
     [
       ...Object.values(jobScopes),
@@ -797,8 +1036,10 @@ const evaluateResult = ({
     pull_requests:
       newerRun === "other-pr" ? [{ number: 8 }] : currentRun.pull_requests,
   };
-  const run = Bun.spawnSync({
-    cmd: ["bash", "-eu", "-c", resultStep.run],
+  return {
+    flags: ["-eu"],
+    script: resultStep.run,
+    args: [],
     env: {
       EVENT: event,
       GITHUB_RUN_ID: "123",
@@ -827,10 +1068,30 @@ const evaluateResult = ({
       SUITE_DEPTH: suiteDepth,
       TRUSTED: "true",
     },
-    stdout: "ignore",
-    stderr: "ignore",
-  });
-  return run.exitCode;
+  };
+};
+
+const evaluateResults = <T>(
+  items: readonly T[],
+  toOptions: (item: T) => EvaluateResultOptions,
+) => runBashBatch(items, (item) => resultGateCase(toOptions(item)));
+
+const evaluateResult = (options: EvaluateResultOptions) =>
+  onlyOutcome(evaluateResults([options], (item) => item)).exitCode;
+
+type ExpectedResultGate = {
+  label: string;
+  options: EvaluateResultOptions;
+  exitCode: number;
+};
+
+const expectResultGates = (gates: readonly ExpectedResultGate[]) => {
+  for (const { item, exitCode } of evaluateResults(
+    gates,
+    ({ options }) => options,
+  )) {
+    expect(exitCode, item.label).toBe(item.exitCode);
+  }
 };
 
 const jobIf = (job: unknown) =>
@@ -856,6 +1117,12 @@ const diagnosticJobs = Object.entries(ciJobs).flatMap(([job, body]) =>
   /needs\.[\w-]+\.result == 'failure'/u.test(jobIf(body))
     ? [job]
     : [],
+);
+
+const failedGatedJobs = fc.tuple(
+  fc.constantFrom(...gatedJobs),
+  fc.constantFrom("failure", "timed_out", ""),
+  fc.constantFrom(...Object.values(EVENT)),
 );
 
 test("the result gate evaluates every job in the workflow", () => {
@@ -886,20 +1153,18 @@ test("the result gate evaluates every job in the workflow", () => {
   expect(resultJob.needs).not.toContain("migration-exact-base-upgrade");
   expect(jobScopes).not.toHaveProperty("migration-exact-base-upgrade");
   expect(resultStep.env["NEEDS"]).toBe(["$", "{{ toJSON(needs) }}"].join(""));
-  fc.assert(
-    fc.property(
-      fc.constantFrom(...gatedJobs),
-      fc.constantFrom("failure", "timed_out", ""),
-      fc.constantFrom(...Object.values(EVENT)),
-      (job, result, event) => {
-        expect(
-          evaluateResult({ event, results: { [job]: result } }),
-          `${event} ${job} ${result}`,
-        ).toBe(1);
-      },
-    ),
-    propertyConfig({ numRuns: 100 }),
-  );
+  for (const {
+    item: { label },
+    exitCode,
+  } of evaluateResults(
+    drawPropertySamples(failedGatedJobs, { numRuns: 100 }),
+    ({ value: [job, result, event] }) => ({
+      event,
+      results: { [job]: result },
+    }),
+  )) {
+    expect(exitCode, label).toBe(1);
+  }
 });
 
 test("each job's plan scope is the ci-plan output its `if:` selects it by", () => {
@@ -919,28 +1184,30 @@ test("each job's plan scope is the ci-plan output its `if:` selects it by", () =
   }
 });
 
+const unsuccessfulFullDepthJobs = fc.tuple(
+  fc.constantFrom(...gatedJobs),
+  fc.constantFrom("skipped", "cancelled", "failure"),
+  fc.constantFrom(...FULL_DEPTH_EVENTS),
+);
+
 test("a full-depth run fails every planned job that did not succeed", () => {
-  fc.assert(
-    fc.property(
-      fc.constantFrom(...gatedJobs),
-      fc.constantFrom("skipped", "cancelled", "failure"),
-      fc.constantFrom(...FULL_DEPTH_EVENTS),
-      (job, result, event) => {
-        expect(
-          evaluateResult({
-            event,
-            results: { [job]: result },
-            suiteDepth: SUITE_DEPTH.full,
-          }),
-          `${event} ${job} ${result}`,
-        ).toBe(1);
-      },
-    ),
-    propertyConfig({ numRuns: 100 }),
-  );
+  for (const {
+    item: { label },
+    exitCode,
+  } of evaluateResults(
+    drawPropertySamples(unsuccessfulFullDepthJobs, { numRuns: 100 }),
+    ({ value: [job, result, event] }) => ({
+      event,
+      results: { [job]: result },
+      suiteDepth: SUITE_DEPTH.full,
+    }),
+  )) {
+    expect(exitCode, label).toBe(1);
+  }
 });
 
 test("a full-depth run passes jobs whose scope was not planned only when skipped", () => {
+  const gates: ExpectedResultGate[] = [];
   for (const job of gatedJobs) {
     const scope = jobScopes[job];
     if (scope === undefined || scope === null) {
@@ -948,16 +1215,21 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
     }
     for (const event of FULL_DEPTH_EVENTS) {
       const unplanned = { event, unplannedScopes: [scope] };
-      expect(
-        evaluateResult({ ...unplanned, results: { [job]: "skipped" } }),
-        `${event} ${job} skipped`,
-      ).toBe(0);
-      expect(
-        evaluateResult({ ...unplanned, results: { [job]: "cancelled" } }),
-        `${event} ${job} cancelled`,
-      ).toBe(1);
+      gates.push(
+        {
+          label: `${event} ${job} skipped`,
+          options: { ...unplanned, results: { [job]: "skipped" } },
+          exitCode: 0,
+        },
+        {
+          label: `${event} ${job} cancelled`,
+          options: { ...unplanned, results: { [job]: "cancelled" } },
+          exitCode: 1,
+        },
+      );
     }
   }
+  expectResultGates(gates);
 });
 
 // A pull request always plans `fast`; a manual run plans the depth it was
@@ -965,6 +1237,7 @@ test("a full-depth run passes jobs whose scope was not planned only when skipped
 const FAST_DEPTH_EVENTS = [EVENT.pullRequest, EVENT.workflowDispatch] as const;
 
 test("a failed dependency cannot pass with cancelled siblings or supersession evidence", () => {
+  const gates: ExpectedResultGate[] = [];
   for (const event of [EVENT.mergeGroup, EVENT.pullRequest]) {
     for (const failedJob of resultJob.needs) {
       for (const cancellationEvidence of ["missing", "superseded"] as const) {
@@ -973,13 +1246,15 @@ test("a failed dependency cannot pass with cancelled siblings or supersession ev
         );
         results["ci-plan"] = "success";
         results[failedJob] = "failure";
-        expect(
-          evaluateResult({ event, results, cancellationEvidence }),
-          `${event} ${failedJob} ${cancellationEvidence}`,
-        ).toBe(1);
+        gates.push({
+          label: `${event} ${failedJob} ${cancellationEvidence}`,
+          options: { event, results, cancellationEvidence },
+          exitCode: 1,
+        });
       }
     }
   }
+  expectResultGates(gates);
 });
 
 test("a self-cancelled merge group fails even when GitHub marks the failing job cancelled", () => {
@@ -1298,6 +1573,7 @@ test("path-scoped platform checks run on the pull requests that touch them", () 
 
 test("a fast-depth run requires every selected fast-required job to run", () => {
   expect(fastRequired.length).toBeGreaterThan(0);
+  const gates: ExpectedResultGate[] = [];
   for (const job of fastRequired) {
     expect(jobScopes).toHaveProperty(job);
     const scope = fastJobScopes[job] ?? jobScopes[job];
@@ -1306,41 +1582,48 @@ test("a fast-depth run requires every selected fast-required job to run", () => 
       expect(heavyJobs, job).not.toContain(job);
     }
     const event = EVENT.pullRequest;
-    expect(evaluateResult({ event, results: { [job]: "success" } }), job).toBe(
-      0,
+    gates.push(
+      {
+        label: job,
+        options: { event, results: { [job]: "success" } },
+        exitCode: 0,
+      },
+      {
+        label: job,
+        options: { event, results: { [job]: "skipped" } },
+        exitCode: 1,
+      },
+      {
+        label: job,
+        options: {
+          event,
+          results: { [job]: "cancelled" },
+          cancellationEvidence: "superseded",
+        },
+        exitCode: 0,
+      },
     );
-    expect(evaluateResult({ event, results: { [job]: "skipped" } }), job).toBe(
-      1,
-    );
-    expect(
-      evaluateResult({
-        event,
-        results: { [job]: "cancelled" },
-        cancellationEvidence: "superseded",
-      }),
-      job,
-    ).toBe(0);
     if (typeof scope === "string") {
-      expect(
-        evaluateResult({
+      gates.push({
+        label: job,
+        options: {
           event,
           results: { [job]: "skipped" },
           unplannedScopes: [scope],
-        }),
-        job,
-      ).toBe(0);
+        },
+        exitCode: 0,
+      });
     }
   }
   // Any other planned job may still skip at fast depth.
   for (const job of gatedJobs.filter((name) => !fastRequired.includes(name))) {
-    expect(
-      evaluateResult({
-        event: EVENT.pullRequest,
-        results: { [job]: "skipped" },
-      }),
-      job,
-    ).toBe(0);
+    gates.push({
+      label: job,
+      options: { event: EVENT.pullRequest, results: { [job]: "skipped" } },
+      exitCode: 0,
+    });
   }
+  expectResultGates(gates);
 });
 
 const MatrixJob = v.object({
@@ -1399,7 +1682,7 @@ test("a manual run supersedes only an older manual run on the same branch", () =
     Bun.YAML.parse(workflow),
   ).concurrency;
   expect(concurrency["cancel-in-progress"]).toBe(
-    `\${{ github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' }}`,
+    `\${{ inputs.heavy_only != true && (github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch') }}`,
   );
   expect(concurrency.group).toContain(
     "github.event_name == 'workflow_dispatch' && format('ci-dispatch-{0}', github.ref)",
@@ -2731,6 +3014,10 @@ test("route-relevant pull requests plan the required route smoke job", () => {
     "apps/web/e2e/network-baseline.json",
     "scripts/network-baseline-scope.ts",
     "scripts/network-baseline-scope.test.ts",
+    "scripts/network-baseline-comparison.test.ts",
+    "apps/web/e2e/network-budgets/feature.json",
+    ".github/actions/prepare-network-baseline/action.yml",
+    ".github/actions/prepare-network-baseline/prepare.sh",
     "apps/web/e2e/specs/route-smoke.spec.ts",
     "apps/web/e2e/helpers/network.ts",
     "apps/web/e2e/helpers/workspace.ts",
@@ -2872,7 +3159,7 @@ test("service-suite PR scope binds planning, execution, and the fast result gate
   expect(plan.outputs[scope]).toBe(
     `\${{ steps.changed-files.outputs.${scope} }}`,
   );
-  for (const { file, required } of [
+  const cases = [
     { file: "apps/api/src/db/schema/new.ts", required: true },
     { file: "apps/api/drizzle/123_new.sql", required: true },
     { file: "apps/api/src/lib/scheduler/new.ts", required: true },
@@ -2894,40 +3181,162 @@ test("service-suite PR scope binds planning, execution, and the fast result gate
     { file: "docs/guide.md", required: false },
     { file: "apps/web/src/new.tsx", required: false },
     { file: "apps/api/src/unused-new-handler.ts", required: false },
-  ]) {
-    const planned = runSelector([file], [scope]).at(0) === "true";
-    expect(planned, file).toBe(required);
-    // Evaluate the actual job condition with planner outputs at both depths.
-    for (const suiteDepth of ["fast", "full"]) {
-      const executable = condition
+  ];
+  // Plans, job conditions and result gates each run as one batch.
+  const planned = planSelector(
+    cases.map(({ file, required }) => ({
+      file,
+      files: [file],
+      outputs: [scope],
+      required,
+    })),
+  ).map(({ item: { file, required }, plan: values }) => ({
+    file,
+    required,
+    selected: values.at(0) === "true",
+  }));
+  for (const { file, required, selected } of planned) {
+    expect(selected, file).toBe(required);
+  }
+  // Evaluate the actual job condition with planner outputs at both depths.
+  const conditions = planned.flatMap(({ file, selected }) =>
+    ["fast", "full"].map((suiteDepth) => ({
+      label: `${file} ${suiteDepth}`,
+      executable: condition
         .replaceAll("needs.ci-plan.outputs.service_suites_required", "'true'")
         .replaceAll(
           `needs.ci-plan.outputs.${scope}`,
-          () => `'${String(planned)}'`,
+          () => `'${String(selected)}'`,
         )
         .replaceAll(
           "needs.ci-plan.outputs.suite_depth",
           () => `'${suiteDepth}'`,
         )
         .replaceAll("needs.ci-plan.outputs.trusted", "'true'")
-        .replaceAll("github.event_name", "'pull_request'");
-      expect(
-        Bun.spawnSync(["bash", "-c", `[[ ${executable} ]]`]).exitCode,
-      ).toBe(suiteDepth === "full" || planned ? 0 : 1);
-    }
-    for (const result of ["success", "failure", "skipped", "cancelled"]) {
-      expect(
-        evaluateResult({
+        .replaceAll("github.event_name", "'pull_request'"),
+      exitCode: suiteDepth === "full" || selected ? 0 : 1,
+    })),
+  );
+  for (const { item, exitCode } of runBashBatch(
+    conditions,
+    ({ executable }) => ({
+      flags: [],
+      script: `[[ ${executable} ]]`,
+      args: [],
+      env: { PATH: Bun.env["PATH"] ?? "" },
+    }),
+  )) {
+    expect(exitCode, item.label).toBe(item.exitCode);
+  }
+  expectResultGates(
+    planned.flatMap(({ file, selected }) =>
+      ["success", "failure", "skipped", "cancelled"].map((result) => ({
+        label: `${file} ${result}`,
+        options: {
           event: EVENT.pullRequest,
           results: { "service-suites": result },
-          unplannedScopes: planned ? [] : [scope],
-        }),
-        `${file} ${result}`,
-      ).toBe(
-        result === "success" || (result === "skipped" && !planned) ? 0 : 1,
-      );
-    }
+          unplannedScopes: selected ? [] : [scope],
+        },
+        exitCode:
+          result === "success" || (result === "skipped" && !selected) ? 0 : 1,
+      })),
+    ),
+  );
+});
+
+// The one selector run that spawns the real detector CLIs: it proves the
+// wiring the in-process plans above stand in for. Each case starts three bun
+// processes, and each service-suite process rebuilds its import graph (about
+// a second), so a run measures ~1.3 s locally; 30 s leaves a cold runner a
+// margin above 20x.
+test("the selector plans the same with its detector CLIs spawned as served in process", () => {
+  const plan = v.parse(
+    v.object({ outputs: v.record(v.string(), v.string()) }),
+    ciJobs["ci-plan"],
+  );
+  const outputs = Object.entries(plan.outputs).flatMap(([name, value]) =>
+    value.includes("steps.changed-files.outputs.") ? [name] : [],
+  );
+  expect(outputs).toContain("service_suites_pr_required");
+  expect(outputs).toContain("dependency_malware_required");
+  expect(outputs).toContain("route_smoke_required");
+  const cases = [
+    { files: ["apps/api/src/server.ts"], outputs },
+    { files: ["apps/api/src/db/schema/new.ts", "bun.lock"], outputs },
+    { files: ["apps/web/src/routes/index.tsx"], outputs },
+    { files: ["docs/guide.md", "packages/time/src/index.ts"], outputs },
+    { files: ["VERSION"], outputs, event: "merge_group", suiteDepth: "full" },
+    {
+      files: ["apps/api/src/handlers/chat/stream-chat.test.ts"],
+      outputs,
+      title: "fix(chat): keep ids",
+    },
+  ];
+  const spawned = planSelector(cases, DETECTORS.spawned).map(
+    ({ plan: values }) => values,
+  );
+  const served = planSelector(cases, DETECTORS.inProcess).map(
+    ({ plan: values }) => values,
+  );
+  expect(served).toEqual(spawned);
+  // The cases exercise both answers of every detector.
+  for (const name of [
+    "service_suites_pr_required",
+    "dependency_malware_required",
+    "route_smoke_required",
+  ]) {
+    const index = outputs.indexOf(name);
+    expect(new Set(served.map((values) => values[index])), name).toEqual(
+      new Set(["true", "false"]),
+    );
   }
+}, 30_000);
+
+test("drawn property samples are the inputs fc.assert would run", () => {
+  // Both sides share one explicit seed: the exploratory tier leaves the
+  // default seed unset, which would give each draw an independent one.
+  const seed = 20_261_003;
+  const drawSamples = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) =>
+    drawPropertySamples(arbitrary, { numRuns, seed }).map(({ value }) => value);
+  const draws = <T>(arbitrary: fc.Arbitrary<T>, numRuns: number) => {
+    const asserted: T[] = [];
+    fc.assert(
+      fc.property(arbitrary, (value) => {
+        asserted.push(value);
+      }),
+      propertyConfig({ numRuns, seed }),
+    );
+    return asserted;
+  };
+  expect(drawSamples(releaseExtraFiles, 30)).toEqual(
+    draws(releaseExtraFiles, 30),
+  );
+  expect(drawSamples(unrelatedDocNames, 30)).toEqual(
+    draws(unrelatedDocNames, 30),
+  );
+  expect(drawSamples(apiSourceSiblings, 10)).toEqual(
+    draws(apiSourceSiblings, 10),
+  );
+  expect(drawSamples(failedGatedJobs, 100)).toEqual(
+    draws(failedGatedJobs, 100),
+  );
+  expect(drawSamples(unsuccessfulFullDepthJobs, 100)).toEqual(
+    draws(unsuccessfulFullDepthJobs, 100),
+  );
+  // A tuple draws what the same arbitraries passed to fc.property separately do.
+  const separate: unknown[] = [];
+  fc.assert(
+    fc.property(
+      fc.constantFrom(...gatedJobs),
+      fc.constantFrom("failure", "timed_out", ""),
+      fc.constantFrom(...Object.values(EVENT)),
+      (job, result, event) => {
+        separate.push([job, result, event]);
+      },
+    ),
+    propertyConfig({ numRuns: 100, seed }),
+  );
+  expect(separate).toEqual(drawSamples(failedGatedJobs, 100));
 });
 
 test("each folded service step follows its own dependency scope at PR depth", () => {
@@ -3089,11 +3498,21 @@ const queueOnlyJobs = v.parse(
 
 // Evaluate the actual predicate with a successful trusted plan. Unfamiliar
 // expression syntax fails closed instead of silently evading parity.
-type DepthContext = { event: Event; depth: SuiteDepth };
-const runsAtDepth = (condition: string, { event, depth }: DepthContext) => {
+type DepthContext = { event: Event; depth: SuiteDepth; heavyOnly?: boolean };
+const runsAtDepth = (
+  condition: string,
+  { event, depth, heavyOnly }: DepthContext,
+) => {
   const expression = condition
     .replaceAll(/\balways\(\)/gu, "true")
     .replaceAll(/\bcancelled\(\)/gu, "false")
+    .replaceAll(
+      /\binputs\.heavy_only\s*(==|!=)\s*(true|false)\b/gu,
+      (_, operator: string, expected: string) => {
+        const equal = (heavyOnly === true) === (expected === "true");
+        return String(operator === "==" ? equal : !equal);
+      },
+    )
     .replaceAll(
       /([\w.-]+)\s*(==|!=)\s*'([^']*)'/gu,
       (_, context: string, operator: string, expected: string) => {
@@ -3102,6 +3521,10 @@ const runsAtDepth = (condition: string, { event, depth }: DepthContext) => {
           actual = event;
         } else if (context === "needs.ci-plan.outputs.suite_depth") {
           actual = depth;
+        } else if (
+          context === "needs.ci-plan.outputs.heavy_web_build_required"
+        ) {
+          actual = String(heavyOnly === true);
         } else if (context.startsWith("needs.ci-plan.outputs.")) {
           actual = "true";
         } else if (/^needs\.[\w-]+\.result$/u.test(context)) {
@@ -3311,6 +3734,43 @@ test("parity rejects new queue-only jobs, ungated PR paths and stale exemptions"
   ).toEqual([`${name}: stale queue-only exception`]);
   expect(() =>
     runsAtDepth("contains(github.ref, 'main')", {
+      event: EVENT.pullRequest,
+      depth: SUITE_DEPTH.fast,
+    }),
+  ).toThrow("Unknown CI predicate syntax");
+});
+
+test("parity treats absent or false heavy-only input as ordinary event execution", () => {
+  for (const event of [
+    EVENT.pullRequest,
+    EVENT.mergeGroup,
+    EVENT.workflowDispatch,
+  ]) {
+    for (const heavyOnly of [undefined, false, true]) {
+      const context = {
+        event,
+        depth: SUITE_DEPTH.full,
+        ...(heavyOnly === undefined ? {} : { heavyOnly }),
+      };
+      expect(runsAtDepth("inputs.heavy_only == true", context)).toBe(
+        heavyOnly === true,
+      );
+      expect(runsAtDepth("inputs.heavy_only != true", context)).toBe(
+        heavyOnly !== true,
+      );
+      expect(
+        runsAtDepth(
+          "needs.ci-plan.outputs.heavy_web_build_required == 'true'",
+          context,
+        ),
+      ).toBe(heavyOnly === true);
+      expect(runsAtDepth(jobIf(ciJobs["heavy-web-build"]), context)).toBe(
+        heavyOnly === true,
+      );
+    }
+  }
+  expect(() =>
+    runsAtDepth("inputs.unknown == true", {
       event: EVENT.pullRequest,
       depth: SUITE_DEPTH.fast,
     }),

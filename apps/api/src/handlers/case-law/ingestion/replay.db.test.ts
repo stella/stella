@@ -40,6 +40,7 @@ import {
   absentDecisionTextFields,
 } from "@/api/lib/case-law/decision-text";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
 // The walk's boundary is the thing under test. Postgres stores `timestamptz`
@@ -310,6 +311,8 @@ type StubAdapterOptions = {
  */
 const stubAdapterWithoutReparse = (): SourceAdapter => ({
   key: ADAPTER_KEYS.EU_ECJ,
+  documentStage: "inline",
+  observeDocumentStage: async ({ fetchPage }) => await fetchPage(),
   sourceFields: { status: "declared", fields: {}, listSourceFields: () => [] },
   sourceSurfaces: { surfaces: {} },
   name: "replay stub",
@@ -323,6 +326,7 @@ const stubAdapterWithoutReparse = (): SourceAdapter => ({
     throw new Error("a replay must never fetch from the publisher");
   },
   reconciliation: {
+    revisionOf: (payload) => payload,
     firstSlice: "1970-01-01",
     sliceOf: () => "1970-01-01",
     nextSlice: () => null,
@@ -653,7 +657,7 @@ describe("replay of a source", () => {
         // re-run converges to); the second to something new.
         reparse: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: stored.caseNumber,
             court: stored.court,
             country: "EU",
@@ -665,7 +669,7 @@ describe("replay of a source", () => {
             rawHash:
               stored.caseNumber === "C-1/26" ? "stored-hash-1" : "new-hash-2",
             documentAst: EMPTY_AST,
-          },
+          }),
         }),
       }),
       scopedDb,
@@ -715,7 +719,7 @@ describe("replay of a source", () => {
       adapter: stubAdapter({
         reparse: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: "C-42/26",
             court: stored.court,
             country: "EU",
@@ -726,7 +730,7 @@ describe("replay of a source", () => {
             ),
             rawHash: "new-hash-41",
             documentAst: EMPTY_AST,
-          },
+          }),
         }),
       }),
       scopedDb,
@@ -767,7 +771,7 @@ describe("replay of a source", () => {
       adapter: stubAdapter({
         reparse: (stored) => ({
           type: "parsed",
-          result: {
+          result: plainTextIngestionResult({
             caseNumber: stored.caseNumber,
             court: stored.court,
             country: "EU",
@@ -778,7 +782,7 @@ describe("replay of a source", () => {
             ),
             rawHash: "stored-hash-42",
             documentAst: EMPTY_AST,
-          },
+          }),
         }),
       }),
       scopedDb,
@@ -877,7 +881,7 @@ describe("replay of a source", () => {
           reparsesToDocument(stored.caseNumber)
             ? {
                 type: "parsed",
-                result: {
+                result: plainTextIngestionResult({
                   caseNumber: stored.caseNumber,
                   court: stored.court,
                   country: "EU",
@@ -888,7 +892,7 @@ describe("replay of a source", () => {
                   ),
                   rawHash: `new-${stored.caseNumber}`,
                   documentAst: EMPTY_AST,
-                },
+                }),
               }
             : {
                 type: "rejected",

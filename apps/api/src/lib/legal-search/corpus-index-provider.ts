@@ -31,6 +31,10 @@ import {
   tokenizeCorpusFreeText,
 } from "@/api/lib/legal-search/corpus-query";
 import {
+  corpusQueryRankingMode,
+  corpusRankingCursorTarget,
+} from "@/api/lib/legal-search/corpus-ranking-policy";
+import {
   decodeCorpusSearchCursor,
   encodeCorpusSearchCursor,
   isStaleCorpusSearchCursor,
@@ -43,6 +47,7 @@ import { loadDocumentContext } from "@/api/lib/legal-search/document-context";
 import { resolveExpandedCorpusQuery } from "@/api/lib/legal-search/expansion";
 import {
   blendStableCitationAuthority,
+  type ScoredCandidate,
   stableBlendUpperBound,
 } from "@/api/lib/legal-search/rerank";
 import {
@@ -66,7 +71,7 @@ import { stripSearchHighlightMarkup } from "@/api/lib/search/highlight";
  * corpus index legal-search provider: two-stage retrieve-then-rerank.
  * corpus index returns BM25 lexical candidates (filtered by tag/fast fields
  * for split pruning); the API re-joins them to the precomputed
- * citation_authority in Postgres and blends via RRF — corpus index has no
+ * citation_authority in Postgres and adds its saturated signal; corpus index has no
  * in-engine function scoring, so the legal-domain ranking stays here.
  *
  * Case-law generations built at passage granularity return one hit per
@@ -158,6 +163,43 @@ export const rehydrateCorpusIndexProviderCandidates =
     ) => await rehydrateCorpusIndexProviderCandidatesQuery(tx, options),
   );
 
+const rankCorpusIndexProviderCandidates = async (
+  generation: string,
+  candidates: readonly ScoredCandidate[],
+) => {
+  const ids = candidates.map((candidate) =>
+    toSafeId<"caseLawDecision">(candidate.id),
+  );
+  const rows =
+    ids.length === 0
+      ? []
+      : await caseLawPublicReadDb(
+          async (tx) =>
+            await rehydrateCorpusIndexProviderCandidates(tx, {
+              generation,
+              ids,
+            }),
+        );
+
+  // Keyed by plain string id (candidate ids from corpus index are strings).
+  const displayById = new Map(rows.map((row) => [String(row.id), row]));
+  const authorityById = new Map(
+    rows.map((row) => [String(row.id), row.citationAuthority]),
+  );
+
+  // Drop candidates missing from Postgres (index/DB drift) so we never
+  // surface a hit we cannot render.
+  return {
+    context: { displayById },
+    ranked: blendStableCitationAuthority({
+      candidates: candidates.filter((candidate) =>
+        displayById.has(candidate.id),
+      ),
+      authorityById,
+    }),
+  };
+};
+
 const searchResult = async (
   query: LegalSearchQuery,
   observer: RegistryRequestObservation,
@@ -195,7 +237,16 @@ const searchResult = async (
       }),
     );
   }
-  const { serving, route, contract, cursorTarget } = target.value;
+  const { serving, route, contract } = target.value;
+  const rankingMode = corpusQueryRankingMode({
+    configuredMode: envBase.CORPUS_INDEX_RANKING_MODE,
+    sort: "relevance",
+    textTokenCount: tokenizeCorpusFreeText(query.query).length,
+  });
+  const cursorTarget = corpusRankingCursorTarget(
+    target.value.cursorTarget,
+    rankingMode,
+  );
   const generation = serving.generation;
 
   // Scoped query → that jurisdiction's index, plus a jurisdiction clause when
@@ -278,6 +329,12 @@ const searchResult = async (
     // owns the reader-chosen orders.
     order: RELEVANCE_ORDER,
     parsedCursor,
+    rankingMode,
+    fallbackScanTransport: { type: "native" },
+    scanTransport:
+      rankingMode === "bm25-ratio"
+        ? { type: "scored", fields: ["document_id"] }
+        : { type: "native" },
     snippetFields: ["text"],
     extractId: (hit) => {
       const id = hit["document_id"];
@@ -302,39 +359,8 @@ const searchResult = async (
     // no unseen candidate could out-blend the page cursor. Saturated
     // authority is bounded by 1, so the bound reads nothing from the corpus.
     unseenScoreUpperBound: stableBlendUpperBound,
-    rankCandidates: async (candidates) => {
-      const ids = candidates.map((candidate) =>
-        toSafeId<"caseLawDecision">(candidate.id),
-      );
-      const rows =
-        ids.length === 0
-          ? []
-          : await caseLawPublicReadDb(
-              async (tx) =>
-                await rehydrateCorpusIndexProviderCandidates(tx, {
-                  generation,
-                  ids,
-                }),
-            );
-
-      // Keyed by plain string id (candidate ids from corpus index are strings).
-      const displayById = new Map(rows.map((row) => [String(row.id), row]));
-      const authorityById = new Map(
-        rows.map((row) => [String(row.id), row.citationAuthority]),
-      );
-
-      // Drop candidates missing from Postgres (index/DB drift) so we never
-      // surface a hit we cannot render.
-      return {
-        context: { displayById },
-        ranked: blendStableCitationAuthority({
-          candidates: candidates.filter((candidate) =>
-            displayById.has(candidate.id),
-          ),
-          authorityById,
-        }),
-      };
-    },
+    rankCandidates: async (candidates) =>
+      await rankCorpusIndexProviderCandidates(generation, candidates),
   });
 
   const {

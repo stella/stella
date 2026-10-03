@@ -4,106 +4,16 @@ import {
   pgIdentityFields,
   shadowGradeFields,
 } from "@/api/lib/observability/failure";
-import {
-  MAX_EVIDENCE_DEPTH,
-  readEvidence,
-  sqlStateFrom,
-} from "@/api/lib/observability/failure-evidence";
+import { readEvidence } from "@/api/lib/observability/failure-evidence";
 
 // The driver codes are owned by the failure grader, which reads them for every
 // sink; they are re-exported here for the retry and control-flow callers.
 export { PG_DRIVER_ERROR };
 
-const MAX_CAUSE_DEPTH = MAX_EVIDENCE_DEPTH;
-
-const readProperty = (value: object, key: string): unknown => {
-  try {
-    return Reflect.get(value, key);
-  } catch {
-    return undefined;
-  }
-};
-
-const readNonEmptyString = (value: object, key: string): string | undefined => {
-  const raw = readProperty(value, key);
-  return typeof raw === "string" && raw !== "" ? raw : undefined;
-};
-
-// The snapshot's SQLSTATE rule, so a code the observability fields can see is
-// one these predicates can match.
-const sqlStateOf = (node: object): string | undefined =>
-  sqlStateFrom({
-    syscall: readProperty(node, "syscall"),
-    errno: readProperty(node, "errno"),
-    code: readProperty(node, "code"),
-  });
-
-/**
- * Every node in `error`'s `.cause` chain, outermost first.
- *
- * Bounded by `MAX_CAUSE_DEPTH` and guarded by `seen`: a self-referential
- * `cause` is an infinite loop on a runtime with proper tail calls, not a
- * fast throw, so the cycle guard is load-bearing rather than defensive.
- * Never throws: property access is fully guarded.
- */
-const causeChain = (error: unknown): object[] => {
-  const nodes: object[] = [];
-  const seen = new WeakSet<object>();
-  let current: unknown = error;
-  let depth = 0;
-
-  while (
-    current !== null &&
-    typeof current === "object" &&
-    depth < MAX_CAUSE_DEPTH &&
-    !seen.has(current)
-  ) {
-    seen.add(current);
-    nodes.push(current);
-    current = readProperty(current, "cause");
-    depth += 1;
-  }
-
-  return nodes;
-};
-
-type PgErrorNode = { node: object; sqlState: string };
-
-/**
- * Every node in `error`'s `.cause` chain, outermost first, that is shaped like
- * a Postgres driver error.
- *
- * Matching walks the chain rather than testing for a `DrizzleQueryError`
- * wrapper because only failures raised inside prepared-query execution are
- * wrapped. The transaction lifecycle runs through the client's own `begin`,
- * so a failure while acquiring a connection or running `BEGIN`, `COMMIT`, or
- * `ROLLBACK` arrives as the bare driver error. `COMMIT` is where Postgres
- * reports deferred constraint violations and serialization failures, so a
- * reader gated on the wrapper misses exactly the codes worth acting on.
- *
- * Every helper below reads the chain through this one walk, so a SQLSTATE the
- * observability fields can see is also one the predicates can match. Never
- * throws: property access is fully guarded.
- */
-const pgErrorNodes = (error: unknown): PgErrorNode[] => {
-  const nodes: PgErrorNode[] = [];
-  for (const node of causeChain(error)) {
-    const sqlState = sqlStateOf(node);
-    if (sqlState !== undefined) {
-      nodes.push({ node, sqlState });
-    }
-  }
-  return nodes;
-};
-
-/**
- * The SQLSTATE of the outermost Postgres driver error in `error`'s cause
- * chain, or undefined when the chain holds none.
- *
- * Common codes: see `PG_ERROR` below.
- */
+/** The outermost SQLSTATE in the shared, read-once failure snapshot. */
 export const getPgErrorCode = (error: unknown): string | undefined =>
-  pgErrorNodes(error).at(0)?.sqlState;
+  readEvidence(error).nodes.find((node) => node.sqlState !== undefined)
+    ?.sqlState;
 
 /** Bun's safe Postgres driver code, including connection failures without SQLSTATE. */
 export const getPgDriverErrorCode = (error: unknown): string | undefined =>
@@ -124,10 +34,9 @@ export const isPgConstraintError = (
   code: string,
   constraint: string,
 ): boolean =>
-  pgErrorNodes(error).some(
-    ({ node, sqlState }) =>
-      sqlState === code &&
-      readNonEmptyString(node, "constraint") === constraint,
+  readEvidence(error).nodes.some(
+    (node) =>
+      node.sqlState === code && node.pgIdentifiers.constraint === constraint,
   );
 
 const CONNECTION_LIFECYCLE_CODES: ReadonlySet<string> = new Set(
@@ -154,21 +63,16 @@ const CONNECTION_LIFECYCLE_SQL_STATES: ReadonlySet<string> = new Set(
  * when the connection failed below the protocol, and the server's SQLSTATE
  * when the backend answered and declined to serve it. Reading only `code`
  * misses the latter entirely, since the driver files every server error under
- * the one generic `code` and puts the SQLSTATE in `errno`. `sqlStateOf` is the
- * same reader `pgErrorFields` uses, so a SQLSTATE the observability fields can
- * see is one this predicate can match.
+ * the one generic `code` and puts the SQLSTATE in `errno`. This reads the
+ * same snapshot as `pgErrorFields`, preserving the identity seen by telemetry.
  */
 export const isTransientPgConnectionError = (error: unknown): boolean =>
-  causeChain(error).some((node) => {
-    const code = readNonEmptyString(node, "code");
-    if (code !== undefined && CONNECTION_LIFECYCLE_CODES.has(code)) {
-      return true;
-    }
-    const sqlState = sqlStateOf(node);
-    return (
-      sqlState !== undefined && CONNECTION_LIFECYCLE_SQL_STATES.has(sqlState)
-    );
-  });
+  readEvidence(error).nodes.some(
+    (node) =>
+      (node.code !== undefined && CONNECTION_LIFECYCLE_CODES.has(node.code)) ||
+      (node.sqlState !== undefined &&
+        CONNECTION_LIFECYCLE_SQL_STATES.has(node.sqlState)),
+  );
 
 export const PG_ERROR = {
   DEADLOCK_DETECTED: "40P01",

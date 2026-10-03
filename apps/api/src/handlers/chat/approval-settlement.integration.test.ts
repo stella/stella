@@ -1,8 +1,8 @@
 import { afterAll, beforeAll, describe, expect, test } from "bun:test";
-import { inArray } from "drizzle-orm";
+import { eq, inArray } from "drizzle-orm";
 
 import type { SafeDb, ScopedDb } from "@/api/db/safe-db";
-import { chatThreads } from "@/api/db/schema";
+import { chatThreadCompactions, chatThreads } from "@/api/db/schema";
 import { createScopedDb } from "@/api/db/scoped";
 import type { ChatPart } from "@/api/handlers/chat/types";
 import { toSafeId } from "@/api/lib/branded-types";
@@ -14,6 +14,7 @@ import {
   pendingApprovalCallOf,
 } from "@/api/tests/helpers/chat-approval-harness";
 import type { ChatHarness } from "@/api/tests/helpers/chat-approval-harness";
+import { seedActiveChatCompaction } from "@/api/tests/helpers/chat-compaction-checkpoint";
 import type { ScriptedTurn } from "@/api/tests/helpers/chat-round-trip";
 import type { WebChatClient } from "@/api/tests/helpers/chat-web-client";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -252,6 +253,88 @@ describe("an approved server tool's result", () => {
       expect(harness.executions).toEqual(["NDA", "Lease"]);
     } finally {
       await harness.close();
+    }
+  });
+
+  test("reaches a model that still sees the thread's compacted summary", async () => {
+    // A long thread's earlier exchanges live only in its active summary. The
+    // continuation stores its owning assistant message, which lies after the
+    // summary's cursor, so the summary must survive that write: the resumed
+    // run and the thread's next turn both read it.
+    const summarizedFact = "The user's vault code is ORCHID-7 (summarized).";
+    const thread = await openThread();
+    const { client, harness, threadId } = thread;
+    try {
+      harness.script(threadId, [
+        { finishReason: "stop", text: "Noted.", type: "text" },
+      ]);
+      await client.sendUserMessage(
+        Bun.randomUUIDv7(),
+        "Remember my vault code ORCHID-7.",
+      );
+      await harness.expectSoundWebClient({ client, threadId });
+      harness.script(threadId, [
+        {
+          arguments: approvalToolArguments("NDA"),
+          toolCallId: "call-NDA",
+          toolName: APPROVAL_TOOL_NAME,
+          type: "tool-call",
+        },
+      ]);
+      await client.sendUserMessage(Bun.randomUUIDv7(), "Delete the NDA");
+      await harness.expectSoundWebClient({ client, threadId });
+
+      const [rememberRequest, rememberAnswer, deleteRequest] =
+        await harness.readThreadMessages(threadId);
+      if (!rememberRequest || !rememberAnswer || !deleteRequest) {
+        throw new Error("seed precondition failed: three stored messages");
+      }
+      const checkpointId = await seedActiveChatCompaction({
+        firstKeptMessageId: toSafeId<"chatMessage">(deleteRequest.id),
+        firstSummarizedMessageId: toSafeId<"chatMessage">(rememberRequest.id),
+        lastSummarizedMessageId: toSafeId<"chatMessage">(rememberAnswer.id),
+        summarizedMessageCount: 2,
+        summaryMarkdown: `## Critical Context\n- ${summarizedFact}`,
+        testDb,
+        threadId,
+      });
+      harness.compacted(threadId);
+      const checkpointStatus = async () =>
+        (
+          await testDb
+            .select({ status: chatThreadCompactions.status })
+            .from(chatThreadCompactions)
+            .where(eq(chatThreadCompactions.id, checkpointId))
+        ).at(0)?.status;
+      const latestPrompt = () => harness.promptsOf(threadId).at(-1) ?? [];
+      const occurrences = (prompt: readonly string[], text: string) =>
+        prompt.filter((message) => message.includes(text)).length;
+
+      harness.script(threadId, [
+        { finishReason: "stop", text: "Deleted.", type: "text" },
+      ]);
+      await client.approve("call-NDA", true);
+      await harness.expectSoundWebClient({ client, threadId });
+
+      expect(harness.executions).toEqual(["NDA"]);
+      const continuationPrompt = latestPrompt();
+      expect(occurrences(continuationPrompt, summarizedFact)).toBe(1);
+      // The summarized exchange is represented by the summary alone.
+      expect(
+        occurrences(continuationPrompt, "Remember my vault code ORCHID-7."),
+      ).toBe(0);
+      expect(occurrences(continuationPrompt, "Delete the NDA")).toBe(1);
+      expect(await checkpointStatus()).toBe("active");
+
+      harness.script(threadId, [
+        { finishReason: "stop", text: "It is ORCHID-7.", type: "text" },
+      ]);
+      await client.sendUserMessage(Bun.randomUUIDv7(), "What is my code?");
+      await harness.expectSoundWebClient({ client, threadId });
+      expect(occurrences(latestPrompt(), summarizedFact)).toBe(1);
+      expect(await checkpointStatus()).toBe("active");
+    } finally {
+      await closeThread(thread);
     }
   });
 

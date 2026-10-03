@@ -234,8 +234,8 @@ describe("deferred document queue tiers", () => {
     ]) {
       const { sql } = compileCondition(predicate);
 
-      expect(sql).toContain(`"fulltext" is null`);
-      expect(sql).toContain(`"document_url" is not null`);
+      expect(sql.toLowerCase()).toContain(`"fulltext" is null`);
+      expect(sql.toLowerCase()).toContain(`"document_url" is not null`);
     }
   });
 
