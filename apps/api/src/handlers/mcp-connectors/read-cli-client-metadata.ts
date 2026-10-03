@@ -1,5 +1,8 @@
 import { Result } from "better-result";
 import { t } from "elysia";
+import type { Static } from "elysia";
+
+import type { CliClientMetadataDocument } from "@stll/cli/client-metadata-document";
 
 import { createSafePublicHandler } from "@/api/lib/api-handlers";
 import { getCliClientMetadataDocument } from "@/api/lib/auth/oauth-own-client-documents";
@@ -23,6 +26,17 @@ const cliClientMetadataResponseSchema = t.Object({
   token_endpoint_auth_method: t.Literal("none"),
 });
 
+// The schema's static type takes mutable arrays; the shared document is
+// readonly.
+const toResponse = (
+  document: CliClientMetadataDocument,
+): Static<typeof cliClientMetadataResponseSchema> => ({
+  ...document,
+  grant_types: [...document.grant_types],
+  redirect_uris: [...document.redirect_uris],
+  response_types: [...document.response_types],
+});
+
 const readCliClientMetadata = createSafePublicHandler(
   {
     cache: { kind: "public", maxAge: 3600 },
@@ -38,7 +52,7 @@ const readCliClientMetadata = createSafePublicHandler(
           : Result.err(new HandlerError({ status: 404, message: "Not found" })),
       ),
     );
-    return Result.ok(document);
+    return Result.ok(toResponse(document));
   },
 );
 
