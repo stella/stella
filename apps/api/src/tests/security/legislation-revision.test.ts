@@ -66,7 +66,7 @@ test("revision writers reject separately assembled metadata and body", async () 
       return plan;
     },
   });
-  expect(writeInputs).toEqual([second.values(sourceRaw).fulltext]);
+  expect(writeInputs).toEqual([second.values(sourceRaw).fulltext ?? ""]);
 });
 
 test("caller mutations cannot change a captured revision", () => {
