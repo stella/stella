@@ -736,7 +736,7 @@ const oversizedUnicode = fc
   })
   .map((atoms) => atoms.join("").repeat(6000));
 
-const oversizedUnicodeProperty = (provider: "pg-fts" | "corpus-index") =>
+const oversizedDisplayFieldProperty = (provider: "pg-fts" | "corpus-index") =>
   fc.asyncProperty(oversizedUnicode, async (text) => {
     expect(Buffer.byteLength(text, "utf-8")).toBeGreaterThan(
       LIMITS.legislationSearchTextBytes.title,
@@ -747,11 +747,11 @@ const oversizedUnicodeProperty = (provider: "pg-fts" | "corpus-index") =>
     const fulltext = `bytecapfixture ${"漢".repeat(250)} `.repeat(30);
     if (provider === "pg-fts") {
       const raw = await db.execute(sql`SELECT ts_headline(
-      'public.stella_unaccent'::regconfig,
-      ${fulltext},
-      plainto_tsquery('simple', 'bytecapfixture'),
-      ${TS_HEADLINE_CONFIG}
-    ) AS headline`);
+          'public.stella_unaccent'::regconfig,
+          ${fulltext},
+          plainto_tsquery('simple', 'bytecapfixture'),
+          ${TS_HEADLINE_CONFIG}
+        ) AS headline`);
       const headline = raw.rows.at(0)?.["headline"];
       if (typeof headline !== "string") {
         panic("byte-cap fixture did not yield a Postgres headline");
@@ -835,7 +835,7 @@ const oversizedUnicodeProperty = (provider: "pg-fts" | "corpus-index") =>
 test("legislation pg-fts search bounds oversized Unicode display fields", async () => {
   await assertProperty(
     "legislation pg-fts search bounds oversized Unicode display fields",
-    oversizedUnicodeProperty("pg-fts"),
+    oversizedDisplayFieldProperty("pg-fts"),
     { numRuns: 12 },
   );
 });
@@ -843,7 +843,7 @@ test("legislation pg-fts search bounds oversized Unicode display fields", async 
 test("legislation corpus-index search bounds oversized Unicode display fields", async () => {
   await assertProperty(
     "legislation corpus-index search bounds oversized Unicode display fields",
-    oversizedUnicodeProperty("corpus-index"),
+    oversizedDisplayFieldProperty("corpus-index"),
     { numRuns: 12 },
   );
 });

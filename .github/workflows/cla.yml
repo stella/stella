@@ -366,8 +366,9 @@ jobs:
                 const page = result.repository?.mergeQueue?.entries;
                 if (!Array.isArray(page?.nodes) || typeof page.pageInfo?.hasNextPage !== "boolean") fail("CLA_INVALID_QUEUE_RESPONSE");
                 for (const entry of page.nodes) {
-                  // Entries not yet built have no commits and cannot belong to this head.
-                  if (entry.headCommit === null && entry.baseCommit === null) continue;
+                  // Entries without both commits (not built yet, or unmergeable after a
+                  // rebuild) cannot link a chain; a group that needs one fails as incomplete.
+                  if (entry.headCommit === null || entry.baseCommit === null) continue;
                   if (!validSha(entry.headCommit?.oid) || !validSha(entry.baseCommit?.oid) || !positiveInteger(entry.pullRequest?.number)) fail("CLA_INVALID_QUEUE_ENTRY");
                   if (entries.has(entry.headCommit.oid)) fail("CLA_AMBIGUOUS_GROUP_CHAIN");
                   entries.set(entry.headCommit.oid, entry);

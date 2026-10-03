@@ -33,7 +33,7 @@ describe("exportAuditLogs", () => {
                       resourceId: "thread_test",
                       changes: {
                         title: { old: "Earlier title", new: "Later title" },
-                        model: { old: "model_a", new: "model_b" },
+                        chatModel: { old: "model_a", new: "model_b" },
                       },
                     },
                   ],
@@ -73,7 +73,7 @@ describe("exportAuditLogs", () => {
 
     expect(result).toBe(
       "Time,User Name,User Email,Action,Resource Type,Resource ID,Changes\n" +
-        '2026-07-16T12:00:00.000Z,Test User,test@example.com,update,chat_thread,thread_test,"{""model"":{""old"":""model_a"",""new"":""model_b""}}"',
+        '2026-07-16T12:00:00.000Z,Test User,test@example.com,update,chat_thread,thread_test,"{""chatModel"":{""old"":""model_a"",""new"":""model_b""}}"',
     );
     expect(result).not.toContain("Earlier title");
     expect(result).not.toContain("Later title");
