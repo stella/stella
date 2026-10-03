@@ -1,5 +1,5 @@
 // parser-output-unchanged: immediate gate checks bound connection and reservation work; response parsing and stored output are unchanged.
-import { TaggedError } from "better-result";
+import { Result, TaggedError } from "better-result";
 
 import { Temporal } from "@stll/time";
 
@@ -13,7 +13,7 @@ const TRY_RESERVE_SLOT_SCRIPT = `
 local clock = redis.call("TIME")
 local now = tonumber(clock[1]) * 1000 + math.floor(tonumber(clock[2]) / 1000)
 local reserved = tonumber(redis.call("GET", KEYS[1])) or now
-local cooldown = tonumber(redis.call("GET", KEYS[2])) or now
+local cooldown = KEYS[2] and tonumber(redis.call("GET", KEYS[2])) or now
 if math.max(reserved, cooldown) > now then return 0 end
 local interval = tonumber(ARGV[1])
 redis.call("PSETEX", KEYS[1], interval * 2, tostring(now + interval))
@@ -171,6 +171,7 @@ const deployedGateClient = connectedGateClient(async () => {
 
 const defaultDependencies = (
   intervalMs: number,
+  cooldown: PublisherRequestGateConfig["cooldown"],
 ): PublisherRequestGateDependencies => {
   let localNextRequestAt = 0;
   let localCooldownUntil = 0;
@@ -192,14 +193,15 @@ const defaultDependencies = (
           ? Math.max(0, localCooldownUntil - now)
           : Math.max(now, localCooldownUntil);
       }
+      const cooldownUntil = cooldown === "shared" ? localCooldownUntil : 0;
       if (args[0] === TRY_RESERVE_SLOT_SCRIPT) {
-        if (Math.max(localNextRequestAt, localCooldownUntil) > now) {
+        if (Math.max(localNextRequestAt, cooldownUntil) > now) {
           return 0;
         }
         localNextRequestAt = now + intervalMs;
         return 1;
       }
-      const slot = Math.max(now, localNextRequestAt, localCooldownUntil);
+      const slot = Math.max(now, localNextRequestAt, cooldownUntil);
       localNextRequestAt = slot + intervalMs;
       return slot - now;
     },
@@ -235,9 +237,17 @@ class PublisherGateReplyError extends TaggedError("PublisherGateReplyError")<{
   message: string;
 }> {}
 
+export class PublisherPacingStopped extends TaggedError(
+  "PublisherPacingStopped",
+)<{
+  message: string;
+  status: "pacing-deferred" | "pacing-unavailable";
+  cause?: unknown;
+}> {}
+
 export const createPublisherRequestSlot = (
   { intervalMs, key: slot, publisher, cooldown }: PublisherRequestGateConfig,
-  dependencies = defaultDependencies(intervalMs),
+  dependencies = defaultDependencies(intervalMs, cooldown),
 ) => {
   const { key, cooldownKey } = publisherGateKeys(slot);
   const commandWait = async (
@@ -292,13 +302,39 @@ export const createPublisherRequestSlot = (
       await dependencies.sleep(remaining, signal);
     }
   };
+  const tryReserve = async (signal?: AbortSignal): Promise<boolean> => {
+    const keys = cooldown === "shared" ? [key, cooldownKey] : [key];
+    const reply = await commandWait(
+      [
+        TRY_RESERVE_SLOT_SCRIPT,
+        String(keys.length),
+        ...keys,
+        String(intervalMs),
+      ],
+      { signal, replies: [0, 1] },
+    );
+    return reply === 1;
+  };
   return Object.assign(reserve, {
-    tryReserve: async (signal?: AbortSignal): Promise<boolean> => {
-      const reply = await commandWait(
-        [TRY_RESERVE_SLOT_SCRIPT, "2", key, cooldownKey, String(intervalMs)],
-        { signal, replies: [0, 1] },
-      );
-      return reply === 1;
+    tryReserve,
+    reserveImmediately: async (signal?: AbortSignal): Promise<void> => {
+      const reserved = await Result.tryPromise({
+        try: async () => await tryReserve(signal),
+        catch: (error) => error,
+      });
+      if (Result.isError(reserved)) {
+        throw new PublisherPacingStopped({
+          message: "Publisher pacing unavailable",
+          status: "pacing-unavailable",
+          cause: reserved.error,
+        });
+      }
+      if (!reserved.value) {
+        throw new PublisherPacingStopped({
+          message: "Publisher pacing deferred",
+          status: "pacing-deferred",
+        });
+      }
     },
     readCooldown: async (): Promise<number | null> => {
       const deadline = await commandWait([

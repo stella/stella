@@ -16,13 +16,14 @@
  * requests rather than a total.
  */
 
-import { panic, Result, TaggedError } from "better-result";
+import { panic, Result } from "better-result";
 import { AsyncLocalStorage } from "node:async_hooks";
 
 import { DAY_IN_MS } from "@stll/time";
 
 import {
   createPublisherRequestSlot,
+  PublisherPacingStopped,
   publisherGateReserves,
   type PublisherRequestGateDependencies,
 } from "@/api/handlers/case-law/ingestion/adapters/publisher-request-gate";
@@ -367,13 +368,7 @@ type WithImmediatePublisherSlotOptions<T> = {
   dependencies?: PublisherRequestGateDependencies;
 };
 
-export type PublisherPacingOutcome = "pacing-deferred" | "pacing-unavailable";
-
-class PublisherPacingStopped extends TaggedError("PublisherPacingStopped")<{
-  message: string;
-  status: PublisherPacingOutcome;
-  cause?: unknown;
-}> {}
+export type PublisherPacingOutcome = PublisherPacingStopped["status"];
 
 export type ImmediatePublisherSlotResult<T> =
   | { status: "completed"; value: T }
@@ -458,48 +453,27 @@ export const withPublisherRequestRateLimit = async <T>({
 export const reservePublisherSlot = async (
   adapterKey: AdapterKey,
   signal?: AbortSignal,
-): Promise<Result<void, PublisherPacingStopped>> =>
+): Promise<void> =>
   await reservePublisherGateSlot(ADAPTER_PUBLISHER_GATES[adapterKey], signal);
 
 export const reservePublisherGateSlot = async (
   gateId: PublisherGateId,
   signal?: AbortSignal,
-): Promise<Result<void, PublisherPacingStopped>> => {
+): Promise<void> => {
   const immediate = immediateRequestGate.getStore();
   if (immediate?.gateId === gateId) {
-    const reserved = await Result.tryPromise({
-      try: async () => await immediate.slot.tryReserve(signal),
-      catch: (error) => error,
-    });
-    if (Result.isError(reserved)) {
-      return Result.err(
-        new PublisherPacingStopped({
-          message: "Publisher pacing unavailable",
-          status: "pacing-unavailable",
-          cause: reserved.error,
-        }),
-      );
-    }
-    if (!reserved.value) {
-      return Result.err(
-        new PublisherPacingStopped({
-          message: "Publisher pacing deferred",
-          status: "pacing-deferred",
-        }),
-      );
-    }
-    return Result.ok();
+    await immediate.slot.reserveImmediately(signal);
+    return;
   }
   const runLimit = runPublisherLimit.getStore();
   if (runLimit?.gateId === gateId) {
     await runLimit.gateSlot(signal);
-    return Result.ok();
+    return;
   }
   if (!publisherGateReserves()) {
-    return Result.ok();
+    return;
   }
   await getPublisherGateSlot(gateId)(signal);
-  return Result.ok();
 };
 
 export const deferPublisherGate = async (

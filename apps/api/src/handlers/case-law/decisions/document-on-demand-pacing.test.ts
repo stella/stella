@@ -1,4 +1,4 @@
-import { panic, Result } from "better-result";
+import { panic } from "better-result";
 import { expect, jest, mock, test } from "bun:test";
 import fc from "fast-check";
 
@@ -68,10 +68,7 @@ const pacedDeps = ({
       }),
     fetchDocument: async (pending, adapterKey) => {
       // The fetch boundary takes the immediate shared reservation.
-      const reservation = await reservePublisherSlot(adapterKey);
-      if (Result.isError(reservation)) {
-        throw reservation.error;
-      }
+      await reservePublisherSlot(adapterKey);
       fetched.push(pending.id);
       return { status: "claimed" };
     },
@@ -178,19 +175,17 @@ for (const mode of ["throws", "rejects", "pending", "connecting"] as const) {
         await withImmediatePublisherSlot({
           adapterKey,
           dependencies: {
-            redis: () =>
+            redis: async () =>
               mode === "connecting"
                 ? new Promise(() => {})
                 : {
-                    send: () => {
+                    send: async () => {
                       gateCalls += 1;
                       switch (mode) {
                         case "throws":
                           throw new Error("Budget unavailable");
                         case "rejects":
-                          return Promise.reject(
-                            new Error("Budget unavailable"),
-                          );
+                          throw new Error("Budget unavailable");
                         case "pending":
                           return new Promise(() => {});
                         default:

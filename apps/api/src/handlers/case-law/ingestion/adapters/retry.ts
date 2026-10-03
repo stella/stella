@@ -93,12 +93,10 @@ const fetchPublisherRequest = async (
     isRateLimitRedirect: _isRateLimitRedirect,
     ...requestInit
   } = init;
-  const reservation =
-    publisherGate === undefined
-      ? await reservePublisherSlot(adapterKey, requestInit.signal)
-      : await reservePublisherGateSlot(publisherGate, requestInit.signal);
-  if (Result.isError(reservation)) {
-    throw reservation.error;
+  if (publisherGate === undefined) {
+    await reservePublisherSlot(adapterKey, requestInit.signal);
+  } else {
+    await reservePublisherGateSlot(publisherGate, requestInit.signal);
   }
   // Each publisher-backoff attempt re-enters here, so every attempt is gated and observed.
   const request = async () =>

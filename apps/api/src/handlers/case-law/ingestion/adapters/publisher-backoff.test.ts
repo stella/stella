@@ -264,7 +264,7 @@ for (const reply of [-1, 2, "invalid"]) {
       redis: () => ({ send: () => reply }),
       sleep: async () => {},
     });
-    await expect(slot.tryReserve()).rejects.toThrow(
+    expect(slot.tryReserve()).rejects.toThrow(
       "publisher gate returned an invalid wait",
     );
   });
@@ -344,4 +344,37 @@ test("preparation without an outbound request leaves the shared gate available",
       clock.dependencies,
     ).tryReserve(),
   ).toBe(true);
+});
+
+test("non-shared cooldown permits immediate and queued reservations", async () => {
+  const clock = createGateClock();
+  const { cooldown: _cooldown, ...config } = CONFIG;
+  const slot = createPublisherRequestSlot(config, clock.dependencies);
+  await slot.defer(CONFIG.intervalMs * 2);
+  expect(await slot.readCooldown()).toBe(CONFIG.intervalMs * 2);
+  expect(await slot.tryReserve()).toBe(true);
+  clock.advanceTo(CONFIG.intervalMs);
+  await slot();
+  expect(clock.sleeps).toEqual([0]);
+});
+
+for (const cooldown of ["shared", "independent"] as const) {
+  test(`the local gate honors ${cooldown} cooldown selection`, async () => {
+    const { cooldown: _cooldown, ...config } = CONFIG;
+    const slot = createPublisherRequestSlot(
+      cooldown === "shared" ? CONFIG : config,
+    );
+    await slot.defer(60_000);
+    expect(await slot.readCooldown()).not.toBeNull();
+    expect(await slot.tryReserve()).toBe(cooldown === "independent");
+  });
+}
+
+test("the local queued gate honors independent cooldown selection", async () => {
+  const { cooldown: _cooldown, ...config } = CONFIG;
+  const slot = createPublisherRequestSlot(config);
+  await slot.defer(60_000);
+  expect(await slot.readCooldown()).not.toBeNull();
+  await slot();
+  expect(await slot.tryReserve()).toBe(false);
 });
