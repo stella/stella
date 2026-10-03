@@ -167,6 +167,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
   ]),
+  fixtureRuleOverride("no-raw-deployment-feature-read.fixture.ts", [
+    "no-raw-deployment-feature-read/no-raw-deployment-feature-read",
+  ]),
   fixtureRuleOverride("docs-source-policy.fixture.ts", [
     "docs-source-policy/docs-source-policy",
   ]),
@@ -1283,6 +1286,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
+    "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
     "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
@@ -3691,6 +3695,47 @@ export default defineConfig({
       rules: {
         "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads":
           "error",
+      },
+    },
+    {
+      // Deployment feature flags are read through `isDeploymentFeatureEnabled`
+      // so every surface shares one local-development policy per flag.
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          {
+            allowedReads: [
+              // Scheduled governed-workflow work follows the raw flag: local
+              // development opens the work-obligation routes, not background
+              // jobs that write obligations on a timer.
+              {
+                file: "apps/api/src/lib/scheduler/jobs.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              // Unresolved: agent billing tools open FEATURE_USAGE in local
+              // development while the usage routes and the hosted usage
+              // provider follow the raw flag. Kept raw until one policy is
+              // chosen; production reads the flag either way.
+              {
+                file: "apps/api/src/handlers/usage/routes.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+              {
+                file: "apps/api/src/lib/hosted-usage-provider/config.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+            ],
+          },
+        ],
       },
     },
     {
