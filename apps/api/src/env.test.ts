@@ -155,6 +155,21 @@ describe("API environment", () => {
     }
   });
 
+  test("uses configured credentials in strict mode and examples in local development", () => {
+    const example = {
+      ...baseEnv,
+      BETTER_AUTH_SECRET: "your-secret-at-least-32-chars-long",
+    };
+    const strict = bootApiEnvironment(example);
+    expect(strict.exitCode).not.toBe(0);
+    expect(strict.stderr.toString()).toContain(
+      "BETTER_AUTH_SECRET must use configured values",
+    );
+    expect(strict.stderr.toString()).not.toContain(example.BETTER_AUTH_SECRET);
+    const local = bootApiEnvironment({ ...example, ...LOCAL_DEV_ENV });
+    expect(local.exitCode, local.stderr.toString()).toBe(0);
+  });
+
   test("preserves structured stdout when loading the environment", () => {
     const result = spawnApiEnvironment(
       baseEnv,
