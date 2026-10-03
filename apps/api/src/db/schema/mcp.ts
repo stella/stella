@@ -123,12 +123,8 @@ export const MCP_AUTHORIZATION_REVIEW_STATUSES = [
 export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
   "mcp_connector_authorization_reviews",
   {
-    organizationId: safeOrganizationId("organization_id")
-      .notNull()
-      .references(() => organization.id, { onDelete: "cascade" }),
-    connectorId: safeUuid<"mcpConnector">("connector_id")
-      .notNull()
-      .references(() => mcpConnectors.id, { onDelete: "cascade" }),
+    organizationId: safeOrganizationId("organization_id").notNull(),
+    connectorId: safeUuid<"mcpConnector">("connector_id").notNull(),
     observedIssuer: p.text("observed_issuer"),
     approvedIssuer: p.text("approved_issuer"),
     observedEndpointOrigins: jsonb("observed_endpoint_origins").$type<
@@ -147,7 +143,24 @@ export const mcpConnectorAuthorizationReviews = p.pgTable.withRLS(
       .$onUpdate(() => new Date()),
   },
   (table) => [
-    p.primaryKey({ columns: [table.organizationId, table.connectorId] }),
+    p.primaryKey({
+      columns: [table.organizationId, table.connectorId],
+      name: "mcp_authorization_reviews_pk",
+    }),
+    p
+      .foreignKey({
+        columns: [table.organizationId],
+        foreignColumns: [organization.id],
+        name: "mcp_authorization_reviews_organization_fk",
+      })
+      .onDelete("cascade"),
+    p
+      .foreignKey({
+        columns: [table.connectorId],
+        foreignColumns: [mcpConnectors.id],
+        name: "mcp_authorization_reviews_connector_fk",
+      })
+      .onDelete("cascade"),
     p.check(
       "mcp_authorization_review_status_check",
       sql`${table.status} IN (${sql.join(

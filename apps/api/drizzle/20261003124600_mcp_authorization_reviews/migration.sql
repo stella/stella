@@ -13,9 +13,9 @@ CREATE TABLE "mcp_connector_authorization_reviews" (
   CONSTRAINT "mcp_authorization_review_status_check" CHECK ("status" IN ('needs_reapproval', 'approved')),
   CONSTRAINT "mcp_authorization_review_approval_check" CHECK ("status" <> 'approved' OR "approved_issuer" IS NOT NULL),
   "updated_at" timestamptz DEFAULT now() NOT NULL,
-  CONSTRAINT "mcp_connector_authorization_reviews_organization_id_connector_id_pk" PRIMARY KEY ("organization_id", "connector_id"),
-  CONSTRAINT "mcp_connector_authorization_reviews_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE,
-  CONSTRAINT "mcp_connector_authorization_reviews_connector_id_mcp_connectors_id_fk" FOREIGN KEY ("connector_id") REFERENCES "mcp_connectors"("id") ON DELETE CASCADE
+  CONSTRAINT "mcp_authorization_reviews_pk" PRIMARY KEY ("organization_id", "connector_id"),
+  CONSTRAINT "mcp_authorization_reviews_organization_fk" FOREIGN KEY ("organization_id") REFERENCES "organization"("id") ON DELETE CASCADE,
+  CONSTRAINT "mcp_authorization_reviews_connector_fk" FOREIGN KEY ("connector_id") REFERENCES "mcp_connectors"("id") ON DELETE CASCADE
 );--> statement-breakpoint
 CREATE INDEX "mcp_connector_authorization_reviews_connector_idx"
   ON "mcp_connector_authorization_reviews" ("connector_id");--> statement-breakpoint
