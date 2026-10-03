@@ -30,7 +30,10 @@ import type { SafeId } from "@/api/lib/branded-types";
 import { createChatRefRegistry } from "@/api/lib/chat/ref-registry";
 import { ChatToolError } from "@/api/lib/errors/tagged-errors";
 import { writeFieldValue } from "@/api/lib/fields/write-field";
-import { sessionMemberRole } from "@/api/lib/permission-authorization";
+import {
+  authorizedMemberRole,
+  sessionMemberRole,
+} from "@/api/lib/permission-authorization";
 import type { AuthorizedMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
@@ -55,10 +58,10 @@ const propertyIds = [restPropertyId, chatPropertyId];
 /** Who acts: a session that may edit documents, and narrower ones that may not. */
 const editor = sessionMemberRole("owner");
 const intern = sessionMemberRole("intern");
-const createOnlyKey: AuthorizedMemberRole = {
+const createOnlyKey = authorizedMemberRole({
   role: "owner",
   credential: { type: "attenuated", permissions: { entity: ["create"] } },
-};
+});
 
 const userId = () => ids.userAdmin;
 

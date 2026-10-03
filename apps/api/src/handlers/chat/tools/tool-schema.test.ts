@@ -2275,14 +2275,14 @@ describe("chat tool schemas", () => {
       expect(
         getChatTools({
           ...baseArgs,
-          memberRole: "owner",
+          memberRole: sessionMemberRole("owner"),
           workspaceStatusById: statuses,
         }),
       ).toHaveProperty("update-entity-fields");
       expect(
         getChatTools({
           ...baseArgs,
-          memberRole: "intern",
+          memberRole: sessionMemberRole("intern"),
           workspaceStatusById: statuses,
         }),
       ).not.toHaveProperty("update-entity-fields");
