@@ -1,3 +1,4 @@
+import { FormatRegistry } from "@sinclair/typebox";
 import { t } from "elysia";
 import type { Static } from "elysia";
 
@@ -46,7 +47,27 @@ export const searchLegislationBodySchema = t.Object({
 
 export type SearchLegislationBody = Static<typeof searchLegislationBodySchema>;
 
-const nullableStringSchema = t.Union([t.String(), t.Null()]);
+const boundedString = (maxBytes: number) => {
+  const format = `legislation-search-utf8-${maxBytes}`;
+  if (!FormatRegistry.Has(format)) {
+    FormatRegistry.Set(
+      format,
+      (value) =>
+        value.isWellFormed() && Buffer.byteLength(value, "utf-8") <= maxBytes,
+    );
+  }
+  return t.String({
+    maxLength: maxBytes,
+    format,
+    "x-maxUtf8Bytes": maxBytes,
+    description: `At most ${maxBytes} UTF-8 bytes.`,
+  });
+};
+
+const nullableBoundedString = (maxBytes: number) =>
+  t.Union([boundedString(maxBytes), t.Null()]);
+
+const textBytes = LIMITS.legislationSearchTextBytes;
 
 export const searchLegislationSuccessResponseSchema = t.Object(
   {
@@ -59,23 +80,25 @@ export const searchLegislationSuccessResponseSchema = t.Object(
             },
             { additionalProperties: false },
           ),
-          documentId: t.String(),
-          eli: t.String(),
-          slug: nullableStringSchema,
-          title: t.String(),
-          country: t.String(),
-          language: t.String(),
-          documentType: nullableStringSchema,
-          status: t.String(),
-          effectiveDate: nullableStringSchema,
-          sourceUrl: nullableStringSchema,
-          headline: nullableStringSchema,
+          documentId: boundedString(textBytes.documentId),
+          eli: boundedString(textBytes.eli),
+          slug: nullableBoundedString(textBytes.slug),
+          title: boundedString(textBytes.title),
+          country: boundedString(textBytes.country),
+          language: boundedString(textBytes.language),
+          documentType: nullableBoundedString(textBytes.documentType),
+          status: boundedString(textBytes.status),
+          effectiveDate: nullableBoundedString(textBytes.effectiveDate),
+          sourceUrl: nullableBoundedString(textBytes.sourceUrl),
+          headline: nullableBoundedString(textBytes.headline),
           score: t.Number(),
         },
         { additionalProperties: false },
       ),
     ),
-    nextCursor: nullableStringSchema,
+    nextCursor: nullableBoundedString(
+      CORPUS_SEARCH_CURSOR_WITH_PHASE_MAX_LENGTH,
+    ),
     total: searchTotalSchema,
   },
   { additionalProperties: false },

@@ -16,6 +16,7 @@ import { isUuid } from "@stll/uuid-codec";
 
 import { legislationDocuments, legislationSources } from "@/api/db/schema";
 import { envBase } from "@/api/env-base";
+import { projectLegislationSearchHit } from "@/api/handlers/legislation/search-response";
 import {
   PUBLIC_JURISDICTIONS_DESCRIPTION,
   searchLegislationBodySchema,
@@ -1247,7 +1248,7 @@ export const searchLegislationHandler = async (
       : await pgSearch(body, parsedCursor, legislationDb, dependencies);
 
   const response: Static<typeof searchLegislationSuccessResponseSchema> = {
-    items,
+    items: items.map(projectLegislationSearchHit),
     nextCursor,
     total: SEARCH_TOTAL_NOT_COUNTED,
   };
