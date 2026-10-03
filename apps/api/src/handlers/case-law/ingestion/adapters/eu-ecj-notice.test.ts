@@ -7,7 +7,7 @@
  * hold the notice to being read per expression rather than per work.
  */
 
-import { describe, expect, test } from "bun:test";
+import { afterEach, describe, expect, test } from "bun:test";
 import * as cheerio from "cheerio";
 import type { Element } from "domhandler";
 import JSZip from "jszip";
@@ -15,7 +15,9 @@ import JSZip from "jszip";
 import { ADAPTER_KEYS } from "@/api/handlers/case-law/consts";
 import {
   buildListingQuery,
+  buildDecision,
   ecjRawParts,
+  fetchNotice,
   euEcjAdapter,
   refreshEcjStoredFormex,
 } from "@/api/handlers/case-law/ingestion/adapters/eu-ecj";
@@ -24,6 +26,7 @@ import { PublisherRateLimitRefusalError } from "@/api/handlers/case-law/ingestio
 import { parseFormexBibliography } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-formex-bibliography";
 import { parseEcjNotice } from "@/api/handlers/case-law/ingestion/parsers/eu-ecj-notice";
 import { DECISION_JUDGE_ROLE } from "@/api/handlers/case-law/judges/consts";
+import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import {
   encodeSourceRawEnvelope,
   SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
@@ -32,6 +35,7 @@ import {
 } from "@/api/lib/legal-search/ingestion-types";
 import type { StoredRawReparseInput } from "@/api/lib/legal-search/ingestion-types";
 import { isRecord } from "@/api/lib/type-guards";
+import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
 const CELEX = "62022CJ0128";
 const EXPRESSION = "cc021804-9350-11ee-8aa6-01aa75ed71a1.0011";
@@ -117,6 +121,78 @@ const decisionFrom = async (notice: string | undefined) => {
   }
   return outcome.result;
 };
+
+describe("notice publication outcomes", () => {
+  const originalFetch = globalThis.fetch;
+  afterEach(() => {
+    globalThis.fetch = originalFetch;
+  });
+
+  test("a 500 notice rejects the item and a later attempt can build it", async () => {
+    let noticeRequests = 0;
+    globalThis.fetch = asFetchMock(async (input: string | URL | Request) => {
+      if (String(input).includes("/resource/celex/")) {
+        noticeRequests += 1;
+        return new Response(null, { status: noticeRequests === 1 ? 500 : 404 });
+      }
+      return new Response(documentEn, {
+        headers: { "Content-Type": "application/xhtml+xml" },
+      });
+    });
+
+    await expect(
+      buildDecision(binding, AbortSignal.timeout(5000)),
+    ).rejects.toThrow("Cellar notice HTTP 500");
+    const retried = await buildDecision(binding, AbortSignal.timeout(5000));
+    expect(noticeRequests).toBe(2);
+    expect(retried?.fulltext?.length).toBeGreaterThan(100);
+    expect(retried?.judges).toBeUndefined();
+  });
+  const readNotice = (status: number) =>
+    fetchNotice({
+      celex: CELEX,
+      languageUri: binding.language.value,
+      signal: AbortSignal.timeout(1000),
+      fetch: async () =>
+        new Response(status === 200 ? noticeEn : null, { status }),
+    });
+
+  for (const status of [404, 410]) {
+    test(`HTTP ${status} states the notice is not published`, async () => {
+      expect(await readNotice(status)).toEqual({
+        type: "not-published",
+        status,
+      });
+    });
+  }
+
+  for (const status of [400, 401, 403, 408, 429, 500, 502, 503, 504]) {
+    test(`HTTP ${status} propagates a notice read failure`, async () => {
+      await expect(readNotice(status)).rejects.toBeInstanceOf(
+        AdapterFetchError,
+      );
+      await expect(readNotice(status)).rejects.toThrow(
+        `Cellar notice HTTP ${status}`,
+      );
+    });
+  }
+
+  test("a published notice retains its bytes", async () => {
+    expect(await readNotice(200)).toEqual({ type: "present", xml: noticeEn });
+  });
+
+  test("notice publication and content changes alter the source hash", async () => {
+    const absent = await decisionFrom(undefined);
+    const present = await decisionFrom(noticeEn);
+    const changed = await decisionFrom(noticeEn.replace("<NOTICE", "<NOTICE "));
+
+    expect(present.fulltext).toBe(absent.fulltext);
+    expect(changed.fulltext).toBe(present.fulltext);
+    expect(present.rawHash).not.toBe(absent.rawHash);
+    expect(changed.rawHash).not.toBe(present.rawHash);
+    expect((await decisionFrom(noticeEn)).rawHash).toBe(present.rawHash);
+  });
+});
 
 describe("the branch notice is read per expression", () => {
   test("the translated fields differ between two notices of one work", () => {

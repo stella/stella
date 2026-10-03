@@ -175,7 +175,7 @@ describe("euEcjAdapter.fetchPage", () => {
   });
 
   test.each([401, 403, 429])(
-    "a branch notice HTTP %s preserves the existing row or rate-limit stop",
+    "a branch notice HTTP %s stops the page for retry",
     async (status) => {
       let noticeRequests = 0;
       globalThis.fetch = asFetchMock(
@@ -212,14 +212,16 @@ describe("euEcjAdapter.fetchPage", () => {
         });
         return;
       }
-      const page = result.unwrap();
-      expect(page.decisions).toHaveLength(1);
-      expect(page.nextCursor).toBe("2024-01-19");
-      const decision = page.decisions.at(0);
-      expect(decision?.sourceDocumentId).toBe(`${enBinding.celex.value}:en`);
-      const parts = decodeSourceRawEnvelope(decision?.sourceRaw ?? "");
-      expect(parts?.["document"]).toBe(fulltextHtml);
-      expect(parts?.["notice"]).toBeUndefined();
+      expect(result.isErr()).toBe(true);
+      if (!result.isErr()) {
+        throw new TypeError("Expected a notice read failure");
+      }
+      expect(result.error).toBeInstanceOf(AdapterFetchError);
+      expect(result.error).toMatchObject({
+        cursor: null,
+        httpStatus: status,
+        message: `Cellar notice HTTP ${status} for ${enBinding.celex.value}`,
+      });
     },
   );
 

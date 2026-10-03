@@ -1589,7 +1589,11 @@ const ecjDecisionFromParts = ({
       ),
       textFields,
       rawHash: hashContent(
-        `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}`,
+        `${celex}|${ecli}|${decisionDate}|${language}|${fulltext}|${
+          noticeXml === undefined
+            ? "notice:not-published"
+            : hashContent(noticeXml)
+        }`,
       ),
       parserVersion: PARSER_VERSIONS[ADAPTER_KEYS.EU_ECJ],
       documentAst,
@@ -1861,6 +1865,17 @@ export const refreshEcjStoredFormex = async ({
   };
 };
 
+type EcjNoticeRead =
+  | { type: "present"; xml: string }
+  | { type: "not-published"; status: 404 | 410 };
+
+type FetchNoticeOptions = {
+  celex: string;
+  languageUri: string;
+  signal: AbortSignal;
+  fetch?: typeof fetchPublisher;
+};
+
 /**
  * The branch notice for one work, negotiated into one expression's language.
  *
@@ -1874,18 +1889,19 @@ export const refreshEcjStoredFormex = async ({
  * parts it has, and the decision is stored without the fields only the
  * notice states.
  */
-const fetchNotice = async (
-  celex: string,
-  languageUri: string,
-  signal: AbortSignal,
-): Promise<string | undefined> => {
+export const fetchNotice = async ({
+  celex,
+  languageUri,
+  signal,
+  fetch = fetchPublisher,
+}: FetchNoticeOptions): Promise<EcjNoticeRead> => {
   const cellarLanguage = languageUri.startsWith(CELLAR_LANGUAGE_PREFIX)
     ? languageUri.slice(CELLAR_LANGUAGE_PREFIX.length).toLowerCase()
     : undefined;
   if (cellarLanguage === undefined) {
-    return undefined;
+    return panic("Expected a Cellar language URI for a branch notice");
   }
-  const response = await fetchPublisher(`${CELLAR_CELEX_PREFIX}${celex}`, {
+  const response = await fetch(`${CELLAR_CELEX_PREFIX}${celex}`, {
     fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.EU_ECJ,
     retryPolicy: "publisher-backoff",
@@ -1897,16 +1913,18 @@ const fetchNotice = async (
       "User-Agent": INGESTION_USER_AGENT,
     },
   });
+  if (response.status === 404 || response.status === 410) {
+    return { type: "not-published", status: response.status };
+  }
   if (!response.ok) {
-    logger.warn("case_law.ingestion.notice_unavailable", {
+    throw new AdapterFetchError({
+      message: `Cellar notice HTTP ${response.status} for ${celex}`,
       adapterKey: ADAPTER_KEYS.EU_ECJ,
-      celex,
-      language: cellarLanguage,
+      cursor: null,
       httpStatus: response.status,
     });
-    return undefined;
   }
-  return await response.text();
+  return { type: "present", xml: await response.text() };
 };
 
 /**
@@ -2049,7 +2067,12 @@ export const buildDecision = async (
     return undefined;
   }
 
-  const notice = await fetchNotice(celex, binding.language.value, signal);
+  const noticeRead = await fetchNotice({
+    celex,
+    languageUri: binding.language.value,
+    signal,
+  });
+  const notice = noticeRead.type === "present" ? noticeRead.xml : undefined;
   const formexResult =
     notice === undefined
       ? undefined
