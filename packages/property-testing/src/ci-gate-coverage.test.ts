@@ -488,7 +488,10 @@ const grepDiscoveryCovers = (
       continue;
     }
     // GNU grep applies --include to each basename, including nested files.
-    if (path.posix.basename(relativeFile).test(new Bun.Glob(include))) {
+    const included = new Bun.Glob(include).match(
+      path.posix.basename(relativeFile),
+    );
+    if (included) {
       return true;
     }
   }
