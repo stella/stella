@@ -172,7 +172,8 @@ export default eslintCompatPlugin({
               }
               if (
                 node.source.value === "@/api/lib/api-handlers" &&
-                imported === "createSafePublicHandler"
+                (imported === "createSafePublicHandler" ||
+                  imported === "createSafeBoundedPublicHandler")
               ) {
                 anonymousPublic = true;
               }
