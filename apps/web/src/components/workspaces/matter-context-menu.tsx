@@ -1,3 +1,4 @@
+import { useState } from "react";
 /**
  * Shared matter context menu used by both the matter card grid
  * and the sidebar pinned items. Right-click to open.
@@ -6,8 +7,6 @@
  * `MatterContextMenu` (card right-click) and the sidebar's
  * own Menu component to guarantee 1:1 parity.
  */
-
-import { useState } from "react";
 
 import { useQueryClient } from "@tanstack/react-query";
 import { Result } from "better-result";
@@ -53,6 +52,7 @@ import {
 } from "@/components/workspaces/addable-member-select";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import { resolveMatterColor } from "@/lib/matter-colors";
 import { openIsolatedWindow } from "@/lib/open-isolated-window";
 import { usePinnedStore } from "@/lib/pinned-store";
@@ -235,7 +235,7 @@ export const useMatterActions = (
     const copied = await copyToClipboard(url);
     if (Result.isError(copied)) {
       getAnalytics().captureError(copied.error);
-      stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+      notifyUserError(copied.error, t("errors.actionFailed"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });
@@ -266,10 +266,9 @@ export const useMatterActions = (
           );
           onDeleted?.();
         },
-        onError: () => {
-          stellaToast.update(toastId, {
-            title: t("errors.failedToDeleteWorkspace"),
-            type: "error",
+        onError: (error) => {
+          notifyUserError(error, t("errors.failedToDeleteWorkspace"), {
+            toastId,
           });
         },
       },
@@ -280,8 +279,8 @@ export const useMatterActions = (
     unarchiveWorkspace.mutate(
       { workspaceId: target.id },
       {
-        onError: () => {
-          stellaToast.add({ title: t("errors.actionFailed"), type: "error" });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );
@@ -530,11 +529,8 @@ export const AddMemberDialog = ({
           onOpenChange(false);
           setSelectedUserId(null);
         },
-        onError: () => {
-          stellaToast.add({
-            title: t("errors.actionFailed"),
-            type: "error",
-          });
+        onError: (error) => {
+          notifyUserError(error, t("errors.actionFailed"));
         },
       },
     );

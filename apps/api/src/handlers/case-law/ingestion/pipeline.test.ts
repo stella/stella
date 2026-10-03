@@ -59,6 +59,7 @@ import {
   UNPERSISTABLE_DECISION_FIELDS,
   UnpersistableDecisionFieldError,
 } from "@/api/lib/errors/tagged-errors";
+import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
 import type { CaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { observePublisherDocumentFetch } from "@/api/lib/legal-search/document-stage-observation";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
@@ -1156,6 +1157,7 @@ describe("runIngestionPipeline — document observer failures", () => {
 
       const wrappedAdapter = defineSourceAdapter({
         ...czNsAdapter,
+        documentStage: ADAPTER_MANIFESTS[czNsAdapter.key].documentStage,
         fetchPage: async () => {
           for (let fetch = 0; fetch < 100; fetch++) {
             await observePublisherDocumentFetch({

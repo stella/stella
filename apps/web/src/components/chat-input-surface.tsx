@@ -1,5 +1,6 @@
-import "./chat-editor.css";
 import { useCallback, useRef } from "react";
+
+import "./chat-editor.css";
 import type { ReactNode } from "react";
 
 import { useTranslations } from "use-intl";
@@ -15,7 +16,6 @@ import {
   COMPOSER_LEADING_GROUP_CLASS,
   COMPOSER_PLACEHOLDER_CLASS,
 } from "@stll/ui/composer";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import {
@@ -43,6 +43,7 @@ import { GUIDE_ANCHORS } from "@/features/guides/guide-anchors";
 import { useExternalSyncEffect } from "@/hooks/use-effect";
 import { getAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import type { ComposerSkillChatContext } from "@/lib/prompts/chat-skill-availability.logic";
 import type { ReservedChatCommandContext } from "@/lib/reserved-chat-commands";
 
@@ -177,10 +178,7 @@ export const ChatInputSurface = ({
         return;
       }
       getAnalytics().captureError(error);
-      stellaToast.add({
-        title: t("common.somethingWentWrong"),
-        type: "error",
-      });
+      notifyUserError(error, t("common.somethingWentWrong"));
     },
     [t],
   );
