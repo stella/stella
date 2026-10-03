@@ -127,14 +127,10 @@ beforeAll(async () => {
 });
 
 afterAll(async () => {
-  if (testDb) {
-    await testDb
-      .delete(organization)
-      .where(eq(organization.id, organizationId));
-    await testDb.delete(user).where(eq(user.id, ownerId));
-    await testDb.delete(user).where(eq(user.id, memberId));
-    await releaseTestDb();
-  }
+  await testDb.delete(organization).where(eq(organization.id, organizationId));
+  await testDb.delete(user).where(eq(user.id, ownerId));
+  await testDb.delete(user).where(eq(user.id, memberId));
+  await releaseTestDb();
 });
 
 describe("MCP connector authorization reviews", () => {

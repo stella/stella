@@ -46,7 +46,7 @@ const setup = ({
       return chain;
     },
     from: () => chain,
-    where: () => (countQuery ? Promise.resolve([{ total: 0 }]) : chain),
+    where: () => (countQuery ? [{ total: 0 }] : chain),
     limit: async () => [],
     insert: () => ({
       values: (value: unknown) => ({

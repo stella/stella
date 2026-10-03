@@ -99,7 +99,7 @@ test("lists shared authorization status in one connector query", async () => {
 
   const result = await listMcpConnectors.handler(context);
   if (!("connectors" in result)) {
-    return panic("Expected a connector list response");
+    panic("Expected a connector list response");
   }
 
   expect(

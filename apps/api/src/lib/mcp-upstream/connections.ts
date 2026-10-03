@@ -1137,6 +1137,7 @@ const resolveMcpTokenDuringRefresh = async ({
       new Promise<void>((resolve) => {
         setTimeout(resolve, MCP_REFRESH_WAIT_INTERVAL_MS);
       }));
+    // db-await-in-loop: bounded wait for a concurrent refresh; each attempt re-reads one row after a pause
     const refreshedRow = await loadMcpConnectionById({
       connectionId: row.userConnectionId,
       organizationId,
