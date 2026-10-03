@@ -14,7 +14,7 @@ const CONFIGURED = {
 describe("configured sign-in codes", () => {
   it("returns the fixed code only for an address equal to the configured one", () => {
     assertProperty(
-      "configured sign-in code matches the exact address only",
+      "returns the fixed code only for an address equal to the configured one",
       fc.property(
         fc.string({ minLength: 1, maxLength: 12 }),
         fc.constantFrom("prefix", "suffix", "subdomain", "plus"),

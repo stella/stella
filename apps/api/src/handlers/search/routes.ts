@@ -19,10 +19,9 @@ import { createSafeRootHandler } from "@/api/lib/api-handlers";
 import type { HandlerConfig } from "@/api/lib/api-handlers";
 import { authMacro, permissionMacro } from "@/api/lib/auth";
 
-export const searchEndpoint = createSafeRootHandler(
+const searchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    access: "read",
     mcp: { type: "tool", name: "search" },
     body: searchBodySchema,
   } satisfies HandlerConfig,
@@ -47,10 +46,9 @@ export const searchEndpoint = createSafeRootHandler(
   },
 );
 
-export const searchFacetsEndpoint = createSafeRootHandler(
+const searchFacetsEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    access: "read",
     mcp: { type: "internal", reason: "search_ui" },
     body: searchFacetsBodySchema,
   } satisfies HandlerConfig,
@@ -74,10 +72,9 @@ export const searchFacetsEndpoint = createSafeRootHandler(
   },
 );
 
-export const refineSearchEndpoint = createSafeRootHandler(
+const refineSearchEndpoint = createSafeRootHandler(
   {
     permissions: { workspace: ["read"] },
-    access: "read",
     mcp: { type: "internal", reason: "search_ui" },
     body: refineSearchBodySchema,
     requiresUsage: { actionType: "chat", modelRole: "fast" },
@@ -114,7 +111,7 @@ export const refineSearchEndpoint = createSafeRootHandler(
   },
 );
 
-export const summarizeSearchEndpoint = createSafeRootHandler(
+const summarizeSearchEndpoint = createSafeRootHandler(
   {
     permissions: { chat: ["create"], workspace: ["read"] },
     mcp: { type: "internal", reason: "search_ui" },
@@ -158,7 +155,7 @@ export const summarizeSearchEndpoint = createSafeRootHandler(
   },
 );
 
-export const searchSummaryChatEndpoint = createSafeRootHandler(
+const searchSummaryChatEndpoint = createSafeRootHandler(
   {
     permissions: { chat: ["create"] },
     mcp: { type: "internal", reason: "search_ui" },

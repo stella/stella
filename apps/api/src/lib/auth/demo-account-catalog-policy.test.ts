@@ -200,8 +200,6 @@ const REVIEWED_SANDBOX_MUTATIONS = [
   "apps/api/src/handlers/saved-time-narratives/create.ts",
   "apps/api/src/handlers/saved-time-narratives/delete.ts",
   "apps/api/src/handlers/saved-time-narratives/update.ts",
-  "apps/api/src/handlers/search/routes.ts#searchSummaryChatEndpoint",
-  "apps/api/src/handlers/search/routes.ts#summarizeSearchEndpoint",
   "apps/api/src/handlers/signals/acceptances/create.ts",
   "apps/api/src/handlers/signals/assignments/create.ts",
   "apps/api/src/handlers/signals/dismissals/create.ts",
@@ -480,8 +478,12 @@ describe("handler account policy census", () => {
       }
     }
     expect(sandboxMutations.length).toBeGreaterThan(0);
-    expect(sandboxMutations.toSorted()).toEqual(REVIEWED_SANDBOX_MUTATIONS);
-    expect(standardOperations.toSorted()).toEqual(REVIEWED_STANDARD_OPERATIONS);
+    expect(sandboxMutations.toSorted()).toEqual([
+      ...REVIEWED_SANDBOX_MUTATIONS,
+    ]);
+    expect(standardOperations.toSorted()).toEqual([
+      ...REVIEWED_STANDARD_OPERATIONS,
+    ]);
     const localEndpointCounts = Object.fromEntries(
       discovery.files
         .filter((file) => file.callCount !== file.enumerableCount)
