@@ -14,8 +14,12 @@ for (const policy of ["noeviction", "allkeys-lru", "unknown"]) {
   test(`admission policy ${policy} emits its operator diagnostics and bounded metric`, async () => {
     const messages: string[] = [];
     const lines: string[] = [];
-    setLogSinkForTesting((record) => messages.push(JSON.stringify(record)));
-    setMetricLineSinkForTesting((line) => lines.push(line));
+    setLogSinkForTesting((record) => {
+      messages.push(JSON.stringify(record));
+    });
+    setMetricLineSinkForTesting((line) => {
+      lines.push(line);
+    });
     const store = createAdmissionRedis({
       ready: async () => ({
         send: async () =>
