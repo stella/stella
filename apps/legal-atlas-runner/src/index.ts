@@ -1,3 +1,5 @@
+import { fileURLToPath } from "node:url";
+
 import {
   LEGAL_AST_CAPABILITIES,
   getRunnerDefinition,
@@ -22,10 +24,49 @@ const writeOut = async (text: string): Promise<number> =>
 const writeErr = async (text: string): Promise<number> =>
   await Bun.write(Bun.stderr, `${text}\n`);
 
-const runImplementedRunner = async (
-  runnerName: string,
-  argv: readonly string[],
-): Promise<number> => {
+type RunCliOptions = {
+  refetch?: (argv: readonly string[]) => Promise<number>;
+};
+
+const refetchEuDecisions = async (argv: readonly string[]): Promise<number> => {
+  const entrypoint = new URL(
+    import.meta.path.endsWith(".ts")
+      ? "../../api/src/scripts/eu-ecj-refetch.ts"
+      : "./eu-ecj-refetch.js",
+    import.meta.url,
+  );
+  const child = Bun.spawn(
+    [process.execPath, fileURLToPath(entrypoint), ...argv],
+    {
+      stdin: "inherit",
+      stdout: "inherit",
+      stderr: "inherit",
+    },
+  );
+  const interrupt = () => child.kill("SIGINT");
+  const terminate = () => child.kill("SIGTERM");
+  process.once("SIGINT", interrupt);
+  process.once("SIGTERM", terminate);
+  return await child.exited.finally(() => {
+    process.removeListener("SIGINT", interrupt);
+    process.removeListener("SIGTERM", terminate);
+  });
+};
+
+type ImplementedRunnerOptions = {
+  runnerName: string;
+  argv: readonly string[];
+  refetch: (argv: readonly string[]) => Promise<number>;
+};
+const runImplementedRunner = async ({
+  runnerName,
+  argv,
+  refetch,
+}: ImplementedRunnerOptions): Promise<number> => {
+  if (runnerName === "eu-ecj-refetch") {
+    return await refetch(argv);
+  }
+
   if (runnerName === "case-law-ingest") {
     const { runCaseLawIngest } = await import("./runners/case-law-ingest.js");
     return await runCaseLawIngest(argv);
@@ -47,7 +88,10 @@ const runImplementedRunner = async (
   return 70;
 };
 
-export const runCli = async (argv: readonly string[]): Promise<number> => {
+export const runCli = async (
+  argv: readonly string[],
+  { refetch = refetchEuDecisions }: RunCliOptions = {},
+): Promise<number> => {
   const command = argv.at(0) ?? "--help";
 
   if (command === "--help" || command === "-h") {
@@ -100,7 +144,11 @@ export const runCli = async (argv: readonly string[]): Promise<number> => {
     return 78;
   }
 
-  return await runImplementedRunner(runner.name, argv.slice(2));
+  return await runImplementedRunner({
+    runnerName: runner.name,
+    argv: argv.slice(2),
+    refetch,
+  });
 };
 
 if (import.meta.main) {

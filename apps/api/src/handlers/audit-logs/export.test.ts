@@ -3,6 +3,7 @@ import { describe, expect, test } from "bun:test";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import { LIMITS } from "@/api/lib/limits";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createScopedDbMock } from "@/api/tests/scoped-db-mock";
 
@@ -53,7 +54,7 @@ describe("exportAuditLogs", () => {
       },
     });
     const context = asTestRaw<ExportAuditLogsContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       query: {},
       recordAuditEvent: async () => {
         auditCallCount += 1;
@@ -97,7 +98,7 @@ describe("exportAuditLogs", () => {
       }),
     });
     const context = asTestRaw<ExportAuditLogsContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       query: {},
       recordAuditEvent: async () => {
         auditCallCount += 1;

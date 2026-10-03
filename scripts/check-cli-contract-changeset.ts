@@ -59,6 +59,8 @@ const changedContractParts = (
     .filter(
       (file) =>
         file === `${CLI_PACKAGE}/capability-catalog.json` ||
+        (file.startsWith(`${CLI_PACKAGE}/capabilities/`) &&
+          file.endsWith(".json")) ||
         file.startsWith(`${CLI_PACKAGE}/src/generated/`),
     )
     .map((file) => file.slice(`${CLI_PACKAGE}/`.length));
@@ -177,13 +179,12 @@ export const generatedContractPaths = (
       ref,
       "--",
       `${CLI_PACKAGE}/src/generated`,
+      `${CLI_PACKAGE}/capabilities`,
+      `${CLI_PACKAGE}/capability-catalog.json`,
     ],
     root,
   ).filter((file) => file.endsWith(".json") || file.endsWith(".ts"));
-  return [
-    `${CLI_PACKAGE}/capability-catalog.json`,
-    ...generated.filter((file) => !file.endsWith("/cli-version.ts")),
-  ];
+  return generated.filter((file) => !file.endsWith("/cli-version.ts"));
 };
 
 const readSemanticContractChanges = (

@@ -19,6 +19,7 @@ const startRegistrationServer = (
 ) => {
   const server = Bun.serve({
     fetch: async (request) => {
+      // swallow-ok: malformed JSON falls through to schema validation, which rejects the invalid registration body
       const raw: unknown = await request.json().catch(() => ({}));
       return respond(v.parse(registrationBodySchema, raw));
     },

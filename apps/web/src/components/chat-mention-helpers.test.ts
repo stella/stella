@@ -141,6 +141,7 @@ describe("buildEntityMentionOption", () => {
     expect(
       buildEntityMentionOption({
         entity,
+        matterId: "ws_other",
         sourceWorkspaceId: "ws_other",
       }),
     ).toEqual({
@@ -152,6 +153,7 @@ describe("buildEntityMentionOption", () => {
       category: "entity",
       kind: "document",
       mimeType: "application/pdf",
+      matterId: "ws_other",
       sourceWorkspaceId: "ws_other",
     });
   });

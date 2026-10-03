@@ -65,6 +65,12 @@ const usagePolicySeedSchema = v.pipe(
       ),
       null,
     ),
+    serviceActionsPerPeriod: v.optional(
+      v.nullable(
+        v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(PG_INT4_MAX)),
+      ),
+      null,
+    ),
     maxMembers: v.optional(
       v.nullable(
         v.pipe(v.number(), v.integer(), v.minValue(1), v.maxValue(PG_INT4_MAX)),
@@ -139,6 +145,7 @@ const seed = async (): Promise<void> => {
               ? null
               : BigInt(seedPolicy.storageBytesPerAssignment),
           maxMembers: seedPolicy.maxMembers,
+          serviceActionsPerPeriod: seedPolicy.serviceActionsPerPeriod,
           visibility: seedPolicy.visibility,
           sortOrder: seedPolicy.sortOrder,
         })
@@ -159,6 +166,7 @@ const seed = async (): Promise<void> => {
                 ? null
                 : BigInt(seedPolicy.storageBytesPerAssignment),
             maxMembers: seedPolicy.maxMembers,
+            serviceActionsPerPeriod: seedPolicy.serviceActionsPerPeriod,
             visibility: seedPolicy.visibility,
             sortOrder: seedPolicy.sortOrder,
           },

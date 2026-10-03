@@ -1,5 +1,7 @@
 import * as v from "valibot";
 
+export { isUuid } from "@stll/uuid-codec";
+
 export type SafeIdType =
   | "accountDeletionRequest"
   | "agentSkill"

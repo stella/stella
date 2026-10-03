@@ -8,6 +8,7 @@ export const toChatMentionNodeAttrs = (
   category: ChatMentionOption["category"];
   kind: ChatMentionOption["kind"];
   mimeType: string | null;
+  matterId: string | undefined;
   sourceWorkspaceId: string | undefined;
 } => ({
   id: mention.resource.id,
@@ -15,6 +16,7 @@ export const toChatMentionNodeAttrs = (
   category: mention.category,
   kind: mention.kind,
   mimeType: mention.mimeType,
+  matterId: mention.category === "entity" ? mention.matterId : undefined,
   sourceWorkspaceId:
     mention.category === "entity" ? mention.sourceWorkspaceId : undefined,
 });

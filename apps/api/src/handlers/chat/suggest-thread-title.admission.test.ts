@@ -5,6 +5,7 @@ import { ORG_AI_CONFIG_STATUS } from "@/api/lib/ai-config-loader-core";
 import type { AccessibleWorkspace } from "@/api/lib/auth";
 import { toSafeId } from "@/api/lib/branded-types";
 import { HandlerError } from "@/api/lib/errors/tagged-errors";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { withActionAdmission } from "@/api/lib/rate-limit/action-admission";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
@@ -146,7 +147,7 @@ const runDeniedTitle = async ({
             ? null
             : { id: workspaceId, status: "active" };
         },
-        memberRole: { role: "owner" },
+        memberRole: sessionMemberRole("owner"),
         orgAIConfig: null,
         orgAIConfigStatus: ORG_AI_CONFIG_STATUS.ok,
         managedAIResidency: "eu" as const,

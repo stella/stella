@@ -1,0 +1,5 @@
+{
+  "metric": "throw-outside-boundary",
+  "delta": 4,
+  "reason": "Convert managed model eligibility Results to typed errors at existing throwing model-selection boundaries in apps/api/src/lib/tanstack-ai-models.ts."
+}

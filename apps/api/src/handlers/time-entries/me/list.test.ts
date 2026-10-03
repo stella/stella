@@ -9,6 +9,7 @@ import { UNPRICED_TIME_ENTRY_CURRENCY } from "@/api/lib/billing-constants";
 import { createSafeId } from "@/api/lib/branded-types";
 import { cents } from "@/api/lib/money";
 import { encodePaginationCursor } from "@/api/lib/pagination";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -231,7 +232,7 @@ const listFor = async (query: ListCtx["query"]) =>
       ),
       session: { activeOrganizationId: ids.orgA },
       user: { id: ids.userA1 },
-      memberRole: { role: "member" },
+      memberRole: sessionMemberRole("member"),
     }),
   );
 
@@ -479,7 +480,7 @@ test("my day includes the owner's internal work without exposing other members o
         safeDb: createSafeDb(testDb, [], ids.orgA, ids.userA1),
         session: { activeOrganizationId: ids.orgA },
         user: { id: ids.userA1 },
-        memberRole: { role: "member" },
+        memberRole: sessionMemberRole("member"),
       }),
     );
     if (!isPage(withoutMatters)) {

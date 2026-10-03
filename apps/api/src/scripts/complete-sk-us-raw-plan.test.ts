@@ -223,6 +223,7 @@ test("the first 429 halts the page with no further requests or checkpoint", asyn
             return "completed";
           },
         }),
+      record: () => {},
       journal: async () => {},
       checkpoint: async () => {
         checkpoints += 1;
@@ -272,6 +273,7 @@ test("a search 404 or undocumented empty body stops without checkpointing", asyn
             return "completed";
           },
         }),
+      record: () => {},
       journal: async () => {},
       checkpoint: async () => {
         checkpoints += 1;
@@ -326,6 +328,7 @@ test("permanent raw-read failures are journaled terminal rejections, transient f
             },
           });
         },
+        record: () => {},
         journal: async () => {},
         checkpoint: async (row, outcome) => {
           audited.push({ row, outcome });
@@ -506,6 +509,7 @@ test("dry runs and transient failures never persist a checkpoint", async () => {
       mode,
       complete: async () =>
         mode === "dry-run" ? "would_complete" : "retry_later",
+      record: () => {},
       journal: async () => {},
       checkpoint: async (value) => {
         persisted.push(value);
@@ -561,6 +565,7 @@ test("undecodable non-PDF bytes are a checkpointed terminal outcome, not a retry
     rows: [cursor, next],
     mode: "apply",
     complete: async (row) => (row === cursor ? "raw_unavailable" : "completed"),
+    record: () => {},
     journal: async () => {},
     checkpoint: async (row, outcome) => {
       persisted.push([row, outcome]);
@@ -612,6 +617,7 @@ test("a crash between fetch and write retries the item, while a crash after writ
         rows: [cursor],
         mode: "apply",
         complete,
+        record: () => {},
         journal: async () => {},
         checkpoint: async () => {
           if (crashing) {
@@ -645,6 +651,7 @@ test("a concurrent pointer writer holds the checkpoint for a fresh read", async 
     rows: [cursor],
     mode: "apply",
     complete: async () => "concurrent_write",
+    record: () => {},
     journal: async () => {},
     checkpoint: async () => {
       checkpoints += 1;
@@ -711,6 +718,7 @@ test("deterministic invalid payloads advance past poison rows in both modes", as
             },
           });
         },
+        record: () => {},
         journal: async () => {},
         checkpoint: async (row, outcome) => {
           persisted.push([row, outcome]);
@@ -760,6 +768,8 @@ test("bounded batch results are invariant under page size and stop before later 
         const visited: string[] = [];
         const persisted: string[] = [];
         const journaled: string[] = [];
+        const recorded: [string, string][] = [];
+        const evidence: string[] = [];
         const result = await runSkUsRawBatch({
           rows,
           pageSize,
@@ -772,8 +782,13 @@ test("bounded batch results are invariant under page size and stop before later 
               ? failure
               : "already_complete";
           },
+          record: (row, outcome) => {
+            recorded.push([row.id, outcome]);
+            evidence.push(`record:${row.id}`);
+          },
           journal: async (row) => {
             journaled.push(row.id);
+            evidence.push(`journal:${row.id}`);
           },
           checkpoint: async (row) => {
             persisted.push(row.id);
@@ -787,6 +802,21 @@ test("bounded batch results are invariant under page size and stop before later 
         );
         expect(persisted).toEqual(mode === "apply" ? terminalIds : []);
         expect(journaled).toEqual(mode === "apply" ? visited : []);
+        // Every attempted row leaves exactly one record, the stopping row
+        // included, and in apply mode the record precedes its journal line.
+        expect(recorded).toEqual(
+          visited.map((id) => [
+            id,
+            id === rows.at(failureIndex)?.id ? failure : "already_complete",
+          ]),
+        );
+        expect(evidence).toEqual(
+          visited.flatMap((id) =>
+            mode === "apply"
+              ? [`record:${id}`, `journal:${id}`]
+              : [`record:${id}`],
+          ),
+        );
         expect(result.stopped).toBe(stopped);
         expect(result.scanned).toBe(visited.length);
         expect(result.scanned).toBeLessThanOrEqual(limit);

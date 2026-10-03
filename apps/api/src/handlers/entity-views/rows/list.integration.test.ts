@@ -34,6 +34,7 @@ import { createSafeDb, createScopedDb } from "@/api/db/scoped";
 import listRows from "@/api/handlers/entity-views/rows/list";
 import { createSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import {
   getRlsFixture,
@@ -268,7 +269,7 @@ const readWindow = async ({
         workspaceIds.includes(workspaceId)
           ? { id: workspaceId, status: "active" }
           : null,
-      memberRole: { role },
+      memberRole: sessionMemberRole(role),
       request: new Request("https://example.test/entity-views/query-window"),
       route: "/test/entity-views/query-window",
       safeDb: createSafeDb(testDb, workspaceIds, organizationId, userId),
