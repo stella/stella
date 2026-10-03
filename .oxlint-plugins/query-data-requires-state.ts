@@ -464,6 +464,14 @@ const hookName = ({
     : undefined;
 };
 
+// Typed ESTree visitor nodes lack AstNode's index signature; narrow them once
+// on entry so the collectors keep the untyped shape the analysis walks.
+const collect = (nodes: AstNode[], node: unknown) => {
+  if (isAstNode(node)) {
+    nodes.push(node);
+  }
+};
+
 type TrackImportsOptions = {
   context: ScopeContext;
   node: AstNode;
@@ -811,8 +819,11 @@ const collectWholeEscapes = (binding: QueryBinding) => {
       if (!reference.isRead()) {
         continue;
       }
-      const identifier = reference.identifier;
-      let container = identifier.parent;
+      // Walk the untyped parent chain: transparent wrappers (TS casts,
+      // parentheses) between the reference and its consumer are not part of
+      // the ESTree parent union.
+      const identifier: unknown = reference.identifier;
+      let container: unknown = reference.identifier.parent;
       while (
         isAstNode(container) &&
         unwrapExpression(container) === identifier
@@ -1026,30 +1037,32 @@ export default eslintCompatPlugin({
             syntax.throws.length = 0;
           },
           ImportDeclaration(node) {
-            trackImports({ context, node, syntax });
+            if (isAstNode(node)) {
+              trackImports({ context, node, syntax });
+            }
           },
           CallExpression(node) {
-            syntax.calls.push(node);
+            collect(syntax.calls, node);
           },
           ReturnStatement(node) {
-            syntax.returns.push(node);
+            collect(syntax.returns, node);
           },
           ArrowFunctionExpression(node) {
             if (node.expression) {
-              syntax.returns.push(node);
+              collect(syntax.returns, node);
             }
           },
           MemberExpression(node) {
-            syntax.memberNodes.push(node);
+            collect(syntax.memberNodes, node);
           },
           VariableDeclarator(node) {
-            syntax.declarations.push(node);
+            collect(syntax.declarations, node);
           },
           ForOfStatement(node) {
-            syntax.iterations.push(node);
+            collect(syntax.iterations, node);
           },
           ThrowStatement(node) {
-            syntax.throws.push(node);
+            collect(syntax.throws, node);
           },
           "Program:exit"() {
             reportQueryViolations(context, syntax);

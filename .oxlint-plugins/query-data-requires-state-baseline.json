@@ -213,7 +213,6 @@
     "apps/web/src/routes/-protected-app/-components/payment-retry-banner.tsx::PaymentRetryBanner::data": "pending migration to useQueryView",
     "apps/web/src/routes/agent-claim.tsx::AgentClaimPage::organizations": "pending migration to useQueryView",
     "apps/web/src/routes/auth/organization.tsx::OrganizationFlow::organizations": "pending migration to useQueryView",
-    "apps/web/src/routes/consent.tsx::ConsentPage::clientQuery": "pending migration to useQueryView",
     "apps/web/src/routes/consent.tsx::ConsentPage::currentUserRole": "pending migration to useQueryView",
     "apps/web/src/routes/consent.tsx::ConsentPage::jurisdictionsQuery": "pending migration to useQueryView",
     "apps/web/src/routes/consent.tsx::ConsentPage::organizations": "pending migration to useQueryView",
