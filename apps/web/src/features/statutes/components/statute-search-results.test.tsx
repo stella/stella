@@ -1,6 +1,7 @@
 import { renderToStaticMarkup } from "react-dom/server";
 
 import { describe, expect, test } from "bun:test";
+import { Window } from "happy-dom";
 import { IntlProvider } from "use-intl";
 
 import {
@@ -36,7 +37,7 @@ const render = ({
   hasNextPage?: boolean;
 }) =>
   renderToStaticMarkup(
-    <IntlProvider locale="en" messages={messages}>
+    <IntlProvider locale="en" messages={messages} timeZone="UTC">
       <StatuteSearchResults
         hits={hits}
         isLoading={isLoading}
@@ -49,6 +50,34 @@ const render = ({
   );
 
 describe("public statute section results", () => {
+  test.each([
+    ["&amp;", "&"],
+    ["&lt;", "<"],
+    ["&gt;", ">"],
+    ["&quot;", '"'],
+    ["&#x27;", "'"],
+    ["&lt;&amp;&gt;&quot;&#x27;", "<&>\"'"],
+    ["&amp;lt;", "&lt;"],
+  ])(
+    "complete entity %s renders as text inside and outside highlights",
+    (encoded, decoded) => {
+      for (const highlighted of [false, true]) {
+        const headline = highlighted ? `<mark>${encoded}</mark>` : encoded;
+        const markup = renderToStaticMarkup(
+          <StatuteSearchSnippet headline={headline} />,
+        );
+        // A real HTML parser is the oracle; the decoder must consume exactly one
+        // entity layer and keep publisher angle brackets inert.
+        const container = new Window().document.createElement("div");
+        // safe-html: markup is React's renderToStaticMarkup output for this test's own component, parsed in a detached happy-dom document.
+        container.innerHTML = markup;
+        expect(container.textContent).toBe(decoded);
+        expect(markup.match(/<mark(?:\s|>)/gu)?.length ?? 0).toBe(
+          highlighted ? 1 : 0,
+        );
+      }
+    },
+  );
   test("loading and exhausted empty results are distinct", () => {
     expect(render({ isLoading: true })).toContain("Loading");
     expect(render({ isLoading: true })).not.toContain("No results");
