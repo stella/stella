@@ -27,7 +27,7 @@ const reportResult = await Result.tryPromise({
       replayEvent: async (eventId) => {
         const [{ replayProviderEvent }, { openMaintenanceDb }] =
           await Promise.all([
-            import("@/api/lib/hosted-usage-provider/replay"),
+            import("@/api/handlers/hosted-usage-webhook/replay"),
             import("@/api/lib/db/maintenance-db"),
           ]);
         let db = maintenanceDb;

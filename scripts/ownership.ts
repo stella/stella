@@ -345,7 +345,7 @@ export const OWNERSHIP = [
     capability: "Minimal verified provider event persistence",
     owner: [
       "apps/api/src/lib/hosted-usage-provider/webhook-store.ts",
-      "apps/api/src/lib/hosted-usage-provider/replay.ts",
+      "apps/api/src/handlers/hosted-usage-webhook/replay.ts",
     ],
     summary:
       "The store projects authenticated deliveries through the dispatch schema before persistence. Retention redacts completed details while preserving deduplication identifiers and unresolved records.",

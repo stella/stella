@@ -15,18 +15,24 @@
 
 import { eq } from "drizzle-orm";
 
+import { Temporal } from "@stll/time";
+
 import { rootDb } from "@/api/db/root";
 import type { Transaction } from "@/api/db/root";
 import { hostedUsageWebhookEvents } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import {
+  AUDIT_ACTION,
+  AUDIT_RESOURCE_TYPE,
   createBackgroundAuditRecorder,
   type AuditAction,
   type AuditEvent,
   type NonChatAuditResourceType,
 } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type { HostedUsageWebhookEvent } from "@/api/lib/hosted-usage-provider/event-schemas";
+import type { ProviderEventReplayAudit } from "@/api/lib/hosted-usage-provider/replay-audit";
 import { minimalWebhookRecord } from "@/api/lib/hosted-usage-provider/webhook-record";
 import { isRecord } from "@/api/lib/type-guards";
 
@@ -222,4 +228,55 @@ export const recordWebhookAuditEvent = async ({
     changes: changes ?? null,
     metadata: { source: "usage_provider.webhook", eventId },
   });
+};
+
+type RecordProviderEventReplayAuditOptions = {
+  tx: Transaction;
+  eventId: string;
+  actor: string;
+  reason: string;
+  newResult: UsageProviderWebhookResult;
+  outcome: DispatchOutcome["kind"];
+  dispatchReason: string | null;
+};
+
+/** System receipts can precede organization resolution, so their audit lives
+ * on the deny-by-default receipt rather than inventing a tenant audit owner.
+ * Dispatch's organization audit records remain in the same transaction. */
+export const recordProviderEventReplayAuditInTx = async ({
+  tx,
+  eventId,
+  actor,
+  reason,
+  newResult,
+  outcome,
+  dispatchReason,
+}: RecordProviderEventReplayAuditOptions) => {
+  const replayAudit = {
+    actor,
+    at: Temporal.Now.instant().toString(),
+    previousResult: "ignored",
+    newResult,
+    outcome,
+    reason,
+    execution: {
+      performer: { type: "service", id: actor, name: null },
+      trigger: {
+        type: "system",
+        source: "usage_provider.replay",
+        sourceId: eventId,
+      },
+    },
+    event: {
+      action: AUDIT_ACTION.UPDATE,
+      resourceType: AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT,
+      resourceId: eventId,
+      changes: { result: { old: "ignored", new: newResult } },
+      metadata: { reason, outcome, dispatchReason },
+    },
+  } as const satisfies ProviderEventReplayAudit;
+  await tx
+    .update(hostedUsageWebhookEvents)
+    .set({ result: newResult, errorMessage: dispatchReason, replayAudit })
+    .where(eq(hostedUsageWebhookEvents.eventId, eventId));
 };

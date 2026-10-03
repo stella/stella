@@ -1,7 +1,7 @@
 import { Result, TaggedError } from "better-result";
 import { closeSync, openSync, writeFileSync } from "node:fs";
 
-import type { ProviderEventReplayRow as CoreReplayRow } from "@/api/lib/hosted-usage-provider/replay";
+import type { ProviderEventReplayRow as CoreReplayRow } from "@/api/handlers/hosted-usage-webhook/replay";
 
 export type ProviderEventReplayMode = CoreReplayRow["mode"];
 

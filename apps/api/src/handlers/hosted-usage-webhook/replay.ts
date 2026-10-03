@@ -1,19 +1,16 @@
 import { Result, TaggedError } from "better-result";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import * as v from "valibot";
 
-import { Temporal } from "@stll/time";
-
-import type { Transaction } from "@/api/db/root";
 import { hostedUsageWebhookEvents } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import { dispatchEvent } from "@/api/handlers/hosted-usage-webhook/dispatch";
-import type { DispatchOutcome } from "@/api/handlers/hosted-usage-webhook/dispatch";
-import { captureError } from "@/api/lib/analytics/capture";
-import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
+import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import { hostedUsageWebhookEventSchema } from "@/api/lib/hosted-usage-provider/event-schemas";
-import type { ProviderEventReplayAudit } from "@/api/lib/hosted-usage-provider/replay-audit";
+import { recordProviderEventReplayAuditInTx } from "@/api/lib/hosted-usage-provider/webhook-store";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
+import { failureSink } from "@/api/lib/observability/failure";
+import { observeFailure } from "@/api/lib/observability/observe-failure";
 
 export type ProviderEventReplayRow = {
   id: string;
@@ -32,10 +29,10 @@ export class ProviderEventReplayError extends TaggedError(
   "ProviderEventReplayError",
 )<{ message: string; cause?: unknown }> {}
 
-class ReplayDryRunRollback extends TaggedError("ReplayDryRunRollback")<{
-  message: string;
-  row: ProviderEventReplayRow;
-}> {}
+const replayFailure = failureSink({
+  event: "usage_provider.replay.failed",
+  expected: [],
+});
 
 type ReplayProviderEventOptions = {
   eventId: string;
@@ -111,6 +108,9 @@ export const replayProviderEvent = async ({
             reason: "Verified dispatch projection unavailable",
           } as const;
         }
+        if (mode === "dry_run") {
+          await tx.execute(sql`SAVEPOINT provider_event_replay_dry_run`);
+        }
         const dispatched = await dispatchEvent({
           tx,
           event: event.output,
@@ -130,77 +130,29 @@ export const replayProviderEvent = async ({
         });
         const row = { ...base, kind: dispatched.kind, reason: dispatchReason };
         if (mode === "dry_run") {
-          // Throwing the typed boundary signal rolls back dispatch, receipt and
-          // all audit writes, including when the caller supplies a savepoint.
-          throw new ReplayDryRunRollback({ message: "Replay dry run", row });
+          // Roll back the evaluated dispatch and both audit writes, then
+          // return its outcome through the ordinary transaction boundary.
+          await tx.execute(
+            sql`ROLLBACK TO SAVEPOINT provider_event_replay_dry_run`,
+          );
+          await tx.execute(
+            sql`RELEASE SAVEPOINT provider_event_replay_dry_run`,
+          );
         }
         return row;
       }),
     catch: (cause) =>
-      cause instanceof ReplayDryRunRollback
-        ? cause
-        : new ProviderEventReplayError({
-            message: "Provider event replay failed",
-            cause,
-          }),
+      new ProviderEventReplayError({
+        message: "Provider event replay failed",
+        cause,
+      }),
   });
   if (result.isOk()) {
     return Result.ok(result.value);
   }
-  if (result.error instanceof ReplayDryRunRollback) {
-    return Result.ok(result.error.row);
-  }
-  captureError(result.error, { source: "usage_provider.replay", eventId });
+  observeFailure(result.error, {
+    sink: replayFailure,
+    ctx: { source: "usage_provider.replay", requestId: eventId },
+  });
   return Result.err(result.error);
-};
-
-type RecordProviderEventReplayAuditOptions = {
-  tx: Transaction;
-  eventId: string;
-  actor: string;
-  reason: string;
-  newResult: UsageProviderWebhookResult;
-  outcome: DispatchOutcome["kind"];
-  dispatchReason: string | null;
-};
-
-/** System receipts can precede organization resolution, so their audit lives
- * on the deny-by-default receipt rather than inventing a tenant audit owner.
- * Dispatch's organization audit records remain in the same transaction. */
-const recordProviderEventReplayAuditInTx = async ({
-  tx,
-  eventId,
-  actor,
-  reason,
-  newResult,
-  outcome,
-  dispatchReason,
-}: RecordProviderEventReplayAuditOptions) => {
-  const replayAudit = {
-    actor,
-    at: Temporal.Now.instant().toString(),
-    previousResult: "ignored",
-    newResult,
-    outcome,
-    reason,
-    execution: {
-      performer: { type: "service", id: actor, name: null },
-      trigger: {
-        type: "system",
-        source: "usage_provider.replay",
-        sourceId: eventId,
-      },
-    },
-    event: {
-      action: AUDIT_ACTION.UPDATE,
-      resourceType: AUDIT_RESOURCE_TYPE.USAGE_PROVIDER_EVENT,
-      resourceId: eventId,
-      changes: { result: { old: "ignored", new: newResult } },
-      metadata: { reason, outcome, dispatchReason },
-    },
-  } as const satisfies ProviderEventReplayAudit;
-  await tx
-    .update(hostedUsageWebhookEvents)
-    .set({ result: newResult, errorMessage: dispatchReason, replayAudit })
-    .where(eq(hostedUsageWebhookEvents.eventId, eventId));
 };

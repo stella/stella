@@ -13,9 +13,9 @@ import {
 } from "@/api/db/schema";
 import type { UsageProviderWebhookResult } from "@/api/db/schema";
 import { env } from "@/api/env";
+import { replayProviderEvent } from "@/api/handlers/hosted-usage-webhook/replay";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
-import { replayProviderEvent } from "@/api/lib/hosted-usage-provider/replay";
 import { redactCompletedWebhookEvents } from "@/api/lib/hosted-usage-provider/webhook-retention";
 import type { WebhookTransactionRunner } from "@/api/lib/hosted-usage-provider/webhook-store";
 import { withGatedTestClients } from "@/api/tests/gated-test-database";

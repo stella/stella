@@ -29,6 +29,7 @@ import type { UsageEntitlementStatus, UsagePolicyKind } from "@/api/db/schema";
 import { env } from "@/api/env";
 import { AUDIT_ACTION, AUDIT_RESOURCE_TYPE } from "@/api/lib/audit-log";
 import type { SafeId } from "@/api/lib/branded-types";
+import type { DispatchOutcome } from "@/api/lib/hosted-usage-provider/dispatch-outcome";
 import type {
   HostedUsageWebhookEvent,
   HostedUsageAllocationPayload,
@@ -50,11 +51,6 @@ import {
 import type { ConfiguredAccessEvent } from "@/api/lib/usage/configured-access";
 import { applyConfiguredAccessEvent } from "@/api/lib/usage/configured-access-store";
 import { allocateUsage } from "@/api/lib/usage/usage-ledger";
-
-export type DispatchOutcome =
-  | { kind: "applied"; entitlementId: SafeId<"usageEntitlement"> }
-  | { kind: "duplicate_allocation" }
-  | { kind: "ignored"; reason: string };
 
 type PolicyLookup = {
   id: SafeId<"usagePolicy">;
