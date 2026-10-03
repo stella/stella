@@ -41,6 +41,7 @@ import {
 } from "@/api/lib/case-law/sitemap-shard-refresh";
 import { corpusProjectionErasureClaimQuery } from "@/api/lib/legal-search/corpus-index-projection-erasure-store";
 import { rehydrateCorpusIndexProviderCandidatesQuery } from "@/api/lib/legal-search/corpus-index-provider";
+import { pendingDocumentPresenceQuery } from "@/api/lib/legal-search/sk-document-backfill";
 import { LIMITS } from "@/api/lib/limits";
 import { PUBLIC_LAW_SHARED_QUERY } from "@/api/lib/public-law-shared-query";
 import type { PublicLawSharedQuery } from "@/api/lib/public-law-shared-query";
@@ -89,6 +90,19 @@ const withFirstParameter = (text: string, value: string): SQLWrapper => {
 
 /** Curated production builders with a committed access path for each scan. */
 export const QUERY_PLAN_REGISTRY = [
+  {
+    id: "case-law.outstanding-document-probe",
+    class: "point",
+    role: "root",
+    build: (tx) =>
+      pendingDocumentPresenceQuery({
+        sourceId: QUERY_PLAN_SAMPLE.caseLaw.sourceId,
+        tx,
+      }),
+    seed: "case-law",
+    planMode: "covering-index",
+    contract: planContracts["case-law.outstanding-document-probe"],
+  },
   {
     id: "case-law.ecli-identity",
     class: "point",

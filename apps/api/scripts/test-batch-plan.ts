@@ -17,10 +17,23 @@ export const PROPERTY_DB_TEST_BATCH_SIZE = 1;
 export const dbTestBatchSize = (propertyOnly: boolean) =>
   propertyOnly ? PROPERTY_DB_TEST_BATCH_SIZE : DB_TEST_BATCH_SIZE;
 
-/** Match transcript generation's per-suite process boundary (gen-chat-transcripts.ts). */
-export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set(
-  Object.values(RECORDED_CONVERSATION_SUITES),
-);
+/**
+ * Recorded conversation suites match transcript generation's per-suite process
+ * boundary (gen-chat-transcripts.ts). The memory-heavy files below are isolated
+ * by hand until the measured table records them; remove each entry once its
+ * measured peak makes the planner run it alone.
+ */
+export const SOLO_TEST_PATHS: ReadonlySet<string> = new Set([
+  ...Object.values(RECORDED_CONVERSATION_SUITES),
+  // Its 25,000-row plan fixture grows PGlite's retained WASM memory; closing
+  // the client cannot reclaim it, and a three-file Linux batch peaked at 2816 MB.
+  "src/lib/scheduler/tasks/legislation-expression-id-backfill-plan.db.test.ts",
+  // Seeds 32,000 legislation versions; a three-file batch with it peaked at
+  // 2909 MB on Linux.
+  "src/handlers/legislation/work-names-plan.db.test.ts",
+  // Keep this suite's retained database graph in its own process.
+  "src/handlers/chat/thread-durable-refs.integration.test.ts",
+]);
 
 /**
  * Move each solo file out of its composed batch into a batch of its own. The
@@ -105,32 +118,38 @@ export const readTestRssTable = (value: unknown): TestRssTable => {
   const raw = rssRecord(value, "RSS table");
   const files = rssRecord(raw["files"], "RSS files");
   if (raw["type"] === "uncalibrated") {
-    const peaks: Record<string, number> = {};
-    for (const [file, peak] of Object.entries(files)) {
-      peaks[file] = rssPositive(peak, `peak RSS for ${file}`);
-    }
+    const peaks = Object.fromEntries(
+      Object.entries(files).map(([file, peak]) => [
+        file,
+        rssPositive(peak, `peak RSS for ${file}`),
+      ]),
+    );
     return { type: "uncalibrated", files: peaks };
   }
   if (raw["type"] !== "measured") {
     return panic("Invalid RSS table type");
   }
   const baselineMb = rssPositive(raw["baselineMb"], "RSS baseline");
-  const measured: Record<string, TestRssFile> = {};
-  for (const [file, observation] of Object.entries(files)) {
-    const row = rssRecord(observation, `RSS row ${file}`);
-    const fileBaseline = rssPositive(
-      row["baselineMb"],
-      `RSS baseline for ${file}`,
-    );
-    if (fileBaseline > baselineMb) {
-      panic(`Table baseline is below the measured baseline for ${file}`);
-    }
-    measured[file] = {
-      peakMb: rssPositive(row["peakMb"], `peak RSS for ${file}`),
-      baselineMb: fileBaseline,
-      source: readTestRssSource(row["source"]),
-    };
-  }
+  const measured = Object.fromEntries(
+    Object.entries(files).map(([file, observation]): [string, TestRssFile] => {
+      const row = rssRecord(observation, `RSS row ${file}`);
+      const fileBaseline = rssPositive(
+        row["baselineMb"],
+        `RSS baseline for ${file}`,
+      );
+      if (fileBaseline > baselineMb) {
+        panic(`Table baseline is below the measured baseline for ${file}`);
+      }
+      return [
+        file,
+        {
+          peakMb: rssPositive(row["peakMb"], `peak RSS for ${file}`),
+          baselineMb: fileBaseline,
+          source: readTestRssSource(row["source"]),
+        },
+      ];
+    }),
+  );
   return {
     type: "measured",
     environment: readTestRssEnvironment(raw["environment"]),

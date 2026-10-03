@@ -40,10 +40,7 @@ import {
 import type { ChatTurnFailureCode } from "@/api/handlers/chat/chat-turn-state";
 import { planAssistantFinishPersistence } from "@/api/handlers/chat/persist-message";
 import type { MessagePersistencePlan } from "@/api/handlers/chat/persist-message";
-import {
-  invalidateChatCompactionChain,
-  shouldInvalidateChatCompactionCheckpoint,
-} from "@/api/handlers/chat/persistent-compaction";
+import { reconcileChatCompactionChainOnTx } from "@/api/handlers/chat/persistent-compaction";
 import { shouldMarkThreadUsedAnonymization } from "@/api/handlers/chat/thread-anonymization";
 import type {
   ChatMessageMetadata,
@@ -912,14 +909,12 @@ const runPersistMessage = async ({
         );
       }
 
-      if (
-        shouldInvalidateChatCompactionCheckpoint({
-          deletedMessageCount: deleteMessageIds.length,
-          persistencePlan,
-        })
-      ) {
-        await invalidateChatCompactionChain({ threadId, tx });
-      }
+      await reconcileChatCompactionChainOnTx({
+        deletedMessageIds: deleteMessageIds,
+        persistencePlan,
+        threadId,
+        tx,
+      });
 
       const updatedMessageId = persistencePlan.messageId;
       await tx
@@ -1055,14 +1050,12 @@ const runPersistMessage = async ({
         ),
       );
 
-    if (
-      shouldInvalidateChatCompactionCheckpoint({
-        deletedMessageCount: 1,
-        persistencePlan,
-      })
-    ) {
-      await invalidateChatCompactionChain({ threadId, tx });
-    }
+    await reconcileChatCompactionChainOnTx({
+      deletedMessageIds: [deletedMessageId],
+      persistencePlan,
+      threadId,
+      tx,
+    });
 
     await recordAuditEvent(tx, {
       action: AUDIT_ACTION.DELETE,

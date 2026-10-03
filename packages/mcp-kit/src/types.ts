@@ -52,6 +52,8 @@ export type ToolDefinition<Context> = {
   readonly summary: string;
   /** Longer guidance, sent only by `describe_capability`. */
   readonly guide?: string;
+  /** Short guidance appended by opt-in outline discovery. */
+  readonly brief?: string;
   readonly access: ToolAccess;
   /** Whether a call can destroy or replace state. Defaults to `access === "write"`. */
   readonly destructive?: boolean;
@@ -63,7 +65,7 @@ export type ToolDefinition<Context> = {
   readonly exampleInput?: Readonly<Record<string, unknown>>;
   /**
    * Optional schema used for the compact parameter outline. Full discovery
-   * always returns `inputSchema`.
+   * returns it when the surface opts into `fullSchema: "described"`.
    */
   readonly describedSchema?: McpJsonSchema;
   /**

@@ -1,3 +1,4 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
 import { panic, Result } from "better-result";
 import * as v from "valibot";
 
@@ -995,6 +996,7 @@ const fetchDetail = async (
   let response: Response;
   try {
     response = await fetchPublisher(url, {
+      fetchStage: "document",
       adapterKey: ADAPTER_KEYS.PL_COURTS,
       signal,
       timeoutMs: ADAPTER_TIMEOUT.REQUEST,
@@ -1794,6 +1796,7 @@ export const listPlCourtsDayPage = async ({
   }).toString()}`;
 
   const response = await fetchPublisher(url, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.PL_COURTS,
     signal,
     timeoutMs: SLICE_LIST_TIMEOUT_MS,
@@ -2472,6 +2475,7 @@ const PL_COURTS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const plCourtsAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.PL_COURTS,
   sourceSurfaces: PL_COURTS_SOURCE_SURFACES,
   sourceFields: {
@@ -2495,6 +2499,7 @@ export const plCourtsAdapter = defineSourceAdapter({
           sortingDirection: "DESC",
         }).toString()}`,
         {
+          fetchStage: "listing",
           adapterKey: ADAPTER_KEYS.PL_COURTS,
           signal,
           timeoutMs: ADAPTER_TIMEOUT.LIST,

@@ -1,15 +1,13 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 
+import type { ConvertibleViewLayoutType } from "@stll/api-contract";
+
 import { useAnalytics } from "@/lib/analytics/provider";
 import { api } from "@/lib/api";
 import { unwrapEden } from "@/lib/errors/api";
 import type { NonEmptyPatch } from "@/lib/mutation-command";
 import { toSafeId } from "@/lib/safe-id";
-import type {
-  ViewLayout,
-  ViewLayoutType,
-  ViewTemplateProperty,
-} from "@/lib/types";
+import type { ViewLayout, ViewTemplateProperty } from "@/lib/types";
 import { propertiesKeys } from "@/lib/workspaces/queries/properties";
 import { viewsKeys, viewsOptions } from "@/lib/workspaces/queries/views";
 import { useTableStore } from "@/lib/workspaces/table-store";
@@ -117,7 +115,7 @@ export const useUpdateView = (workspaceId: string) => {
 
 type ConvertViewVars = {
   viewId: string;
-  targetType: ViewLayoutType;
+  targetType: ConvertibleViewLayoutType;
 };
 
 export const useConvertView = (workspaceId: string) => {

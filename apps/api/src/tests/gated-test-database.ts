@@ -40,8 +40,9 @@ export type GatedTestDatabase = {
  */
 export const openGatedTestDatabase = (
   databaseUrl: string,
+  options: { max?: number } = {},
 ): GatedTestDatabase => {
-  const client = new SQL({ url: databaseUrl });
+  const client = new SQL({ url: databaseUrl, ...options });
   const cleanupSteps: CleanupStep[] = [];
 
   afterAll(async () => {
