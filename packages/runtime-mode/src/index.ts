@@ -170,6 +170,7 @@ export const readRuntimeMode = (): ResolvedRuntime => {
   return resolved.value;
 };
 
+// parser-output-unchanged: startup refuses example credentials; no parser output depends on it.
 type SecretExampleInvariantOptions = {
   values: Record<string, string | undefined>;
   runtimeMode: RuntimeMode;

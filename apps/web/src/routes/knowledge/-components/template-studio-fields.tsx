@@ -58,7 +58,9 @@ import { api } from "@/lib/api";
 import { optionalArray } from "@/lib/arrays";
 import { useAuthenticatedUser } from "@/lib/authenticated-user-context";
 import { detached } from "@/lib/detached";
+import { toAPIError } from "@/lib/errors/api";
 import { userErrorMessage } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   knowledgeKeys,
   templateClausesOptions,
@@ -356,9 +358,7 @@ const SlotSyncButton = ({
     setSyncing(false);
 
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("clauses.syncFailed"),
+      notifyUserError(toAPIError(response.error), t("clauses.syncFailed"), {
         description: userErrorMessage(
           response.error,
           t("common.unexpectedError"),
@@ -1112,10 +1112,7 @@ const FieldConditionSection = ({
           className="self-start"
           onClick={() => {
             if (actions?.wrapFieldInCondition(field.path) !== true) {
-              stellaToast.add({
-                type: "error",
-                title: t("errors.actionFailed"),
-              });
+              notifyUserError(undefined, t("errors.actionFailed"));
             }
           }}
           size="sm"
@@ -1151,7 +1148,7 @@ const FieldConditionSection = ({
         disabled={!condition.canRemove}
         onClick={() => {
           if (actions?.unwrapFieldCondition(field.path) !== true) {
-            stellaToast.add({ type: "error", title: t("errors.actionFailed") });
+            notifyUserError(undefined, t("errors.actionFailed"));
           }
         }}
         size="sm"
@@ -1241,7 +1238,7 @@ export const FieldFace = ({
     const applied = actions?.setFieldRepeatable(field.path, next) ?? false;
     if (!applied) {
       pendingFieldFaceScrollTop = null;
-      stellaToast.add({ type: "error", title: t("errors.actionFailed") });
+      notifyUserError(undefined, t("errors.actionFailed"));
     }
   };
 
@@ -1601,10 +1598,10 @@ const SaveRecipeDialog = ({
     });
     setSaving(false);
     if (response.error) {
-      stellaToast.add({
-        type: "error",
-        title: t("templates.studio.recipeSaveFailed"),
-      });
+      notifyUserError(
+        toAPIError(response.error),
+        t("templates.studio.recipeSaveFailed"),
+      );
       return;
     }
     stellaToast.add({
@@ -1716,10 +1713,7 @@ const ClauseSlotEditor = ({
       setEditing(false);
       return;
     }
-    stellaToast.add({
-      type: "error",
-      title: t("clauses.renameSlotInvalid"),
-    });
+    notifyUserError(undefined, t("clauses.renameSlotInvalid"));
   };
 
   if (!editing) {
@@ -1782,10 +1776,7 @@ const FieldPathEditor = ({
       setEditing(false);
       return;
     }
-    stellaToast.add({
-      type: "error",
-      title: t("templates.studio.renameFieldInvalid"),
-    });
+    notifyUserError(undefined, t("templates.studio.renameFieldInvalid"));
   };
 
   if (!editing) {

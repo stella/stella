@@ -22,6 +22,7 @@ import { resolveCorpusStorageMode } from "@/api/lib/corpus-storage-mode";
 import { resolveCorpusMemberLayout } from "@/api/lib/legal-search/corpus-member-layout";
 import { runtimeMode } from "@/api/runtime-mode";
 
+// parser-output-unchanged: startup refuses example credentials; no parser output depends on it.
 const exampleViolation = secretExampleInvariantViolation({
   values: process.env,
   runtimeMode: runtimeMode(),

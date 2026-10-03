@@ -184,7 +184,7 @@ const extractHiddenMetadata = ($: cheerio.CheerioAPI): HiddenMetadata => ({
   parallelQuotation: $("input#paralellQuotationHidden").attr("value") ?? null,
   popularName: $("input#popularNameHidden").attr("value") ?? null,
   docId: $("input#docIdHidden").attr("value") ?? null,
-  decisionForm: $("span#lblDecisionForm").text().trim() || null,
+  decisionForm: visibleHtmlText($("span#lblDecisionForm")).trim() || null,
 });
 
 // ── Cross-reference extraction ────────────────────────────
@@ -205,7 +205,7 @@ const extractCrossReferences = ($: cheerio.CheerioAPI): CrossReference[] => {
       return;
     }
 
-    const text = $(el).text().trim();
+    const text = visibleHtmlText($(el)).trim();
     if (!text || seen.has(text)) {
       return;
     }

@@ -17,14 +17,13 @@ import {
   FramePanel,
   FrameTitle,
 } from "@stll/ui/frame";
-import { stellaToast } from "@stll/ui/toast";
 import { cn } from "@stll/ui/utils";
 
 import { useInvalidateSession } from "@/hooks/use-invalidate-session";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { authClient } from "@/lib/auth-client";
 import { toAuthClientError } from "@/lib/errors/auth";
-import { userErrorFromThrown } from "@/lib/errors/user-safe";
+import { notifyUserError } from "@/lib/errors/user-toast";
 
 export const Route = createFileRoute("/auth/accept-invitation/$invitationId")({
   beforeLoad: ({ context, location }) => {
@@ -70,13 +69,7 @@ function AcceptInvitation() {
       });
 
       if (error) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
         throw toAuthClientError(error);
       }
 
@@ -87,13 +80,10 @@ function AcceptInvitation() {
       );
 
       if (setActiveError) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(setActiveError),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(
+          toAuthClientError(setActiveError),
+          t("errors.actionFailed"),
+        );
         throw toAuthClientError(setActiveError);
       }
 
@@ -112,13 +102,7 @@ function AcceptInvitation() {
       });
 
       if (error) {
-        stellaToast.add({
-          title: userErrorFromThrown(
-            toAuthClientError(error),
-            t("errors.actionFailed"),
-          ),
-          type: "error",
-        });
+        notifyUserError(toAuthClientError(error), t("errors.actionFailed"));
         throw toAuthClientError(error);
       }
 

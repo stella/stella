@@ -15,6 +15,7 @@ import { usePermissions } from "@/hooks/use-permissions";
 import { useFormatter } from "@/i18n/formatting-context";
 import { useAnalytics } from "@/lib/analytics/provider";
 import { detached } from "@/lib/detached";
+import { notifyUserError } from "@/lib/errors/user-toast";
 import {
   correspondenceAddressOptions,
   CORRESPONDENCE_PAGE_SIZE,
@@ -86,7 +87,7 @@ const AddressCard = ({ workspaceId }: { workspaceId: string }) => {
     const copied = await copyToClipboard(address);
     if (Result.isError(copied)) {
       analytics.captureError(copied.error);
-      stellaToast.add({ title: t("common.error"), type: "error" });
+      notifyUserError(copied.error, t("common.error"));
       return;
     }
     stellaToast.add({ title: t("common.copied"), type: "success" });

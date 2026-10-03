@@ -73,7 +73,13 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
     mcp: { type: "internal", reason: "upload_mechanics" },
     params: workspaceParams({ fieldId: tSafeId("field") }),
   } satisfies WorkspaceHandlerConfig,
-  async function* ({ params: { fieldId }, scopedDb, session, workspaceId }) {
+  async function* ({
+    params: { fieldId },
+    scopedDb,
+    session,
+    workspaceId,
+    recordAuditEvent,
+  }) {
     const response = yield* Result.await(
       Result.tryPromise(
         async () =>
@@ -82,6 +88,7 @@ export const readEmailHtmlPreviewEndpoint = createSafeHandler(
             organizationId: session.activeOrganizationId,
             workspaceId,
             scopedDb,
+            recordAuditEvent,
           }),
       ),
     );

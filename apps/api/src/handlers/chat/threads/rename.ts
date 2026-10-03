@@ -79,7 +79,7 @@ const renameThread = createSafeRootHandler(
           );
 
         const [existing] = await tx
-          .select({ id: chatThreads.id, title: chatThreads.title })
+          .select({ id: chatThreads.id, titleSource: chatThreads.titleSource })
           .from(chatThreads)
           .where(threadPredicate())
           .limit(1);
@@ -102,7 +102,11 @@ const renameThread = createSafeRootHandler(
           resourceId: existing.id,
           workspaceId: scope.scope === "workspace" ? scope.workspaceId : null,
           changes: {
-            title: { old: existing.title, new: title },
+            titleChanged: { old: false, new: true },
+            titleSource: {
+              old: existing.titleSource,
+              new: CHAT_TITLE_SOURCE.USER,
+            },
           },
         });
 

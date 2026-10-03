@@ -5,11 +5,6 @@
     "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
   },
   {
-    "table": "usage_provider_webhook_events",
-    "column": "processedAt",
-    "reason": "unreferenced as of 2026-09-02; decide: wire or drop"
-  },
-  {
     "table": "organization_settings",
     "column": "documentStampEnabled",
     "reason": "unreferenced as of 2026-09-02; decide: wire or drop"

@@ -665,14 +665,14 @@ mechanics, and similar), not gaps in coverage.
 | --- | --- |
 | account_lifecycle | 4 |
 | assistant_chat | 16 |
-| auth_plumbing | 17 |
+| auth_plumbing | 18 |
 | billing_ui | 1 |
 | chat_thread_ui | 2 |
 | compound_consent | 1 |
 | deploy_mechanics | 1 |
 | document_processing | 25 |
 | hosted_billing | 7 |
-| mcp_transport | 11 |
+| mcp_transport | 12 |
 | native_tool_ui | 9 |
 | provider_secret | 27 |
 | public_indexing | 8 |

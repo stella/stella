@@ -157,7 +157,7 @@ const fixtureRuleOverrides = [
     rules: publicSsrAmbientStateRules,
   },
   fixtureRuleOverride("auth-lifecycle.fixture.ts", [
-    "auth-lifecycle/after-remove-member-revokes-artifacts",
+    "auth-lifecycle/member-removal-revokes-artifacts",
     "auth-lifecycle/no-direct-auth-artifact-delete",
   ]),
   fixtureRuleOverride("forbid-process-env-outside-env-ts.fixture.ts", [
@@ -250,6 +250,12 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("no-raw-public-law-seo.fixture.ts", [
     "no-raw-public-law-seo/no-raw-public-law-seo",
+  ]),
+  fixtureRuleOverride("no-discarded-toast-error.fixture.ts", [
+    "no-discarded-toast-error/no-discarded-toast-error",
+  ]),
+  fixtureRuleOverride("no-direct-error-toast.fixture.ts", [
+    "no-direct-error-toast/no-direct-error-toast",
   ]),
   fixtureRuleOverride("no-raw-router-invalidation.fixture.ts", [
     "no-raw-router-invalidation/no-raw-router-invalidation",
@@ -927,6 +933,8 @@ export default defineConfig({
     "scanned-file-boundary/scanned-file-boundary": "error",
     "no-raw-zip-load/no-raw-zip-load": "error",
     "no-direct-property-table-write/no-direct-property-table-write": "error",
+    "no-direct-legislation-revision-write/no-direct-legislation-revision-write":
+      "error",
     "no-unvalidated-clause-write/no-unvalidated-clause-write": "error",
     "no-direct-template-version-write/no-direct-template-version-write":
       "error",
@@ -1246,6 +1254,8 @@ export default defineConfig({
     "./.oxlint-plugins/require-loader-prefetch.ts",
     "./.oxlint-plugins/require-matter-affordance.ts",
     "./.oxlint-plugins/no-raw-route-query-client.ts",
+    "./.oxlint-plugins/no-discarded-toast-error.ts",
+    "./.oxlint-plugins/no-direct-error-toast.ts",
     "./.oxlint-plugins/no-raw-router-invalidation.ts",
     "./.oxlint-plugins/no-optional-mutation-command.ts",
     "./.oxlint-plugins/no-beforeload-redirect.ts",
@@ -1263,6 +1273,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-direct-ingestion-checkpoint-write.ts",
     "./.oxlint-plugins/no-literal-decision-court.ts",
     "./.oxlint-plugins/no-parser-validator-calls.ts",
+    "./.oxlint-plugins/no-raw-parser-html.ts",
     "./.oxlint-plugins/no-swallowed-item-error.ts",
     "./.oxlint-plugins/no-raw-decision-text-fields.ts",
     "./.oxlint-plugins/no-unowned-file-version-write.ts",
@@ -1299,6 +1310,7 @@ export default defineConfig({
     "./.oxlint-plugins/scanned-file-boundary.ts",
     "./.oxlint-plugins/no-raw-zip-load.ts",
     "./.oxlint-plugins/no-direct-property-table-write.ts",
+    "./.oxlint-plugins/no-direct-legislation-revision-write.ts",
     "./.oxlint-plugins/no-unvalidated-clause-write.ts",
     "./.oxlint-plugins/no-direct-template-version-write.ts",
     "./.oxlint-plugins/no-direct-pdf-save.ts",
@@ -3035,6 +3047,8 @@ export default defineConfig({
         ],
         "require-router-select/require-router-select": "error",
         "no-optional-mutation-command/no-optional-mutation-command": "error",
+        "no-discarded-toast-error/no-discarded-toast-error": "error",
+        "no-direct-error-toast/no-direct-error-toast": "error",
         "no-raw-router-invalidation/no-raw-router-invalidation": "error",
         "require-matter-affordance/require-matter-affordance": "error",
         "security-guards/no-unsanitized-href": "error",
@@ -3133,6 +3147,26 @@ export default defineConfig({
         ".oxlint-plugins/__fixtures__/no-swallowed-item-error.fixture.test.ts",
       ],
       rules: { "no-swallowed-item-error/no-test-swallowed-error": "error" },
+    },
+    {
+      files: [
+        "apps/api/src/handlers/case-law/ingestion/parsers/**/*.ts",
+        "apps/api/src/handlers/case-law/ingestion/adapters/**/*.ts",
+        "apps/api/src/lib/legal-search/parsers/**/*.ts",
+        ".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts",
+      ],
+      excludeFiles: [
+        "**/*.test.ts",
+        "**/__fixtures__/**",
+        // This test support oracle checks retention independently of the
+        // production HTML helpers; sharing their reads would make it vacuous.
+        "apps/api/src/handlers/case-law/ingestion/parsers/courtlistener/test-oracle.ts",
+      ],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
+    },
+    {
+      files: [".oxlint-plugins/__fixtures__/no-raw-parser-html.fixture.ts"],
+      rules: { "no-raw-parser-html/no-raw-parser-html": "error" },
     },
     {
       files: [
@@ -3906,7 +3940,7 @@ export default defineConfig({
     {
       files: ["apps/api/src/**/*.{ts,tsx}"],
       rules: {
-        "auth-lifecycle/after-remove-member-revokes-artifacts": "error",
+        "auth-lifecycle/member-removal-revokes-artifacts": "error",
         "auth-lifecycle/no-direct-auth-artifact-delete": "error",
         "mcp-security/no-direct-oauth-client-join": "error",
         "no-raw-error-logging/no-raw-error-logging": "error",
@@ -4519,7 +4553,7 @@ export default defineConfig({
                 name: "@/api/lib/api-handlers",
                 importNames: ["createSafeHandler", "createSafeRootHandler"],
                 message:
-                  "Public route files must use createSafePublicHandler and must not receive authenticated handler context.",
+                  "Public route files must use createSafePublicHandler or createSafeBoundedPublicHandler and must not receive authenticated handler context.",
               },
               {
                 name: "@/api/lib/auth",

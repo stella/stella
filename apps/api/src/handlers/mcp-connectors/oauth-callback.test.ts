@@ -3,6 +3,7 @@ import { afterEach, beforeEach, describe, expect, test } from "bun:test";
 
 import mcpOAuthCallback, {
   buildCallbackRedirectUrl,
+  createMcpOAuthCallbackHandler,
 } from "@/api/handlers/mcp-connectors/oauth-callback";
 import { toSafeId } from "@/api/lib/branded-types";
 import { DatabaseError, HandlerError } from "@/api/lib/errors/tagged-errors";
@@ -73,7 +74,12 @@ const stateRow = (overrides: Record<string, unknown> = {}) => ({
   codeVerifier: "verifier",
   redirectUri: "https://api.example.com/cb",
   resourceUrl: "https://rs.example.com",
-  connector: { id: toSafeId<"mcpConnector">("conn_1"), slug: "acme" },
+  connector: {
+    id: toSafeId<"mcpConnector">("conn_1"),
+    slug: "acme",
+    url: "https://rs.example.com",
+    oauthIssuer: "https://as.example.com",
+  },
   ...overrides,
 });
 
@@ -82,14 +88,36 @@ const stateRow = (overrides: Record<string, unknown> = {}) => ({
 // rejected binding.
 const callbackContext = (
   row: Record<string, unknown>,
-  counter: { calls: number },
+  counter: {
+    calls: number;
+    review?: {
+      status: "needs_reapproval" | "approved";
+      approvedIssuer: string | null;
+      approvedEndpointOrigins?: readonly string[];
+    };
+  },
 ): CallbackCtx =>
   asTestRaw<CallbackCtx>({
     query: { code: "auth-code", state: "state-token" },
-    safeDb: asTestRaw<CallbackCtx["safeDb"]>(async () => {
-      counter.calls += 1;
-      return Result.ok(row);
-    }),
+    safeDb: asTestRaw<CallbackCtx["safeDb"]>(
+      async (operation: (tx: unknown) => unknown) => {
+        counter.calls += 1;
+        return Result.ok(
+          await operation({
+            query: {
+              mcpOAuthState: { findFirst: async () => row },
+              mcpConnectorAuthorizationReviews: {
+                findFirst: async () => counter.review,
+              },
+              mcpOAuthClients: { findFirst: async () => undefined },
+            },
+            insert: () => ({
+              values: () => ({ onConflictDoUpdate: async () => {} }),
+            }),
+          }),
+        );
+      },
+    ),
     scopedDb: asTestRaw<CallbackCtx["scopedDb"]>(async () => undefined),
     session: { activeOrganizationId: orgA },
     user: { id: userA },
@@ -108,6 +136,125 @@ const reasonOf = (result: unknown): string | null => {
 };
 
 describe("mcpOAuthCallback identity binding", () => {
+  test("preserves current organization approval when a pending connection is outdated", async () => {
+    const issuer = "https://as.example.net";
+    const counter = {
+      calls: 0,
+      review: {
+        status: "approved",
+        approvedIssuer: issuer,
+        approvedEndpointOrigins: [],
+      } as const,
+    };
+    const callback = createMcpOAuthCallbackHandler(async () =>
+      Result.ok({
+        protectedResource: {
+          resource: "https://rs.example.com",
+          authorization_servers: [issuer],
+        },
+        authorizationServer: {
+          issuer,
+          authorization_endpoint: `${issuer}/authorize`,
+          token_endpoint: `${issuer}/token`,
+        },
+      }),
+    );
+    expect(
+      reasonOf(await callback.handler(callbackContext(stateRow(), counter))),
+    ).toBe("invalid-secret");
+    expect(counter.calls).toBe(2);
+  });
+
+  test("continues only with the resource recorded for the pending connection", async () => {
+    const counter = { calls: 0 };
+    const callback = createMcpOAuthCallbackHandler(async () =>
+      Result.ok({
+        protectedResource: {
+          resource: "https://rs.example.com/",
+          authorization_servers: ["https://as.example.com"],
+        },
+        authorizationServer: {
+          issuer: "https://as.example.com",
+          authorization_endpoint: "https://as.example.com/authorize",
+          token_endpoint: "https://as.example.com/token",
+        },
+      }),
+    );
+    const result = await callback.handler(callbackContext(stateRow(), counter));
+    expect(reasonOf(result)).toBe("invalid-secret");
+    expect(counter.calls).toBe(2);
+  });
+
+  test("uses organization endpoint approval for the pending connection", async () => {
+    for (const confirmed of [false, true]) {
+      const counter = {
+        calls: 0,
+        review: {
+          status: "approved",
+          approvedIssuer: "https://as.example.net",
+          approvedEndpointOrigins: confirmed
+            ? ["https://tokens.example.org"]
+            : [],
+        } as const,
+      };
+      const callback = createMcpOAuthCallbackHandler(async () =>
+        Result.ok({
+          protectedResource: {
+            resource: "https://rs.example.com",
+            authorization_servers: ["https://as.example.net"],
+          },
+          authorizationServer: {
+            issuer: "https://as.example.net",
+            authorization_endpoint: "https://as.example.net/authorize",
+            token_endpoint: "https://tokens.example.org/token",
+          },
+        }),
+      );
+      const result = await callback.handler(
+        callbackContext(
+          stateRow({ authorizationServerUrl: "https://as.example.net" }),
+          counter,
+        ),
+      );
+      expect(reasonOf(result)).toBe(
+        confirmed ? "missing-client" : "invalid-secret",
+      );
+      expect(counter.calls).toBe(3);
+    }
+  });
+
+  test("requires organization approval before continuing a pending connection", async () => {
+    for (const resourceUrl of [
+      "https://rs.example.com/other",
+      "https://rs.example.com",
+    ]) {
+      const counter = {
+        calls: 0,
+        review: {
+          status: "needs_reapproval",
+          approvedIssuer: "https://as.example.com",
+        } as const,
+      };
+      const result = await mcpOAuthCallback.handler(
+        callbackContext(stateRow({ resourceUrl }), counter),
+      );
+      expect(reasonOf(result)).toBe("approval-required");
+      expect(counter.calls).toBe(2);
+    }
+  });
+
+  test("uses the connector resource configured for the pending connection", async () => {
+    const counter = { calls: 0 };
+    const result = await mcpOAuthCallback.handler(
+      callbackContext(
+        stateRow({ resourceUrl: "https://rs.example.com/other" }),
+        counter,
+      ),
+    );
+    expect(reasonOf(result)).toBe("invalid-secret");
+    expect(counter.calls).toBe(3);
+  });
+
   test("rejects a state row belonging to another organization", async () => {
     const counter = { calls: 0 };
     const result = await mcpOAuthCallback.handler(
