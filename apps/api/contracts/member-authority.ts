@@ -11,11 +11,9 @@ declare const memberRole: AuthorizedMemberRole;
 void (memberRole.role === "admin");
 // @ts-expect-error the authority's role is private to its owner
 ["admin", "owner"].includes(memberRole.role);
+const forged = { role: "admin", credential: { type: "session" } } as const;
 // @ts-expect-error authority must be constructed by its owner
-({
-  role: "admin",
-  credential: { type: "session" },
-}) satisfies AuthorizedMemberRole;
+void (forged satisfies AuthorizedMemberRole);
 
 hasMemberPermission(memberRole, { entity: ["update"] });
 hasManagementPermission(memberRole, { workspace: ["update"] });
