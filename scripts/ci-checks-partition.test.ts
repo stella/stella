@@ -3,6 +3,8 @@ import { expect, test } from "bun:test";
 import { readFileSync } from "node:fs";
 import * as v from "valibot";
 
+import { CUSTOM_LINT_TEST_ARGS } from "./check-oxlint-rule-coverage.ts";
+
 const jobSchema = v.looseObject({
   steps: v.array(v.looseObject({ name: v.string() })),
 });
@@ -162,7 +164,28 @@ const legSteps = (
     );
   });
 const actualSteps = legSteps(partitions, partitionIds);
+const lintFixtureCommand = ["bun", ...CUSTOM_LINT_TEST_ARGS].join(" ");
 const baseSteps = legSteps(baseline, baselineIds);
+for (const step of baseSteps) {
+  if (
+    step.name !== "Documentation source policy rule" ||
+    step["run"] !== `${lintFixtureCommand}\nbun run check:docs-sources\n`
+  ) {
+    continue;
+  }
+  // The coverage owner now runs these fixtures and records their outcomes.
+  const coverage = actualSteps.find(
+    ({ name }) => name === "Custom lint rule coverage",
+  );
+  expect(coverage?.["if"]).toBe(step["if"]);
+  expect(coverage?.["run"]).toBe(
+    "bun test scripts/check-oxlint-rule-coverage.test.ts\nbun scripts/check-oxlint-rule-coverage.ts\n",
+  );
+  expect(coverage?.["env"]).toEqual({
+    BASE_SHA: `\${{ github.event.pull_request.base.sha || github.event.merge_group.base_sha || '' }}`,
+  });
+  step["run"] = "bun run check:docs-sources";
+}
 
 test("parallel CI checks preserve every merge-base check exactly once", () => {
   expect(jobs).not.toHaveProperty("ci-checks");
