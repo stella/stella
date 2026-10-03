@@ -6,10 +6,11 @@ import { lintSingleRule } from "./lint-single-rule.ts";
 setDefaultTimeout(20_000);
 
 test("parser failures cannot supply clean rule coverage", async () => {
-  const result = await Result.tryPromise(() =>
-    lintSingleRule("no-unsafe-inner-html", "const broken = ;", {
-      sourcePath: "source.tsx",
-    }),
+  const result = await Result.tryPromise(
+    async () =>
+      await lintSingleRule("no-unsafe-inner-html", "const broken = ;", {
+        sourcePath: "source.tsx",
+      }),
   );
   expect(Result.isError(result)).toBe(true);
   if (Result.isError(result)) {
