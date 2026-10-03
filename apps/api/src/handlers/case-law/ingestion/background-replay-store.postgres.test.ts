@@ -22,7 +22,10 @@ import {
   EMPTY_AST,
   STORED_RAW_REPARSE_REJECTION,
 } from "@/api/handlers/case-law/ingestion/adapter";
-import { getAdapter } from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
+import {
+  getAdapter,
+  listAdapters,
+} from "@/api/handlers/case-law/ingestion/adapters/adapter-registry";
 import type {
   BackgroundReplayBatch,
   BackgroundReplaySource,
@@ -36,6 +39,7 @@ import {
 import {
   CASE_LAW_REPLAY_SCOPE,
   REPLAY_ROW_OUTCOME,
+  type ReplayRowReport,
   replayCaseLawSource,
   selectScopeEnd,
   buildBackgroundReplayProbe,
@@ -562,229 +566,222 @@ if (!databaseUrl || !enabled) {
       }
     });
 
-    test("lost heavy-slot sessions fence parser stamps and document writes before any effect", async () => {
+    test("lost heavy-slot sessions fence changed document writes before any effect", async () => {
       const registered = getAdapter(ADAPTER_KEYS.EU_ECJ);
       if (!registered) {
         throw new TypeError("Expected registered replay adapter");
       }
       const fake = startFakeS3();
       try {
-        for (const mode of ["parser-stamp", "document-write"] as const) {
-          const { source, store } = await fixture(1);
-          const reserved = await store.reserveBatch(
-            source,
-            "2026-10-01",
-            verdict(),
-          );
-          if (reserved.type !== "reserved") {
-            throw new TypeError("Expected fenced replay reservation");
-          }
-          let fulltext = "Text rozhodnutí před opravou parseru.";
-          const adapter = {
-            ...registered,
-            reparseStoredRaw: (
-              stored: Parameters<
-                NonNullable<typeof registered.reparseStoredRaw>
-              >[0],
-            ) => ({
-              type: "parsed" as const,
-              result: {
-                caseNumber: stored.caseNumber,
-                court: stored.court,
-                country: "CZE",
-                language: stored.language,
-                metadata: stored.metadata,
-                parserVersion: 2,
-                rawHash: "replay-slot-fence",
-                textFields: absentDecisionTextFields(
-                  TEXT_ABSENCE_REASON.NOT_PUBLISHED,
-                ),
-                fulltext,
-                documentAst: EMPTY_AST,
-              },
-            }),
-          };
-          const lease = await acquireCaseLawSourceIngestionLease({
+        const { source, store } = await fixture(1);
+        const reserved = await store.reserveBatch(
+          source,
+          "2026-10-01",
+          verdict(),
+        );
+        if (reserved.type !== "reserved") {
+          throw new TypeError("Expected fenced replay reservation");
+        }
+        let fulltext = "Text rozhodnutí před opravou parseru.";
+        const adapter = {
+          ...registered,
+          reparseStoredRaw: (
+            stored: Parameters<
+              NonNullable<typeof registered.reparseStoredRaw>
+            >[0],
+          ) => ({
+            type: "parsed" as const,
+            result: {
+              caseNumber: stored.caseNumber,
+              court: stored.court,
+              country: "CZE",
+              language: stored.language,
+              metadata: stored.metadata,
+              parserVersion: 2,
+              rawHash: "replay-slot-fence",
+              textFields: absentDecisionTextFields(
+                TEXT_ABSENCE_REASON.NOT_PUBLISHED,
+              ),
+              fulltext,
+              documentAst: EMPTY_AST,
+            },
+          }),
+        };
+        const lease = await acquireCaseLawSourceIngestionLease({
+          scopedDb,
+          sourceId: source.id,
+        });
+        if (!lease) {
+          throw new TypeError("Expected fenced replay source lease");
+        }
+        const raw = new TextEncoder().encode("<html>stored decision</html>");
+        try {
+          const seeded = createBackgroundReplayRunner({
+            rootDb: db,
+            ingestionDb: scopedDb,
+            getLease: () => lease,
+            assertSlot: async () => {},
+            store,
+            log: () => {},
+            adapterFor: () => adapter,
+            readStoredRaw: async () => raw,
+          });
+          expect(
+            (await seeded.replay(reserved.batch, { apply: true })).outcomes
+              .applied,
+          ).toBe(1);
+          const fixedPoint = await replayCaseLawSource({
+            adapter,
             scopedDb,
             sourceId: source.id,
+            scope: {
+              type: "decision",
+              decisionId: reserved.batch.decisionId,
+            },
+            bound: { type: "at-most", limit: 1 },
+            pageSize: 1,
+            sourceLease: null,
+            readStoredRaw: async () => raw,
           });
-          if (!lease) {
-            throw new TypeError("Expected fenced replay source lease");
+          if (fixedPoint.type !== "ran") {
+            throw new TypeError("Expected seeded replay fixed point");
           }
-          const raw = new TextEncoder().encode("<html>stored decision</html>");
-          try {
-            const seeded = createBackgroundReplayRunner({
-              rootDb: db,
-              ingestionDb: scopedDb,
-              getLease: () => lease,
-              assertSlot: async () => {},
-              store,
-              log: () => {},
-              adapterFor: () => adapter,
-              readStoredRaw: async () => raw,
-            });
-            expect(
-              (await seeded.replay(reserved.batch, { apply: true })).outcomes
-                .applied,
-            ).toBe(1);
-            const fixedPoint = await replayCaseLawSource({
-              adapter,
-              scopedDb,
-              sourceId: source.id,
-              scope: {
-                type: "decision",
-                decisionId: reserved.batch.decisionId,
-              },
-              bound: { type: "at-most", limit: 1 },
-              pageSize: 1,
-              sourceLease: null,
-              readStoredRaw: async () => raw,
-            });
-            if (fixedPoint.type !== "ran") {
-              throw new TypeError("Expected seeded replay fixed point");
-            }
-            expect(fixedPoint.report.outcomes.unchanged).toBe(1);
+          expect(fixedPoint.report.outcomes.unchanged).toBe(1);
+          await db
+            .update(caseLawDecisions)
+            .set({ parserVersion: 1 })
+            .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+          fulltext = "Text rozhodnutí po opravě parseru.";
+          const before = (
             await db
-              .update(caseLawDecisions)
-              .set({ parserVersion: 1 })
-              .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
-            if (mode === "document-write") {
-              fulltext = "Text rozhodnutí po opravě parseru.";
-            }
-            const before = (
-              await db
-                .select()
-                .from(caseLawDecisions)
-                .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
-            ).at(0);
-            if (before === undefined) {
-              throw new TypeError("Expected seeded decision before fencing");
-            }
-            const writesBefore = fake.requests.filter(
-              ({ method }) => method === "PUT",
-            ).length;
-            await withGatedTestClients(
-              databaseUrl,
-              async ({ openClient }) => {
-                const first = await openClient().sql.reserve();
-                const rival = await openClient().sql.reserve();
-                const admin = openClient().sql;
-                const makeSlot = (session: typeof first) =>
-                  createHeavyWorkSlot({
-                    kind: "backfill_batch",
-                    session: {
-                      query: async (statement, parameters) =>
-                        await session.unsafe<{ acquired: boolean }[]>(
-                          statement,
-                          [...parameters],
-                        ),
-                    },
-                  });
-                const firstSlot = makeSlot(first);
-                const rivalSlot = makeSlot(rival);
-                const expectAcquisition = async (
-                  slot: typeof firstSlot,
-                  expected: boolean,
-                ) => {
-                  const acquired = await slot.tryAcquire();
-                  if (acquired.isErr()) {
-                    throw acquired.error;
-                  }
-                  expect(acquired.value).toBe(expected);
-                };
-                const pid = (
-                  await first.unsafe<{ pid: number }[]>(
-                    "SELECT pg_backend_pid() AS pid",
-                  )
-                ).at(0)?.pid;
-                if (pid === undefined) {
-                  throw new TypeError("Missing heavy-slot backend identity");
-                }
-                let reads = 0;
-                let fenceChecks = 0;
-                const cleanupState = { killed: false };
-                try {
-                  await expectAcquisition(firstSlot, true);
-                  await expectAcquisition(rivalSlot, false);
-                  const runner = createBackgroundReplayRunner({
-                    rootDb: db,
-                    ingestionDb: scopedDb,
-                    getLease: () => lease,
-                    store,
-                    log: () => {},
-                    adapterFor: () => adapter,
-                    readStoredRaw: async () => {
-                      reads += 1;
-                      if (reads === 2) {
-                        const terminated = await admin<
-                          { terminated: boolean }[]
-                        >`SELECT pg_terminate_backend(${pid}, 5000) AS terminated`;
-                        expect(terminated.at(0)?.terminated).toBe(true);
-                        cleanupState.killed = true;
-                        await expectAcquisition(rivalSlot, true);
-                      }
-                      return raw;
-                    },
-                    assertSlot: async () => {
-                      fenceChecks += 1;
-                      const current = (
-                        await first.unsafe<{ pid: number }[]>(
-                          "SELECT pg_backend_pid() AS pid",
-                        )
-                      ).at(0)?.pid;
-                      if (current !== pid) {
-                        throw new TypeError("Heavy-work session was replaced");
-                      }
-                    },
-                  });
-                  const replayed = await runner.replay(reserved.batch, {
-                    apply: true,
-                  });
-                  expect(reads).toBe(2);
-                  expect(cleanupState.killed).toBe(true);
-                  expect(fenceChecks).toBeGreaterThan(0);
-                  expect(replayed.outcomes.applied).toBe(0);
-                  expect(replayed.haltReason).not.toBeNull();
-                  expect(
-                    await db
-                      .select()
-                      .from(caseLawDecisions)
-                      .where(
-                        eq(caseLawDecisions.id, reserved.batch.decisionId),
-                      ),
-                  ).toEqual([before]);
-                  expect(
-                    fake.requests.filter(({ method }) => method === "PUT"),
-                  ).toHaveLength(writesBefore);
-                  expect(
-                    await store.pendingBatch(source, "2026-10-01"),
-                  ).toEqual(reserved);
-                  const checkpoint = (
-                    await db
-                      .select()
-                      .from(databaseBackfillStates)
-                      .where(
-                        eq(
-                          databaseBackfillStates.name,
-                          `case-law-replay:${source.id}:2`,
-                        ),
-                      )
-                  ).at(0);
-                  expect(checkpoint?.cursor).toBeNull();
-                } finally {
-                  await rivalSlot.close();
-                  if (!cleanupState.killed) {
-                    await firstSlot.close();
-                  }
-                  first.release();
-                  rival.release();
-                }
-              },
-              { closeTimeout: 0 },
-            );
-          } finally {
-            await lease.release();
+              .select()
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+          ).at(0);
+          if (before === undefined) {
+            throw new TypeError("Expected seeded decision before fencing");
           }
+          const writesBefore = fake.requests.filter(
+            ({ method }) => method === "PUT",
+          ).length;
+          await withGatedTestClients(
+            databaseUrl,
+            async ({ openClient }) => {
+              const first = await openClient().sql.reserve();
+              const rival = await openClient().sql.reserve();
+              const admin = openClient().sql;
+              const makeSlot = (session: typeof first) =>
+                createHeavyWorkSlot({
+                  kind: "backfill_batch",
+                  session: {
+                    query: async (statement, parameters) =>
+                      await session.unsafe<{ acquired: boolean }[]>(statement, [
+                        ...parameters,
+                      ]),
+                  },
+                });
+              const firstSlot = makeSlot(first);
+              const rivalSlot = makeSlot(rival);
+              const expectAcquisition = async (
+                slot: typeof firstSlot,
+                expected: boolean,
+              ) => {
+                const acquired = await slot.tryAcquire();
+                if (acquired.isErr()) {
+                  throw acquired.error;
+                }
+                expect(acquired.value).toBe(expected);
+              };
+              const pid = (
+                await first.unsafe<{ pid: number }[]>(
+                  "SELECT pg_backend_pid() AS pid",
+                )
+              ).at(0)?.pid;
+              if (pid === undefined) {
+                throw new TypeError("Missing heavy-slot backend identity");
+              }
+              let reads = 0;
+              let fenceChecks = 0;
+              const cleanupState = { killed: false };
+              try {
+                await expectAcquisition(firstSlot, true);
+                await expectAcquisition(rivalSlot, false);
+                const runner = createBackgroundReplayRunner({
+                  rootDb: db,
+                  ingestionDb: scopedDb,
+                  getLease: () => lease,
+                  store,
+                  log: () => {},
+                  adapterFor: () => adapter,
+                  readStoredRaw: async () => {
+                    reads += 1;
+                    if (reads === 2) {
+                      const terminated = await admin<
+                        { terminated: boolean }[]
+                      >`SELECT pg_terminate_backend(${pid}, 5000) AS terminated`;
+                      expect(terminated.at(0)?.terminated).toBe(true);
+                      cleanupState.killed = true;
+                      await expectAcquisition(rivalSlot, true);
+                    }
+                    return raw;
+                  },
+                  assertSlot: async () => {
+                    fenceChecks += 1;
+                    const current = (
+                      await first.unsafe<{ pid: number }[]>(
+                        "SELECT pg_backend_pid() AS pid",
+                      )
+                    ).at(0)?.pid;
+                    if (current !== pid) {
+                      throw new TypeError("Heavy-work session was replaced");
+                    }
+                  },
+                });
+                const replayed = await runner.replay(reserved.batch, {
+                  apply: true,
+                });
+                expect(reads).toBe(2);
+                expect(cleanupState.killed).toBe(true);
+                expect(fenceChecks).toBeGreaterThan(0);
+                expect(replayed.outcomes.applied).toBe(0);
+                expect(replayed.haltReason).not.toBeNull();
+                expect(
+                  await db
+                    .select()
+                    .from(caseLawDecisions)
+                    .where(eq(caseLawDecisions.id, reserved.batch.decisionId)),
+                ).toEqual([before]);
+                expect(
+                  fake.requests.filter(({ method }) => method === "PUT"),
+                ).toHaveLength(writesBefore);
+                expect(await store.pendingBatch(source, "2026-10-01")).toEqual(
+                  reserved,
+                );
+                const checkpoint = (
+                  await db
+                    .select()
+                    .from(databaseBackfillStates)
+                    .where(
+                      eq(
+                        databaseBackfillStates.name,
+                        `case-law-replay:${source.id}:2`,
+                      ),
+                    )
+                ).at(0);
+                expect(checkpoint?.cursor).toBeNull();
+              } finally {
+                await rivalSlot.close();
+                if (!cleanupState.killed) {
+                  await firstSlot.close();
+                }
+                first.release();
+                rival.release();
+              }
+            },
+            { closeTimeout: 0 },
+          );
+        } finally {
+          await lease.release();
         }
       } finally {
         fake.stop();
@@ -1060,6 +1057,219 @@ if (!databaseUrl || !enabled) {
       });
     });
 
+    test("unchanged receipts require the exact checked row despite concurrent same-version edits", async () => {
+      for (const invalidation of [
+        "missing-token",
+        "updated-token",
+        "parser-version",
+      ] as const) {
+        const { source, store } = await fixture(3);
+        const reserved = await store.reserveBatch(
+          source,
+          "2026-10-01",
+          verdict(),
+        );
+        if (reserved.type !== "reserved") {
+          throw new TypeError("Expected concurrent unchanged reservation");
+        }
+        const checked = (
+          await db
+            .select({ token: sql<string>`${caseLawDecisions.updatedAt}::text` })
+            .from(caseLawDecisions)
+            .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+        ).at(0);
+        if (checked === undefined) {
+          throw new TypeError("Expected checked row token");
+        }
+        if (invalidation === "updated-token") {
+          await db
+            .update(caseLawDecisions)
+            .set({
+              updatedAt: sql`${caseLawDecisions.updatedAt} + interval '1 microsecond'`,
+            })
+            .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+        }
+        if (invalidation === "parser-version") {
+          await db
+            .update(caseLawDecisions)
+            .set({ parserVersion: 0 })
+            .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+        }
+        expect(
+          await store.completeBatch(reserved.batch, {
+            report: {
+              id: reserved.batch.decisionId,
+              caseNumber: "fixture",
+              language: "cs",
+              outcome: REPLAY_ROW_OUTCOME.UNCHANGED,
+              ...(invalidation === "missing-token"
+                ? {}
+                : { checkedUpdateToken: checked.token }),
+            },
+            durationMs: 1,
+            verdict: verdict(),
+          }),
+        ).toBe("retryable");
+        expect(
+          await db
+            .select()
+            .from(caseLawReplayBlocked)
+            .where(
+              eq(caseLawReplayBlocked.decisionId, reserved.batch.decisionId),
+            ),
+        ).toHaveLength(0);
+        expect(
+          (
+            await db
+              .select()
+              .from(caseLawReplayBatches)
+              .where(eq(caseLawReplayBatches.id, reserved.batch.id))
+          ).at(0)?.status,
+        ).toBe("reserved");
+      }
+    });
+
+    test("every registered jurisdiction receipts all terminal outcomes and only reselects after a parser bump", async () => {
+      const outcomes = ["changed", "unchanged", "rejected"] as const;
+      for (const registered of listAdapters()) {
+        const { source: baseSource, ids, store } = await fixture(3);
+        const source = { ...baseSource, adapterKey: registered.key };
+        for (const outcome of outcomes) {
+          const reserved = await store.reserveBatch(
+            source,
+            "2026-10-01",
+            verdict(),
+          );
+          if (reserved.type !== "reserved") {
+            throw new TypeError("Expected terminal outcome reservation");
+          }
+          const before = (
+            await db
+              .select()
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+          ).at(0);
+          if (before === undefined) {
+            throw new TypeError("Expected receipt fixture decision");
+          }
+          // The changed driver's persisted stamp is the pipeline's completion proof.
+          if (outcome === "changed") {
+            await db
+              .update(caseLawDecisions)
+              .set({ parserVersion: 2 })
+              .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+          }
+          const checked = (
+            await db
+              .select({
+                token: sql<string>`${caseLawDecisions.updatedAt}::text`,
+              })
+              .from(caseLawDecisions)
+              .where(eq(caseLawDecisions.id, reserved.batch.decisionId))
+          ).at(0);
+          if (checked === undefined) {
+            throw new TypeError("Expected checked decision token");
+          }
+          const identity = {
+            checkedUpdateToken: checked.token,
+            id: reserved.batch.decisionId,
+            caseNumber: before.caseNumber,
+            language: before.language,
+          };
+          const report =
+            outcome === "rejected"
+              ? {
+                  ...identity,
+                  outcome: REPLAY_ROW_OUTCOME.REJECTED,
+                  rejection: STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH,
+                }
+              : {
+                  ...identity,
+                  outcome:
+                    outcome === "changed"
+                      ? REPLAY_ROW_OUTCOME.APPLIED
+                      : REPLAY_ROW_OUTCOME.UNCHANGED,
+                };
+          const completion = {
+            report: report satisfies ReplayRowReport,
+            durationMs: 1,
+            verdict: verdict(),
+          };
+          await store.completeBatch(reserved.batch, completion);
+          await store.completeBatch(reserved.batch, completion);
+          expect(
+            await db
+              .select()
+              .from(caseLawReplayBlocked)
+              .where(
+                eq(caseLawReplayBlocked.decisionId, reserved.batch.decisionId),
+              ),
+          ).toMatchObject([
+            {
+              decisionId: reserved.batch.decisionId,
+              parserVersionTo: 2,
+              outcome,
+              reason:
+                outcome === "rejected"
+                  ? STORED_RAW_REPARSE_REJECTION.IDENTITY_MISMATCH
+                  : null,
+            },
+          ]);
+          if (outcome !== "changed") {
+            expect(
+              await db
+                .select()
+                .from(caseLawDecisions)
+                .where(eq(caseLawDecisions.id, reserved.batch.decisionId)),
+            ).toEqual([before]);
+          }
+          const scope = {
+            type: "decision",
+            decisionId: reserved.batch.decisionId,
+          } as const;
+          expect(
+            await selectScopeEnd({
+              scopedDb,
+              sourceId: source.id,
+              scope,
+              selection: {
+                type: "background",
+                currentParserVersion: 2,
+                mode: "enrolled",
+              },
+            }),
+          ).toBeNull();
+          expect(
+            await selectScopeEnd({
+              scopedDb,
+              sourceId: source.id,
+              scope,
+              selection: {
+                type: "background",
+                currentParserVersion: 3,
+                mode: "enrolled",
+              },
+            }),
+          ).toBe(reserved.batch.decisionId);
+        }
+        const receipts = await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.sourceId, source.id));
+        expect(receipts.map(({ decisionId }) => decisionId).toSorted()).toEqual(
+          [...ids],
+        );
+        const daily = await db
+          .select()
+          .from(caseLawReplayDailyRows)
+          .where(eq(caseLawReplayDailyRows.sourceId, source.id));
+        expect(daily).toHaveLength(outcomes.length);
+        expect(
+          (await store.reserveBatch(source, "2026-10-01", verdict())).type,
+        ).toBe("budget-exhausted");
+      }
+    });
+
     test("rejected completion is idempotent and removes only the current blocked generation from selection", async () => {
       const { source, store } = await fixture(3);
       const reserved = await store.reserveBatch(
@@ -1141,58 +1351,65 @@ if (!databaseUrl || !enabled) {
       ).at(0);
       expect(checkpoint?.cursor).toBe(reserved.batch.decisionId);
     });
-    test("reported applied without a moved database stamp excludes the row across wrap-around", async () => {
-      const { source, store, ids } = await fixture(10);
-      const completed = [];
-      for (let index = 0; index < 3; index++) {
-        const reserved = await store.reserveBatch(
-          source,
-          "2026-10-01",
-          verdict(),
-        );
-        if (reserved.type !== "reserved") {
-          throw new TypeError("Expected next lagging fixture");
-        }
-        completed.push(reserved.batch.decisionId);
-        expect(
-          await store.completeBatch(reserved.batch, applied(reserved.batch)),
-        ).toBe("blocked");
+    test("an incomplete reported write stays reserved until the persisted stamp proves recovery", async () => {
+      const { source } = await fixture(10);
+      let time = Date.UTC(2026, 9, 1);
+      const store = createBackgroundReplayStore({ db, now: () => time });
+      const reserved = await store.reserveBatch(
+        source,
+        "2026-10-01",
+        verdict(),
+      );
+      if (reserved.type !== "reserved") {
+        throw new TypeError("Expected incomplete write fixture");
       }
-      expect(completed).toEqual([...ids]);
-      expect(await store.reserveBatch(source, "2026-10-01", verdict())).toEqual(
-        { type: "empty" },
-      );
-      const exclusions = await db
-        .select()
-        .from(caseLawReplayBlocked)
-        .where(eq(caseLawReplayBlocked.sourceId, source.id));
-      expect(exclusions.map(({ reason }) => reason)).toEqual([
-        "no-write-settled",
-        "no-write-settled",
-        "no-write-settled",
-      ]);
-      // A new low-ID insert forces the cursor to wrap; dropping wrap-around loses it.
-      const lowId = ids[0];
-      const lower = toSafeId<"caseLawDecision">(
-        "00000000-0000-4000-8000-000000000001",
-      );
-      expect(lower < lowId).toBe(true);
-      await db.insert(caseLawDecisions).values({
-        id: lower,
-        sourceId: source.id,
-        caseNumber: "late fixture",
-        court: "fixture court",
-        country: "CZE",
-        language: "cs",
-        parserVersion: 1,
-        sourceRawS3Key: `fixture/${lower}`,
+      expect(await store.pickUpBatch(reserved.batch)).toBe("ready");
+      expect(
+        await store.completeBatch(reserved.batch, applied(reserved.batch)),
+      ).toBe("retryable");
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.sourceId, source.id)),
+      ).toHaveLength(0);
+      expect(
+        (
+          await db
+            .select()
+            .from(caseLawReplayBatches)
+            .where(eq(caseLawReplayBatches.id, reserved.batch.id))
+        ).at(0),
+      ).toMatchObject({
+        status: "reserved",
+        applied: 0,
+        blocked: 0,
+        failureCode: "writer-retryable",
       });
-      const next = await store.reserveBatch(source, "2026-10-01", verdict());
-      expect(next.type).toBe("reserved");
-      if (next.type !== "reserved") {
-        throw new TypeError("Expected wrapped fixture");
-      }
-      expect(next.batch.decisionId).toBe(lower);
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual({
+        type: "empty",
+      });
+      time += BACKGROUND_REPLAY_LIMITS.rowRetryMaxMs;
+      expect(await store.pendingBatch(source, "2026-10-01")).toEqual(reserved);
+      await db
+        .update(caseLawDecisions)
+        .set({ parserVersion: 2 })
+        .where(eq(caseLawDecisions.id, reserved.batch.decisionId));
+      expect(
+        await store.completeBatch(reserved.batch, applied(reserved.batch)),
+      ).toBe("applied");
+      expect(
+        await db
+          .select()
+          .from(caseLawReplayBlocked)
+          .where(eq(caseLawReplayBlocked.sourceId, source.id)),
+      ).toMatchObject([
+        {
+          decisionId: reserved.batch.decisionId,
+          outcome: "changed",
+          reason: null,
+        },
+      ]);
     });
 
     test("backoff skips poison rows, persists classified reasons and bounds attempts", async () => {
@@ -1266,7 +1483,7 @@ if (!databaseUrl || !enabled) {
       expect(next.batch.decisionId).toBe(ids[2]);
     });
 
-    test("crashed pickups exhaust the row budget and automatically re-admit after seven days", async () => {
+    test("crashed pickups stay excluded at their checked parser version after the retry budget", async () => {
       const { source } = await fixture(30);
       let time = Date.UTC(2026, 9, 1);
       const store = createBackgroundReplayStore({ db, now: () => time });
@@ -1284,9 +1501,10 @@ if (!databaseUrl || !enabled) {
       }
       expect(await store.pickUpBatch(first.batch)).toBe("failed");
       time += 7 * DAY_IN_MS;
-      const readmitted = await store.pendingBatch(source, "2026-10-08");
-      expect(readmitted.type).toBe("reserved");
-      expect(await store.pickUpBatch(first.batch)).toBe("ready");
+      expect(await store.pendingBatch(source, "2026-10-08")).toEqual({
+        type: "empty",
+      });
+      expect(await store.pickUpBatch(first.batch)).toBe("failed");
       const receipt = (
         await db
           .select()
@@ -1294,9 +1512,9 @@ if (!databaseUrl || !enabled) {
           .where(eq(caseLawReplayBatches.id, first.batch.id))
       ).at(0);
       expect(receipt).toMatchObject({
-        status: "reserved",
-        attempts: 1,
-        attemptState: "picked-up",
+        status: "failed",
+        attempts: BACKGROUND_REPLAY_LIMITS.maxRowAttempts,
+        retryAt: null,
       });
       expect(
         await db
@@ -1304,6 +1522,34 @@ if (!databaseUrl || !enabled) {
           .from(caseLawReplayBlocked)
           .where(eq(caseLawReplayBlocked.decisionId, first.batch.decisionId)),
       ).toHaveLength(0);
+      const scope = {
+        type: "decision",
+        decisionId: first.batch.decisionId,
+      } as const;
+      expect(
+        await selectScopeEnd({
+          scopedDb,
+          sourceId: source.id,
+          scope,
+          selection: {
+            type: "background",
+            currentParserVersion: 2,
+            mode: "enrolled",
+          },
+        }),
+      ).toBeNull();
+      expect(
+        await selectScopeEnd({
+          scopedDb,
+          sourceId: source.id,
+          scope,
+          selection: {
+            type: "background",
+            currentParserVersion: 3,
+            mode: "enrolled",
+          },
+        }),
+      ).toBe(first.batch.decisionId);
     });
 
     test("systemic failure refunds only its pickup and persists a source hold without settling a pending mirror", async () => {
@@ -2260,8 +2506,8 @@ if (!databaseUrl || !enabled) {
         SELECT ('00000000-0000-7000-8000-' || lpad(n::text, 12, '0'))::uuid, ${source.id}, 'plan-' || n::text, 'fixture court', 'CZE', 'cs', 2,
           CASE WHEN n % 2 = 0 THEN NULL ELSE 'fixture-plan' END
         FROM generate_series(1, 1000) AS series(n)`);
-      await db.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, reason, detail)
-        SELECT ${source.id}, id, 1, 2, 'missing-payload', 'synthetic blocked fixture'
+      await db.execute(sql`INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_from, parser_version_to, outcome, reason, detail)
+        SELECT ${source.id}, id, 1, 2, 'rejected', 'missing-payload', 'synthetic blocked fixture'
         FROM case_law_decisions WHERE source_id = ${source.id} AND case_number LIKE 'plan-%'`);
       const end = toSafeId<"caseLawDecision">(
         "ffffffff-ffff-4fff-bfff-ffffffffffff",

@@ -18,7 +18,7 @@ const receipts = [
   {
     prepare: null,
     table: "case_law_replay_blocked",
-    insert: `INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_to, reason) VALUES ('${sourceId}', '${decisionId}', 2, 'no-document')`,
+    insert: `INSERT INTO case_law_replay_blocked (source_id, decision_id, parser_version_to, outcome, reason) VALUES ('${sourceId}', '${decisionId}', 2, 'rejected', 'no-document')`,
     update:
       "UPDATE case_law_replay_blocked SET detail = 'updated' RETURNING decision_id",
   },

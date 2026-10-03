@@ -38,6 +38,7 @@ import {
   setSharedLockTimeout,
   setSharedStatementTimeout,
 } from "@/api/db/shared-pool-timeouts";
+import type { SafeId } from "@/api/lib/branded-types";
 import type { CaseLawRootHandle } from "@/api/lib/case-law/maintenance-lane";
 import { escapeLike } from "@/api/lib/escape-like";
 import { recordReplayMaintenanceAuditEvent } from "@/api/lib/legal-search/case-law-replay-audit";
@@ -45,6 +46,7 @@ import {
   ADAPTER_KEYS,
   PARSER_VERSIONS,
 } from "@/api/lib/legal-search/ingestion-constants";
+import type { StoredRawReparseRejection } from "@/api/lib/legal-search/ingestion-types";
 import { logger } from "@/api/lib/observability/logger";
 
 import { getAdapter } from "./adapters/adapter-registry";
@@ -86,7 +88,6 @@ const withReplayTransaction = async <T>(
     return await work(tx);
   });
 
-export const REPLAY_FAILED_READMISSION_DAYS = 7;
 export const REPLAY_SYSTEMIC_ISOLATION_THRESHOLD = 3;
 const PREFLIGHT_CHECKPOINT = "case-law-replay:preflight";
 
@@ -181,7 +182,7 @@ const hasDailyAllowance = async ({
                 ),
                 sql`${caseLawReplayBatches.id} LIKE ${`${escapeLike(`${source.id}:${source.currentParserVersion}:`)}%${escapeLike(BACKGROUND_REPLAY_PREVIEW_SUFFIX)}`}`,
               )
-            : inArray(caseLawReplayBatches.status, ["reserved", "failed"]),
+            : eq(caseLawReplayBatches.status, "reserved"),
           or(
             isNull(caseLawReplayBatches.retryAt),
             lte(
@@ -285,7 +286,7 @@ const chooseSource = async (
               .where(
                 and(
                   eq(caseLawReplayBatches.sourceId, source.id),
-                  inArray(caseLawReplayBatches.status, ["reserved", "failed"]),
+                  eq(caseLawReplayBatches.status, "reserved"),
                   or(
                     isNull(caseLawReplayBatches.retryAt),
                     lte(
@@ -625,7 +626,7 @@ const pendingInTransaction = async (
       .where(
         and(
           eq(caseLawReplayBatches.sourceId, source.id),
-          inArray(caseLawReplayBatches.status, ["reserved", "failed"]),
+          eq(caseLawReplayBatches.status, "reserved"),
           or(
             isNull(caseLawReplayBatches.retryAt),
             lte(
@@ -687,35 +688,6 @@ const pendingInTransaction = async (
       createdAt: new Date(now),
     });
     return { type: "empty" } as const;
-  }
-  if (row.status === "failed") {
-    // Retry-exhausted rows re-enter automatically after seven days, independent
-    // of parser releases. Only this classified exclusion is removed.
-    await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      .delete(caseLawReplayBlocked)
-      .where(
-        and(
-          eq(caseLawReplayBlocked.sourceId, source.id),
-          eq(caseLawReplayBlocked.decisionId, row.firstDecisionId),
-          eq(caseLawReplayBlocked.parserVersionTo, row.parserVersionTo),
-          eq(caseLawReplayBlocked.reason, "retry-exhausted"),
-        ),
-      );
-    await tx
-      // audit: skip — public case-law corpus bookkeeping, no workspace data
-      .update(caseLawReplayBatches)
-      .set({
-        status: "reserved",
-        attempts: 0,
-        systemicFailures: 0,
-        systemicProgress: 0,
-        attemptState: "idle",
-        failed: 0,
-        retryAt: null,
-        completedAt: null,
-      })
-      .where(eq(caseLawReplayBatches.id, row.id));
   }
   if (!(await admitDailyRow(tx, { source, batchId: row.id, utcDay }))) {
     return { type: "budget-exhausted" } as const;
@@ -951,22 +923,11 @@ const pickUpBatch = async (
         .set({
           status: "failed",
           failed: 1,
-          retryAt: new Date(now() + REPLAY_FAILED_READMISSION_DAYS * DAY_IN_MS),
+          retryAt: null,
           completedAt: new Date(now()),
         })
         .where(eq(caseLawReplayBatches.id, batch.id));
-      await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
-        .insert(caseLawReplayBlocked)
-        .values({
-          sourceId: batch.source.id,
-          decisionId: batch.decisionId,
-          parserVersionFrom: batch.parserVersionFrom,
-          parserVersionTo: batch.targetParserVersion,
-          reason: "retry-exhausted",
-          detail: "pickup-exhausted",
-        })
-        .onConflictDoNothing();
+
       return "failed";
     }
     const attempts = receipt.attempts + 1;
@@ -1228,6 +1189,18 @@ const recordFailure = async (
           completedAt: new Date(now()),
         })
         .where(eq(caseLawReplayBatches.id, batch.id));
+      await tx
+        // audit: skip — public case-law corpus bookkeeping, no workspace data
+        .insert(caseLawReplayBlocked)
+        .values({
+          sourceId: batch.source.id,
+          decisionId: batch.decisionId,
+          parserVersionFrom: batch.parserVersionFrom,
+          parserVersionTo: batch.targetParserVersion,
+          outcome: "changed",
+          reason: null,
+        })
+        .onConflictDoNothing();
       await recordVerifiedProgress(tx, {
         sourceId: batch.source.id,
         completedAt: new Date(now()),
@@ -1265,12 +1238,7 @@ const recordFailure = async (
         attemptState: "idle",
         failed: 1,
         status: exhausted ? "failed" : "reserved",
-        retryAt: new Date(
-          now() +
-            (exhausted
-              ? REPLAY_FAILED_READMISSION_DAYS * DAY_IN_MS
-              : retryDelay),
-        ),
+        retryAt: exhausted ? null : new Date(now() + retryDelay),
         failureCode: failure.code,
         failureMessageClass: failure.messageClass,
         outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
@@ -1281,18 +1249,6 @@ const recordFailure = async (
       .where(eq(caseLawReplayBatches.id, batch.id));
     if (exhausted) {
       // poison rows are excluded only for the failed parser version
-      await tx
-        // audit: skip — public case-law corpus bookkeeping, no workspace data
-        .insert(caseLawReplayBlocked)
-        .values({
-          sourceId: batch.source.id,
-          decisionId: batch.decisionId,
-          parserVersionFrom: batch.parserVersionFrom,
-          parserVersionTo: batch.targetParserVersion,
-          reason: "retry-exhausted",
-          detail: failure.code,
-        })
-        .onConflictDoNothing();
     }
     const systemicHoldCount = checkpoint.batch.holdCount + 1;
     const sourceDelay = Math.min(
@@ -1338,39 +1294,121 @@ const recordFailure = async (
   });
 };
 
-type CompletionBlockedReasonOptions = {
-  moved: boolean;
+// Mirror #4656 replay.ts's ReplayRowResult/replayRowResult until it lands on main.
+export type ReplayRowResultMirror = {
+  decisionId: SafeId<"caseLawDecision">;
+  targetParserVersion: number;
+} & (
+  | { outcome: "changed" }
+  | { outcome: "unchanged" }
+  | {
+      outcome: "rejected";
+      reason: StoredRawReparseRejection | "missing-payload";
+    }
+);
+export const toReplayReceipt = (
+  report: ReplayRowReport,
+  targetParserVersion: number,
+): ReplayRowResultMirror | null => {
+  const identity = { decisionId: report.id, targetParserVersion };
+  switch (report.outcome) {
+    case REPLAY_ROW_OUTCOME.APPLIED:
+      return { ...identity, outcome: "changed" };
+    case REPLAY_ROW_OUTCOME.UNCHANGED:
+      return { ...identity, outcome: "unchanged" };
+    case REPLAY_ROW_OUTCOME.REJECTED:
+      return {
+        ...identity,
+        outcome: "rejected",
+        reason:
+          report.rejection ??
+          panic("Replay rejection has no classified reason"),
+      };
+    case REPLAY_ROW_OUTCOME.MISSING_PAYLOAD:
+      return { ...identity, outcome: "rejected", reason: "missing-payload" };
+    case REPLAY_ROW_OUTCOME.WOULD_APPLY:
+    case REPLAY_ROW_OUTCOME.RETRYABLE:
+    case REPLAY_ROW_OUTCOME.WITHDRAWN:
+    case REPLAY_ROW_OUTCOME.WITHDRAW_INCOMPLETE:
+    case REPLAY_ROW_OUTCOME.WOULD_WITHDRAW:
+      return null;
+    default:
+      report.outcome satisfies never;
+      return panic("Unknown replay row outcome");
+  }
+};
+
+type CheckedReplayCompletion =
+  | { type: "terminal"; receipt: ReplayRowResultMirror }
+  | { type: "retryable" }
+  | { type: "blocked" };
+type CheckReplayCompletionOptions = {
+  batch: BackgroundReplayBatch;
   report: ReplayRowReport;
   decision:
-    | Pick<typeof caseLawDecisions.$inferSelect, "parserVersion" | "redactedAt">
+    | (Pick<
+        typeof caseLawDecisions.$inferSelect,
+        "parserVersion" | "redactedAt" | "corpusMirrorStatus"
+      > & { updateToken: string })
     | undefined;
 };
-const completionBlockedReason = ({
-  moved,
+const checkReplayCompletion = ({
+  batch,
   report,
   decision,
-}: CompletionBlockedReasonOptions):
-  | (typeof caseLawReplayBlocked.$inferInsert)["reason"]
-  | null => {
-  if (moved) {
-    return null;
+}: CheckReplayCompletionOptions): CheckedReplayCompletion => {
+  if (decision?.redactedAt !== null) {
+    return { type: "blocked" };
   }
-  if (report.outcome === REPLAY_ROW_OUTCOME.MISSING_PAYLOAD) {
-    return "missing-payload";
+  const moved = (decision.parserVersion ?? -1) >= batch.targetParserVersion;
+  if (report.outcome === REPLAY_ROW_OUTCOME.APPLIED && !moved) {
+    return { type: "retryable" };
   }
-  if (report.outcome === REPLAY_ROW_OUTCOME.REJECTED) {
-    return (
-      report.rejection ?? panic("Replay rejection has no classified reason")
-    );
+  const receipt = toReplayReceipt(
+    moved ? { ...report, outcome: REPLAY_ROW_OUTCOME.APPLIED } : report,
+    batch.targetParserVersion,
+  );
+  if (receipt === null) {
+    return { type: "retryable" };
   }
-  if (decision === undefined) {
-    return "superseded";
+  if (
+    receipt.outcome === "unchanged" &&
+    (decision.parserVersion !== batch.parserVersionFrom ||
+      report.checkedUpdateToken === undefined ||
+      decision.updateToken !== report.checkedUpdateToken)
+  ) {
+    return { type: "retryable" };
   }
-  if (decision.redactedAt !== null) {
-    return "redacted";
+  if (
+    receipt.outcome !== "rejected" &&
+    decision.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
+  ) {
+    return { type: "retryable" };
   }
-  return "no-write-settled";
+  return { type: "terminal", receipt };
 };
+const completionDisposition = (receipt: ReplayRowResultMirror | null) => {
+  switch (receipt?.outcome) {
+    case "changed":
+      return "applied";
+    case "unchanged":
+      return "unchanged";
+    case "rejected":
+    case undefined:
+      return "blocked";
+    default:
+      receipt satisfies never;
+      return panic("Unknown replay receipt outcome");
+  }
+};
+const COMPLETION_REPORT_OUTCOME = {
+  applied: REPLAY_ROW_OUTCOME.APPLIED,
+  unchanged: REPLAY_ROW_OUTCOME.UNCHANGED,
+  blocked: REPLAY_ROW_OUTCOME.REJECTED,
+} as const satisfies Record<
+  ReturnType<typeof completionDisposition>,
+  ReplayRowReport["outcome"]
+>;
 
 const completeBatch = async (
   context: ReplayStoreContext,
@@ -1418,12 +1456,16 @@ const completeBatch = async (
           .limit(1)
       ).at(0) ?? panic("Replay completion has no reservation");
     if (receipt.status !== "reserved") {
+      if (receipt.outcome === REPLAY_ROW_OUTCOME.UNCHANGED) {
+        return "unchanged";
+      }
       return receipt.applied > 0 ? "applied" : "blocked";
     }
     const decision = (
       await tx
         .select({
           parserVersion: caseLawDecisions.parserVersion,
+          updateToken: sql<string>`${caseLawDecisions.updatedAt}::text`,
           redactedAt: caseLawDecisions.redactedAt,
           corpusMirrorStatus: caseLawDecisions.corpusMirrorStatus,
         })
@@ -1432,44 +1474,40 @@ const completeBatch = async (
         .for("update")
         .limit(1)
     ).at(0);
-    const moved =
-      decision?.redactedAt === null &&
-      (decision.parserVersion ?? -1) >= batch.targetParserVersion;
-    if (
-      moved &&
-      decision.corpusMirrorStatus !== CASE_LAW_CORPUS_MIRROR_STATUS.SETTLED
-    ) {
-      return "mirror-pending";
+    const completion = checkReplayCompletion({ batch, report, decision });
+    if (completion.type === "retryable") {
+      return "retryable-completion";
     }
-    const reason = completionBlockedReason({ moved, report, decision });
-    if (reason !== null) {
-      // reported completion without a database stamp is a terminal exclusion
+    const terminal = completion.type === "terminal" ? completion.receipt : null;
+    if (terminal !== null) {
+      const reason = terminal.outcome === "rejected" ? terminal.reason : null;
       await tx
         // audit: skip — public case-law corpus bookkeeping, no workspace data
         .insert(caseLawReplayBlocked)
         .values({
           sourceId: batch.source.id,
-          decisionId: batch.decisionId,
+          decisionId: terminal.decisionId,
           parserVersionFrom: batch.parserVersionFrom,
-          parserVersionTo: batch.targetParserVersion,
+          parserVersionTo: terminal.targetParserVersion,
+          outcome: terminal.outcome,
           reason,
           detail: reason,
         })
         .onConflictDoNothing();
     }
+    const rowDisposition = completionDisposition(terminal);
+    const successful = rowDisposition !== "blocked";
     // A recovered write is applied even when the replay reports unchanged.
-    // The parser stamp, read under the same fence, is the completion authority.
-    // settles the owner-only receipt from verified database state
+    // Changed rows require the parser stamp; unchanged rows retain their stamp
+    // and are fenced by the exact checked input token. Both settle the receipt.
     await tx
       // audit: skip — public case-law corpus bookkeeping, no workspace data
       .update(caseLawReplayBatches)
       .set({
-        status: moved ? "completed" : "blocked",
-        outcome: moved
-          ? REPLAY_ROW_OUTCOME.APPLIED
-          : REPLAY_ROW_OUTCOME.REJECTED,
-        applied: Number(moved),
-        blocked: Number(!moved),
+        status: successful ? "completed" : "blocked",
+        outcome: COMPLETION_REPORT_OUTCOME[rowDisposition],
+        applied: Number(rowDisposition === "applied"),
+        blocked: Number(!successful),
         failed: 0,
         attempts: receipt.attempts,
         attemptState: "idle",
@@ -1479,7 +1517,7 @@ const completeBatch = async (
         completedAt: new Date(now()),
       })
       .where(eq(caseLawReplayBatches.id, batch.id));
-    if (moved) {
+    if (successful) {
       await recordVerifiedProgress(tx, {
         sourceId: batch.source.id,
         completedAt: new Date(now()),
@@ -1494,17 +1532,17 @@ const completeBatch = async (
       .where(eq(databaseBackfillStates.name, checkpointName(batch.source)));
     await recordReplayMaintenanceAuditEvent(tx, {
       sourceId: batch.source.id,
-      action: moved ? "receipt-applied" : "receipt-blocked",
+      action: successful ? "receipt-applied" : "receipt-blocked",
       resourceId: batch.id,
       details: {
         attempts: receipt.attempts,
-        status: moved ? "completed" : "blocked",
+        status: successful ? "completed" : "blocked",
       },
       createdAt: new Date(now()),
     });
-    return moved ? "applied" : "blocked";
+    return rowDisposition;
   });
-  if (disposition === "mirror-pending") {
+  if (disposition === "retryable-completion") {
     const failure = await recordFailure(context, batch, {
       ...replayFailure("writer-retryable"),
       healthyEvidence,

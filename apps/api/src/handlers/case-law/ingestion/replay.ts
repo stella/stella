@@ -23,7 +23,6 @@ import {
   caseLawDecisions,
   caseLawReplayBlocked,
   caseLawReplayBatches,
-  caseLawSources,
 } from "@/api/db/schema";
 import { STORED_RAW_REPARSE_REJECTION } from "@/api/handlers/case-law/ingestion/adapter";
 import type {
@@ -99,14 +98,14 @@ import {
  * changing its words leaves that hash exactly where it was, so a replay
  * keyed on it would report every such migration as "unchanged" and apply
  * none of them. The comparison is therefore over the canonical payload the
- * row would store, plus the parser version and the source-side refresh
- * check; and where it says the row would change, the write is made under
+ * row would store and the source-side refresh check; where it says the
+ * row would change, the write is made under
  * `DECISION_REFRESH.ALWAYS`, since the pipeline's own dedup asks the
  * source-hash question this one deliberately does not.
  *
  * Together these make a re-run converge rather than accumulate: the second
  * pass derives the payload the row already holds, reports it unchanged, and
- * lets the pipeline advance the observation watermark alone. Where a write
+ * leaves the decision untouched. Where a write
  * does run, the corpus writer compares the derived keys against the ones
  * the row records and skips re-uploading a payload the row already holds.
  *
@@ -119,7 +118,7 @@ import {
  */
 
 export const REPLAY_ROW_OUTCOME = {
-  /** The replay applied the re-parsed payload or stamped its parser version. */
+  /** The replay applied a changed re-parsed payload. */
   APPLIED: "applied",
   /** Re-parsing reproduced the stored result; nothing to write. */
   UNCHANGED: "unchanged",
@@ -167,7 +166,7 @@ export type ReplayDecisionRow = {
    */
   contentHash: string | null;
   parserVersion: number | null;
-  /** Exact PostgreSQL timestamp for the stamp's compare-and-set, without Date truncation. */
+  /** Exact PostgreSQL timestamp for receipt fencing, without Date truncation. */
   updateToken: string;
   sourceRawS3Key: string;
   sourceRawContentType: string | null;
@@ -576,6 +575,8 @@ export type ReplayRowReport = {
   caseNumber: string;
   language: string;
   outcome: ReplayRowOutcome;
+  /** Exact row revision inspected by the re-parse, for terminal receipt fencing. */
+  checkedUpdateToken?: string;
   /** Present on `rejected`, `retryable` and `missing-payload`. */
   detail?: string | undefined;
   rejection?: StoredRawReparseRejection | undefined;
@@ -908,8 +909,8 @@ const describedColumnsChanged = ({
  * Whether replaying this result would change what the row holds.
  *
  * The source-side refresh check and sanitized canonical payload are compared
- * independently. A parser-version difference is handled separately so an
- * identical payload can be stamped without running the ingestion pipeline.
+ * independently. A parser-version difference alone does not change the row;
+ * an identical payload is recorded only in its replay receipt.
  *
  * - the source-side refresh check the pipeline itself applies, which covers
  *   the publisher's hash and the ingestion metadata (keywords included);
@@ -963,9 +964,8 @@ const replayWouldChangeRow = async ({
 /**
  * Apply one re-parsed result, or say what applying it would do.
  *
- * A row the replay would not change is still handed to the pipeline, which
- * advances the observation watermark and writes nothing else. A row it would
- * change is written under `DECISION_REFRESH.ALWAYS`, because the pipeline's
+ * An identical re-parse returns without writing the decision row. A changed
+ * re-parse is written under `DECISION_REFRESH.ALWAYS`, because the pipeline's
  * own dedup asks only whether the publisher's document moved, and here it
  * did not: the payload the parser derives from it did.
  */
@@ -988,6 +988,7 @@ const replayRow = async ({
     id: row.id,
     caseNumber: row.caseNumber,
     language: row.language,
+    checkedUpdateToken: row.updateToken,
   };
 
   if (reparsed.type === "supplement") {
@@ -1051,55 +1052,13 @@ const replayRow = async ({
     scopedDb,
   });
 
-  const versionChanged =
-    (row.parserVersion ?? 0) !== (reparsed.result.parserVersion ?? 0);
-  if (sourceLease === null) {
-    return {
-      ...base,
-      outcome:
-        changed || versionChanged
-          ? REPLAY_ROW_OUTCOME.WOULD_APPLY
-          : REPLAY_ROW_OUTCOME.UNCHANGED,
-    };
+  // Parser provenance for an identical re-parse belongs in the replay receipt.
+  // Even an older parser version must leave the decision row untouched.
+  if (!changed) {
+    return { ...base, outcome: REPLAY_ROW_OUTCOME.UNCHANGED };
   }
-
-  if (!changed && versionChanged) {
-    await sourceLease.beforeDatabaseMark();
-    const stamped = await scopedDb(
-      async (tx) =>
-        // audit: skip — stamps parser provenance for a public corpus row; no document change
-        await tx
-          .update(caseLawDecisions)
-          .set({
-            parserVersion: reparsed.result.parserVersion ?? null,
-            updatedAt: sql`${caseLawDecisions.updatedAt}`,
-          })
-          .where(
-            and(
-              eq(caseLawDecisions.id, row.id),
-              eq(caseLawDecisions.sourceId, sourceId),
-              isNull(caseLawDecisions.redactedAt),
-              sql`${caseLawDecisions.updatedAt} = ${row.updateToken}::timestamptz`,
-              sql`${caseLawDecisions.parserVersion} IS NOT DISTINCT FROM ${row.parserVersion}::integer`,
-              sql`EXISTS (
-            SELECT 1 FROM ${caseLawSources}
-            WHERE ${caseLawSources.id} = ${sourceId}
-              AND ${caseLawSources.ingestionLeaseToken} = ${sourceLease.leaseToken}
-              AND ${caseLawSources.ingestionLeaseExpiresAt} > now()
-          )`,
-            ),
-          )
-          .returning({ id: caseLawDecisions.id }),
-    );
-    if (stamped.length === 0) {
-      return {
-        ...base,
-        outcome: REPLAY_ROW_OUTCOME.RETRYABLE,
-        detail:
-          "decision or source lease changed before its parser version could be stamped",
-      };
-    }
-    return { ...base, outcome: REPLAY_ROW_OUTCOME.APPLIED };
+  if (sourceLease === null) {
+    return { ...base, outcome: REPLAY_ROW_OUTCOME.WOULD_APPLY };
   }
 
   // Ordered on the source's own counter, under its lease: the row guards
@@ -1127,9 +1086,7 @@ const replayRow = async ({
       scopedDb,
       observedAt: new Date(),
       observationOrder,
-      refresh: changed
-        ? DECISION_REFRESH.ALWAYS
-        : DECISION_REFRESH.WHEN_SOURCE_CHANGED,
+      refresh: DECISION_REFRESH.ALWAYS,
     },
     resolveMetadataUrlSchema,
   );
@@ -1144,9 +1101,7 @@ const replayRow = async ({
 
   return {
     ...base,
-    outcome: changed
-      ? REPLAY_ROW_OUTCOME.APPLIED
-      : REPLAY_ROW_OUTCOME.UNCHANGED,
+    outcome: REPLAY_ROW_OUTCOME.APPLIED,
   };
 };
 

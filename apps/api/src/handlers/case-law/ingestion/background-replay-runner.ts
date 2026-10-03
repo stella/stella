@@ -126,6 +126,9 @@ export const createBackgroundReplayRunner = ({
             ? REPLAY_ROW_OUTCOME.APPLIED
             : REPLAY_ROW_OUTCOME.UNCHANGED,
         };
+        if (!recovered && row?.redactedAt === null && row.rawKey === null) {
+          report.outcome = REPLAY_ROW_OUTCOME.MISSING_PAYLOAD;
+        }
         reports.set(batch.id, report);
         return replaySingleRowReport(report);
       }
