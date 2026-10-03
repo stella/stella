@@ -26,6 +26,7 @@ import { createSafeId } from "@/api/lib/branded-types";
 import { createEmailAttachmentDescriptor } from "@/api/lib/files/email-attachment-token";
 import { readFileHandler } from "@/api/lib/files/read-file";
 import { createFileKey } from "@/api/lib/files/utils";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { DOCX_MIME_TYPE, PDF_MIME_TYPE } from "@/api/mime-types";
 import { startFakeS3 } from "@/api/tests/helpers/fake-s3";
 import type { FakeS3 } from "@/api/tests/helpers/fake-s3";
@@ -465,7 +466,7 @@ const readAttachment = async ({
 }) =>
   await emailAttachmentEndpoint.handler(
     asTestRaw<AttachmentContext>({
-      memberRole: { role: "owner" },
+      memberRole: sessionMemberRole("owner"),
       params: {
         attachmentId: createEmailAttachmentDescriptor({
           attachmentIndex: 0,
