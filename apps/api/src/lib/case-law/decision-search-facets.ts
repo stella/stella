@@ -4,6 +4,10 @@ import {
   COURT_TIER_LABELS,
   type CourtTierLabel,
 } from "@stll/api-contract/case-law-court-tiers";
+import {
+  FACET_COUNT_TYPE,
+  type FacetCountType,
+} from "@stll/api-contract/search";
 
 import { caseLawSources } from "@/api/db/schema";
 import type { CaseLawPublicReadDb } from "@/api/lib/case-law-public-read-db";
@@ -11,6 +15,7 @@ import {
   courtTierLabelFromMap,
   type CourtWeightMap,
 } from "@/api/lib/case-law/court-weights";
+import { LIMITS } from "@/api/lib/limits";
 import { brandPersistedCaseLawSourceId } from "@/api/lib/safe-id-boundaries";
 
 /**
@@ -30,6 +35,24 @@ export type SearchFacetBucket = {
   count: number;
 };
 
+export type SourceFacetBucket = SearchFacetBucket & {
+  countType: FacetCountType;
+};
+
+/** Convert a capped N+1 probe into its exact count or lower bound. */
+export const cappedSourceFacetBuckets = (
+  buckets: readonly SearchFacetBucket[],
+): SourceFacetBucket[] =>
+  buckets.map((bucket) =>
+    bucket.count > LIMITS.caseLawSourceFacetCountCap
+      ? {
+          ...bucket,
+          count: LIMITS.caseLawSourceFacetCountCap,
+          countType: FACET_COUNT_TYPE.AT_LEAST,
+        }
+      : { ...bucket, countType: FACET_COUNT_TYPE.EXACT },
+  );
+
 type SearchCourtTier = {
   tierLabel: CourtTierLabel;
   courts: SearchFacetBucket[];
@@ -39,7 +62,7 @@ export type DecisionSearchFacets = {
   court: SearchCourtTier[];
   year: SearchFacetBucket[];
   decisionType: SearchFacetBucket[];
-  source: SearchFacetBucket[];
+  source: SourceFacetBucket[];
   language: SearchFacetBucket[];
 };
 
@@ -143,10 +166,10 @@ export const readCaseLawSourceNames = async (
 };
 
 /** The source facet with every bucket's display name attached. */
-export const labelSourceBuckets = (
-  buckets: readonly SearchFacetBucket[],
+export const labelSourceBuckets = <TBucket extends SearchFacetBucket>(
+  buckets: readonly TBucket[],
   nameById: ReadonlyMap<string, string>,
-): SearchFacetBucket[] =>
+) =>
   buckets.map((bucket) => ({
     ...bucket,
     label: nameById.get(bucket.value) ?? null,

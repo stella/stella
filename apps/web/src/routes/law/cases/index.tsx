@@ -150,6 +150,7 @@ import {
   ensureRouteInfiniteQueryData,
   ensureRouteQueryData,
 } from "@/lib/react-query";
+import { optionalUuidSearchSchema } from "@/lib/schema";
 import { ssrStatusHeaders } from "@/ssr-response-status";
 
 /** What the route accepts in `q`, and therefore what the field may hold. */
@@ -228,6 +229,7 @@ const searchSchema = v.object({
   // A link is public and may be edited by hand or by a crawler; an order this
   // build does not know is not an error page, it is the default order.
   sort: v.fallback(v.optional(v.picklist(SEARCH_SORTS)), undefined),
+  sourceId: optionalUuidSearchSchema,
   strict: optionalStrictSchema,
   to: optionalDateSchema,
   type: optionalBrowseStringSchema(128),
@@ -242,6 +244,7 @@ type CaseLawIndexSearch = v.InferOutput<typeof searchSchema>;
 const FILTER_KIND_LABEL_KEYS = {
   court: "common.court",
   lang: "common.language",
+  sourceId: "common.source",
   type: "common.type",
 } as const satisfies Record<CaseLawFilterKey, TranslationKey>;
 
@@ -262,6 +265,8 @@ const withFilter = (
       return { ...previous, lang: value };
     case "type":
       return { ...previous, type: value };
+    case "sourceId":
+      return { ...previous, sourceId: value };
     default:
       key satisfies never;
       return panic(`Unhandled case-law filter: ${String(key)}`);
@@ -281,6 +286,7 @@ const chipValue = (
     case "lang":
       return languageLabel(format, value);
     case "court":
+    case "sourceId":
     case "type":
       return value;
     default:
@@ -604,6 +610,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       pageSize,
       q,
       sort,
+      sourceId,
       strict,
       to,
       type,
@@ -617,6 +624,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       pageSize,
       q,
       sort,
+      sourceId,
       strict,
       to,
       type,
@@ -982,7 +990,11 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
       id: `filter:${key}`,
       kind: t(FILTER_KIND_LABEL_KEYS[key]),
       onRemove: () => selectFacet(key, undefined),
-      value: chipValue(key, value, format),
+      value:
+        key === "sourceId"
+          ? (facets.source.find((bucket) => bucket.value === value)?.label ??
+            value)
+          : chipValue(key, value, format),
     });
   }
   // Enter on an identifier opens the decision when exactly one answers to it.
@@ -1075,6 +1087,7 @@ function PublicCaseLawIndex({ routeState }: PublicCaseLawIndexProps) {
               selection={{
                 court: search.court,
                 lang: search.lang,
+                sourceId: search.sourceId,
                 type: search.type,
               }}
             />

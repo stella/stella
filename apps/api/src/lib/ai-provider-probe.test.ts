@@ -97,6 +97,19 @@ beforeEach(() => {
 });
 
 describe("probeProvider", () => {
+  test("probes OpenRouter authentication through the EU endpoint", async () => {
+    expect(await probeProvider("openrouter", "test-org-key")).toEqual({
+      valid: true,
+    });
+    expect(calls).toHaveLength(1);
+    expect(calls.at(0)?.url.href).toBe(
+      "https://eu.openrouter.ai/api/v1/auth/key",
+    );
+    expect(calls.at(0)?.headers.get("authorization")).toBe(
+      "Bearer test-org-key",
+    );
+  });
+
   test("passes the configured Azure API version to the Foundry probe", async () => {
     const result = await probeProvider("azure_foundry", "azure-key", {
       endpoint: "https://example.openai.azure.com/openai/v1",
