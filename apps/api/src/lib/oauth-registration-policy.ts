@@ -89,15 +89,17 @@ const registrationScopePolicy = createAuthMiddleware(async (ctx) => {
     model: "oauthClient",
     where: [{ field: "clientId", value: parameters["client_id"] }],
   });
-  if (!client?.scopes) {
+  if (!client) {
     return;
   }
-  const allowedScopes = client.scopes;
+  // Elevated scopes go only to clients identified by a client metadata
+  // document, whatever ceiling an older registration stored.
+  const elevatedScopes = client.clientDiscoveryId ? (client.scopes ?? []) : [];
   const downscopedScope = requestedScopes
     .filter(
       (scope) =>
         !ELEVATED_REGISTRATION_SCOPES.has(scope) ||
-        allowedScopes.includes(scope),
+        elevatedScopes.includes(scope),
     )
     .join(" ");
   if (downscopedScope === parameters["scope"]) {

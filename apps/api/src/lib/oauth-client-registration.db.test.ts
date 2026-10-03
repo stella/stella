@@ -295,6 +295,61 @@ describe("OAuth dynamic client registration", () => {
     expect(grant.scope.split(" ").toSorted()).toEqual(expectedResourceScopes);
   });
 
+  test("authorizes an earlier registration with the open capability subset", async () => {
+    const response = await registerClient({
+      client_name: "Earlier connector",
+      redirect_uris: ["https://earlier.example/callback"],
+    });
+    expect(response.status).toBe(201);
+    const registered = v.parse(
+      v.looseObject({ client_id: v.string() }),
+      await response.json(),
+    );
+    // A registration stored before the capability policy kept every scope.
+    const context = await getAuth().$context;
+    await context.adapter.update({
+      model: "oauthClient",
+      where: [{ field: "clientId", value: registered.client_id }],
+      update: { scopes: [...MCP_OAUTH_SCOPES] },
+    });
+    const browser = await signInHuman("earlier-registration@example.test");
+    const organization = await getAuth().api.createOrganization({
+      body: { name: "Consent flow", slug: `consent-${Bun.randomUUIDv7()}` },
+      headers: browser.headers(),
+    });
+    await browser.setActiveOrganization(organization.id);
+    registrationsIssued += 1;
+    const query = new URLSearchParams({
+      client_id: registered.client_id,
+      code_challenge: "E9Melhoa2OwvFrEMTJguCHaoeK1t8URWbuGJSstw-cM",
+      code_challenge_method: "S256",
+      redirect_uri: "https://earlier.example/callback",
+      response_type: "code",
+      scope: MCP_OAUTH_SCOPES.join(" "),
+    });
+    const authorized = await getAuth().handler(
+      new Request(`${getAuthEndpointUrl("oauth2/authorize")}?${query}`, {
+        headers: {
+          cookie: browser.cookieHeader(),
+          "x-forwarded-for": `198.51.100.${String(registrationsIssued)}`,
+        },
+      }),
+    );
+    expect(authorized.status).toBe(302);
+    const location = new URL(
+      v.parse(v.string(), authorized.headers.get("location")),
+    );
+    expect(location.pathname).toBe("/consent");
+    const consentScope = new URLSearchParams(readSignedQuery(location)).get(
+      "scope",
+    );
+    expect(consentScope?.split(" ")).toEqual(
+      MCP_OAUTH_SCOPES.filter((scope) =>
+        OPEN_REGISTRATION_SCOPES.includes(scope),
+      ),
+    );
+  });
+
   test("treats an empty contacts array as absent", async () => {
     const { body } = OAUTH_CLIENT_REGISTRATION_FIXTURES.emptyContacts;
     // The fixture must actually carry the empty array, or this passes without
