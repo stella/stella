@@ -350,8 +350,12 @@ export const projectDecisionReader = (decision: ReadableDecision) => {
     ...value,
     value: truncateTextBytes(value.value, DECISION_IDENTIFIER_MAX_LENGTH * 4),
   });
+  // The wire carries the AST opaque, as the schema declares: clients rebuild
+  // the derivable block text with `parseDocumentAst` on arrival.
+  const documentAst: unknown = decision.documentAst;
   return {
     ...decision,
+    documentAst,
     createdAt: decision.createdAt.toISOString(),
     updatedAt: decision.updatedAt.toISOString(),
     resolution:

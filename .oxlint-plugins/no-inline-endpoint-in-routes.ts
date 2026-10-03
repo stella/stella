@@ -1,9 +1,9 @@
 // Require API endpoints to live in their own default-export
 // `{ config, handler }` modules, not defined inline in a route file.
 //
-// createSafeHandler / createSafeRootHandler / createSafePublicHandler bundle a
-// route's schema, permissions, and typed error handling together with its
-// business logic. When an endpoint is defined inline in a `routes.ts` file,
+// Every safe-handler factory (`SAFE_HANDLER_FACTORIES`) bundles a route's
+// schema, permissions, and typed error handling together with its business
+// logic. When an endpoint is defined inline in a `routes.ts` file,
 // that config drifts away from the endpoint module convention: schemas and
 // permissions end up far from the route wiring, and the mounting-side rule
 // (`require-safe-route-handlers`, which expects each route to mount
@@ -27,18 +27,9 @@
 
 import { eslintCompatPlugin } from "@oxlint/plugins";
 
+import { isSafeHandlerFactory } from "../apps/api/src/lib/safe-handler-factories.ts";
 import type { AstNode } from "./utils.ts";
 import { getCalleeName, isAstNode } from "./utils.ts";
-
-// The safe-handler factory family from `@/api/lib/api-handlers`. A bare
-// identifier call to any of these defines an endpoint; a route file should
-// import and mount one instead.
-const SAFE_HANDLER_FACTORIES = new Set([
-  "createSafeHandler",
-  "createSafeRootHandler",
-  "createSafePublicHandler",
-  "createSafeBoundedPublicHandler",
-]);
 
 type CallExpressionNode = AstNode & { callee: unknown };
 
@@ -71,10 +62,7 @@ export default eslintCompatPlugin({
             // endpoint here; `getCalleeName` returns a dotted name for member
             // calls, which never match the factory set.
             const calleeName = getCalleeName(node.callee);
-            if (
-              calleeName === null ||
-              !SAFE_HANDLER_FACTORIES.has(calleeName)
-            ) {
+            if (calleeName === null || !isSafeHandlerFactory(calleeName)) {
               return;
             }
 

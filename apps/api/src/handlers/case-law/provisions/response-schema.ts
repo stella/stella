@@ -71,7 +71,7 @@ const citationFields = {
     t.Null(),
   ]),
   printedWorkIdentifier: shortText,
-  targetDocumentId: nullableBoundedString(36),
+  targetDocumentId: t.Union([tSafeId("legislationDocument"), t.Null()]),
   targetStatus: t.Union([
     t.UnionEnum(caseLawProvisionCitations.targetStatus.enumValues),
     t.Null(),
@@ -133,14 +133,14 @@ export const decisionProvisionsSuccessResponseSchema = t.Object({
 export const citingDecisionsSuccessResponseSchema = t.Object({
   items: t.Array(
     t.Object({
-      decisionId: boundedString(36),
+      decisionId: tSafeId("caseLawDecision"),
       caseNumber: boundedString(1024),
       slug: nullableBoundedString(1024),
       court: boundedString(2048),
       country: boundedString(12),
       language: boundedString(32),
       decisionDate: date,
-      citationAuthority: nullableNumber,
+      citationAuthority: t.Number(),
       sentenceText: nullableBoundedString(16_384),
       spanStart: t.Number(),
       spanEnd: t.Number(),

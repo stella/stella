@@ -30,8 +30,8 @@ import readVerification from "@/api/handlers/lists/verifications/get";
 import readLatestVerifications from "@/api/handlers/lists/verifications/latest/list";
 import readVerifications from "@/api/handlers/lists/verifications/list";
 import { permissionMacro, workspaceAccessMacro } from "@/api/lib/auth";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { deploymentFeatureGate } from "@/api/lib/deployment-feature-route";
-import { legalListsDeployed } from "@/api/lib/lists/deployment";
 import {
   resourceRealtime,
   workspaceResourceSetUpdates,
@@ -42,7 +42,11 @@ const legalListRealtimeUpdates = workspaceResourceSetUpdates(
 );
 
 export const listsRoute = new Elysia({ prefix: "/lists/:workspaceId" })
-  .use(deploymentFeatureGate(legalListsDeployed))
+  .use(
+    deploymentFeatureGate(() =>
+      isDeploymentFeatureEnabled("FEATURE_LEGAL_LISTS"),
+    ),
+  )
   .use(workspaceAccessMacro)
   .use(resourceRealtime)
   .use(permissionMacro)

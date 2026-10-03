@@ -8,6 +8,7 @@ import {
   stellaLowercasePluginSpecifier,
 } from "@stll/oxlint-config";
 
+import { factoriesWhere } from "./apps/api/src/lib/safe-handler-factories.ts";
 import designLintBaseline from "./scripts/design-lint-baseline.json" with { type: "json" };
 import {
   SHADCN_LINT_JS_PLUGINS,
@@ -45,6 +46,16 @@ const fixtureRuleOverride = (file: string, rules: readonly string[]) => ({
 // document an owner that no rule can yet prove.
 const enforcedOwnershipEntries = OWNERSHIP.filter(
   (entry) => entry.enforcement.kind !== "none",
+);
+
+// Public route files may build handlers only from the factories whose context
+// is anonymous. The ban lists every other factory, so a new one is banned
+// until its scope says otherwise.
+const anonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context === "anonymous",
+);
+const nonAnonymousHandlerFactories = factoriesWhere(
+  ({ context }) => context !== "anonymous",
 );
 
 const PUBLIC_SSR_AMBIENT_STATE_MESSAGE =
@@ -152,6 +163,9 @@ const fixtureRuleOverrides = [
   fixtureRuleOverride("no-swallowed-item-error.fixture.test.ts", [
     "no-swallowed-item-error/no-test-swallowed-error",
   ]),
+  fixtureRuleOverride("provider-call-error-message.fixture.ts", [
+    "provider-call-error-message/provider-call-error-message",
+  ]),
   {
     files: [".oxlint-plugins/__fixtures__/public-ssr-ambient-state.fixture.ts"],
     rules: publicSsrAmbientStateRules,
@@ -166,6 +180,9 @@ const fixtureRuleOverrides = [
   ]),
   fixtureRuleOverride("forbid-dev-runner-config-reads.fixture.ts", [
     "forbid-dev-runner-config-reads/forbid-dev-runner-config-reads",
+  ]),
+  fixtureRuleOverride("no-raw-deployment-feature-read.fixture.ts", [
+    "no-raw-deployment-feature-read/no-raw-deployment-feature-read",
   ]),
   fixtureRuleOverride("docs-source-policy.fixture.ts", [
     "docs-source-policy/docs-source-policy",
@@ -214,6 +231,9 @@ const fixtureRuleOverrides = [
     "require-tenant-page-limit/require-tenant-page-limit",
   ]),
   fixtureRuleOverride("require-tenant-page-limit.fixture.tsx", [
+    "require-tenant-page-limit/require-tenant-page-limit",
+  ]),
+  fixtureRuleOverride("require-tenant-page-limit.fixture.impostor.ts", [
     "require-tenant-page-limit/require-tenant-page-limit",
   ]),
   fixtureRuleOverride("no-optional-mutation-command.fixture.ts", [
@@ -339,6 +359,7 @@ const fixtureRuleOverrides = [
     "bun-test-hygiene/no-focused-tests",
     "bun-test-hygiene/no-disabled-tests",
     "bun-test-hygiene/no-identical-title",
+    "bun-test-hygiene/no-promise-matchers",
     "bun-test-hygiene/no-unmanaged-database-client",
   ]),
   fixtureRuleOverride("no-untyped-updates.fixture.ts", [
@@ -919,6 +940,7 @@ export default defineConfig({
       "error",
     "no-coerced-optional-union-enum/no-coerced-optional-union-enum": "error",
     "tagged-error-requires-message/tagged-error-requires-message": "error",
+    "provider-call-error-message/provider-call-error-message": "error",
     "require-custom-jsonb-column/require-custom-jsonb-column": "error",
     // The column-cast allowlist lives in per-file overrides below, scoped to
     // the files that own the schema objects, so the same spelling elsewhere
@@ -1287,6 +1309,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-untranslated-jsx-literal.ts",
     "./.oxlint-plugins/forbid-process-env-outside-env-ts.ts",
     "./.oxlint-plugins/forbid-dev-runner-config-reads.ts",
+    "./.oxlint-plugins/no-raw-deployment-feature-read.ts",
     "./.oxlint-plugins/docs-source-policy.ts",
     "./.oxlint-plugins/confine-server-reads.ts",
     "./.oxlint-plugins/no-facade-imports.ts",
@@ -1331,6 +1354,7 @@ export default defineConfig({
     "./.oxlint-plugins/no-coerced-optional-union-enum.ts",
     "./.oxlint-plugins/no-array-built-typebox-union.ts",
     "./.oxlint-plugins/tagged-error-requires-message.ts",
+    "./.oxlint-plugins/provider-call-error-message.ts",
     "./.oxlint-plugins/require-custom-jsonb-column.ts",
     "./.oxlint-plugins/no-bare-jsonb-cast.ts",
     "./.oxlint-plugins/no-hand-rolled-sql-case.ts",
@@ -1421,6 +1445,7 @@ export default defineConfig({
         "bun-test-hygiene/no-focused-tests": "error",
         "bun-test-hygiene/no-disabled-tests": "error",
         "bun-test-hygiene/no-identical-title": "error",
+        "bun-test-hygiene/no-promise-matchers": "error",
       },
     },
     {
@@ -3699,6 +3724,47 @@ export default defineConfig({
       },
     },
     {
+      // Deployment feature flags are read through `isDeploymentFeatureEnabled`
+      // so every surface shares one local-development policy per flag.
+      files: ["apps/api/src/**/*.ts"],
+      rules: {
+        "no-raw-deployment-feature-read/no-raw-deployment-feature-read": [
+          "error",
+          {
+            allowedReads: [
+              // Scheduled governed-workflow work follows the raw flag: local
+              // development opens the work-obligation routes, not background
+              // jobs that write obligations on a timer.
+              {
+                file: "apps/api/src/lib/scheduler/jobs.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-attention-scout.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              {
+                file: "apps/api/src/lib/scheduler/tasks/work-obligation-backfill.ts",
+                flags: ["FEATURE_GOVERNED_WORKFLOW"],
+              },
+              // Unresolved: agent billing tools open FEATURE_USAGE in local
+              // development while the usage routes and the hosted usage
+              // provider follow the raw flag. Kept raw until one policy is
+              // chosen; production reads the flag either way.
+              {
+                file: "apps/api/src/handlers/usage/routes.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+              {
+                file: "apps/api/src/lib/hosted-usage-provider/config.ts",
+                flags: ["FEATURE_USAGE"],
+              },
+            ],
+          },
+        ],
+      },
+    },
+    {
       // fetch() without a timeout is allowed in throwaway / non-runtime
       // surfaces: sandbox playground, load tests, tooling scripts, build
       // configs, unit tests. Product runtime code (apps/api including its
@@ -4438,12 +4504,6 @@ export default defineConfig({
               noZodImport,
               apiValibotJsonSchemaImport,
               {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
                 name: "@/api/lib/branded-types",
                 importNames: ["toSafeId"],
                 message:
@@ -4563,15 +4623,8 @@ export default defineConfig({
               ...apiProviderAdapterImports,
               {
                 name: "@/api/lib/api-handlers",
-                importNames: ["createHandler", "createRootHandler"],
-                message:
-                  "Use 'createSafeHandler' or 'createSafeRootHandler' instead.",
-              },
-              {
-                name: "@/api/lib/api-handlers",
-                importNames: ["createSafeHandler", "createSafeRootHandler"],
-                message:
-                  "Public route files must use createSafePublicHandler or createSafeBoundedPublicHandler and must not receive authenticated handler context.",
+                importNames: nonAnonymousHandlerFactories,
+                message: `Public route files may use only the anonymous handler factories (${anonymousHandlerFactories.join(", ")}) and must not receive authenticated handler context.`,
               },
               {
                 name: "@/api/lib/auth",

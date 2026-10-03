@@ -87,7 +87,7 @@ const deriveWorkspaceStatusMap = ({
  *
  * Scope/feature gating is deliberately NOT applied here. MCP dispatch gates a
  * tool on its `ToolScope` (the caller's OAuth scope) and its
- * `McpToolFeatureFlag` (a deploy flag). OAuth scopes have no meaning for a
+ * `DeploymentFeatureFlag` (a deploy flag). OAuth scopes have no meaning for a
  * session-authed chat turn: reaching `getChatTools` already means the request
  * passed the coarser workspace/role authorization that governs reads, so scope
  * gating is dropped. Feature-flag gating still matters (a tool's backing surface

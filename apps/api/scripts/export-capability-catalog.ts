@@ -60,6 +60,7 @@ import {
   type CatalogServiceClassification,
   type ServiceClassification,
 } from "../src/lib/rate-limit/service-classification";
+import type { HandlerKind } from "../src/lib/safe-handler-factories";
 import { advertisedSchema } from "../src/mcp/advertised-schema";
 import { CONTEXT_FIDELITY_WAIVERS } from "../src/mcp/capability-waivers";
 import { PUBLIC_FIELD_NAME } from "../src/mcp/public-field-names";
@@ -111,7 +112,6 @@ import {
 } from "./lib/compact-schema-defs";
 import {
   discoverSafeHandlers,
-  type HandlerKind,
   isRecord,
   type ParsedExposure,
   REPO_ROOT,
@@ -1234,7 +1234,7 @@ const buildCatalog = async (): Promise<BuildResult> => {
       return typeof feature === "string" ? [[tool.name, feature] as const] : [];
     }),
   );
-  // DOMAIN_FEATURE values are plain strings (the McpToolFeatureFlag key-of-env
+  // DOMAIN_FEATURE values are plain strings (the DeploymentFeatureFlag key-of-env
   // type collapses outside the app tsconfig), so validate every flag against
   // the REAL deployment env at export time: a typo'd or removed flag fails the
   // build here instead of silently fail-closing every entry at runtime.

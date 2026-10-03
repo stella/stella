@@ -1,5 +1,7 @@
 import { describe, expect, mock, test } from "bun:test";
 
+import { rejectionOf } from "@stll/property-testing/rejection";
+
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
 import { asFetchMock } from "@/api/tests/helpers/test-tool-set";
 
@@ -264,8 +266,9 @@ for (const reply of [-1, 2, "invalid"]) {
       redis: () => ({ send: () => reply }),
       sleep: async () => {},
     });
-    expect(slot.tryReserve()).rejects.toThrow(
-      "publisher gate returned an invalid wait",
+    expect(await rejectionOf(slot.tryReserve())).toHaveProperty(
+      "message",
+      expect.stringContaining("publisher gate returned an invalid wait"),
     );
   });
 }

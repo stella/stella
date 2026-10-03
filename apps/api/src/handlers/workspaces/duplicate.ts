@@ -16,7 +16,6 @@ import {
   workspaceViews,
 } from "@/api/db/schema";
 import type { FieldContent } from "@/api/db/schema-validators";
-import { env } from "@/api/env";
 import { captureError } from "@/api/lib/analytics/capture";
 import { ACCOUNT_ACCESS, createSafeHandler } from "@/api/lib/api-handlers";
 import type { WorkspaceHandlerConfig } from "@/api/lib/api-handlers";
@@ -27,6 +26,7 @@ import {
   remapDependencyRefs,
   remapNodePropertyIds,
 } from "@/api/lib/conditions/ast-utils";
+import { isDeploymentFeatureEnabled } from "@/api/lib/deployment-feature";
 import { allocateEntityStamps } from "@/api/lib/document-counter";
 import { enqueueDocumentProcessingRun } from "@/api/lib/document-processing-enqueue";
 import { handoffCommittedDocumentProcessingRuns } from "@/api/lib/document-processing-handoff";
@@ -359,7 +359,7 @@ const copyWorkspaceFiles = async ({
       mimeType: copy.mimeType,
     });
     copiedS3Keys.push(targetKey);
-    const source = env.FEATURE_FILE_USAGE_LIMITS
+    const source = isDeploymentFeatureEnabled("FEATURE_FILE_USAGE_LIMITS")
       ? await headObject(sourceKey)
       : Result.ok({ contentLength: 0 });
     if (Result.isError(source)) {
