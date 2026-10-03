@@ -30,21 +30,32 @@ pub async fn open_stella_account(
   account: State<'_, crate::account::AccountState>,
 ) -> Result<(), String> {
   let linked = crate::account::current(&account).await?;
-  let linked_self_host_origin = {
+  let (selected_self_host, remembered_self_host) = {
     let manager = state.lock().await;
-    manager.linked_self_host_origin().map(str::to_owned)
+    (
+      manager.selected_self_host_connection().cloned(),
+      manager.linked_self_host_origin().is_some(),
+    )
   };
-  let web_origin = linked
-    .as_ref()
-    .map(|account| account.web_origin.as_str())
-    .or(linked_self_host_origin.as_deref());
-  let mut url = stella_account_url(web_origin);
   if linked.is_none() {
-    url.push_str("#desktop-account");
+    if selected_self_host.is_none() && remembered_self_host {
+      return Err("Reconnect the self-hosted desktop server to select its API".into());
+    }
+    let (api_base_url, origin) = selected_self_host.as_ref().map_or(
+      ("https://api.stll.app", "https://my.stll.app"),
+      |connection| {
+        (
+          connection.api_base_url.as_str(),
+          connection.web_origin.as_str(),
+        )
+      },
+    );
+    return crate::account::open_browser_connection(&app, api_base_url, origin);
   }
+  let web_origin = linked.as_ref().map(|account| account.web_origin.as_str());
   app
     .opener()
-    .open_url(url, None::<&str>)
+    .open_url(stella_account_url(web_origin), None::<&str>)
     .map_err(|e| format!("stella desktop could not open stella web: {e}"))
 }
 

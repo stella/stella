@@ -58,6 +58,7 @@ import {
 import { sweepCaseLawRawDecision } from "@/api/lib/legal-search/case-law-raw-sweeps";
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { ADAPTER_KEYS } from "@/api/lib/legal-search/ingestion-constants";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import {
   RAW_SOURCE_FAMILY,
   rawDocumentPrefix,
@@ -599,14 +600,17 @@ describe("reasons published apart from their ruling", () => {
  */
 const ingestStandaloneReasons = async (fixture: Fixture) => {
   const { document } = supplementOf(REASONS);
-  return await ingestDecision(fixture, {
-    ...document,
-    decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
-    metadata: {
-      ...document.metadata,
+  return await ingestDecision(
+    fixture,
+    plainTextIngestionResult({
+      ...document,
       decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
-    },
-  });
+      metadata: {
+        ...document.metadata,
+        decisionType: PL_COURTS_PRE_SUPPLEMENT_REASONS_DECISION_TYPE,
+      },
+    }),
+  );
 };
 
 describe("the standalone row of reasons already stored", () => {
@@ -898,6 +902,7 @@ test("the crawl places a page's reasons after its decisions, from the payload it
     );
   try {
     const run = await runIngestionPipeline({
+      acquireStoredTotalAdmission: async () => "held",
       source,
       sourceLease,
       scopedDb,
@@ -1097,10 +1102,13 @@ describe("the reasons' stored payload", () => {
 
     // Neither document observed again brings the erased text back.
     await ingestSupplement(fixture, supplementOf(REASONS));
-    await ingestDecision(fixture, {
-      ...decisionOf(RULING),
-      rawHash: "re-observed",
-    });
+    await ingestDecision(
+      fixture,
+      plainTextIngestionResult({
+        ...decisionOf(RULING),
+        rawHash: "re-observed",
+      }),
+    );
     const again = await rebuilt();
     expect(again.fulltext).not.toContain(REASONS_TEXT);
     expect(JSON.stringify(again.documentAst)).not.toContain(REASONS_TEXT);

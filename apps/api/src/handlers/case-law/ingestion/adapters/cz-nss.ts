@@ -1,3 +1,5 @@
+// parser-output-unchanged: fetch-stage telemetry and document-stage metadata only; parser decision fields are unchanged.
+// parser-output-unchanged: Reconciliation revision projections classify listing inputs without changing parsed decision output.
 import { panic, Result } from "better-result";
 
 import {
@@ -47,6 +49,7 @@ import type {
   StoredRawReparseOutcome,
 } from "@/api/handlers/case-law/ingestion/adapter";
 import { createCalendarDaySliceWalk } from "@/api/handlers/case-law/ingestion/adapters/calendar-day-slice-walk";
+import { buildPlainTextItem } from "@/api/handlers/case-law/ingestion/adapters/item-build";
 import { fetchPublisher } from "@/api/handlers/case-law/ingestion/adapters/retry";
 import {
   INGESTION_USER_AGENT,
@@ -66,10 +69,12 @@ import {
   sourceTextField,
   splitStoredDecisionTextMetadata,
 } from "@/api/lib/case-law/decision-text";
+import { PlainTextError } from "@/api/lib/case-law/plain-text";
 import { addUtcDays } from "@/api/lib/dates";
 import { AdapterFetchError } from "@/api/lib/errors/tagged-errors";
 import { errorTag } from "@/api/lib/errors/utils";
 import { ADAPTER_MANIFESTS } from "@/api/lib/legal-search/adapter-manifest";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { failureSink } from "@/api/lib/observability/failure";
 import { logger } from "@/api/lib/observability/logger";
 import { observeFailure } from "@/api/lib/observability/observe-failure";
@@ -746,6 +751,7 @@ const fetchRichDocument = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Html/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -839,6 +845,7 @@ const fetchDecisionContent = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentOriginal/Text/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -1397,6 +1404,7 @@ const readDetailPage = async (
     const response = await fetchPublisher(
       `${BASE_URL}/DokumentDetail/Index/${documentId}`,
       {
+        fetchStage: "document",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         signal,
         headers: {
@@ -1536,7 +1544,7 @@ const rowToResult = ({
     ...(detailHtml === null ? {} : { [CZ_NSS_RAW_PART.DETAIL]: detailHtml }),
   };
 
-  return {
+  return plainTextIngestionResult({
     caseNumber: row.caseNumber,
     sheetNumber,
     ...(reporterIdentifiers === undefined
@@ -1602,7 +1610,7 @@ const rowToResult = ({
           sourceRaw: encodeSourceRawEnvelope(rawParts),
           sourceRawContentType: SOURCE_RAW_ENVELOPE_CONTENT_TYPE,
         }),
-  };
+  });
 };
 
 /**
@@ -1821,7 +1829,7 @@ const reparseStoredRaw = (
 
   return {
     type: "parsed",
-    result: {
+    result: plainTextIngestionResult({
       caseNumber: stored.caseNumber,
       sheetNumber,
       ...(reporterIdentifiers === undefined
@@ -1875,7 +1883,7 @@ const reparseStoredRaw = (
       // a decision, it does not rewrite what the crawl fetched for it.
       sourceRaw: raw,
       sourceRawContentType: stored.contentType ?? "text/html",
-    },
+    }),
   };
 };
 
@@ -1909,6 +1917,7 @@ let cachedSession: {
 
 const initSession = async (signal: AbortSignal): Promise<SessionState> => {
   const response = await fetchPublisher(BASE_URL, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     signal,
     redirect: "follow",
@@ -2010,6 +2019,7 @@ const executeSearch = async (
   formData.set(DATE_TO_FIELD, czDate);
 
   const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
@@ -2091,6 +2101,7 @@ const fetchResultPage = async ({
   formData.set("resultOrder", continuation.order);
 
   const response = await fetchPublisher(`${BASE_URL}/Home/MyResTRowsCont`, {
+    fetchStage: "listing",
     adapterKey: ADAPTER_KEYS.CZ_NSS,
     method: "POST",
     signal,
@@ -2182,11 +2193,12 @@ type BuildCzNssDecisionOptions = {
  * the one the same document hashes to once read, so the full row replaces it
  * when the document is read.
  */
-const listingOnlyDecision = (decision: IngestionResult): IngestionResult => ({
-  ...decision,
-  isListingOnly: true,
-  rawHash: hashContent(`${decision.rawHash}|listing-only`),
-});
+const listingOnlyDecision = (decision: IngestionResult): IngestionResult =>
+  plainTextIngestionResult({
+    ...decision,
+    isListingOnly: true,
+    rawHash: hashContent(`${decision.rawHash}|listing-only`),
+  });
 
 /** The listing-only row for a listed document nothing was read for. */
 const unreadRowDecision = (row: ParsedRow): IngestionResult =>
@@ -2586,6 +2598,7 @@ const CZ_NSS_SOURCE_SURFACES = {
 } as const satisfies SourceSurfaceCensus;
 
 export const czNssAdapter = defineSourceAdapter({
+  documentStage: "inline",
   key: ADAPTER_KEYS.CZ_NSS,
   sourceSurfaces: CZ_NSS_SOURCE_SURFACES,
   sourceFields: {
@@ -2631,6 +2644,7 @@ export const czNssAdapter = defineSourceAdapter({
       );
 
       const response = await fetchPublisher(`${BASE_URL}/Home/Index`, {
+        fetchStage: "listing",
         adapterKey: ADAPTER_KEYS.CZ_NSS,
         method: "POST",
         signal,
@@ -2668,6 +2682,19 @@ export const czNssAdapter = defineSourceAdapter({
    * held.
    */
   reconciliation: {
+    // Publisher identity and content fields exclude listing position, query decoration, and repair aliases.
+    revisionOf: (payload) =>
+      isRecord(payload)
+        ? {
+            caseNumber: payload["caseNumber"],
+            publishedCaseNumber: payload["publishedCaseNumber"],
+            decisionDate: payload["decisionDate"],
+            decisionType: payload["decisionType"],
+            outcome: payload["outcome"],
+            documentUrl: payload["documentUrl"],
+            documentId: payload["documentId"],
+          }
+        : null,
     firstSlice: CZ_NSS_FIRST_SLICE,
     ...czNssDaySlices.walk,
     tipWindowDays: CZ_NSS_TIP_WINDOW_DAYS,
@@ -2745,35 +2772,49 @@ export const czNssAdapter = defineSourceAdapter({
           continued === null ? searchResult.html : continued.value,
         );
         const decisions: IngestionResult[] = [];
+        let failed = 0;
 
         // Every listed row is stored, and the cursor moves past the page. A
         // document that was not read, including every row left once the
         // page's read budget is spent, is stored listing-only, and the
         // reconciliation reads it again.
         for (const row of rows) {
-          if (readBudgetSpent()) {
-            decisions.push(unreadRowDecision(row));
-            continue;
-          }
-          const built = await Result.tryPromise({
-            try: async () =>
-              await buildCzNssDecision({
-                row,
-                session,
-                signal: effectiveSignal,
-              }),
-            catch: (cause: unknown) => cause,
+          const attempted = await buildPlainTextItem({
+            decisionOf: (value) => value,
+            adapterKey: ADAPTER_KEYS.CZ_NSS,
+
+            rawListing: JSON.stringify(row),
+            build: async () => {
+              if (readBudgetSpent()) {
+                return unreadRowDecision(row);
+              }
+              const built = await Result.tryPromise({
+                try: async () =>
+                  await buildCzNssDecision({
+                    row,
+                    session,
+                    signal: effectiveSignal,
+                  }),
+                catch: (cause: unknown) => cause,
+              });
+              if (built.isOk()) {
+                return built.value.decision;
+              }
+              if (
+                readBudgetSpent() &&
+                !(built.error instanceof PlainTextError)
+              ) {
+                return unreadRowDecision(row);
+              }
+              throw built.error;
+            },
           });
-          if (Result.isOk(built)) {
-            decisions.push(built.value.decision);
+          if (attempted.type === "item_build_failed") {
+            failed++;
+            decisions.push(attempted.decision);
             continue;
           }
-          if (readBudgetSpent()) {
-            decisions.push(unreadRowDecision(row));
-            continue;
-          }
-          const { error } = built;
-          throw error;
+          decisions.push(attempted.value);
         }
 
         // Determine next cursor. Against the size this page can hold, not the
@@ -2784,6 +2825,7 @@ export const czNssAdapter = defineSourceAdapter({
           // More pages for this date
           return {
             decisions,
+            itemBuildFailures: { type: "item_build_failed", count: failed },
             nextCursor: `${date}:${page + 1}`,
           };
         }
@@ -2792,6 +2834,7 @@ export const czNssAdapter = defineSourceAdapter({
         const next = nextDay(date);
         return {
           decisions,
+          itemBuildFailures: { type: "item_build_failed", count: failed },
           nextCursor: next <= today ? `${next}:0` : `${today}:0`,
         };
       },

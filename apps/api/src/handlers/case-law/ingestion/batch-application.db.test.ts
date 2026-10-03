@@ -58,6 +58,7 @@ import {
 import { acquireCaseLawSourceIngestionLease } from "@/api/lib/legal-search/case-law-source-ingestion-lease";
 import { CorpusPackError } from "@/api/lib/legal-search/corpus-pack";
 import type { EncodedPack } from "@/api/lib/legal-search/corpus-pack";
+import { plainTextIngestionResult } from "@/api/lib/legal-search/plain-text-assembly";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import { createTestPglite } from "@/api/tests/pglite-test-db";
 
@@ -125,29 +126,31 @@ const failingTransfer = (): CaseLawCorpusDependencies => ({
   },
 });
 
-const record = (n: number): IngestionResult => ({
-  caseNumber: `4 As ${n}/2008`,
-  sourceDocumentId: `batch-record-${n}`,
-  court: "Nejvyšší správní soud",
-  country: "CZE",
-  language: "cs",
-  decisionDate: "2008-12-18",
-  decisionType: "rozsudek",
-  fulltext: `Nejvyšší správní soud rozhodl v právní věci žalobkyně č. ${n}.`,
-  metadata: {},
-  textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
-  rawHash: `batch-record-hash-${n}`,
-  documentAst: {},
-});
+const record = (n: number): IngestionResult =>
+  plainTextIngestionResult({
+    caseNumber: `4 As ${n}/2008`,
+    sourceDocumentId: `batch-record-${n}`,
+    court: "Nejvyšší správní soud",
+    country: "CZE",
+    language: "cs",
+    decisionDate: "2008-12-18",
+    decisionType: "rozsudek",
+    fulltext: `Nejvyšší správní soud rozhodl v právní věci žalobkyně č. ${n}.`,
+    metadata: {},
+    textFields: absentDecisionTextFields(TEXT_ABSENCE_REASON.NOT_PUBLISHED),
+    rawHash: `batch-record-hash-${n}`,
+    documentAst: {},
+  });
 
 const records = (count: number): IngestionResult[] =>
   Array.from({ length: count }, (_, n) => record(n + 1));
 
 /** A record the ingestion boundary refuses: its identity cannot be stored. */
-const rejectedRecord = (n = 99): IngestionResult => ({
-  ...record(n),
-  sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
-});
+const rejectedRecord = (n = 99): IngestionResult =>
+  plainTextIngestionResult({
+    ...record(n),
+    sourceDocumentId: "x".repeat(SOURCE_DOCUMENT_ID_MAX_LENGTH + 1),
+  });
 
 const sourceRejection = (n: number): RejectedCaseLawIngestionRecord => ({
   type: "rejected",
@@ -314,6 +317,7 @@ const crawlCaller: Caller = {
     const run = await Result.tryPromise({
       try: async () =>
         await runIngestionPipeline({
+          acquireStoredTotalAdmission: async () => "held",
           source: sourceLease.source,
           sourceLease,
           scopedDb,
@@ -917,32 +921,35 @@ describe("the batch bounds", () => {
   );
 
   test("a page is admitted in parts, and a record over the byte bound is a part of its own", () => {
-    const oversized = {
+    const oversized = plainTextIngestionResult({
       ...record(2),
       fulltext: "a".repeat(CASE_LAW_INGESTION_BATCH_LIMITS.encodedBytes + 1),
-    };
+    });
 
     const parts = admitPageDecisions([record(1), oversized, record(3)]);
 
     expect(
-      parts.map(({ admission, decisions }) => ({
-        admission,
-        caseNumbers: decisions.map(({ caseNumber }) => caseNumber),
-      })),
-    ).toEqual([
-      {
-        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
-        caseNumbers: ["4 As 1/2008"],
-      },
-      {
-        admission: DECISION_ADMISSION.OVERSIZED_RECORD,
-        caseNumbers: ["4 As 2/2008"],
-      },
-      {
-        admission: DECISION_ADMISSION.WITHIN_BOUNDS,
-        caseNumbers: ["4 As 3/2008"],
-      },
-    ]);
+      Bun.deepEquals(
+        parts.map(({ admission, decisions }) => ({
+          admission,
+          caseNumbers: decisions.map(({ caseNumber }) => caseNumber),
+        })),
+        [
+          {
+            admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+            caseNumbers: ["4 As 1/2008"],
+          },
+          {
+            admission: DECISION_ADMISSION.OVERSIZED_RECORD,
+            caseNumbers: ["4 As 2/2008"],
+          },
+          {
+            admission: DECISION_ADMISSION.WITHIN_BOUNDS,
+            caseNumbers: ["4 As 3/2008"],
+          },
+        ],
+      ),
+    ).toBe(true);
     // The same contract refuses it for a prepared batch.
     const refused = prepareCaseLawIngestionBatch({ decisions: [oversized] });
     expect(Result.isError(refused) ? refused.error.reason : null).toBe(
@@ -957,16 +964,18 @@ describe("the batch bounds", () => {
         // The fixture reaches the fault: a Buffer serializes as a JSON array.
         expect(JSON.stringify(asBuffer)).toStartWith('{"type":"Buffer"');
         const measured = (payload: Uint8Array) =>
-          encodedIngestionResultBytes({
-            ...record(1),
-            sourceRawBytes: payload,
-            sourceRawObjects: {
-              "document-file": {
-                bytes: payload,
-                contentType: "application/pdf",
+          encodedIngestionResultBytes(
+            plainTextIngestionResult({
+              ...record(1),
+              sourceRawBytes: payload,
+              sourceRawObjects: {
+                "document-file": {
+                  bytes: payload,
+                  contentType: "application/pdf",
+                },
               },
-            },
-          });
+            }),
+          );
         expect(measured(asBuffer)).toBe(measured(bytes));
         expect(measured(bytes)).toBe(
           measured(new Uint8Array()) + 2 * bytes.length,
@@ -979,7 +988,9 @@ describe("the batch bounds", () => {
     expect(
       Result.isOk(
         prepareCaseLawIngestionBatch({
-          decisions: [{ ...record(1), sourceRawBytes: payload }],
+          decisions: [
+            plainTextIngestionResult({ ...record(1), sourceRawBytes: payload }),
+          ],
         }),
       ),
     ).toBe(true);
@@ -987,10 +998,12 @@ describe("the batch bounds", () => {
 
   test("structure weighs something even when every value is empty", () => {
     const measured = (aliases: number) =>
-      encodedIngestionResultBytes({
-        ...record(1),
-        sourceDocumentIdAliases: Array.from({ length: aliases }, () => ""),
-      });
+      encodedIngestionResultBytes(
+        plainTextIngestionResult({
+          ...record(1),
+          sourceDocumentIdAliases: Array.from({ length: aliases }, () => ""),
+        }),
+      );
 
     expect(measured(1000) - measured(0)).toBeGreaterThanOrEqual(1000);
   });
@@ -998,10 +1011,11 @@ describe("the batch bounds", () => {
   test("a prepared batch refuses what it cannot carry before any write", () => {
     const { records: maxRecords, encodedBytes } =
       CASE_LAW_INGESTION_BATCH_LIMITS;
-    const heavy = (n: number, bytes: number): IngestionResult => ({
-      ...record(n),
-      fulltext: "a".repeat(bytes),
-    });
+    const heavy = (n: number, bytes: number): IngestionResult =>
+      plainTextIngestionResult({
+        ...record(n),
+        fulltext: "a".repeat(bytes),
+      });
     const refusal = (decisions: readonly IngestionResult[]) => {
       const admitted = prepareCaseLawIngestionBatch({ decisions });
       return Result.isError(admitted)

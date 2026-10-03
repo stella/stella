@@ -1916,6 +1916,7 @@ describe("createReconciliationProgress", () => {
       .runTick(async () => {
         throw new Error("reconcile unavailable");
       })
+      // swallow-ok: injected reconcile failure is asserted through the failed tick report below
       .catch(() => undefined);
     expect(progress.latestTickReport()).toEqual({ status: "failed" });
   });

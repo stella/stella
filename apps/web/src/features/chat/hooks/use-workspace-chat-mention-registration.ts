@@ -35,7 +35,11 @@ const toEntityMentionOptions = ({
   workspaceId: string;
 }) =>
   data.entities.map((entity) =>
-    buildEntityMentionOption({ entity, sourceWorkspaceId: workspaceId }),
+    buildEntityMentionOption({
+      entity,
+      matterId: workspaceId,
+      sourceWorkspaceId: workspaceId,
+    }),
   );
 
 export const useWorkspaceChatMentionRegistration = (

@@ -38,6 +38,7 @@ import {
 import {
   decisionIdentityLocatorOf,
   decisionIdsNamedBy,
+  docketFamilyKeyToRead,
   readDecisionIdentityHits,
 } from "@/api/handlers/case-law/decisions/lookup-by-identity";
 import {
@@ -1510,6 +1511,8 @@ type DecisionIdentity = Extract<DecisionQueryIntent, { type: "identifier" }>;
  */
 type DecisionIdsByIdentityQueryOptions = {
   country: string | undefined;
+  /** The case-file key a bare docket also reads by (`docketFamilyKeyToRead`). */
+  familyKey: string | null;
   identity: DecisionIdentity;
   tx: CaseLawPublicReadTransaction;
 };
@@ -1517,6 +1520,7 @@ type DecisionIdsByIdentityQueryOptions = {
 /** The identity read itself, exported so a plan test can EXPLAIN it. */
 export const decisionIdsByIdentityQuery = ({
   country,
+  familyKey,
   identity,
   tx,
 }: DecisionIdsByIdentityQueryOptions) =>
@@ -1529,6 +1533,7 @@ export const decisionIdsByIdentityQuery = ({
           caseLawDecisions.id,
           decisionIdsNamedBy({
             country,
+            familyKey,
             locator: decisionIdentityLocatorOf(identity),
             tx,
           }),
@@ -1564,6 +1569,11 @@ export const findDecisionIdsByIdentity = async ({
       await caseLawDb(async (tx) => {
         const rows = await decisionIdsByIdentityQuery({
           country,
+          familyKey: await docketFamilyKeyToRead({
+            country,
+            locator: decisionIdentityLocatorOf(identity),
+            tx,
+          }),
           identity,
           tx,
         });

@@ -11,6 +11,7 @@ import { createSafeDb } from "@/api/db/scoped";
 import type { AuditEvent, AuditRecorder } from "@/api/lib/audit-log";
 import { toSafeId } from "@/api/lib/branded-types";
 import type { SafeId } from "@/api/lib/branded-types";
+import { sessionMemberRole } from "@/api/lib/permission-authorization";
 import { createTestHandlerContext } from "@/api/tests/helpers/handler-context";
 import { asTestRaw } from "@/api/tests/helpers/test-tool-set";
 import type { TestDatabase } from "@/api/tests/security/test-utils";
@@ -47,7 +48,7 @@ export const skillHandlerContext = <TContext>({
   };
   return createTestHandlerContext<TContext>({
     ...fields,
-    memberRole: { role },
+    memberRole: sessionMemberRole(role),
     recordAuditEvent,
     createAuditRecorder: () => recordAuditEvent,
     safeDb: asTestRaw<SafeDb>(createSafeDb(testDb, [], organizationId, userId)),
