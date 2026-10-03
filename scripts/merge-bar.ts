@@ -842,8 +842,9 @@ const ratchetFreshnessFailure = ({
   }
   return (
     `main changed the ratchet since the green run (${ratchetChanges.join(", ")}) ` +
-    `and the ratchet does not pass on ${baseRefName} merged with this head: ${ 
-    recheck.error.message}`
+    `and the ratchet does not pass on ${baseRefName} merged with this head: ${
+      recheck.error.message
+    }`
   );
 };
 
